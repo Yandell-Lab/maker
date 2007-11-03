@@ -1,0 +1,39 @@
+#!/usr/bin/perl -w
+use Datastore::MD5;
+$| = 1;
+
+if ($#ARGV < 3) {
+    die "multifasta_maker genomefile.fasta location_of_configfiles/maker_exe.ctl location_of_configfiles/maker_bopts.ctl location_of_configfiles/maker_opts.ctl\n 
+"
+
+}
+my $fasta_file = $ARGV[0];
+my @cf = @ARGV[1..3];
+my %seq = read_seq($fasta_file);
+my $i = 0;
+foreach my $k (keys %seq) {
+    $fn = (split(/\s+/, $k))[0];
+    my $qfile = "$fn\.fasta";
+    open SFILE, ">$qfile" or die $!;
+    print SFILE ">",$k,"\n",$seq{$k},"\n";
+    close SFILE;
+    system("maker $k\.fasta $cf[0] $cf[1] $cf[2]");
+}
+
+sub read_seq{
+    my $infile = shift @_;
+    my %hash = ();
+    open SEQ, "<$infile" or die $!;
+    my $header = '';
+    while (my $line = <SEQ>) {
+	chomp($line);
+	if ($line =~ m/>(.+)/) {
+	    $header = $1;
+	    $hash{$header} = '';
+	}else {
+	    $hash{$header} = join("", $hash{$header},$line);
+	}
+    }
+    close SEQ;
+    return %hash;
+}
