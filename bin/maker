@@ -33,14 +33,29 @@ use vars qw($opt_h $opt_a $opt_R %CTL_OPTIONS $IOG $IOX $GFF3);
 getopts("hRa:");
 
 
-my $usage = "maker [options] genome_file maker_opts.ctl maker_bopts.ctl maker_exe.ctl
-where maker.ctl a geneerate name for user control file:
- Please see maker documentation to learn more about control file format.
+my $usage = "
+Usage:
 
-options
+        maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
--R Turns repeat masking off
--h help
+        If you already specified the location for the genome file in the user control files
+        you can ommit the first argument, <genome_file>.  The genome file must be in fasta
+        format.
+
+        The last three arguments are user control files that specify how maker should behave.
+        Please see maker documentation to learn more about control file format.
+
+Options:
+
+        -R Turns repeat masking off (* See Warning)
+        -h Help
+
+Warning:
+      
+        *When using the -R flag, maker expects that the input genome file is already masked.
+         This means that if your genome file contains lower case characters, maker will
+         consider those characers to be soft masked.
+
 ";
 
 if ($opt_h) {die $usage;}
