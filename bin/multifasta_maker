@@ -7,17 +7,19 @@ if ($#ARGV < 3) {
 "
 
 }
-my $fasta_file = $ARGV[0];
-my @cf = @ARGV[1..3];
+
+my $fasta_file = shift @ARGV;
+my @cf = @ARGV;
+
 my %seq = read_seq($fasta_file);
-my $i = 0;
-foreach my $k (keys %seq) {
-    $fn = (split(/\s+/, $k))[0];
+
+while (my $k = each %seq) {
+    $fn = (split(/\s+|\t+|\n+/, $k))[0];
     my $qfile = "$fn\.fasta";
     open SFILE, ">$qfile" or die $!;
     print SFILE ">",$k,"\n",$seq{$k},"\n";
     close SFILE;
-    system("maker $k\.fasta $cf[0] $cf[1] $cf[2]");
+    system("maker $fn\.fasta $cf[0] $cf[1] $cf[2]");
 }
 
 sub read_seq{

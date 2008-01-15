@@ -28,9 +28,9 @@ use repeat_mask_seq;
 use maker::sens_spec;
 $|  = 1;
 
-use vars qw($opt_h $opt_a %CTL_OPTIONS $IOG $IOX $GFF3);
+use vars qw($opt_h $opt_a $opt_R %CTL_OPTIONS $IOG $IOX $GFF3);
 
-getopts("ha:");
+getopts("hRa:");
 
 
 my $usage = "maker [options] genome_file maker_opts.ctl maker_bopts.ctl maker_exe.ctl
@@ -39,6 +39,7 @@ where maker.ctl a geneerate name for user control file:
 
 options
 
+-R Turns repeat masking off
 -h help
 ";
 
@@ -99,34 +100,39 @@ my ($seq_id)  = $query_def =~ /^>(\S+)/;
 
 my $the_void  = build_the_void($seq_id, $run_id);
 
-#-- repeatmask the input file 
-my ($temp_masked_fasta, $rma_keepers) = repeatmask($fasta, 
-                                                   $the_void,
-                                                   length($$query_seq),
-                                                   $CTL_OPTIONS{'max_dna_len'},
-                                                   $seq_id,
-					           );
+my $masked_fasta = \$fasta;
+my $rm_keepers = [];
+
+unless ($opt_R){
+    #-- repeatmask the input file 
+    my ($temp_masked_fasta, $rma_keepers) = repeatmask($fasta, 
+						       $the_void,
+						       length($$query_seq),
+						       $CTL_OPTIONS{'max_dna_len'},
+						       $seq_id,
+						      );
 
 
-#-- blastx agains a repeat library (for better masking)
-my $repeat_blastx_keepers = blastx($temp_masked_fasta,
-                                   $CTL_OPTIONS{'repeat_protein'},
-                                   $the_void,
-                                   length($$query_seq),
-                                   $CTL_OPTIONS{'max_dna_len'},
-                                   $seq_id,
-                                   );
+    #-- blastx agains a repeat library (for better masking)
+    my $repeat_blastx_keepers = blastx($temp_masked_fasta,
+				       $CTL_OPTIONS{'repeat_protein'},
+				       $the_void,
+				       length($$query_seq),
+				       $CTL_OPTIONS{'max_dna_len'},
+				       $seq_id,
+				      );
 
+ 
+    #-- now use the repeatmasker data + the blastx repeat data 
+    #-- to generate a better masked fasta
 
-#-- now use the repeatmasker data + the blastx repeat data 
-#-- to generate a better masked fasta
-
-my ($masked_seq, $rm_keepers) = repeat_mask_seq::process($query_seq, 
-                                                         $rma_keepers, 
-                                                         $repeat_blastx_keepers,
-                                                         );
-
-my $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_seq);
+    (my $masked_seq, $rm_keepers) = repeat_mask_seq::process($query_seq, 
+							     $rma_keepers, 
+							     $repeat_blastx_keepers,
+							    );
+   
+    $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_seq);
+}
 
 FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
 
