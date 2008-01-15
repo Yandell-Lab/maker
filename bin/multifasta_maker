@@ -1,11 +1,38 @@
 #!/usr/bin/perl -w
-use Datastore::MD5;
+use Getopt::Long;
+
 $| = 1;
 
-if ($#ARGV < 3) {
-    die "multifasta_maker genomefile.fasta location_of_configfiles/maker_exe.ctl location_of_configfiles/maker_bopts.ctl location_of_configfiles/maker_opts.ctl\n 
-"
+my $usage = "
+Usage:
 
+        multifasta_maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+
+        The genome file must be in fasta format.
+
+        The last three arguments are user control files that specify how maker should behave.
+        Please see maker documentation to learn more about control file format.
+
+Options:
+
+        -R Turns repeat masking off (* See Warning)
+        -h Help
+
+Warning:
+
+        *When using the -R flag, maker expects that the input genome file is already masked.
+         This means that if your genome file contains lower case characters, maker will
+         consider those characers to be soft masked.                                                                                                                                                                                                                                                                                    
+";
+
+my $opt_R;
+
+GetOptions ( "R" => \$opt_R,
+	     "help|?" => sub{ print $usage; exit;}
+	   );
+
+if ($#ARGV < 3) {
+    die $usage;
 }
 
 my $fasta_file = shift @ARGV;
@@ -19,7 +46,11 @@ while (my $k = each %seq) {
     open SFILE, ">$qfile" or die $!;
     print SFILE ">",$k,"\n",$seq{$k},"\n";
     close SFILE;
-    system("maker $fn\.fasta $cf[0] $cf[1] $cf[2]");
+    $command = "maker";
+    $command .= " -R" if ($opt_R);
+    $command .= " $fn\.fasta $cf[0] $cf[1] $cf[2]";
+
+    system("$command");
 }
 
 sub read_seq{

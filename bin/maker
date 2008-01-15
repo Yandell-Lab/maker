@@ -40,7 +40,8 @@ Usage:
 
         If you already specified the location for the genome file in the user control files
         you can ommit the first argument, <genome_file>.  The genome file must be in fasta
-        format.
+        format.  Maker only works with one fasta sequence at a time, so if your genome_file
+        contains a multifasta, use multifasa_maker to iterate over the sequences.
 
         The last three arguments are user control files that specify how maker should behave.
         Please see maker documentation to learn more about control file format.
