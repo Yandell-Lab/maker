@@ -26,6 +26,7 @@ use maker::auto_annotator;
 use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
+
 $|  = 1;
 
 use vars qw($opt_h $opt_a $opt_R %CTL_OPTIONS $IOG $IOX $GFF3);
