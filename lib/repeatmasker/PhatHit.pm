@@ -105,9 +105,9 @@ sub AUTOLOAD {
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 
-        print STDERR "repeatmasker::PhatHit::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+        #print STDERR "repeatmasker::PhatHit::AutoLoader called for: ",
+        #      "\$self->$call","()\n";
+        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (defined($arg)){
                 $self->{$call} = $arg;

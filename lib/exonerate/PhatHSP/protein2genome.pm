@@ -85,7 +85,7 @@ sub name
  {
 	my $self = shift;
 	
-	return $self->hit->seqname();
+	return $self->hit->seq_id();
 }
 sub nB
  {
@@ -358,9 +358,9 @@ sub AUTOLOAD
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 
-        print STDERR "blastn::PhatHsp::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+        #print STDERR "blastn::PhatHsp::AutoLoader called for: ",
+        #      "\$self->$call","()\n";
+        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (@_){
                 $self->{$call} = shift;

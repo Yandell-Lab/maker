@@ -88,9 +88,9 @@ sub AUTOLOAD {
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 
-        print STDERR "FastaChunker::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+        #print STDERR "FastaChunker::AutoLoader called for: ",
+        #      "\$self->$call","()\n";
+        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (defined($arg)){
                 $self->{$call} = $arg;

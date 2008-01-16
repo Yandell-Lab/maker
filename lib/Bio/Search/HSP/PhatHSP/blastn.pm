@@ -263,7 +263,7 @@ sub name
  {
 	my $self = shift;
 	
-	return $self->hit->seqname();
+	return $self->hit->seq_id();
 }
 
 ################################################ subroutine header begin ##

@@ -45,7 +45,9 @@ Usage:
         contains a multifasta, use multifasa_maker to iterate over the sequences.
 
         The last three arguments are user control files that specify how maker should behave.
-        Please see maker documentation to learn more about control file format.
+        Please see maker documentation to learn more about control file format.  The program
+        will automatically try and locate the user control files in the current working
+        directory if no arguments are supplied when initializing maker.
 
 Options:
 
@@ -67,7 +69,7 @@ if ($opt_h) {die $usage;}
 #-----------------------------------------------------------------------------
 set_default();
 my $infile = '';
-if ($#ARGV > 2) {
+if ($#ARGV > 2 || $#ARGV == 0) {
 	$infile = shift @ARGV;
 }
 my @ctlfiles = @ARGV;
@@ -75,7 +77,7 @@ if (not @ctlfiles) {
 	@ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
 }
 foreach my $ctlfile (@ctlfiles) {
-	open CTL, "<$ctlfile" or die $usage;
+	open CTL, "<$ctlfile" or die "$usage";
 	while (my $line = <CTL>) {
 		chomp($line);
 		if ($line !~ m/^\s*$/ ) {
@@ -120,7 +122,7 @@ my $the_void  = build_the_void($seq_id, $run_id);
 my $masked_fasta = \$fasta;
 my $rm_keepers = [];
 
-unless ($opt_R){
+if (not $opt_R){
     #-- repeatmask the input file 
     my ($temp_masked_fasta, $rma_keepers) = repeatmask($fasta, 
 						       $the_void,
@@ -149,6 +151,9 @@ unless ($opt_R){
 							    );
    
     $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_seq);
+}
+else{
+    print STDERR "Repeatmasking skipped!!\n";
 }
 
 FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
@@ -383,7 +388,7 @@ sub get_snap_p_and_t_fastas {
 	my $p_fastas = '';
 	my $t_fastas = '';
 	foreach my $hit (@{$snaps}){
-		my $t_name = $hit->id(); # note this is being set in GFFV3::pred_data
+		my $t_name = $hit->name(); # note this is being set in GFFV3::pred_data
 		my $t_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);	
 		
 		my ($p_seq, $offset, $end) = 

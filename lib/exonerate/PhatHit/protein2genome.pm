@@ -243,9 +243,9 @@ sub AUTOLOAD
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 
-        print STDERR "blastn::PhatHit::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+        #print STDERR "blastn::PhatHit::AutoLoader called for: ",
+        #      "\$self->$call","()\n";
+        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (@_){
                 $self->{$call} = shift;
