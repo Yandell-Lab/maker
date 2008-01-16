@@ -29,9 +29,9 @@ use maker::sens_spec;
 
 $|  = 1;
 
-use vars qw($opt_h $opt_a $opt_R %CTL_OPTIONS $IOG $IOX $GFF3);
+use vars qw($opt_h $opt_a $opt_R $opt_f %CTL_OPTIONS $IOG $IOX $GFF3);
 
-getopts("hRa:");
+getopts("hRfa:");
 
 
 my $usage = "
@@ -47,11 +47,18 @@ Usage:
         The last three arguments are user control files that specify how maker should behave.
         Please see maker documentation to learn more about control file format.  The program
         will automatically try and locate the user control files in the current working
-        directory if no arguments are supplied when initializing maker.
+        directory if these arguments are supplied when initializing maker.
+
+        It is important to note that maker does not try and recalculated data that it has
+        already calculated.  For example, if you run an analysis twice on the same fasta file
+        you will notice that maker does not rerun any of the blast analyses but instead uses
+        the blast analyses stored from the previous run.  To force maker to rerun all
+        analyses, use the -f flag.
 
 Options:
 
         -R Turns repeat masking off (* See Warning)
+        -f Forces maker to rerun all analyses
         -h Help
 
 Warning:
@@ -591,7 +598,7 @@ sub runSnap {
 	
 	my $w = new Widget::snap();
 	
-	if (-e $out_file){
+	if (-e $out_file && ! $opt_f){
 		print STDERR "re reading snap report.\n";
 		print STDERR "$out_file\n";
 	}
@@ -906,7 +913,7 @@ sub runBlastn {
 	$command .= " > $out_file";
 	
 	my $w = new Widget::blastn();
-	if (-e $out_file){
+	if (-e $out_file && ! $opt_f){
 		print STDERR "re reading blast report.\n";
 		print STDERR "$out_file\n";
 	}
@@ -1012,7 +1019,7 @@ sub runBlastx {
     $command .= " filter=seg";
     $command .= " > $out_file";
     my $w = new Widget::blastx();
-    if (-e $out_file){
+    if (-e $out_file  && ! $opt_f){
 	print STDERR "re reading blast report.\n";
 	print STDERR "$out_file\n";
     }
@@ -1039,7 +1046,7 @@ sub runRepeatMasker {
 	$command .= " -nolow" if defined($no_low);
 	
 	my $w = new Widget::RepeatMasker();
-	if (-e $o_file){
+	if (-e $o_file && ! $opt_f){
 		print STDERR "re reading repeat masker report.\n";
 		print STDERR "$o_file\n";
 	}
@@ -1187,7 +1194,7 @@ sub runTblastx {
     $command .= " filter=seg";
     $command .= " > $out_file";
     my $w = new Widget::tblastx();
-    if (-e $out_file){
+    if (-e $out_file && ! $opt_f){
 	print STDERR "re reading blast report.\n";
 	print STDERR "$out_file\n";
     }

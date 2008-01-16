@@ -8,14 +8,24 @@ Usage:
 
         multifasta_maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
-        The genome file must be in fasta format.
+        Unlike maker, multifasta_maker requires you to always supply all four command line
+        arguments.
+
+        The genome file identified in the first argument must be in fasta format.
 
         The last three arguments are user control files that specify how maker should behave.
         Please see maker documentation to learn more about control file format.
 
+        It is important to note that maker does not try and recalculated data that it has
+        already calculated.  For example, if you run an analysis twice on the same fasta file
+        you will notice that maker does not rerun any of the blast analyses but instead uses
+        the blast analyses stored from the previous run.  To force maker to rerun all
+        analyses, use the -f flag.
+
 Options:
 
         -R Turns repeat masking off (* See Warning)
+        -f Forces maker to rerun all analyses
         -h Help
 
 Warning:
@@ -26,8 +36,10 @@ Warning:
 ";
 
 my $opt_R;
+my $opt_f;
 
 GetOptions ( "R" => \$opt_R,
+	     "f" => \$opt_f,
 	     "help|?" => sub{ print $usage; exit;}
 	   );
 
@@ -48,6 +60,7 @@ while (my $k = each %seq) {
     close SFILE;
     $command = "maker";
     $command .= " -R" if ($opt_R);
+    $command .= " -f" if ($opt_f);
     $command .= " $fn\.fasta $cf[0] $cf[1] $cf[2]";
 
     system("$command");
