@@ -1,0 +1,12 @@
+blib/
+CVS/
+\.\#
+\.bak$
+\.BAK$
+\.old$
+\.OLD$
+\~$
+^Makefile$
+^core$
+.cvsignore$
+MPI-unimplemented.xs$

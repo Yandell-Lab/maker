@@ -1,0 +1,554 @@
+#! /usr/bin/perl -w
+
+use strict "vars";
+use strict "refs";
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use Process::MakerChunk;
+use Process::MakerTiers;
+use Storable qw (freeze thaw);
+use File::Temp qw(tempfile tempdir);
+use Parallel::MPIcar qw(:all);
+use Dumper::GFF::GFFV3;
+use Dumper::XML::Game;
+use Datastore::MD5;
+use URI::Escape;
+use File::Path;
+use Data::Dumper;
+use Getopt::Long;
+use FileHandle;
+use PostData;
+use Cwd qw(cwd abs_path);
+use Fasta;
+use Iterator::Fasta;
+use FastaChunker;
+use Widget::RepeatMasker;
+use Widget::blastx;
+use Widget::tblastx;
+use Widget::blastn;
+use Widget::snap; 
+use PhatHit_utils;
+use Shadower;
+use Bio::DB::Fasta;
+use polisher::exonerate::protein;
+use polisher::exonerate::est;
+use maker::auto_annotator;
+use cluster;
+use repeat_mask_seq;
+use maker::sens_spec;
+
+BEGIN {
+    $SIG{'__WARN__'} = sub {
+	                       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+					       $_[0] !~ /Can't store item CODE/
+					     )
+			   }
+}
+
+MPI_Init();			#initiate the MPI
+
+$| = 1;
+
+my $usage = "
+Usage:
+
+        maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+
+        If you already specified the location for the genome file in the user control files
+        you can ommit the first argument, <genome_file>.  The genome file must be in fasta
+        format.  Maker only works with one fasta sequence at a time, so if your genome_file
+        contains a multifasta, use multifasa_maker to iterate over the sequences.
+
+        The last three arguments are user control files that specify how maker should behave.
+        Please see maker documentation to learn more about control file format.  The program
+        will automatically try and locate the user control files in the current working
+        directory if these arguments are not supplied when initializing maker.
+
+        It is important to note that maker does not try and recalculated data that it has
+        already calculated.  For example, if you run an analysis twice on the same fasta file
+        you will notice that maker does not rerun any of the blast analyses but instead uses
+        the blast analyses stored from the previous run.  To force maker to rerun all
+        analyses, use the -f flag.
+
+Options:
+
+        -R Turns repeat masking off (* See Warning)
+        -f Forces maker to rerun all analyses
+        -d Causes output to be written using datastore.  This option is automatically enabled
+           if there are more than 1000 fasta entries in the input file.  Output is then
+           accessed using the datastore_index file created by the program.
+        -h Help
+
+Warning:
+      
+        *When using the -R flag, maker expects that the input genome file is already masked.
+         This means that if your genome file contains lower case characters, maker will
+         consider those characers to be soft masked.
+
+";
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+
+#------INITIATE MPI VARIABLES------
+my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
+my $size = MPI_Comm_size(MPI_COMM_WORLD); #how many proccesses
+
+my $give_me_data = 1111;
+my $mpi_data = 2222;
+my $data_available = 3333;
+my $message_length = 4444;
+my $mpi_result = 5555;
+my $result_available = 7777;
+
+if ($size < 2) {
+    system ("perl $FindBin::Bin/maker " . join (" ", @ARGV));
+    exit;
+}
+
+#---------PRIMARY MPI PROCCESS---------
+if ($rank == 0) {
+    my %OPT;
+    $OPT{a} = 0;
+
+    GetOptions("RM_off|R" => \$OPT{R},
+	       "force|f" => \$OPT{f},
+	       "datastore|d" => \$OPT{d},
+	       "a=s" => \$OPT{a},
+	       "help|?" => sub {die $usage;}
+	      );
+
+    #get arguments off the command line
+    my $infile = '';
+
+    if (@ARGV > 3 || @ARGV == 1) {
+	$infile = shift @ARGV;
+    }
+
+    my @ctlfiles = @ARGV;
+
+    if ((not @ctlfiles) && (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl")) {
+	@ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
+    }
+    else {
+	die $usage;
+    }
+
+    #set up control options from control files
+    my %CTL_OPTIONS = load_control_files($infile, @ctlfiles);
+
+    #load genome fasta file
+    my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
+
+    #decide whether to use datastore 
+    my $DS_FH; #datastore file handle
+    if ($fasta_iterator->number_of_entries() > 1000) {
+	print STDERR "\n\n".
+	"WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
+	"Datastore will be used to avoid overloading the data structure of\n".
+	"the output directory.\n\n";
+
+	$OPT{d} = 1;
+    }
+
+    if ($OPT{d}) {
+	%CTL_OPTIONS = build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
+	$DS_FH = new FileHandle();
+	$DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
+        $DS_FH->autoflush(1);
+    }
+
+    #set up blast databases for analyisis
+    %CTL_OPTIONS = create_blastdb(\%CTL_OPTIONS);
+
+    #iterate over each sequence in the fasta
+    my @tiers;
+
+    while (my $fasta = $fasta_iterator->nextEntry()) {
+	if (@tiers < $size) {
+	    my $tier = Process::MakerTiers->new($fasta, \%CTL_OPTIONS, \%OPT, $DS_FH);
+	    push (@tiers, $tier);
+	}
+    }
+
+    my $status = 1;
+    
+    #---main code for distribution of mpi data here
+    while ($status) {
+	my $term_count = 0;
+	
+	foreach my $tier (@tiers) {
+	    my $recv;
+	    my $res;
+	
+	    #--send and receive data via mpi for first chunk of tier
+	    MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
+	    MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+	    
+	    if ($res) {
+		my $new_chunk;
+		MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
+		Process::MakerTiers->update_chunk($new_chunk);
+	    }
+
+	    if (my $chunk = $tier->next_chunk) { #take next chunk off tier and send
+		my $signal = 1;
+		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
+		MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
+	    }
+	    else {	     #no chunk available tell mpi node to wait
+		my $signal = 2;
+		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status		
+	    }
+	    
+	    #--send and receive all data in this tier before continuing
+	    while (my $chunk = $tier->next_chunk) {
+		my $recv;
+		my $res;
+		my $signal = 1;
+		
+		MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
+		MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+		
+		if ($res) {
+		    my $new_chunk;
+		    MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
+		    Process::MakerTiers->update_chunk($new_chunk);
+		}
+		
+		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
+		MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
+	    }
+	        
+	    #--check if tier is finished
+	    if ($tier->level_finished()) {
+		$tier->next_level();
+	    }
+	    
+	    #--check if tier is terminated
+	    if ($tier->terminated()) {
+		if (my $fasta = $fasta_iterator->nextEntry()) {
+		    $tier = Process::MakerTiers->new($fasta, \%CTL_OPTIONS, \%OPT, $DS_FH);
+		}
+		else {
+		    $term_count++;
+		}
+	    }
+	}
+
+	$status = 0 if ($term_count == @tiers);
+    }
+
+    #---tell mpi nodes there is no data left
+    for (my $i = 1; $i < $size; $i++) {
+	my $recv;
+	my $signal = 0;
+	my $res;
+	
+	MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
+	MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+	
+	if ($res) { #this is for debugging
+	    die "Error: Maker did not gather all results before terminating mpi processes";
+	}
+
+	MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
+    }
+}
+#------SECONDARY MPI PROCESSES------
+else {
+    my $signal = 1;
+    my $res = 0;
+    my $result;
+
+    while($signal) {
+	MPI_Send(\$rank, 1, MPI_INT, 0, $give_me_data, MPI_COMM_WORLD); #request data from primary process
+	MPI_Send(\$res, 1, MPI_INT, 0, $result_available, MPI_COMM_WORLD); #tell primary process status results are available
+	
+	if ($res) {
+	    MPI_SendII(\$result, 0, $mpi_result, MPI_COMM_WORLD); #send result
+	    undef $result;
+	    $res = 0;
+	}
+	
+	MPI_Recv(\$signal, 1, MPI_INT, 0, $data_available, MPI_COMM_WORLD);	#receive data status
+	
+	my $chunk;
+
+	if ($signal == 1){
+	    MPI_RecvII(\$chunk, 0, $mpi_data, MPI_COMM_WORLD); #receive chunk
+	}
+	elsif($signal == 2){
+	    sleep 1;
+	    next;
+	}
+	elsif($signal == 0){
+	    next;
+	}
+
+	$chunk->run();
+	$result = $chunk;
+	$res = 1;
+    }
+}
+
+#-----------------------------------
+MPI_Finalize();			#terminate MPI
+
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
+sub build_datastore {
+    my %CTL_OPTIONS = %{shift @_};
+
+    $CTL_OPTIONS{'dsroot'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_datastore";
+    $CTL_OPTIONS{'dsindex'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_master_datastore.index";
+
+    print STDERR "A data structure will now be created for you at:\n".
+    "$CTL_OPTIONS{'dsroot'}\n\n".
+    "To access files for individual sequences use the datastore index:\n".
+    "$CTL_OPTIONS{'dsindex'}\n\n";
+    
+    $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
+
+    return %CTL_OPTIONS;
+}
+#----------------------------------------------------------------------------
+sub create_blastdb {
+    my %CTL_OPTIONS = %{shift @_};
+
+    $CTL_OPTIONS{'old_protein'}        = $CTL_OPTIONS{'protein'};
+    $CTL_OPTIONS{'old_est'}            = $CTL_OPTIONS{'est'};
+    $CTL_OPTIONS{'old_repeat_protein'} = $CTL_OPTIONS{'repeat_protein'};
+    $CTL_OPTIONS{'old_alt_est'}        = $CTL_OPTIONS{'alt_est'};
+    
+    $CTL_OPTIONS{'protein'} = split_db($CTL_OPTIONS{'protein'});
+    $CTL_OPTIONS{'est'} = split_db($CTL_OPTIONS{'est'});
+    $CTL_OPTIONS{'repeat_protein'} = split_db($CTL_OPTIONS{'repeat_protein'});
+    $CTL_OPTIONS{'alt_est'} = split_db($CTL_OPTIONS{'alt_est'}) if ($CTL_OPTIONS{'alt_est'});
+
+    return %CTL_OPTIONS;
+}
+#----------------------------------------------------------------------------
+sub split_db {
+    my $file = shift @_;
+    
+    my $fasta_iterator = new Iterator::Fasta($file);
+    my $db_size = $fasta_iterator->number_of_entries();
+    my $bins = $size - 1;
+    $bins = $db_size if ($db_size < $bins);
+
+    my @fhs;
+    my @db_files;
+
+    if ($bins == 1){
+	push (@db_files, $file);
+	
+	return \@db_files;
+    }
+    
+    my $dir = tempdir("dbXXXXX", DIR => cwd(), CLEANUP => 1);
+
+    for (my $i = 0; $i < $bins; $i++){
+	my ($fh, $name) = tempfile("dbXXXXX",DIR => $dir, SUFFIX => '.fasta', UNLINK => 1);
+	push (@fhs, $fh);
+	push (@db_files, $name);
+    }
+
+    while (my $fasta = $fasta_iterator->nextEntry()){
+	my $fh = shift @fhs;
+	print $fh "$fasta\n";
+	push (@fhs, $fh);
+    }
+
+    foreach my $fh (@fhs){
+	close ($fh);
+    }
+
+    return \@db_files;
+}
+#----------------------------------------------------------------------------
+sub load_control_files {
+    my $infile= shift @_;
+    my @ctlfiles = @_;
+    my %CTL_OPTIONS;
+    my %OK_FIELDS;
+
+    my @MAKER_OPTS_PARAMS = ('genome',
+			     'protein',
+			     'est',
+			     'alt_est',
+			     'repeat_protein',
+			     'clean_up',
+			     'rmlib',
+			     'use_seq_dir',
+			     'split_hit',
+			     'snap_flank',
+			     'te_remove',
+			     'single_exon'
+			    );
+    
+    my @MAKER_BOPTS_PARAMS = ('max_dna_len',
+			      'percov_blastn',
+			      'percid_blastn',
+			      'eval_blastn',
+			      'bit_blastn',
+			      'percov_blastx',
+			      'percid_blastx',
+			      'eval_blastx',
+			      'bit_blastx',
+			      'e_perc_cov',
+			      'ep_score_limit',
+			      'en_score_limit',
+			      'model_org',
+			      'snaphmm',
+			     );
+
+    my @MAKER_EXE_PARAMS = ('setdb',
+			    'pressdb',
+			    'blastn',
+			    'blastx',
+			    'tblastx',
+			    'snap',
+			    'RepeatMasker',
+			    'exonerate',
+			    'cpus',
+			   );
+    
+    foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
+	$OK_FIELDS{$attr}++;
+    }
+
+    #set default values for certain control options
+    $CTL_OPTIONS{'clean_up'} = 0;
+    $CTL_OPTIONS{'max_dna_len'} = 100000;
+    $CTL_OPTIONS{'percov_blastn'} = 0.80;
+    $CTL_OPTIONS{'percid_blastn'} = 0.85;
+    $CTL_OPTIONS{'eval_blastn'} = 1e-10;
+    $CTL_OPTIONS{'bit_blastn'} = 40;
+    $CTL_OPTIONS{'percov_blastx'} = 0.50;
+    $CTL_OPTIONS{'percid_blastx'} = 0.40;
+    $CTL_OPTIONS{'eval_blastx'} = 1e-6;
+    $CTL_OPTIONS{'bit_blastx'} = 30;
+    $CTL_OPTIONS{'percov_tblastx'} = 0.50;
+    $CTL_OPTIONS{'percid_tblastx'} = 0.40;
+    $CTL_OPTIONS{'eval_tblastx'} = 1e-6;
+    $CTL_OPTIONS{'bit_tblastx'} = 30;
+    $CTL_OPTIONS{'e_perc_cov'} = 50;
+
+    #load values from control files
+    foreach my $ctlfile (@ctlfiles) {
+	open (CTL, "< $ctlfile") or die "ERROR: Could not open control files.\n$usage";
+	
+	while (my $line = <CTL>) {
+	    chomp($line);
+	    
+	    if ($line !~ /^\s\t\n/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
+		if (exists $OK_FIELDS{$1}) {
+		    $CTL_OPTIONS{$1} = $2 unless (not defined $2);
+		}
+		else {
+		    warn "ERROR: Invalid option \"$1\" in control file $ctlfile\n";
+		}
+	    }
+	}
+    }
+
+    $CTL_OPTIONS{'genome'} = $infile if ($infile);
+    $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
+    
+
+    #validate required values from control files
+    my @infiles = ('genome','protein', 'est','setdb','pressdb','blastn',
+		   'blastx','snap','RepeatMasker', 'exonerate'
+		  );
+
+    foreach my $in (@infiles) {
+	if (not $CTL_OPTIONS{$in}) {
+	    die "You have failed to provide the name and location of the $in file\n;"
+	}
+
+	if (not -e $CTL_OPTIONS{$in}) {
+	    die "The $in file $CTL_OPTIONS{$in} does not exist.".
+	    "Please check your control files: maker_opts.ctl or maker_exe.ctl\n";
+	}
+    }
+
+    if (not $CTL_OPTIONS{'model_org'}) {
+	warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
+	"As a result the default (drosophila) will be used.\n";
+	$CTL_OPTIONS{'model_org'} = "drosophila";
+    }
+    if (not $CTL_OPTIONS{'snaphmm'}) {
+	warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
+	"As a result, te default (fly) will be used.\n";
+	$CTL_OPTIONS{'snaphmm'} = "fly";
+    }
+
+    #set values for datastructure    
+    $CTL_OPTIONS{'genome'} =~ /([^\/]+)$/;
+    $CTL_OPTIONS{'out_name'} = $1;
+    $CTL_OPTIONS{'out_name'} =~ s/\.[^\.]+$//;
+    $CTL_OPTIONS{'out_base'} = cwd();
+
+    if ($CTL_OPTIONS{'use_seq_dir'}) {
+	my @file_struct = split(/\//, $CTL_OPTIONS{'genome'});
+	pop @file_struct;
+	$CTL_OPTIONS{'out_base'} = join("/", @file_struct);
+    }
+    
+    if (not $CTL_OPTIONS{'out_base'}) {
+	die "No working directory, check your use_seq_dir option\n";
+    }
+
+    return %CTL_OPTIONS;
+}
+#----------------------------------------------------------------------------
+sub totemp{
+    my $data = shift @_;
+
+    my ($fh, $name) = tempfile();
+    print $fh $data;
+    close ($fh);
+
+    return $name;
+}
+#----------------------------------------------------------------------------
+sub MPI_SendII{
+    my $msg = shift @_;
+    my $target = shift @_;
+    my $tag = shift @_;
+    my $communicator = shift @_;
+
+    my $send = freeze($msg);
+
+    $send ="##########################StartStartStart".$send."EndEndEnd##########################";
+    my $length = length($send);
+
+    MPI_Send(\$length, 1, MPI_INT, $target, $message_length, $communicator);
+    MPI_Send(\$send, $length, MPI_CHAR, $target, $tag, $communicator);
+
+}
+#----------------------------------------------------------------------------
+sub MPI_RecvII{
+    my $ref = shift @_;
+    my $source = shift @_;
+    my $tag = shift @_;
+    my $communicator = shift @_;
+
+    my $length;
+    my $recv;
+
+    MPI_Recv(\$length, 1, MPI_INT, $source, $message_length, $communicator);
+    MPI_Recv(\$recv, $length, MPI_CHAR, $source, $tag, $communicator); #receive line
+
+    $recv =~ /\#{10}StartStartStart(.*)EndEndEnd\#{10}/s;
+
+    $recv = $1 || '';
+
+    ${$ref} = ${thaw($recv)};
+}
+
