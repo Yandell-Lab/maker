@@ -1,0 +1,38 @@
+===============================================================================
+To Do:
+-----
+
+Array Handling:
+   If size is undef or 0, figure out from scalar(@array).
+   Add array handling for all functions.
+
+API:
+ figure out a MPI::Request class. (to use for MPI_Request's for asyncs)
+
+Scatter:
+    Figure out why the free's are making it seg fault!
+
+Data Type Handling:
+   For now, i've used the FLOAT_HACK, which uses MPI_DOUBLE instead of 
+      MPI_FLOAT under the covers.  This makes it pass our tests, at
+      least.   Since perl represents data as doubles anyway, it might
+      be fine to just stick with this hack.  I would like to
+      understand why it is necessary.
+  
+Buffers:
+   Finish array buffer packer.
+   For scatter, bcast, and others- don't malloc the sendbuf unless we're in
+     the root?  Can we just pass null? (and recvbuf for gather)
+
+Documentation:
+   Finish POD docs.  
+
+Testing:
+   Write test for MPI_Sendrecv.
+    
+   Extend tests for communication functions to test out all of the
+     data types, at least for send/recv.  We can safely assume that if
+     they work in this case they will work for others, probably.
+   Extend tests to test array handling.
+
+===============================================================================

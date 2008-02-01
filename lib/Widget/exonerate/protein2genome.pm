@@ -1,0 +1,724 @@
+#------------------------------------------------------------------------
+#----                   Widget::exonerate::protein2genome            ---- 
+#------------------------------------------------------------------------
+package Widget::exonerate::protein2genome;
+use strict;
+use vars qw(@ISA @EXPORT $VERSION);
+use Exporter;
+use PostData;
+use FileHandle;
+use Widget::exonerate;
+use exonerate::PhatHit::protein2genome;
+use exonerate::PhatHSP::protein2genome;
+@ISA = qw(
+	Widget::exonerate
+       );
+
+#------------------------------------------------------------------------------
+#--------------------------------- METHODS ------------------------------------
+#------------------------------------------------------------------------------
+sub new {
+        my $class  = shift;
+        my @args   = @_;
+
+        my $self = $class->SUPER::new(@args);
+
+	bless ($self, $class);
+        return $self;
+}
+#------------------------------------------------------------------------------
+#------------------------------ FUNCTIONS --------------------------------------
+#-------------------------------------------------------------------------------
+sub get_blocks {
+	my $file = shift;
+
+      my $fh = new FileHandle();
+         $fh->open($file);
+
+	$/ = 'C4 Alignment:';
+
+	my @chunks;
+	while (my $line = <$fh>){
+		push(@chunks, $line);
+	} 
+	$fh->close();
+
+	$/ = "\n";
+
+	return \@chunks;
+}
+#-------------------------------------------------------------------------------
+sub get_exon_coors {
+
+	my $v = shift;
+
+	#PostData($v);
+
+	my $pos_q = $v->{q_b};
+	my $pos_t = $v->{t_b};
+	#print "AAAAAAAA:$pos_q\n";
+	my $exon = 0;
+	my @data;
+        foreach my $o (@{$v->{operations}}){
+		#print "STATE:".$o->{state}."\n";
+		if    ($o->{state} eq 'M'){
+
+			$data[$exon]{q}{b} = $pos_q
+			unless defined($data[$exon]{q}{b});
+
+			$data[$exon]{t}{b} = $pos_t	
+			unless defined($data[$exon]{t}{b});
+
+			$pos_q += $o->{q};
+
+			if ($v->{t_strand} == 1){
+				$pos_t += $o->{t};
+			}
+			else {
+				$pos_t -= $o->{t};
+			}
+
+			#print "BBBBBBB:$pos_q\n";
+		}
+		elsif ($o->{state} eq 'G'){
+
+			$pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+			#die "dead in :protein2genomic::get_hsp_coors:G\n";
+		}
+                elsif ($o->{state} eq 'N'){
+			die "dead in protein2genomic::get_hsp_coors:N\n";
+                }
+                elsif ($o->{state} eq '5'){
+			$data[$exon]{q}{e} = $pos_q; 
+			$data[$exon]{t}{e} = $pos_t; 
+
+      			$data[$exon]{q}{strand} = $v->{q_strand};
+        		$data[$exon]{t}{strand} = $v->{t_strand};
+
+                    	$pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+
+			$exon++;
+                }
+                elsif ($o->{state} eq '3'){
+                    	$pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+
+                }
+                elsif ($o->{state} eq 'I'){
+			$pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+
+                }
+                elsif ($o->{state} eq 'S'){
+
+                        $pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+
+                }
+                elsif ($o->{state} eq 'F'){
+
+                       $pos_q += $o->{q};
+
+                        if ($v->{t_strand} == 1){
+                                $pos_t += $o->{t};
+                        }
+                        else {
+                                $pos_t -= $o->{t};
+                        }
+
+                }
+
+        }
+
+	$data[$exon]{q}{e} = $pos_q;
+	$data[$exon]{t}{e} = $pos_t;
+
+	#PostData($v);
+	$data[$exon]{q}{strand} = $v->{q_strand};
+        $data[$exon]{t}{strand} = $v->{t_strand};
+
+	fix_exon_coors(\@data);
+
+	return \@data;
+}
+#-------------------------------------------------------------------------------
+sub fix_exon_coors {
+        my $data = shift;
+        foreach my $exon (@{$data}){
+
+		$exon->{q}{b}++ if $exon->{q}{b} == 0;
+		$exon->{t}{b}++ if $exon->{t}{b} == 0;
+
+                $exon->{q}{e}++ if $exon->{q}{e} == 0;
+                $exon->{t}{e}++ if $exon->{t}{e} == 0;
+
+                if ($exon->{t}->{strand} == 1){
+                        $exon->{t}->{b}++;
+                }  
+                else {
+                        $exon->{t}->{b}++;
+                }
+        }
+}
+#-------------------------------------------------------------------------------
+sub assemble {
+	my $bhd       = shift;
+	my $bad       = shift;
+	my $v         = shift;
+	my $q_seq_len = shift;
+	my $t_seq_len = shift;
+
+	my $exons = get_exon_coors($v);
+
+	add_align_strs($bad, $exons);
+	add_align_attr($exons, $q_seq_len, $t_seq_len);
+
+        my $phat_hit = 
+	new exonerate::PhatHit::protein2genome(
+	                          '-name'        => $v->{q_id},
+                                  '-description' => $v->{q_id},
+                                  '-algorithm'   => 'exonerate::protein2genome',
+                                   '-length'     => $q_seq_len,
+                                  );
+
+        $phat_hit->queryLength($t_seq_len);
+
+	my $i = -1;
+	foreach my $exon (@{$exons}){
+		$i++;
+		#print "XXXXXXXXX $i XXXXXXXXXXXX\n";
+		#next unless $i ==3;
+		my $args = load_args($exon, $v);	
+		my $hsp = new exonerate::PhatHSP::protein2genome(@{$args});
+                   $hsp->queryName($v->{q_id});
+		#-------------------------------------------------
+                # setting strand because bioperl is all fucked up!
+                #------------------------------------------------
+                $hsp->{_strand_hack}->{query} = $exon->{t}->{strand};
+                $hsp->{_strand_hack}->{hit}   = $exon->{q}->{strand};
+		$hsp->{_indentical_hack}      = $exon->{identical};
+
+		#print substr($hsp->query_string(), 0, 100)."\n";
+		#print substr($hsp->homology_string(), 0, 100)."\n";
+		#print substr($hsp->hit_string(), 0, 100)."\n";
+
+		#PostData($exon);
+		#$hsp->show();
+		
+		my $q_pos = $hsp->nE('query') -1 ;
+;
+		#my $h_pos = $hsp->equivalent_pos_in_alignment_partner('query', $q_pos);
+		#my $q_char = $hsp->whatIsThere('query', $q_pos);
+		#my $h_char  = $hsp->whatIsThere('hit', $h_pos);
+		#my $q_test  =  $hsp->equivalent_pos_in_alignment_partner('hit', $h_pos);
+		#print "q_pos:$q_pos q_char:$q_char h_pos:$h_pos h_char:$h_char q_test:$q_test\n";
+		#die;
+
+		$phat_hit->add_hsp($hsp);	
+	}
+	return $phat_hit;
+}
+#-------------------------------------------------------------------------------
+sub split_aa_str {
+        my $q_aa_str = shift;
+
+        my $reg_ex = 'Target\s+Intron\s+\d+';
+
+        my @q_aa_strs = split(/$reg_ex/, $q_aa_str);
+
+        foreach my $str (@q_aa_strs){
+                $str =~ s/[<>]//g;
+                $str =~ s/^\s+//;
+                $str =~ s/\s+$//;
+        }
+
+        return \@q_aa_strs;
+
+}
+#-------------------------------------------------------------------------------
+sub add_align_strs {
+	my $bad   = shift;
+	my $exons = shift;
+
+	my $q_aa_str = $bad->{q_aa_str};
+
+	if ($q_aa_str =~ /Target Intron/){
+
+		my $q_aa_strs = split_aa_str($q_aa_str);
+
+		my $i = 0;
+		my $o = 0;
+		foreach my $q_aa_part (@{$q_aa_strs}){
+			my $m_str    = substr($bad->{m_str},    
+				              $o, 
+			                      length($q_aa_part),
+			                      );
+
+			my $t_aa_str = substr($bad->{t_aa_str}, 
+			                      $o, 
+			                      length($q_aa_part),
+			                      );
+
+			my $t_nc_str = substr($bad->{t_nc_str}, 
+			                      $o, 
+			                      length($q_aa_part),
+			                      );
+			
+
+			$o += length($q_aa_part) + 29;
+
+			# go heare to get phase!
+
+			$q_aa_part =~ s/\{[A-Za-z]+\}//;
+			$m_str     =~ s/\{\|+\}//;
+			$t_nc_str =~ s/\{[A-Z]+\}//;
+
+                	$exons->[$i]->{q_aa_str} = $q_aa_part;
+                	$exons->[$i]->{m_str}    = $m_str;
+                	$exons->[$i]->{t_aa_str} = $t_aa_str;
+                	$exons->[$i]->{t_nc_str} = $t_nc_str;
+
+			$i++;
+		}
+	}
+	else {
+		$exons->[0]->{q_aa_str} = $bad->{q_aa_str};
+		$exons->[0]->{m_str}    = $bad->{m_str};
+		$exons->[0]->{t_aa_str} = $bad->{t_aa_str};
+		$exons->[0]->{t_nc_str} = $bad->{t_nc_str};
+		
+		#$exons->[0]->{q_aa_str} =~ s/[<>]/-/g; ;
+	}
+
+	return $exons;
+}
+#-------------------------------------------------------------------------------
+sub add_align_attr {
+	my $exons     = shift;
+	my $q_seq_len = shift;
+	my $t_seq_len = shift;
+
+	foreach my $e (@{$exons}){
+
+		my $num_pipes = $e->{m_str} =~ tr/\|/\|/;
+		my $num_con   = $e->{m_str} =~ tr/\|\!\:\./\|\!\:\./;
+		my $m_str_len = length($e->{m_str});
+
+		my $identical = $num_pipes/3;
+		my $conserved = $num_con/ 3;
+
+		my ($q_gaps) = $e->{q_aa_str} =~ tr/\<\-\>/\<\-\>/;
+		my ($t_gaps) = $e->{t_nc_str} =~ tr/\-/\-/;
+
+		my $q_hit_len = $e->{q_aa_str} =~ tr/A-Z/A-Z/;
+		my $t_hit_len = $e->{t_nc_str} =~ tr/A-Z/A-Z/;
+
+		$e->{identical} = $identical;
+		$e->{conserved} = $conserved;
+		$e->{q_gaps}    = $q_gaps;
+		$e->{t_gaps}    = $t_gaps;
+		$e->{q_hit_len} = $q_hit_len;
+		$e->{t_hit_len} = $t_hit_len;	
+
+		$e->{q_seq_len} = $q_seq_len;
+        	$e->{t_seq_len} = $t_seq_len;
+
+		
+	}
+}
+#-------------------------------------------------------------------------------
+sub load_args {
+	my $exon = shift;
+	my $v    = shift;
+
+	my ($t_b, $t_e);
+	if ($exon->{t}->{b} < $exon->{t}->{e}){
+		$t_b = $exon->{t}->{b};
+		$t_e = $exon->{t}->{e};
+	}
+	else {
+		$t_b = $exon->{t}->{e};
+                $t_e = $exon->{t}->{b};
+	}
+
+	my $q_b = $exon->{q}->{b};
+	my $q_e = $exon->{q}->{e};
+
+
+        my @args;
+
+        push(@args, '-query_start');
+        push(@args, $t_b);
+
+        push(@args, '-query_seq');
+        push(@args, $exon->{t_aa_str});
+
+        push(@args, '-score');
+        push(@args, $v->{score});
+
+        push(@args, '-homology_seq');
+        push(@args, $exon->{m_str});
+
+        push(@args, '-hit_start');
+        push(@args, $q_b);
+
+        push(@args, '-hit_seq');
+        push(@args, $exon->{q_nc_str});
+
+        push(@args, '-hsp_length');
+        push(@args, length($exon->{t_aa_str}));
+
+        push(@args, '-identical');
+	push(@args, $exon->{identical});
+
+        push(@args, '-hit_length');
+        push(@args, $exon->{q_hit_len});
+
+        push(@args, '-query_name');
+        push(@args, $v->{t_id});
+
+        push(@args, '-algorithm');
+        push(@args, 'exonerate::protein2genome');
+
+        push(@args, '-bits');
+        push(@args, $v->{score}); # bioperl hack!
+
+        push(@args, '-evalue');
+        push(@args, 'NA');
+
+        push(@args, '-pvalue');
+        push(@args, 'NA');
+
+        push(@args, '-query_length');
+        push(@args, $exon->{t_seq_len});
+
+        push(@args, '-query_end');
+        push(@args, $t_e);
+
+        push(@args, '-conserved');
+        push(@args, $exon->{conserved});
+
+        push(@args, '-hit_name');
+        push(@args, $v->{q_id});
+
+        push(@args, '-hit_end');
+        push(@args, $q_e);
+
+        push(@args, '-query_gaps');
+        push(@args, $exon->{t_gaps});
+
+        push(@args, '-hit_gaps');
+        push(@args, $exon->{q_gaps});
+
+
+
+	return \@args;
+
+}
+#-------------------------------------------------------------------------------
+sub get_gaps {
+	my $type = shift;
+	my $v    = shift;
+
+	my $gaps = 0;
+	foreach my $o (@{$v->{operations}}){
+		next unless $o->{state} eq 'G';
+		$gaps += $o->{$type};	
+	}
+	return $gaps;
+}
+#-------------------------------------------------------------------------------
+sub parse {
+	my $file = shift;
+	my $q_seq_length = shift;
+	my $t_seq_length = shift;	
+
+	my $blocks = get_blocks($file);
+
+	my $command;
+	my $hostname;
+	
+	my @hits;
+	my $BID = -1;
+	foreach my $block  (@{$blocks}){
+		$BID++;
+		#next unless $BID ==7;
+		my ($block_head_data, $block_align_data, $vulgarity);
+		my @b = split(/\n/, $block);
+		if ($b[0] =~ /Command line/){
+			($command, $hostname) = parse_header(\@b);
+		}
+		elsif ($b[2] =~ /Query\:/ && $b[3] =~ /Target:/){
+
+			($block_head_data, $block_align_data, $vulgarity) 
+			= parse_block(\@b);
+
+			my $phat_hit = assemble($block_head_data,
+			                         $block_align_data,
+			                         $vulgarity,
+						 $q_seq_length,
+			                         $t_seq_length,
+			                         );
+ 
+			push(@hits, $phat_hit);
+		}
+	}
+	return \@hits;
+}
+#-------------------------------------------------------------------------------
+sub parse_block_head {
+	my $b = shift;
+
+	
+	my %data;
+	foreach my $l (@{$b}){
+        	chomp($l);
+                if    ($l =~ /Query\:/){
+                        ($data{q_id}) = $l =~ /\s+Query\:\s+(.*)$/;
+                }
+                elsif ($l =~ /Target\:/){
+                        ($data{t_id}) = $l =~ /\s+Target\:\s+(.*)$/;
+                }
+                elsif ($l =~ /Model\:/){
+                       ($data{model}) = $l =~ /\s+Model\:\s+(.*)$/;
+                }
+               elsif ($l =~ /Raw\s+score\:\s+/){
+                       ($data{r_score}) = $l =~ /\s+Raw\s+score\:\s+(.*)$/;
+                }
+               elsif ($l =~ /Query\s+range\:/){
+                       ($data{q_b}, $data{q_e}) = 
+			$l =~ /\s+Query\s+range\:\s+(\d+)\s+\-\>\s+(\d+)$/;
+                }
+                elsif ($l =~ /Target\s+range\:/){
+                       ($data{t_b}, $data{t_e}) = 
+			$l =~ /\s+Target\s+range\:\s+(\d+)\s+\-\>\s+(\d+)$/;
+                }
+	}
+	return \%data;
+}
+#-------------------------------------------------------------------------------
+sub parse_block_tail {
+	my $b = shift;
+
+	my ($cigar, $vulgarity);
+        foreach my $l (@{$b}){
+                chomp($l);
+                if ($l =~ /cigar\:/){
+                        #$cigar = parse_cigar($l);
+                }
+                elsif ($l =~ /vulgar\:/){
+                        $vulgarity = parse_vulgar($l);
+                }
+
+
+        }
+	return $vulgarity;
+}
+#-------------------------------------------------------------------------------
+sub parse_vulgar {
+	my $l = shift;
+
+	#print "VULGAR:$l\n";
+
+	my @f = split(/\s+/, $l);
+
+	my @left = splice(@f, 0, 10);
+
+	my %vulgarity;
+	while (defined (my $s = shift(@f))){
+		my $q = shift @f;
+		my $t = shift @f; 
+
+		die "dead in parse_vulgar!\n"
+                unless defined($s) 
+		&&     defined($q) 
+	        &&     defined($t);
+		
+		push(@{$vulgarity{operations}}, { 'state' => $s, 'q' => $q, 't' => $t});
+	}
+
+	
+	$vulgarity{score}    = $left[9];
+	$vulgarity{q_id}     = $left[1];
+	$vulgarity{q_b}      = $left[2];
+	$vulgarity{q_e}      = $left[3];
+	$vulgarity{q_strand} = 1;
+
+	$vulgarity{t_id}     = $left[5];
+	$vulgarity{t_b}      = $left[6];
+        $vulgarity{t_e}      = $left[7];
+        $vulgarity{t_strand} = $left[8] eq '+' ? 1 : -1;
+	
+	
+	 return \%vulgarity;
+}
+#-------------------------------------------------------------------------------
+sub parse_block {
+        my $b = shift;
+
+	my @block_head = splice(@{$b},2, 7);
+	my @block_tail;
+	push(@block_tail, pop(@{$b}));
+	push(@block_tail, pop(@{$b}));
+	push(@block_tail, pop(@{$b}));	
+	push(@block_tail, pop(@{$b}));
+
+	my $block_head_data = parse_block_head(\@block_head);
+
+	my $vulgarity       = parse_block_tail(\@block_tail);
+
+	shift @{$b};
+	shift @{$b};
+
+	my $block_align_data = parse_block_align($b);
+
+	return ($block_head_data, $block_align_data, $vulgarity); 
+}
+#-------------------------------------------------------------------------------
+sub parse_block_align {
+	my $b = shift;
+
+	my %data;
+	$data{q_aa_str} = '';
+	$data{m_str}    = '';
+	$data{t_aa_str} = '';
+	$data{t_nc_str} = '';
+
+	my ($w, $x, $y, $z) = '';
+	while (defined(my $l = shift(@{$b}))){
+		next unless $l =~ /\S+/;
+		my ($lead, $q_aa) = $l =~ /(\s+\d+\s+\:\s)(\s*\S.*\S\s*)\s+\:/;
+		   ($lead, $q_aa) = $l =~ /(\s+\d+\s+\:\s)(\s*\S\s*)\s+\:/
+                   if !defined($lead) || !defined($q_aa);;
+
+		my $o = length($lead);
+
+		my $m    = substr(shift(@{$b}), $o);
+		my $t_aa = substr(shift(@{$b}), $o); 
+		my $t_nc = substr(shift(@{$b}), $o, length($q_aa));
+ 
+		die "no q_aa\n" unless defined($q_aa);
+		die "no m\n" unless defined($m);
+		die "no t_aa\n" unless defined($t_aa);
+		die "no t_nc\n" unless defined($t_nc);
+
+		$data{q_aa_str} .= $q_aa;
+		$data{m_str}    .= $m;
+		$data{t_aa_str} .= $t_aa;
+		$data{t_nc_str} .= $t_nc;
+
+		#print $q_aa."\n";
+		#print $m."\n";
+		#print $t_aa."\n";
+		#print $t_nc."\n";
+		#print "\n";
+	}
+	
+	return \%data;	
+}
+#-------------------------------------------------------------------------------
+sub parse_header {
+	my $b = shift;
+
+	my ($command)  = $b->[0] =~ /Command line: \[(.+)\]/;
+	my ($hostname) = $b->[1] =~ /Hostname\: \[(.+)\]/;
+
+	return ($command, $hostname);
+}
+#-------------------------------------------------------------------------------
+sub keepers {
+        my $sio    = shift;
+        my $params = shift;
+
+
+	#print "XXXXXXXXXXX\n";
+
+        my $result = $sio->next_result();
+
+	#PostData($result);
+
+        my @keepers;
+        my $start = $result->hits();
+        while(my $hit = $result->next_hit) {
+		$hit->show();
+=head;
+                my $significance = $hit->significance();
+                $significance = "1".$significance if  $significance =~ /^e/;
+                $hit->queryLength($result->query_length);
+                $hit->queryName($result->query_name);
+                #next unless $significance < $params->{significance};
+=cut;
+                my @hsps;
+                while(my $hsp = $hit->next_hsp) {
+			print "start q:".$hsp->start('hit')."\n";
+			print "end q:".$hsp->end('hit')."\n";
+                        #$hsp->query_name($result->query_name);
+
+                        #push(@hsps, $hsp) if $hsp->bits > $params->{hsp_bit_min};
+                }
+                $hit->hsps(\@hsps);
+                push(@keepers, $hit) if $hit->hsps();
+        }
+        my $end     = @keepers;
+        my $deleted = $start - $end;
+        print STDERR "deleted:$deleted hits\n";
+
+        return \@keepers;
+}
+#-------------------------------------------------------------------------------
+sub AUTOLOAD {
+        my ($self, $arg) = @_;
+
+        my $caller = caller();
+        use vars qw($AUTOLOAD);
+        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
+        $call =~/DESTROY/ && return;
+
+        print STDERR "Widget::RepeatMasker::AutoLoader called for: ",
+              "\$self->$call","()\n";
+        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+
+        if (defined($arg)){
+                $self->{$call} = $arg;
+        }
+        else {
+                return $self->{$call};
+        }
+}
+#------------------------------------------------------------------------
+
+1;
+
+
