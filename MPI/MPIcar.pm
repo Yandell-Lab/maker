@@ -97,7 +97,7 @@ my @funcs =     qw(&MPI_Send
 %EXPORT_TAGS = ( all => [ keys %constants, @funcs ] );
 @EXPORT_OK = ( keys %constants, @funcs );
 
-$VERSION = '0.04mod';
+$VERSION = '0.03';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
