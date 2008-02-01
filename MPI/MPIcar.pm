@@ -99,6 +99,9 @@ my @funcs =     qw(&MPI_Send
 
 $VERSION = '0.03';
 
+#this is a hack to stop an error in the original code by the original Author
+#I hope to eventually fix the error, but for now this works
+
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
     # XS function.  If a constant is not found then control is passed

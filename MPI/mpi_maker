@@ -42,7 +42,7 @@ use maker::sens_spec;
 BEGIN {
     $SIG{'__WARN__'} = sub {
 	                       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-					       $_[0] !~ /Can't store item CODE/
+					       $_[0] !~ /Can\'t store item CODE/
 					     )
 			   }
 }
