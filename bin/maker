@@ -3,6 +3,14 @@
 use strict "vars";
 use strict "refs";
 
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+BEGIN{
+    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
+    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo" if not ($ENV{CGL_GO_SOURCE});
+}
+
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use Datastore::MD5;
@@ -31,55 +39,6 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 
-use vars qw(%OK_FIELDS @MAKER_OPTS_PARAMS @MAKER_BOPTS_PARAMS @MAKER_EXE_PARAMS);
-
-BEGIN{
-    @MAKER_OPTS_PARAMS = ('genome',
-			  'protein',
-			  'est',
-			  'alt_est',
-			  'repeat_protein',
-			  'clean_up',
-			  'rmlib',
-			  'use_seq_dir',
-			  'split_hit',
-			  'snap_flank',
-			  'te_remove',
-			  'single_exon'
-			 );
-    
-    @MAKER_BOPTS_PARAMS = ('max_dna_len',
-			   'percov_blastn',
-			   'percid_blastn',
-			   'eval_blastn',
-			   'bit_blastn',
-			   'percov_blastx',
-			   'percid_blastx',
-			   'eval_blastx',
-			   'bit_blastx',
-			   'e_perc_cov',
-			   'ep_score_limit',
-			   'en_score_limit',
-			   'model_org',
-			   'snaphmm',
-			  );
-
-    @MAKER_EXE_PARAMS = ('setdb',
-			 'pressdb',
-			 'blastn',
-			 'blastx',
-			 'tblastx',
-			 'snap',
-			 'RepeatMasker',
-			 'exonerate',
-			 'cpus',
-			);
-    
-    foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
-	$OK_FIELDS{$attr}++;
-    }
-}
-
 $|  = 1;
 
 my $usage = "
@@ -89,8 +48,7 @@ Usage:
 
         If you already specified the location for the genome file in the user control files
         you can ommit the first argument, <genome_file>.  The genome file must be in fasta
-        format.  Maker only works with one fasta sequence at a time, so if your genome_file
-        contains a multifasta, use multifasa_maker to iterate over the sequences.
+        format.
 
         The last three arguments are user control files that specify how maker should behave.
         Please see maker documentation to learn more about control file format.  The program
@@ -115,8 +73,8 @@ Options:
 Warning:
       
         *When using the -R flag, maker expects that the input genome file is already masked.
-         This means that if your genome file contains lower case characters, maker will
-         consider those characers to be soft masked.
+         Also if your genome file contains lower case characters, maker will consider those
+         characers to be soft masked.
 
 ";
 
@@ -1378,6 +1336,54 @@ sub load_control_files {
     my $infile= shift @_;
     my @ctlfiles = @_;
     my %CTL_OPTIONS;
+
+    my @MAKER_OPTS_PARAMS = ('genome',
+			     'protein',
+			     'est',
+			     'alt_est',
+			     'repeat_protein',
+			     'clean_up',
+			     'rmlib',
+			     'use_seq_dir',
+			     'split_hit',
+			     'snap_flank',
+			     'te_remove',
+			     'single_exon'
+			     );
+    
+    my @MAKER_BOPTS_PARAMS = ('max_dna_len',
+			      'percov_blastn',
+			      'percid_blastn',
+			      'eval_blastn',
+			      'bit_blastn',
+			      'percov_blastx',
+			      'percid_blastx',
+			      'eval_blastx',
+			      'bit_blastx',
+			      'e_perc_cov',
+			      'ep_score_limit',
+			      'en_score_limit',
+			      'model_org',
+			      'snaphmm',
+			      );
+
+    my @MAKER_EXE_PARAMS = ('setdb',
+			    'pressdb',
+			    'blastn',
+			    'blastx',
+			    'tblastx',
+			    'snap',
+			    'RepeatMasker',
+			    'exonerate',
+			    'cpus',
+			    );
+    
+    my %OK_FIELDS;
+
+    foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
+	$OK_FIELDS{$attr}++;
+    }
+
 
     #set default values for certain control options
     $CTL_OPTIONS{'clean_up'} = 0;

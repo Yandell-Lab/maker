@@ -6,6 +6,18 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
+BEGIN{
+    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
+    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo" if not ($ENV{CGL_GO_SOURCE});
+
+    $SIG{'__WARN__'} =
+	sub {
+	    warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+			    $_[0] !~ /Can\'t store item CODE/
+			    );
+	    }
+}
+
 use Process::MakerChunk;
 use Process::MakerTiers;
 use Storable qw (freeze thaw);
@@ -39,14 +51,6 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 
-BEGIN {
-    $SIG{'__WARN__'} = sub {
-	                       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-					       $_[0] !~ /Can\'t store item CODE/
-					     )
-			   }
-}
-
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
 #--This is a hack to solve the problem
@@ -58,19 +62,21 @@ if (not @ARGV){
 else {
     MPI_Init();                 #initiate the MPI
 }
-#--End hack
 
 $| = 1;
 
 my $usage = "
 Usage:
 
-        maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+        mpi_maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+
+        mpi_maker is to be used on mpi campatable systems only.  All MPI batches should be
+        run on more than 2 processors to see any kind of performance benefit over standard
+        maker (i.e. mpi_run -n 4 mpi_maker).
 
         If you already specified the location for the genome file in the user control files
         you can ommit the first argument, <genome_file>.  The genome file must be in fasta
-        format.  Maker only works with one fasta sequence at a time, so if your genome_file
-        contains a multifasta, use multifasa_maker to iterate over the sequences.
+        format.
 
         The last three arguments are user control files that specify how maker should behave.
         Please see maker documentation to learn more about control file format.  The program
@@ -95,8 +101,8 @@ Options:
 Warning:
       
         *When using the -R flag, maker expects that the input genome file is already masked.
-         This means that if your genome file contains lower case characters, maker will
-         consider those characers to be soft masked.
+         If your genome file contains lower case characters, maker will consider those
+         characers to be soft masked.
 
 ";
 
@@ -114,11 +120,6 @@ my $data_available = 3333;
 my $message_length = 4444;
 my $mpi_result = 5555;
 my $result_available = 7777;
-
-if ($size < 2) {
-    system ("perl $FindBin::Bin/maker " . join (" ", @ARGV));
-    exit;
-}
 
 #---------PRIMARY MPI PROCCESS---------
 if ($rank == 0) {
@@ -146,6 +147,11 @@ if ($rank == 0) {
     }
     else {
 	die $usage;
+    }
+
+    if ($size < 3) {
+        system ("perl $FindBin::Bin/maker " . join (" ", @ARGV));
+        exit;
     }
 
     #set up control options from control files
