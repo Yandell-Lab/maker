@@ -11,6 +11,11 @@ SNAP version 2006-07-28 (homepage.mac.com/iankorf)
 RepeatMasker 3.1.6 (www.repeatmasker.org)
 Exonerate 1.4 (www.ebi.ac.uk/~guy/exonerate)
 
+You will also need to install this perl module:
+
+Datastore (http://www.yandell-lab.org/downloads/cgl/Datastore-0.11.tar.gz)
+
+
 Notes: 
 1) RepeatMaker requires Wu-BLAST, so please install Wu-BLAST before installing RepeatMaker
 2) Exonerate Binaries can be downloaded from the website.  If you have Mac OSX, however, binaries are only available for version 1.0.  This verion will work too.  If you would like to compile exonerate, it requires GLIB, a C-library, that has a link from the exonerate website.  If you have Mac OSX, this can downloaded using FINK.
