@@ -59,6 +59,7 @@ sub print {
 	$fh->open(">$file");		
     }
     print_txt($fh, $self->header."\n");
+    print_txt($fh, $self->contig_comment."\n");
     print_txt($fh, $self->contig_line."\n"); 
     foreach my $g (@{$self->genes}){
 	print_txt($fh, gene_data($g, $self->seq_id));
@@ -96,6 +97,27 @@ sub contig_line {
     push(@data, $id, '.', 'contig', 1, $length, '.','.','.');
     push(@data, 'ID='.$id.';Name='.$name);
     
+    my $l = join("\t", @data);
+    return $l;
+}
+#------------------------------------------------------------------------
+sub contig_comment {
+    my $self = shift;
+
+    die "no contig seq in Dumper::GFFV3::contig_comment\n"
+        unless defined($self->seq);
+
+    my $seq = $self->seq();
+
+    my $length = length($$seq);
+    my $id     = $self->seq_id();
+    my $name   = $id;
+    if ($id =~ m/gnl\%7Cv3\%7C(Contig\d+)/) {
+        $name = $1;
+    }
+    my @data;
+    push(@data, "##sequence-region", $id, 1, $length);
+
     my $l = join("\t", @data);
     return $l;
 }

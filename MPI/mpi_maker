@@ -23,33 +23,14 @@ use Process::MakerTiers;
 use Storable qw (freeze thaw);
 use File::Temp qw(tempfile tempdir);
 use Parallel::MPIcar qw(:all);
-use Dumper::GFF::GFFV3;
-use Dumper::XML::Game;
 use Datastore::MD5;
-use URI::Escape;
 use File::Path;
-use Data::Dumper;
 use Getopt::Long;
 use FileHandle;
-use PostData;
 use Cwd qw(cwd abs_path);
-use Fasta;
-use Iterator::Fasta;
-use FastaChunker;
-use Widget::RepeatMasker;
-use Widget::blastx;
-use Widget::tblastx;
-use Widget::blastn;
-use Widget::snap; 
-use PhatHit_utils;
-use Shadower;
 use Bio::DB::Fasta;
-use polisher::exonerate::protein;
-use polisher::exonerate::est;
-use maker::auto_annotator;
-use cluster;
-use repeat_mask_seq;
-use maker::sens_spec;
+use Iterator::Fasta;
+use threads;
 
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
@@ -160,6 +141,10 @@ if ($rank == 0) {
     #load genome fasta file
     my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
 
+    if ($fasta_iterator->number_of_entries() == 0) {
+        die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
+    }
+
     #decide whether to use datastore 
     my $DS_FH; #datastore file handle
     if ($fasta_iterator->number_of_entries() > 1000) {
@@ -180,6 +165,10 @@ if ($rank == 0) {
 
     #set up blast databases for analyisis
     %CTL_OPTIONS = create_blastdb(\%CTL_OPTIONS);
+
+    #build fasta indexes
+    my $thread = threads->create(\&build_all_indexes, $CTL_OPTIONS{old_protein}, $CTL_OPTIONS{old_est});
+    $thread->detach();
 
     #iterate over each sequence in the fasta
     my @tiers;
@@ -212,7 +201,7 @@ if ($rank == 0) {
 	    }
 
 	    if (my $chunk = $tier->next_chunk) { #take next chunk off tier and send
-		my $signal = 1;
+                my $signal = 1;
 		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
 		MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
 	    }
@@ -568,4 +557,11 @@ sub MPI_RecvII{
 
     ${$ref} = ${thaw($recv)};
 }
+#-----------------------------------------------------------------------------
+sub build_all_indexes {
+    my @dbs = @_;
 
+    foreach my $db (@dbs){
+	my $index = new Bio::DB::Fasta($db);
+    }
+}

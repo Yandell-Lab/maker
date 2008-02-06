@@ -1317,6 +1317,7 @@ sub runBlastn {
     $command .= " hspsepqmax=10000";
     $command .= " lcmask";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
 	
     my $w = new Widget::blastn();
@@ -1463,6 +1464,7 @@ sub runBlastx {
     $command .= " hspsepqmax=10000";
     $command .= " lcfilter";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
     my $w = new Widget::blastx();
 
@@ -1600,6 +1602,7 @@ sub runTblastx {
     $command .= " hspsepqmax=10000";
     $command .= " lcfilter";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
     my $w = new Widget::tblastx();
     if (-e $out_file && ! $opt_f) {

@@ -114,6 +114,10 @@ my %CTL_OPTIONS = load_control_files($infile, @ctlfiles);
 #load genome fasta file
 my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
 
+if ($fasta_iterator->number_of_entries() == 0) {
+        die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
+}
+
 #decide whether to use datastore 
 if ($fasta_iterator->number_of_entries() > 1000){
     print STDERR "\n\n".
@@ -1047,6 +1051,7 @@ sub runBlastn {
     $command .= " hspsepqmax=10000";
     $command .= " lcmask";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
 	
     my $w = new Widget::blastn();
@@ -1167,6 +1172,7 @@ sub runBlastx {
     $command .= " hspsepqmax=10000";
     $command .= " lcfilter";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
     my $w = new Widget::blastx();
     if (-e $out_file  && ! $OPT{f}) {
@@ -1276,6 +1282,7 @@ sub runTblastx {
     $command .= " hspsepqmax=10000";
     $command .= " lcfilter";
     $command .= " filter=seg";
+    $command .= " gi";
     $command .= " > $out_file";
     my $w = new Widget::tblastx();
     if (-e $out_file && ! $OPT{f}) {

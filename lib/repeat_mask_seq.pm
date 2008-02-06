@@ -14,6 +14,10 @@ use SimpleCluster;
 use compare;
 use cluster;
 use clean;
+use Bio::Search::HSP::PhatHSP::blastx;
+use Bio::Search::HSP::PhatHSP::blastn;
+use Bio::Search::HSP::PhatHSP::tblastx;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
