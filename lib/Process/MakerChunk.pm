@@ -8,7 +8,6 @@ use Storable qw (freeze thaw dclone);
 use FindBin;
 use lib "$FindBin::Bin/../..";
 
-
 use File::Util;
 use File::Temp qw(tempfile);
 use Dumper::GFF::GFFV3;
@@ -76,6 +75,7 @@ sub _initialize{
 #--------------------------------------------------------------
 sub run {
     my $self = shift;
+    my $self->{RANK} = shift;
     my $level = $self->{LEVEL};
     my @vars = @{thaw($self->{VARS})};
     my @results;
@@ -146,6 +146,7 @@ sub run {
 					   $CTL_OPTIONS{split_hit},
 					   $CTL_OPTIONS{setdb},
 					   $self->id(),
+					   $self->{RANK},
 					   $opt_f
 					  );
 	#-------------------------CHUNK
@@ -248,6 +249,7 @@ sub run {
 				    $CTL_OPTIONS{split_hit},
 				    $CTL_OPTIONS{setdb},
 				    $self->id(),
+				    $self->{RANK},
 				    $opt_f
 				   );
 	#-------------------------CHUNK
@@ -286,6 +288,7 @@ sub run {
 				       $CTL_OPTIONS{old_alt_est},
 				       $CTL_OPTIONS{pressdb},
 				       $self->id(),
+				       $self->{RANK},
 				       $opt_f
 				      );
 	}
@@ -323,6 +326,7 @@ sub run {
 				    $CTL_OPTIONS{old_est},
 				    $CTL_OPTIONS{pressdb},
 				    $self->id(),
+				    $self->{RANK},
 				    $opt_f
 				   );
 	#-------------------------CHUNK
@@ -1211,6 +1215,7 @@ sub blastn {
     my $old_db = shift;
     my $pressdb = shift;
     my $id = shift;
+    my $rank = shift;
     my $opt_f = shift;
 
     my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1230,11 +1235,15 @@ sub blastn {
 	$db_old_n  =~ s/\.fasta$//;
 	my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastn";
 
+	my $t_dir = "/tmp/rank".$rank;
+	mkpath($t_dir);
+
 	my $file_name = "$the_void/$seq_id\.$chunk_number";
+	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastn";
 
 	$db =~ /([^\/]+$)/;
-	my $tmp_db = "/tmp/" . $1;
+	my $tmp_db = "$t_dir/$1";
 
 	if (-e $blast_finished && ! $opt_f){
 	    $o_file = $blast_finished;
@@ -1246,8 +1255,10 @@ sub blastn {
 	    system ("$pressdb $tmp_db");
 	}
 	
-	$chunk->write_file($file_name);
-	runBlastn($file_name,
+	$chunk->write_file($file_name) unless (-e $file_name);
+	$chunk->write_file($t_file_name);
+
+	runBlastn($t_file_name,
 		  $tmp_db,
 		  $o_file,
 		  $blastn,
@@ -1352,6 +1363,7 @@ sub blastx {
     my $split_hit = shift;
     my $setdb = shift;
     my $id = shift;
+    my $rank = shift;
     my $opt_f = shift;
 	
     my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1371,24 +1383,30 @@ sub blastx {
 	$db_old_n  =~ s/\.fasta$//;
 	my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastx";
 
+	my $t_dir = "/tmp/rank".$rank;
+        mkpath($t_dir);
+
 	my $file_name = "$the_void/$seq_id\.$chunk_number";
+	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastx";
 
 	$db =~ /([^\/]+$)/;
-	my $tmp_db = "/tmp/" . $1;
+	my $tmp_db = "$t_dir/$1";
 
 	if (-e $blast_finished && ! $opt_f){
 	    $o_file = $blast_finished ;
 	    
 	    return [] if ($id !~ /\:0$/);
 	}
-	elsif (! -e $blast_finished && ! `ls $tmp_db\.n*`) {
+	elsif (! `ls $tmp_db\.n*`) {
 	    system("cp $db $tmp_db");
 	    system ("$setdb $tmp_db");
 	}
 	
-	$chunk->write_file($file_name);
-	runBlastx($file_name,
+	$chunk->write_file($file_name) unless (-e $file_name);
+	$chunk->write_file($t_file_name);
+
+	runBlastx($t_file_name,
 		  $tmp_db,
 		  $o_file,
 		  $blastx,
@@ -1498,6 +1516,7 @@ sub tblastx {
     my $old_db = shift;
     my $setdb = shift;
     my $id = shift;
+    my $rank = shift;
     my $opt_f = shift;
 	
     my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1512,29 +1531,35 @@ sub tblastx {
     my $i = 0;
     while (my $chunk = $fasta_chunker->get_chunk($i)) {
 	my $chunk_number = $chunk->number();
+
+	my $t_dir = "/tmp/rank".$rank;
+        mkpath($t_dir);
 	
 	my ($db_old_n) = $old_db =~ /([^\/]+)$/;
 	$db_old_n  =~ s/\.fasta$//;
 	my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
 		
 	my $file_name = "$the_void/$seq_id\.$chunk_number";
+	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.tblastx";
 
 	$db =~ /([^\/]+$)/;
-	my $tmp_db = "/tmp/" . $1;
+	my $tmp_db = "$t_dir/$1";
 
 	if (-e $blast_finished && ! $opt_f){
 	    $o_file = $blast_finished ;
 	    
 	    return [] if ($id !~ /\:0$/);
 	}	
-	elsif (! -e $blast_finished && ! `ls $tmp_db\.n*`) {
+	elsif (! `ls $tmp_db\.n*`) {
 	    system("cp $db $tmp_db");
 	    system ("$setdb $tmp_db");
 	}
-	
-	$chunk->write_file($file_name);
-	runTblastx($file_name,
+
+	$chunk->write_file($file_name) unless (-e $file_name);
+	$chunk->write_file($t_file_name);	
+
+	runTblastx($t_file_name,
 		   $tmp_db,
 		   $o_file,
 		   $tblastx,
