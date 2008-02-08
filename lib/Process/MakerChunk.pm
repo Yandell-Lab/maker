@@ -67,7 +67,8 @@ sub _initialize{
     $self->{LEVEL} = shift;
     my $vars       = shift; #this should be an array reference
     $self->{ID}    = shift || 0;
-
+    $self->{RANK} = 0;
+    
     local $Storable::forgive_me = 1; #I hate code references
     $self->{VARS} = freeze($vars);
 }
@@ -75,7 +76,7 @@ sub _initialize{
 #--------------------------------------------------------------
 sub run {
     my $self = shift;
-    my $self->{RANK} = shift;
+    $self->{RANK} = shift;
     my $level = $self->{LEVEL};
     my @vars = @{thaw($self->{VARS})};
     my @results;
@@ -911,7 +912,7 @@ sub snap {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     return $snap_keepers;
@@ -1185,7 +1186,7 @@ sub repeatmask {
 				  $rm_chunk_keepers, 
 				  20,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
 	
@@ -1238,7 +1239,6 @@ sub blastn {
 	my $t_dir = "/tmp/rank".$rank;
 	mkpath($t_dir);
 
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
 	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastn";
 
@@ -1255,7 +1255,6 @@ sub blastn {
 	    system ("$pressdb $tmp_db");
 	}
 	
-	$chunk->write_file($file_name) unless (-e $file_name);
 	$chunk->write_file($t_file_name);
 
 	runBlastn($t_file_name,
@@ -1266,7 +1265,7 @@ sub blastn {
 		  $cpus,
 		  $opt_f
 		 );
-	
+
 	my %params;
 	$params{significance}  = $eval_blastn;
 	$params{hsp_bit_min}   = $bit_blastn;
@@ -1281,7 +1280,7 @@ sub blastn {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     
@@ -1386,7 +1385,6 @@ sub blastx {
 	my $t_dir = "/tmp/rank".$rank;
         mkpath($t_dir);
 
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
 	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastx";
 
@@ -1403,7 +1401,6 @@ sub blastx {
 	    system ("$setdb $tmp_db");
 	}
 	
-	$chunk->write_file($file_name) unless (-e $file_name);
 	$chunk->write_file($t_file_name);
 
 	runBlastx($t_file_name,
@@ -1429,7 +1426,7 @@ sub blastx {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     my @purge;
@@ -1539,7 +1536,6 @@ sub tblastx {
 	$db_old_n  =~ s/\.fasta$//;
 	my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
 		
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
 	my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
 	my $o_file    = "$blast_finished\.temp_dir/$db_n\.tblastx";
 
@@ -1556,7 +1552,6 @@ sub tblastx {
 	    system ("$setdb $tmp_db");
 	}
 
-	$chunk->write_file($file_name) unless (-e $file_name);
 	$chunk->write_file($t_file_name);	
 
 	runTblastx($t_file_name,
@@ -1582,7 +1577,7 @@ sub tblastx {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     my @purge;

@@ -682,7 +682,7 @@ sub snap {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     return $snap_keepers;
@@ -942,7 +942,7 @@ sub repeatmask {
 				  $rm_chunk_keepers, 
 				  20,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
 	
@@ -1006,7 +1006,7 @@ sub blastn {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
 
@@ -1120,7 +1120,7 @@ sub blastx {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     my @purge;
@@ -1238,7 +1238,7 @@ sub tblastx {
 				  $chunk_keepers,
 				  10000,
 				 );
-	$chunk->erase_file();
+	$chunk->erase_fasta_file();
 	$i++;
     }
     my @purge;

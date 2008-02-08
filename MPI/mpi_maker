@@ -298,7 +298,7 @@ else {
 	    next;
 	}
 
-	$chunk->run();
+	$chunk->run($rank);
 	$result = $chunk;
 	$res = 1;
     }
