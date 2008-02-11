@@ -536,16 +536,16 @@ sub get_p_and_t_fastas {
 sub create_blastdb {
     my %CTL_OPTIONS = %{shift @_};
 
-    if (not `ls $CTL_OPTIONS{'protein'}\.a*`) {
+    if (not @{[<$CTL_OPTIONS{'protein'}.a??*>]}) {
 	system($CTL_OPTIONS{setdb}." $CTL_OPTIONS{'protein'}");
     }
-    if (not `ls $CTL_OPTIONS{'est'}\.n*`) {
+    if (not @{[<$CTL_OPTIONS{'est'}.n??*>]}) {
 	system($CTL_OPTIONS{pressdb}. " $CTL_OPTIONS{'est'}");
     }
-    if (not `ls $CTL_OPTIONS{'repeat_protein'}\.a*`) {
+    if (! $OPT{R} && ! @{[<$CTL_OPTIONS{'repeat_protein'}.a??*>]}) {
 	system($CTL_OPTIONS{setdb}." $CTL_OPTIONS{'repeat_protein'}");
     }
-    if ($CTL_OPTIONS{'alt_est'} && not `ls $CTL_OPTIONS{'alt_est'}\.n*`) {
+    if ($CTL_OPTIONS{'alt_est'} && not @{[<$CTL_OPTIONS{'alt_est'}\.n*>]}) {
 	system($CTL_OPTIONS{pressdb}. " $CTL_OPTIONS{'alt_est'}");
     }
 }
@@ -1433,8 +1433,10 @@ sub load_control_files {
 
     #validate required values from control files
     my @infiles = ('genome','protein', 'est','setdb','pressdb','blastn',
-		   'blastx','snap','RepeatMasker', 'exonerate'
+		   'blastx','snap','exonerate'
 		  );
+
+    push (@infiles, 'RepeatMasker') unless($OPT{R});
 
     foreach my $in (@infiles) {
 	if (not $CTL_OPTIONS{$in}) {
@@ -1447,7 +1449,7 @@ sub load_control_files {
 	}
     }
 
-    if (not $CTL_OPTIONS{'model_org'}) {
+    if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
 	warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
 	     "As a result the default (drosophila) will be used.\n";
 	$CTL_OPTIONS{'model_org'} = "drosophila";

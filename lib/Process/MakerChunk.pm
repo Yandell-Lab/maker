@@ -1256,7 +1256,7 @@ sub blastn {
 	    
 	    return [] if ($id !~ /\:0$/);
 	}
-	elsif (! -e $blast_finished && ! `ls $tmp_db\.n*`) {
+	elsif (! -e $blast_finished && ! @{[<$tmp_db.n??*>]}) {
 	    system("cp $db $tmp_db");
 	    system ("$pressdb $tmp_db");
 	}
@@ -1402,7 +1402,7 @@ sub blastx {
 	    
 	    return [] if ($id !~ /\:0$/);
 	}
-	elsif (! `ls $tmp_db\.n*`) {
+	elsif (! @{[<$tmp_db.n??*>]}) {
 	    system("cp $db $tmp_db");
 	    system ("$setdb $tmp_db");
 	}
@@ -1553,7 +1553,7 @@ sub tblastx {
 	    
 	    return [] if ($id !~ /\:0$/);
 	}	
-	elsif (! `ls $tmp_db\.n*`) {
+	elsif (! @{[<$tmp_db.n??*>]}) {
 	    system("cp $db $tmp_db");
 	    system ("$setdb $tmp_db");
 	}

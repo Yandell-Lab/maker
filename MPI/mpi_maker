@@ -465,9 +465,11 @@ sub load_control_files {
 
     #validate required values from control files
     my @infiles = ('genome','protein', 'est','setdb','pressdb','blastn',
-		   'blastx','snap','RepeatMasker', 'exonerate'
+		   'blastx','snap','exonerate'
 		  );
 
+    push (@infiles, 'RepeatMasker') unless($OPT{R});
+    
     foreach my $in (@infiles) {
 	if (not $CTL_OPTIONS{$in}) {
 	    die "You have failed to provide the name and location of the $in file\n;"
@@ -479,7 +481,7 @@ sub load_control_files {
 	}
     }
 
-    if (not $CTL_OPTIONS{'model_org'}) {
+    if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
 	warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
 	"As a result the default (drosophila) will be used.\n";
 	$CTL_OPTIONS{'model_org'} = "drosophila";
