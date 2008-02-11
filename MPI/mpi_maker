@@ -130,7 +130,7 @@ if ($rank == 0) {
 	die $usage;
     }
 
-    if ($size < 3) {
+    if ($size < 2) {
         system ("perl $FindBin::Bin/maker " . join (" ", @ARGV));
         exit;
     }
@@ -179,76 +179,34 @@ if ($rank == 0) {
             push (@tiers, $tier);
         }
         else{
-            next;
+            last;
         }
     }
-
-    my $status = 1;
     
     #---main code for distribution of mpi data here
-    while ($status) {
-	my $term_count = 0;
-	
-	foreach my $tier (@tiers) {
-	    my $recv;
-	    my $res;
-	
-	    #--send and receive data via mpi for first chunk of tier
-	    MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
-	    MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+    while (@tiers) {
+        #--send and receive all data possible in this tier before continuing
+        my $recv;
+	my $res;
+	my $signal = 2;
 	    
-	    if ($res) {
-		my $new_chunk;
-		MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
-		Process::MakerTiers->update_chunk($new_chunk);
-	    }
+	MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
+	MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+	    
+	if ($res) {
+	    my $new_chunk;
+	    MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
+	    Process::MakerTiers->update_chunk($new_chunk);
+        }
 
-	    if (my $chunk = $tier->next_chunk) { #take next chunk off tier and send
-                my $signal = 1;
-		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
-		MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
-	    }
-	    else {	     #no chunk available tell mpi node to wait
-		my $signal = 2;
-		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status		
-	    }
-	    
-	    #--send and receive all data in this tier before continuing
-	    while (my $chunk = $tier->next_chunk) {
-		my $recv;
-		my $res;
-		my $signal = 1;
-		
-		MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
-		MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
-		
-		if ($res) {
-		    my $new_chunk;
-		    MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
-		    Process::MakerTiers->update_chunk($new_chunk);
-		}
-		
-		MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
-		MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
-	    }
-	        
-	    #--check if tier is finished
-	    if ($tier->level_finished()) {
-		$tier->next_level();
-	    }
-	    
-	    #--check if tier is terminated
-	    if ($tier->terminated()) {
-		if (my $fasta = $fasta_iterator->nextEntry()) {
-		    $tier = Process::MakerTiers->new($fasta, \%CTL_OPTIONS, \%OPT, $DS_FH);
-		}
-		else {
-		    $term_count++;
-		}
-	    }
-	}
+        my $chunk;
 
-	$status = 0 if ($term_count == @tiers);
+        if ( $chunk = get_chunk_in_order(\@tiers, $fasta_iterator, \%CTL_OPTIONS, \%OPT, $DS_FH) ){
+            $signal = 1;
+        }
+
+        MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
+        MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD) if ($signal == 1); #send chunk
     }
 
     #---tell mpi nodes there is no data left
@@ -309,6 +267,41 @@ MPI_Finalize();			#terminate MPI
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
+sub get_chunk_in_order{
+    my $tiers = shift @_;
+    my $fasta_iterator = shift @_;
+    my $CTL_OPTIONS = shift @_;
+    my $OPT = shift @_;
+    my $DS_FH = shift @_;
+
+    if (not @{$tiers}) {
+        return undef;
+    }
+
+    my $tier = shift (@{$tiers});
+    my $chunk;
+
+    if ($chunk = $tier->next_chunk()) {    #--get the next chunk
+        unshift(@{$tiers}, $tier);
+        return $chunk;
+    }
+    elsif ($tier->terminated()) {    #--check if tier is terminated
+	if (my $fasta = $fasta_iterator->nextEntry()) {
+	    $tier = Process::MakerTiers->new($fasta, $CTL_OPTIONS, $OPT, $DS_FH);
+            push(@{$tiers}, $tier);
+            return get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
+	}
+	else {
+	    return get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
+        }
+    }
+    else {
+        $chunk = get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
+        unshift(@{$tiers}, $tier);
+        return $chunk;
+    }
+}
 #-----------------------------------------------------------------------------
 sub build_datastore {
     my %CTL_OPTIONS = %{shift @_};

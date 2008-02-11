@@ -77,8 +77,14 @@ sub _initialize{
 sub run {
     my $self = shift;
     $self->{RANK} = shift;
+
+    if (exists $self->{RESULT}){
+        return;
+    }
+
     my $level = $self->{LEVEL};
     my @vars = @{thaw($self->{VARS})};
+    undef $self->{VARS};
     my @results;
 
     #--redirect STDERR to a log file
@@ -631,16 +637,16 @@ sub run {
 	#Write the quality index of the mRNAs to a separate file.
 	#write_quality_data(\@quality_indices, $seq_id);
 
-	FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_id\.maker.proteins.fasta");
-	FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_id\.maker.transcripts.fasta");
+	FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
+	FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
 
 	#$IOG->GFF3();
 	$IOX->Game();
 
 	my ($p_snap_fastas, $t_snap_fastas) = get_snap_p_and_t_fastas($query_seq, $snaps);
 
-	FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_id\.maker.snap.proteins.fasta");
-	FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_id\.maker.snap.transcript.fasta");
+	FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
+	FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
 
 	rmtree ($the_void) if $CTL_OPTIONS{clean_up}; #rm temp directory
 	#-------------------------CHUNK
@@ -650,7 +656,7 @@ sub run {
 	#------------------------RESULTS
     }
     else {
-	warn "Error: Invalid argument for method _run_level in Process::MakerChunk\n";
+	warn "Error: Invalid argument for method run() in Process::MakerChunk\n";
 	return undef;
     }
 

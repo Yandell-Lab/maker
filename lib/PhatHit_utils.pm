@@ -247,7 +247,7 @@ sub load_args {
         }
 
         push(@args, '-score');
-        push(@args, $hsp->{score});
+        push(@args, $hsp->{SCORE});
 
         push(@args, '-homology_seq');
         push(@args, $hsp->homology_string);

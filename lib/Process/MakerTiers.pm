@@ -122,6 +122,10 @@ sub next_chunk {
 	return $chunk;
     }
 
+    if ($self->next_level()){
+	return $self->next_chunk();
+    }
+
     return undef;
 }
 
@@ -420,7 +424,6 @@ sub next_level {
 		 $self->{VARS}{query_seq}
 	       );
 	#------------------------ARGS_IN
-
     }
     elsif($level == 10){
 	#------------------------ARGS_IN

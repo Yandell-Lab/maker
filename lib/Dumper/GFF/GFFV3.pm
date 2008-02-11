@@ -362,7 +362,7 @@ sub hit_data {
 
      my ($class, $type) = get_class_and_type($h, 'hit');
 
-     my $h_n = $class eq 'repeatmasker' && $type eq 'match_set' 
+     my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
                ? $h->hsp('best')->name() : $h->name();
 
      $h_n   =~ s/\s/-/g;
@@ -402,25 +402,25 @@ sub get_class_and_type {
 
 	my $type;
 	if    ($class eq 'blastx'){
-		$type = $k eq 'hit' ? 'match_set' : 'protein_match';
+		$type = $k eq 'hit' ? 'match' : 'protein_match';
 	}elsif    ($class eq 'tblastx'){
-		$type = $k eq 'hit' ? 'match_set' : 'protein_match';
+		$type = $k eq 'hit' ? 'match' : 'protein_match';
 	}
 	elsif ($class eq 'protein2genome'){
-		$type = $k eq 'hit' ? 'match_set' : 'protein_match'; 
+		$type = $k eq 'hit' ? 'match' : 'protein_match'; 
 	}
         elsif ($class eq 'est2genome'){
-                $type = $k eq 'hit' ? 'match_set' : 'nucleotide_match';
+                $type = $k eq 'hit' ? 'match' : 'nucleotide_match';
         }
         elsif ($class eq 'blastn'){
-                $type = $k eq 'hit' ? 'match_set' : 'nucleotide_match' ;
+                $type = $k eq 'hit' ? 'match' : 'nucleotide_match' ;
         }
         elsif (ref($h)  =~ /snap/){
                 $type = $k eq 'hit' ? 'gene' : 'mRNA' ;
 		$class= 'snap';
         }
         elsif (ref($h)  =~ /repeatmasker/){
-                $type = $k eq 'hit' ? 'match_set' : 'repeat_region';
+                $type = $k eq 'hit' ? 'match' : 'repeat_region';
 		$class= 'repeatmasker';
         }
 	else {
