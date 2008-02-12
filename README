@@ -232,6 +232,11 @@ maker2zff.pl <directory>
 each GFF file will have a sister file called sequence.wutr.gff3
 
 
+APOLLO
+
+Maker is bundled with a configuration file that improves the color and display of maker annotations and evidence in the Apollo genome browser.  The configuration file is called "fly.tiers" and is located in the maker/Apollo/ directory.  The file should be copied to the conf/ sub_directory which is located under the Apollo instalation directory.
+
+
 HMM BUILDING
 
 A. First you will need to determine the genes used to model future genes, by determining a high quality gene set and then covert them into ZFF format.  You can do this by using maker2zff.pl found in maker/bin.
