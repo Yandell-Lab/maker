@@ -449,11 +449,17 @@ sub load_control_files {
 	    chomp($line);
 	    
 	    if ($line !~ /^\s\t\n/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
-		if (exists $OK_FIELDS{$1}) {
-		    $CTL_OPTIONS{$1} = $2 unless (not defined $2);
-		}
+		my $key = $1;
+                my $value = $2;
+                if (exists $OK_FIELDS{$key}){
+		    if ($value =~ /\$/){
+			$value = `echo $value`;
+			chomp($value);
+		    }
+                    $CTL_OPTIONS{$key} = $value unless (not defined $value);
+                }
 		else {
-		    warn "ERROR: Invalid option \"$1\" in control file $ctlfile\n";
+		    warn "ERROR: Invalid option \"$key\" in control file $ctlfile\n";
 		}
 	    }
 	}

@@ -1,5 +1,6 @@
 ***MAKER Documentation***
 
+#----------
 INSTALLATION INSTUCTIONS FOR MAKER
 
 To install maker, you will first need to install the following programs:
@@ -10,6 +11,11 @@ Wu-BLAST 2.0 (blast.wustl.edu)
 SNAP version 2006-07-28 (homepage.mac.com/iankorf)
 RepeatMasker 3.1.6 (www.repeatmasker.org)
 Exonerate 1.4 (www.ebi.ac.uk/~guy/exonerate)
+
+
+To install mpi_maker, you must have an mpi package installed, try the following:
+
+MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
 
 
 Notes: 
@@ -28,6 +34,7 @@ This will create a directory called maker with 5 sub directories:
 	bin - contains the maker code.
 	lib - contains all the necessary perl libaries for MAKER.
         MPI - contains MPI specific data to configure maker to run on a cluster that supports MPI.
+        Apollo - contains fly.tiers file (See section titled APOLLO below)
 	data  - contains some sample data used to make sure everything works
 	config - contains the 3 configuration files for MAKER:
 
@@ -37,7 +44,6 @@ This will create a directory called maker with 5 sub directories:
 
 
 These configuration files will have to be examined for changes in order to use MAKER for your specific data
-
 
 
 You must also set some environmental variables:
@@ -56,6 +62,7 @@ export WUBLASTFILTER=where_wublast_is_installed/filter
 
 
 
+#----------
 MPI MAKER
 
 If you are running maker on an MPI capable cluster, you can install an MPI version of maker by doing the following:
@@ -76,7 +83,7 @@ Example:
 
 
 
-
+#----------
 RUNNING MAKER
 
 Usage:
@@ -113,8 +120,7 @@ Warning:
          characers to be soft masked.
 
 
-
-EXAMPLES OF RUNNING  MAKER
+Examples of running maker:
 
 If you have the name of the desired genome file in the maker_opts.ctl file, you can omit the first arguement:
 
@@ -127,6 +133,7 @@ Otherwise the location of the genome file can be set at the command line as the 
 
 
 
+#----------
 RUNNING MAKER WITH EXAMPLE DATA
 
 1) Copy the files in the config and data directories to a temporary directory where you will run an example file.
@@ -154,6 +161,7 @@ WARNING:
 
 
 
+#----------
 DATASTORE
 
 "Many filesystems have performance problems with large numbers of subdirectories in a directory and even when the underlying filesystems handle things gracefully, access via network filesystems can be an issue.  The Datastore modules create a hiearchy of subdirectory layers, starting from a 'base', and mapping end-user's identifiers to the corresponding subdirectory." - quote from http://www.yandell-lab.org/cgl/  (See site for more information on Datastores)
@@ -166,7 +174,11 @@ The master_datastore_index file contains two columns of text.  The first column 
 
 
 
+#----------
 CONFIG FILE EDITING
+
+Lines in the maker control files have the format key:value whith no spaces before or after the colon(:).  If the value is a file name, you can use relative paths and environmental variables, i.e. genome:$HOME/my_genome.fasta
+
 
 MAKER has 3 control files for configuration options.
 
@@ -184,7 +196,7 @@ RepeatMasker:/usr/local/RepeatMasker/RepeatMasker
 exonerate:/usr/local/bin/exonerate
 cpus:2 #max number of cpus to use
 
-Note that for all control files that comments written to help users begin with a pound sign(#).  In addition, options before the colon(:) can not be changed, nor should there be a space before or after the colon.
+Note that for all control files the comments written to help users begin with a pound sign(#).  In addition, options before the colon(:) can not be changed, nor should there be a space before or after the colon.
 
 
 B. maker_bopts.ctl - includes information about the options for executables run by MAKER
@@ -222,6 +234,7 @@ single_exon:0 #Includes est hits aligning to single exons, 1 = yes, 0 = no
 
 
 
+#----------
 ADDING UTRs for GBROWSE
 
 * When using APOLLO to visualize gene annotations, UTRs are inferred based on exon and CDS locations.  However GMOD and GBROWSE do not infer the UTR, so to visualize the UTR, you will have to run: add_utr_gff.pl with the following command:
@@ -232,11 +245,15 @@ maker2zff.pl <directory>
 each GFF file will have a sister file called sequence.wutr.gff3
 
 
+
+#----------
 APOLLO
 
 Maker is bundled with a configuration file that improves the color and display of maker annotations and evidence in the Apollo genome browser.  The configuration file is called "fly.tiers" and is located in the maker/Apollo/ directory.  The file should be copied to the conf/ sub_directory which is located under the Apollo instalation directory.
 
 
+
+#----------
 HMM BUILDING
 
 A. First you will need to determine the genes used to model future genes, by determining a high quality gene set and then covert them into ZFF format.  You can do this by using maker2zff.pl found in maker/bin.
