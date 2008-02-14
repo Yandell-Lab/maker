@@ -88,10 +88,10 @@ sub run {
     my @results;
 
     #--redirect STDERR to a log file
-    open (OLDERR, ">&STDERR");
+#    open (OLDERR, ">&STDERR");
     my (undef, $t_name) = tempfile();
-    close(STDERR);
-    open(STDERR, "> $t_name");
+#    close(STDERR);
+#    open(STDERR, "> $t_name");
 
     if ($level == 0) {
 	#------------------------ARGS_IN
@@ -661,14 +661,14 @@ sub run {
     }
 
     #--redirect STDERR back to STDERR
-    close(STDERR);
-    open (STDERR, ">&OLDERR");
-    close(OLDERR);
+#    close(STDERR);
+#    open (STDERR, ">&OLDERR");
+#    close(OLDERR);
 
     #--collect STDERR log file data
     open (IN, "< $t_name");
     $self->{ERROR} = join('', <IN>);
-    close(IN);
+#    close(IN);
 
     local $Storable::forgive_me = 1; #I hate code references
     $self->{RESULT} = freeze(\@results);

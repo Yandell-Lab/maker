@@ -95,16 +95,45 @@ Warning:
 my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
 my $size = MPI_Comm_size(MPI_COMM_WORLD); #how many proccesses
 
-my $give_me_data = 1111;
-my $mpi_data = 2222;
-my $data_available = 3333;
-my $message_length = 4444;
-my $mpi_result = 5555;
-my $result_available = 7777;
+#--mpi message tags
+my $give_me_data           = 1111;
+my $data_type              = 2222;
+my $data_available         = 3333;
+my $mpi_data               = 4444;
+my $message_length         = 5555;
+my $mpi_error              = 6666;
+my $results_available      = 7777;
+my $new_chunks_available   = 8888;
+my $result_chunk_available = 9999;
+
+#--data_types signals
+my $chunk_type = 1;
+my $tier_type  = 2;
+
+#--data_available signals
+my $tier_available  = 1;
+my $no_tiers        = 2;
+my $chunk_available = 3;
+my $no_chunks       = 4;
+my $terminate       = 6;
+my $initiate        = 7;
+
+#--results_available signals
+my $no_results  = 0;
+my $got_results = 1;
+
+#--new_chunk_available signals
+my $no_new_chunks  = 0;
+my $got_new_chunks = 1;
+
+#--result_chunk_available signals
+my $no_result_chunk  = 0;
+my $got_result_chunk = 1;
 
 #---------PRIMARY MPI PROCCESS---------
+my %OPT;
+
 if ($rank == 0) {
-    my %OPT;
     $OPT{a} = 0;
 
     GetOptions("RM_off|R" => \$OPT{R},
@@ -169,96 +198,169 @@ if ($rank == 0) {
     #build fasta indexes
     my $thread = threads->create(\&build_all_indexes, $CTL_OPTIONS{old_protein}, $CTL_OPTIONS{old_est});
     $thread->detach();
-
-    #iterate over each sequence in the fasta
-    my @tiers;
-
-    while (@tiers < $size) {
-        if (my $fasta = $fasta_iterator->nextEntry()){
-	    my $tier = Process::MakerTiers->new($fasta, \%CTL_OPTIONS, \%OPT, $DS_FH);
-            push (@tiers, $tier);
-        }
-        else{
-            last;
-        }
-    }
     
     #---main code for distribution of mpi data here
-    while (@tiers) {
-        #--send and receive all data possible in this tier before continuing
+    my @chunks;
+    my @active;
+    my %RESULTS;
+    my $go_mpi_flag = 1;
+    
+    while ($go_mpi_flag) {
         my $recv;
-	my $res;
-	my $signal = 2;
-	    
+        my $type;
+	my $new_chunk_status;
+	my $result_chunk_status;
+    
 	MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
-	MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
+        MPI_Recv(\$type, 1, MPI_INT, $recv, $data_type, MPI_COMM_WORLD); #check request type
+       	MPI_Recv(\$result_chunk_status, 1, MPI_INT, $recv, $result_chunk_available, MPI_COMM_WORLD); #receive result chunk status
+
+        if($result_chunk_status == $got_result_chunk){
+            my $result_chunk;
+            MPI_RecvII(\$result_chunk, $recv, $mpi_data, MPI_COMM_WORLD);
+            my ($node_id, $level_id, $chunk_num) = split(':', $result_chunk->id());
+            push(@{$RESULTS{$node_id}}, $result_chunk);
+        }
+
+       	MPI_Recv(\$new_chunk_status, 1, MPI_INT, $recv, $new_chunks_available, MPI_COMM_WORLD); #receive new chunk status
+
+        if($new_chunk_status == $got_new_chunks){
+            my $new_chunks;
+            MPI_RecvII(\$new_chunks, $recv, $mpi_data, MPI_COMM_WORLD);
+            push(@chunks, @{$new_chunks});
+        }
+
+        my $result_status = (defined $RESULTS{$recv}) ? $got_results: $no_results;
+        MPI_Send(\$result_status, 1, MPI_INT, $recv, $results_available, MPI_COMM_WORLD); #send result status
+
+        if ($result_status == $got_results){
+            MPI_SendII(\$RESULTS{$recv}, $recv, $mpi_data, MPI_COMM_WORLD); #send back chunks with results
+            $RESULTS{$recv} = undef;
+        }
 	    
-	if ($res) {
-	    my $new_chunk;
-	    MPI_RecvII(\$new_chunk, $recv, $mpi_result, MPI_COMM_WORLD); #receive result
-	    Process::MakerTiers->update_chunk($new_chunk);
+	if ($type == $tier_type) {
+            if (my $fasta = $fasta_iterator->nextEntry()){
+                my $tier = Process::MakerTiers->new($fasta,\%CTL_OPTIONS, \%OPT, $recv, $DS_FH);
+                MPI_Send(\$tier_available, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD); #send data status
+                MPI_SendII(\$tier, $recv, $mpi_data, MPI_COMM_WORLD); #send tier
+                $active[$recv] = 1;
+            }
+            else{
+                MPI_Send(\$no_tiers, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD); #send data status
+                $active[$recv] = 0;
+            }
+        }
+        elsif($type == $chunk_type){
+            if (my $chunk = shift @chunks){
+                MPI_Send(\$chunk_available, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD); #send data ststus
+                MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD); #send chunk
+            }
+            else{
+                MPI_Send(\$no_chunks, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD); #send data status
+            }
         }
 
-        my $chunk;
+        my $inactive_count = 0;
 
-        if ( $chunk = get_chunk_in_order(\@tiers, $fasta_iterator, \%CTL_OPTIONS, \%OPT, $DS_FH) ){
-            $signal = 1;
+        foreach my $node_status (@active){
+            $inactive_count++ if (defined $node_status && $node_status == 0);
         }
-
-        MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
-        MPI_SendII(\$chunk, $recv, $mpi_data, MPI_COMM_WORLD) if ($signal == 1); #send chunk
+        
+        if ($inactive_count >= $size - 1){
+            $go_mpi_flag = 0;
+        }
     }
 
     #---tell mpi nodes there is no data left
     for (my $i = 1; $i < $size; $i++) {
 	my $recv;
-	my $signal = 0;
-	my $res;
-	
-	MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
-	MPI_Recv(\$res, 1, MPI_INT, $recv, $result_available, MPI_COMM_WORLD); #receive result status
-	
-	if ($res) { #this is for debugging
-	    die "Error: Maker did not gather all results before terminating mpi processes";
-	}
+	my $type;
+        my $result_chunk_status;
+        my $new_chunk_status;
 
-	MPI_Send(\$signal, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD);	#send data status
+        MPI_Recv(\$recv, 1, MPI_INT, -2, $give_me_data, MPI_COMM_WORLD); #check to see who asks for a file
+        MPI_Recv(\$type, 1, MPI_INT, $recv, $data_type, MPI_COMM_WORLD); #check request type
+
+        MPI_Recv(\$result_chunk_status, 1, MPI_INT, $recv, $result_chunk_available, MPI_COMM_WORLD); #receive result chunk status
+        if ($result_chunk_status == $got_result_chunk){
+            die "ERROR:  You are terminating MPI proccesses that have results\n" ;
+        }
+
+        MPI_Recv(\$new_chunk_status, 1, MPI_INT, $recv, $new_chunks_available, MPI_COMM_WORLD); #receive new chunk status
+        if ($result_chunk_status == $got_result_chunk){
+            die "ERROR:  You are terminating MPI proccesses that have chunks\n";
+        }
+
+        MPI_Send(\$no_results, 1, MPI_INT, $recv, $results_available, MPI_COMM_WORLD); #send chunk result status
+        MPI_Send(\$terminate, 1, MPI_INT, $recv, $data_available, MPI_COMM_WORLD); #send data status
     }
+
 }
 #------SECONDARY MPI PROCESSES------
 else {
-    my $signal = 1;
-    my $res = 0;
-    my $result;
+    my $data_status = $initiate;
+    my $end_tiers_flag = 0;
+    my $tier;
+    my @chunks;
+    my $result_chunk;
 
-    while($signal) {
+    while($data_status != $terminate) {
 	MPI_Send(\$rank, 1, MPI_INT, 0, $give_me_data, MPI_COMM_WORLD); #request data from primary process
-	MPI_Send(\$res, 1, MPI_INT, 0, $result_available, MPI_COMM_WORLD); #tell primary process status results are available
-	
-	if ($res) {
-	    MPI_SendII(\$result, 0, $mpi_result, MPI_COMM_WORLD); #send result
-	    undef $result;
-	    $res = 0;
-	}
-	
-	MPI_Recv(\$signal, 1, MPI_INT, 0, $data_available, MPI_COMM_WORLD);	#receive data status
-	
-	my $chunk;
+        
+        my $type = (!$end_tiers_flag && (!$tier || $tier->terminated())) ? $tier_type : $chunk_type;
+	MPI_Send(\$type, 1, MPI_INT, 0, $data_type, MPI_COMM_WORLD); #tell primary proccess the data type needed	
 
-	if ($signal == 1){
-	    MPI_RecvII(\$chunk, 0, $mpi_data, MPI_COMM_WORLD); #receive chunk
-	}
-	elsif($signal == 2){
-	    sleep 1;
-	    next;
-	}
-	elsif($signal == 0){
-	    next;
-	}
+        my $result_chunk_status = ($result_chunk) ? $got_result_chunk : $no_result_chunk;
+        MPI_Send(\$result_chunk_status, 1, MPI_INT, 0, $result_chunk_available, MPI_COMM_WORLD); #send result chunk status
+        if ($result_chunk_status == $got_result_chunk){
+            MPI_SendII(\$result_chunk, 0, $mpi_data, MPI_COMM_WORLD); #send result chunk
+            $result_chunk = undef;
+        }
 
-	$chunk->run($rank);
-	$result = $chunk;
-	$res = 1;
+        my $new_chunk_status = (@chunks) ? $got_new_chunks : $no_new_chunks;
+        MPI_Send(\$new_chunk_status, 1, MPI_INT, 0, $new_chunks_available, MPI_COMM_WORLD); #send new chunk status
+        if($new_chunk_status == $got_new_chunks){
+            my $chunks_ref = \@chunks;
+            MPI_SendII(\$chunks_ref, 0, $mpi_data, MPI_COMM_WORLD); #send new chunk
+            @chunks = undef;
+        }
+
+        my $result_status;
+        MPI_Recv(\$result_status, 1, MPI_INT, 0, $results_available, MPI_COMM_WORLD); #receive result status
+        if($result_status == $got_results){
+            my $results;
+            MPI_RecvII(\$results, 0, $mpi_data, MPI_COMM_WORLD); #receive results
+            
+            foreach my $res (@{$results}){
+                $tier->update_chunk($res);
+            }
+        }
+	
+        my $data_status;
+        MPI_Recv(\$data_status, 1, MPI_INT, 0, $data_available, MPI_COMM_WORLD); #receive staus of tier or chunk data
+
+        if ($data_status == $tier_available){
+            MPI_RecvII(\$tier, 0, $mpi_data, MPI_COMM_WORLD);  #receive new tier
+        }
+        elsif($data_status == $chunk_available){
+            my $chunk;
+            MPI_RecvII(\$chunk, 0, $mpi_data, MPI_COMM_WORLD);  #receive new chunk
+            $chunk->run($rank);
+            $result_chunk = $chunk;
+        }
+        elsif($data_status == $no_tiers){
+            $end_tiers_flag = 1;
+        }
+        elsif($data_status == $no_chunks){
+            
+        }
+        elsif($data_status == $terminate){
+            last;
+        }
+
+        next if ($end_tiers_flag || $tier->terminated);
+
+        @chunks = get_chunks($tier); #only get chunks if there are more than 1 in that level
     }
 }
 
@@ -268,38 +370,21 @@ MPI_Finalize();			#terminate MPI
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
-sub get_chunk_in_order{
-    my $tiers = shift @_;
-    my $fasta_iterator = shift @_;
-    my $CTL_OPTIONS = shift @_;
-    my $OPT = shift @_;
-    my $DS_FH = shift @_;
+sub get_chunks{ #runs chunks unless there is more than 1 in a level
+    my $tier = shift;
+    my @chunks;
 
-    if (not @{$tiers}) {
-        return undef;
+    while(my $chunk = $tier->next_chunk()){
+        push (@chunks, $chunk);
     }
 
-    my $tier = shift (@{$tiers});
-    my $chunk;
-
-    if ($chunk = $tier->next_chunk()) {    #--get the next chunk
-        unshift(@{$tiers}, $tier);
-        return $chunk;
+    if (@chunks == 1){
+        $chunks[0]->run($rank);
+        $tier->update_chunk($chunks[0]);
+        return get_chunks($tier); 
     }
-    elsif ($tier->terminated()) {    #--check if tier is terminated
-	if (my $fasta = $fasta_iterator->nextEntry()) {
-	    $tier = Process::MakerTiers->new($fasta, $CTL_OPTIONS, $OPT, $DS_FH);
-            push(@{$tiers}, $tier);
-            return get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
-	}
-	else {
-	    return get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
-        }
-    }
-    else {
-        $chunk = get_chunk_in_order($tiers, $fasta_iterator, $CTL_OPTIONS, $OPT, $DS_FH);
-        unshift(@{$tiers}, $tier);
-        return $chunk;
+    else{
+        return @chunks;
     }
 }
 #-----------------------------------------------------------------------------
@@ -534,8 +619,6 @@ sub MPI_SendII{
     my $communicator = shift @_;
 
     my $send = freeze($msg);
-
-    $send ="##########################StartStartStart".$send."EndEndEnd##########################";
     my $length = length($send);
 
     MPI_Send(\$length, 1, MPI_INT, $target, $message_length, $communicator);
@@ -552,12 +635,9 @@ sub MPI_RecvII{
     my $length;
     my $recv;
 
+
     MPI_Recv(\$length, 1, MPI_INT, $source, $message_length, $communicator);
     MPI_Recv(\$recv, $length, MPI_CHAR, $source, $tag, $communicator); #receive line
-
-    $recv =~ /\#{10}StartStartStart(.*)EndEndEnd\#{10}/s;
-
-    $recv = $1 || '';
 
     ${$ref} = ${thaw($recv)};
 }

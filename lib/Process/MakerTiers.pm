@@ -13,8 +13,6 @@ use URI::Escape;
 #-----------------------------------------------------------------------------
 #------------------------------GLOBAL VARIABLES-------------------------------
 #-----------------------------------------------------------------------------
-my $TIER_ID = 0;
-my %INDEX;
 my %SEEN;
 
 #-----------------------------------------------------------------------------
@@ -27,9 +25,6 @@ sub new {
 
     bless ($self, $class);
 
-    $self->{TIER_ID} = $TIER_ID;
-    $TIER_ID++;
-
     if (@args) {
 	my $arg = shift @args;
 	if (ref $arg eq 'Process::MakerChunk') {
@@ -39,12 +34,11 @@ sub new {
 	    $self->{VARS}{fasta} = $arg;
 	    $self->{VARS}{CTL_OPTIONS} = shift @args;
 	    $self->{VARS}{OPT} = shift @args;
+            $self->{TIER_ID} = shift @args;
 	    $self->{VARS}{DS_FH} = shift @args;
 	    $self->_initialize();
 	}
     }
-
-    $INDEX{$self->{TIER_ID}} = $self;
 
     return $self;
 }
@@ -94,6 +88,7 @@ sub _initialize {
 	
 	my $fh = $self->{VARS}{DS_FH};
 	print $fh "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\n";
+        $self->{VARS}{DS_FH} = undef;
     }
 
     $self->{VARS}{the_void}  = build_the_void($self->{VARS}{seq_out_name},
@@ -235,7 +230,6 @@ sub polish_results{
 	elsif ($level == 14) {
 	    #------------------------RESULTS
 	    $self->{TERMINATE} = 1;
-	    $INDEX{$self->id()} = undef;
 	    #------------------------RESULTS
 	}
     }
@@ -538,10 +532,10 @@ sub update_chunk {
 
     my ($tier_id, $level_num, $chunk_num) = split (":", $id);
     
-    push (@{$INDEX{$tier_id}->{LEVEL}{$level_num}{RESULTS}}, \@result);
-    $INDEX{$tier_id}->{LEVEL}{$level_num}{RESULT_COUNT}++;
+    push (@{$self->{LEVEL}{$level_num}{RESULTS}}, \@result);
+    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;
     
-    $INDEX{$tier_id}->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
+    $self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
     print STDERR $chunk->error();
 }
 
