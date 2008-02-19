@@ -414,7 +414,7 @@ sub create_blastdb {
     
     $CTL_OPTIONS{'protein'} = split_db($CTL_OPTIONS{'protein'});
     $CTL_OPTIONS{'est'} = split_db($CTL_OPTIONS{'est'});
-    $CTL_OPTIONS{'repeat_protein'} = split_db($CTL_OPTIONS{'repeat_protein'});
+    $CTL_OPTIONS{'repeat_protein'} = split_db($CTL_OPTIONS{'repeat_protein'}) unless($OPT{R});
     $CTL_OPTIONS{'alt_est'} = split_db($CTL_OPTIONS{'alt_est'}) if ($CTL_OPTIONS{'alt_est'});
 
     return %CTL_OPTIONS;
