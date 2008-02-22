@@ -921,6 +921,19 @@ sub snap {
 	$chunk->erase_fasta_file();
 	$i++;
     }
+
+    my $count = 0;
+
+    foreach my $snap_hit (@{$snap_keepers}){
+        $snap_hit->{_name} .= ".$count";
+
+        foreach my $snap_hsp (@{$snap_hit->{_hsps}}){
+            $snap_hsp->{HIT_NAME} =~ s/^([^\:]+)/$1\.$count/;
+        }
+
+        $count++;
+    }
+
     return $snap_keepers;
 }
 
