@@ -693,6 +693,8 @@ sub snap {
 	
 	foreach my $snap_hsp (@{$snap_hit->{_hsps}}){
 	    $snap_hsp->{HIT_NAME} =~ s/^([^\:]+)/$1\.$count/;
+	    $snap_hsp->{feature1}->{_gsf_seq_id} =~ s/^([^\:]+)/$1\.$count/;
+	    $snap_hsp->{feature2}->{_gsf_seq_id} =~ s/^([^\:]+)/$1\.$count/;
 	}
 
 	$count++;
