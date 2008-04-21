@@ -101,11 +101,13 @@ if (@ARGV > 3 || @ARGV == 1) {
 
 my @ctlfiles = @ARGV;
 
-if ((not @ctlfiles) && (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl")) {
-    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
-}
-else {
-    die $usage;
+if (not @ctlfiles){
+       if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
+              @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
+       }
+       else {
+              die $usage;
+       }
 }
 
 #set up control options from control files
