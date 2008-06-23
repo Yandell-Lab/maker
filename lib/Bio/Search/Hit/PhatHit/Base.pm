@@ -77,12 +77,12 @@ use warnings;
 use Bio::Search::Hit::GenericHit;
 
 BEGIN {
-  use vars qw( $VERSION @ISA );
+   use vars qw( $VERSION @ISA );
 
-  $VERSION     = 0.01;
-  @ISA = qw(
-	    Bio::Search::Hit::GenericHit
-	   );
+   $VERSION     = 0.01;
+   @ISA = qw(
+	     Bio::Search::Hit::GenericHit
+	    );
 }
 
 ################################################ subroutine header begin ##
@@ -118,18 +118,212 @@ BEGIN {
 
 ################################################## subroutine header end ##
 
-sub new
- {
-        my $class  = shift;
-	my @args   = @_;
+sub new {
+   my $class  = shift;
+   my @args   = @_;
 
 
-	my $self = $class->SUPER::new(@args);
+   my $self = $class->SUPER::new(@args);
 
-	bless ($self, $class);
+   bless ($self, $class);
 
-	return $self;
+   return $self;
 }
+
+################################################ subroutine header begin ##
+
+=head2 nB
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $q_natural_begin = $hit->nB('query');
+ my $h_natural_begin = $hit->nB('hit');
+=for example end
+
+=for example_testing
+  is($q_natural_begin, 23, "Check the query's natural begin.");
+  is($h_natural_begin, 16596, "Check the hit's natural begin.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub nB {
+   my $self = shift;
+   my $w    = shift;
+     
+   if ($self->strand($w) == 1 || $self->strand($w) == 0) {
+      my $sorted = $self->sortFeatures($w);
+      return  $sorted->[0]->start($w);
+   }
+   elsif ($self->strand($w) == -1) {
+      my $sorted = $self->revSortFeatures($w);
+      return  $sorted->[0]->end($w);
+   }
+   else {
+      die "dead in PhatHit::Base::nB\n";
+   }
+}
+
+################################################ subroutine header begin ##
+
+=head2 nE
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $q_natural_end = $hit->nE('query');
+ my $h_natural_end = $hit->nE('hit');
+=for example end
+
+=for example_testing
+  is($q_natural_end, 742, "Check the query's natural end.");
+  is($h_natural_end, 17492, "Check the hit's natural end.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub nE {
+   my $self = shift;
+   my $w    = shift;
+
+   if ($self->strand($w) == -1) {
+      my $sorted = $self->sortFeatures($w);
+      return  $sorted->[0]->start($w);
+   }
+   elsif ($self->strand($w) == 1 || $self->strand($w) == 0) {
+      my $sorted = $self->revSortFeatures($w);
+      return  $sorted->[0]->end($w);
+   }
+   else {
+      die "dead in blastn::PhatHit::nE\n";
+   }
+}
+
+################################################ subroutine header begin ##
+
+=head2 nB
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $q_natural_begin = $hit->nB('query');
+ my $h_natural_begin = $hit->nB('hit');
+=for example end
+
+=for example_testing
+  is($q_natural_begin, 23, "Check the query's natural begin.");
+  is($h_natural_begin, 16596, "Check the hit's natural begin.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub start {
+   my $self = shift;
+   my $w    = shift;
+     
+   my $b = $self->nB($w);
+   my $e = $self->nE($w);
+
+   ($b, $e) = ($e, $b) if ($b > $e);
+
+   return $b;
+}
+
+################################################ subroutine header begin ##
+
+=head2 end
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $q_natural_begin = $hit->end('query');
+ my $h_natural_begin = $hit->end('hit');
+=for example end
+
+=for example_testing
+  is($q_natural_begin, 23, "Check the query's natural begin.");
+  is($h_natural_begin, 16596, "Check the hit's natural begin.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub end {
+   my $self = shift;
+   my $w    = shift;
+     
+   my $b = $self->nB($w);
+   my $e = $self->nE($w);
+
+   ($b, $e) = ($e, $b) if ($b > $e);
+
+   return $e;
+}
+
 
 ################################################ subroutine header begin ##
 
@@ -170,14 +364,14 @@ sub new
 ################################################## subroutine header end ##
 
 sub id
- {
-	my $self = shift;
+{
+   my $self = shift;
 
-	if (@_){
-		$self->{id} = shift;
-	}
+   if (@_) {
+      $self->{id} = shift;
+   }
 
-	return $self->{id};
+   return $self->{id};
 }
 
 ################################################ subroutine header begin ##
@@ -220,34 +414,34 @@ sub id
 ################################################## subroutine header end ##
 
 sub strand
- {
-    my ($self, $seqType) = @_;
+{
+   my ($self, $seqType) = @_;
 
-    $seqType ||= (wantarray ? 'list' : 'query');
-    $seqType = 'sbjct' if $seqType eq 'hit';
+   $seqType ||= (wantarray ? 'list' : 'query');
+   $seqType = 'sbjct' if $seqType eq 'hit';
 
-    # If there is only one HSP, defer this call to the solitary HSP.
-    if($self->num_hsps == 1) {
-        return $self->hsp->strand($seqType);
-    } else {
-        # otherwise, iterate through all HSPs collecting strand info.
-        my (%qstr, %hstr);
-        foreach my $hsp( $self->hsps ) {
-            my $q = $hsp->strand('query');
-            my $h = $hsp->strand('hit');
-            $qstr{ $q }++;
-            $hstr{ $h }++;
-        }
-        my $qstr = join( '/', sort keys %qstr);
-        my $hstr = join( '/', sort keys %hstr);
-        if($seqType =~ /list|array/i) {
-            return ($qstr, $hstr);
-        } elsif( $seqType eq 'query' ) {
-            return $qstr;
-        } else {
-            return $hstr;
-        }
-    }
+   # If there is only one HSP, defer this call to the solitary HSP.
+   if ($self->num_hsps == 1) {
+      return $self->hsp->strand($seqType);
+   } else {
+      # otherwise, iterate through all HSPs collecting strand info.
+      my (%qstr, %hstr);
+      foreach my $hsp ( $self->hsps ) {
+	 my $q = $hsp->strand('query');
+	 my $h = $hsp->strand('hit');
+	 $qstr{ $q }++;
+	 $hstr{ $h }++;
+      }
+      my $qstr = join( '/', sort keys %qstr);
+      my $hstr = join( '/', sort keys %hstr);
+      if ($seqType =~ /list|array/i) {
+	 return ($qstr, $hstr);
+      } elsif ( $seqType eq 'query' ) {
+	 return $qstr;
+      } else {
+	 return $hstr;
+      }
+   }
 }
 
 ################################################ subroutine header begin ##
@@ -289,18 +483,18 @@ sub strand
 # think about changing this to return a reference, and to be in
 # cjm-normal-form.
 sub hsps
- {
-	my $self = shift;
-	my $hsps = shift;
+{
+   my $self = shift;
+   my $hsps = shift;
 
-	if    (not ref $self->{'_hsps'}) {
-	        # XXXX throw!
-       		$self->throw("Can't get HSPs: data not collected.");
-   	}
-	elsif (defined($hsps)){
-		$self->{'_hsps'} = $hsps;
-	}
-	return wantarray ? @{$self->{'_hsps'}} : scalar(@{$self->{'_hsps'}});
+   if (not ref $self->{'_hsps'}) {
+      # XXXX throw!
+      $self->throw("Can't get HSPs: data not collected.");
+   }
+   elsif (defined($hsps)) {
+      $self->{'_hsps'} = $hsps;
+   }
+   return wantarray ? @{$self->{'_hsps'}} : scalar(@{$self->{'_hsps'}});
 
 }
 
@@ -340,19 +534,20 @@ sub hsps
 ################################################## subroutine header end ##
 
 sub pAq
- {
-        my $self    = shift;
-	my $ql      = shift;
+{
+   my $self    = shift;
+   my $ql      = shift;
 
-	# XXXX danger will robinson
-	$ql = $self->queryLength() unless defined($ql);
+   #XXXX danger will robinson
+   $ql = $self->queryLength() unless defined($ql);
 
-	die "\$self->queryLength undefined; define or provide as arg!\n"
-	unless defined($ql);
+   die "\$self->queryLength undefined; define or provide as arg!\n"
+   unless defined($ql);
 
-        my ($laq, $lah) = $self->getLengths();
-        my $perAl = ($laq/$ql)*100;
-        return substr($perAl, 0, 5);
+   my ($laq, $lah) = $self->getLengths();
+   my $perAl = ($laq/$ql);
+
+   return sprintf '%.4f', $perAl;
 }
 
 ################################################ subroutine header begin ##
@@ -360,7 +555,7 @@ sub pAq
 # XXXX percent aligned hit
 =head2 pAh
 
- Usage     : How to use this function/method
+Usage     : How to use this function/method
 
 =for example
  use Bio::Search::Hit::PhatHit::Base;
@@ -390,15 +585,13 @@ sub pAq
 ################################################## subroutine header end ##
 
 sub pAh
- {
-        my $self = shift;
+{
+   my $self = shift;
 
-	# XXXX don't have to sum here (unlike pAq) because bioperl keeps
-	# XXXX track of it for us...
-        my ($laq, $lah) = $self->getLengths();
-        my $perAl = ($lah/$self->length)*100;
-	# XXXX interesting way to control precision of answer....
-        return substr($perAl, 0, 5);
+   my ($laq, $lah) = $self->getLengths();
+   my $perAl = ($lah/$self->length);
+
+   return sprintf '%.4f', $perAl;
 }
 
 ################################################ subroutine header begin ##
@@ -436,16 +629,59 @@ sub pAh
 ################################################## subroutine header end ##
 
 sub getLengths
- {
-        my $self = shift;
+{
+   my $self = shift;
 
-        my $laq = 0;
-        my $lah = 0;
-        foreach my $s ($self->hsps){
-                $laq += abs($s->start('query') - $s->end('query')) + 1;
-                $lah += abs($s->start('hit')   - $s->end('hit'))   + 1
-        }
-        return ($laq, $lah);
+   if (defined ($self->{LAlnQ}) && defined ($self->{LAlnH})){
+         return $self->{LAlnQ}, $self->{LAlnH};
+   }
+
+   my $q_e = $self->nE('query');
+   my $q_b = $self->nB('query');
+   my $h_e = $self->nE('hit');
+   my $h_b = $self->nB('hit');
+
+   ($q_b, $q_e) = ($q_e, $q_b) if ($q_b > $q_e);
+   ($h_b, $h_e) = ($h_e, $h_b) if ($h_b > $h_e);
+
+   my $qLen = abs($q_e - $q_b) + 1;
+   my $hLen = abs($h_e - $h_b) + 1;
+
+   my $qOffset = $q_b - 1;
+   my $hOffset = $h_b - 1;
+
+   my $q_seq = '';
+   my $h_seq = '';
+   $q_seq .= 'nnnnnnnnnnnnnnnnnnnn' while (length($q_seq) <= $qLen);
+   $h_seq .= 'nnnnnnnnnnnnnnnnnnnn' while (length($h_seq) <= $hLen);
+
+   foreach my $s ($self->hsps) {
+      my $q_hspLen = abs($s->end('query') - $s->start('query')) + 1;
+      my $h_hspLen = abs($s->end('hit') - $s->start('hit')) + 1;
+
+      my $q_hspStart = $s->start('query') - $qOffset;
+      my $h_hspStart = $s->start('hit') - $hOffset;
+ 
+      substr($q_seq,
+	     $q_hspStart - 1,
+	     $q_hspLen,
+	     uc(substr($q_seq, $q_hspStart - 1, $q_hspLen))
+	    );
+
+      substr($h_seq,
+	     $h_hspStart - 1,
+	     $h_hspLen,
+	     uc(substr($h_seq, $h_hspStart - 1, $h_hspLen))
+	    );
+   }
+   
+   my $laq = 0;
+   my $lah = 0;
+
+   $laq++ while ($q_seq =~ m/N/g);
+   $lah++ while ($q_seq =~ m/N/g);
+
+   return ($laq, $lah);
 }
 
 ################################################ subroutine header begin ##
@@ -467,29 +703,29 @@ sub getLengths
 ################################################## subroutine header end ##
 
 sub show
- {
-	my $self = shift;
+{
+   my $self = shift;
 
-	print "---------------------------------------------------------\n";
-	print "-- ", ref($self), " -------------\n";
-	print "---------------------------------------------------------\n";
-	print $self->name()."\n";
-	print "is_split:".$self->is_split()."\n";
-	print "sQ:".$self->strand('query')." sH:". $self->strand('hit')."\n";
-	print "nBq:".$self->nB('query')." nEq:".$self->nE('query')."\n";
-	print "nBh:".$self->nB('hit')." nEh:".$self->nE('hit')."\n";
-	print "pAq:". $self->pAq."\n";
-	print "pAH:". $self->pAh."\n";
-	print "E/P:". $self->significance()."\n";
-	print "queryLength:".$self->queryLength()."\n";
-	print "sbjctLength:".$self->length()."\n";
-	my $i = 0;
-	foreach my $hsp ($self->hsps){
-		print "-------------- HSP:$i -----------------\n";
-		$hsp->show();
-		$i++;
-	}
-	print "---------------------------------------------------------\n";
+   print "---------------------------------------------------------\n";
+   print "-- ", ref($self), " -------------\n";
+   print "---------------------------------------------------------\n";
+   print $self->name()."\n";
+   print "is_split:".$self->is_split()."\n";
+   print "sQ:".$self->strand('query')." sH:". $self->strand('hit')."\n";
+   print "nBq:".$self->nB('query')." nEq:".$self->nE('query')."\n";
+   print "nBh:".$self->nB('hit')." nEh:".$self->nE('hit')."\n";
+   print "pAq:". $self->pAq."\n";
+   print "pAH:". $self->pAh."\n";
+   print "E/P:". $self->significance()."\n";
+   print "queryLength:".$self->queryLength()."\n";
+   print "sbjctLength:".$self->length()."\n";
+   my $i = 0;
+   foreach my $hsp ($self->hsps) {
+      print "-------------- HSP:$i -----------------\n";
+      $hsp->show();
+      $i++;
+   }
+   print "---------------------------------------------------------\n";
 }
 
 ################################################ subroutine header begin ##
@@ -528,14 +764,13 @@ sub show
 ################################################## subroutine header end ##
 
 sub revSortFeatures
- {
-        my $self = shift;
-	my $who  = shift;
+{
+   my $self = shift;
+   my $who  = shift;
 
-	my @rev = reverse sort {$a->end($who) <=> $b->end($who)}
-	                        $self->hsps;
+   my @rev = reverse sort {$a->end($who) <=> $b->end($who)} $self->hsps;
 
-        return \@rev;
+   return \@rev;
 }
 
 ################################################ subroutine header begin ##
@@ -574,15 +809,14 @@ sub revSortFeatures
 ################################################## subroutine header end ##
 
 sub sortFeatures
- {
-        my $self = shift;
-	my $who  = shift;
+{
+   my $self = shift;
+   my $who  = shift;
 
-	my @hsps =  $self->hsps;
+   my @hsps =  $self->hsps;
 
-        my @subfeatures = sort {$a->start($who) <=> $b->start($who)}
-                                @hsps;
-        return \@subfeatures;
+   my @subfeatures = sort {$a->start($who) <=> $b->start($who)} @hsps;
+   return \@subfeatures;
 }
 
 ################################################ subroutine header begin ##
@@ -619,14 +853,14 @@ sub sortFeatures
 ################################################## subroutine header end ##
 
 sub queryLength
- {
-	my $self = shift;
+{
+   my $self = shift;
 
-	if (@_){
-		$self->{queryLength} = shift;
-	}
+   if (@_) {
+      $self->{queryLength} = shift;
+   }
 
-	return $self->{queryLength};
+   return $self->{queryLength};
 }
 
 ################################################ subroutine header begin ##
@@ -653,34 +887,34 @@ use Bio::Search::Hit::HitFactory;
 use Bio::Search::HSP::HSPFactory;
 
 sub _getTestHits {
-  my($type, $report) = @_;
+   my($type, $report) = @_;
 
-  my $sio;			# the search IO object
+   my $sio;			# the search IO object
 
-  my $hitFactory;		# hit and hsp factory objects for search
-  my $hspFactory;
-  my $result;			# a blast result
-  my $hit;			# a blast hit
-  my $hit_aref;			# reference to an array of hits
+   my $hitFactory;	      # hit and hsp factory objects for search
+   my $hspFactory;
+   my $result;			# a blast result
+   my $hit;			# a blast hit
+   my $hit_aref;		# reference to an array of hits
 
 
-  $sio = new Bio::SearchIO(-format => 'blast', -file   => $report);
+   $sio = new Bio::SearchIO(-format => 'blast', -file   => $report);
 
-  $hitFactory = new Bio::Search::Hit::HitFactory(-type =>
-                'Bio::Search::Hit::PhatHit::' . $type);
-  $hspFactory = new Bio::Search::HSP::HSPFactory(-type =>
-                'Bio::Search::HSP::PhatHSP::' . $type);
+   $hitFactory = new Bio::Search::Hit::HitFactory(-type =>
+						  'Bio::Search::Hit::PhatHit::' . $type);
+   $hspFactory = new Bio::Search::HSP::HSPFactory(-type =>
+						  'Bio::Search::HSP::PhatHSP::' . $type);
 
-  $sio->_eventHandler->register_factory('hit', $hitFactory);
-  $sio->_eventHandler->register_factory('hsp', $hspFactory);
+   $sio->_eventHandler->register_factory('hit', $hitFactory);
+   $sio->_eventHandler->register_factory('hsp', $hspFactory);
 
-  while($result = $sio->next_result) {
-    while($hit = $result->next_hit) {
-      push @{$hit_aref}, $hit;
-    }
-  }
+   while ($result = $sio->next_result) {
+      while ($hit = $result->next_hit) {
+	 push @{$hit_aref}, $hit;
+      }
+   }
 
-  return($hit_aref);
+   return($hit_aref);
 }
 
 ################################################ subroutine header begin ##
@@ -702,25 +936,25 @@ sub _getTestHits {
 ################################################## subroutine header end ##
 
 sub AUTOLOAD
- {
-        my $self = shift;
+{
+   my $self = shift;
 
-        my $caller = caller();
-        use vars qw($AUTOLOAD);
-        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
-        $call =~/DESTROY/ && return;
+   my $caller = caller();
+   use vars qw($AUTOLOAD);
+   my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
+   $call =~/DESTROY/ && return;
 
-        if($ENV{CGL_CHATTER}) {
-	    print STDERR "PhatHit::AutoLoader called for: ",
-	    "\$self->$call","()\n";
-	    print STDERR "call to AutoLoader issued from: ", $caller, "\n";
-	}
+   if ($ENV{CGL_CHATTER}) {
+      print STDERR "PhatHit::AutoLoader called for: ",
+      "\$self->$call","()\n";
+      print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+   }
 
-        if (@_){
-                $self->{$call} = shift;
-        }
+   if (@_) {
+      $self->{$call} = shift;
+   }
 
-	return $self->{$call};
+   return $self->{$call};
 }
 
 1; #this line is important and will help the module return a true value

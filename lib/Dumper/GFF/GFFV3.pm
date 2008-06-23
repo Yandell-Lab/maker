@@ -23,7 +23,7 @@ sub new {
 #------------------------------------------------------------------------
 sub fasta {
     my $self  = shift;
-    my $fasta = Fasta::toFasta('>'.$self->seq_id, $self->seq);
+    my $fasta = Fasta::toFasta('>'.$self->seq_id, \(uc(${$self->seq})));
     return $$fasta;
 }
 #------------------------------------------------------------------------
@@ -61,19 +61,12 @@ sub print {
     print_txt($fh, $self->header."\n");
     print_txt($fh, $self->contig_comment."\n");
     print_txt($fh, $self->contig_line."\n"); 
-    foreach my $g (@{$self->genes}){
-	print_txt($fh, gene_data($g, $self->seq_id));
-    }
-    foreach my $set (@{$self->predictions}){
-	foreach my $p (@{$set}){
-	    print_txt($fh, pred_data($p, $self->seq_id));
-	}
-    }
-    foreach my $set (@{$self->phat_hits}){
-	foreach my $hit (@{$set}){
-	    print_txt($fh, hit_data($hit, $self->seq_id));
-	}
-    }
+
+    print_txt($fh, $self->genes); 
+    print_txt($fh, $self->predictions);
+    print_txt($fh, $self->repeat_hits);
+    print_txt($fh, $self->phat_hits);   
+    
     print_txt($fh, "##FASTA\n");
     print_txt($fh, $self->fasta);
     $fh->close() if defined($file);
@@ -118,7 +111,7 @@ sub contig_comment {
     my @data;
     push(@data, "##sequence-region", $id, 1, $length);
 
-    my $l = join("\t", @data);
+    my $l = join(" ", @data);
     return $l;
 }
 #------------------------------------------------------------------------
@@ -153,35 +146,56 @@ sub predictions {
     my $self  = shift;
     my $hits  = shift;
     
-    if (defined($hits)){
-	push(@{$self->{predictions}}, $hits) if defined($hits->[0]);
+    if (defined($hits) && defined($hits->[0])){
+       foreach my $p (@{$hits}){
+	  #$self->{predictions} .= pred_data($p, $self->seq_id);
+	  $self->{predictions} .= hit_data($p, $self->seq_id);
+       }
     }
     else {
-	return $self->{predictions} || [];
+	return $self->{predictions} || '';
     }
 }
 #------------------------------------------------------------------------
 sub phat_hits {
-    my $self  = shift;
-    my $hits  = shift;
-    
-    if (defined($hits)){
-	push(@{$self->{hits}}, $hits) if defined($hits->[0]);
-    }
-    else {
-	return $self->{hits} || [];
-        }
+   my $self  = shift;
+   my $hits  = shift;
+   
+   if (defined($hits) && defined($hits->[0])){
+      foreach my $hit (@{$hits}){
+	 $self->{hits} .= hit_data($hit, $self->seq_id);
+      }
+   }
+   else {
+      return $self->{hits} || '';
+   }
+}
+#------------------------------------------------------------------------
+sub repeat_hits {
+   my $self  = shift;
+   my $hits  = shift;
+   
+   if (defined($hits) && defined($hits->[0])){
+      foreach my $hit (@{$hits}){
+	 $self->{repeats} .= repeat_data($hit, $self->seq_id);
+      }
+   }
+   else {
+      return $self->{repeats} || '';
+   }
 }
 #------------------------------------------------------------------------
 sub genes {
     my $self  = shift;
     my $genes = shift;
     
-    if (defined($genes)){
-	$self->{genes} = defined($genes->[0]) ? $genes : [];
+    if (defined($genes) && defined($genes->[0])){
+       foreach my $g (@{$genes}){
+	  $self->{genes} .= gene_data($g, $self->seq_id);
+       }
     }
     else {
-	return $self->{genes} || [];
+	return $self->{genes} || '';
     }
 }
 #------------------------------------------------------------------------
@@ -289,7 +303,7 @@ sub pred_data {
 
 		my $t_l = join("\t", @t_data)."\n";
 	#--------
-	$g_l .= $t_l."\n";
+	$g_l .= $t_l;
 	
 	grow_exon_data_lookup($t, $t_id, \%epl);
     }
@@ -344,54 +358,116 @@ sub gene_data {
 }
 #------------------------------------------------------------------------
 sub hit_data {
-    my $h      = shift;
-    my $seq_id = shift;
-    
-    my $h_str = $h->strand('query') == 1 ? '+' : '-';
-    
-    my ($h_s, $h_e) = PhatHit_utils::get_span_of_hit($h, 'query');
+   my $h      = shift;
+   my $seq_id = shift;
+   
+   my $h_str = $h->strand('query') == 1 ? '+' : '-';
+   
+   my ($h_s, $h_e) = PhatHit_utils::get_span_of_hit($h, 'query');
+   
+   ($h_s, $h_e) = ($h_e, $h_s) if $h_s > $h_e; 
+   
+   
+   my ($t_s, $t_e) = PhatHit_utils::get_span_of_hit($h, 'hit');
+   
+   my $t_strand = $h->strand('hit') == -1  ? '-' : '+';
+   
+   ($t_s, $t_e) = ($t_e, $t_s) if $t_s > $t_e;
+   
+   my ($class, $type) = get_class_and_type($h, 'hit');
+   
+   my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
+       ? $h->hsp('best')->name() : $h->name();
+   
+   $h_n   =~ s/\s/-/g;
+   
+   my $h_id = get_id_hit();
+   $h_id = join(":", $seq_id, $h_id);
+   my $score = $h->significance() || 'NA';
+   $score .= 0 if $score eq '0.';
+   $score = '.' if $score eq 'NA';
 
-    ($h_s, $h_e) = ($h_e, $h_s) if $h_s > $h_e; 
+   my $alt_score = $h->score() || '.';
+   $score = $alt_score
+       if ($score eq '.' && $alt_score =~ /\d/);
 
+   my @h_data;
+   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str);
+   push(@h_data, '.', 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand);
+   my $h_l = join("\t", @h_data)."\n";
+   
+   my $sorted = PhatHit_utils::sort_hits($h);
+   
+   foreach my $hsp (@{$sorted}){
+      my $hsp_id = get_id_hsp();
+      $hsp_id = join(":", $seq_id, $hsp_id);
+      $hsp_id =~ s/\s/-/g;
+      my $hsp_l =
+      get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
+      
+      $h_l .= $hsp_l."\n";
+      
+   }
+   
+   return $h_l;
+}
+#------------------------------------------------------------------------
+sub repeat_data {
+   my $h      = shift;
+   my $seq_id = shift;
+   
+   my $h_str = $h->strand('query') == 1 ? '+' : '-';
+   #my $h_str = '+';
+   
+   my ($h_s, $h_e) = PhatHit_utils::get_span_of_hit($h, 'query');
+   
+   ($h_s, $h_e) = ($h_e, $h_s) if $h_s > $h_e; 
+   
+   
+   my ($t_s, $t_e) = PhatHit_utils::get_span_of_hit($h, 'hit');
+   
+   my $t_strand = $h->strand('hit') == -1  ? '-' : '+';
+   
+   ($t_s, $t_e) = ($t_e, $t_s) if $t_s > $t_e;
+   
+   my ($class, $type) = get_class_and_type($h, 'hit');
 
-     my ($t_s, $t_e) = PhatHit_utils::get_span_of_hit($h, 'hit');
-     
-     my $t_strand = $h->strand('hit') == -1  ? '-' : '+';
-     
-     ($t_s, $t_e) = ($t_e, $t_s) if $t_s > $t_e;
+   $class = "blastx:repeatmask" if ($class eq 'blastx');
+   
+   my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
+       ? $h->hsp('best')->name() : $h->name();
+   
+   $h_n   =~ s/\s/-/g;
+   
+   my $h_id = get_id_hit();
+   $h_id = join(":", $seq_id, $h_id);
+   my $score = $h->significance() || 'NA';
+   $score .= 0 if $score eq '0.';
+   $score = '.' if $score eq 'NA';
 
-     my ($class, $type) = get_class_and_type($h, 'hit');
+   my $alt_score = $h->score() || '.';
+   $score = $alt_score
+       if ($score eq '.' && $alt_score =~ /\d/);
 
-     my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
-               ? $h->hsp('best')->name() : $h->name();
-
-     $h_n   =~ s/\s/-/g;
-
-     my $h_id = get_id_hit();
-	$h_id = join(":", $seq_id, $h_id);
-	my $score = $h->significance();
-	   $score .= 0 if $score eq '0.';
-	   $score = '.' if $score eq 'NA';
-
-        my @h_data;
-        push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str);
-        push(@h_data, '.', 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand);
-        my $h_l = join("\t", @h_data)."\n";
-
-	my $sorted = PhatHit_utils::sort_hits($h);
-
-        foreach my $hsp (@{$sorted}){
-                my $hsp_id = get_id_hsp();
-		$hsp_id = join(":", $seq_id, $hsp_id);
-		$hsp_id =~ s/\s/-/g;
-                my $hsp_l =
-		    get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
-		
-                $h_l .= $hsp_l."\n";
-		
-	    }
-			
-			return $h_l;
+   my @h_data;
+   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str);
+   push(@h_data, '.', 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand);
+   my $h_l = join("\t", @h_data)."\n";
+   
+   my $sorted = PhatHit_utils::sort_hits($h);
+   
+   foreach my $hsp (@{$sorted}){
+      my $hsp_id = get_id_hsp();
+      $hsp_id = join(":", $seq_id, $hsp_id);
+      $hsp_id =~ s/\s/-/g;
+      my $hsp_l =
+      get_repeat_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
+      
+      $h_l .= $hsp_l."\n";
+      
+   }
+   
+   return $h_l;
 }
 #------------------------------------------------------------------------
 sub get_class_and_type {
@@ -402,25 +478,25 @@ sub get_class_and_type {
 
 	my $type;
 	if    ($class eq 'blastx'){
-		$type = $k eq 'hit' ? 'match' : 'protein_match';
+		$type = $k eq 'hit' ? 'protein_match' : 'match_part';
 	}elsif    ($class eq 'tblastx'){
-		$type = $k eq 'hit' ? 'match' : 'protein_match';
+		$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
 	}
 	elsif ($class eq 'protein2genome'){
-		$type = $k eq 'hit' ? 'match' : 'protein_match'; 
+		$type = $k eq 'hit' ? 'protein_match' : 'match_part'; 
 	}
         elsif ($class eq 'est2genome'){
-                $type = $k eq 'hit' ? 'match' : 'nucleotide_match';
+                $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
         }
         elsif ($class eq 'blastn'){
-                $type = $k eq 'hit' ? 'match' : 'nucleotide_match' ;
+                $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
         }
         elsif (ref($h)  =~ /snap/){
-                $type = $k eq 'hit' ? 'gene' : 'mRNA' ;
+                $type = $k eq 'hit' ? 'match' : 'match_part' ;
 		$class= 'snap';
         }
         elsif (ref($h)  =~ /repeatmasker/){
-                $type = $k eq 'hit' ? 'match' : 'repeat_region';
+                $type = $k eq 'hit' ? 'match' : 'match_part';
 		$class= 'repeatmasker';
         }
 	else {
@@ -490,6 +566,7 @@ sub get_cds_data {
         }
 
         my $c_l = '';
+	my $phase = 0;
         foreach my $e (@uniques){
                 my $nB = $e->[0];
                 my $nE = $e->[1];
@@ -509,7 +586,9 @@ sub get_cds_data {
 
                 my @data;
                 push(@data, $seq_id, $source, 'CDS', $nB, $nE, $score);
-                push(@data, $strand, '.','ID='.$e_id.';Parent='.$p);
+                push(@data, $strand, $phase,'ID='.$e_id.';Parent='.$p);
+
+		$phase = (3 - (($nE - $nB + 1) % 3)) % 3;
 
                 $c_l .= join("\t", @data)."\n";
         }
@@ -642,7 +721,14 @@ sub get_hsp_data {
         my $hsp_str  = $hsp->strand('query') ==  1 ? '+' : '-';
 	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
 
-	my $score = $hsp->score() || '.';
+	my $score = $hsp->significance() || 'NA';
+	$score .= 0 if $score eq '0.';
+	$score = '.' if $score eq 'NA';
+	
+	my $alt_score = $hsp->score() || '.';
+	$score = $alt_score
+	    if ( $score eq '.' && $alt_score =~ /\d/);
+
 
 	my $nB = $hsp->nB('query');
 	my $nE = $hsp->nE('query');
@@ -665,6 +751,53 @@ sub get_hsp_data {
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
+        push(@data, $nine);
+
+        my $l = join("\t", @data);
+        return $l;
+}
+#------------------------------------------------------------------------
+sub get_repeat_hsp_data {
+        my $hsp      = shift;
+        my $hsp_id   = shift;
+        my $seq_id   = shift;
+        my $hit_id   = shift;
+        my $hit_n    = shift;
+
+        my $hsp_str  = $hsp->strand('query') ==  1 ? '+' : '-';
+	#my $hsp_str  = '+';
+	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
+
+	my $score = $hsp->significance() || 'NA';
+	$score .= 0 if $score eq '0.';
+	$score = '.' if $score eq 'NA';
+	
+	my $alt_score = $hsp->score() || '.';
+	$score = $alt_score
+	    if ( $score eq '.' && $alt_score =~ /\d/);
+
+
+	my $nB = $hsp->nB('query');
+	my $nE = $hsp->nE('query');
+
+        ($nB, $nE) = ($nE, $nB) if $nB > $nE;
+
+	my $tB = $hsp->nB('hit');
+	my $tE = $hsp->nE('hit');
+
+	($tB, $tE) = ($tE, $tB) if $tB > $tE;
+
+	my ($class, $type) = get_class_and_type($hsp, 'hsp');
+	$class = "blastx:repeatmask" if ($class eq 'blastx');
+	
+	my $hsp_name = $hsp->name();
+	   $hsp_name =~ s/\s/-/g;
+
+ 
+        my @data;
+        push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
+	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
+	$nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand;
         push(@data, $nine);
 
         my $l = join("\t", @data);

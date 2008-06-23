@@ -24,7 +24,7 @@ sub clean_and_cluster {
 	my $seq     = shift;
 	my $depth   = shift;
 
-	my ($p, $m, $x, $z) = PhatHit_utils::split_by_strand('query', $keepers);
+	my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $keepers);
 
 	my $p_clusters = shadow_cluster($depth, $seq, $p);
         my $m_clusters = shadow_cluster($depth, $seq, $m);
@@ -64,7 +64,7 @@ sub special_cluster_phat_hits {
 	my $seq       = shift;        
 	my $flank     = shift || 10;
 
-        my ($p, $m, $x, $z) = PhatHit_utils::split_by_strand('query', $phat_hits);
+        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
 
         my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
         my $m_clusters = shadow_cluster(20, $seq, $m, $flank);
@@ -135,7 +135,7 @@ sub careful_cluster_phat_hits {
         my $phat_hits = shift;
 	my $seq       = shift;
 	my $flank     = shift || 10;
-        my ($p, $m, $x, $z) = PhatHit_utils::split_by_strand('query', $phat_hits);
+        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
 
         my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
         my $m_clusters = shadow_cluster(20, $seq, $m, $flank);
@@ -252,7 +252,7 @@ sub shadow_cluster {
 
         my $coors  = PhatHit_utils::to_begin_and_end_coors($phat_hits, 'query');
         my $pieces = Shadower::getPieces($seq, $coors, $flank);
-
+ 
         my $temp_id = 0;
         foreach my $hit (@{$phat_hits}){
                 $hit->{temp_id} = $temp_id;
@@ -283,9 +283,12 @@ sub shadow_cluster {
 		my $j = 0;
         	foreach my $s (@{$pieces}){
 
-			if (defined($c_size{$j}) && $c_size{$j} >  $depth) {
-				$j++;
-				next;
+		        if (defined($depth) &&
+			    defined($c_size{$j}) &&
+			    $c_size{$j} >  $depth
+			   ){
+			      $j++;
+			      next;
 			}
 
                 	my $sB = $s->{b};

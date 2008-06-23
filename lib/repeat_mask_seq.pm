@@ -24,23 +24,20 @@ use Bio::Search::HSP::PhatHSP::tblastx;
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub process {
-	my $query_seq             = shift;
 	my $rm_keepers            = shift;
 	my $repeat_blastx_keepers = shift;
+	my $query_seq = shift;
 
 	my @features = (@{$rm_keepers}, @{$repeat_blastx_keepers});
 
 	my ($tes, $lcs) = seperate_types(\@features);
-
-	my $masked_seq = mask_seq($query_seq, $tes, $lcs);
 
 	my $shattered_lcs = shatter_hits($lcs);
 	my $tes_keepers   = clean_tes($query_seq, $tes);
 
 	my @best_keepers  = (@{$shattered_lcs}, @{$tes_keepers});
 
-	return ($masked_seq, \@best_keepers);
-
+	return (\@best_keepers);
 }
 #-----------------------------------------------------------------------------
 sub shatter_hits {
@@ -83,29 +80,82 @@ sub clean_tes {
 	return \@keepers;
 }
 #-----------------------------------------------------------------------------
-sub mask_seq {
-	my $seq = shift;
-	my $tes = shift;
-	my $lcs = shift;
+sub mask_chunk {
+	my $chunk = shift;
+	my $features = shift;
 
-	my $tes_coors = get_coors($tes);
-	my $lcs_coors = get_coors($lcs);
+	my ($tes, $lcs) = seperate_types($features);
 
-	my $masked_seq = Shadower::maskSequence($seq, $tes_coors, 50, 'N');
-    	   $masked_seq = Shadower::softMaskSequence($masked_seq,
-                                                    $lcs_coors,
-                                                    0,
-                                                   );
-	return $masked_seq;
+	my $chunk_offset = $chunk->offset();
+
+	my $tes_coors = get_coors($tes, $chunk_offset);
+	my $lcs_coors = get_coors($lcs, $chunk_offset);
+
+	my $seq = $chunk->seq();
+	_hard_mask_seq (\$seq, $tes_coors, 50, 'N');
+    	_soft_mask_seq(\$seq, $lcs_coors, 0);
+
+	$chunk->seq($seq);
+	
+	return $chunk;
+}
+#-----------------------------------------------------------------------------
+sub _hard_mask_seq {
+   my $seq = shift;
+   my $features = shift;
+   my $flank = shift || 0;
+   my $replace = shift || 'N';
+   
+   foreach my $p (@{$features}){
+      my $b = $p->[0];
+      my $e = $p->[1];
+      
+      ($b, $e) = ($e, $b) if $e < $b;
+      
+      my $f = $b - $flank;
+      
+      $b = $f > 0 ? $b - $flank : 1;
+      $e = $e + $flank;
+   
+      my $l = $e - $b + 1;
+      
+      my $replace_string = '';
+      $replace_string .= $replace while(length($replace_string) < $l);
+
+      substr($$seq, $b -1 , $l, $replace_string);
+   }  
+}
+#-----------------------------------------------------------------------------
+sub _soft_mask_seq {
+   my $seq = shift;
+   my $features = shift;
+   my $flank = shift || 0;
+   
+   foreach my $p (@{$features}){
+      my $b = $p->[0];
+      my $e = $p->[1];
+      
+      ($b, $e) = ($e, $b) if $e < $b;
+      
+      my $f = $b - $flank;
+      
+      $b = $f > 0 ? $b - $flank : 1;
+      $e = $e + $flank;
+   
+      my $l = $e - $b + 1;
+      
+      substr($$seq, $b -1 , $l, lc(substr($$seq, $b -1 , $l)));
+   }
 }
 #-----------------------------------------------------------------------------
 sub get_coors {
 	my $hits = shift;
+	my $offset = shift || 0;
 
 	my @coors;
 	foreach my $hit (@{$hits}){
         	foreach my $hsp ($hit->hsps()){
-			push(@coors, [$hsp->nB('query'), $hsp->nE('query')]);
+			push(@coors, [$hsp->nB('query') - $offset, $hsp->nE('query') - $offset]);
 		}
 	}
 

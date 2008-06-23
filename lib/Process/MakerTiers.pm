@@ -18,542 +18,784 @@ my %SEEN;
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
 #-----------------------------------------------------------------------------
+
+#returns a new MakerTier object
 sub new {
-    my ($class, @args) = @_;
+   my ($class, @args) = @_;
 
-    my $self = {};
+   my $self = {};
 
-    bless ($self, $class);
+   bless ($self, $class);
 
-    if (@args) {
-	my $arg = shift @args;
-	if (ref $arg eq 'Process::MakerChunk') {
-	    $self = $arg->clone();
-	}
-	else {
-	    $self->{VARS}{fasta} = $arg;
-	    $self->{VARS}{CTL_OPTIONS} = shift @args;
-	    $self->{VARS}{OPT} = shift @args;
-            $self->{TIER_ID} = shift @args;
-	    $self->{VARS}{DS_FH} = shift @args;
-	    $self->_initialize();
-	}
-    }
+   if (@args) {
+      my $arg = shift @args;
+      if (ref $arg eq 'Process::MakerChunk') {
+	 $self = $arg->clone();
+      }
+      else {
+	 $self->{VARS}{fasta} = $arg;
+	 $self->{VARS}{CTL_OPTIONS} = shift @args;
+	 $self->{VARS}{OPT} = shift @args;
+	 $self->{TIER_ID} = shift @args;
+	 $self->{TERMINATE} = 0;
+	 $self->_initialize();
+      }
+   }
 
-    return $self;
+   return $self;
 }
 
 #--------------------------------------------------------------
+#initializes variables in the MakerTier object
+#called from $self->new
+
 sub _initialize {
-    my $self        = shift;
-    my $fasta       = $self->{VARS}{fasta};
-    my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
-    my %OPT         = %{$self->{VARS}{OPT}};
+   my $self        = shift;
+   my $fasta       = $self->{VARS}{fasta};
+   my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
+   my %OPT         = %{$self->{VARS}{OPT}};
 
-    #-------------------------CHUNK
-    $self->{VARS}{query_def} = Fasta::getDef($fasta); #Get fasta header
-    $self->{VARS}{query_seq} = Fasta::getSeq($fasta); #Get fasta sequence
-    ($self->{VARS}{seq_id})  = $self->{VARS}{query_def} =~ /^>(\S+)/; #Get sequence identifier off of fasta header
+   $self->{VARS}{query_def} = Fasta::getDef($fasta); #Get fasta header
+   ($self->{VARS}{seq_id})  = $self->{VARS}{query_def} =~ /^>(\S+)/; #Get identifier
+   $self->{VARS}{query_seq} = Fasta::getSeq($fasta); #Get fasta Sequence
     
-    #--error checking for no-unique ids in multi-fasta
-    if (exists $SEEN{$self->{VARS}{seq_id}}){
-	warn "ERROR:  The multi-fasta file contains non-unique sequence ids.\n",
-	     "The id " . $self->{VARS}{seq_id} . " occurs more than once.\n";
+   #--error checking for non-unique ids in multi-fasta
+   if (exists $SEEN{$self->{VARS}{seq_id}}) {
+      warn "ERROR:  The multi-fasta file contains non-unique sequence ids.\n",
+      "The id " . $self->{VARS}{seq_id} . " occurs more than once.\n";
 
-	$SEEN{$self->{VARS}{seq_id}}++;
-	my $new_id = $self->{VARS}{seq_id}.".V".$SEEN{$self->{VARS}{seq_id}};
+      $SEEN{$self->{VARS}{seq_id}}++;
+      my $new_id = $self->{VARS}{seq_id}.".V".$SEEN{$self->{VARS}{seq_id}};
 
-	warn "\n\n\nThe id ".$self->{VARS}{seq_id}." will now be changed to $new_id \n";
+      warn "\n\n\nThe id ".$self->{VARS}{seq_id}." will now be changed to $new_id \n";
 
-	$self->{VARS}{seq_id} = $new_id;
-	$SEEN{$new_id}++;
-    }
-    else{
-	$SEEN{$self->{VARS}{seq_id}}++;
-    }
+      $self->{VARS}{seq_id} = $new_id;
+      $SEEN{$new_id}++;
+   }
+   else {
+      $SEEN{$self->{VARS}{seq_id}}++;
+   }
 
-    #--build a safe name for file names from the sequence identifier  
-    $self->{VARS}{seq_out_name} = uri_escape($self->{VARS}{seq_id},
+   #--build a safe name for file names from the sequence identifier  
+   $self->{VARS}{seq_out_name} = uri_escape($self->{VARS}{seq_id},
 					    '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
 					   );
 
-    #--set up void directory where analysis is stored
-    $self->{VARS}{out_dir} = $CTL_OPTIONS{'out_base'};
+   #--set up void directory where analysis is stored
+   $self->{VARS}{out_dir} = $CTL_OPTIONS{'out_base'};
 
-    if (exists $CTL_OPTIONS{'datastore'}) {
-	$self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
-	
-	$CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
-	    die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
-	
-	my $fh = $self->{VARS}{DS_FH};
-	print $fh "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\n";
-        $self->{VARS}{DS_FH} = undef;
-    }
+   if (exists $CTL_OPTIONS{'datastore'}) {
+      $self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
+      $CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
+          die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
+   }
 
-    $self->{VARS}{the_void}  = build_the_void($self->{VARS}{seq_out_name},
-					     $OPT{a}, $self->{VARS}{out_dir}
+   $self->{VARS}{the_void}  = build_the_void($self->{VARS}{seq_out_name},
+					     $self->{VARS}{out_dir}
 					    );
-    #-------------------------CHUNK
-    $self->{TERMINATE} = 0;
-    $self->{LEVEL}{CURRENT} = -1;
-    $self->next_level();
+
+   #-set up variables that are heldover from last chunk
+   $self->{VARS}{holdover_chunk} = undef;
+
+   #-set up variables that are the result of chunk accumulation
+   $self->{VARS}{masked_total_seq} = '';
+   $self->{VARS}{p_fastas} = '';
+   $self->{VARS}{t_fastas} = '';
+   $self->{VARS}{p_snap_fastas} = '';
+   $self->{VARS}{t_snap_fastas} = '';
+
+   $self->{VARS}{GFF3} = new Dumper::GFF::GFFV3();    
+   $self->{VARS}{GFF3}->seq($self->{VARS}{query_seq});
+   $self->{VARS}{GFF3}->seq_id($self->{VARS}{seq_id});
+
+   $self->{LEVEL}{CURRENT} = -1;
+}
+#--------------------------------------------------------------
+#runs the MakerTier until multiple chunks are available to distribute
+
+sub run {
+   my $self = shift;
+   my $current_level = $self->{LEVEL}{CURRENT};
+
+   return undef if ($self->terminated);
+   return undef if ($self->_level_started && ! $self->_level_finished);
+
+   my %OPT = %{$self->{VARS}{OPT}};
+   my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
+
+   if($self->_next_level){
+      return $self->run;
+   }
+
+   if ($current_level == -1){
+      #==REPEAT MASKING HERE
+      if($OPT{R}){
+	 print STDERR "Repeatmasking skipped!!\n";
+	 $self->{VARS}{masked_total_seq} = ${$self->{VARS}{query_seq}};
+
+	 $self->{LEVEL}{CURRENT} = 3;
+	 $self->_initiate_level(3);
+	 return $self->run;
+      }
+      elsif($OPT{GFF}){
+	 $self->{VARS}{masked_total_seq} = repeat_mask_seq::gff(uc(${$self->{VARS}{query_seq}}), 
+								$self->{VARS}{seq_id},
+								$CTL_OPTIONS{'rm_gff'}
+							       );
+
+	 $self->{LEVEL}{CURRENT} = 3;
+	 $self->_initiate_level(3);
+	 return $self->run;
+      }
+      else{
+	 my $fasta_chunker = new FastaChunker();
+	 $fasta_chunker->parent_fasta($self->{VARS}{fasta});
+	 $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+	 $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+	 $fasta_chunker->load_chunks();
+
+	 my $chunk_count = 0;
+
+	 $self->{VARS}{fasta_chunker} = $fasta_chunker;
+	 $self->{VARS}{chunk_count} = $chunk_count;
+	 $self->{VARS}{f_chunk} = $fasta_chunker->get_chunk($chunk_count);
+
+	 $self->{LEVEL}{CURRENT} = 0;
+	 $self->_initiate_level(0);
+	 return $self->run;
+      }
+   }
+   elsif($current_level == 0){#repeat masking one chunk
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+      return $self->run;
+   }
+   elsif($current_level == 1){#repeatmask blastx multiple makerChunks
+      $self->_load_chunks_for_level($current_level);
+      return; #pause here;
+   }
+   elsif($current_level == 2){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      my $chunk_count = ++$self->{VARS}{chunk_count};
+      
+      if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
+	 $self->{LEVEL}{CURRENT} = 0;
+	 $self->_initiate_level(0);
+      }
+
+      return $self->run;
+   }
+   elsif($current_level == 3){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      #--set up new chunks for remaining levels
+      my $fasta_chunker = new FastaChunker();
+      $fasta_chunker = new FastaChunker();
+      $fasta_chunker->parent_fasta(${$self->{VARS}{masked_fasta}});
+      $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+      $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+      $fasta_chunker->load_chunks();
+      
+      my $chunk_count = 0;
+
+      $self->{VARS}{fasta_chunker} = $fasta_chunker;
+      $self->{VARS}{chunk_count} = $chunk_count;
+      $self->{VARS}{f_chunk} = $fasta_chunker->get_chunk($chunk_count);
+
+      return $self->run;
+   }
+   elsif($current_level == 4){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      return $self->run;
+   }
+   elsif($current_level == 5){
+      $self->_load_chunks_for_level($current_level);
+      return undef; #pause here
+   }
+   elsif($current_level == 6){
+      $self->_load_chunks_for_level($current_level);
+      return undef; #pause here
+   }
+   elsif($current_level == 7){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      return $self->run;
+   }
+   elsif($current_level == 8){
+      $self->_load_chunks_for_level($current_level);
+      my $chunk = $self->next_chunk;
+      $chunk->run;
+      $self->chunk_update($chunk);
+
+      return $self->run;
+   }
+   elsif($current_level == 9){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      return $self->run;
+   }
+   elsif($current_level == 10){
+      $self->_load_chunks_for_level($current_level);
+      my $chunk = $self->next_chunk;
+      $chunk->run;
+      $self->chunk_update($chunk);
+
+      return $self->run;
+   }
+   elsif($current_level == 11){
+      $self->_load_chunks_for_level($current_level);
+      my $chunk = $self->next_chunk;
+      $chunk->run;
+      $self->chunk_update($chunk);
+
+      my $chunk_count = ++$self->{VARS}{chunk_count};
+      
+      if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
+	 $self->{LEVEL}{CURRENT} = 4;
+	 $self->_initiate_level(4);
+      }
+
+      return $self->run;
+   }
+   elsif($current_level == 12){
+      $self->_load_chunks_for_level($current_level);
+      my $mChunk = $self->next_chunk;
+      $mChunk->run;
+      $self->chunk_update($mChunk);
+
+      #output error log for this contig
+      my $err_file = $self->{VARS}{out_dir}."/".$self->{VARS}{seq_out_name}.".error";
+      open(OUT, "> $err_file");
+      print OUT $self->error;
+      close(OUT);
+
+      return $self->run;
+   }
+   else{
+      $self->{TERMINATE} = 1;
+      return undef; #stop here
+   }
 }
 
 #--------------------------------------------------------------
-sub id {
-    my $self = shift;
-   
-    return $self->{TIER_ID};
-}
+#itteratively gets the next chunk from the tier
+#returns undef if there is no chunk or the tier can not yet advance
+#calls $self->run to try and advance the MakerTier
 
-#--------------------------------------------------------------
 sub next_chunk {
-    my $self = shift;
+   my $self = shift;
+   my $current_level = $self->{LEVEL}{CURRENT};
 
-    my $current = $self->{LEVEL}{CURRENT};
+   if ($current_level == -1 || ! $self->_level_started){
+      $self->run;
+      $current_level = $self->{LEVEL}{CURRENT};
+   }
+   elsif($self->_level_finished && ! $self->terminated){
+      $self->run;
+      $current_level = $self->{LEVEL}{CURRENT};
+   }
 
-    if (my $chunk = shift @{$self->{LEVEL}{$current}{CHUNKS}}) {
-	return $chunk;
-    }
+   return undef if ($self->terminated);
 
-    if ($self->next_level()){
-	return $self->next_chunk();
-    }
 
-    return undef;
+   if (my $chunk = shift @{$self->{LEVEL}{$current_level}{CHUNKS}}) {
+      return $chunk;
+   }
+   else{
+      return undef;
+   }
 }
 
-#--------------------------------------------------------------
-sub _build_chunk {
-    my $self = shift;
-    my $level = shift;
-    my $args = shift;
 
-    my $chunk_id = $self->id().":".$level.":". $self->{LEVEL}{$level}{CHUNK_COUNT};
+#--------------------------------------------------------------
+#moves tier up one level is current level is finished
+
+sub _next_level {
+   my $self  = shift;
+   my $level = $self->{LEVEL}{CURRENT};
     
-    my $chunk = Process::MakerChunk->new($level, $args, $chunk_id);
-    push (@{$self->{LEVEL}{$level}{CHUNKS}}, $chunk);
-    $self->{LEVEL}{$level}{CHUNK_COUNT}++;
+   if ($level  == -1) {
+      return undef;
+   }
+   elsif ($self->_level_started() && $self->_level_finished && not $self->terminated()) {
+      #--get results for current level
+      $self->_polish_results();
+   }
+   else {
+      return undef;
+   }
+
+   #--now go up one level
+   $level++;
+   $self->{LEVEL}{CURRENT} = $level;
+   $self->_initiate_level($level);    
+   
+   return 1;
 }
 #--------------------------------------------------------------
-sub polish_results{
-    my $self = shift;
-    my $level = $self->{LEVEL}{CURRENT};
+#defines variables for new level and undefines last level
 
-    unless ($level >= 0 && $self->level_finished()){
-	return 0;
-    }
+sub _initiate_level {
+   my $self = shift;
+   my $level = shift;
 
-    if (not $self->{LEVEL}{$level}{RESULTS}){
-	return 0;
-    }
+   #undef previous level and current level
+   $self->{LEVEL}{$level - 1} = undef;
+   $self->{LEVEL}{$level} = undef;
 
-    foreach my $result (@{$self->{LEVEL}{$level}{RESULTS}}){
-	my @results = @{$result};
-
-	if ($level == 0) {
-	    #------------------------RESULTS
-	    $self->{VARS}{temp_masked_fasta} = shift @results;
-	    $self->{VARS}{rma_keepers}       = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 1) {
-	    #------------------------RESULTS
-	    push (@{$self->{VARS}{repeat_blastx_keepers}}, @{shift @results});
-	    #------------------------RESULTS
-	}
-	elsif ($level == 2) {
-	    #------------------------RESULTS
-	    $self->{VARS}{rm_keepers}   = shift @results;
-	    $self->{VARS}{masked_fasta} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 3) {
-	    #------------------------RESULTS
-	    $self->{VARS}{IOX}           = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 4) {
-	    #------------------------RESULTS
-	    push (@{$self->{VARS}{blastx_keepers}}, @{shift @results});
-	    #------------------------RESULTS
-	}
-	elsif ($level == 5) {
-	    #------------------------RESULTS
-	    push (@{$self->{VARS}{tblastx_keepers}}, @{shift @results});
-	    #------------------------RESULTS
-	}
-	elsif ($level == 6) {
-	    #------------------------RESULTS
-	    push (@{$self->{VARS}{blastn_keepers}}, @{shift @results});
-	    #------------------------RESULTS
-	}
-	elsif ($level == 7) {
-	    #------------------------RESULTS
-	    $self->{VARS}{IOX}             = shift @results;
-	    $self->{VARS}{blastx_clusters} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 8) {
-	    #------------------------RESULTS
-	    $self->{VARS}{exonerate_p_clusters} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 9) {
-	    #------------------------RESULTS
-	    $self->{VARS}{IOX}              = shift @results;
-	    $self->{VARS}{tblastx_clusters} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 10) {
-	    #------------------------RESULTS
-	    $self->{VARS}{blastn_clusters} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 11) {
-	    #------------------------RESULTS
-	    $self->{VARS}{exonerate_e_clusters} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 12) {
-	    #------------------------RESULTS
-	    $self->{VARS}{IOX} = shift @results;
-	    $self->{VARS}{snaps} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 13) {
-	    #------------------------RESULTS
-	    $self->{VARS}{annotations} = shift @results;
-	    #------------------------RESULTS
-	}
-	elsif ($level == 14) {
-	    #------------------------RESULTS
-	    $self->{TERMINATE} = 1;
-	    #------------------------RESULTS
-	}
-    }
-
-    return 1;
+   #--initiate level variables
+   $self->{LEVEL}{$level}{CHUNK_COUNT} = 0;
+   $self->{LEVEL}{$level}{RESULT_COUNT} = 0;
+   $self->{LEVEL}{$level}{CHUNKS} = undef;
+   $self->{LEVEL}{$level}{RESULTS} = undef;
+   $self->{LEVEL}{$level}{ERROR} = undef;
+   $self->{LEVEL}{$level}{STARTED} = undef;
 }
 #--------------------------------------------------------------
-sub next_level {
-    my $self  = shift;
-    my $level = $self->{LEVEL}{CURRENT};
-    my %OPT   = %{$self->{VARS}{OPT}};
-    my @args;
-    
-    if ($level  >= 0) {
-	if ($self->level_finished() && not $self->terminated()){
+#gets variables needed for chunks from the current level
+#also constructs chunks using _build_chunk 
 
-	    #--get results for current level
-	    $self->polish_results();
-	}
-	else {
-	    return 0;
-	}
-    }	    
-    
-    #--now go up one level
-    $level++;
-    $self->{LEVEL}{CURRENT} = $level;
-    
-    #--initiate level variables
-    $self->{LEVEL}{$level}{CHUNK_COUNT} = 0;
-    $self->{LEVEL}{$level}{RESULT_COUNT} = 0;
-    $self->{LEVEL}{$level}{CHUNKS} = undef;
-    $self->{LEVEL}{$level}{RESULTS} = undef;
-    $self->{LEVEL}{$level}{ERROR} = undef;
-    
-    #--select variables to send to Process::MakerChunk object
-    if ($level == 0) {
-	$self->{VARS}{masked_fasta} = \$self->{VARS}{fasta};
-	$self->{VARS}{rm_keepers} = [];
+sub _load_chunks_for_level {
+   my $self = shift;
+   my $level = shift;
 
-	return $self->next_level() if ($OPT{R});
-	
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{fasta},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{seq_out_name},
-		 $self->{VARS}{query_seq},
-		 $self->{VARS}{query_def},
-		 $self->{VARS}{CTL_OPTIONS},
-		 $self->{VARS}{OPT}{f}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 1){
-	return $self->next_level() if ($OPT{R});
+   $self->{LEVEL}{$level}{STARTED} = 1;
 
-	foreach my $repeat_protein (@{$self->{VARS}{CTL_OPTIONS}{repeat_protein}}){
-	    #------------------------ARGS_IN
-	    @args =( $self->{VARS}{temp_masked_fasta},
-		     $repeat_protein,
-		     $self->{VARS}{the_void},
-		     $self->{VARS}{query_seq},
-		     $self->{VARS}{seq_out_name},
-		     $self->{VARS}{CTL_OPTIONS},
-		     $self->{VARS}{OPT}{f}
-		   );
-	    #------------------------ARGS_IN
+   my @args;
+
+   #--select variables to send to Process::MakerChunk object
+   if ($level == 0) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{f_chunk},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{seq_out_name},
+	       $self->{VARS}{CTL_OPTIONS},
+	       $self->{VARS}{OPT}{f}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 1) {
+      foreach my $repeat_protein (@{$self->{VARS}{CTL_OPTIONS}{repeat_protein}}) {
+	 #------------------------ARGS_IN
+	 @args =( $self->{VARS}{f_chunk},
+		  $repeat_protein,
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{seq_out_name},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+	 #------------------------ARGS_IN
 		
-	    #-------------------------CHUNK
-	    $self->_build_chunk($level,\@args);
-	    #-------------------------CHUNK
-	}
+	 #-------------------------CHUNK
+	 $self->_build_chunk($level,\@args);
+	 #-------------------------CHUNK
+      }
 	
-	return 1;
-    }
-    elsif ($level == 2){
-	return $self->next_level() if ($OPT{R});
+      return 1;
+   }
+   elsif ($level == 2) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{f_chunk},
+	       $self->{VARS}{rma_keepers},
+	       $self->{VARS}{repeat_blastx_keepers},
+	       $self->{VARS}{GFF3},
+	       $self->{VARS}{query_def},
+	       $self->{VARS}{query_seq},
+	       $self->{VARS}{masked_total_seq},
+	       $self->{VARS}{the_void},
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 3) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{masked_total_seq},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{seq_out_name},
+	       $self->{VARS}{query_def},
+	       $self->{VARS}{CTL_OPTIONS}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 4) {
+	 #------------------------ARGS_IN
+	 @args =( $self->{VARS}{holdover_chunk},
+		  $self->{VARS}{f_chunk}
+		);
+	 #------------------------ARGS_IN
+   }
+   elsif ($level == 5) {
+      foreach my $transcripts (@{$self->{VARS}{CTL_OPTIONS}{est}}) {
+	 #------------------------ARGS_IN
+	 @args =( $self->{f_chunk},
+		  $transcripts,
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{seq_out_name},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+	 #------------------------ARGS_IN
 
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{query_seq},
-		 $self->{VARS}{rma_keepers},
-		 $self->{VARS}{repeat_blastx_keepers},
-		 $self->{VARS}{query_def},
-		 $self->{VARS}{the_void}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 3){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{masked_fasta},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{out_dir},
-		 $self->{VARS}{seq_out_name},
-		 $self->{VARS}{rm_keepers},
-		 $self->{VARS}{CTL_OPTIONS}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 4){
-	foreach my $protein (@{$self->{VARS}{CTL_OPTIONS}{protein}}){
-	    #------------------------ARGS_IN
-	    @args =( $self->{VARS}{masked_fasta},
-		     $protein,
-		     $self->{VARS}{the_void},
-		     $self->{VARS}{query_seq},
-		     $self->{VARS}{seq_out_name},
-		     $self->{VARS}{CTL_OPTIONS},
-		     $self->{VARS}{OPT}{f}
-		   );
-	    #------------------------ARGS_IN
+	 #-------------------------CHUNK
+	 $self->_build_chunk($level,\@args);
+	 #-------------------------CHUNK
+      }
 
-	    #-------------------------CHUNK
-	    $self->_build_chunk($level,\@args);
-	    #-------------------------CHUNK
-	}
-	
-	return 1;
-    }
-    elsif($level == 5){
-	foreach my $alt_est (@{$self->{VARS}{CTL_OPTIONS}{alt_est}}){
-	    #------------------------ARGS_IN
-	    @args =( $self->{VARS}{masked_fasta},
-		     $alt_est,
-		     $self->{VARS}{the_void},
-		     $self->{VARS}{query_seq},
-		     $self->{VARS}{seq_out_name},
-		     $self->{VARS}{CTL_OPTIONS},
-		     $self->{VARS}{OPT}{f}
-		   );
-	    #------------------------ARGS_IN
+      return 1;
+   }
+   elsif ($level == 6) {
+      foreach my $proteins (@{$self->{VARS}{CTL_OPTIONS}{protein}}) {
+	 #------------------------ARGS_IN
+	 @args =( $self->{f_chunk},
+		  $proteins,
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{seq_out_name},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+	 #------------------------ARGS_IN
 
-	    #-------------------------CHUNK
-	    $self->_build_chunk($level,\@args);
-	    #-------------------------CHUNK
-	}
+	 #-------------------------CHUNK
+	 $self->_build_chunk($level,\@args);
+	 #-------------------------CHUNK
+      }
 
-	return 1;
-    }
-    elsif($level == 6){
-	foreach my $est (@{$self->{VARS}{CTL_OPTIONS}{est}}){
-	    #------------------------ARGS_IN
-	    @args =( $self->{VARS}{masked_fasta},
-		     $est,
-		     $self->{VARS}{the_void},
-		     $self->{VARS}{query_seq},
-		     $self->{VARS}{seq_out_name},
-		     $self->{VARS}{CTL_OPTIONS},
-		     $self->{VARS}{OPT}{f}
-		   );
-	    #------------------------ARGS_IN
+      return 1;
+   }
+   elsif ($level == 7) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{f_chunk},
+	       $self->{VARS}{holdover_chunk},
+	       $self->{VARS}{snaps},
+	       $self->{VARS}{blastx_keepers},
+	       $self->{VARS}{blastn_keepers},
+	       $self->{VARS}{query_seq},
+	       $self->{VARS}{CTL_OPTIONS}{split_hit},
+	       $self->{VARS}{the_void}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 8) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{fasta},
+	       $self->{VARS}{blastx_keepers},
+	       $self->{VARS}{query_seq},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{CTL_OPTIONS},
+	       $self->{VARS}{OPT}{f}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 9) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{fasta},
+	       $self->{VARS}{blastn_keepers},
+	       $self->{VARS}{query_seq},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{CTL_OPTIONS},
+	       $self->{VARS}{OPT}{f}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 10) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{fasta},
+	       $self->{VARS}{masked_fasta},
+	       $self->{VARS}{f_chunk}->number,
+	       $self->{VARS}{exonerate_p_data},
+	       $self->{VARS}{exonerate_e_data},
+	       $self->{VARS}{blastx_data},
+	       $self->{VARS}{snaps_on_chunk},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{CTL_OPTIONS},
+	       $self->{VARS}{OPT}{f},
+	       $self->{VARS}{OPT}{SNAPS}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 11) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{blastx_data},
+	       $self->{VARS}{blastn_data},
+	       $self->{VARS}{exonerate_p_data},
+	       $self->{VARS}{exonerate_e_data},
+	       $self->{VARS}{annotations},
+	       $self->{VARS}{snaps},
+	       $self->{VARS}{query_seq},
+	       $self->{VARS}{snaps_on_chunk},
+	       $self->{VARS}{p_fastas},
+	       $self->{VARS}{t_fastas},
+	       $self->{VARS}{p_snap_fastas},
+	       $self->{VARS}{t_snap_fastas},
+	       $self->{VARS}{GFF3}
+	     );
+      #------------------------ARGS_IN
+   }
+   elsif ($level == 12) {
+      #------------------------ARGS_IN
+      @args =( $self->{VARS}{p_fastas},
+	       $self->{VARS}{t_fastas},
+	       $self->{VARS}{p_snap_fastas},
+	       $self->{VARS}{t_snap_fastas},
+	       $self->{VARS}{GFF3},
+	       $self->{VARS}{seq_out_name},
+	       $self->{VARS}{out_dir},
+	       $self->{VARS}{the_void},
+	       $self->{VARS}{CTL_OPTIONS}
+	     );
+      #------------------------ARGS_IN
+   }
+   else {
+      return undef;
+   }
 
-	    #-------------------------CHUNK
-	    $self->_build_chunk($level,\@args);
-	    #-------------------------CHUNK
-	}
+   #-------------------------CHUNK
+   $self->_build_chunk($level,\@args);
+   #-------------------------CHUNK
 
-	return 1;
-    }
-    elsif($level == 7){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{blastx_keepers},
-		 $self->{VARS}{tblastx_keepers},
-		 $self->{VARS}{blastn_keepers},
-		 $self->{VARS}{IOX},
-		 $self->{VARS}{query_seq},
-		 $self->{VARS}{the_void}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 8){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{fasta},
-		 $self->{VARS}{blastx_clusters},
-		 $self->{VARS}{CTL_OPTIONS}{old_protein},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{CTL_OPTIONS},
-		 $self->{VARS}{OPT}{f}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 9){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{exonerate_p_clusters},
-		 $self->{VARS}{IOX},
-		 $self->{VARS}{tblastx_keepers},
-		 $self->{VARS}{query_seq}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 10){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{blastn_keepers},
-		 $self->{VARS}{query_seq}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 11){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{fasta},
-		 $self->{VARS}{blastn_clusters},
-		 $self->{VARS}{CTL_OPTIONS}{old_est},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{CTL_OPTIONS},
-		 $self->{VARS}{OPT}{f}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 12){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{exonerate_e_clusters},
-		 $self->{VARS}{IOX},
-		 $self->{VARS}{masked_fasta},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{seq_out_name},
-		 $self->{VARS}{CTL_OPTIONS},
-		 $self->{VARS}{OPT}{f}
-	       );
-      	#------------------------ARGS_IN
-    }
-    elsif($level == 13){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{fasta},
-		 $self->{VARS}{masked_fasta},
-		 $self->{VARS}{exonerate_p_clusters},
-		 $self->{VARS}{exonerate_e_clusters},
-		 $self->{VARS}{blastx_clusters},
-		 $self->{VARS}{snaps},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{CTL_OPTIONS},
-		 $self->{VARS}{OPT}{f}
-	       );
-	#------------------------ARGS_IN
-    }
-    elsif($level == 14){
-	#------------------------ARGS_IN
-	@args =( $self->{VARS}{blastx_clusters},
-		 $self->{VARS}{blastn_clusters},
-		 $self->{VARS}{tblastx_clusters},
-		 $self->{VARS}{exonerate_p_clusters},
-		 $self->{VARS}{exonerate_e_clusters},
-		 $self->{VARS}{query_seq},
-		 $self->{VARS}{seq_id},
-		 $self->{VARS}{annotations},
-		 $self->{VARS}{rm_keepers},
-		 $self->{VARS}{snaps},
-		 $self->{VARS}{out_dir},
-		 $self->{VARS}{seq_out_name},
-		 $self->{VARS}{IOX},
-		 $self->{VARS}{the_void},
-		 $self->{VARS}{CTL_OPTIONS}
-	       );
-	#------------------------ARGS_IN
-    }
-    else{
-	return 0;
-    }
+   return 1;
+}
+#--------------------------------------------------------------
+#processes results from each level once all chunks are in
 
-    #-------------------------CHUNK
-    $self->_build_chunk($level,\@args);
-    #-------------------------CHUNK
+sub _polish_results{
+   my $self = shift;
+   my $level = $self->{LEVEL}{CURRENT};
 
-    return 1;
+   if ($level < 0 || ! $self->level_finished()){
+      return undef;
+   }
+
+   if (not $self->{LEVEL}{$level}{RESULTS}) {
+      return undef;
+   }
+
+   foreach my $result (@{$self->{LEVEL}{$level}{RESULTS}}) {
+      my @results = @{$result};
+
+      if ($level == 0) {
+	 #------------------------RESULTS
+	 $self->{VARS}{f_chunk}     = shift @results;
+	 $self->{VARS}{rma_keepers} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 1) {
+	 #------------------------RESULTS
+	 push (@{$self->{VARS}{repeat_blastx_keepers}}, @{shift @results});
+	 #------------------------RESULTS
+      }
+      elsif ($level == 2) {
+	 #------------------------RESULTS
+	 $self->{VARS}{f_chunk}          = shift @results;
+	 $self->{VARS}{masked_total_seq} = shift @results;
+	 $self->{VARS}{GFF3}             = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 3) {
+	 #------------------------RESULTS
+	 $self->{VARS}{masked_fasta} = shift @results;
+	 $self->{VARS}{snaps}        = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 4) {
+	 #------------------------RESULTS
+	 $self->{VARS}{f_chunk} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 5) {
+	 #------------------------RESULTS
+	 push (@{$self->{VARS}{blastn_keepers}}, @{shift @results});
+	 #------------------------RESULTS
+      }
+      elsif ($level == 6) {
+	 #------------------------RESULTS
+	 push (@{$self->{VARS}{blastx_keepers}}, @{shift @results});
+	 #------------------------RESULTS
+      }
+      elsif ($level == 7) {
+	 #------------------------RESULTS
+	 $self->{VARS}{holdover_chunk} = shift @results;
+	 $self->{VARS}{blastx_keepers} = shift @results;
+	 $self->{VARS}{blastn_keepers} = shift @results;
+	 $self->{VARS}{snaps_on_chunk} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 8) {
+	 #------------------------RESULTS
+	 $self->{VARS}{blastx_data}      = shift @results;
+	 $self->{VARS}{exonerate_p_data} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 9) {
+	 #------------------------RESULTS
+	 $self->{VARS}{blastn_data}      = shift @results;
+	 $self->{VARS}{exonerate_e_data} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 10) {
+	 #------------------------RESULTS
+	 $self->{VARS}{annotations} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 11) {
+	 #------------------------RESULTS
+	 $self->{VARS}{GFF3}          = shift @results;
+	 $self->{VARS}{p_fastas}      = shift @results;
+	 $self->{VARS}{t_fastas}      = shift @results;
+	 $self->{VARS}{p_snap_fastas} = shift @results;
+	 $self->{VARS}{t_snap_fastas} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 12) {
+	 #------------------------RESULTS
+	 #------------------------RESULTS
+      }
+   }
+
+   return 1;
+}
+#--------------------------------------------------------------
+#builds each individual chunk for processing
+#called from $self->_load_chunks_for_level
+
+sub _build_chunk {
+   my $self = shift;
+   my $level = shift;
+   my $args = shift;
+
+   my $chunk_id = $self->id().":".$level.":". $self->{LEVEL}{$level}{CHUNK_COUNT};
+    
+   my $chunk = Process::MakerChunk->new($level, $args, $chunk_id);
+   push (@{$self->{LEVEL}{$level}{CHUNKS}}, $chunk);
+   $self->{LEVEL}{$level}{CHUNK_COUNT}++;
+}
+#--------------------------------------------------------------
+#returns a line giving name of sequence and the location where
+#analysis is stored.  Used for datastore implementation.
+
+sub DS {
+   my $self = shift;
+   return $self->{VARS}{seq_id} . "\t" . $self->{VARS}{out_dir};
 }
 
 #--------------------------------------------------------------
+#returns the number of chunks currently available for processing
+
+sub num_chunks {
+   my $self = shift;
+
+   $self->next_level();
+   my $current = $self->{LEVEL}{CURRENT};
+
+   return @{$self->{LEVEL}{$current}{CHUNKS}};
+}
+#--------------------------------------------------------------
+#returns a copy of this MakerTiers object
+
 sub clone {
-    my $self = shift;
+   my $self = shift;
     
-    my $clone = dclone($self);
+   my $clone = dclone($self);
 
-    return $clone;
+   return $clone;
+}
+#--------------------------------------------------------------
+#returns true if level is finished
+
+sub _level_finished {
+   my $self = shift;
+   my $level = $self->{LEVEL}{CURRENT};
+
+   if ($self->{LEVEL}{$level}{CHUNK_COUNT} == $self->{LEVEL}{$level}{RESULT_COUNT}) {
+      return 1;
+   }
+
+   return 0;
 }
 
 #--------------------------------------------------------------
-sub level_finished {
-    my $self = shift;
-    my $level = $self->{LEVEL}{CURRENT};
+#returns true if level has been been started, i.e. had chunks in it
 
-    if ($self->{LEVEL}{$level}{CHUNK_COUNT} == $self->{LEVEL}{$level}{RESULT_COUNT}){
-	return 1;
-    }
+sub _level_started {
+   my $self = shift;
+   my $level = $self->{LEVEL}{CURRENT};
 
-    return 0;
+   return undef if (! exists $self->{LEVEL}{$level});
+   return $self->{LEVEL}{$level}{STARTED};
 }
-
 #--------------------------------------------------------------
+#returns true if tier has terminated
+
 sub terminated {
-    my $self = shift;
+   my $self = shift;
 
-    return $self->{TERMINATE};
+   return $self->{TERMINATE};
 }
 
 #--------------------------------------------------------------
+#takes a chunk and adds its results to the tier
+
 sub update_chunk {
-    my $self = shift;
-    my $chunk = shift;
+   my $self = shift;
+   my $chunk = shift;
 
-    my $id = $chunk->id();
-    my @result = $chunk->result();
+   my $id = $chunk->id();
+   my $result = $chunk->result();
 
-    my ($tier_id, $level_num, $chunk_num) = split (":", $id);
+   my ($tier_id, $level_num, $chunk_num) = split (":", $id);
     
-    push (@{$self->{LEVEL}{$level_num}{RESULTS}}, \@result);
-    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;
+   push (@{$self->{LEVEL}{$level_num}{RESULTS}}, $result);
+   $self->{LEVEL}{$level_num}{RESULT_COUNT}++;
     
-    $self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
-    print STDERR $chunk->error();
+   $self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
+   $self->{ERROR} .= $chunk->error();
+   print STDERR $chunk->error();
+}
+#-------------------------------------------------------------
+sub error{
+   my $self = shift;
+   return $self->{ERROR};
+}
+#-------------------------------------------------------------
+#returns the id of the tier
+
+sub id {
+   my $self = shift @_;
+   return $self->{TIER_ID};
 }
 
 #-----------------------------------------------------------------------------
 #------------------------------------SUBS-------------------------------------
 #-----------------------------------------------------------------------------
 sub build_the_void {
-    my $seq_id  = shift;
-    my $run_id  = shift;
-    my $out_dir = shift;
+   my $seq_id  = shift;
+   my $out_dir = shift;
 
-    $out_dir =~ s/\/$//;
+   $out_dir =~ s/\/$//;
 
-    my $vid = "theVoid\.$seq_id\.$run_id";   
-    my $the_void = "$out_dir/$vid";
-    mkpath ($the_void);
+   my $vid = "theVoid\.$seq_id";
+   my $the_void = "$out_dir/$vid";
+   mkpath ($the_void);
 
-    return $the_void;
+   return $the_void;
 }
 
 #-----------------------------------------------------------------------------

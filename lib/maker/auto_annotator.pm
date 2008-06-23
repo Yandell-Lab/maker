@@ -21,6 +21,7 @@ use maker::quality_index;
        );
 
 my $OPT_F; #GLOBAL VARIABLE
+my $OPT_SNAPS; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -50,20 +51,19 @@ sub prep_hits {
 
 	my $c_bag = combine($exonerate_p_hits,
 	                    $clean_exonerate_e, 
-			    $blastx_keepers,
-			  );
+		             $blastx_keepers,
+			    );
 
-        my $s_bag = combine($exonerate_p_hits,
-                            $blastx_keepers
-                            );
+        #my $s_bag = combine($exonerate_p_hits,
+        #                    $blastx_keepers
+        #                    );
 
 	# preferred method if the est data is good. This was standard untill 12/11/06
 	#my $careful_clusters = cluster::careful_cluster_phat_hits($c_bag, $seq, 50);
 
 	# -- BEGIN nGASP modification
-
 	# I  set this up to deal with nGASP
-        my ($p, $m, $x, $z) = PhatHit_utils::split_by_strand('query', $c_bag);
+        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
 
         my $p_clusters = cluster::shadow_cluster(30, $seq, $p, 10);
         my $m_clusters = cluster::shadow_cluster(30, $seq, $m, 10);
@@ -79,18 +79,19 @@ sub prep_hits {
                 $temp_id++;
         }
 
+	
 	# identify the snap ab-inits that fall within and between clusters
 	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_snaps($snap_predictions, 
 	                                                              $careful_clusters,
 	                                                              $seq,
 	                                                              );
 	
-	# add the ab-initio snaops that hit only a single cluster
+	# add the ab-initio snaps that hit only a single cluster
         foreach my $s (@{$hit_one}){
                 my @keys = keys %{$c_index->{$s->{temp_id}}};
                 my $i = $keys[0];
                 die "logic error in segment_snaps\n" if defined($keys[1]);
-
+	
                 push(@{$careful_clusters->[$i]}, $s);
         }
 	#--- end nGASP modification;
@@ -152,12 +153,20 @@ sub segment_snaps {
                 my $coors  = PhatHit_utils::to_begin_and_end_coors($c, 'query');
                 my $pieces = Shadower::getPieces($seq, $coors, 10);
                 
-                die "error in auto_annotator::segment_snaps!\n"
-                if defined($pieces->[1]);
+		my $cB;
+		my $cE;
 
-                my $cB = $pieces->[0]->{b};
-                my $cE = $pieces->[0]->{e};
-        
+                if (defined($pieces->[1])){	   
+		   #die "error in auto_annotator::segment_snaps!\n";
+		   $pieces = [sort {$a->{b} <=> $b->{b}} @{$pieces}];
+		   $cB = $pieces->[0]->{b};
+		   $cE = $pieces->[-1]->{e};
+		}
+		else{
+		   $cB = $pieces->[0]->{b};
+		   $cE = $pieces->[0]->{e};
+		}
+
         	foreach my $s (@{$snaps}){
 
                 	my $s_strand = $s->strand('query');
@@ -199,6 +208,32 @@ sub segment_snaps {
 
 }
 #------------------------------------------------------------------------
+sub perge_single_snaps {
+   my $careful_clusters = shift;
+
+   my @c_keepers;
+   foreach my $c (@{$careful_clusters}){
+      my $ests_in_cluster  = get_selected_types($c, 'est2genome');
+      my $ps_in_cluster    = get_selected_types($c,'protein2genome');
+      my $bx_in_cluster    = get_selected_types($c,'blastx');
+      my $snaps_in_cluster = get_selected_types($c,'snap');
+
+      if (defined($ests_in_cluster->[0]) ||
+	  defined($ps_in_cluster->[0]) ||
+	  defined($bx_in_cluster->[0])
+	 ){
+	    push (@c_keepers, $c);
+      }
+   }
+   
+   return (\@c_keepers);
+}
+#------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
+#ests => set of all ests
+#protein homology =>  set of combined protein exonerate and blastx data
+#alternative splice form => each est from best ests
+#snap predictions included
 sub prep_blastx_data {
         my $c    = shift;
 	my $c_id = shift;
@@ -239,6 +274,11 @@ sub prep_blastx_data {
 	return \@data;
 }
 #------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
+#ests => set of best ests from all ests
+#protein homology => each protein exonerate structure
+#alternative splice forms => each protein exonerate structure
+#no snap predictions included
 sub prep_polpro_data {
         my $c    = shift;
         my $c_id = shift;
@@ -246,7 +286,6 @@ sub prep_polpro_data {
 
         my $ests_in_cluster = get_selected_types($c, 'est2genome');
         my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-        my $bx_in_cluster   = get_selected_types($c,'blastx');
 
 	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
 
@@ -266,6 +305,11 @@ sub prep_polpro_data {
         return \@data;
 }
 #------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
+#ests => each best est from all ests
+#protein homology =>  best set from combined protein exonerate and blastx data
+#alternative splice forms => based on each best ests from all ests
+#no snap predictions included
 sub prep_polest_data {
         my $c    = shift;
         my $c_id = shift;
@@ -294,9 +338,11 @@ sub prep_polest_data {
         return \@data;
 }
 #------------------------------------------------------------------------
+#this subrutine returns finished MAKER annoations
 sub annotate {
         my $virgin_fasta     = shift;
         my $masked_fasta     = shift;
+	my $chunk_number     = shift; #required to name genes for each chunk
         my $exonerate_p_hits = shift;
         my $exonerate_e_hits = shift;
         my $blastx_hits      = shift;
@@ -306,6 +352,8 @@ sub annotate {
 	my $snap_flank       = shift;
 	my $single_exon      = shift;
 	$OPT_F               = shift;
+	$OPT_SNAPS           = shift;
+
 
         my $def   = Fasta::getDef($masked_fasta);
         my $seq   = Fasta::getSeq($masked_fasta);
@@ -328,18 +376,17 @@ sub annotate {
 	my $bx_transcripts = 
 	run_it($bx_data, $the_void, $seq, $v_seq, $def, 'bx', $snap_command, $snap_flank);
 
-	my $pp_transcripts = 
+	#my $pp_transcripts = 
 	#run_it($pp_data, $the_void, $seq, $v_seq, $def, 'pp', $snap_command, $snap_flank);
 
 	#my $pe_transcripts = 
 	#run_it($pe_data, $the_void, $seq, $v_seq, $def, 'pe', $snap_command, $snap_flank);
-
 	
 	#my @transcripts = (@{$bx_transcripts}, @{$pp_transcripts}, @{$pe_transcripts});
 
 	my @transcripts = (@{$bx_transcripts});
 
-        my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $snap_predictions);
+        my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $chunk_number, $snap_predictions);
         return $annotations;
 }
 #------------------------------------------------------------------------
@@ -363,13 +410,13 @@ sub run_it {
 		my $ests   = $set->{ests};
 
 		my ($snap_shots, $strand)   = get_snap_shot($seq, 
-		                              $def, 
-		                              $id.'.'.$i, 
-					      $the_void, 
-			                      $set, 
-					      $snap_flank, 
-					      $snap_command,
-		                              );
+							    $def, 
+							    $id.'.'.$i, 
+							    $the_void, 
+							    $set, 
+							    $snap_flank, 
+							    $snap_command,
+							   );
 
 		my $best_pred       = get_best_snap_shot($strand, $snap_shots);
 		my $on_right_strand = get_best_snap_shots($strand, $snap_shots);
@@ -388,7 +435,6 @@ sub run_it {
 			    push(@transcripts, [$transcript, $set, $snap_shot])
 			}
 			else {
-					
 			    push(@transcripts, [$copy, $set, $snap_shot])
 			}
 		    }
@@ -463,6 +509,7 @@ sub group_transcripts {
 	my $data         = shift;
 	my $seq          = shift;
 	my $seq_id       = shift;
+	my $chunk_number = shift;
 	my $snap_abinits = shift;
 
 	my @transcripts;
@@ -483,13 +530,15 @@ sub group_transcripts {
 	}
 
 	#-- add the non overlapping ab initio snap predictions
- 	my $non_overlapping_snap_abinits = 
- 	get_non_overlapping(\@transcripts, $snap_abinits);
-
- 	#push (@transcripts, @{$non_overlapping_snap_abinits});
-
+	if ($OPT_SNAPS){
+	   my $non_overlapping_snap_abinits = get_non_overlapping(\@transcripts,
+								  $snap_abinits
+								 );
+	   
+	   push (@transcripts, @{$non_overlapping_snap_abinits});
+	}
 	#---
-
+	
 	my $careful_clusters = 
 	cluster::careful_cluster_phat_hits(\@transcripts, $seq);
 
@@ -510,7 +559,7 @@ sub group_transcripts {
 			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
 
 			my $t_struct = 
-			load_transcript_struct($f, $c_id, $i, $seq, $seq_id, $evidence, $snap_abinits);
+			load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits);
 			push(@t_structs, $t_struct);
 
 			$i++;
@@ -519,7 +568,7 @@ sub group_transcripts {
 		my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
 
 		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => "maker-gene-$c_id",
+		                   'g_name'    => "maker-gene-$chunk_number.$c_id",
 				   'g_start'   => $g_start,
 			           'g_end'     => $g_end,
 				   'g_strand'  => $g_strand,
@@ -757,7 +806,6 @@ sub pneu {
 }
 #------------------------------------------------------------------------
 sub get_snap_shot {
-
 	my $seq           = shift;
 	my $def           = shift;
 	my $id            = shift;
@@ -782,7 +830,7 @@ sub get_snap_shot {
                 $alt_snap_command = $exe.' -plus ';
         }
         else {
-                $alt_snap_command = $exe.' -minus ';
+                 $alt_snap_command = $exe.' -minus ';
         }
 
 	if ($use_full && -e $hmm.'.full_only'){
@@ -796,8 +844,6 @@ sub get_snap_shot {
 
 	$gene_preds = snap($$shadow_fasta,
                            $the_void,
-                           length($$shadow_seq),
-                           100000,
                            $id,
 	                   $strand,
 		           $offset,
@@ -808,8 +854,6 @@ sub get_snap_shot {
 
        $gene_preds = snap($$shadow_fasta,
                            $the_void,
-                           length($$shadow_seq),
-                           100000,
                            $id,
                            $strand,
                            $offset,
@@ -824,8 +868,6 @@ sub get_snap_shot {
 sub snap {
         my $fasta      = shift;
         my $the_void   = shift;
-        my $q_length   = shift;
-        my $chunk_size = shift;
         my $seq_id     = shift;
 	my $strand     = shift;
 	my $offset     = shift;
@@ -944,12 +986,12 @@ sub prep_for_genefinder {
 
         my $final_seq = $p->[0]->{piece}; 
 
-	my $offset    = $p->[0]->{b};
-	my $end_d     = length($$seq) - $p->[0]->{e};
-	my $size      = $p->[0]->{e} - $p->[0]->{b};
+	my $offset    = $p->[0]->{b} - 1;
+	#my $end_d     = length($$seq) - $p->[0]->{e};
+	#my $size      = $p->[0]->{e} - $p->[0]->{b} + 1;
 
-	my $min_gene_size = 2000;
-	my $max_gene_size = 10000;
+	#my $min_gene_size = 2000;
+	#my $max_gene_size = 10000;
 
 	my $use_full = 0;
 	

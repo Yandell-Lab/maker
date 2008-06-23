@@ -7,14 +7,15 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 
 BEGIN{
-    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
-    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo" if not ($ENV{CGL_GO_SOURCE});
+   $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
+   $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo" if not ($ENV{CGL_GO_SOURCE});
 }
 
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use Datastore::MD5;
 use URI::Escape;
+use Storable;
 use File::Path;
 use Data::Dumper;
 use Getopt::Long;
@@ -41,18 +42,19 @@ use maker::sens_spec;
 
 $|  = 1;
 
+#--delete these later
+my $masked_fasta;
+#--
+
 my $usage = "
 Usage:
 
-        maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+        maker [options] <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
-        If you already specified the location for the genome file in the user control files
-        you can ommit the first argument, <genome_file>.  The genome file must be in fasta
-        format.
-
-        The last three arguments are user control files that specify how maker should behave.
-        Please see maker documentation to learn more about control file format.  The program
-        will automatically try and locate the user control files in the current working
+        The three input arguments are user control files that specify how maker should behave.
+        All input files listed in the control options files must be in fasta format.  Please
+        see maker documentation to learn more about control file format.  The program will
+        automatically try and locate the user control files in the current working
         directory if these arguments are not supplied when initializing maker.
 
         It is important to note that maker does not try and recalculated data that it has
@@ -63,12 +65,16 @@ Usage:
 
 Options:
 
-        -R Turns repeat masking off (* See Warning)
-        -f Forces maker to rerun all analyses
-        -d Causes output to be written using datastore.  This option is automatically enabled
-           if there are more than 1000 fasta entries in the input file.  Output is then
-           accessed using the datastore_index file created by the program.
-        -h Help
+     -genome|g   <file_name>   Give MAKER a different genome file (this overrides the
+                               control file)
+     -RM_off|R                 Turns repeat masking off (* See Warning)
+     -force|f                  Forces maker to rerun all analyses
+     -datastore|d              Causes output to be written using datastore.  This option is
+                               automatically enabled if there are more than 1000 fasta entries
+                               in the input file.  Output is thenaccessed using the
+                               datastore_index file created by the program.
+     -cpus|c     <integer>     Tells how many cpus to use for Blast analysis.
+     -help|?                   Prints this usage statement.
 
 Warning:
       
@@ -79,12 +85,14 @@ Warning:
 ";
 
 my %OPT;
-$OPT{a} = 0;
 
 GetOptions("RM_off|R" => \$OPT{R},
 	   "force|f" => \$OPT{f},
 	   "datastore|d" => \$OPT{d},
-	   "a=s" => \$OPT{a},
+	   "genome|g=s" => \$OPT{g},
+	   "cpus|c=i" => \$OPT{c},
+	   "GFF"=> \$OPT{GFF},
+	   "SNAPS" => \$OPT{SNAPS},
 	   "help|?" => sub {die $usage;}
 	  );
 
@@ -92,355 +100,387 @@ GetOptions("RM_off|R" => \$OPT{R},
 #----------------------------------- MAIN ------------------------------------
 #-----------------------------------------------------------------------------
 
-#get arguments off the command line
-my $infile = '';
-
-if (@ARGV > 3 || @ARGV == 1) {
-    $infile = shift @ARGV;
-}
+#---get arguments off the command line
+my $infile;
 
 my @ctlfiles = @ARGV;
 
-if (not @ctlfiles){
-       if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
-              @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
-       }
-       else {
-              die $usage;
-       }
+if (not @ctlfiles) {
+   if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
+      @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
+   }
+   else {
+      die $usage;
+   }
 }
 
-#set up control options from control files
-my %CTL_OPTIONS = load_control_files($infile, @ctlfiles);
+#---set up control options from control files
+my %CTL_OPTIONS = load_control_files(@ctlfiles);
 
-#load genome fasta file
+#---load genome fasta file
 my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
 
 if ($fasta_iterator->number_of_entries() == 0) {
-        die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
+   die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
 }
 
-#decide whether to use datastore 
-if ($fasta_iterator->number_of_entries() > 1000){
-    print STDERR "\n\n".
-                 "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
-		 "Datastore will be used to avoid overloading the data structure of\n".
-		 "the output directory.\n\n";
+#---decide whether to use datastore 
+if ($fasta_iterator->number_of_entries() > 1000) {
+   print STDERR "\n\n".
+   "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
+   "Datastore will be used to avoid overloading the data structure of\n".
+   "the output directory.\n\n";
 
-    $OPT{d} = 1;
+   $OPT{d} = 1;
 }
 
-if ($OPT{d}){
-    %CTL_OPTIONS = build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
+if ($OPT{d}) {
+   %CTL_OPTIONS = build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
 }
 
-#set up blast databases for analyisis
+#---set up blast databases for analyisis
 create_blastdb(\%CTL_OPTIONS);
 
-#iterate over each sequence in the fasta
-while (my $fasta     = $fasta_iterator->nextEntry()){
+#---iterate over each sequence in the fasta
+while (my $fasta     = $fasta_iterator->nextEntry()) {
 
-    my $query_def = Fasta::getDef($fasta); #Get fasta header
-    my $query_seq = Fasta::getSeq($fasta); #Get fasta sequence
-    my ($seq_id)  = $query_def =~ /^>(\S+)/; #Get sequence identifier off of fasta header
+   my $query_def = Fasta::getDef($fasta);  #Get fasta header
+   my $query_seq = Fasta::getSeq($fasta);  #Get fasta sequence
+   my ($seq_id)  = $query_def =~ /^>(\S+)/; #Get sequence identifier off of fasta header
+   
+   #-build a safe name for file names from the sequence identifier
+   my $seq_out_name = uri_escape($seq_id,  
+				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+				);
 
-    my $seq_out_name = uri_escape($seq_id,  #build a safe name for file names from the sequence identifier  
-				  '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+   #-set up void directory where analysis is stored
+   my $out_dir = $CTL_OPTIONS{'out_base'};
+
+   if ($OPT{d}) {
+      $out_dir = $CTL_OPTIONS{'datastore'}->id_to_dir($seq_out_name);
+      $CTL_OPTIONS{'datastore'}->mkdir($seq_out_name) || die "ERROR: could not make directory $out_dir\n";
+      my $fh = $CTL_OPTIONS{'fh_dsindex'};
+      print $fh "$seq_id\t$out_dir\n";
+   }
+
+   my $the_void  = build_the_void($seq_out_name, $out_dir);
+
+   #==from here on fastas are proccessed as chunks
+
+   #-set up variables that are heldover from last chunk
+   my $holdover_chunk;
+
+   #-set up variables that are the result of chunk accumulation
+   my $masked_total_seq;
+   my $p_fastas;
+   my $t_fastas;
+   my $p_snap_fastas;
+   my $t_snap_fastas;
+
+   my $GFF3 = new Dumper::GFF::GFFV3();    
+   $GFF3->seq($query_seq);
+   $GFF3->seq_id($seq_id);
+
+   #==REPEAT MASKING HERE
+   if($OPT{R}){
+      print STDERR "Repeatmasking skipped!!\n";
+      $masked_total_seq = $$query_seq;
+   }
+   elsif($OPT{GFF}){
+      $masked_total_seq = repeat_mask_seq::gff(uc($$query_seq), 
+					       $seq_id,
+					       $CTL_OPTIONS{'rm_gff'}
+					      );
+   }
+   else{
+      my $fasta_chunker = new FastaChunker();
+      $fasta_chunker->parent_fasta($fasta);
+      $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+      $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+      $fasta_chunker->load_chunks();
+      
+      my $chunk_count = 0;
+      
+      while (my $chunk = $fasta_chunker->get_chunk($chunk_count++)) {	 
+	 $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
+	 
+	 #-get repeatmask hits
+	 my ($rma_keepers) = repeatmask($chunk, 
+					$the_void,
+					$seq_out_name,
+					$CTL_OPTIONS{'model_org'},
+					$CTL_OPTIONS{'RepeatMasker'},
+					$CTL_OPTIONS{'rmlib'},
+					$CTL_OPTIONS{'cpus'}
+				       );
+	 
+	 #-mask the chunk using repeatmasker hits
+	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers);
+	 
+	 #-blastx against a repeat library (for better masking)
+	 my $repeat_blastx_keepers = blastx($chunk,
+					    $CTL_OPTIONS{'repeat_protein'},
+					    $the_void,
+					    $seq_out_name,
+					    $CTL_OPTIONS{blastx},
+					    $CTL_OPTIONS{eval_blastx},
+					    $CTL_OPTIONS{bit_blastx},
+					    $CTL_OPTIONS{percov_blastx},
+					    $CTL_OPTIONS{percid_blastx},
+					    $CTL_OPTIONS{split_hit},
+					    $CTL_OPTIONS{cpus}
+					   );
+	 
+	 #-mask the chunk using blastx hits
+	 $chunk = repeat_mask_seq::mask_chunk($chunk, $repeat_blastx_keepers);
+	 
+	 #-combine and cluster blastx and repeatmasker hits
+	 #-to get consensus repeat hits for gff3 and XML annotations
+	 my $rm_keepers = repeat_mask_seq::process($rma_keepers, 
+						   $repeat_blastx_keepers,
+						   $query_seq
+						  );
+	 
+	 #-add repeats to GFF3
+	 $GFF3->repeat_hits($rm_keepers);
+	 
+	 #-build/fill big masked sequence
+	 $masked_total_seq .= $chunk->seq();
+      }
+   }
+   
+   $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_total_seq);
+   FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
+
+   #==SNAP ab initio here
+   my $snaps = snap($masked_fasta,
+		    $the_void,
+		    $seq_out_name,
+		    $CTL_OPTIONS{snap},
+		    $CTL_OPTIONS{'snaphmm'}
+		   );
+
+   #--build an index of the databases
+   my $proteins = $CTL_OPTIONS{'protein'};
+   my $transcripts = $CTL_OPTIONS{'est'};
+   my $fasta_p_index     = build_fasta_index($proteins);
+   my $fasta_t_index     = build_fasta_index($transcripts);
+   
+   #--run blast analysis in chunks
+   my $fasta_chunker = new FastaChunker();
+   $fasta_chunker = new FastaChunker();
+   $fasta_chunker->parent_fasta($$masked_fasta);
+   $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+   $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+   $fasta_chunker->load_chunks();
+
+   my $chunk_count = 0;
+
+   while (my $chunk = $fasta_chunker->get_chunk($chunk_count++)) {
+      #==BLAST ANALYSIS HERE
+      
+      #-merge heldover chunk sequence from last round
+      unless($chunk->number == 0){
+	 $chunk = merge_chunks($holdover_chunk, $chunk);
+      }
+
+      #-blastn search the file against ESTs
+      my $blastn_keepers = blastn($chunk,
+				  $transcripts,
+				  $the_void,
+				  $seq_out_name,
+				  $CTL_OPTIONS{blastn},
+				  $CTL_OPTIONS{eval_blastn},
+				  $CTL_OPTIONS{bit_blastn},
+				  $CTL_OPTIONS{percov_blastn},
+				  $CTL_OPTIONS{percid_blastn},
+				  $CTL_OPTIONS{split_hit},
+				  $CTL_OPTIONS{cpus}
 				 );
 
-    #--set up void directory where analysis is stored
-    my $out_dir = $CTL_OPTIONS{'out_base'};
+      #-blastx search the masked input file
+      my $blastx_keepers = blastx($chunk, 
+				  $proteins,
+				  $the_void,
+				  $seq_out_name,
+				  $CTL_OPTIONS{blastx},
+				  $CTL_OPTIONS{eval_blastx},
+				  $CTL_OPTIONS{bit_blastx},
+				  $CTL_OPTIONS{percov_blastx},
+				  $CTL_OPTIONS{percid_blastx},
+				  $CTL_OPTIONS{split_hit},
+				  $CTL_OPTIONS{cpus}
+				 );
 
-    if (exists $CTL_OPTIONS{'datastore'}){
-	$out_dir = $CTL_OPTIONS{'datastore'}->id_to_dir($seq_out_name);
-	$CTL_OPTIONS{'datastore'}->mkdir($seq_out_name) || die "ERROR: could not make directory $out_dir\n";
-	my $fh = $CTL_OPTIONS{'fh_dsindex'};
-	print $fh "$seq_id\t$out_dir\n";
-    }
+      #==get just the snaps that overlap this chunk
+      my $snaps_on_chunk = get_snaps_on_chunk($snaps,
+					      $chunk
+					     );
 
-    my $the_void  = build_the_void($seq_out_name, $OPT{a}, $out_dir);
-    
-    #--Repeat masking starts here
-    my $masked_fasta = \$fasta;
-    my $rm_keepers = [];
-    
-    if (not $OPT{R}) { #use -R option to skip repeat masking
-	#-- repeatmask the input file 
-	my ($temp_masked_fasta, $rma_keepers) = repeatmask($fasta, 
-							   $the_void,
-							   length($$query_seq),
-							   $CTL_OPTIONS{'max_dna_len'},
-							   $seq_out_name,
-							   $query_seq,
-							   $query_def,
-							   $CTL_OPTIONS{'model_org'},
-							   $CTL_OPTIONS{'RepeatMasker'},
-							   $CTL_OPTIONS{'rmlib'}
-							  );	
-	
-	#-- blastx agains a repeat library (for better masking)
-	my $repeat_blastx_keepers = blastx($temp_masked_fasta,
-					   $CTL_OPTIONS{'repeat_protein'},
-					   $the_void,
-					   length($$query_seq),
-					   $CTL_OPTIONS{'max_dna_len'},
-					   $seq_out_name,
-					   $CTL_OPTIONS{blastx},
-					   $CTL_OPTIONS{eval_blastx},
-					   $CTL_OPTIONS{bit_blastx},
-					   $CTL_OPTIONS{percov_blastx},
-					   $CTL_OPTIONS{percid_blastx},
-					   $CTL_OPTIONS{cpus},
-					   $CTL_OPTIONS{split_hit}
-					  );
-	
-	#-- now use the repeatmasker data + the blastx repeat data 
-	#-- to generate a better masked fasta	
-	(my $masked_seq, $rm_keepers) = repeat_mask_seq::process($query_seq, 
-								 $rma_keepers, 
-								 $repeat_blastx_keepers,
-								);
-	
-	$masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_seq);
-    }
-    else {
-	print STDERR "Repeatmasking skipped!!\n";
-    }
-    
-    FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
-    
-    #$IOG= new Dumper::GFF::GFF3->init(FastaFile=>$CTL_OPTIONS{'genome'},
-    #				  WriteFile=>$out_dir."/".$seq_out_name.".gff");
-    
-    my $IOX= new Dumper::XML::Game->init(FastaFile=>$CTL_OPTIONS{'genome'},
-				      WriteFile=>$out_dir."/".$seq_out_name.".xml");
-    my $i=0;
-    my $j=0;
-    
-    #--add repeat masked hits to be included
-    $IOX->add_hits($rm_keepers);
-    
-    my $proteins = $CTL_OPTIONS{'protein'};
-    my $transcripts = $CTL_OPTIONS{'est'};
-    my $cests = $CTL_OPTIONS{'alt_est'};
-    
-    #-- build an index of the databases
-    my $fasta_p_index     = build_fasta_index($proteins);
-    my $fasta_t_index     = build_fasta_index($transcripts);
-    
-    #-- blastx search  the masked input file
-    my $blastx_keepers = blastx($$masked_fasta, 
-				$proteins,
-				$the_void,
-				length($$query_seq),
-				$CTL_OPTIONS{'max_dna_len'},
-				$seq_out_name,
-				$CTL_OPTIONS{blastx},
-				$CTL_OPTIONS{eval_blastx},
-				$CTL_OPTIONS{bit_blastx},
-				$CTL_OPTIONS{percov_blastx},
-				$CTL_OPTIONS{percid_blastx},
-				$CTL_OPTIONS{cpus},
-				$CTL_OPTIONS{split_hit}
-			       );
-    
-    my $tblastx_keepers = [];
-    if ($cests) {
-	$tblastx_keepers = tblastx($$masked_fasta, 
-				   $cests,
-				   $the_void,
-				   length($$query_seq),
-				   $CTL_OPTIONS{'max_dna_len'},
-				   $seq_out_name,
-				   $CTL_OPTIONS{tblastx},
-				   $CTL_OPTIONS{eval_tblastx},
-				   $CTL_OPTIONS{bit_tblastx},
-				   $CTL_OPTIONS{percov_tblastx},
-				   $CTL_OPTIONS{percid_tblastx},
-				   $CTL_OPTIONS{cpus}
-				  );
-    }
-    
-    #-- blastn search the file against ESTs
-    my $blastn_keepers = blastn($$masked_fasta,
-				$transcripts,
-				$the_void,
-				length($$query_seq),
-				$CTL_OPTIONS{'max_dna_len'},
-				$seq_out_name,
-				$CTL_OPTIONS{blastn},
-				$CTL_OPTIONS{eval_blastn},
-				$CTL_OPTIONS{bit_blastn},
-				$CTL_OPTIONS{percov_blastn},
-				$CTL_OPTIONS{percid_blastn},
-				$CTL_OPTIONS{cpus}
-			       );
-    
-    #--add blastx and blastn hits 
-    $IOX->add_hits($blastx_keepers);
-    $IOX->add_hits($tblastx_keepers);
-    $IOX->add_hits($blastn_keepers);
-    
-    #-- cluster the blastx hits
-    print STDERR "cleaning blastx...\n";
-    
-    my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
-						     $query_seq,
-						     10);
-    
-    
-    #-- make a multi-fasta of the seqs in the blastx_clusters 
-    #-- polish the blastx hits with exonerate
-    
-    my $exonerate_p_clusters = polish_exonerate($fasta,
-						$blastx_clusters,
-						$fasta_p_index,
-						$the_void,
-						5,
-						'p',
-						$CTL_OPTIONS{exonerate},
-						$CTL_OPTIONS{percov_blastx},
-						$CTL_OPTIONS{percid_blastx},
-						$CTL_OPTIONS{ep_score_limit},
-						$CTL_OPTIONS{ep_matrix}
-					       ); 
-    
-    
-    #--add hits
-    foreach my $pp (@$exonerate_p_clusters) {
-	$IOX->add_hits($pp);
-    }
-    #-- cluster the tblastx hits
-    print STDERR "cleaning blastx...\n";
-    
-    my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
-						      $query_seq,
-						      10);
-    
-    
-    #-- make a multi-fasta of the seqs in the tblastx_clusters 
-    #-- polish the tblastx hits with exonerate
-    
-    #####There is no exonerate with Tblastx#####
-    
-    #-- Cluster the blastn hits
-    print STDERR "cleaning blastn...\n";
-    my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
-						     $query_seq,
-						     10);
-    
-    #-- polish blastn hits with exonerate
-    my $exonerate_e_clusters = polish_exonerate($fasta,
-						$blastn_clusters,
-						$fasta_t_index,
-						$the_void,
-						5,
-						'e',
-						$CTL_OPTIONS{exonerate},
-						$CTL_OPTIONS{percov_blastn},
-						$CTL_OPTIONS{percid_blastn},
-						$CTL_OPTIONS{en_score_limit},
-						$CTL_OPTIONS{en_matrix}
-					       );
-    
-    
-    #--add hits
-    foreach my $ee (@$exonerate_e_clusters) {
-	$IOX->add_hits($ee);
-    }
-    #####working here###########
-    #-- gene_find the input file
-    my $snaps = snap($$masked_fasta, $the_void, length($$masked_fasta), $CTL_OPTIONS{'max_dna_len'},
-		     $seq_out_name,$CTL_OPTIONS{snap}, $CTL_OPTIONS{'snaphmm'}
-		    );
+      #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
+      if(not $chunk->is_last){ #if not last chunk
+	 ($holdover_chunk,
+	  $blastx_keepers,
+	  $blastn_keepers,
+	  $snaps_on_chunk) = process_the_chunk_divide($chunk,
+						      $CTL_OPTIONS{'split_hit'},
+						      $blastx_keepers,
+						      $blastn_keepers,
+						      $snaps_on_chunk
+						     );
+      }
 
-    $IOX->add_hits($snaps);
+      #==EXONERATE HERE
+          
+      #-cluster the blastx hits
+      print STDERR "cleaning blastx...\n";
+      
+      my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
+						       $query_seq,
+						       10);
 
-    #-- auto-annotate the input file
-    my $snap_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
-    my $snap_flank   = $CTL_OPTIONS{snap_flank};
+      undef $blastx_keepers;
+      
+      #-make a multi-fasta of the seqs in the blastx_clusters 
+      #-polish the blastx hits with exonerate
+      
+      my $exonerate_p_clusters = polish_exonerate($fasta,
+						  $blastx_clusters,
+						  $fasta_p_index,
+						  $the_void,
+						  5,
+						  'p',
+						  $CTL_OPTIONS{exonerate},
+						  $CTL_OPTIONS{percov_blastx},
+						  $CTL_OPTIONS{percid_blastx},
+						  $CTL_OPTIONS{ep_score_limit},
+						  $CTL_OPTIONS{ep_matrix}
+						 );
 
-    my $annotations = auto_annotate($fasta,
-				    $$masked_fasta,
-				    $exonerate_p_clusters,
-				    $exonerate_e_clusters,
-				    $blastx_clusters,
-				    $snaps,
-				    $the_void,
-				    $snap_command,
-				    $snap_flank,
-				    $CTL_OPTIONS{'single_exon'}
-				   );
+      #-cluster the blastn hits
+      print STDERR "cleaning blastn...\n";
+      my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
+						       $query_seq,
+						       10
+						      );
+
+      undef $blastn_keepers;
+      
+      #-polish blastn hits with exonerate
+      my $exonerate_e_clusters = polish_exonerate($fasta,
+						  $blastn_clusters,
+						  $fasta_t_index,
+						  $the_void,
+						  5,
+						  'e',
+						  $CTL_OPTIONS{exonerate},
+						  $CTL_OPTIONS{percov_blastn},
+						  $CTL_OPTIONS{percid_blastn},
+						  $CTL_OPTIONS{en_score_limit},
+						  $CTL_OPTIONS{en_matrix}
+						 ); 
 
 
+      #####working here###########
 
-    #--- new GFF3
+      #==MAKER annotations built here
 
-    my $blastx_data      = flatten($blastx_clusters);
-    my $blastn_data      = flatten($blastn_clusters);
-    my $tblastx_data      = flatten($tblastx_clusters);
-    my $exonerate_p_data = flatten($exonerate_p_clusters, 'exonerate:p');
-    my $exonerate_e_data = flatten($exonerate_e_clusters, 'exonerate:e');
+      my $blastx_data      = flatten($blastx_clusters);
+      my $blastn_data      = flatten($blastn_clusters);
+      my $exonerate_p_data = flatten($exonerate_p_clusters, 'exonerate:p');
+      my $exonerate_e_data = flatten($exonerate_e_clusters, 'exonerate:e');
+      
+      #-auto-annotate the input file
+      my $snap_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
 
-    my $GFF3 = new Dumper::GFF::GFFV3();
+      my $annotations = maker::auto_annotator::annotate($fasta,
+							$$masked_fasta,
+							$chunk->number(),
+							$exonerate_p_data,
+							$exonerate_e_data,
+							$blastx_data,
+							$snaps_on_chunk,
+							$the_void,
+							$snap_command,
+							$CTL_OPTIONS{snap_flank},
+							$CTL_OPTIONS{'single_exon'},
+							$OPT{f},
+							$OPT{SNAPS}
+						       );
 
-    $GFF3->seq($query_seq);
-    $GFF3->seq_id($seq_id);
+      #==OUTPUT DATA HERE
+      
+      #--- GFF3      
+      $GFF3->genes($annotations);
+      $GFF3->predictions($snaps_on_chunk);
+      $GFF3->phat_hits($blastx_data);
+      $GFF3->phat_hits($blastn_data);
+      $GFF3->phat_hits($exonerate_p_data);
+      $GFF3->phat_hits($exonerate_e_data);
+
+      #--- GAME XML
+
+      #my $IOX= new Dumper::XML::Game->init(FastaFile=>$CTL_OPTIONS{'genome'},
+      #                                     WriteFile=>$out_dir."/".$seq_out_name.".xml"
+      #                                    );
+      #$IOX->add_hits($rm_keepers);
+      #$IOX->add_hits($blastx_keepers);
+      #$IOX->add_hits($blastn_keepers);
+      #foreach my $pp (@$exonerate_p_clusters) {
+      #   $IOX->add_hits($pp);
+      #}
+      #foreach my $ee (@$exonerate_e_clusters) {
+      #   $IOX->add_hits($ee);
+      #}      
+      #$IOX->add_hits($snaps);
+            
+      #---adding auto annotations
+
+      #my @quality_indices;
+      #foreach my $an (@$annotations) {
+      #   my $g_name     = $an->{g_name};
+      #   my $g_s        = $an->{g_start};
+      #   my $g_e        = $an->{g_end};
+      #   my $g_strand   = $an->{g_strand};
+      #
+      #   my @temp_ant;
+      #   foreach my $a (@{$an->{t_structs}}) {
+      #       push(@quality_indices, [$a->{t_name}, $a->{t_qi}]);
+      #
+      #       my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+      #
+      #       $t_fastas .= $$t_fasta;
+      #       $p_fastas .= $$p_fasta;
+      #
+      #       push (@temp_ant,$a) if defined($a->{hit});
+      #       $IOX->add_autoant($a) if defined($a->{hit});
+      #   }
+      #}
+      #Write the quality index of the mRNAs to a separate file.
+      #write_quality_data(\@quality_indices, $seq_id);
+      #
+      #   $IOX->Game();
 
 
-    $GFF3->genes($annotations);
-    $GFF3->phat_hits($rm_keepers);
-    $GFF3->phat_hits($blastx_data);
-    $GFF3->phat_hits($blastn_data);
-    $GFF3->phat_hits($tblastx_data);
-    $GFF3->phat_hits($exonerate_p_data);
-    $GFF3->phat_hits($exonerate_e_data);
-    $GFF3->predictions($snaps);
-    $GFF3->print($out_dir."/".$seq_out_name.".gff");
-    #$GFF3->print('foo.gff');
+      #--- building fastas
+      my ($p_fasta, $t_fasta) = get_maker_p_and_t_fastas($annotations);
+      $p_fastas .= $p_fasta;
+      $t_fastas .= $t_fasta;
+   
+      my ($p_snap_fasta, $t_snap_fasta) = get_snap_p_and_t_fastas($query_seq, $snaps_on_chunk);
+      $p_snap_fastas .= $p_snap_fasta;
+      $t_snap_fastas .= $t_snap_fasta;
+   }
 
+   #--Write fasta files and gff3 files now that all chunks are finished
+   FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
+   FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
+   FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
+   FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+   $GFF3->print($out_dir."/".$seq_out_name.".gff");
 
-    #--adding auto annotations
-    my $p_fastas = '';
-    my $t_fastas = '';
-    my @quality_indices;
-    foreach my $an (@$annotations) {
-	my $g_name     = $an->{g_name};
-	my $g_s        = $an->{g_start};
-	my $g_e        = $an->{g_end};
-	my $g_strand   = $an->{g_strand};
-	
-	#$IOG->add_auto_gene($an);
-	my @temp_ant;
-	foreach my $a (@{$an->{t_structs}}) {
-	    push(@quality_indices, [$a->{t_name}, $a->{t_qi}]);
-		
-	    my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
-		
-	    $t_fastas .= $$t_fasta;
-	    $p_fastas .= $$p_fasta;
-		
-	    #$IOG->add_autoant($a) if defined($a->{hit});
-	    push (@temp_ant,$a) if defined($a->{hit});
-	    $IOX->add_autoant($a) if defined($a->{hit});
-	}
-	#$IOG->add_autoant(\@temp_ant); 
-    }
-    #Write the quality index of the mRNAs to a separate file.
-    #write_quality_data(\@quality_indices, $seq_id);
-
-    FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
-    FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
-
-    #$IOG->GFF3();
-    $IOX->Game();
-
-    my ($p_snap_fastas, $t_snap_fastas) = get_snap_p_and_t_fastas($query_seq, $snaps);
-
-    FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
-    FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
-
-    rmtree ($the_void) if $CTL_OPTIONS{clean_up}; #rm temp directory
+   #--cleanup maker files created with each fasta sequence
+   rmtree ($the_void) if $CTL_OPTIONS{clean_up}; #rm temp directory
 }
 
 exit(0);
@@ -448,1057 +488,1031 @@ exit(0);
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
+sub get_snaps_on_chunk {
+   my $snaps = shift;
+   my $chunk = shift;
+
+   my $c_pstart = $chunk->offset + 1;
+   my $c_pend = $chunk->offset + $chunk->length;
+   
+   my $c_mstart = $chunk->offset + 1;
+   my $c_mend = $chunk->offset + $chunk->length;
+
+   if($chunk->p_cutoff || $chunk->m_cutoff){
+      $c_pstart = $chunk->p_cutoff;
+      $c_pend = $chunk->p_cutoff + $chunk->length - 1;
+      
+      $c_mstart = $chunk->m_cutoff;
+      $c_mend = $chunk->m_cutoff + $chunk->length - 1;
+   }
+
+   my @keepers;
+   foreach my $snap (@{$snaps}){
+      my $s_start = $snap->start('query');
+
+      if ($snap->strand('query') eq '1' && $c_pstart <= $s_start && $s_start <= $c_pend){
+	 push (@keepers, $snap);
+      }
+      elsif ($snap->strand('query') eq '-1' && $c_mstart <= $s_start && $s_start <= $c_mend){
+	 push (@keepers, $snap);
+      }
+   }
+
+   return \@keepers;
+}
+#-----------------------------------------------------------------------------
+sub get_maker_p_and_t_fastas {
+   my $annotations = shift @_;
+   
+   my $p_fastas = '';
+   my $t_fastas = '';
+   
+   foreach my $an (@$annotations) {
+      foreach my $a (@{$an->{t_structs}}) {
+	 my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+	 $p_fastas .= $$p_fasta;
+	 $t_fastas .= $$t_fasta;
+      }
+   }
+   
+   return $p_fastas, $t_fastas;
+}
+#-----------------------------------------------------------------------------
+sub merge_chunks{
+   my $chunk1 = shift @_;
+   my $chunk2 = shift @_;
+
+   if (ref($chunk1) eq 'FastaChunk' && ref($chunk2) ne 'FastaChunk'){
+      return $chunk1;
+   }
+   elsif(ref($chunk2) eq 'FastaChunk' && ref($chunk1) ne 'FastaChunk'){
+      die "ERROR: The second argument to main::merge_chunks\n",
+          "must be a FastaChunk object";
+   }
+   elsif ($chunk1->length == 0 ){
+      return $chunk2;
+   }
+
+   #chunks must be flush to each other and given in order
+   die "ERROR: Can not merge chunks at main::mergechunks\n"
+      if ($chunk1->offset > $chunk2->offset);
+   
+   $chunk2->seq($chunk1->seq . $chunk2->seq);
+   $chunk2->length($chunk1->length + $chunk2->length);
+   $chunk2->offset($chunk1->offset);
+   $chunk2->p_cutoff($chunk1->p_cutoff);
+   $chunk2->m_cutoff($chunk1->m_cutoff);
+
+   return $chunk2;
+}
+
+#-----------------------------------------------------------------------------
+sub process_the_chunk_divide{
+   my $chunk = shift @_;
+   my $split_hit = shift @_;
+   my $hit_groups = \@_;
+
+   my $phat_hits;
+
+   foreach my $group (@{$hit_groups}){
+      push(@{$phat_hits}, @{$group});
+   }
+
+   my ($p_hits, $m_hits) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
+   my $p_coors  = PhatHit_utils::to_begin_and_end_coors($p_hits, 'query');
+   my $m_coors  = PhatHit_utils::to_begin_and_end_coors($m_hits, 'query');
+
+   foreach my $p_coor (@{$p_coors}){
+      $p_coor->[0] -= $chunk->offset();
+      $p_coor->[1] -= $chunk->offset();
+      $p_coor->[0] = $chunk->length if($p_coor->[0] > $chunk->length);
+      $p_coor->[1] = $chunk->length if($p_coor->[1] > $chunk->length);
+   }
+   foreach my $m_coor (@{$m_coors}){
+      $m_coor->[0] -= $chunk->offset();
+      $m_coor->[1] -= $chunk->offset();
+      $m_coor->[0] = $chunk->length if($m_coor->[0] > $chunk->length);
+      $m_coor->[1] = $chunk->length if($m_coor->[1] > $chunk->length);
+   }
+
+   my $p_pieces = Shadower::getPieces(\($chunk->seq), $p_coors, 10);
+      $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
+   my $m_pieces = Shadower::getPieces(\($chunk->seq), $m_coors, 10);
+      $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
+
+   my @keepers;
+   my $cutoff = $chunk->length + $chunk->offset - $CTL_OPTIONS{'split_hit'};
+   my $p_cutoff = $chunk->length + $chunk->offset + 1;
+   my $m_cutoff = $chunk->length + $chunk->offset + 1;
+
+   foreach my $p_piece (@{$p_pieces}){
+      if ($p_piece->{e} + $chunk->offset >= $cutoff){
+	 $p_cutoff = $p_piece->{b} + $chunk->offset;
+      }
+   }
+   foreach my $m_piece (@{$m_pieces}){
+      if ($m_piece->{e} + $chunk->offset >= $cutoff){
+	 $m_cutoff = $m_piece->{b} + $chunk->offset;
+      }
+   }
+
+   if ($p_cutoff <= 1 && $m_cutoff <= 1){  #too small, all are heldover for next round
+      return $chunk, @keepers;
+   }
+
+   foreach my $group (@{$hit_groups}){
+      my $group_keepers = [];
+
+      foreach my $hit (@{$group}){
+	 my $b = $hit->nB('query');
+	 my $e = $hit->nE('query');
+	 my $strand = $hit->strand;
+
+	 ($b, $e) = ($e, $b) if $b > $e;
+	 
+	 if (($e < $p_cutoff && $strand eq '1') ||
+	     ($e < $m_cutoff && $strand eq '-1')
+	    ){
+	       push(@{$group_keepers}, $hit);
+	 }
+      }
+
+      push(@keepers, $group_keepers);
+   }
+
+   my $abs_cutoff = ($p_cutoff < $m_cutoff) ? $p_cutoff -200 : $m_cutoff -200;
+   my $sub_strt = $abs_cutoff - $chunk->offset - 1;
+      $sub_strt = 0 if($sub_strt < 0);
+
+   my $new_chunk = Storable::dclone($chunk); 
+      $new_chunk->p_cutoff($p_cutoff);
+      $new_chunk->m_cutoff($m_cutoff);
+      $new_chunk->length($chunk->length - ($abs_cutoff - $chunk->offset - 1));
+      $new_chunk->offset($abs_cutoff - 1);
+      $new_chunk->seq(substr($new_chunk->seq,
+			     $sub_strt,
+			     $new_chunk->length
+			    )
+		     );
+
+   return $new_chunk, @keepers;
+}
+#-----------------------------------------------------------------------------
 sub build_datastore {
-    my %CTL_OPTIONS = %{shift @_};
+   my %CTL_OPTIONS = %{shift @_};
 
-    $CTL_OPTIONS{'dsroot'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_datastore";
-    $CTL_OPTIONS{'dsindex'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_master_datastore.index";
+   $CTL_OPTIONS{'dsroot'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_datastore";
+   $CTL_OPTIONS{'dsindex'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_master_datastore.index";
 
-    print STDERR "A data structure will now be created for you at:\n".
-                 "$CTL_OPTIONS{'dsroot'}\n\n".
-		 "To access files for individual sequences use the datastore index:\n".
-		 "$CTL_OPTIONS{'dsindex'}\n\n";
+   print STDERR "A data structure will be created for you at:\n".
+                "$CTL_OPTIONS{'dsroot'}\n\n".
+                "To access files for individual sequences use the datastore index:\n".
+                "$CTL_OPTIONS{'dsindex'}\n\n";
     
-    $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
-    $CTL_OPTIONS{'fh_dsindex'} = new FileHandle();
-    $CTL_OPTIONS{'fh_dsindex'}->open("> $CTL_OPTIONS{'dsindex'}");
-    $CTL_OPTIONS{'fh_dsindex'}->autoflush(1);
+   $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
+   $CTL_OPTIONS{'fh_dsindex'} = new FileHandle();
+   $CTL_OPTIONS{'fh_dsindex'}->open("> $CTL_OPTIONS{'dsindex'}");
+   $CTL_OPTIONS{'fh_dsindex'}->autoflush(1);
 
-    return %CTL_OPTIONS;
+   return %CTL_OPTIONS;
 }
 #-----------------------------------------------------------------------------
 sub write_quality_data {
-    my $quality_indices = shift;
-    my $seq_id          = shift;
+   my $quality_indices = shift;
+   my $seq_id          = shift;
 
-    my $out_file = $seq_id.'.maker.transcripts.qi';
-    my $fh = new FileHandle();
-    $fh->open(">$out_file");
+   my $out_file = $seq_id.'.maker.transcripts.qi';
+   my $fh = new FileHandle();
+   $fh->open(">$out_file");
 
-    print $fh "genomic_seq\ttranscript\tquality_index\n";
+   print $fh "genomic_seq\ttranscript\tquality_index\n";
 
-    while (my $d = shift(@{$quality_indices})) {
-	my $t_name = $d->[0];
-	my $t_qi   = $d->[1];
+   while (my $d = shift(@{$quality_indices})) {
+      my $t_name = $d->[0];
+      my $t_qi   = $d->[1];
 	
-	print $fh "$seq_id\t$t_name\t$t_qi\n";
-    }
-    $fh->close();
+      print $fh "$seq_id\t$t_name\t$t_qi\n";
+   }
+   $fh->close();
 }
 #-----------------------------------------------------------------------------
 sub get_snap_p_and_t_fastas {
-    my $seq   = shift;
-    my $snaps = shift;
+   my $seq   = shift;
+   my $snaps = shift;
 	
-    my $p_fastas = '';
-    my $t_fastas = '';
-    foreach my $hit (@{$snaps}) {
-	my $t_name = $hit->name(); # note this is being set in GFFV3::pred_data
-	my $t_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);	
+   my $p_fastas = '';
+   my $t_fastas = '';
+   foreach my $hit (@{$snaps}) {
+      my $t_name = $hit->name(); # note this is being set in GFFV3::pred_data
+      my $t_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);	
 		
-	my ($p_seq, $offset, $end) = 
-	maker::auto_annotator::get_translation_seq($t_seq);
+      my ($p_seq, $offset, $end) = 
+      maker::auto_annotator::get_translation_seq($t_seq);
 		
-	my $score = 0;
-	foreach my $hsp ($hit->hsps) {
-	    $score += $hsp->score();
-	}
+      my $score = 0;
+      foreach my $hsp ($hit->hsps) {
+	 $score += $hsp->score();
+      }
 		
-	my $p_def = '>'.$t_name.' protein score:'.$score;
-	my $t_def = '>'.$t_name.' snap.transcript offset:'.$offset;
-	$t_def.= ' score:'.$score; 
+      my $p_def = '>'.$t_name.' protein score:'.$score;
+      my $t_def = '>'.$t_name.' snap.transcript offset:'.$offset;
+      $t_def.= ' score:'.$score; 
 		
-	my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
-	my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
+      my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
+      my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
 		
-	$p_fastas .= $$p_fasta;
-	$t_fastas .= $$t_fasta;
+      $p_fastas .= $$p_fasta;
+      $t_fastas .= $$t_fasta;
 		
-    }
-    return ($p_fastas, $t_fastas);
+   }
+   return ($p_fastas, $t_fastas);
 }
 #-----------------------------------------------------------------------------
 sub get_p_and_t_fastas {
-    my $t_struct = shift;
+   my $t_struct = shift;
 	
-    my $t_seq  = $t_struct->{t_seq};
-    my $p_seq  = $t_struct->{p_seq};
-    my $t_off  = $t_struct->{t_offset};
-    my $t_name = $t_struct->{t_name};
+   my $t_seq  = $t_struct->{t_seq};
+   my $p_seq  = $t_struct->{p_seq};
+   my $t_off  = $t_struct->{t_offset};
+   my $t_name = $t_struct->{t_name};
 	
-    my $p_def = '>'.$t_name.' protein'; 
-    my $t_def = '>'.$t_name.' transcript offset:'.$t_off;
+   my $p_def = '>'.$t_name.' protein'; 
+   my $t_def = '>'.$t_name.' transcript offset:'.$t_off;
 	
-    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
-    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
+   my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
+   my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
 	
-    return($p_fasta, $t_fasta);
+   return($p_fasta, $t_fasta);
 }
 #----------------------------------------------------------------------------
 sub create_blastdb {
-    my %CTL_OPTIONS = %{shift @_};
+   my %CTL_OPTIONS = %{shift @_};
 
-    if (not @{[<$CTL_OPTIONS{'protein'}.a??*>]}) {
-	system($CTL_OPTIONS{setdb}." $CTL_OPTIONS{'protein'}");
-    }
-    if (not @{[<$CTL_OPTIONS{'est'}.n??*>]}) {
-	system($CTL_OPTIONS{pressdb}. " $CTL_OPTIONS{'est'}");
-    }
-    if (! $OPT{R} && ! @{[<$CTL_OPTIONS{'repeat_protein'}.a??*>]}) {
-	system($CTL_OPTIONS{setdb}." $CTL_OPTIONS{'repeat_protein'}");
-    }
-    if ($CTL_OPTIONS{'alt_est'} && not @{[<$CTL_OPTIONS{'alt_est'}\.n*>]}) {
-	system($CTL_OPTIONS{pressdb}. " $CTL_OPTIONS{'alt_est'}");
-    }
+   if (not @{[<$CTL_OPTIONS{'protein'}.a??*>]}) {
+      system($CTL_OPTIONS{xdformat}. " -p -C $CTL_OPTIONS{'alt_peptide'} $CTL_OPTIONS{'protein'}");
+   }
+   if (not @{[<$CTL_OPTIONS{'est'}.n??*>]}) {
+      system($CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'est'}");
+   }
+   if (! $OPT{R} && ! @{[<$CTL_OPTIONS{'repeat_protein'}.a??*>]}) {
+      system($CTL_OPTIONS{xdformat}." -p $CTL_OPTIONS{'repeat_protein'}");
+   }
+   if ($CTL_OPTIONS{'alt_est'} && not @{[<$CTL_OPTIONS{'alt_est'}\.n*>]}) {
+      system($CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'alt_est'}");
+   }
 }
 #----------------------------------------------------------------------------
 sub load_anno_hsps {
-    my $annotations = shift;
-    my @coors;
-    my $i = @{$annotations};
-    foreach my $an (@$annotations) {
-	foreach my $a (@{$an->[0]}) {
-	    my $hit = $a->{hit};
-	    foreach my $hsp ($hit->hsps()) {
-		push(@coors, [$hsp->nB('query'),
-			      $hsp->nE('query'),
-			     ]);
-	    }
-	}
-    }
-    return (\@coors, $i);;
-}
-#-----------------------------------------------------------------------------
-sub load_clust_hsps {
-    my $clusters = shift;
-    my @coors;
-    my $i = @{$clusters};
-    foreach my $c (@$clusters) {
-	foreach my $hit (@{$c}) {
-	    foreach my $hsp ($hit->hsps()) {
-		push(@coors, [$hsp->nB('query'),
-			      $hsp->nE('query'),
-			     ]);
-	    }
-	}
-    }
-    return (\@coors, $i);
-}
-#-----------------------------------------------------------------------------
-sub load_snap_hsps {
-    my $snaps = shift;
-    my @coors;
-    my $i = @{$snaps};
-    foreach my $hit (@{$snaps}) {
-	foreach my $hsp ($hit->hsps()) {
+   my $annotations = shift;
+   my @coors;
+   my $i = @{$annotations};
+   foreach my $an (@$annotations) {
+      foreach my $a (@{$an->[0]}) {
+	 my $hit = $a->{hit};
+	 foreach my $hsp ($hit->hsps()) {
 	    push(@coors, [$hsp->nB('query'),
 			  $hsp->nE('query'),
 			 ]);
-	}
-    }
-    return (\@coors, $i);
+	 }
+      }
+   }
+   return (\@coors, $i);;
 }
 #-----------------------------------------------------------------------------
-sub auto_annotate {
-    my $virgin_fasta         = shift;
-    my $masked_fasta         = shift;
-    my $exonerate_p_clusters = shift;
-    my $exonerate_e_clusters = shift;
-    my $blastx_clusters      = shift;
-    my $snaps                = shift;
-    my $the_void             = shift;
-    my $snap_command         = shift;
-    my $snap_flank           = shift;
-    my $single_exon          = shift;
-
-    my $blastx_hits      = flatten($blastx_clusters);
-    my $exonerate_p_hits = flatten($exonerate_p_clusters, 'exonerate:p');
-    my $exonerate_e_hits = flatten($exonerate_e_clusters, 'exonerate:e');
-
-	
-    my $annotations = maker::auto_annotator::annotate($virgin_fasta,
-						      $masked_fasta,
-						      $exonerate_p_hits,
-						      $exonerate_e_hits,
-						      $blastx_hits,
-						      $snaps,
-						      $the_void,
-						      $snap_command,
-						      $snap_flank,
-						      $single_exon,
-						      $OPT{f}
-						     );
+sub load_clust_hsps {
+   my $clusters = shift;
+   my @coors;
+   my $i = @{$clusters};
+   foreach my $c (@$clusters) {
+      foreach my $hit (@{$c}) {
+	 foreach my $hsp ($hit->hsps()) {
+	    push(@coors, [$hsp->nB('query'),
+			  $hsp->nE('query'),
+			 ]);
+	 }
+      }
+   }
+   return (\@coors, $i);
+}
+#-----------------------------------------------------------------------------
+sub load_snap_hsps {
+   my $snaps = shift;
+   my @coors;
+   my $i = @{$snaps};
+   foreach my $hit (@{$snaps}) {
+      foreach my $hsp ($hit->hsps()) {
+	 push(@coors, [$hsp->nB('query'),
+		       $hsp->nE('query'),
+		      ]);
+      }
+   }
+   return (\@coors, $i);
 }
 #-----------------------------------------------------------------------------
 sub flatten {
-    my $clusters = shift;
-    my $type     = shift;
-    my @hits;
-    foreach my $c (@{$clusters}) {
-	foreach my $hit (@{$c}) {
-	    $hit->type($type) if defined($type);
-	    push(@hits, $hit);
-	}
-    }
-    return \@hits;
+   my $clusters = shift;
+   my $type     = shift;
+   my @hits;
+   foreach my $c (@{$clusters}) {
+      foreach my $hit (@{$c}) {
+	 $hit->type($type) if defined($type);
+	 push(@hits, $hit);
+      }
+   }
+   return \@hits;
 }
 #-----------------------------------------------------------------------------
 sub snap {
-    my $fasta      = shift;
-    my $the_void   = shift;
-    my $q_length   = shift;
-    my $chunk_size = shift;
-    my $seq_id     = shift;
-    my $snap = shift;
-    my $snaphmm = shift;
+   my $fasta      = shift;
+   my $the_void   = shift;
+   my $seq_id     = shift;
+   my $snap       = shift;
+   my $snaphmm    = shift;
 	
-    my $fasta_chunker = new FastaChunker();
-    $fasta_chunker->parent_fasta($fasta);
-    $fasta_chunker->chunk_size($chunk_size);
-    $fasta_chunker->load_chunks();
-	
-    my %params;
-    my $snap_keepers = [];
-    my $i = 0;
-    while (my $chunk = $fasta_chunker->get_chunk($i)) {
-	my $chunk_number = $chunk->number();
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
-	my $o_file    = "$the_void/$seq_id\.$chunk_number\.snap";
-
-	$chunk->write_file($file_name);
+   my %params;
+   my $file_name = "$the_void/$seq_id.all";
+   my $o_file    = "$the_void/$seq_id\.all\.snap";
+   
+   FastaFile::writeFile($fasta , $file_name);
 		
-	runSnap($file_name, $o_file, $snap, $snaphmm);
+   runSnap($file_name,
+	   $o_file,
+	   $snap,
+	   $snaphmm
+	  );
 		
-	$params{min_exon_score}  = -100000;	    #-10000;
-	$params{min_gene_score}  = -100000;	    #0;
+   $params{min_exon_score}  = -100000;	    #-10000;
+   $params{min_gene_score}  = -100000;	    #0;
 		
-	my $chunk_keepers =
-	Widget::snap::parse($o_file,
-			    \%params,
-			    $file_name,
-			   );
-	PhatHit_utils::add_offset($chunk_keepers,
-				  $chunk->offset(),
-				 );
-	PhatHit_utils::merge_hits($snap_keepers,
-				  $chunk_keepers,
-				  10000,
-				 );
-	$chunk->erase_fasta_file();
-	$i++;
-    }
+   my $chunk_keepers = Widget::snap::parse($o_file,
+					   \%params,
+					   $file_name,
+					  );
 
-    my $count = 0;
+   unlink($file_name);
 
-    foreach my $snap_hit (@{$snap_keepers}){
-	$snap_hit->{_name} .= ".$count";
-	
-	foreach my $snap_hsp (@{$snap_hit->{_hsps}}){
-	    $snap_hsp->{HIT_NAME} =~ s/^([^\:]+)/$1\.$count/;
-	    $snap_hsp->{feature1}->{_gsf_seq_id} =~ s/^([^\:]+)/$1\.$count/;
-	    $snap_hsp->{feature2}->{_gsf_seq_id} =~ s/^([^\:]+)/$1\.$count/;
-	}
-
-	$count++;
-    }
-
-    return $snap_keepers;
+   return $chunk_keepers;
 }
 #-----------------------------------------------------------------------------
 sub runSnap {
-    my $q_file   = shift;
-    my $out_file = shift;
-    my $snap = shift;
-    my $snaphmm = shift;
+   my $q_file   = shift;
+   my $out_file = shift;
+   my $snap = shift;
+   my $snaphmm = shift;
 	
-    my $command  = $snap;
-    $command .= " $snaphmm";
-    $command .= " $q_file";
-    $command .= " > $out_file";
+   my $command  = $snap;
+   $command .= " $snaphmm";
+   $command .= " $q_file";
+   $command .= " > $out_file";
 	
-    my $w = new Widget::snap();
+   my $w = new Widget::snap();
 	
-    if (-e $out_file && ! $OPT{f}) {
-	print STDERR "re reading snap report.\n";
-	print STDERR "$out_file\n";
-    }
-    else {
-	print STDERR "running  snap.\n";
-	$w->run($command);
-    }
+   if (-e $out_file && ! $OPT{f}) {
+      print STDERR "re reading snap report.\n";
+      print STDERR "$out_file\n";
+   }
+   else {
+      print STDERR "running  snap.\n";
+      $w->run($command);
+   }
 }
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
-    my $g_fasta           = shift;
-    my $phat_hit_clusters = shift;
-    my $db_index          = shift;
-    my $the_void          = shift;
-    my $depth             = shift;
-    my $type              = shift;
-    my $exonerate         = shift;
-    my $percov            = shift;
-    my $percid            = shift;
-    my $score_limit       = shift;
-    my $matrix            = shift;
+   my $g_fasta           = shift;
+   my $phat_hit_clusters = shift;
+   my $db_index          = shift;
+   my $the_void          = shift;
+   my $depth             = shift;
+   my $type              = shift;
+   my $exonerate         = shift;
+   my $percov            = shift;
+   my $percid            = shift;
+   my $score_limit       = shift;
+   my $matrix            = shift;
 
-    my $def = Fasta::getDef($g_fasta);
-    my $seq = Fasta::getSeq($g_fasta);
+   my $def = Fasta::getDef($g_fasta);
+   my $seq = Fasta::getSeq($g_fasta);
 	
-    my $exe = $exonerate;
+   my $exe = $exonerate;
 	
-	
-    my @exonerate_clusters;
-    my $i = 0;
-    foreach my $c (@{$phat_hit_clusters}) {
-	my $n = 0;
-	my $got_some = 0;
-	foreach my $hit (@{$c}) {
-	    last if $n == $depth;
+   my @exonerate_clusters;
+   my $i = 0;
+   foreach my $c (@{$phat_hit_clusters}) {
+      my $n = 0;
+      my $got_some = 0;
 
-	    if ($type eq 'e') {
-		next if $hit->pAh < $percov;
-		next if $hit->hsp('best')->frac_identical < $percid;
-	    }
-	    elsif ($type eq 'p') {
-		next if $hit->pAh < $percov;
-		next if $hit->hsp('best')->frac_identical < $percid;
-	    }
-	    my ($nB, $nE) =
-	    PhatHit_utils::get_span_of_hit($hit,'query');
-	    my @coors = [$nB, $nE];
-	    my $p = Shadower::getPieces($seq, \@coors, 50);
-	    my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
-	    my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
-	    my ($name) = $p_def =~ />([^\s\t\n]+)/;
-	    my $safe_name = uri_escape($name,  #build a safe name for file names from the sequence identifier
+      foreach my $hit (@{$c}) {
+	 last if $n == $depth;
+
+	 next if $hit->pAh < $percov;
+	 next if $hit->hsp('best')->frac_identical < $percid;
+	 
+	 my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
+
+	 my @coors = [$nB, $nE];
+	 my $p = Shadower::getPieces($seq, \@coors, 50);
+	 my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
+	 my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
+	 my ($name) = $p_def =~ />([^\s\t\n]+)/;
+
+	 #build a safe name for file names from the sequence identifier
+	 my $safe_name = uri_escape($name,
 				    '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-				    );
-	    $safe_name .= '.fasta';
-	    my $d_file = $the_void."/".$safe_name.'.'.$i.'.'.$n;
-	    FastaFile::writeFile($p_fasta, $d_file);
-	    my $offset = $p->[0]->{b};
-	    my $id  = $hit->name();
-	    $id =~ s/\s+/_/g;
-	    $id =~ s/\|/_/g;
-	    my $fastaObj = $db_index->get_Seq_by_id($hit->name);
-	    if (not $fastaObj) {
-		print "stop here:".$hit->name."\n";
-		die;
-	    }
-	    my $seq      = $fastaObj->seq();
-	    my $def      = $db_index->header($hit->name);
-	    $def =~ s/\|/_/g;
-	    my $fasta    = Fasta::toFasta('>'.$def, \$seq);
-	    my $safe_id = uri_escape($id,  #build a safe name for file names from the sequence identifier
-				     '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-				     );
-	    my $t_file    = $the_void."/".$safe_id.'.'.$i.'.'.$n.'.fasta';
-	    my $ext = "$i\.$n";
-	    FastaFile::writeFile($fasta, $t_file);
-	    my $exonerate_hits = to_polisher($d_file,
-					     $t_file,
-					     $the_void,
-					     $offset,
-					     $type,
-					     $ext,
-					     $exe,
-					     $score_limit,
-					     $matrix
-					    );
+				   );
+	 $safe_name .= '.fasta';
+	 my $d_file = $the_void."/".$safe_name.'.'.$i.'.'.$n;
+	 FastaFile::writeFile($p_fasta, $d_file);
+	 my $offset = $p->[0]->{b} - 1;
+	 my $id  = $hit->name();
+	 $id =~ s/\s+/_/g;
+	 $id =~ s/\|/_/g;
+	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	 if (not $fastaObj) {
+	    print "stop here:".$hit->name."\n";
+	    die "ERROR: Fasta index error\n";
+	 }
+	 my $seq      = $fastaObj->seq();
+	 my $def      = $db_index->header($hit->name);
+	 $def =~ s/\|/_/g;
+	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 
+	 #build a safe name for file names from the sequence identifier
+	 my $safe_id = uri_escape($id, 
+				  '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+				 );
 
-	    foreach my $exonerate_hit (@{$exonerate_hits}) {
-		if (defined($exonerate_hit) && exonerate_okay($exonerate_hit)) {
-		    $n++;
-		    push(@{$exonerate_clusters[$i]}, $exonerate_hit);
-		    $got_some = 1;
-		}
+	 my $t_file    = $the_void."/".$safe_id.'.'.$i.'.'.$n.'.fasta';
+	 my $ext = "$i\.$n";
+	 FastaFile::writeFile($fasta, $t_file);
+
+	 my $exonerate_hits = to_polisher($d_file,
+					  $t_file,
+					  $the_void,
+					  $offset,
+					  $type,
+					  $ext,
+					  $exe,
+					  $score_limit,
+					  $matrix
+					 );
+
+	 foreach my $exonerate_hit (@{$exonerate_hits}) {
+	    if (defined($exonerate_hit) && exonerate_okay($exonerate_hit)) {
+	       $n++;
+	       push(@{$exonerate_clusters[$i]}, $exonerate_hit);
+	       $got_some = 1;
 	    }
-	}
-	$i++ if $got_some;
-    }
-    return \@exonerate_clusters;
+	 }
+      }
+      $i++ if $got_some;
+   }
+   return \@exonerate_clusters;
 }
 #-----------------------------------------------------------------------------
 sub exonerate_okay {
-    my $hit  = shift;
+   my $hit  = shift;
 
-    my $i = 0;
-    foreach my $hsp ($hit->hsps()) {
-	return 0 unless defined($hsp->nB('query'));
-	return 0 unless defined($hsp->nE('query'));
-	return 0 unless defined($hsp->nB('hit'));
-	return 0 unless defined($hsp->nE('hit'));
-	return 0 unless defined($hsp->strand('query'));
-	return 0 unless defined($hsp->strand('query'));
-	return 0 unless defined($hsp->strand('hit'));
-	return 0 unless defined($hsp->strand('hit'));
+   my $i = 0;
+   foreach my $hsp ($hit->hsps()) {
+      return 0 unless defined($hsp->nB('query'));
+      return 0 unless defined($hsp->nE('query'));
+      return 0 unless defined($hsp->nB('hit'));
+      return 0 unless defined($hsp->nE('hit'));
+      return 0 unless defined($hsp->strand('query'));
+      return 0 unless defined($hsp->strand('query'));
+      return 0 unless defined($hsp->strand('hit'));
+      return 0 unless defined($hsp->strand('hit'));
 
-	my $q_str = $hsp->query_string();
-	my $h_str = $hsp->hit_string();
+      my $q_str = $hsp->query_string();
+      my $h_str = $hsp->hit_string();
 		
-	if ($h_str =~ /Target Intron/) {
-	    print STDERR "BADDD EXONERATE!\n";
-	    sleep 4;
-	    return 0;
-	} elsif ($q_str =~ /Target Intron/) {
-	    print STDERR "BADDD EXONERATE!\n";
-	    sleep 4;
-	    return 0;
-	}
-	$i++;
-    }
+      if ($h_str =~ /Target Intron/) {
+	 print STDERR "BADDD EXONERATE!\n";
+	 sleep 4;
+	 return 0;
+      } elsif ($q_str =~ /Target Intron/) {
+	 print STDERR "BADDD EXONERATE!\n";
+	 sleep 4;
+	 return 0;
+      }
+      $i++;
+   }
 
-    return 1 
+   return 1 
 }
 #-----------------------------------------------------------------------------
 sub to_polisher {
-    my $d_file   = shift;
-    my $t_file   = shift;
-    my $the_void = shift;
-    my $offset   = shift;
-    my $type     = shift;
-    my $ext      = shift;
-    my $exe      = shift;
-    my $score_limit = shift;
-    my $matrix = shift;
+   my $d_file   = shift;
+   my $t_file   = shift;
+   my $the_void = shift;
+   my $offset   = shift;
+   my $type     = shift;
+   my $ext      = shift;
+   my $exe      = shift;
+   my $score_limit = shift;
+   my $matrix = shift;
     
-    if ($type eq 'p') {
-	return polisher::exonerate::protein::polish($d_file,
-						    $t_file,
-						    $the_void,
-						    $offset,
-						    $ext,
-						    $exe,
-						    $score_limit,
-						    $matrix,
-						    $OPT{f}
-						   );
-    } elsif ($type eq 'e') {
-	return polisher::exonerate::est::polish($d_file,
-						$t_file,
-						$the_void,
-						$offset,
-						$ext,
-						$exe,
-						$score_limit,
-						$matrix,
-						$OPT{f}
-					       );
-    } else {
-	die "unknown type:$type in sub to_polisher.\n";
-    }
+   if ($type eq 'p') {
+      return polisher::exonerate::protein::polish($d_file,
+						  $t_file,
+						  $the_void,
+						  $offset,
+						  $ext,
+						  $exe,
+						  $score_limit,
+						  $matrix,
+						  $OPT{f}
+						 );
+   } elsif ($type eq 'e') {
+      return polisher::exonerate::est::polish($d_file,
+					      $t_file,
+					      $the_void,
+					      $offset,
+					      $ext,
+					      $exe,
+					      $score_limit,
+					      $matrix,
+					      $OPT{f}
+					     );
+   } else {
+      die "unknown type:$type in sub to_polisher.\n";
+   }
 }
 #-----------------------------------------------------------------------------
 sub make_multi_fasta {
-    my $index    = shift;
-    my $clusters = shift;;
-    my $fastas = '';
-    foreach my $c (@{$clusters}) {
-	foreach my $hit (@{$c}) {
-	    my $id = $hit->name();
-	    my $fastaObj = $index->get_Seq_by_id($id);
-	    my $seq      = $fastaObj->seq(); 
-	    my $def      = $index->header($id);
-	    my $fasta    = Fasta::toFasta('>'.$def, \$seq);
-	    $fastas     .= $$fasta; 
-	}
-    }
-    return \$fastas;
+   my $index    = shift;
+   my $clusters = shift;;
+   my $fastas = '';
+   foreach my $c (@{$clusters}) {
+      foreach my $hit (@{$c}) {
+	 my $id = $hit->name();
+	 my $fastaObj = $index->get_Seq_by_id($id);
+	 my $seq      = $fastaObj->seq(); 
+	 my $def      = $index->header($id);
+	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
+	 $fastas     .= $$fasta; 
+      }
+   }
+   return \$fastas;
 }
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
-    my $db = shift;
-    my $index = new Bio::DB::Fasta($db);
-    return $index;
+   my $db = shift;
+   my $index = new Bio::DB::Fasta($db);
+   return $index;
 }
 #-----------------------------------------------------------------------------
 sub repeatmask {
-    my $fasta      = shift;
-    my $the_void    = shift;
-    my $q_length   = shift;
-    my $chunk_size = shift;
-    my $seq_id     = shift;
-    my $query_seq = shift;
-    my $query_def = shift;
-    my $model_org = shift;
-    my $RepeatMasker = shift;
-    my $rmlib = shift;
-	
-    my $fasta_chunker = new FastaChunker();
-    $fasta_chunker->parent_fasta($fasta);
-    $fasta_chunker->chunk_size($chunk_size);
-    $fasta_chunker->load_chunks();
-	
-    my $rm_keepers = [];
-    my $i = 0;
-    while (my $chunk = $fasta_chunker->get_chunk($i)) {
+   my $chunk        = shift;
+   my $the_void     = shift;
+   my $seq_id       = shift;
+   my $model_org    = shift;
+   my $RepeatMasker = shift;
+   my $rmlib        = shift;
+   my $cpus         = shift;
 
-	my $chunk_number = $chunk->number();
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
-	my $o_file    = "$the_void/$seq_id\.$chunk_number\.out";
-	$chunk->write_file($file_name);
+   my $chunk_number = $chunk->number();
+   my $file_name = "$the_void/$seq_id\.$chunk_number";
+   my $o_file    = "$the_void/$seq_id\.$chunk_number\.out";
+   my $q_length = $chunk->parent_seq_length();
+   my $query_def = $chunk->parent_def();
+   my $query_seq = $chunk->seq();
+
+   $chunk->write_file($file_name);
 		
-	runRepeatMasker($file_name, 
-			$model_org, 
-			$the_void, 
-			$o_file,
-			$RepeatMasker,
-			$rmlib
-		       );	# -no_low
+   runRepeatMasker($file_name, 
+		   $model_org, 
+		   $the_void, 
+		   $o_file,
+		   $RepeatMasker,
+		   $rmlib,
+		   $cpus
+		  );		# -no_low
 		
-	my $rm_chunk_keepers = 
-	Widget::RepeatMasker::parse($o_file, 
-				    $seq_id, 
-				    $q_length,
-				   );
-	PhatHit_utils::add_offset($rm_chunk_keepers, 
-				  $chunk->offset(),
-				 );
-	PhatHit_utils::merge_hits($rm_keepers,  
-				  $rm_chunk_keepers, 
-				  20,
-				 );
-	$chunk->erase_fasta_file();
-	$i++;
-    }
+   my $rm_chunk_keepers = Widget::RepeatMasker::parse($o_file, 
+						      $seq_id, 
+						      $q_length,
+						      $OPT{f}
+						     );
+  
+   PhatHit_utils::add_offset($rm_chunk_keepers, 
+			     $chunk->offset(),
+			    );
+   #     PhatHit_utils::merge_hits($rm_keepers,  
+   # 			      $rm_chunk_keepers, 
+   # 			      20,
+   # 			     );
+
+   $chunk->erase_fasta_file();
 	
-    my ($tes, $lcs) = repeat_mask_seq::seperate_types($rm_keepers);
-	
-    my $masked_seq = repeat_mask_seq::mask_seq($query_seq, $tes, $lcs);
-	
-    my $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_seq);
-	
-    return ($$masked_fasta, $rm_keepers);
+   return ($rm_chunk_keepers);
 }
 #-----------------------------------------------------------------------------
 sub blastn {
-    my $fasta      = shift;
-    my $db         = shift;
-    my $the_void    = shift;
-    my $q_length   = shift;
-    my $chunk_size = shift;
-    my $seq_id     = shift;
-    my $blastn = shift;
-    my $eval_blastn = shift;
-    my $bit_blastn = shift,
-    my $percov_blastn = shift;
-    my $percid_blastn = shift;
-    my $cpus = shift;
+   my $chunk      = shift;
+   my $db         = shift;
+   my $the_void    = shift;
+   my $seq_id     = shift;
+   my $blastn = shift;
+   my $eval_blastn = shift;
+   my $bit_blastn = shift,
+   my $percov_blastn = shift;
+   my $percid_blastn = shift;
+   my $split_hit = shift;
+   my $cpus = shift;
 
-    my ($db_n) = $db =~ /([^\/]+)$/;
-    $db_n  =~ s/\.fasta$//;
+   my ($db_n) = $db =~ /([^\/]+)$/;
+   $db_n  =~ s/\.fasta$//;
 	
-    my $fasta_chunker = new FastaChunker();
-    $fasta_chunker->parent_fasta($fasta);
-    $fasta_chunker->chunk_size($chunk_size);
-    $fasta_chunker->load_chunks();
-	
-    my $blastn_keepers = [];
-    my $i = 0;
-    while (my $chunk = $fasta_chunker->get_chunk($i)) {
-	my $chunk_number = $chunk->number();
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
-	my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastn";
+   my $chunk_number = $chunk->number();
+   my $q_length = $chunk->parent_seq_length();
+   my $file_name = "$the_void/$seq_id\.$chunk_number";
+   my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastn";
 		
-	$chunk->write_file($file_name);
-	runBlastn($file_name,
-		  $db,
-		  $o_file,
-		  $blastn,
-		  $eval_blastn,
-		  $cpus
-		 );
-	my %params;
-	$params{significance}  = $eval_blastn;
-	$params{hsp_bit_min}   = $bit_blastn;
-	my $chunk_keepers =
-	Widget::blastn::parse($o_file,
-			      \%params,
-			     );
-	PhatHit_utils::add_offset($chunk_keepers,
-				  $chunk->offset(),
-				 );
-	PhatHit_utils::merge_hits($blastn_keepers,
-				  $chunk_keepers,
-				  10000,
-				 );
-	$chunk->erase_fasta_file();
-	$i++;
-    }
+   $chunk->write_file($file_name);
+   runBlastn($file_name,
+	     $db,
+	     $o_file,
+	     $blastn,
+	     $eval_blastn,
+	     $cpus
+	    );
 
-    my @purge;
+   my %params;
+   $params{significance}  = $eval_blastn;
+   $params{hsp_bit_min}   = $bit_blastn;
+   $params{percov}        = $percov_blastn;
+   $params{percid}        = $percid_blastn;
+   $params{split_hit}     = $split_hit;
 
-    foreach my $hit (@{$blastn_keepers}) {
-	next unless $hit->pAh > $percov_blastn;
-	next unless $hit->hsp('best')->frac_identical() > $percid_blastn;
-	next unless PhatHit_utils::is_contigous($hit);
-	push(@purge, $hit);
-    }
+   my $chunk_keepers = Widget::blastn::parse($o_file,
+					     \%params,
+					    );
 
-    my $a = @{$blastn_keepers};
-    my $b = @purge;
-    my $diff = $a - $b;
-    print STDERR "purging blastns deleted $diff hits!\n";
-    sleep 1;
-    return \@purge;
+   PhatHit_utils::add_offset($chunk_keepers,
+			     $chunk->offset(),
+			    );
+
+   $chunk->erase_fasta_file();
+   
+   if($chunk->p_cutoff || $chunk->m_cutoff){
+      my @keepers;
+      
+      foreach my $hit (@{$chunk_keepers}){
+	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff){
+	    push (@keepers, $hit)
+	 }
+	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff){
+	    push (@keepers, $hit)
+	 }
+      }
+      
+      return \@keepers;
+   }
+   else{
+      return $chunk_keepers
+   }
 }
 #-----------------------------------------------------------------------------
 sub runBlastn {
-    my $q_file   = shift;
-    my $db       = shift;
-    my $out_file = shift;
-    my $blastn = shift;
-    my $eval_blastn = shift;
-    my $cpus = shift;
+   my $q_file   = shift;
+   my $db       = shift;
+   my $out_file = shift;
+   my $blastn = shift;
+   my $eval_blastn = shift;
+   my $cpus = shift;
 	
-    my $command  = $blastn;
-    $command .= " $db $q_file B=10000 V=10000 E=$eval_blastn";
-    $command .= " wordmask=seg";
-    $command .= " R=3";
-    $command .= " W=15";
-    $command .= " M=1";
-    $command .= " N=-3";
-    $command .= " Q=3";
-    $command .= " Z=128000000";
-    $command .= " cpus=$cpus";	
-    $command .= " topcomboN=1";
-    $command .= " hspmax=100";
-    $command .= " gspmax=100";
-    $command .= " hspsepqmax=10000";
-    $command .= " lcmask";
-    $command .= " filter=seg";
-    $command .= " gi";
-    $command .= " > $out_file";
+   my $command  = $blastn;
+   $command .= " $db $q_file B=10000 V=10000 E=$eval_blastn";
+   $command .= " wordmask=seg";
+   $command .= " R=3";
+   $command .= " W=15";
+   $command .= " M=1";
+   $command .= " N=-3";
+   $command .= " Q=3";
+   $command .= " Z=128000000";
+   $command .= " cpus=$cpus";	
+   $command .= " topcomboN=1";
+   $command .= " hspmax=100";
+   $command .= " gspmax=100";
+   $command .= " hspsepqmax=10000";
+   $command .= " lcmask";
+   $command .= " filter=seg";
+   $command .= " gi";
+   #$command .= " mformat=2"; # remove for full report
+   $command .= " > $out_file";
 	
-    my $w = new Widget::blastn();
-    if (-e $out_file && ! $OPT{f}) {
-	print STDERR "re reading blast report.\n";
-	print STDERR "$out_file\n";
-    }
-    else {
-	print STDERR "running  blast search.\n";
-	$w->run($command);
-    }
+   my $w = new Widget::blastn();
+   if (-e $out_file && ! $OPT{f}) {
+      print STDERR "re reading blast report.\n";
+      print STDERR "$out_file\n";
+   }
+   else {
+      print STDERR "running  blast search.\n";
+      $w->run($command);
+   }
 
 }
 #-----------------------------------------------------------------------------
 sub blastx {
-    my $fasta      = shift;
-    my $db         = shift;
-    my $the_void    = shift;
-    my $q_length   = shift;
-    my $chunk_size = shift;
-    my $seq_id     = shift;
-    my $blastx = shift;
-    my $eval_blastx = shift;
-    my $bit_blastx = shift;
-    my $percov_blastx = shift;
-    my $percid_blastx = shift;
-    my $cpus = shift;
-    my $split_hit = shift;
-	
-    my ($db_n) = $db =~ /([^\/]+)$/;
-    $db_n  =~ s/\.fasta$//;
-	
-    my $fasta_chunker = new FastaChunker();
-    $fasta_chunker->parent_fasta($fasta);
-    $fasta_chunker->chunk_size($chunk_size);
-    $fasta_chunker->load_chunks();
-	
-    my $blastx_keepers = [];
-    my $i = 0;
-    while (my $chunk = $fasta_chunker->get_chunk($i)) {
-	my $chunk_number = $chunk->number();
+   my $chunk      = shift;
+   my $db         = shift;
+   my $the_void    = shift;
+   my $seq_id     = shift;
+   my $blastx = shift;
+   my $eval_blastx = shift;
+   my $bit_blastx = shift;
+   my $percov_blastx = shift;
+   my $percid_blastx = shift;
+   my $split_hit = shift;
+   my $cpus = shift;
+
+   my ($db_n) = $db =~ /([^\/]+)$/;
+   $db_n  =~ s/\.fasta$//;
+
+   my $q_length = $chunk->parent_seq_length();
+   my $chunk_number = $chunk->number();
 		
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
-	my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastx";
+   my $file_name = "$the_void/$seq_id\.$chunk_number";
+   my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastx";
 		
-	$chunk->write_file($file_name);
-	runBlastx($file_name,
-		  $db,
-		  $o_file,
-		  $blastx,
-		  $eval_blastx,
-		  $cpus
-		 );
-	my %params;
-	$params{significance} = $eval_blastx;
-	$params{hsp_bit_min}  = $bit_blastx;
-		
-	my $chunk_keepers =
-	Widget::blastx::parse($o_file,
-			      \%params,
-			     );
-	PhatHit_utils::add_offset($chunk_keepers,
-				  $chunk->offset(),
-				 );
-	PhatHit_utils::merge_hits($blastx_keepers,
-				  $chunk_keepers,
-				  10000,
-				 );
-	$chunk->erase_fasta_file();
-	$i++;
-    }
-    my @purge;
-    foreach my $hit (@{$blastx_keepers}) {
-	#my $new_hit = PhatHit_utils::normalize($hit, 'hit');
-	my $split_hits = PhatHit_utils::split_hit($hit, $split_hit);
-							  
-	foreach my $s_hit (@{$split_hits}) {
-	    push(@purge, $s_hit);
-	}
-							  
-							  
-	#if (!PhatHit_utils::is_contigous($hit)){
-	#	my $shatter_hits = PhatHit_utils::shatter_hit($hit);
-	#	push(@purge, @{$shatter_hits});
-	#}
-	#else {
-	#	push(@purge, $hit);
-	#}
-    }
-    my $a = @{$blastx_keepers};
-    my $b = @purge;
-    my $diff = $a - $b;
-    print STDERR "purging blastxs deleted $diff hits!\n";
-    sleep 1;
-    return \@purge;
+   $chunk->write_file($file_name);
+   runBlastx($file_name,
+	     $db,
+	     $o_file,
+	     $blastx,
+	     $eval_blastx,
+	     $cpus
+	    );
+
+   my %params;
+   $params{significance}  = $eval_blastx;
+   $params{hsp_bit_min}   = $bit_blastx;
+   $params{percov}        = $percov_blastx;
+   $params{percid}        = $percid_blastx;
+   $params{split_hit}     = $split_hit;
+   
+   my $chunk_keepers = Widget::blastx::parse($o_file,
+					     \%params,
+					    );
+
+   PhatHit_utils::add_offset($chunk_keepers,
+			     $chunk->offset(),
+			    );
+   
+   $chunk->erase_fasta_file();
+   
+   if($chunk->p_cutoff || $chunk->m_cutoff){
+      my @keepers;
+      
+      foreach my $hit (@{$chunk_keepers}){
+	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff){
+	    push (@keepers, $hit)
+	 }
+	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff){
+	    push (@keepers, $hit)
+	 }
+      }
+      
+      return \@keepers;
+   }
+   else{
+      return $chunk_keepers
+   }
 }
 
 #-----------------------------------------------------------------------------
 sub runBlastx {
-    my $q_file   = shift;
-    my $db       = shift;
-    my $out_file = shift;
-    my $blastx = shift;
-    my $eval_blastx = shift;
-    my $cpus = shift;
+   my $q_file   = shift;
+   my $db       = shift;
+   my $out_file = shift;
+   my $blastx = shift;
+   my $eval_blastx = shift;
+   my $cpus = shift;
 
-    my $command  = $blastx;
-    $command .= " $db $q_file B=10000 V=10000 E=$eval_blastx";
-    $command .= " wordmask=seg";
-    #$command .= " T=20";
-    #$command .= " W=5";
-    #$command .= " wink=5";
-    $command .= " Z=300";
-    $command .= " Y=500000000";
-    $command .= " hspmax=100";
-    $command .= " cpus=$cpus";
-    $command .= " gspmax=100";
-    $command .= " hspsepqmax=10000";
-    $command .= " lcfilter";
-    $command .= " filter=seg";
-    $command .= " gi";
-    $command .= " > $out_file";
-    my $w = new Widget::blastx();
-    if (-e $out_file  && ! $OPT{f}) {
-	print STDERR "re reading blast report.\n";
-	print STDERR "$out_file\n";
-    }
-    else {
-	print STDERR "running  blast search.\n";
-	$w->run($command);
-    }
-}
-#-----------------------------------------------------------------------------
-sub tblastx {
-    my $fasta      = shift;
-    my $db         = shift;
-    my $the_void    = shift;
-    my $q_length   = shift;
-    my $chunk_size = shift;
-    my $seq_id     = shift;
-    my $tblastx = shift;
-    my $eval_tblastx = shift;
-    my $bit_tblastx = shift;
-    my $percov_tblastx = shift;
-    my $percid_tblastx = shift;
-    my $cpus = shift;
-	
-    my ($db_n) = $db =~ /([^\/]+)$/;
-    $db_n  =~ s/\.fasta$//;
-	
-    my $fasta_chunker = new FastaChunker();
-    $fasta_chunker->parent_fasta($fasta);
-    $fasta_chunker->chunk_size($chunk_size);
-    $fasta_chunker->load_chunks();
-	
-    my $tblastx_keepers = [];
-    my $i = 0;
-    while (my $chunk = $fasta_chunker->get_chunk($i)) {
-	my $chunk_number = $chunk->number();
-		
-	my $file_name = "$the_void/$seq_id\.$chunk_number";
-	my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.tblastx";
-		
-	$chunk->write_file($file_name);
-	runTblastx($file_name,
-		   $db,
-		   $o_file,
-		   $tblastx,
-		   $eval_tblastx,
-		   $cpus
-		  );
-	my %params;
-	$params{significance} = $eval_tblastx;
-	$params{hsp_bit_min}  = $bit_tblastx;
-		
-	my $chunk_keepers =
-	Widget::tblastx::parse($o_file,
-			       \%params,
-			      );
-	PhatHit_utils::add_offset($chunk_keepers,
-				  $chunk->offset(),
-				 );
-	PhatHit_utils::merge_hits($tblastx_keepers,
-				  $chunk_keepers,
-				  10000,
-				 );
-	$chunk->erase_fasta_file();
-	$i++;
-    }
-    my @purge;
-    foreach my $hit (@{$tblastx_keepers}) {
-	if (!PhatHit_utils::is_contigous($hit)) {
-	    my $shatter_hits = PhatHit_utils::shatter_hit($hit);
-	    push(@purge, @{$shatter_hits});
-	}
-	else {
-	    push(@purge, $hit);
-	}
-    }
-    my $a = @{$tblastx_keepers};
-    my $b = @purge;
-    my $diff = $a - $b;
-    print STDERR "purging tblastxs deleted $diff hits!\n";
-    sleep 1;
-    return \@purge;
+   my $command  = $blastx;
+   $command .= " $db $q_file B=10000 V=10000 E=$eval_blastx";
+   $command .= " wordmask=seg";
+   #$command .= " T=20";
+   #$command .= " W=5";
+   #$command .= " wink=5";
+   $command .= " Z=300";
+   $command .= " Y=500000000";
+   $command .= " hspmax=100";
+   $command .= " cpus=$cpus";
+   $command .= " gspmax=100";
+   $command .= " hspsepqmax=10000";
+   $command .= " lcfilter";
+   $command .= " filter=seg";
+   $command .= " gi";
+   #$command .= " mformat=2"; # remove for full report
+   $command .= " > $out_file";
+   my $w = new Widget::blastx();
+
+   if (-e $out_file  && ! $OPT{f}) {
+      print STDERR "re reading blast report.\n";
+      print STDERR "$out_file\n";
+   }
+   else {
+      print STDERR "running  blast search.\n";
+      $w->run($command);
+   }
 }
 
-#-----------------------------------------------------------------------------
-sub runTblastx {
-    my $q_file   = shift;
-    my $db       = shift;
-    my $out_file = shift;
-    my $tblastx = shift;
-    my $eval_tblastx = shift;
-    my $cpus = shift;
-
-    my $command  = $tblastx;
-    $command .= " $db $q_file B=10000 V=10000 E=$eval_tblastx";
-    $command .= " wordmask=seg";
-    #$command .= " T=20";
-    #$command .= " W=5";
-    #$command .= " wink=5";
-    $command .= " Z=300";
-    $command .= " Y=500000000";
-    $command .= " hspmax=100";
-    $command .= " cpus=$cpus";
-    $command .= " gspmax=100";
-    $command .= " hspsepqmax=10000";
-    $command .= " lcfilter";
-    $command .= " filter=seg";
-    $command .= " gi";
-    $command .= " > $out_file";
-    my $w = new Widget::tblastx();
-    if (-e $out_file && ! $OPT{f}) {
-	print STDERR "re reading blast report.\n";
-	print STDERR "$out_file\n";
-    }
-    else {
-	print STDERR "running  blast search.\n";
-	$w->run($command);
-    }
-}
 #-----------------------------------------------------------------------------
 sub runRepeatMasker {
-    my $q_file   = shift;
-    my $species  = shift;
-    my $dir      = shift;
-    my $o_file   = shift;
-    my $RepeatMasker = shift;
-    my $rmlib = shift;
-    my $no_low   = shift;
+   my $q_file   = shift;
+   my $species  = shift;
+   my $dir      = shift;
+   my $o_file   = shift;
+   my $RepeatMasker = shift;
+   my $rmlib = shift;
+   my $cpus = shift;
+   my $no_low   = shift;
 	
-    my $command  = $RepeatMasker;
+   my $command  = $RepeatMasker;
     
-    if ($rmlib) {
-	$command .= " $q_file -lib $rmlib -dir $dir ";    
-    } else {
-	$command .= " $q_file -species $species -dir $dir ";
-    }
-    $command .= " -nolow" if defined($no_low);
+   if ($rmlib) {
+      $command .= " $q_file -lib $rmlib -dir $dir -pa $cpus";    
+   } else {
+      $command .= " $q_file -species $species -dir $dir -pa $cpus";
+   }
+   $command .= " -nolow" if defined($no_low);
 	
-    my $w = new Widget::RepeatMasker();
-    if (-e $o_file && ! $OPT{f}) {
-	print STDERR "re reading repeat masker report.\n";
-	print STDERR "$o_file\n";
-    }
-    else {
-	print STDERR "running  repeat masker.\n";
-	$w->run($command);
-    }
+   my $w = new Widget::RepeatMasker();
+   if (-e $o_file && ! $OPT{f}) {
+      print STDERR "re reading repeat masker report.\n";
+      print STDERR "$o_file\n";
+   }
+   else {
+      print STDERR "running  repeat masker.\n";
+      $w->run($command);
+   }
 }
+
 #-----------------------------------------------------------------------------
 sub build_the_void {
-    my $seq_id  = shift;
-    my $run_id  = shift;
-    my $out_dir = shift;
+   my $seq_id  = shift;
+   my $out_dir = shift;
 
-    $out_dir =~ s/\/$//;
+   $out_dir =~ s/\/$//;
 
-    my $vid = "theVoid\.$seq_id\.$run_id";   
-    my $the_void = "$out_dir/$vid";
-    mkpath ($the_void);
+   my $vid = "theVoid\.$seq_id";   
+   my $the_void = "$out_dir/$vid";
+   mkpath ($the_void);
 
-    return $the_void;
+   return $the_void;
 }
+
 #-----------------------------------------------------------------------------
-
 sub load_control_files {
-    my $infile= shift @_;
-    my @ctlfiles = @_;
-    my %CTL_OPTIONS;
+   my @ctlfiles = @_;
+   my %CTL_OPTIONS;
+   my %OK_FIELDS;
 
-    my @MAKER_OPTS_PARAMS = ('genome',
-			     'protein',
-			     'est',
-			     'alt_est',
-			     'repeat_protein',
-			     'clean_up',
-			     'rmlib',
-			     'use_seq_dir',
-			     'split_hit',
-			     'snap_flank',
-			     'te_remove',
-			     'single_exon'
-			     );
+   my @MAKER_OPTS_PARAMS = ('genome',
+			    'protein',
+			    'est',
+			    'alt_est',
+			    'repeat_protein',
+			    'clean_up',
+			    'rmlib',
+			    'use_seq_dir',
+			    'split_hit',
+			    'snap_flank',
+			    'te_remove',
+			    'single_exon',
+			    'rm_gff'
+			   );
     
-    my @MAKER_BOPTS_PARAMS = ('max_dna_len',
-			      'percov_blastn',
-			      'percid_blastn',
-			      'eval_blastn',
-			      'bit_blastn',
-			      'percov_blastx',
-			      'percid_blastx',
-			      'eval_blastx',
-			      'bit_blastx',
-			      'e_perc_cov',
-			      'ep_score_limit',
-			      'en_score_limit',
-			      'model_org',
-			      'snaphmm',
-			      );
-
-    my @MAKER_EXE_PARAMS = ('setdb',
-			    'pressdb',
-			    'blastn',
-			    'blastx',
-			    'tblastx',
-			    'snap',
-			    'RepeatMasker',
-			    'exonerate',
-			    'cpus',
+   my @MAKER_BOPTS_PARAMS = ('max_dna_len',
+			     'percov_blastn',
+			     'percid_blastn',
+			     'eval_blastn',
+			     'bit_blastn',
+			     'percov_blastx',
+			     'percid_blastx',
+			     'eval_blastx',
+			     'bit_blastx',
+			     'e_perc_cov',
+			     'ep_score_limit',
+			     'en_score_limit',
+			     'model_org',
+			     'snaphmm',
 			    );
-    
-    my %OK_FIELDS;
 
-    foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
-	$OK_FIELDS{$attr}++;
-    }
+   my @MAKER_EXE_PARAMS = ('xdformat',
+			   'alt_peptide',
+			   'blastn',
+			   'blastx',
+			   'tblastx',
+			   'snap',
+			   'RepeatMasker',
+			   'exonerate',
+			   'cpus',
+			  );
 
 
-    #set default values for certain control options
-    $CTL_OPTIONS{'clean_up'} = 0;
-    $CTL_OPTIONS{'max_dna_len'} = 100000;
-    $CTL_OPTIONS{'percov_blastn'} = 0.80;
-    $CTL_OPTIONS{'percid_blastn'} = 0.85;
-    $CTL_OPTIONS{'eval_blastn'} = 1e-10;
-    $CTL_OPTIONS{'bit_blastn'} = 40;
-    $CTL_OPTIONS{'percov_blastx'} = 0.50;
-    $CTL_OPTIONS{'percid_blastx'} = 0.40;
-    $CTL_OPTIONS{'eval_blastx'} = 1e-6;
-    $CTL_OPTIONS{'bit_blastx'} = 30;
-    $CTL_OPTIONS{'percov_tblastx'} = 0.50;
-    $CTL_OPTIONS{'percid_tblastx'} = 0.40;
-    $CTL_OPTIONS{'eval_tblastx'} = 1e-6;
-    $CTL_OPTIONS{'bit_tblastx'} = 30;
-    $CTL_OPTIONS{'e_perc_cov'} = 50;
+   foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
+      $OK_FIELDS{$attr}++;
+   }
 
-    #load values from control files
-    foreach my $ctlfile (@ctlfiles) {
-	open (CTL, "< $ctlfile") or die "ERROR: Could not open control files.\n$usage";
+
+   #set default values for certain control options
+   $CTL_OPTIONS{'clean_up'} = 0;
+   $CTL_OPTIONS{'max_dna_len'} = 100000;
+   $CTL_OPTIONS{'percov_blastn'} = 0.80;
+   $CTL_OPTIONS{'percid_blastn'} = 0.85;
+   $CTL_OPTIONS{'eval_blastn'} = 1e-10;
+   $CTL_OPTIONS{'bit_blastn'} = 40;
+   $CTL_OPTIONS{'percov_blastx'} = 0.50;
+   $CTL_OPTIONS{'percid_blastx'} = 0.40;
+   $CTL_OPTIONS{'eval_blastx'} = 1e-6;
+   $CTL_OPTIONS{'bit_blastx'} = 30;
+   $CTL_OPTIONS{'percov_tblastx'} = 0.50;
+   $CTL_OPTIONS{'percid_tblastx'} = 0.40;
+   $CTL_OPTIONS{'eval_tblastx'} = 1e-6;
+   $CTL_OPTIONS{'bit_tblastx'} = 30;
+   $CTL_OPTIONS{'e_perc_cov'} = 50;
+   $CTL_OPTIONS{'alt_peptide'} = 'c';
+
+   #load values from control files
+   foreach my $ctlfile (@ctlfiles) {
+      open (CTL, "< $ctlfile") or die "ERROR: Could not open control files.\n$usage";
 	
-	while (my $line = <CTL>) {
-	    chomp($line);
+      while (my $line = <CTL>) {
+	 chomp($line);
 	    
-	    if ($line !~ /^\s\t\n/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/){
-		my $key = $1;
-                my $value = $2;
-		if (exists $OK_FIELDS{$key}){
-		    if ($value =~ /\$/){
-                        $value = `echo $value`;
-                        chomp($value);
-                    }
-		    $CTL_OPTIONS{$key} = $value unless (not defined $value);
-		}
-		else{
-		    warn "ERROR: Invalid option \"$key\" in control file $ctlfile\n";
-		}
+	 if ($line !~ /^\s\t\n/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
+	    my $key = $1;
+	    my $value = $2;
+	    if (exists $OK_FIELDS{$key}) {
+	       if ($value =~ /\$/) {
+		  $value = `echo $value`;
+		  chomp($value);
+	       }
+	       $CTL_OPTIONS{$key} = $value unless (not defined $value);
 	    }
-	}
-    }
+	    else {
+	       warn "ERROR: Invalid option \"$key\" in control file $ctlfile\n";
+	    }
+	 }
+      }
+   }
 
-    $CTL_OPTIONS{'genome'} = $infile if ($infile);
-    $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
+   $CTL_OPTIONS{'genome'} = $OPT{g} if (defined $OPT{g});
+   $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
     
 
-    #validate required values from control files
-    my @infiles = ('genome','protein', 'est','setdb','pressdb','blastn',
-		   'blastx','snap','exonerate'
-		  );
+   #validate required values from control files
+   my @infiles = ('genome','protein', 'est','xdformat','blastn',
+		  'blastx','snap','exonerate'
+		 );
 
-    push (@infiles, 'RepeatMasker') unless($OPT{R});
+   push (@infiles, 'RepeatMasker') unless($OPT{R});
 
-    foreach my $in (@infiles) {
-	if (not $CTL_OPTIONS{$in}) {
-	    die "You have failed to provide the name and location of the $in file\n;"
-	}
+   foreach my $in (@infiles) {
+      if (not $CTL_OPTIONS{$in}) {
+	 die "You have failed to provide value for \'$in\' in the control files\n;"
+      }
 
-	if (not -e $CTL_OPTIONS{$in}) {
-	    die "The $in file $CTL_OPTIONS{$in} does not exist.".
-	        "Please check your control files: maker_opts.ctl or maker_exe.ctl\n";
-	}
-    }
+      if (not -e $CTL_OPTIONS{$in}) {
+	 die "The \'$in\' file $CTL_OPTIONS{$in} does not exist.".
+	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n";
+      }
+   }
 
-    if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
-	warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
-	     "As a result the default (drosophila) will be used.\n";
-	$CTL_OPTIONS{'model_org'} = "drosophila";
-    }
-    if (not $CTL_OPTIONS{'snaphmm'}) {
-	warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
-	     "As a result, te default (fly) will be used.\n";
-	$CTL_OPTIONS{'snaphmm'} = "fly";
-    }
+   if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
+      warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
+      "As a result the default (drosophila) will be used.\n";
+      $CTL_OPTIONS{'model_org'} = "drosophila";
+   }
+   if (not $CTL_OPTIONS{'snaphmm'}) {
+      warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
+      "As a result, the default (fly) will be used.\n";
+      $CTL_OPTIONS{'snaphmm'} = "fly";
+   }
+   if ($CTL_OPTIONS{'max_dna_len'} < 50000){
+      warn "ERROR: max_dna_len is set too low.  The minimum value permited is 50,000\n",
+           "max_dna_len wil be reset to 50,000\n\n";
+   }
 
-    #set values for datastructure    
-    $CTL_OPTIONS{'genome'} =~ /([^\/]+)$/;
-    $CTL_OPTIONS{'out_name'} = $1;
-    $CTL_OPTIONS{'out_name'} =~ s/\.[^\.]+$//;
-    $CTL_OPTIONS{'out_base'} = cwd();
+   #set values for datastructure    
+   $CTL_OPTIONS{'genome'} =~ /([^\/]+)$/;
+   $CTL_OPTIONS{'out_name'} = $1;
+   $CTL_OPTIONS{'out_name'} =~ s/\.[^\.]+$//;
+   $CTL_OPTIONS{'out_base'} = cwd();
 
-    if ($CTL_OPTIONS{'use_seq_dir'}) {
-	my @file_struct = split(/\//, $CTL_OPTIONS{'genome'});
-	pop @file_struct;
-	$CTL_OPTIONS{'out_base'} = join("/", @file_struct);
-    }
+   if ($CTL_OPTIONS{'use_seq_dir'}) {
+      my @file_struct = split(/\//, $CTL_OPTIONS{'genome'});
+      pop @file_struct;
+      $CTL_OPTIONS{'out_base'} = join("/", @file_struct);
+   }
     
-    if (not $CTL_OPTIONS{'out_base'}) {
-	die "No working directory, check your use_seq_dir option\n";
-    }
+   if (not $CTL_OPTIONS{'out_base'}) {
+      die "No working directory, check your use_seq_dir option\n";
+   }
 
-    return %CTL_OPTIONS;
+   return %CTL_OPTIONS;
 }
 

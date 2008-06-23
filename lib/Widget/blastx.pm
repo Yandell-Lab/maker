@@ -9,6 +9,8 @@ use Exporter;
 use PostData;
 use FileHandle;
 use Widget;
+use PhatHit_utils;
+
 @ISA = qw(
 	Widget
        );
@@ -64,86 +66,52 @@ sub parse {
 }
 #-------------------------------------------------------------------------------
 sub keepers {
-        my $sio    = shift;
-	my $params = shift; 
+   my $sio    = shift;
+   my $params = shift; 
+   
+   my @keepers;
+   my $start = 0;
+   
+   while (my $result = $sio->next_result()){
+      my $hits = [$result->hits()];
+      $start += @{$hits};
+      
+      foreach my $hit (@{$hits}){
+	 $hit->queryLength($result->query_length);
+	 $hit->queryName($result->query_name);
+	 
+	 my @hsps;
+	 while(my $hsp = $hit->next_hsp) {
+		 $hsp->query_name($result->query_name);
+		 
+		 push(@hsps, $hsp) if $hsp->bits > $params->{hsp_bit_min};
+	      }
+	 $hit->hsps(\@hsps);
+      }
 
-        my @keepers;
-	my $start = 0;
+      $hits = PhatHit_utils::split_hit_by_strand($hits);
+      if (exists $params->{split_hit}){
+	 $hits = PhatHit_utils::split_hit_on_intron($hits, $params->{split_hit});
+      }
 
-        while (my $result = $sio->next_result()){
-	    $start += $result->hits();
-	    while(my $hit = $result->next_hit) {
-                my $significance = $hit->significance();
-                $significance = "1".$significance if  $significance =~ /^e/;
-                $hit->queryLength($result->query_length);
-                $hit->queryName($result->query_name);
-                next unless $significance < $params->{significance};
-                my @hsps;
-                while(my $hsp = $hit->next_hsp) {
-		    $hsp->query_name($result->query_name);
-		    
-		    push(@hsps, $hsp) if $hsp->bits > $params->{hsp_bit_min};
-                }
-                $hit->hsps(\@hsps);
-		
-		if ( $hit->strand('query') eq '-1/1' || $hit->strand('query') eq '1/-1'){
-		    my ($p_hit, $m_hit) = clean_mixed_strands($hit);
-		    push(@keepers, $p_hit) unless $p_hit eq 'no_hsps';
-		    push(@keepers, $m_hit) unless $m_hit eq 'no_hsps';
-		}
-		else {
-		    push(@keepers, $hit) if $hit->hsps();
-		}
-	    }
-	}
-	my $end     = @keepers;
-	my $deleted = $start - $end;
-	print STDERR "deleted:$deleted hits\n";
-        
-	return \@keepers;
-}
-#-----------------------------------------------------------------------------
-sub clean_mixed_strands {
-	my $hit = shift;
+      foreach my $hit (@{$hits}) {
+	 my $significance = $hit->significance();
+	 $significance = "1".$significance if  $significance =~ /^e/;
+	 $significance = 0                 if  $significance =~ /0\./;
+	 next unless $significance < $params->{significance};
 
-	my @plus;
-	my @minus;
-	while(my $hsp = $hit->next_hsp) {
-		push(@plus, $hsp) if $hsp->strand('query') ==  1;
-		push(@minus,$hsp) if $hsp->strand('query') == -1;
-	}
-
-      my $p_hit = new Bio::Search::Hit::PhatHit::blastx(
-	                              '-name'        => $hit->name()." plus HSPs only",
-                                      '-description' => $hit->name()." cleaned_mixed_strands",
-		                      '-algorithm'   => 'blastx_', 
-				      '-length'      => $hit->length(),
-	                             );
-      my $m_hit = new Bio::Search::Hit::PhatHit::blastx(
-	                              '-name'        => $hit->name()." minus HSPs only",
-                                      '-description' => $hit->name()." cleaned_mixed_strands",
-                                      '-algorithm'   => 'blastx',                  
-                                      '-length'      => $hit->length(),
-                                     );
-
-        if (defined $plus[0]){
-                $p_hit->hsps(\@plus);
-		$p_hit->queryName($hit->queryName);
-        }
-        else {
-		$p_hit = 'no_hsps';
-        }
-
-        if (defined $minus[0]){
-                $m_hit->hsps(\@minus);
-		$m_hit->queryName($hit->queryName);
-        }
-        else { 
-        }
-                $m_hit = 'no_hsps';
-
-	return ($p_hit, $m_hit);
-
+	 #next unless $hit->pAh > $params->{percov};
+	 #next unless $hit->hsp('best')->frac_identical() > $params->{percid};
+	 #next unless PhatHit_utils::is_contigous($hit);
+	 
+	 push(@keepers, $hit) if $hit->hsps();
+      }
+   }
+   my $end     = @keepers;
+   my $deleted = $start - $end;
+   print STDERR "deleted:$deleted hits\n";
+   
+   return \@keepers;
 }
 #-----------------------------------------------------------------------------
 sub AUTOLOAD {

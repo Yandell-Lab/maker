@@ -57,9 +57,7 @@ sub purge_single_exon_hits {
 }
 #------------------------------------------------------------------------
 sub alt_sort {
-        $b->num_hsps <=> $a->num_hsps
-                     ||
-        $b->length  <=>  $a->length;
+        $b->num_hsps <=> $a->num_hsps || $b->length  <=>  $a->length;
 }
 #------------------------------------------------------------------------
 sub remove_redundant_alt_splices {

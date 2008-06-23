@@ -103,7 +103,7 @@ sub getUpperCasedSegments {
         my @pieces;
         while ($$sequence =~ m/([A-Z]+)/g ) {
                 my $e = pos($$sequence);
-                my $b = $e - length($1);
+                my $b = $e - length($1) + 1;
                 push(@pieces, {b => $b , e => $e, piece => $1});
         }
         return \@pieces;
@@ -122,7 +122,7 @@ sub getPieces {
         my @pieces;
         while ($$sSeq =~ m/([A-Z]+)/g ) {
                 my $e = pos($$sSeq);
-                my $b = $e - length($1);
+                my $b = $e - length($1) + 1;
                 push(@pieces, {b => $b , e => $e, piece => $1});
         }
 	return \@pieces;
@@ -141,7 +141,7 @@ sub getNegativePieces {
         my @pieces;
         while ($$sSeq =~ m/([a-z]+)/g ) {
                 my $e = pos($$sSeq);
-                my $b = $e - length($1);
+                my $b = $e - length($1) + 1;
                 push(@pieces, {b => $b , e => $e, piece => $1});
         }
         return \@pieces;

@@ -38,7 +38,7 @@ sub sort_hits {
 	return $sorted;
 }
 #------------------------------------------------------------------------
-sub split_by_strand {
+sub seperate_by_strand {
 	my $what = shift;
 	my $hits = shift;
 
@@ -120,60 +120,125 @@ sub get_hsp_coors {
         return \@coors;
 }
 #------------------------------------------------------------------------
-sub split_hit {
-	my $hit        = shift;
-	my $max_intron = shift;
+sub split_hit_on_intron {
+   my $hits        = shift;
+   my $max_intron = shift;
+   
+   push (@{$hits}, $hits) if (ref($hits) ne 'ARRAY');
+   
+   my @new_hits;
+   
+   foreach my $hit (@{$hits}){
+      my $ref = ref($hit);
+      
+      my $sorted = $hit->sortFeatures('query');
+      
+      unless (defined($sorted->[1])){
+	 push(@new_hits, $hit);
+	 next;
+      }
+      
+      my %splits;
+      my $k = 0;
+      my $distance;
+      for (my $i = 0; $i < @{$sorted} - 1; $i++){
+	 my $hsp_i = $sorted->[$i];
+	 my $hsp_j = $sorted->[$i + 1];
 
-	my $ref = ref($hit);
+	 my $end_i = $hsp_i->end('query'); #end is normalized to be larger than start
+	 my $beg_j = $hsp_j->start('query'); #start is normalized to be smaller than end
+	 
+	 $distance = $beg_j - $end_i;
+	 
+	 
+	 push(@{$splits{$k}}, $hsp_i);
+	 
+	 $k++ if $distance > $max_intron;
+      }
+      
+      push(@{$splits{$k}}, $sorted->[-1]);
+      
+      my $num = (keys %splits);
+      
+      foreach my $key (sort keys %splits){
+	 
+	 my $new_hit = 
+	 new $ref('-name'         => $hit->name,
+		  '-description'  => $hit->description,
+		  '-algorithm'    => $hit->algorithm,
+		  '-length'       => $hit->length,
+		 );
+	 
+	 $new_hit->queryLength($hit->queryLength);
+	 $new_hit->{is_split} = 1 if $num > 1;
+	 
+	 foreach my  $hsp (@{$splits{$key}}){
+	    $new_hit->add_hsp($hsp);
+	 }
+	 
+	 push(@new_hits, $new_hit);
+	 
+	 $num++;
+      }
+   }
+   
+   return \@new_hits;
+}
+#------------------------------------------------------------------------
+sub split_hit_by_strand {
+   my $hits = shift;
 
-	my $sorted = sort_hits($hit, 'query');
+   push (@{$hits}, $hits) if (ref($hits) ne 'ARRAY');
 
-	return [$hit] unless defined($sorted->[1]);
+   my @new_hits;
 
-	my %splits;
-	my $k = 0;
-	my $distance;
-	for (my $i = 0; $i < @{$sorted} - 1; $i++){
-		my $hsp_i = $sorted->[$i];
-		my $hsp_j = $sorted->[$i + 1];
+   foreach my $hit (@{$hits}){
+      my $ref = ref($hit);
+      
+      my @hsps = $hit->hsps;
+      
+      my %pm_splits;
+      
+      foreach my $hsp (@hsps){
+	 my $strand = $hsp->strand('query');
+	 
+	 if($strand == 1 || $strand == 0){
+	    push(@{$pm_splits{plus}}, $hsp); #plus strand
+	 }
+	 elsif($strand == -1){
+	    push(@{$pm_splits{minus}}, $hsp); #minus strand
+	 }
+	 else{
+	    die "ERROR: There is no strand for this HSP\n";
+	 }
+      }  
+      
+      my @keys = keys %pm_splits;
+      
+      if(@keys == 1){
+	 push(@new_hits, $hit);
+	 next;
+      }
+      
+      foreach my $k (@keys){
+	 my $new_hit = new $ref('-name'         => $hit->name,
+				'-description'  => $hit->description,
+				'-algorithm'    => $hit->algorithm,
+				'-length'       => $hit->length,
+			       );
+	 
+	 $new_hit->queryLength($hit->queryLength);
+	 $new_hit->{is_split} = 1;
+	 
+	 foreach my  $hsp (@{$pm_splits{$k}}){
+	    $new_hit->add_hsp($hsp);
+	 }
+	 
+	 push(@new_hits, $new_hit);
+      }
+   }
 
-		my $nend_i = $hsp_i->nE('query');
-		my $nbeg_j = $hsp_j->nB('query');
-
-		$distance =  abs($nbeg_j - $nend_i);
-
-		
-		push(@{$splits{$k}}, $hsp_i);
-
-		$k++ if $distance > $max_intron;
-
-	}
-
-	push(@{$splits{$k}}, $sorted->[-1]);
-		
-	my $num = (keys %splits);
-
-	my @new_hits;
-	foreach my $k (sort keys %splits){
-		
-            	my $new_hit = 
-		new $ref('-name'         => $hit->name,
-                         '-description'  => $hit->description,
-                         '-algorithm'    => $hit->algorithm,
-                         '-length'       => $hit->queryLength,
-                         );
-
-               	$new_hit->queryLength($hit->queryLength);
-               	$new_hit->{is_split} = 1 if $num > 1;
-
-		foreach my  $hsp (@{$splits{$k}}){
-                	$new_hit->add_hsp($hsp);
-		}
-                push(@new_hits, $new_hit);
-
-		$num++;
-	}
-	return \@new_hits;
+   return \@new_hits;
 }
 #------------------------------------------------------------------------
 sub shatter_hit {
@@ -188,7 +253,7 @@ sub shatter_hit {
             my $new_hit = new $ref('-name'         => $hit->name,
                                    '-description'  => $hit->description,
                                    '-algorithm'    => $hit->algorithm,
-                                   '-length'       => $hit->queryLength,
+                                   '-length'       => $hit->length,
                                    );
 
 		$new_hit->queryLength($hit->queryLength);
@@ -336,7 +401,7 @@ sub copy {
         my $new_hit = new $ref('-name'         => $hit->name,
                                '-description'  => $hit->description,
                                '-algorithm'    => $hit->algorithm,
-                               '-length'       => $hit->queryLength,
+                               '-length'       => $hit->length,
                               );
 
         $new_hit->queryLength($hit->queryLength);
@@ -447,7 +512,7 @@ sub normalize {
         my $new_hit = new $ref('-name'         => $hit->name,
                                '-description'  => $hit->description,
                                '-algorithm'    => $hit->algorithm,
-                               '-length'       => $hit->queryLength,
+                               '-length'       => $hit->length,
                               );
 
                 $new_hit->queryLength($hit->queryLength);
@@ -496,35 +561,15 @@ sub is_contigous {
 sub get_span_of_hit {
 	my $hit  = shift;
 	my $what = shift || 'query';
-	my $sorted;
-
+	
 	if ($hit->strand($what) eq '-1/1'){
 		print STDERR " mixed strand feature in PhatHit_utils\n";	
 	}
         elsif ($hit->strand($what) eq '1/-1'){
                 print STDERR " mixed strand feature in PhatHit_utils\n";
         }
-	elsif ($hit->strand($what) == 1) {
-		$sorted = $hit->sortFeatures($what);
-	}
-	elsif ($hit->strand($what) == -1 ){
-		$sorted = $hit->revSortFeatures($what);
-	}	
-        elsif ($hit->strand($what) == 0 ){
-                $sorted = $hit->sortFeatures($what);
-        }
 
-	else {
-		print "class:".ref($hit)."\n";
-		print "what:$what\n";
-		print "strand:".$hit->strand($what)."\n";
-		print "not yet supported in PhatHit_utils::get_span_of_hit\n";
-		die;
-	}
-	my $alpha = $sorted->[0];
-	my $omega = $sorted->[-1];
-
-	return ($alpha->nB($what), $omega->nE($what));
+	return ($hit->nB($what), $hit->nE($what));
 }
 #------------------------------------------------------------------------
 sub add_offset {
