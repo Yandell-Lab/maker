@@ -67,13 +67,13 @@ sub _initialize{
    $self->{LEVEL} = shift;
    $self->{VARS}  = shift;	#this should be an array reference
    $self->{ID}    = shift || 0;
-   $self->{RANK}  = 0;
+   $self->{RANK}  = shift || 0;
 }
 
 #--------------------------------------------------------------
 sub run {
    my $self = shift;
-   $self->{RANK} = shift;
+   $self->{RANK} = shift || $self->{RANK} || 0;
 
    if (exists $self->{RESULT}) {
       return;
@@ -221,11 +221,20 @@ sub run {
 		       $CTL_OPTIONS{snap},
 		       $CTL_OPTIONS{'snaphmm'}
 		      );
+
+      #--set up new chunks for remaining levels
+      my $fasta_chunker = new FastaChunker();
+      $fasta_chunker->parent_fasta($$masked_fasta);
+      $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+      $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+      $fasta_chunker->load_chunks();
+      
+      my $chunk_count = 0;
       
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($masked_fasta, $snaps);
+      @results = ($masked_fasta, $snaps, $fasta_chunker, $chunk_count);
       #------------------------RESULTS
    }
       elsif ($level == 4) {
@@ -1267,7 +1276,7 @@ sub blastn {
 	
    $chunk->write_file($t_file_name);
    runBlastn($t_file_name,
-	     $db,
+	     $tmp_db,
 	     $o_file,
 	     $blastn,
 	     $eval_blastn,
@@ -1405,7 +1414,7 @@ sub blastx {
 	     
    $chunk->write_file($t_file_name);
    runBlastx($t_file_name,
-	     $db,
+	     $tmp_db,
 	     $o_file,
 	     $blastx,
 	     $eval_blastx,

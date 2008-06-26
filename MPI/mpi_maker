@@ -32,6 +32,7 @@ use Cwd qw(cwd abs_path);
 use Bio::DB::Fasta;
 use Iterator::Fasta;
 use threads;
+use threads::shared;
 
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
@@ -126,9 +127,9 @@ my $terminate      = 0;
 my $yes_result = 1;
 my $no_result  = 0;
 
-#--c_res_status signals
+#--c_res_status signal
 my $yes_c_res      = 1;
-my $no_c_res      = 1;
+my $no_c_res      = 0;
 
 #--chunk_status signals
 my $yes_chunk = 1;
@@ -154,9 +155,10 @@ my $t_terminate :shared;
 
 #---global variables
 my %OPT;
+my $root = 0;
 
 #--check if root node
-if ($rank == 0) {
+if ($rank == $root) {
    #--Process arguments and the command line 
    GetOptions("RM_off|R" => \$OPT{R},
 	      "force|f" => \$OPT{f},
@@ -180,7 +182,7 @@ if ($rank == 0) {
       }
    }
 
-   if ($size < 2) {
+   if ($size < 0) {
       my $options = '';
       $options .= "-R " if ($OPT{R});
       $options .= "-f " if ($OPT{f});
@@ -241,14 +243,14 @@ if ($rank == 0) {
 
    #---main code for distribution of mpi data here
    my $go_mpi_status = 1;
-   my $thr;
+   my $thr = threads->create(\&node_thread);
 
    while($go_mpi_status){
       #check on results from internal thread
       if (defined($t_tier_result)){
 	 my $t_res = ${thaw($t_tier_result)};
 	 $t_tier_result = undef;
-	 $active[0] = 0;
+	 $active[$root] = $root;
 	 print STDERR $t_res;
       }
       if (defined($t_chunk_result)){
@@ -257,7 +259,7 @@ if ($rank == 0) {
 	 my $id = $chunk->id();
 	 ($id) = split (":", $id);
 	 push (@{$c_results[$id]}, $chunk);
-	 unshift (@{$res_loc[$id]}, 0);
+	 unshift (@{$res_loc[$id]}, $root);
       }
 
       #see if there are chunks to get from the internal thread
@@ -315,7 +317,7 @@ if ($rank == 0) {
 	 else{
 	    MPI_Send(\$wait_as_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
 	    push(@helper_stack, $who);
-	    $active[$who] = 0;
+	    $active[$who] = $root;
 	 }
       }
       #if the node wants a helper or needs a chunk result, do this
@@ -328,7 +330,7 @@ if ($rank == 0) {
 
 	    #if primary node has chunk result to send
 	    foreach my $loc (@{$res_loc[$who]}){
-	       next unless ($loc == 0);
+	       next unless ($loc == $root);
 	       my $res = shift @{$c_results[$who]};
 	       MPI_SendII(\$res, $who, $mpi_data, MPI_COMM_WORLD);
 	    }
@@ -373,7 +375,7 @@ if ($rank == 0) {
 
 	 #primary node thread helper
 	 if ($thr_avail && $num_helpers_req > 0){
-	    my $helper = 0;
+	    my $helper = $root;
 	    unshift(@{$helpers}, $helper);
 	 }
 
@@ -406,7 +408,7 @@ if ($rank == 0) {
 	 my $owner;
 	 MPI_Recv(\$owner, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
 	 
-	 if($owner == 0){
+	 if($owner == $root){
 	    my $chunk_res;
 	    MPI_RecvII(\$chunk_res, $who, $mpi_data, MPI_COMM_WORLD);
 	    push(@returned_chunks, freeze(\$chunk_res));
@@ -425,14 +427,14 @@ if ($rank == 0) {
 	    my $tier = Process::MakerTiers->new($fasta,
 						\%CTL_OPTIONS,
 						\%OPT,
-						0
+						$root
 					       );
 	    
 	    print $DS_FH $tier->DS() . "\n" if($OPT{d});
 	    
 	    $t_need_flag = 0;
 	    $t_tier = freeze(\$tier);
-	    $active[0] = 1;
+	    $active[$root] = 1;
 	 }
 	 else{
 	    $t_need_flag = 2;
@@ -470,7 +472,7 @@ else {
 
    while ($go_mpi_status) {
       #tell primary process what node it is speaking to
-      MPI_Send(\$rank, 1, MPI_INT, 0, $who_I_am, MPI_COMM_WORLD );
+      MPI_Send(\$rank, 1, MPI_INT, $root, $who_I_am, MPI_COMM_WORLD );
 
 
       #decide what this node needs
@@ -484,7 +486,7 @@ else {
 	 $what = $need_tier;
 	 $tier_result = $tier->error if(defined($tier) && $tier->terminated);
       }
-      elsif($chunk = $tier->next_chunk && $tier->num_chunks > 0){
+      elsif(($chunk = $tier->next_chunk) && ($tier->num_chunks > 0)){
 	 $what = $need_helper;
       }
       else{
@@ -492,26 +494,26 @@ else {
       }
 
       #--tell primary node what this node needs
-      MPI_Send(\$what, 1, MPI_INT, 0, $what_I_want, MPI_COMM_WORLD );
+      MPI_Send(\$what, 1, MPI_INT, $root, $what_I_want, MPI_COMM_WORLD );
 
       #if tier is needed do this
       if($what == $need_tier){
 	 #Send result status
 	 my $rs_type = (defined($tier_result)) ? $yes_result: $no_result;
-	 MPI_Send(\$rs_type, 1, MPI_INT, 0, $result_status, MPI_COMM_WORLD );
+	 MPI_Send(\$rs_type, 1, MPI_INT, $root, $result_status, MPI_COMM_WORLD );
 
 	 #Send result if available
 	 if($rs_type == $yes_result){
-	    MPI_SendII(\$tier_result, 0, $mpi_data, MPI_COMM_WORLD);
+	    MPI_SendII(\$tier_result, $root, $mpi_data, MPI_COMM_WORLD);
 	    undef $tier_result;
 	 }
 
 	 #get request_status
 	 my $req_status;
-	 MPI_Recv(\$req_status, 1, MPI_INT, 0, $request_status, MPI_COMM_WORLD );
+	 MPI_Recv(\$req_status, 1, MPI_INT, $root, $request_status, MPI_COMM_WORLD );
 	 
 	 if($req_status == $yes_tier){
-	    MPI_RecvII(\$tier, 0, $mpi_data, MPI_COMM_WORLD );
+	    MPI_RecvII(\$tier, $root, $mpi_data, MPI_COMM_WORLD );
 	    $tier->run;
 	 }
 	 elsif($req_status == $wait_as_helper){
@@ -549,17 +551,17 @@ else {
       elsif ($what == $need_helper || $what == $need_c_res){
 	 # check c_result_status
 	 my $c_res_stat;
-	 MPI_Recv(\$c_res_stat, 1, MPI_INT, 0, $c_res_status, MPI_COMM_WORLD);
+	 MPI_Recv(\$c_res_stat, 1, MPI_INT, $root, $c_res_status, MPI_COMM_WORLD);
 	 
 	 #if there are chunk results, do this
 	 my $locs;
 	 if($c_res_stat == $yes_c_res){
 	    #get ids of nodes with chunk result
-	    MPI_RecvII(\$locs, 0, $mpi_data, MPI_COMM_WORLD);
+	    MPI_RecvII(\$locs, $root, $mpi_data, MPI_COMM_WORLD);
 
 	    #get chunk results from only the root node for now
 	    foreach my $loc (@{$locs}){
-	       next if ($loc != 0);
+	       next if ($loc != $root);
 	       my $c_res;
 	       MPI_RecvII(\$c_res, $loc, $mpi_data, MPI_COMM_WORLD);
 	       $tier->update_chunk($c_res);
@@ -570,15 +572,15 @@ else {
 	 if ($what == $need_helper){
 	    #send the number of helpers required
 	    my $num_helpers_req = $tier->num_chunks;
-	    MPI_Send(\$num_helpers_req, 1, MPI_INT, 0, $work_order, MPI_COMM_WORLD);
+	    MPI_Send(\$num_helpers_req, 1, MPI_INT, $root, $work_order, MPI_COMM_WORLD);
 	    
 	    #see if helper is available
 	    my $help_stat;
-	    MPI_Recv(\$help_stat, 1, MPI_INT, 0, $request_status, MPI_COMM_WORLD);
+	    MPI_Recv(\$help_stat, 1, MPI_INT, $root, $request_status, MPI_COMM_WORLD);
 	    
 	    if($help_stat == $yes_helper){
 	       my $helpers;
-	       MPI_RecvII(\$helpers, 0, $mpi_data, MPI_COMM_WORLD);
+	       MPI_RecvII(\$helpers, $root, $mpi_data, MPI_COMM_WORLD);
 	       
 	       #send chunk to helper
 	       foreach my $helper (@{$helpers}){
@@ -597,7 +599,7 @@ else {
 
 	 #get chunk results from non root nodes since root comm has terminated
 	 foreach my $loc (@{$locs}){
-	    next if ($loc == 0);
+	    next if ($loc == $root);
 	    my $c_res;
 	    MPI_RecvII(\$c_res, $loc, $mpi_data, MPI_COMM_WORLD);
 	    $tier->update_chunk($c_res);
@@ -607,7 +609,7 @@ else {
 	 if(defined($chunk)){
 	    $chunk->run($rank);
 	    $tier->update_chunk($chunk);
-	    undef $chunk;
+	    $chunk = undef;
 	 }
       }
       #if just finished a helper chunk, inform that it is finished
@@ -615,7 +617,7 @@ else {
 	 #send the owner id of the result
 	 my $owner = $chunk->id();
 	 ($owner) = split(":", $owner);
-	 MPI_Send(\$owner, 1, MPI_INT, 0, $work_order, MPI_COMM_WORLD);
+	 MPI_Send(\$owner, 1, MPI_INT, $root, $work_order, MPI_COMM_WORLD);
 
 	 #send the result
 	 MPI_SendII(\$chunk_result, $owner, $mpi_data, MPI_COMM_WORLD);
@@ -632,11 +634,11 @@ MPI_Finalize();			#terminate MPI
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
-sub thread {
+sub node_thread {
    my $tier;
    my $chunk;
    $t_need_flag = 1;
-
+   sleep;
    while(not $t_terminate){
       if(defined($tier)){
 	 #get chunk results from other nodes
@@ -657,7 +659,7 @@ sub thread {
 	 #run chunks one at a time
 	 while(my $chnk = shift @chunks){
 	    $chnk = ${thaw($chnk)};
-	    $chnk->run();
+	    $chnk->run($root);
 	    $tier->update_chunk($chnk);
 	 }
 
@@ -682,7 +684,7 @@ sub thread {
 	 next;
       } 
       elsif(defined($chunk)){
-	 $chunk->run;
+	 $chunk->run($root);
 	 sleep 1 while (defined ($t_chunk_result)); #pause incase result will be overwritten
 	 $t_chunk_result = freeze(\$chunk);
 	 $chunk = undef;
@@ -731,7 +733,7 @@ sub create_blastdb {
    $CTL_OPTIONS->{'old_est'}            = $CTL_OPTIONS->{'est'};
    $CTL_OPTIONS->{'old_repeat_protein'} = $CTL_OPTIONS->{'repeat_protein'};
     
-   $CTL_OPTIONS->{'protein'} = split_db($CTL_OPTIONS>{'protein'});
+   $CTL_OPTIONS->{'protein'} = split_db($CTL_OPTIONS->{'protein'});
    $CTL_OPTIONS->{'est'} = split_db($CTL_OPTIONS->{'est'});
    
    $CTL_OPTIONS->{'repeat_protein'} = split_db($CTL_OPTIONS->{'repeat_protein'})
@@ -743,7 +745,7 @@ sub split_db {
     
    my $fasta_iterator = new Iterator::Fasta($file);
    my $db_size = $fasta_iterator->number_of_entries();
-   my $bins = $size - 1;
+   my $bins = $size;
    $bins = $db_size if ($db_size < $bins);
 
    my @fhs;

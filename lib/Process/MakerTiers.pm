@@ -117,6 +117,10 @@ sub run {
    my $self = shift;
    my $current_level = $self->{LEVEL}{CURRENT};
 
+   #---debug
+   print STDERR "\n\n\nNow in LEVEL: $current_level\n\n\n";
+   #---debug
+
    return undef if ($self->terminated);
    return undef if ($self->_level_started && ! $self->_level_finished);
 
@@ -165,11 +169,12 @@ sub run {
 	 return $self->run;
       }
    }
-   elsif($current_level == 0){#repeat masking one chunk
+   elsif($current_level == 0){#repeat masking individual chunk
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
       return $self->run;
    }
    elsif($current_level == 1){#repeatmask blastx multiple makerChunks
@@ -179,8 +184,9 @@ sub run {
    elsif($current_level == 2){
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       my $chunk_count = ++$self->{VARS}{chunk_count};
       
@@ -194,30 +200,22 @@ sub run {
    elsif($current_level == 3){
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
-
-      #--set up new chunks for remaining levels
-      my $fasta_chunker = new FastaChunker();
-      $fasta_chunker = new FastaChunker();
-      $fasta_chunker->parent_fasta(${$self->{VARS}{masked_fasta}});
-      $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
-      $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
-      $fasta_chunker->load_chunks();
-      
-      my $chunk_count = 0;
-
-      $self->{VARS}{fasta_chunker} = $fasta_chunker;
-      $self->{VARS}{chunk_count} = $chunk_count;
-      $self->{VARS}{f_chunk} = $fasta_chunker->get_chunk($chunk_count);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       return $self->run;
    }
    elsif($current_level == 4){
+      #get curent fasta chunk
+      my $chunk_count = $self->{VARS}{chunk_count};
+      $self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count);
+
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       return $self->run;
    }
@@ -232,40 +230,45 @@ sub run {
    elsif($current_level == 7){
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       return $self->run;
    }
    elsif($current_level == 8){
       $self->_load_chunks_for_level($current_level);
       my $chunk = $self->next_chunk;
-      $chunk->run;
-      $self->chunk_update($chunk);
+      $chunk->run($self->id);
+      $self->update_chunk($chunk);
+      $self->_polish_results();
 
       return $self->run;
    }
    elsif($current_level == 9){
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       return $self->run;
    }
    elsif($current_level == 10){
       $self->_load_chunks_for_level($current_level);
       my $chunk = $self->next_chunk;
-      $chunk->run;
-      $self->chunk_update($chunk);
+      $chunk->run($self->id);
+      $self->update_chunk($chunk);
+      $self->_polish_results();
 
       return $self->run;
    }
    elsif($current_level == 11){
       $self->_load_chunks_for_level($current_level);
       my $chunk = $self->next_chunk;
-      $chunk->run;
-      $self->chunk_update($chunk);
+      $chunk->run($self->id);
+      $self->update_chunk($chunk);
+      $self->_polish_results();
 
       my $chunk_count = ++$self->{VARS}{chunk_count};
       
@@ -279,8 +282,9 @@ sub run {
    elsif($current_level == 12){
       $self->_load_chunks_for_level($current_level);
       my $mChunk = $self->next_chunk;
-      $mChunk->run;
-      $self->chunk_update($mChunk);
+      $mChunk->run($self->id);
+      $self->update_chunk($mChunk);
+      $self->_polish_results();
 
       #output error log for this contig
       my $err_file = $self->{VARS}{out_dir}."/".$self->{VARS}{seq_out_name}.".error";
@@ -445,7 +449,7 @@ sub _load_chunks_for_level {
    elsif ($level == 5) {
       foreach my $transcripts (@{$self->{VARS}{CTL_OPTIONS}{est}}) {
 	 #------------------------ARGS_IN
-	 @args =( $self->{f_chunk},
+	 @args =( $self->{VARS}{f_chunk},
 		  $transcripts,
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{seq_out_name},
@@ -464,7 +468,7 @@ sub _load_chunks_for_level {
    elsif ($level == 6) {
       foreach my $proteins (@{$self->{VARS}{CTL_OPTIONS}{protein}}) {
 	 #------------------------ARGS_IN
-	 @args =( $self->{f_chunk},
+	 @args =( $self->{VARS}{f_chunk},
 		  $proteins,
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{seq_out_name},
@@ -580,7 +584,7 @@ sub _polish_results{
    my $self = shift;
    my $level = $self->{LEVEL}{CURRENT};
 
-   if ($level < 0 || ! $self->level_finished()){
+   if ($level < 0 || ! $self->_level_finished()){
       return undef;
    }
 
@@ -611,8 +615,10 @@ sub _polish_results{
       }
       elsif ($level == 3) {
 	 #------------------------RESULTS
-	 $self->{VARS}{masked_fasta} = shift @results;
-	 $self->{VARS}{snaps}        = shift @results;
+	 $self->{VARS}{masked_fasta}  = shift @results;
+	 $self->{VARS}{snaps}         = shift @results;
+	 $self->{VARS}{fasta_chunker} = shift @results;
+	 $self->{VARS}{chunk_count}   = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 4) {
@@ -702,7 +708,7 @@ sub DS {
 sub num_chunks {
    my $self = shift;
 
-   $self->next_level();
+   $self->_next_level();
    my $current = $self->{LEVEL}{CURRENT};
 
    return @{$self->{LEVEL}{$current}{CHUNKS}};
