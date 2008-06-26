@@ -11,4 +11,4 @@ e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments
 ep_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide
 en_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate protein
 model_org:drosophila #Model Organism use for finding repeat sequences by RepeatMasker
-snaphmm:/Users/bcantarel/programs/snap/HMM/Dm.hmm #SNAP HMM Model - This can be organism specific by iterating MAKER see HMM BUILDING
+snaphmm:/usr/local/snap/HMM/Dm.hmm #SNAP HMM Model - This can be organism specific by iterating MAKER see HMM BUILDING

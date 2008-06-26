@@ -30,6 +30,7 @@ use Widget::blastx;
 use Widget::tblastx;
 use Widget::blastn;
 use Widget::snap; 
+use Widget::augustus;
 use PhatHit_utils;
 use Shadower;
 use Bio::DB::Fasta;
@@ -176,6 +177,8 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    my $t_fastas;
    my $p_snap_fastas;
    my $t_snap_fastas;
+   my $p_augus_fastas;
+   my $t_augus_fastas;
 
    my $GFF3 = new Dumper::GFF::GFFV3();    
    $GFF3->seq($query_seq);
@@ -260,6 +263,14 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 		    $CTL_OPTIONS{'snaphmm'}
 		   );
 
+   #==AUGUSTUS ab initio here
+   my $augus = augustus($masked_fasta,
+                        $the_void,
+                        $seq_out_name,
+                        $CTL_OPTIONS{'augustus'},
+                        $CTL_OPTIONS{'augustus_species'}
+                   );
+
    #--build an index of the databases
    my $proteins = $CTL_OPTIONS{'protein'};
    my $transcripts = $CTL_OPTIONS{'est'};
@@ -317,16 +328,23 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 					      $chunk
 					     );
 
+      #==get just the augustus that overlap this chunk
+      my $augus_on_chunk = get_snaps_on_chunk($augus,
+                                              $chunk
+                                             );
+
       #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
       if(not $chunk->is_last){ #if not last chunk
 	 ($holdover_chunk,
 	  $blastx_keepers,
 	  $blastn_keepers,
-	  $snaps_on_chunk) = process_the_chunk_divide($chunk,
+	  $snaps_on_chunk,
+	  $augus_on_chunk) = process_the_chunk_divide($chunk,
 						      $CTL_OPTIONS{'split_hit'},
 						      $blastx_keepers,
 						      $blastn_keepers,
-						      $snaps_on_chunk
+						      $snaps_on_chunk,
+						      $augus_on_chunk,
 						     );
       }
 
@@ -413,6 +431,7 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       #--- GFF3      
       $GFF3->genes($annotations);
       $GFF3->predictions($snaps_on_chunk);
+      $GFF3->predictions($augus_on_chunk);
       $GFF3->phat_hits($blastx_data);
       $GFF3->phat_hits($blastn_data);
       $GFF3->phat_hits($exonerate_p_data);
@@ -470,6 +489,11 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       my ($p_snap_fasta, $t_snap_fasta) = get_snap_p_and_t_fastas($query_seq, $snaps_on_chunk);
       $p_snap_fastas .= $p_snap_fasta;
       $t_snap_fastas .= $t_snap_fasta;
+
+      my ($p_augus_fasta, $t_augus_fasta) = get_snap_p_and_t_fastas($query_seq, $augus_on_chunk);
+      $p_augus_fastas .= $p_augus_fasta;
+      $t_augus_fastas .= $t_augus_fasta;
+
    }
 
    #--Write fasta files and gff3 files now that all chunks are finished
@@ -477,6 +501,9 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
    FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
    FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+   FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
+   FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
+
    $GFF3->print($out_dir."/".$seq_out_name.".gff");
 
    #--cleanup maker files created with each fasta sequence
@@ -748,16 +775,16 @@ sub get_p_and_t_fastas {
 sub create_blastdb {
    my %CTL_OPTIONS = %{shift @_};
 
-   if (not @{[<$CTL_OPTIONS{'protein'}.a??*>]}) {
+   unless (-e $CTL_OPTIONS{'protein'}.'.xpd') {
       system($CTL_OPTIONS{xdformat}. " -p -C $CTL_OPTIONS{'alt_peptide'} $CTL_OPTIONS{'protein'}");
    }
-   if (not @{[<$CTL_OPTIONS{'est'}.n??*>]}) {
+   unless (-e $CTL_OPTIONS{'est'}.'.xnd') {
       system($CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'est'}");
    }
-   if (! $OPT{R} && ! @{[<$CTL_OPTIONS{'repeat_protein'}.a??*>]}) {
+   if (!$OPT{R} && ! -e $CTL_OPTIONS{'repeat_protein'}.'.xpd') {
       system($CTL_OPTIONS{xdformat}." -p $CTL_OPTIONS{'repeat_protein'}");
    }
-   if ($CTL_OPTIONS{'alt_est'} && not @{[<$CTL_OPTIONS{'alt_est'}\.n*>]}) {
+   if ($CTL_OPTIONS{'alt_est'} && ! $CTL_OPTIONS{'alt_est'}.'.xnd') {
       system($CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'alt_est'}");
    }
 }
@@ -854,6 +881,40 @@ sub snap {
    return $chunk_keepers;
 }
 #-----------------------------------------------------------------------------
+sub augustus {
+   my $fasta      = shift;
+   my $the_void   = shift;
+   my $seq_id     = shift;
+   my $exe        = shift;
+   my $org        = shift;
+
+   my %params;
+   my $file_name = "$the_void/$seq_id.all";
+   my $o_file    = "$the_void/$seq_id\.all\.augustus";
+
+
+   FastaFile::writeFile($fasta , $file_name) unless -e $file_name;
+
+   runAugustus($file_name,
+               $o_file,
+               $exe,
+               $org
+          );
+
+
+   $params{min_exon_score}  = -100000;      #-10000;
+   $params{min_gene_score}  = -100000;      #0;
+
+   my $chunk_keepers = Widget::augustus::parse($o_file,
+                                              \%params,
+                                              $file_name,
+                                             );
+
+   unlink($file_name);
+
+   return $chunk_keepers;
+}
+#-----------------------------------------------------------------------------
 sub runSnap {
    my $q_file   = shift;
    my $out_file = shift;
@@ -873,6 +934,29 @@ sub runSnap {
    }
    else {
       print STDERR "running  snap.\n";
+      $w->run($command);
+   }
+}
+#-----------------------------------------------------------------------------
+sub runAugustus {
+   my $q_file   = shift;
+   my $out_file = shift;
+   my $exe      = shift;
+   my $org      = shift;
+
+   my $command  = $exe;
+      $command .= ' --species='."$org";
+      $command .= " $q_file";
+      $command .= " > $out_file";
+
+   my $w = new Widget::augustus();
+
+   if (-e $out_file && ! $OPT{f}) {
+      print STDERR "re reading augustus report.\n";
+      print STDERR "$out_file\n";
+   }
+   else {
+      print STDERR "running  augustus.\n";
       $w->run($command);
    }
 }
@@ -1410,6 +1494,8 @@ sub load_control_files {
 			   'RepeatMasker',
 			   'exonerate',
 			   'cpus',
+			   'augustus',
+			   'augustus_species',
 			  );
 
 

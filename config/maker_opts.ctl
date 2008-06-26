@@ -1,7 +1,7 @@
-genome:/Users/bcantarel/maker_devel/maker/data/dpp_contig.fasta #genome sequence file.
-protein:/Users/bcantarel/maker_devel/maker/data/dpp_proteins.fasta #protein sequence file.
-est:/Users/bcantarel/maker_devel/maker/data/dpp_transcripts.fasta #EST sequence file.
-repeat_protein:/Users/bcantarel/maker_devel/maker/data/te_proteins.fasta #A transposable Elements Library
+genome:/Users/myandell//maker/data/dpp_contig.fasta #genome sequence file.
+protein:/Users/myandell/maker/data/dpp_proteins.fasta #protein sequence file.
+est:/Users/myandell/maker/data/dpp_transcripts.fasta #EST sequence file.
+repeat_protein:/Users/myandell/maker/data/te_proteins.fasta #A transposable Elements Library
 clean_up:0 #remove theVoid directory: 1 = yes, 0 = no
 rmlib: #An organism specific Repeat Library
 use_seq_dir:0 #place files in same directory as sequence file: 1 = yes, 0 = no

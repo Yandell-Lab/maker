@@ -263,7 +263,20 @@ sub pred_data {
     
     $g_name =~ s/\s/-/g;
     my $g_id = get_id_gene();
-    $g_id = join("-", "snap", $seq_id, $g_id);
+
+    my $source;
+    if    (ref($g) =~ /snap/){
+	$source = 'snap';
+	$g_id = join("-", $source, $seq_id, $g_id);
+    }
+    elsif (ref($g) =~ /augustus/){
+	$source = 'augustus';
+	$g_id = join("-", $source, $seq_id, $g_id);
+    }
+    else {
+		die "unknown class:".ref($g)." in GFFV3::pred_data\n";
+    }
+
     my $score = $g->score();
     
     ($g_s, $g_e) = ($g_e, $g_s) if $g_s > $g_e;
@@ -307,7 +320,7 @@ sub pred_data {
 	
 	grow_exon_data_lookup($t, $t_id, \%epl);
     }
-    my $e_l = get_exon_data($seq_id, \%epl, 'snap');
+    my $e_l = get_exon_data($seq_id, \%epl, $source);
     
     $g_l .= $e_l;
     
@@ -494,6 +507,10 @@ sub get_class_and_type {
         elsif (ref($h)  =~ /snap/){
                 $type = $k eq 'hit' ? 'match' : 'match_part' ;
 		$class= 'snap';
+        }
+        elsif (ref($h)  =~ /augustus/){
+                $type = $k eq 'hit' ? 'match' : 'match_part' ;
+                $class= 'augustus';
         }
         elsif (ref($h)  =~ /repeatmasker/){
                 $type = $k eq 'hit' ? 'match' : 'match_part';

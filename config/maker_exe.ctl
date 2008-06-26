@@ -1,9 +1,10 @@
-setdb:/Users/bcantarel/programs/bin/setdb
-pressdb:/Users/bcantarel/programs/bin/pressdb
-blastn:/Users/bcantarel/programs/bin/blastn
-blastx:/Users/bcantarel/programs/bin/blastx
-tblastx:/Users/bcantarel/programs/bin/tblastx
-snap:/Users/bcantarel/programs/snap/snap
-RepeatMasker:/Users/bcantarel/programs/RepeatMasker/RepeatMasker
-exonerate:/usr/local/bin/exonerate
-cpus:2 #max number of cpus to use
+xdformat:/usr/local/wu-blast/xdformat
+blastn:/usr/local/wu-blast/blastn
+blastx:/usr/local/wu-blast/blastx
+tblastx:/usr/local/wu-blast/tblastx
+snap:/usr/local/snap/snap
+augustus:/usr/local/augustus/bin/augustus
+augustus_species:fly # species for augustus hmm
+RepeatMasker:/usr/local/RepeatMasker/RepeatMasker
+exonerate:/usr/local/exonerate-1.0.0-osx/bin/exonerate
+cpus:1 #max number of cpus to use
