@@ -50,7 +50,7 @@ my $masked_fasta;
 my $usage = "
 Usage:
 
-        maker [options] <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+        maker [options] -predictor <snap | augustus> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
         The three input arguments are user control files that specify how maker should behave.
         All input files listed in the control options files must be in fasta format.  Please
@@ -76,7 +76,7 @@ Options:
                                datastore_index file created by the program.
      -cpus|c     <integer>     Tells how many cpus to use for Blast analysis.
      -help|?                   Prints this usage statement.
-
+     -predictor  <snap|augustus> gene predictor to build annotations from; required.
 Warning:
       
         *When using the -R flag, maker expects that the input genome file is already masked.
@@ -94,7 +94,8 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "cpus|c=i" => \$OPT{c},
 	   "GFF"=> \$OPT{GFF},
 	   "SNAPS" => \$OPT{SNAPS},
-	   "help|?" => sub {die $usage;}
+	   "help|?" => sub {die $usage;},
+	   "predictor=s" =>\$OPT{predictor},
 	  );
 
 #-----------------------------------------------------------------------------
@@ -114,6 +115,13 @@ if (not @ctlfiles) {
       die $usage;
    }
 }
+
+
+print "You must specify the option -predictor, see usage for details\n" unless defined($OPT{predictor});
+print "Also you need to set the path to the predictor executable and hmm in maker_exe.ctl\n" 
+unless defined($OPT{predictor}); 
+
+die unless defined($OPT{predictor});
 
 #---set up control options from control files
 my %CTL_OPTIONS = load_control_files(@ctlfiles);
@@ -408,8 +416,18 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       my $exonerate_p_data = flatten($exonerate_p_clusters, 'exonerate:p');
       my $exonerate_e_data = flatten($exonerate_e_clusters, 'exonerate:e');
       
+	#-- decide which gene finder to use to build annotations 
+	my $pred_command;
+	my $preds_on_chunk;
+	if ($OPT{predictor} && $OPT{predictor} eq 'augustus'){
+		$pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
+		$preds_on_chunk = $augus_on_chunk;
+	}
+	else {
+		$pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
+		$preds_on_chunk = $snaps_on_chunk;
+	}
       #-auto-annotate the input file
-      my $snap_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
 
       my $annotations = maker::auto_annotator::annotate($fasta,
 							$$masked_fasta,
@@ -417,13 +435,14 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 							$exonerate_p_data,
 							$exonerate_e_data,
 							$blastx_data,
-							$snaps_on_chunk,
+							$preds_on_chunk,
 							$the_void,
-							$snap_command,
+							$pred_command,
 							$CTL_OPTIONS{snap_flank},
 							$CTL_OPTIONS{'single_exon'},
 							$OPT{f},
-							$OPT{SNAPS}
+							$OPT{SNAPS},
+							$OPT{predictor},
 						       );
 
       #==OUTPUT DATA HERE

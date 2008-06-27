@@ -254,10 +254,11 @@ sub get_strings {
 }
 #------------------------------------------------------------------------
 sub join_f {
-	my $b_5   = shift;
-	my $g     = shift;
-	my $b_3   = shift;
-	my $q_seq = shift;
+	my $b_5         = shift;
+	my $g           = shift;
+	my $b_3         = shift;
+	my $q_seq       = shift;
+	my $pred_source = shift;
 
 	#$b_5->{f} = $b_5->{f}->name;
 	#$b_3->{f} = $b_3->{f}->name;
@@ -349,12 +350,13 @@ sub join_f {
 		$new_total_score += $hsp->score();
         }
 
-	my $new_f = new snap::PhatHit('-name'         => $g->name." annotation",
-                                      '-description'  => 'derived from:',
-                                      '-algorithm'    => 'auto_annotator',
-                                      '-length'       => length($$q_seq),
-				      '-score'        => $new_total_score, 
-                                      );
+	my $hit_class = $pred_source.'::PhatHit';
+	my $new_f = new $hit_class('-name'         => $g->name." annotation",
+                                   '-description'  => 'derived from:'.$pred_source,
+                                   '-algorithm'    => 'auto_annotator',
+                                   '-length'       => length($$q_seq),
+			           '-score'        => $new_total_score, 
+                                 );
 
 	my @evidence;
 	push(@evidence, $g->name);
@@ -371,6 +373,7 @@ sub join_f {
 	}
 
 	return $new_f;
+
 }
 #------------------------------------------------------------------------
 sub merge_hsp {

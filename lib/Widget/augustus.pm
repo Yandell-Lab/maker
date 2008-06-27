@@ -45,6 +45,26 @@ sub run {
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
+sub get_xdef {
+	print STDERR "Widget::augustus::get_xdef is currently a only a place holder function!\n";
+	sleep 1;
+	return undef;
+}
+#-------------------------------------------------------------------------------
+sub write_xdef_file {
+        my $xdef = shift;
+        my $loc  = shift;
+
+        my $fh = new FileHandle();
+           $fh->open(">$loc") || die "couldn't open $loc";
+       
+        foreach my $l (@{$xdef}){
+                print $fh $l."\n";
+        }
+        $fh->close();
+
+}
+#-------------------------------------------------------------------------------
 sub parse_gene {
 	my $stuff = shift;
 

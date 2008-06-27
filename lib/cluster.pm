@@ -227,6 +227,7 @@ sub criteria {
 	return  2 if $ref =~ /blast/;
 	return  3 if $ref =~ /2genome/;
 	return  1 if $ref =~ /snap/;
+	return  1 if $ref =~ /augustus/;
 	return  0;
 }
 #------------------------------------------------------------------------
@@ -239,7 +240,7 @@ sub criteria_2 {
 	return  $hit->hsp('best')->score  if $ref =~ /repeatmasker/;
 	return  $hit->hsp('best')->bits   if $ref =~ /2genome/;
 	return $hit->score()              if $ref =~/snap/;	
-
+	return $hit->score()              if $ref =~/augustus/;
 	die "UNKNOWN CLASS(".ref($hit).") in cluster::criteria_2\n";
 
 }

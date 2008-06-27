@@ -22,6 +22,7 @@ use maker::quality_index;
 
 my $OPT_F; #GLOBAL VARIABLE
 my $OPT_SNAPS; #GLOBAL VARIABLE
+my $OPT_PRED; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -346,14 +347,14 @@ sub annotate {
         my $exonerate_p_hits = shift;
         my $exonerate_e_hits = shift;
         my $blastx_hits      = shift;
-	my $snap_predictions = shift;
+	my $predictions      = shift;
         my $the_void         = shift;
-	my $snap_command     = shift;
-	my $snap_flank       = shift;
+	my $pred_command     = shift;
+	my $pred_flank       = shift;
 	my $single_exon      = shift;
 	$OPT_F               = shift;
 	$OPT_SNAPS           = shift;
-
+	$OPT_PRED            = shift;
 
         my $def   = Fasta::getDef($masked_fasta);
         my $seq   = Fasta::getSeq($masked_fasta);
@@ -362,7 +363,7 @@ sub annotate {
 	my ($bx_data, $pp_data, $pe_data) = prep_hits($exonerate_p_hits,
 	                                              $exonerate_e_hits,
 	                                              $blastx_hits,
-						      $snap_predictions,
+						      $predictions,
 	                                              $v_seq,
 						      $single_exon
 						     );
@@ -374,7 +375,8 @@ sub annotate {
 	my $g_name;
 
 	my $bx_transcripts = 
-	run_it($bx_data, $the_void, $seq, $v_seq, $def, 'bx', $snap_command, $snap_flank);
+	run_it($bx_data, $the_void, $seq, $v_seq, $def, 'bx', $pred_command, $pred_flank);
+
 
 	#my $pp_transcripts = 
 	#run_it($pp_data, $the_void, $seq, $v_seq, $def, 'pp', $snap_command, $snap_flank);
@@ -386,7 +388,7 @@ sub annotate {
 
 	my @transcripts = (@{$bx_transcripts});
 
-        my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $chunk_number, $snap_predictions);
+        my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $chunk_number, $predictions);
         return $annotations;
 }
 #------------------------------------------------------------------------
@@ -397,8 +399,8 @@ sub run_it {
 	my $v_seq        = shift;
 	my $def          = shift;
 	my $id           = shift;
-	my $snap_command = shift;
-	my $snap_flank   = shift;
+	my $pred_command = shift;
+	my $pred_flank   = shift;
 
 	my @transcripts;
 	my $i = 0;
@@ -409,14 +411,26 @@ sub run_it {
 		my $c_id   = $set->{c_id};
 		my $ests   = $set->{ests};
 
-		my ($snap_shots, $strand)   = get_snap_shot($seq, 
-							    $def, 
-							    $id.'.'.$i, 
-							    $the_void, 
-							    $set, 
-							    $snap_flank, 
-							    $snap_command,
-							   );
+		my ($snap_shots, $strand);
+
+		($snap_shots, $strand)   = get_snap_shot($seq, 
+		  				         $def, 
+							 $id.'.'.$i, 
+							 $the_void, 
+							 $set, 
+							 $pred_flank, 
+							 $pred_command,
+							 ) if $OPT_PRED eq 'snap';
+
+                ($snap_shots, $strand)   = get_aug_shot($seq,
+                                                        $def,
+                                                        $id.'.'.$i,
+                                                        $the_void,
+                                                        $set,
+                                                        $pred_flank,
+                                                        $pred_command,
+                                                        ) if $OPT_PRED eq 'augustus';
+
 
 		my $best_pred       = get_best_snap_shot($strand, $snap_shots);
 		my $on_right_strand = get_best_snap_shots($strand, $snap_shots);
@@ -471,7 +485,9 @@ sub load_transcript_struct {
 	? maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$snap_abinits, $l_trans)
 	: 'non-overlapping-snap';
 
-        my $t_name = "maker-$seq_id-gene-$c_id-mRNA-$i";
+	my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
+
+        my $t_name = "maker-$seq_id-gene-source:$source-$c_id-mRNA-$i";
            $t_name .= " $qi";
 
         my $t_struct = {'hit'      => $f,
@@ -550,11 +566,15 @@ sub group_transcripts {
 	}	
 	my $c_id = 0;
 
+	my %pred_sources;
 	my @annotations;
 	foreach my $c (@keepers){
 		my @t_structs;
 		my $i = 1;
 		foreach my $f (@{$c}){
+
+			my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;
+			$pred_sources{$source}++;
 
 			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
 
@@ -567,8 +587,10 @@ sub group_transcripts {
 
 		my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
 
+		my $sources = join("-", keys %pred_sources);
+
 		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => "maker-gene-$chunk_number.$c_id",
+		                   'g_name'    => "maker-gene-sources:$sources-.$chunk_number.$c_id",
 				   'g_start'   => $g_start,
 			           'g_end'     => $g_end,
 				   'g_strand'  => $g_strand,
@@ -799,7 +821,8 @@ sub pneu {
 		$b_3 = maker::join::find_best_three($g, $ests);
 	}
 
-	my $anno_transcript = maker::join::join_f($b_5, $g, $b_3, $q_seq);
+	my $anno_transcript = 
+	maker::join::join_f($b_5, $g, $b_3, $q_seq, $OPT_PRED);
 
 	#return $g;
 	return $anno_transcript;
@@ -865,6 +888,60 @@ sub get_snap_shot {
 
 }
 #------------------------------------------------------------------------
+sub get_aug_shot {
+        my $seq           = shift;
+        my $def           = shift;
+        my $id            = shift;
+        my $the_void      = shift;
+        my $set           = shift;
+        my $pred_flank    = shift;
+        my $pred_command  = shift;
+
+
+        my ($shadow_seq, $strand, $offset, $xdef, $use_full) =
+            prep_for_genefinder($seq, $set, $pred_flank);
+
+        my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
+                                          $shadow_seq,
+                                         );
+
+
+        my $alt_snap_command;
+        if ($strand == 1){
+                $alt_snap_command = $pred_command.' --strand=forward';
+        }
+        else {
+                 $alt_snap_command = $pred_command.' --strand=backward';
+        }
+
+        if ($use_full){
+                $alt_snap_command .= $pred_command. '--genemodel=complete';
+        }
+        my $gene_preds;
+
+        $gene_preds = augustus($$shadow_fasta,
+                               $the_void,
+                               $id,
+                               $strand,
+                               $offset,
+                               $xdef,
+                               $alt_snap_command,
+                              );
+
+
+       $gene_preds = augustus($$shadow_fasta,
+                              $the_void,
+                              $id,
+                              $strand,
+                              $offset,
+                              $xdef,
+                             $pred_command,
+                             ) if $use_full && !defined($gene_preds->[0]);
+
+        return ($gene_preds, $strand);
+
+}
+#------------------------------------------------------------------------
 sub snap {
         my $fasta      = shift;
         my $the_void   = shift;
@@ -906,6 +983,47 @@ sub snap {
 
 }
 #------------------------------------------------------------------------
+sub augustus {
+        my $fasta      = shift;
+        my $the_void   = shift;
+        my $seq_id     = shift;
+        my $strand     = shift;
+        my $offset     = shift;
+        my $xdef       = shift;
+        my $command    = shift;
+
+        my $aug_keepers = [];
+
+        my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.augustus.fasta";
+
+        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.augustus";
+
+        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.augustus";
+
+        Widget::augustus::write_xdef_file($xdef, $xdef_file) if defined $xdef;
+
+                FastaFile::writeFile(\$fasta, $file_name);
+
+                runAugustus($file_name, $o_file, $xdef_file, $command);
+
+                my %params;
+                   $params{min_exon_score}  = -100;
+                   $params{min_gene_score}  = -20;
+
+                my $keepers =
+                Widget::augustus::parse($o_file,
+                                       \%params,
+                                        $file_name,
+                                        );
+
+                PhatHit_utils::add_offset($keepers,
+                                          $offset,
+                                          );
+
+        return $keepers;
+
+}
+#------------------------------------------------------------------------
 sub runSnap {
         my $q_file    = shift;
         my $out_file  = shift;
@@ -928,6 +1046,30 @@ sub runSnap {
         }
         else {
                 print STDERR "running  snap.\n";
+                $w->run($command);
+        }
+
+}
+#------------------------------------------------------------------------
+sub runAugustus {
+        my $q_file    = shift;
+        my $out_file  = shift;
+        my $xdef_file = shift;
+        my $command   = shift;
+
+        $command .= " -xdef $xdef_file " if -e $xdef_file;
+
+            $command .= " $q_file";
+            $command .= " > $out_file";
+
+        my $w = new Widget::augustus();
+
+        if (-e $out_file && ! $OPT_F){
+                print STDERR "re reading augustus report.\n";
+                print STDERR "$out_file\n";
+        }
+        else {
+                print STDERR "running  augustus.\n";
                 $w->run($command);
         }
 
@@ -1004,15 +1146,28 @@ sub prep_for_genefinder {
 	my $strand = $plus > $minus ? 1 : -1;
 
 	my $i_flank = 2;
-        my $xdef = Widget::snap::get_xdef($seq,
-                                          $p_set_coors,
-					  $n_set_coors,
-                                          $strand == 1 ? '+' : '-',
-                                          0.2, # Coding
-                                          1000, # intron 
-                                          $offset,
-                                          $i_flank,
-                                         );
+	my $xdef;
+
+        $xdef = Widget::snap::get_xdef($seq,
+                                       $p_set_coors,
+				       $n_set_coors,
+                                       $strand == 1 ? '+' : '-',
+                                       0.2, # Coding
+                                       1000, # intron 
+                                       $offset,
+                                       $i_flank,
+                                      ) if $OPT_PRED eq 'snap';
+
+        $xdef = Widget::augustus::get_xdef($seq,
+                                           $p_set_coors,
+                                           $n_set_coors,
+                                           $strand == 1 ? '+' : '-',
+                                           0.2, # Coding
+                                           1000, # intron
+                                           $offset,
+                                           $i_flank,
+                                           ) if $OPT_PRED eq 'augustus';
+
 
 	return (\$final_seq, $strand, $offset, $xdef, $use_full);
 }
