@@ -389,6 +389,7 @@ sub annotate {
 	my @transcripts = (@{$bx_transcripts});
 
         my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $chunk_number, $predictions);
+
         return $annotations;
 }
 #------------------------------------------------------------------------

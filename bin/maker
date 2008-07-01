@@ -50,7 +50,7 @@ my $masked_fasta;
 my $usage = "
 Usage:
 
-        maker [options] -predictor <snap | augustus> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+        maker [options] <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
         The three input arguments are user control files that specify how maker should behave.
         All input files listed in the control options files must be in fasta format.  Please
@@ -66,17 +66,33 @@ Usage:
 
 Options:
 
-     -genome|g   <file_name>   Give MAKER a different genome file (this overrides the
-                               control file)
-     -RM_off|R                 Turns repeat masking off (* See Warning)
-     -force|f                  Forces maker to rerun all analyses
-     -datastore|d              Causes output to be written using datastore.  This option is
-                               automatically enabled if there are more than 1000 fasta entries
-                               in the input file.  Output is thenaccessed using the
-                               datastore_index file created by the program.
-     -cpus|c     <integer>     Tells how many cpus to use for Blast analysis.
-     -help|?                   Prints this usage statement.
-     -predictor  <snap|augustus> gene predictor to build annotations from; required.
+     -genome|g  <file_name>     Give MAKER a different genome file (this overrides the
+                                control file value)
+
+     -predictor <snap|augustus> gene predictor to build annotations from (Defaults to 'snap').
+
+     -GFF|G                     Use an input gff3 format file of repeat elements for repeat masking.
+                                You must set rm_gff in maker_opts.ctl to the files location.  This
+                                option turns off all other repeat masking.
+
+     -RM_off|R                  Turns repeat masking off (* See Warning)
+
+     -force|f                   Forces maker to rerun all analyses (replaces all previous output).
+
+     -datastore|d               Causes output to be written using datastore.  This option is
+                                automatically enabled if there are more than 1000 fasta entries
+                                in the input file.  Output can then accessed using the
+                                master_datastore_index file created by the program.
+
+     -SNAPS|S                   Outputs ab-initio predictions that do not overlap maker annotation
+                                as gene annotations in the final gff3 output file.
+
+     -cpus|c    <integer>       Tells how many cpus to use for Blast analysis (this overrides
+                                contorol file value).
+
+     -help|?                    Prints this usage statement.
+
+
 Warning:
       
         *When using the -R flag, maker expects that the input genome file is already masked.
@@ -92,10 +108,10 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "datastore|d" => \$OPT{d},
 	   "genome|g=s" => \$OPT{g},
 	   "cpus|c=i" => \$OPT{c},
-	   "GFF"=> \$OPT{GFF},
-	   "SNAPS" => \$OPT{SNAPS},
-	   "help|?" => sub {die $usage;},
+	   "GFF|G"=> \$OPT{GFF},
+	   "SNAPS|S" => \$OPT{SNAPS},
 	   "predictor=s" =>\$OPT{predictor},
+	   "help|?" => sub {die $usage;},
 	  );
 
 #-----------------------------------------------------------------------------
@@ -115,13 +131,6 @@ if (not @ctlfiles) {
       die $usage;
    }
 }
-
-
-print "You must specify the option -predictor, see usage for details\n" unless defined($OPT{predictor});
-print "Also you need to set the path to the predictor executable and hmm in maker_exe.ctl\n" 
-unless defined($OPT{predictor}); 
-
-die unless defined($OPT{predictor});
 
 #---set up control options from control files
 my %CTL_OPTIONS = load_control_files(@ctlfiles);
@@ -416,17 +425,20 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       my $exonerate_p_data = flatten($exonerate_p_clusters, 'exonerate:p');
       my $exonerate_e_data = flatten($exonerate_e_clusters, 'exonerate:e');
       
-	#-- decide which gene finder to use to build annotations 
-	my $pred_command;
-	my $preds_on_chunk;
-	if ($OPT{predictor} && $OPT{predictor} eq 'augustus'){
-		$pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
-		$preds_on_chunk = $augus_on_chunk;
-	}
-	else {
-		$pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
-		$preds_on_chunk = $snaps_on_chunk;
-	}
+      #-- decide which gene finder to use to build annotations 
+      my $pred_command;
+      my $preds_on_chunk;
+      if ($CTL_OPTIONS{predictor} eq 'augustus'){
+	  $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
+	  $preds_on_chunk = $augus_on_chunk;
+      }
+      elsif ($CTL_OPTIONS{predictor} eq 'snap'){
+	  $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
+	  $preds_on_chunk = $snaps_on_chunk;
+      }
+      else{
+	  die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
+      }
       #-auto-annotate the input file
 
       my $annotations = maker::auto_annotator::annotate($fasta,
@@ -442,7 +454,7 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 							$CTL_OPTIONS{'single_exon'},
 							$OPT{f},
 							$OPT{SNAPS},
-							$OPT{predictor},
+							$CTL_OPTIONS{predictor},
 						       );
 
       #==OUTPUT DATA HERE
@@ -592,7 +604,7 @@ sub merge_chunks{
       return $chunk1;
    }
    elsif(ref($chunk2) eq 'FastaChunk' && ref($chunk1) ne 'FastaChunk'){
-      die "ERROR: The second argument to main::merge_chunks\n",
+      die "ERROR: The second argument to main::merge_chunks\n".
           "must be a FastaChunk object";
    }
    elsif ($chunk1->length == 0 ){
@@ -1474,22 +1486,25 @@ sub load_control_files {
    my %OK_FIELDS;
 
    my @MAKER_OPTS_PARAMS = ('genome',
-			    'protein',
 			    'est',
-			    'alt_est',
+			    'protein',
 			    'repeat_protein',
-			    'clean_up',
 			    'rmlib',
-			    'use_seq_dir',
+			    'rm_gff',
+			    'predictor',
+			    'snaphmm',
+			    'augustus_species',
+			    'model_org',
+			    'max_dna_len',
 			    'split_hit',
 			    'snap_flank',
 			    'te_remove',
 			    'single_exon',
-			    'rm_gff'
+			    'use_seq_dir',
+			    'clean_up'
 			   );
     
-   my @MAKER_BOPTS_PARAMS = ('max_dna_len',
-			     'percov_blastn',
+   my @MAKER_BOPTS_PARAMS = ('percov_blastn',
 			     'percid_blastn',
 			     'eval_blastn',
 			     'bit_blastn',
@@ -1499,22 +1514,18 @@ sub load_control_files {
 			     'bit_blastx',
 			     'e_perc_cov',
 			     'ep_score_limit',
-			     'en_score_limit',
-			     'model_org',
-			     'snaphmm',
+			     'en_score_limit'
 			    );
 
    my @MAKER_EXE_PARAMS = ('xdformat',
 			   'alt_peptide',
 			   'blastn',
 			   'blastx',
-			   'tblastx',
 			   'snap',
+			   'Augustus',
 			   'RepeatMasker',
 			   'exonerate',
 			   'cpus',
-			   'augustus',
-			   'augustus_species',
 			  );
 
 
@@ -1540,7 +1551,8 @@ sub load_control_files {
    $CTL_OPTIONS{'bit_tblastx'} = 30;
    $CTL_OPTIONS{'e_perc_cov'} = 50;
    $CTL_OPTIONS{'alt_peptide'} = 'c';
-
+   $CTL_OPTIONS{'predictor'} = 'snap';
+   
    #load values from control files
    foreach my $ctlfile (@ctlfiles) {
       open (CTL, "< $ctlfile") or die "ERROR: Could not open control files.\n$usage";
@@ -1565,16 +1577,26 @@ sub load_control_files {
       }
    }
 
+   #use command line defined genome
    $CTL_OPTIONS{'genome'} = $OPT{g} if (defined $OPT{g});
    $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
     
+   #use command line defined predictor
+   $CTL_OPTIONS{'predictor'} = $OPT{predictor} if (defined $OPT{predictor});
+   die "ERROR: Invalid predictor defined: $CTL_OPTIONS{'predictor'}\n".
+       "Must be set to 'augustus' or 'snap'\n"
+       unless ($CTL_OPTIONS{'predictor'} =~ /snap|augustus/);
 
    #validate required values from control files
-   my @infiles = ('genome','protein', 'est','xdformat','blastn',
-		  'blastx','snap','exonerate'
+   my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn',
+		  'blastx', 'exonerate'
 		 );
 
+   #sometimes required
    push (@infiles, 'RepeatMasker') unless($OPT{R});
+   push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap');
+   push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus');
+   push (@infiles, 'rm_gff') if ($OPT{GFF});
 
    foreach my $in (@infiles) {
       if (not $CTL_OPTIONS{$in}) {
@@ -1589,17 +1611,31 @@ sub load_control_files {
 
    if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
       warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
-      "As a result the default (drosophila) will be used.\n";
+	  "As a result the default (drosophila) will be used.\n";
       $CTL_OPTIONS{'model_org'} = "drosophila";
    }
+   if ($CTL_OPTIONS{'predictor'} eq 'augustus' && not $CTL_OPTIONS{'augustus_species'}) {
+       warn "There is no species specified for Augustus in maker_opts.ctl : augustus_species.\n".
+	   "As a result the default (fly) will be used.\n";
+       $CTL_OPTIONS{'augustus_species'} = "fly";
+   }
    if (not $CTL_OPTIONS{'snaphmm'}) {
-      warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
-      "As a result, the default (fly) will be used.\n";
-      $CTL_OPTIONS{'snaphmm'} = "fly";
+       warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
+	   "As a result, the default (fly) will be used.\n";
+       $CTL_OPTIONS{'snaphmm'} = "fly";
+   }
+   if ($CTL_OPTIONS{'predictor'} eq 'snap'){
+       if (! -e $CTL_OPTIONS{'snaphmm'} &&
+	   (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}/$CTL_OPTIONS{'snaphmm'})
+	  ){
+
+	   die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";
+       }
    }
    if ($CTL_OPTIONS{'max_dna_len'} < 50000){
-      warn "ERROR: max_dna_len is set too low.  The minimum value permited is 50,000\n",
-           "max_dna_len wil be reset to 50,000\n\n";
+       warn "ERROR: max_dna_len is set too low.  The minimum value permited is 50,000\n".
+	   "max_dna_len wil be reset to 50,000\n\n";
+       $CTL_OPTIONS{'max_dna_len'} = 50000;
    }
 
    #set values for datastructure    
