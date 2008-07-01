@@ -487,7 +487,7 @@ sub load_transcript_struct {
 
 	my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
 
-        my $t_name = "maker-$seq_id-gene-source:$source-$c_id-mRNA-$i";
+        my $t_name = "maker-$seq_id-gene-$source-$c_id-mRNA-$i"; #affects GFFV3.pm
            $t_name .= " $qi";
 
         my $t_struct = {'hit'      => $f,
@@ -587,10 +587,12 @@ sub group_transcripts {
 
 		my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
 
-		my $sources = join("-", keys %pred_sources);
+		my @sources = keys %pred_sources;
+		die "ERROR: There is more than one source for annotations which may break GFF3V.pm\n" if (@sources > 1);
+		my $source = $sources[0];
 
 		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => "maker-gene-sources:$sources-.$chunk_number.$c_id",
+		                   'g_name'    => "maker-gene-$source-.$chunk_number.$c_id", #affects GFFV3.pm
 				   'g_start'   => $g_start,
 			           'g_end'     => $g_end,
 				   'g_strand'  => $g_strand,
