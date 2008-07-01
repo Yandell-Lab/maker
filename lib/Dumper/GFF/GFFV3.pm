@@ -331,7 +331,8 @@ sub gene_data {
     my $g      = shift;
     my $seq_id = shift;
     
-    my $g_name     = join("-", "maker", $seq_id, (split("-", $g->{g_name}))[1..2]);
+    my $g_name     = $g->{g_name};
+    #my $g_name     = join("-", "maker", $seq_id, (split("-", $g->{g_name}))[1..2]);
     my $g_s        = $g->{g_start};
         my $g_e        = $g->{g_end};
         my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';

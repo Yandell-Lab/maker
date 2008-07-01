@@ -1522,7 +1522,7 @@ sub load_control_files {
 			   'blastn',
 			   'blastx',
 			   'snap',
-			   'Augustus',
+			   'augustus',
 			   'RepeatMasker',
 			   'exonerate',
 			   'cpus',
