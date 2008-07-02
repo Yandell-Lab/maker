@@ -88,6 +88,7 @@ sub run {
    my (undef, $t_name) = tempfile();
    close(STDERR);
    open(STDERR, "| tee $t_name >&2");
+   select((select(STDERR), $|=1)[0]);
 
    if ($level == 0) {
       #------------------------ARGS_IN
@@ -597,7 +598,7 @@ sub result {
 sub error {
    my $self = shift;
     
-   return $self->{ERROR};
+   return $self->{ERROR} || '';
 }
 
 #--------------------------------------------------------------
