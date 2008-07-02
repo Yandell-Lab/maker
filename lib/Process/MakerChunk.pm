@@ -493,7 +493,8 @@ sub run {
 							$CTL_OPTIONS{'snap_flank'},
 							$CTL_OPTIONS{'single_exon'},
 							$opt_f,
-							$opt_snaps
+							$opt_snaps,
+							'snap'#temporary fix
 						       );
       #-------------------------CHUNK
 
