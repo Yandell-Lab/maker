@@ -17,6 +17,8 @@ use cluster;
 use clean;
 use maker::join;
 use maker::quality_index;
+use Widget::snap;
+use Widget::augustus;
 @ISA = qw(
        );
 
@@ -30,7 +32,7 @@ sub prep_hits {
 	my $exonerate_p_hits = shift;
 	my $exonerate_e_hits = shift;
 	my $blastx_keepers   = shift;
-	my $snap_predictions = shift;
+	my $predictions      = shift;
 	my $seq              = shift;
 	my $single_exon      = shift;
 	
@@ -75,14 +77,14 @@ sub prep_hits {
 	push(@{$careful_clusters}, @{$m_clusters}) if defined $m_clusters->[0];
 
         my $temp_id = 0;
-        foreach my $s (@{$snap_predictions}){
+        foreach my $s (@{$predictions}){
                 $s->{temp_id} = $temp_id;
                 $temp_id++;
         }
 
 	
 	# identify the snap ab-inits that fall within and between clusters
-	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_snaps($snap_predictions, 
+	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, 
 	                                                              $careful_clusters,
 	                                                              $seq,
 	                                                              );
@@ -91,7 +93,7 @@ sub prep_hits {
         foreach my $s (@{$hit_one}){
                 my @keys = keys %{$c_index->{$s->{temp_id}}};
                 my $i = $keys[0];
-                die "logic error in segment_snaps\n" if defined($keys[1]);
+                die "logic error in segment_preds\n" if defined($keys[1]);
 	
                 push(@{$careful_clusters->[$i]}, $s);
         }
@@ -125,8 +127,8 @@ sub prep_hits {
 
 }
 #------------------------------------------------------------------------
-sub segment_snaps {
-        my $snaps            = shift;
+sub segment_preds {
+        my $preds            = shift;
         my $careful_clusters = shift;
         my $seq              = shift;
 
@@ -136,7 +138,7 @@ sub segment_snaps {
 	my %spans;
 	# initialize...
 
-	foreach my $s (@{$snaps}){
+	foreach my $s (@{$preds}){
 		$counts{$s->{temp_id}} = 0;
 
 		my ($sB, $sE) = PhatHit_utils::get_span_of_hit($s, 'query');
@@ -145,7 +147,7 @@ sub segment_snaps {
 		$spans{$s->{temp_id}} = [$sB, $sE];
 	}
 
-        print STDERR "Segmenting snap predctions\n";
+        print STDERR "Segmenting predctions\n";
 
 	my $i = 0;
         foreach my $c (@{$careful_clusters}){
@@ -158,7 +160,7 @@ sub segment_snaps {
 		my $cE;
 
                 if (defined($pieces->[1])){	   
-		   #die "error in auto_annotator::segment_snaps!\n";
+		   #die "error in auto_annotator::segment_preds!\n";
 		   $pieces = [sort {$a->{b} <=> $b->{b}} @{$pieces}];
 		   $cB = $pieces->[0]->{b};
 		   $cE = $pieces->[-1]->{e};
@@ -168,7 +170,7 @@ sub segment_snaps {
 		   $cE = $pieces->[0]->{e};
 		}
 
-        	foreach my $s (@{$snaps}){
+        	foreach my $s (@{$preds}){
 
                 	my $s_strand = $s->strand('query');
 
@@ -193,7 +195,7 @@ sub segment_snaps {
         my @hit_one;
         my @hit_mult;
 
-        foreach my $s (@{$snaps}){
+        foreach my $s (@{$preds}){
                 if ($counts{$s->{temp_id}} == 0){
                         push(@hit_none, $s);
                 }
@@ -209,7 +211,7 @@ sub segment_snaps {
 
 }
 #------------------------------------------------------------------------
-sub perge_single_snaps {
+sub purge_single_preds {
    my $careful_clusters = shift;
 
    my @c_keepers;
@@ -218,7 +220,7 @@ sub perge_single_snaps {
       my $ps_in_cluster    = get_selected_types($c,'protein2genome');
       my $bx_in_cluster    = get_selected_types($c,'blastx');
       my $snaps_in_cluster = get_selected_types($c,'snap');
-
+      my $augs_in_cluster = get_selected_types($c,'augustus');
       if (defined($ests_in_cluster->[0]) ||
 	  defined($ps_in_cluster->[0]) ||
 	  defined($bx_in_cluster->[0])
@@ -244,6 +246,7 @@ sub prep_blastx_data {
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx');
 	my $snaps_in_cluster = get_selected_types($c,'snap');
+	my $augs_in_cluster  = get_selected_types($c,'augustus');
 
         # groups of most informative protein hits
 	# go ahead and inclde the proteion2genome data as well... why not?
@@ -257,7 +260,7 @@ sub prep_blastx_data {
         	foreach my $mia (@{$gomias}){
         	        push(@data, {'gomiph' => $gomiph,
                                      'ests'   => $ests_in_cluster,
-				     'snaps'  => $snaps_in_cluster,
+				     'preds'  => $OPT_PRED eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
                                      'mia'    => $mia,
                                      'c_id'   => $c_id});
 
@@ -265,7 +268,7 @@ sub prep_blastx_data {
         }
         else {
         	push(@data, {'gomiph' => $gomiph,
-			     'snaps'  => $snaps_in_cluster,
+			     'preds'  => $OPT_PRED eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
                              'ests'   => undef,
                              'mia'    => undef,
                              'c_id'   => $c_id});
@@ -388,7 +391,11 @@ sub annotate {
 
 	my @transcripts = (@{$bx_transcripts});
 
-        my $annotations = group_transcripts(\@transcripts, $v_seq, $seq_id, $chunk_number, $predictions);
+        my $annotations = group_transcripts(\@transcripts, 
+	                                    $v_seq, 
+	                                    $seq_id, 
+	                                    $chunk_number, 
+	                                    $predictions);
 
         return $annotations;
 }
@@ -414,32 +421,47 @@ sub run_it {
 
 		my ($snap_shots, $strand);
 
-		($snap_shots, $strand)   = get_snap_shot($seq, 
-		  				         $def, 
-							 $id.'.'.$i, 
-							 $the_void, 
-							 $set, 
-							 $pred_flank, 
-							 $pred_command,
-							 ) if $OPT_PRED eq 'snap';
+                if ($OPT_PRED eq 'est2genome' && defined($mia)){
+                        my $transcript = pneu($ests, $mia, $seq);
+                        push(@transcripts, [$transcript, $set, undef]);
 
-                ($snap_shots, $strand)   = get_aug_shot($seq,
-                                                        $def,
-                                                        $id.'.'.$i,
-                                                        $the_void,
-                                                        $set,
-                                                        $pred_flank,
-                                                        $pred_command,
-                                                        ) if $OPT_PRED eq 'augustus';
+			$i++;
+			next;
+                }
+
+		($snap_shots, $strand)   = 
+		Widget::snap::get_snap_shot($seq, 
+	 			            $def, 
+					    $id.'.'.$i, 
+					    $the_void, 
+					    $set, 
+					    $pred_flank, 
+					    $pred_command,
+					    $OPT_F,
+					  ) if $OPT_PRED eq 'snap';
+
+		my ($q_id) = $def =~ />(\S+).*/;
+
+                ($snap_shots, $strand)   = 
+		Widget::augustus::get_aug_shot($seq,
+                                               $def,
+                                               $id.'.'.$i,
+                                               $the_void,
+                                               $set,
+                                               $pred_flank,
+                                               $pred_command,
+					       $q_id,
+					       $OPT_F,
+                                              ) if $OPT_PRED eq 'augustus';
+
 
 
 		my $best_pred       = get_best_snap_shot($strand, $snap_shots);
 		my $on_right_strand = get_best_snap_shots($strand, $snap_shots);
 
-
-		if (!defined($best_pred) && defined($mia)){
-		    my $transcript = pneu($ests, $mia, $seq);
-		    push(@transcripts, [$transcript, $set, undef]);
+		if  (!defined($best_pred) && defined($mia) && $OPT_PRED ne 'est2genome' ){
+		    	my $transcript = pneu($ests, $mia, $seq);
+		    	push(@transcripts, [$transcript, $set, undef]);
 		}
 		
 		foreach my $snap_shot (@{$on_right_strand}){
@@ -471,7 +493,7 @@ sub load_transcript_struct {
 	my $seq          = shift;
 	my $seq_id       = shift;
 	my $evi          = shift;
-	my $snap_abinits = shift;
+	my $abinits      = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 
@@ -483,8 +505,8 @@ sub load_transcript_struct {
 	my $l_trans =  length($translation_seq);
 	
 	my $qi = defined($evi)
-	? maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$snap_abinits, $l_trans)
-	: 'non-overlapping-snap';
+	? maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$abinits, $l_trans)
+	: 'non-overlapping-'.$OPT_PRED;
 
 	my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
 
@@ -639,6 +661,9 @@ sub get_selected_types {
 			elsif (ref($f) eq 'snap::PhatHit' && $type eq 'snap'){
 				push(@keepers, $f);
 			}
+                        elsif (ref($f) eq 'augustus::PhatHit' && $type eq 'augustus'){
+                                push(@keepers, $f);
+                        }
 		}
 	}
 
@@ -827,350 +852,6 @@ sub pneu {
 
 	#return $g;
 	return $anno_transcript;
-}
-#------------------------------------------------------------------------
-sub get_snap_shot {
-	my $seq           = shift;
-	my $def           = shift;
-	my $id            = shift;
-	my $the_void      = shift;
-	my $set           = shift;
-	my $snap_flank    = shift;
-	my $snap_command  = shift;
-	
-
-	my ($shadow_seq, $strand, $offset, $xdef, $use_full) =  
-	    prep_for_genefinder($seq, $set, $snap_flank);
-
-	my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset", 
-                                          $shadow_seq,
-                                         );
-
-
-	my ($exe, $hmm) = $snap_command =~ /(\S+)\s+(\S+)/;
-
-	my $alt_snap_command;
-        if ($strand == 1){
-                $alt_snap_command = $exe.' -plus ';
-        }
-        else {
-                 $alt_snap_command = $exe.' -minus ';
-        }
-
-	if ($use_full && -e $hmm.'.full_only'){
-		$alt_snap_command .= $hmm.'.full_only';
-	}
-	else {
-		$alt_snap_command .= $hmm;
-	}
-	
-	my $gene_preds;
-
-	$gene_preds = snap($$shadow_fasta,
-                           $the_void,
-                           $id,
-	                   $strand,
-		           $offset,
-		           $xdef,
-		           $alt_snap_command,
-                          );
-
-
-       $gene_preds = snap($$shadow_fasta,
-                           $the_void,
-                           $id,
-                           $strand,
-                           $offset,
-                           $xdef,
-                           $snap_command,
-                          ) if $use_full && !defined($gene_preds->[0]);
-
-	return ($gene_preds, $strand);
-
-}
-#------------------------------------------------------------------------
-sub get_aug_shot {
-        my $seq           = shift;
-        my $def           = shift;
-        my $id            = shift;
-        my $the_void      = shift;
-        my $set           = shift;
-        my $pred_flank    = shift;
-        my $pred_command  = shift;
-
-
-        my ($shadow_seq, $strand, $offset, $xdef, $use_full) =
-            prep_for_genefinder($seq, $set, $pred_flank);
-
-        my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
-                                          $shadow_seq,
-                                         );
-
-
-        my $alt_snap_command;
-        if ($strand == 1){
-                $alt_snap_command = $pred_command.' --strand=forward';
-        }
-        else {
-                 $alt_snap_command = $pred_command.' --strand=backward';
-        }
-
-        if ($use_full){
-                $alt_snap_command .= $pred_command. '--genemodel=complete';
-        }
-        my $gene_preds;
-
-        $gene_preds = augustus($$shadow_fasta,
-                               $the_void,
-                               $id,
-                               $strand,
-                               $offset,
-                               $xdef,
-                               $alt_snap_command,
-                              );
-
-
-       $gene_preds = augustus($$shadow_fasta,
-                              $the_void,
-                              $id,
-                              $strand,
-                              $offset,
-                              $xdef,
-                             $pred_command,
-                             ) if $use_full && !defined($gene_preds->[0]);
-
-        return ($gene_preds, $strand);
-
-}
-#------------------------------------------------------------------------
-sub snap {
-        my $fasta      = shift;
-        my $the_void   = shift;
-        my $seq_id     = shift;
-	my $strand     = shift;
-	my $offset     = shift;
-	my $xdef       = shift;
-	my $command    = shift;
-
-        my $snap_keepers = [];
-
-	my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.snap.fasta";
-
-	my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.snap";
-
-	my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.snap";
-
-	Widget::snap::write_xdef_file($xdef, $xdef_file);
-	
-                FastaFile::writeFile(\$fasta, $file_name);
-
-                runSnap($file_name, $o_file, $xdef_file, $command);
-
-                my %params;
-                   $params{min_exon_score}  = -100;
-                   $params{min_gene_score}  = -20;
-
-                my $keepers =
-                Widget::snap::parse($o_file,
-                                    \%params,
-                                    $file_name,
-                                     );
-
-                PhatHit_utils::add_offset($keepers,
-                                          $offset,
-                                          );
-
-        return $keepers;
-
-}
-#------------------------------------------------------------------------
-sub augustus {
-        my $fasta      = shift;
-        my $the_void   = shift;
-        my $seq_id     = shift;
-        my $strand     = shift;
-        my $offset     = shift;
-        my $xdef       = shift;
-        my $command    = shift;
-
-        my $aug_keepers = [];
-
-        my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.augustus.fasta";
-
-        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.augustus";
-
-        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.augustus";
-
-        Widget::augustus::write_xdef_file($xdef, $xdef_file) if defined $xdef;
-
-                FastaFile::writeFile(\$fasta, $file_name);
-
-                runAugustus($file_name, $o_file, $xdef_file, $command);
-
-                my %params;
-                   $params{min_exon_score}  = -100;
-                   $params{min_gene_score}  = -20;
-
-                my $keepers =
-                Widget::augustus::parse($o_file,
-                                       \%params,
-                                        $file_name,
-                                        );
-
-                PhatHit_utils::add_offset($keepers,
-                                          $offset,
-                                          );
-
-        return $keepers;
-
-}
-#------------------------------------------------------------------------
-sub runSnap {
-        my $q_file    = shift;
-        my $out_file  = shift;
-	my $xdef_file = shift;
-	my $command   = shift;
-
-	$command .= " -xdef $xdef_file ";
-
-    #$command .= " /usr/local/SNAP/HMM/planaria.f1.hmm -xdef $xdef_file ";
-    #$command .= " /usr/local/SNAP/HMM/planaria.f1.hmm -xdef $xdef_file -ACoding 0.2 -AIntron 0.2 ";
-
-            $command .= " $q_file";
-            $command .= " > $out_file";
-
-        my $w = new Widget::snap();
-
-        if (-e $out_file && ! $OPT_F){
-                print STDERR "re reading snap report.\n";
-                print STDERR "$out_file\n";
-        }
-        else {
-                print STDERR "running  snap.\n";
-                $w->run($command);
-        }
-
-}
-#------------------------------------------------------------------------
-sub runAugustus {
-        my $q_file    = shift;
-        my $out_file  = shift;
-        my $xdef_file = shift;
-        my $command   = shift;
-
-        $command .= " -xdef $xdef_file " if -e $xdef_file;
-
-            $command .= " $q_file";
-            $command .= " > $out_file";
-
-        my $w = new Widget::augustus();
-
-        if (-e $out_file && ! $OPT_F){
-                print STDERR "re reading augustus report.\n";
-                print STDERR "$out_file\n";
-        }
-        else {
-                print STDERR "running  augustus.\n";
-                $w->run($command);
-        }
-
-}
-#------------------------------------------------------------------------
-sub prep_for_genefinder {
-	my $seq    = shift;
-	my $set    = shift;
-	my $flank  = shift;
-
-	my $gomiph = $set->{gomiph};
-	my $mia    = $set->{mia};
-	my $snaps  = $set->{snaps};
-	my $ests   = $set->{ests};
-
-	my @t_data;
-
-	push(@t_data, @{$gomiph})  if defined($gomiph);
-	push(@t_data, @{$snaps})   if defined($snaps);
-	push(@t_data, $mia)        if defined($mia);
-	push(@t_data, @{$ests})    if defined($ests);
-
-	my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
-
-	my $n_set_coors = 
-	defined($ests) ? PhatHit_utils::get_hsp_coors($ests, 'query')
-                      : [];
-
-	my @coors;
-	my $plus  = 0;
-	my $minus = 0;
-
-
-	my $least;
-	my $most;
-        foreach my $hit (@t_data){
-		foreach my $hsp ($hit->hsps()){
-			my $s = $hsp->start('query');
-			my $e = $hsp->end('query');   
-
-			$least = $s if !defined($least) || $s < $least;
-			$most  = $e if !defined($most)  || $e > $most;
-
-			if ($hsp->strand('query') == 1) {
-				$plus++;
-			}
-			else {
-				$minus++;
-			}
-		}
-        }
-
-	my @span_coors = [$least, $most];
-
-        my $p = Shadower::getPieces($seq, \@span_coors, $flank);
-
-        my $final_seq = $p->[0]->{piece}; 
-
-	my $offset    = $p->[0]->{b} - 1;
-	#my $end_d     = length($$seq) - $p->[0]->{e};
-	#my $size      = $p->[0]->{e} - $p->[0]->{b} + 1;
-
-	#my $min_gene_size = 2000;
-	#my $max_gene_size = 10000;
-
-	my $use_full = 0;
-	
-	# 	$use_full = 1 if $size > $min_gene_size 
-	# 	     && $size < $max_gene_size 
-	# 	     && $offset > $min_gene_size 
-	# 	     && $end_d > $min_gene_size; 
-	
-	
-	my $strand = $plus > $minus ? 1 : -1;
-
-	my $i_flank = 2;
-	my $xdef;
-
-        $xdef = Widget::snap::get_xdef($seq,
-                                       $p_set_coors,
-				       $n_set_coors,
-                                       $strand == 1 ? '+' : '-',
-                                       0.2, # Coding
-                                       1000, # intron 
-                                       $offset,
-                                       $i_flank,
-                                      ) if $OPT_PRED eq 'snap';
-
-        $xdef = Widget::augustus::get_xdef($seq,
-                                           $p_set_coors,
-                                           $n_set_coors,
-                                           $strand == 1 ? '+' : '-',
-                                           0.2, # Coding
-                                           1000, # intron
-                                           $offset,
-                                           $i_flank,
-                                           ) if $OPT_PRED eq 'augustus';
-
-
-	return (\$final_seq, $strand, $offset, $xdef, $use_full);
 }
 #------------------------------------------------------------------------
 sub combine {

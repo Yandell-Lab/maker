@@ -13,10 +13,12 @@ use FastaFile;
 use Iterator::Fasta;
 use snap::PhatHit;
 use snap::PhatHsp;
+use PhatHit_utils;
 @ISA = qw(
 	Widget
        );
 
+my $OPT_F; # global varible for maker clean up.
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -28,6 +30,177 @@ sub new {
 
 	bless ($self, $class);
         return $self;
+}
+#------------------------------------------------------------------------
+sub prep_for_genefinder {
+        my $seq    = shift;
+        my $set    = shift;
+        my $flank  = shift;
+        my $seq_id = shift;
+
+        my $gomiph = $set->{gomiph};
+        my $mia    = $set->{mia};
+        my $snaps  = $set->{preds};
+        my $ests   = $set->{ests};
+        my @t_data;
+
+        push(@t_data, @{$gomiph})  if defined($gomiph);
+        push(@t_data, @{$snaps})   if defined($snaps);
+        push(@t_data, $mia)        if defined($mia);
+        push(@t_data, @{$ests})    if defined($ests);
+
+        my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
+
+        my $n_set_coors =
+        defined($ests) ? PhatHit_utils::get_hsp_coors($ests, 'query')
+                      : [];
+
+        my @coors;
+        my $plus  = 0;
+        my $minus = 0;
+       my $least;
+        my $most;
+        foreach my $hit (@t_data){
+                foreach my $hsp ($hit->hsps()){
+                        my $s = $hsp->start('query');
+                        my $e = $hsp->end('query');
+
+                        $least = $s if !defined($least) || $s < $least;
+                        $most  = $e if !defined($most)  || $e > $most;
+
+                        if ($hsp->strand('query') == 1) {
+                                $plus++;
+                        }
+                        else {
+                                $minus++;
+                        }
+                }
+        }
+
+        my @span_coors = [$least, $most];
+
+        my $p = Shadower::getPieces($seq, \@span_coors, $flank);
+
+        my $final_seq = $p->[0]->{piece};
+
+        my $offset    = $p->[0]->{b} - 1;
+
+
+	my $strand = $plus > $minus ? 1 : -1;
+
+        my $i_flank = 2;
+
+        my $xdef = get_xdef($seq,
+                            $p_set_coors,
+                            $n_set_coors,
+                            $strand == 1 ? '+' : '-',
+                            0.2, # Coding
+                            1000, # intron
+                            $offset,
+                            $i_flank,
+                            );
+
+
+        return (\$final_seq, $strand, $offset, $xdef);
+}
+#------------------------------------------------------------------------
+sub get_snap_shot {
+        my $seq           = shift;
+        my $def           = shift;
+        my $id            = shift;
+        my $the_void      = shift;
+        my $set           = shift;
+        my $snap_flank    = shift;
+        my $snap_command  = shift;
+	   $OPT_F         = shift;
+
+        my ($shadow_seq, $strand, $offset, $xdef) =
+            prep_for_genefinder($seq, $set, $snap_flank);
+
+        my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
+                                          $shadow_seq,
+                                         );
+
+
+        my ($exe, $hmm) = $snap_command =~ /(\S+)\s+(\S+)/;
+
+        my $alt_snap_command;
+        if ($strand == 1){
+                $alt_snap_command = $exe.' -plus ';
+        }
+        else {
+                 $alt_snap_command = $exe.' -minus ';
+        }
+
+        $alt_snap_command .= $hmm;
+
+        my $gene_preds = snap($$shadow_fasta,
+                           $the_void,
+                           $id,
+                           $strand,
+                           $offset,
+                           $xdef,
+                           $alt_snap_command,
+                          );
+
+
+        return ($gene_preds, $strand);
+
+}
+#------------------------------------------------------------------------
+sub snap {
+        my $fasta      = shift;
+        my $the_void   = shift;
+        my $seq_id     = shift;
+        my $strand     = shift;
+        my $offset     = shift;
+        my $xdef       = shift;
+        my $command    = shift;
+
+        my $snap_keepers = [];
+
+        my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.snap.fasta";
+
+        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.snap";
+
+        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.snap";
+
+        write_xdef_file($xdef, $xdef_file);
+
+         FastaFile::writeFile(\$fasta, $file_name);
+
+	 $command .= " -xdef $xdef_file ";
+         $command .= " $file_name";
+         $command .= " > $o_file";
+
+
+        if (-e $o_file && ! $OPT_F){
+                print STDERR "re reading snap report.\n";
+                print STDERR "$o_file\n";
+        }
+        else {
+                print STDERR "running  snap.\n";
+		my $w = new Widget::snap();
+                $w->run($command);
+        }
+
+
+         my %params;
+        $params{min_exon_score}  = -100;
+        $params{min_gene_score}  = -20;
+
+        my $keepers =
+        parse($o_file,
+             \%params,
+              $file_name,
+             );
+
+         PhatHit_utils::add_offset($keepers,
+                                   $offset,
+                                  );
+
+        return $keepers;
+
 }
 #------------------------------------------------------------------------------
 sub run {
