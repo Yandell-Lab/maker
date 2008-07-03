@@ -84,11 +84,11 @@ sub run {
    my @results;
 
    #--redirect STDERR to a log file
-   open (OLDERR, ">&STDERR");
-   my (undef, $t_name) = tempfile();
-   close(STDERR);
-   open(STDERR, "| tee $t_name >&2");
-   select((select(STDERR), $|=1)[0]);
+   #open (OLDERR, ">&STDERR");
+   #my (undef, $t_name) = tempfile();
+   #close(STDERR);
+   #open(STDERR, "| tee $t_name >&2");
+   #select((select(STDERR), $|=1)[0]);
 
    if ($level == 0) {
       #------------------------ARGS_IN
@@ -577,14 +577,14 @@ sub run {
    }
    
    #--redirect STDERR back to STDERR
-   close(STDERR);
-   open (STDERR, ">&OLDERR");
-   close(OLDERR);
+   #close(STDERR);
+   #open (STDERR, ">&OLDERR");
+   #close(OLDERR);
 
    #--collect STDERR log file data
-   open (IN, "< $t_name");
-   $self->{ERROR} = join('', <IN>);
-   close(IN);
+   #open (IN, "< $t_name");
+   #$self->{ERROR} = join('', <IN>);
+   #close(IN);
    $self->{RESULT} = \@results;
 }
 
@@ -1216,8 +1216,8 @@ sub repeatmask {
 						     );
   
    PhatHit_utils::add_offset($rm_chunk_keepers, 
-			     $chunk->offset(),
-			    );
+			     $chunk->offset()
+			     );
    #     PhatHit_utils::merge_hits($rm_keepers,  
    # 			      $rm_chunk_keepers, 
    # 			      20,
@@ -1436,7 +1436,7 @@ sub blastx {
 					    );
 
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
+			     $chunk->offset()
 			    );
 
    $chunk->erase_fasta_file();
@@ -1456,7 +1456,7 @@ sub blastx {
       return \@keepers;
    }
    else{
-      return $chunk_keepers
+       return $chunk_keepers;
    }
 }
 

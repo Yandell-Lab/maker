@@ -306,10 +306,6 @@ sub next_chunk {
    my $self = shift;
    my $current_level = $self->{LEVEL}{CURRENT};
 
-   #--debug
-   #print STDERR "\n\n" . $self->num_chunks . "\n\n";
-   #--debug
-
    if ($current_level == -1 || ! $self->_level_started){
       $self->run;
       $current_level = $self->{LEVEL}{CURRENT};
@@ -391,6 +387,11 @@ sub _load_chunks_for_level {
 
    #--select variables to send to Process::MakerChunk object
    if ($level == 0) {
+      #----------------------CLEAR_MEMORY
+      $self->{VARS}{rma_keepers} = [];
+      $self->{VARS}{repeat_blastx_keepers} = [];
+      #----------------------CLEAR_MEMORY
+
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{f_chunk},
 		  $self->{VARS}{the_void},
@@ -441,6 +442,11 @@ sub _load_chunks_for_level {
       #-------------------------CHUNK
    }
    elsif ($level == 3) {
+      #----------------------CLEAR_MEMORY
+      $self->{VARS}{rma_keepers} = [];
+      $self->{VARS}{repeat_blastx_keepers} = [];
+      #----------------------CLEAR_MEMORY
+
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{masked_total_seq},
 		  $self->{VARS}{the_void},
@@ -455,6 +461,17 @@ sub _load_chunks_for_level {
       #-------------------------CHUNK
    }
    elsif ($level == 4) {
+      #----------------------CLEAR_MEMORY
+      $self->{VARS}{blastn_keepers} = [];
+      $self->{VARS}{blastx_keepers} = [];
+      $self->{VARS}{snaps_on_chunk} = [];
+      $self->{VARS}{blastn_data} = [];
+      $self->{VARS}{blastx_data} = [];
+      $self->{VARS}{exonerate_e_data} = []; 
+      $self->{VARS}{exonerate_p_data} = []; 
+      $self->{VARS}{annotations} = []; 
+      #----------------------CLEAR_MEMORY
+
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{holdover_chunk},
 		  $self->{VARS}{f_chunk}
@@ -593,6 +610,17 @@ sub _load_chunks_for_level {
       #-------------------------CHUNK
    }
    elsif ($level == 12) {
+      #----------------------CLEAR_MEMORY
+      $self->{VARS}{blastn_keepers} = [];
+      $self->{VARS}{blastx_keepers} = [];
+      $self->{VARS}{snaps_on_chunk} = [];
+      $self->{VARS}{blastn_data} = [];
+      $self->{VARS}{blastx_data} = [];
+      $self->{VARS}{exonerate_e_data} = []; 
+      $self->{VARS}{exonerate_p_data} = []; 
+      $self->{VARS}{annotations} = []; 
+      #----------------------CLEAR_MEMORY
+
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{p_fastas},
 		  $self->{VARS}{t_fastas},
@@ -631,6 +659,18 @@ sub _polish_results{
       return undef;
    }
 
+   #---clear value in specific variable before redefining
+   if ($level == 1) {
+       $self->{VARS}{repeat_blastx_keepers} = [];
+   }
+   elsif ($level == 5) {
+       $self->{VARS}{blastn_keepers} = [];
+   }
+   elsif ($level == 6) {
+       $self->{VARS}{blastx_keepers} = [];
+   }
+
+   #collect values from result
    foreach my $result (@{$self->{LEVEL}{$level}{RESULTS}}) {
       my @results = @{$result};
 

@@ -92,6 +92,7 @@ sub mask_chunk {
 	my $lcs_coors = get_coors($lcs, $chunk_offset);
 
 	my $seq = $chunk->seq();
+
 	_hard_mask_seq (\$seq, $tes_coors, 50, 'N');
     	_soft_mask_seq(\$seq, $lcs_coors, 0);
 
