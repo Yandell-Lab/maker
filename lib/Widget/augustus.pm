@@ -442,10 +442,10 @@ sub refactor {
 		foreach my $cds (reverse sort sort_cdss @{$CDS}){
 			
 	                if ($cds->{strand} == 1){
-                        	$cds->{e} = $stop_codon->{e};
+                        	$cds->{e} = $stop_codon->{e} if($stop_codon);
                 	}
                 	else {
-                        	$cds->{b} = $stop_codon->{b};
+                        	$cds->{b} = $stop_codon->{b} if ($stop_codon);
                 	}
 
 			last;
