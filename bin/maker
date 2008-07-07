@@ -84,8 +84,11 @@ Options:
                                 in the input file.  Output can then accessed using the
                                 master_datastore_index file created by the program.
 
-     -SNAPS                     Outputs ab-initio predictions that do not overlap maker annotation
-                                as gene annotations in the final gff3 output file.
+     -PREDS                     Outputs ab-initio predictions that do not overlap maker annotation
+                                as gene annotations in the final gff3 output file (based on the
+                                -predictor flag ).
+
+     -CTL                       Generates generic control files in the current working directory.
 
      -cpus|c    <integer>       Tells how many cpus to use for Blast analysis (this overrides
                                 contorol file value).
@@ -109,8 +112,9 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "genome|g=s" => \$OPT{g},
 	   "cpus|c=i" => \$OPT{c},
 	   "GFF"=> \$OPT{GFF},
-	   "SNAPS" => \$OPT{SNAPS},
+	   "PREDS" => \$OPT{SNAPS},
 	   "predictor=s" =>\$OPT{predictor},
+	   "CTL" => sub {generate_control_files(); exit;},
 	   "help|?" => sub {die $usage;},
 	  );
 
@@ -197,7 +201,7 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    my $p_augus_fastas;
    my $t_augus_fastas;
 
-   my $GFF3 = new Dumper::GFF::GFFV3();    
+   my $GFF3 = new Dumper::GFF::GFFV3();
    $GFF3->seq($query_seq);
    $GFF3->seq_id($seq_id);
 
@@ -1501,7 +1505,9 @@ sub load_control_files {
 			    'te_remove',
 			    'single_exon',
 			    'use_seq_dir',
-			    'clean_up'
+			    'clean_up',
+			    'cpus',
+			    'alt_peptide'
 			   );
     
    my @MAKER_BOPTS_PARAMS = ('percov_blastn',
@@ -1518,14 +1524,12 @@ sub load_control_files {
 			    );
 
    my @MAKER_EXE_PARAMS = ('xdformat',
-			   'alt_peptide',
 			   'blastn',
 			   'blastx',
 			   'snap',
 			   'augustus',
 			   'RepeatMasker',
 			   'exonerate',
-			   'cpus',
 			  );
 
 
@@ -1545,12 +1549,10 @@ sub load_control_files {
    $CTL_OPTIONS{'percid_blastx'} = 0.40;
    $CTL_OPTIONS{'eval_blastx'} = 1e-6;
    $CTL_OPTIONS{'bit_blastx'} = 30;
-   $CTL_OPTIONS{'percov_tblastx'} = 0.50;
-   $CTL_OPTIONS{'percid_tblastx'} = 0.40;
-   $CTL_OPTIONS{'eval_tblastx'} = 1e-6;
-   $CTL_OPTIONS{'bit_tblastx'} = 30;
    $CTL_OPTIONS{'e_perc_cov'} = 50;
    $CTL_OPTIONS{'alt_peptide'} = 'c';
+   $CTL_OPTIONS{'en_score_limit'} = 20;
+   $CTL_OPTIONS{'ep_score_limit'} = 20;
    $CTL_OPTIONS{'predictor'} = 'snap';
    
    #load values from control files
@@ -1560,7 +1562,7 @@ sub load_control_files {
       while (my $line = <CTL>) {
 	 chomp($line);
 	    
-	 if ($line !~ /^\s\t\n/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
+	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
 	    my $key = $1;
 	    my $value = $2;
 	    if (exists $OK_FIELDS{$key}) {
@@ -1589,14 +1591,14 @@ sub load_control_files {
 
    #validate required values from control files
    my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn',
-		  'blastx', 'exonerate'
+		  'blastx', 'exonerate', 'snap'
 		 );
 
    #sometimes required
-   push (@infiles, 'RepeatMasker') unless($OPT{R});
-   push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap');
-   push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus');
+   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove});
+   push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
    push (@infiles, 'rm_gff') if ($OPT{GFF});
+   push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
 
    foreach my $in (@infiles) {
       if (not $CTL_OPTIONS{$in}) {
@@ -1614,7 +1616,9 @@ sub load_control_files {
 	  "As a result the default (drosophila) will be used.\n";
       $CTL_OPTIONS{'model_org'} = "drosophila";
    }
-   if ($CTL_OPTIONS{'predictor'} eq 'augustus' && not $CTL_OPTIONS{'augustus_species'}) {
+   if ( ($CTL_OPTIONS{'predictor'} eq 'augustus' || $CTL_OPTIONS{'augustus'}) &&
+	not $CTL_OPTIONS{'augustus_species'}
+      ) {
        warn "There is no species specified for Augustus in maker_opts.ctl : augustus_species.\n".
 	   "As a result the default (fly) will be used.\n";
        $CTL_OPTIONS{'augustus_species'} = "fly";
@@ -1657,3 +1661,78 @@ sub load_control_files {
    return %CTL_OPTIONS;
 }
 
+sub generate_control_files {
+   #--build maker_opts.ctl file
+   my $repeat_protein = abs_path("$FindBin::Bin/../data/te_proteins.fasta");
+
+   open (OUT, "> maker_opts.ctl");
+   print OUT "#-----sequence and library files\n";
+   print OUT "genome: #genome sequence file (required)\n";
+   print OUT "est: #EST sequence file (required)\n";
+   print OUT "protein:  #protein sequence file (required)\n";
+   print OUT "repeat_protein:$repeat_protein #a database of transposable element proteins\n";
+   print OUT "rmlib: #an organism specific repeat library (optional)\n";
+   print OUT "rm_gff: #a gff3 format file of repeat elements (only used with -GFF flag)\n";
+   print OUT "\n";
+   print OUT "#-----external application specific options\n";
+   print OUT "snaphmm:fly #SNAP HMM model\n";
+   print OUT "augustus_species:fly #Augustus gene prediction model\n";
+   print OUT "model_org:all #RepeatMasker model organism\n";
+   print OUT "alt_peptide:c #amino acid used to replace non standard amino acids in xdformat\n";
+   print OUT "cpus:2 #max number of cpus to use in BLAST and RepeatMasker\n";
+   print OUT "\n";
+   print OUT "#-----Maker specific options\n";
+   print OUT "predictor:snap #identifies which gene prediction program to use for annotations\n";
+   print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
+   print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
+   print OUT "split_hit:10000 #length of the splitting of hits (max intron size for EST and protein alignments)\n";
+   print OUT "snap_flank:200 #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
+   print OUT "single_exon:0 #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no\n";
+   print OUT "use_seq_dir:1 #place output files in same directory as sequence file: 1 = yes, 0 = no\n";
+   print OUT "clean_up:0 #remove theVoid directory: 1 = yes, 0 = no\n";
+   close (OUT);
+
+   #--build maker_bopts.ctl file
+   open (OUT, "> maker_bopts.ctl");
+   print OUT "#-----BLAST and Exonerate statistics thresholds\n";
+   print OUT "percov_blastn:0.80 #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
+   print OUT "percid_blastn:0.85 #Blastn Percent Identity Threshold EST-Genome Aligments\n";
+   print OUT "eval_blastn:1e-10 #Blastn eval cutoff\n";
+   print OUT "bit_blastn:40 #Blastn bit cutoff\n";
+   print OUT "percov_blastx:0.50 #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
+   print OUT "percid_blastx:0.40 #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
+   print OUT "eval_blastx:1e-6 #Blastx eval cutoff\n";
+   print OUT "bit_blastx:30 #Blastx bit cutoff\n";
+   print OUT "e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments\n";
+   print OUT "ep_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide\n";
+   print OUT "en_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate protein\n";
+   close(OUT);
+
+   #--build maker_exe.ctl file
+   my %executables = ( xdformat => '',
+		       blastn => '',
+		       blastx => '',
+		       snap => '',
+		       augustus => '',
+		       exonerate => '',
+		       RepeatMasker => '',
+		       exonerate => ''
+		     );
+
+   while (my $exe = each %executables){
+      my $loc = `which $exe`;
+      chomp $loc;
+      $executables{$exe} = $loc unless ($loc =~ /^no $exe/);
+   }
+
+   open (OUT, "> maker_exe.ctl");
+   print OUT "#-----Location of executables required by Maker\n";
+   print OUT "xdformat:".$executables{xdformat}." #location of xdformat executable\n";
+   print OUT "blastn:".$executables{blastn}." #location of blastn executable\n";
+   print OUT "blastx:".$executables{blastx}." #location of blastn executable\n";
+   print OUT "snap:".$executables{snap}." #location of snap executable\n";
+   print OUT "augustus:".$executables{augustus}." #location of augustus executable (optional)\n";
+   print OUT "RepeatMasker:".$executables{RepeatMasker}." #location of RepeatMasker executable\n";
+   print OUT "exonerate:".$executables{exonerate}." #location of exonerate executable\n";
+   close(OUT);
+}
