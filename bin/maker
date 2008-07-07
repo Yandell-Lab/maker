@@ -69,7 +69,9 @@ Options:
      -genome|g  <file_name>     Give MAKER a different genome file (this overrides the
                                 control file value)
 
-     -predictor <snap|augustus> gene predictor to build annotations from (Defaults to 'snap').
+     -predictor <snap>          Selects the gene predictor to use when building annotations (Default
+                <augustus>      is 'snap').  The option 'est2genome' builds annotations directly
+                <est2genome>    from the EST evidence.
 
      -GFF                       Use an input gff3 format file of repeat elements for repeat masking.
                                 You must set rm_gff in maker_opts.ctl to the files location.  This
@@ -285,12 +287,13 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 		   );
 
    #==AUGUSTUS ab initio here
-   my $augus = augustus($masked_fasta,
-                        $the_void,
-                        $seq_out_name,
-                        $CTL_OPTIONS{'augustus'},
-                        $CTL_OPTIONS{'augustus_species'}
-                   );
+   my $augus = [];
+   $augus = augustus($masked_fasta,
+		     $the_void,
+		     $seq_out_name,
+		     $CTL_OPTIONS{'augustus'},
+		     $CTL_OPTIONS{'augustus_species'}
+		    ) if ($CTL_OPTIONS{'augustus'});
 
    #--build an index of the databases
    my $proteins = $CTL_OPTIONS{'protein'};
@@ -433,18 +436,22 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       my $pred_command;
       my $preds_on_chunk;
       if ($CTL_OPTIONS{predictor} eq 'augustus'){
-	  $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
-	  $preds_on_chunk = $augus_on_chunk;
+	 $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
+	 $preds_on_chunk = $augus_on_chunk;
       }
       elsif ($CTL_OPTIONS{predictor} eq 'snap'){
-	  $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
-	  $preds_on_chunk = $snaps_on_chunk;
+	 $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
+	 $preds_on_chunk = $snaps_on_chunk;
+      }
+      elsif($CTL_OPTIONS{predictor} eq 'est2genome'){
+	 $pred_command = '';
+	 $preds_on_chunk = [];
       }
       else{
-	  die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
+	 die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
       }
       #-auto-annotate the input file
-
+      
       my $annotations = maker::auto_annotator::annotate($fasta,
 							$$masked_fasta,
 							$chunk->number(),
@@ -536,9 +543,10 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
    FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
    FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
-   FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
-   FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
-
+   if($CTL_OPTIONS{'augustus'}){
+      FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
+      FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
+   }
    $GFF3->print($out_dir."/".$seq_out_name.".gff");
 
    #--cleanup maker files created with each fasta sequence
@@ -1586,8 +1594,8 @@ sub load_control_files {
    #use command line defined predictor
    $CTL_OPTIONS{'predictor'} = $OPT{predictor} if (defined $OPT{predictor});
    die "ERROR: Invalid predictor defined: $CTL_OPTIONS{'predictor'}\n".
-       "Must be set to 'augustus' or 'snap'\n"
-       unless ($CTL_OPTIONS{'predictor'} =~ /snap|augustus/);
+       "Must be set to 'snap', 'augustus, or 'es2genome'\n"
+       unless ($CTL_OPTIONS{'predictor'} =~ /snap|augustus|est2genome/);
 
    #validate required values from control files
    my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn',
@@ -1602,7 +1610,7 @@ sub load_control_files {
 
    foreach my $in (@infiles) {
       if (not $CTL_OPTIONS{$in}) {
-	 die "You have failed to provide value for \'$in\' in the control files\n;"
+	 die "You have failed to provide a value for \'$in\' in the control files\n;"
       }
 
       if (not -e $CTL_OPTIONS{$in}) {
@@ -1628,13 +1636,11 @@ sub load_control_files {
 	   "As a result, the default (fly) will be used.\n";
        $CTL_OPTIONS{'snaphmm'} = "fly";
    }
-   if ($CTL_OPTIONS{'predictor'} eq 'snap'){
-       if (! -e $CTL_OPTIONS{'snaphmm'} &&
-	   (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}/$CTL_OPTIONS{'snaphmm'})
-	  ){
-
-	   die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";
-       }
+   if (! -e $CTL_OPTIONS{'snaphmm'} &&
+       (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}/$CTL_OPTIONS{'snaphmm'})
+      ){
+      
+      die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";
    }
    if ($CTL_OPTIONS{'max_dna_len'} < 50000){
        warn "ERROR: max_dna_len is set too low.  The minimum value permited is 50,000\n".
