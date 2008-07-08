@@ -133,30 +133,50 @@ sub run {
 
       #-------------------------CHUNK
       #-- blastx against a repeat library (for better masking)
-      my $repeat_blastx_keepers = blastx($chunk,
-					 $repeat_protein,
-					 $the_void,
-					 $seq_out_name,
-					 $CTL_OPTIONS{blastx},
-					 $CTL_OPTIONS{eval_blastx},
-					 $CTL_OPTIONS{bit_blastx},
-					 $CTL_OPTIONS{percov_blastx},
-					 $CTL_OPTIONS{percid_blastx},
-					 $CTL_OPTIONS{split_hit},
-					 $CTL_OPTIONS{cpus},
-					 $CTL_OPTIONS{old_repeat_protein},
-					 $CTL_OPTIONS{xdformat},
-					 $self->id(),
-					 $self->{RANK},
-					 $opt_f
-					);
+      my $rep_blastx_res_dir = blastx_as_chunks($chunk,
+						$repeat_protein,
+						$the_void,
+						$seq_out_name,
+						$CTL_OPTIONS{blastx},
+						$CTL_OPTIONS{eval_blastx},
+						$CTL_OPTIONS{cpus},
+						$CTL_OPTIONS{old_repeat_protein},
+						$CTL_OPTIONS{xdformat},
+						$self->{RANK},
+						$opt_f
+					       );
       #-------------------------CHUNK
 	    
+      #------------------------RESULTS
+      @results = ($rep_blastx_res_dir);
+      #------------------------RESULTS
+   }
+   elsif ($level == 2) {
+      #------------------------ARGS_IN
+      my $chunk              = shift @{$vars};
+      my $rep_blastx_res_dir = shift @{$vars};
+      my %CTL_OPTIONS        = %{shift @{$vars}};
+      my $opt_f              = shift @{$vars};
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      #-- merge and collect blastx results
+      my $repeat_blastx_keepers = collect_blastx($chunk,
+						 $rep_blastx_res_dir,
+						 $CTL_OPTIONS{eval_blastx},
+						 $CTL_OPTIONS{bit_blastx},
+						 $CTL_OPTIONS{percov_blastx},
+						 $CTL_OPTIONS{percid_blastx},
+						 $CTL_OPTIONS{split_hit},
+						 $opt_f
+						);
+      #-------------------------CHUNK
+	
       #------------------------RESULTS
       @results = ($repeat_blastx_keepers);
       #------------------------RESULTS
    }
-   elsif ($level == 2) {
+   elsif ($level == 3) {
       #------------------------ARGS_IN
       my $chunk                 = shift @{$vars};
       my $rma_keepers           = shift @{$vars};
@@ -202,13 +222,14 @@ sub run {
       @results = ($chunk, $masked_total_seq, $GFF3);
       #------------------------RESULTS
    }
-   elsif ($level == 3) {
+   elsif ($level == 4) {
       #------------------------ARGS_IN
       my $masked_total_seq = shift @{$vars};
       my $the_void     = shift @{$vars};
       my $seq_out_name = shift @{$vars};
       my $query_def    = shift @{$vars};
       my %CTL_OPTIONS  = %{shift @{$vars}};
+      my $opt_f        = shift @{$vars};      
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
@@ -220,8 +241,19 @@ sub run {
 		       $the_void,
 		       $seq_out_name,
 		       $CTL_OPTIONS{snap},
-		       $CTL_OPTIONS{'snaphmm'}
+		       $CTL_OPTIONS{'snaphmm'},
+		       $opt_f
 		      );
+
+      #==AUGUSTUS ab initio here
+      my $augus = [];
+      $augus = augustus($masked_fasta,
+			$the_void,
+			$seq_out_name,
+			$CTL_OPTIONS{'augustus'},
+			$CTL_OPTIONS{'augustus_species'},
+			$opt_f
+		       ) if ($CTL_OPTIONS{'augustus'});
 
       #--set up new chunks for remaining levels
       my $fasta_chunker = new FastaChunker();
@@ -235,10 +267,10 @@ sub run {
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($masked_fasta, $snaps, $fasta_chunker, $chunk_count);
+      @results = ($masked_fasta, $snaps, $augus, $fasta_chunker, $chunk_count);
       #------------------------RESULTS
    }
-      elsif ($level == 4) {
+      elsif ($level == 5) {
       #------------------------ARGS_IN
       my $holdover_chunk = shift @{$vars};
       my $chunk          = shift @{$vars};
@@ -255,7 +287,7 @@ sub run {
       @results = ($chunk);
       #------------------------RESULTS
    }
-   elsif ($level == 5) {
+   elsif ($level == 6) {
       #------------------------ARGS_IN
       my $chunk        = shift @{$vars};
       my $transcripts  = shift @{$vars};
@@ -267,30 +299,50 @@ sub run {
 
       #-------------------------CHUNK
       #-- blastn search the file against ESTs
-      my $blastn_keepers = blastn($chunk,
-				  $transcripts,
-				  $the_void,
-				  $seq_out_name,
-				  $CTL_OPTIONS{blastn},
-				  $CTL_OPTIONS{eval_blastn},
-				  $CTL_OPTIONS{bit_blastn},
-				  $CTL_OPTIONS{percov_blastn},
-				  $CTL_OPTIONS{percid_blastn},
-				  $CTL_OPTIONS{split_hit},
-				  $CTL_OPTIONS{cpus},
-				  $CTL_OPTIONS{old_est},
-				  $CTL_OPTIONS{xdformat},
-				  $self->id(),
-				  $self->{RANK},
-				  $opt_f
-				 );
+      my $blastn_res_dir = blastn_as_chunks($chunk,
+					    $transcripts,
+					    $the_void,
+					    $seq_out_name,
+					    $CTL_OPTIONS{blastn},
+					    $CTL_OPTIONS{eval_blastn},
+					    $CTL_OPTIONS{cpus},
+					    $CTL_OPTIONS{old_est},
+					    $CTL_OPTIONS{xdformat},
+					    $self->{RANK},
+					    $opt_f
+					   );
       #-------------------------CHUNK
 
+      #------------------------RESULTS
+      @results = ($blastn_res_dir);
+      #------------------------RESULTS
+   }
+   elsif ($level == 7) {
+      #------------------------ARGS_IN
+      my $chunk          = shift @{$vars};
+      my $blastn_res_dir = shift @{$vars};
+      my %CTL_OPTIONS    = %{shift @{$vars}};
+      my $opt_f          = shift @{$vars};
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      #-- merge and collect blastn results
+      my $blastn_keepers = collect_blastn($chunk, 
+					  $blastn_res_dir,
+					  $CTL_OPTIONS{eval_blastx},
+					  $CTL_OPTIONS{bit_blastx},
+					  $CTL_OPTIONS{percov_blastx},
+					  $CTL_OPTIONS{percid_blastx},
+					  $CTL_OPTIONS{split_hit},
+					  $opt_f
+					 );
+      #-------------------------CHUNK
+	
       #------------------------RESULTS
       @results = ($blastn_keepers);
       #------------------------RESULTS
    }
-   elsif ($level == 6) {
+   elsif ($level == 8) {
       #------------------------ARGS_IN
       my $chunk        = shift @{$vars};
       my $proteins     = shift @{$vars};
@@ -302,34 +354,55 @@ sub run {
 
       #-------------------------CHUNK
       #-- blastx search  the masked input file
-      my $blastx_keepers = blastx($chunk, 
-				  $proteins,
-				  $the_void,
-				  $seq_out_name,
-				  $CTL_OPTIONS{blastx},
-				  $CTL_OPTIONS{eval_blastx},
-				  $CTL_OPTIONS{bit_blastx},
-				  $CTL_OPTIONS{percov_blastx},
-				  $CTL_OPTIONS{percid_blastx},
-				  $CTL_OPTIONS{split_hit},
-				  $CTL_OPTIONS{cpus},
-				  $CTL_OPTIONS{old_protein},
-				  $CTL_OPTIONS{xdformat},
-				  $self->id(),
-				  $self->{RANK},
-				  $opt_f
-				 );
+      my $blastx_res_dir = blastx_as_chunks($chunk,
+					    $proteins,
+					    $the_void,
+					    $seq_out_name,
+					    $CTL_OPTIONS{blastx},
+					    $CTL_OPTIONS{eval_blastx},
+					    $CTL_OPTIONS{cpus},
+					    $CTL_OPTIONS{old_protein},
+					    $CTL_OPTIONS{xdformat},
+					    $self->{RANK},
+					    $opt_f
+					   );
+      #-------------------------CHUNK
+
+      #------------------------RESULTS
+      @results = ($blastx_res_dir);
+      #------------------------RESULTS
+   }
+   elsif ($level == 9) {
+      #------------------------ARGS_IN
+      my $chunk          = shift @{$vars};
+      my $blastx_res_dir = shift @{$vars};
+      my %CTL_OPTIONS    = %{shift @{$vars}};
+      my $opt_f          = shift @{$vars};
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      #-- merge and collect blastx results
+      my $blastx_keepers = collect_blastx($chunk,
+					  $blastx_res_dir,
+					  $CTL_OPTIONS{eval_blastx},
+					  $CTL_OPTIONS{bit_blastx},
+					  $CTL_OPTIONS{percov_blastx},
+					  $CTL_OPTIONS{percid_blastx},
+					  $CTL_OPTIONS{split_hit},
+					  $opt_f
+					 );
       #-------------------------CHUNK
 	
       #------------------------RESULTS
       @results = ($blastx_keepers);
       #------------------------RESULTS
    }
-   elsif ($level == 7) {
+   elsif ($level == 10) {
       #------------------------ARGS_IN
       my $chunk          = shift @{$vars};
       my $holdover_chunk = shift @{$vars};
       my $snaps          = shift @{$vars};
+      my $augus          = shift @{$vars};
       my $blastx_keepers = shift @{$vars};
       my $blastn_keepers = shift @{$vars};
       my $query_seq      = shift @{$vars};
@@ -338,42 +411,38 @@ sub run {
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
-      #merge blast reports
-      my($f_util) = File::Util->new();
-      my(@dirs) = $f_util->list_dir($the_void, '--dirs-only');
-      @dirs = grep (/blast.\.temp_dir$/, @dirs);
-
-      foreach my $dir (@dirs) {
-	 my $blast_finished = $dir;
-	 $blast_finished =~ s/\.temp_dir$//;
-	 system ("cat $the_void/$dir/*blast* > $the_void/$blast_finished");
-	 rmtree ("$the_void/$dir");
-      }
-    
+  
       #==get just the snaps that overlap this chunk
       my $snaps_on_chunk = get_snaps_on_chunk($snaps,
 					      $chunk
 					     );
+
+      #==get just the augustus that overlap this chunk
+      my $augus_on_chunk = get_snaps_on_chunk($augus,
+                                              $chunk
+                                             );
 
       #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
       if(not $chunk->is_last){ #if not last chunk
 	 ($holdover_chunk,
 	  $blastx_keepers,
 	  $blastn_keepers,
-	  $snaps_on_chunk) = process_the_chunk_divide($chunk,
+	  $snaps_on_chunk,
+	  $augus_on_chunk) = process_the_chunk_divide($chunk,
 						      $split_hit,
 						      $blastx_keepers,
 						      $blastn_keepers,
-						      $snaps_on_chunk
+						      $snaps_on_chunk,
+						      $augus_on_chunk
 						     );
       }
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($holdover_chunk, $blastx_keepers, $blastn_keepers, $snaps_on_chunk);
+      @results = ($holdover_chunk, $blastx_keepers, $blastn_keepers, $snaps_on_chunk, $augus_on_chunk);
       #------------------------RESULTS
    }
-   elsif ($level == 8) {
+   elsif ($level == 11) {
       #------------------------ARGS_IN
       my $fasta           = shift @{$vars};
       my $blastx_keepers  = shift @{$vars};
@@ -417,7 +486,7 @@ sub run {
       @results = ($blastx_data, $exonerate_p_data);
       #------------------------RESULTS
    }
-   elsif ($level == 9) {
+   elsif ($level == 12) {
       #------------------------ARGS_IN
       my $fasta           = shift @{$vars};
       my $blastn_keepers = shift @{$vars};
@@ -460,7 +529,7 @@ sub run {
       @results = ($blastn_data, $exonerate_e_data);
       #------------------------RESULTS
    }
-   elsif ($level == 10) {
+   elsif ($level == 13) {
       #------------------------ARGS_IN
       my $fasta            = shift @{$vars};
       my $masked_fasta     = shift @{$vars};
@@ -469,6 +538,7 @@ sub run {
       my $exonerate_e_data = shift @{$vars};
       my $blastx_data      = shift @{$vars};
       my $snaps_on_chunk   = shift @{$vars};
+      my $augus_on_chunk   = shift @{$vars};
       my $the_void         = shift @{$vars};
       my %CTL_OPTIONS      = %{shift @{$vars}};
       my $opt_f            = shift @{$vars};
@@ -477,6 +547,25 @@ sub run {
 
       #-------------------------CHUNK
       #==MAKER annotations built here
+
+      #-- decide which gene finder to use to build annotations 
+      my $pred_command;
+      my $preds_on_chunk;
+      if ($CTL_OPTIONS{predictor} eq 'augustus'){
+	 $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
+	 $preds_on_chunk = $augus_on_chunk;
+      }
+      elsif ($CTL_OPTIONS{predictor} eq 'snap'){
+	 $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
+	 $preds_on_chunk = $snaps_on_chunk;
+      }
+      elsif($CTL_OPTIONS{predictor} eq 'est2genome'){
+	 $pred_command = '';
+	 $preds_on_chunk = [];
+      }
+      else{
+	 die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
+      }
       
       #-auto-annotate the input file
       my $snap_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
@@ -487,14 +576,14 @@ sub run {
 							$exonerate_p_data,
 							$exonerate_e_data,
 							$blastx_data,
-							$snaps_on_chunk,
+							$preds_on_chunk,
 							$the_void,
-							$snap_command,
+							$pred_command,
 							$CTL_OPTIONS{'snap_flank'},
 							$CTL_OPTIONS{'single_exon'},
 							$opt_f,
 							$opt_snaps,
-							'snap'#temporary fix
+							$CTL_OPTIONS{predictor}
 						       );
       #-------------------------CHUNK
 
@@ -502,20 +591,22 @@ sub run {
       @results = ($annotations);
       #------------------------RESULTS
    }
-   elsif ($level == 11) {
+   elsif ($level == 14) {
       #------------------------ARGS_IN
       my $blastx_data      = shift @{$vars};
       my $blastn_data      = shift @{$vars};
       my $exonerate_p_data = shift @{$vars};
       my $exonerate_e_data = shift @{$vars};
       my $annotations      = shift @{$vars};
-      my $snaps            = shift @{$vars};
       my $query_seq        = shift @{$vars};
       my $snaps_on_chunk   = shift @{$vars};
+      my $augus_on_chunk  = shift @{$vars};
       my $p_fastas         = shift @{$vars};
       my $t_fastas         = shift @{$vars};
       my $p_snap_fastas    = shift @{$vars};
       my $t_snap_fastas    = shift @{$vars};
+      my $p_augus_fastas   = shift @{$vars};
+      my $t_augus_fastas   = shift @{$vars};
       my $GFF3             = shift @{$vars};
       #------------------------ARGS_IN
 
@@ -523,6 +614,7 @@ sub run {
       #--- GFF3      
       $GFF3->genes($annotations);
       $GFF3->predictions($snaps_on_chunk);
+      $GFF3->predictions($augus_on_chunk);
       $GFF3->phat_hits($blastx_data);
       $GFF3->phat_hits($blastn_data);
       $GFF3->phat_hits($exonerate_p_data);
@@ -536,23 +628,29 @@ sub run {
       my ($p_snap_fasta, $t_snap_fasta) = get_snap_p_and_t_fastas($query_seq, $snaps_on_chunk);
       $p_snap_fastas .= $p_snap_fasta;
       $t_snap_fastas .= $t_snap_fasta;
+
+      my ($p_augus_fasta, $t_augus_fasta) = get_snap_p_and_t_fastas($query_seq, $augus_on_chunk);
+      $p_augus_fastas .= $p_augus_fasta;
+      $t_augus_fastas .= $t_augus_fasta;
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($GFF3, $p_fastas, $t_fastas, $p_snap_fastas, $t_snap_fastas);
+      @results = ($GFF3, $p_fastas, $t_fastas, $p_snap_fastas, $t_snap_fastas, $p_augus_fastas, $t_augus_fastas);
       #------------------------RESULTS
    }
-   elsif ($level == 12) {
+   elsif ($level == 15) {
       #------------------------ARGS_IN
-      my $p_fastas      = shift @{$vars};
-      my $t_fastas      = shift @{$vars};
-      my $p_snap_fastas = shift @{$vars};
-      my $t_snap_fastas = shift @{$vars};
-      my $GFF3          = shift @{$vars};
-      my $seq_out_name  = shift @{$vars};
-      my $out_dir       = shift @{$vars};
-      my $the_void      = shift @{$vars};
-      my %CTL_OPTIONS   = %{shift @{$vars}};
+      my $p_fastas       = shift @{$vars};
+      my $t_fastas       = shift @{$vars};
+      my $p_snap_fastas  = shift @{$vars};
+      my $t_snap_fastas  = shift @{$vars};
+      my $p_augus_fastas = shift @{$vars};
+      my $t_augus_fastas = shift @{$vars};
+      my $GFF3           = shift @{$vars};
+      my $seq_out_name   = shift @{$vars};
+      my $out_dir        = shift @{$vars};
+      my $the_void       = shift @{$vars};
+      my %CTL_OPTIONS    = %{shift @{$vars}};
       #------------------------ARGS_IN
       
       #-------------------------CHUNK
@@ -561,6 +659,10 @@ sub run {
       FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
       FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
       FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+      if($CTL_OPTIONS{'augustus'}){
+	 FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
+	 FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
+      }
       $GFF3->print($out_dir."/".$seq_out_name.".gff");
       
       #--cleanup maker files created with each fasta sequence
@@ -984,7 +1086,66 @@ sub runSnap {
       $w->run($command);
    }
 }
+#-----------------------------------------------------------------------------
+sub augustus {
+   my $fasta      = shift;
+   my $the_void   = shift;
+   my $seq_id     = shift;
+   my $exe        = shift;
+   my $org        = shift;
+   my $opt_f = shift;
 
+   my %params;
+   my $file_name = "$the_void/$seq_id.all";
+   my $o_file    = "$the_void/$seq_id\.all\.augustus";
+
+
+   FastaFile::writeFile($fasta , $file_name) unless -e $file_name;
+
+   runAugustus($file_name,
+               $o_file,
+               $exe,
+               $org,
+	       $opt_f
+          );
+
+
+   $params{min_exon_score}  = -100000;      #-10000;
+   $params{min_gene_score}  = -100000;      #0;
+
+   my $chunk_keepers = Widget::augustus::parse($o_file,
+                                              \%params,
+                                              $file_name,
+                                             );
+
+   unlink($file_name);
+
+   return $chunk_keepers;
+}
+#-----------------------------------------------------------------------------
+sub runAugustus {
+   my $q_file   = shift;
+   my $out_file = shift;
+   my $exe      = shift;
+   my $org      = shift;
+   my $opt_f = shift;
+
+   my $command  = $exe;
+      $command .= ' --species='."$org";
+      $command .= " $q_file";
+      $command .= " > $out_file";
+
+   my $w = new Widget::augustus();
+
+   if (-e $out_file && ! $opt_f) {
+      print STDERR "re reading augustus report.\n";
+      print STDERR "$out_file\n";
+   }
+   else {
+      print STDERR "running  augustus.\n";
+      $w->run($command);
+   }
+}
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
    my $g_fasta           = shift;
@@ -1229,29 +1390,24 @@ sub repeatmask {
 }
 
 #-----------------------------------------------------------------------------
-sub blastn {
+sub blastn_as_chunks {
    my $chunk      = shift;
    my $db         = shift;
    my $the_void    = shift;
    my $seq_id     = shift;
    my $blastn = shift;
    my $eval_blastn = shift;
-   my $bit_blastn = shift,
-   my $percov_blastn = shift;
-   my $percid_blastn = shift;
-   my $split_hit = shift;
    my $cpus = shift;
    my $old_db = shift;
    my $xdformat = shift;
-   my $id = shift;
    my $rank = shift;
    my $opt_f = shift;
 
+   #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
 	
    my $chunk_number = $chunk->number();
-   my $q_length = $chunk->parent_seq_length();
  
    my ($db_old_n) = $old_db =~ /([^\/]+)$/;
    $db_old_n  =~ s/\.fasta$//;
@@ -1261,22 +1417,26 @@ sub blastn {
    mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
-   my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastn";
+   my $blast_dir = "$blast_finished\.temp_dir";
+   my $o_file    = "$blast_dir/$db_n\.blastn";
 
    $db =~ /([^\/]+$)/;
    my $tmp_db = "$t_dir/$1";
 
-   if (-e $blast_finished && ! $opt_f) {
-      $o_file = $blast_finished;
-	    
-	 return [] if ($id !~ /\:0$/);
-      }
-      elsif (! -e $blast_finished && ! @{[<$tmp_db.n??*>]}) {
-	 system("cp $db $tmp_db");
-	 system ("$xdformat -n $tmp_db");
-      }
+   #copy db to local tmp dir and run xdformat 
+   if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
+      system("cp $db $tmp_db");
+      system ("$xdformat -n $tmp_db");
+   }
+   elsif(-e $blast_finished && ! $opt_f){
+      print STDERR "re reading blast report.\n";
+      print STDERR "$blast_finished\n";
+      return $blast_dir;
+   }
 	
+   #call blast executable
    $chunk->write_file($t_file_name);
+
    runBlastn($t_file_name,
 	     $tmp_db,
 	     $o_file,
@@ -1286,6 +1446,30 @@ sub blastn {
 	     $opt_f
 	    );
 
+   $chunk->erase_fasta_file();
+
+   return $blast_dir;
+}
+#-----------------------------------------------------------------------------
+sub collect_blastn{
+   my $chunk      = shift;
+   my $blast_dir    = shift;
+   my $eval_blastn = shift;
+   my $bit_blastn = shift,
+   my $percov_blastn = shift;
+   my $percid_blastn = shift;
+   my $split_hit = shift;
+   my $opt_f = shift;
+
+   my $blast_finished = $blast_dir;
+   $blast_finished =~ s/\.temp_dir$//;
+
+   #merge blast reports
+   if (! -e $blast_finished && ! $opt_f){
+      system ("cat $blast_dir/*blast* > $blast_finished");
+      rmtree ("$blast_dir");
+   }
+
    my %params;
    $params{significance}  = $eval_blastn;
    $params{hsp_bit_min}   = $bit_blastn;
@@ -1293,7 +1477,7 @@ sub blastn {
    $params{percid}        = $percid_blastn;
    $params{split_hit}     = $split_hit;
 
-   my $chunk_keepers = Widget::blastn::parse($o_file,
+   my $chunk_keepers = Widget::blastn::parse($blast_finished,
 					     \%params,
 					    );
    
@@ -1301,8 +1485,6 @@ sub blastn {
 			     $chunk->offset(),
 			    );
 
-   $chunk->erase_fasta_file();
-    
    if($chunk->p_cutoff || $chunk->m_cutoff){
       my @keepers;
       
@@ -1367,28 +1549,23 @@ sub runBlastn {
 }
 
 #-----------------------------------------------------------------------------
-sub blastx {
+sub blastx_as_chunks {
    my $chunk         = shift;
    my $db            = shift;
    my $the_void      = shift;
    my $seq_id        = shift;
    my $blastx        = shift;
    my $eval_blastx   = shift;
-   my $bit_blastx    = shift;
-   my $percov_blastx = shift;
-   my $percid_blastx = shift;
-   my $split_hit     = shift;
    my $cpus          = shift;
    my $old_db        = shift;
    my $xdformat      = shift;
-   my $id            = shift;
    my $rank          = shift;
    my $opt_f         = shift;
-	
+
+   #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
 
-   my $q_length = $chunk->parent_seq_length();
    my $chunk_number = $chunk->number();
     
    my ($db_old_n) = $old_db =~ /([^\/]+)$/;
@@ -1399,22 +1576,26 @@ sub blastx {
    mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
-   my $o_file    = "$blast_finished\.temp_dir/$db_n\.blastx";
+   my $blast_dir = "$blast_finished\.temp_dir";
+   my $o_file    = "$blast_dir/$db_n\.blastx";
     
    $db =~ /([^\/]+$)/;
    my $tmp_db = "$t_dir/$1";
-	     
-   if (-e $blast_finished && ! $opt_f) {
-      $o_file = $blast_finished ;
-	    
-      return [] if ($id !~ /\:0$/);
-   }
-   elsif (! @{[<$tmp_db.n??*>]}) {
+
+   #copy db to local tmp dir and run xdformat 
+   if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
       system ("$xdformat -p $tmp_db");
    }
-	     
+   elsif(-e $blast_finished && ! $opt_f){
+      print STDERR "re reading blast report.\n";
+      print STDERR "$blast_finished\n";
+      return $blast_dir;
+   }
+
+   #call blast executable	     
    $chunk->write_file($t_file_name);
+
    runBlastx($t_file_name,
 	     $tmp_db,
 	     $o_file,
@@ -1424,6 +1605,30 @@ sub blastx {
 	     $opt_f
 	    );
 
+   $chunk->erase_fasta_file();
+
+   return $blast_dir;
+}
+#-----------------------------------------------------------------------------
+sub collect_blastx{
+   my $chunk      = shift;
+   my $blast_dir    = shift;
+   my $eval_blastx = shift;
+   my $bit_blastx = shift,
+   my $percov_blastx = shift;
+   my $percid_blastx = shift;
+   my $split_hit = shift;
+   my $opt_f = shift;
+
+   my $blast_finished = $blast_dir;
+   $blast_finished =~ s/\.temp_dir$//;
+
+   #merge blast reports
+   if (! -e $blast_finished && ! $opt_f){
+      system ("cat $blast_dir/*blast* > $blast_finished");
+      rmtree ("$blast_dir");
+   }
+
    my %params;
    $params{significance}  = $eval_blastx;
    $params{hsp_bit_min}   = $bit_blastx;
@@ -1431,7 +1636,7 @@ sub blastx {
    $params{percid}        = $percid_blastx;
    $params{split_hit}     = $split_hit;
    
-   my $chunk_keepers = Widget::blastx::parse($o_file,
+   my $chunk_keepers = Widget::blastx::parse($blast_finished,
 					     \%params,
 					    );
 

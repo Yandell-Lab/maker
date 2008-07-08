@@ -66,36 +66,36 @@ Usage:
 
 Options:
 
-     -genome|g  <file_name>     Give MAKER a different genome file (this overrides the
-                                control file value)
+     -genome|g  <file_name>   Give MAKER a different genome file (this overrides the
+                              control file value)
 
-     -predictor <snap>          Selects the gene predictor to use when building annotations (Default
-                <augustus>      is 'snap').  The option 'est2genome' builds annotations directly
-                <est2genome>    from the EST evidence.
+     -predictor <snap>        Selects the gene predictor to use when building annotations (Default
+                <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
+                <est2genome>  from the EST evidence.
 
-     -GFF                       Use an input gff3 format file of repeat elements for repeat masking.
-                                You must set rm_gff in maker_opts.ctl to the files location.  This
-                                option turns off all other repeat masking.
+     -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
+                              You must set rm_gff in maker_opts.ctl to the files location.  This
+                              option turns off all other repeat masking.
 
-     -RM_off|R                  Turns repeat masking off (* See Warning)
+     -RM_off|R                Turns repeat masking off (* See Warning)
 
-     -force|f                   Forces maker to rerun all analyses (replaces all previous output).
+     -force|f                 Forces maker to rerun all analyses (replaces all previous output).
 
-     -datastore|d               Causes output to be written using datastore.  This option is
-                                automatically enabled if there are more than 1000 fasta entries
-                                in the input file.  Output can then accessed using the
-                                master_datastore_index file created by the program.
+     -datastore|d             Causes output to be written using datastore.  This option is
+                              automatically enabled if there are more than 1000 fasta entries
+                              in the input file.  Output can then accessed using the
+                              master_datastore_index file created by the program.
 
-     -PREDS                     Outputs ab-initio predictions that do not overlap maker annotation
-                                as gene annotations in the final gff3 output file (based on the
-                                -predictor flag ).
+     -PREDS                   Outputs ab-initio predictions that do not overlap maker annotation
+                              as gene annotations in the final gff3 output file (based on the
+                              -predictor flag ).
 
-     -CTL                       Generates generic control files in the current working directory.
+     -CTL                     Generates generic control files in the current working directory.
 
-     -cpus|c    <integer>       Tells how many cpus to use for Blast analysis (this overrides
-                                contorol file value).
+     -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
+                              contorol file value).
 
-     -help|?                    Prints this usage statement.
+     -help|?                  Prints this usage statement.
 
 
 Warning:
@@ -1667,6 +1667,7 @@ sub load_control_files {
    return %CTL_OPTIONS;
 }
 
+#-----------------------------------------------------------------------------
 sub generate_control_files {
    #--build maker_opts.ctl file
    my $repeat_protein = abs_path("$FindBin::Bin/../data/te_proteins.fasta");
