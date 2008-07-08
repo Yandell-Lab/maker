@@ -38,6 +38,7 @@ sub new {
 	 $self->{VARS}{OPT} = shift @args;
 	 $self->{TIER_ID} = shift @args;
 	 $self->{TERMINATE} = 0;
+	 $self->{LEVEL}{CURRENT} = -1;
 	 $self->_initialize();
       }
    }
@@ -81,15 +82,28 @@ sub _initialize {
 					    '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
 					   );
 
-   #--set up void directory where analysis is stored
+   #set up base directory for output
    $self->{VARS}{out_dir} = $CTL_OPTIONS{'out_base'};
 
+   #use datastore as base if datastore flag is set
    if (exists $CTL_OPTIONS{'datastore'}) {
       $self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
       $CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
           die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
    }
 
+   #skip this fasta if gff3 output already exists
+   if (-e $self->{VARS}{out_dir}."/".$self->{VARS}{seq_out_name}.".gff" && ! $OPT{f}){
+      print STDERR "#----------------------------------------------------------------------\n",
+                   "The contig:".$self->{VARS}{seq_id}." has already been processed!!\n",
+                   "Maker will now skip to the next contig.\n",
+                   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+		   "#----------------------------------------------------------------------\n\n\n";
+      $self->{TERMINATE} = 1;
+      return;
+   }
+
+   #--set up void directory where analysis is stored
    $self->{VARS}{the_void}  = build_the_void($self->{VARS}{seq_out_name},
 					     $self->{VARS}{out_dir}
 					    );
@@ -108,7 +122,7 @@ sub _initialize {
    $self->{VARS}{GFF3}->seq($self->{VARS}{query_seq});
    $self->{VARS}{GFF3}->seq_id($self->{VARS}{seq_id});
 
-   $self->{LEVEL}{CURRENT} = -1;
+   return;
 }
 #--------------------------------------------------------------
 #runs the MakerTier until multiple chunks are available to distribute

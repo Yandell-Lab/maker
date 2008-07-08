@@ -511,6 +511,8 @@ if ($rank == $root) {
    #---release thread
    $t_terminate = 1;
    $thr->detach();
+
+   print STDERR "\n\nMaker is now finished!!!\n\n";
 }
 #------SECONDARY MPI PROCESSES------
 else {

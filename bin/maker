@@ -177,9 +177,10 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
 				);
 
-   #-set up void directory where analysis is stored
+   #set up base directory for output
    my $out_dir = $CTL_OPTIONS{'out_base'};
 
+   #use datastore as base if datastore flag is set
    if ($OPT{d}) {
       $out_dir = $CTL_OPTIONS{'datastore'}->id_to_dir($seq_out_name);
       $CTL_OPTIONS{'datastore'}->mkdir($seq_out_name) || die "ERROR: could not make directory $out_dir\n";
@@ -187,7 +188,19 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       print $fh "$seq_id\t$out_dir\n";
    }
 
+   #skip this fasta if gff3 output already exists
+   if (-e "$out_dir/$seq_out_name.gff" && ! $OPT{f}){
+      print STDERR "#----------------------------------------------------------------------\n",
+                   "The contig:$seq_id has already been processed!!\n",
+                   "Maker will now skip to the next contig.\n",
+                   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+		   "#----------------------------------------------------------------------\n\n\n";
+      next;
+   }
+
+   #-set up void directory where analysis is stored
    my $the_void  = build_the_void($seq_out_name, $out_dir);
+
 
    #==from here on fastas are proccessed as chunks
 
@@ -552,6 +565,8 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    #--cleanup maker files created with each fasta sequence
    rmtree ($the_void) if $CTL_OPTIONS{clean_up}; #rm temp directory
 }
+
+print STDERR "\n\nMaker is now finished!!!\n\n";
 
 exit(0);
 
