@@ -3,20 +3,32 @@
 #----------
 INSTALLATION INSTUCTIONS FOR MAKER
 
-To install maker, you will first need to install the following programs:
+To install maker, you will first need to install the following external programs:
 
-PERL 5.8.0 or higher
-BioPerl 1.5 (www.bioperl.org)
-Wu-BLAST 2.0 (blast.wustl.edu)
-SNAP version 2006-07-28 (homepage.mac.com/iankorf)
-RepeatMasker 3.1.6 (www.repeatmasker.org)
-Exonerate 1.4 (www.ebi.ac.uk/~guy/exonerate)
+*PERL 5.8.0 or higher
+*BioPerl 1.5 (www.bioperl.org)
+*Wu-BLAST 2.0 (blast.wustl.edu)
+*SNAP version 2006-07-28 (homepage.mac.com/iankorf)
+*RepeatMasker 3.1.6 (www.repeatmasker.org)
+*Exonerate 1.4 or 2.0 (www.ebi.ac.uk/~guy/exonerate)
+
+
+
+You might want to also install these optional external programs:
+
+*Augustus 2.0 (augustus.gobics.de)
+
+
+You will need to install the following perl modules from CPAN as well(search.cpan.org):
+
+*URI:Escape
+*threads v1.71 or higher (only needed for mpi_maker, otherwise ignore this)
 
 
 To install mpi_maker, you must have an mpi package installed, try the following:
 
-MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
-*note:  Remember to install MPICH2 with the --enable-sharedlibs flag set to the appropriate value (See MPICH2 Installer's Guide at http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs).
+*MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
+note:  Remember to install MPICH2 with the --enable-sharedlibs flag set to the appropriate value (See MPICH2 Installer's Guide at http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs).
 
 
 Notes: 
@@ -35,13 +47,13 @@ This will create a directory called maker with 5 sub directories:
 	bin - contains the maker code.
 	lib - contains all the necessary perl libaries for MAKER.
         MPI - contains MPI specific data to configure maker to run on a cluster that supports MPI.
-        Apollo - contains fly.tiers file (See section titled APOLLO below)
+        Apollo - contains gff3.tiers file (See section titled APOLLO below)
 	data  - contains some sample data used to make sure everything works
 	config - contains the 3 configuration files for MAKER:
 
-	     1. maker_exe.ctl - contains the path information for needed program
-	     2. maker_bopts - contains the optional settings for the various needed programs
-	     3. maker_opts.ctl - contains all the optional information for MAKER, including file locations for data files.
+	     1. maker_exe.ctl - contains the path information for needed executables
+	     2. maker_bopts - contains filtering statistics for BLAST and Exonerate
+	     3. maker_opts.ctl - contains all other information for MAKER, including the location of the genome file.
 
 
 These configuration files will have to be examined for changes in order to use MAKER for your specific data
@@ -54,13 +66,14 @@ setenv PERL5LIB where_bioperl_is_installed
 setenv WUBLASTMAT where_wublast_is_installed/matrix
 setenv ZOE where_snap_installation_folder_is
 setenv WUBLASTFILTER where_wublast_is_installed/filter
+setenv AUGUSTUS_CONFIG_PATH where_augustus_is_installed/config
 
 for bash:
 export PERL5LIB=where_bioperl_is_installed
 export WUBLASTMAT=where_wublast_is_installed/matrix
-export ZOE=where_snap_installation_folder_is
+export ZOE=where_snap_is_installed
 export WUBLASTFILTER=where_wublast_is_installed/filter
-
+export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
 
 
 #----------
@@ -71,17 +84,19 @@ If you are running maker on an MPI capable cluster, you can install an MPI versi
 	1. Install standard maker and verify that it runs.
 	2. Use cd to change to the MPI subdirectory in the maker instalation folder (i.e. maker/MPI/)
 	3. Run Makefile.PL by typing:	 perl Makefile.PL
-	4. Compile needed binaries using make by typing:	make
+	4. Compile needed binaries by typing:	make
 	5. Install mpi_maker and all needed libraries by typing:	make install 	
 
 A new version of maker called mpi_maker should now be installed under maker/bin.
 
-To run mpi_maker, first verify that your mpi environment is initiated, (i.e. using the mpi &, mpd &, or mpdboot command). Now start mpi_maker.
+To run mpi_maker, first verify that your mpi environment is initiated, (i.e. using the mpdboot command). Now start mpi_maker via mpiexec.
 
 Example:
 
-	mpiexec -n 45 perl maker_directory/maker/bin/mpi_maker genome.fasta maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+	mpiexec -n 3 perl maker_directory/maker/bin/mpi_maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
 
+
+Please see the documentation for the MPI environment you use for how to initiate an MPI process.
 
 
 #----------
@@ -89,15 +104,13 @@ RUNNING MAKER
 
 Usage:
 
-        maker [options] <genome_file> <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+        maker [options] <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
 
-        If you already specified the location for the genome file in the user control files
-        you can ommit the first argument, <genome_file>.  The genome file must be in fasta
-        format.
-
-        The last three arguments are user control files that specify how maker should behave.
-        The program will automatically try and locate the user control files in the current
-        working directory if these arguments are not supplied when initializing maker.
+        The three input arguments are user control files that specify how maker should behave.
+        All input files listed in the control options files must be in fasta format.  Please
+        see maker documentation to learn more about control file format.  The program will
+        automatically try and locate the user control files in the current working
+        directory if these arguments are not supplied when initializing maker.
 
         It is important to note that maker does not try and recalculated data that it has
         already calculated.  For example, if you run an analysis twice on the same fasta file
@@ -107,58 +120,70 @@ Usage:
 
 Options:
 
-        -R Turns repeat masking off (* See Warning)
-        -f Forces maker to rerun all analyses
-        -d Causes output to be written using datastore.  This option is automatically enabled
-           if there are more than 1000 fasta entries in the input file.  Output is then
-           accessed using the datastore_index file created by the program.
-        -h Help
+     -genome|g  <file_name>   Give MAKER a different genome file (this overrides the
+                              control file value)
+
+     -predictor <snap>        Selects the gene predictor to use when building annotations (Default
+                <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
+                <est2genome>  from the EST evidence.
+
+     -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
+                              You must set rm_gff in maker_opts.ctl to the files location.  This
+                              option turns off all other repeat masking.
+
+     -RM_off|R                Turns repeat masking off (* See Warning)
+
+     -force|f                 Forces maker to rerun all analyses (replaces all previous output).
+
+     -datastore|d             Causes output to be written using datastore.  This option is
+                              automatically enabled if there are more than 1000 fasta entries
+                              in the input file.  Output can then accessed using the
+                              master_datastore_index file created by the program.
+
+     -PREDS                   Outputs ab-initio predictions that do not overlap maker annotation
+                              as gene annotations in the final gff3 output file (based on the
+                              -predictor flag ).
+
+     -CTL                     Generates generic control files in the current working directory.
+
+     -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
+                              contorol file value).
+
+     -help|?                  Prints this usage statement.
+
 
 Warning:
       
         *When using the -R flag, maker expects that the input genome file is already masked.
-         Also, if your genome file contains lower case characters, maker will consider those
+         Also if your genome file contains lower case characters, maker will consider those
          characers to be soft masked.
-
-
-Examples of running maker:
-
-If you have the name of the desired genome file in the maker_opts.ctl file, you can omit the first arguement:
-
-	Example:	perl maker_directory/bin/maker maker_exe.ctl maker_opts.ctl maker_bopts.ctl
-
-
-Otherwise the location of the genome file can be set at the command line as the first argument:
-
-	Example:	perl maker_directory/bin/maker genome.fasta maker_exe.ctl maker_opts.ctl maker_bopts.ctl
-
 
 
 #----------
 RUNNING MAKER WITH EXAMPLE DATA
 
-1) Copy the files in the config and data directories to a temporary directory where you will run an example file.
-2) Next you will need to edit maker_exe.ctl to include the path of the programs that you have installed.  See CONFIG FILE EDITING for more information.
-3) Then try the following command from your temporary directory:
+1) Copy the files in the data directories to a temporary directory where you will run an example file.
+2) Type maker -CTL to generate generic maker control files
+3) Next you will need to edit the control files to include the path of the genome file, EST file, and proitein file, as well as the paths to all required executables.  See CONFIG FILE EDITING for more information.
+4) Then try the following command from your temporary directory:
 
 perl maker_directory/bin/maker maker_exe.ctl maker_opts.ctl maker_bopts.ctl
 
-MAKER will create the following files/directory:
+MAKER will create at least the following files/directory:
 
-seq_name.gff - a gff file that can be loaded into GMOD or GBROWSE
-seq_name.xml - an xml file that can be loaded into APOLLO
+seq_name.gff - a gff file that can be loaded into GMOD, GBROWSE, or Apollo
 
 seq_name.maker.transcripts.fasta - a file of the maker transcript sequences
 seq_name.maker.snap.transcript.fasta - a file of ab-inito snap transcript sequences
 seq_name.maker.proteins.fasta - a file of the maker protein sequences
 seq_name.maker.snap.proteins.fasta - a file of ab-inito snap protein sequences
 
-theVoid.seq_name.0 - a directory containing all of the results files produced by maker, including BLAST reports, SNAP output, exonnerate output and the masked sequence
+theVoid.seq_name - a directory containing all of the results files produced by maker, including BLAST reports, SNAP output, exonnerate output and the masked sequence
 
 WARNING:
-	*The names of output files are based on sequence ids.  If giving maker a multi-fasta file, it is important to verify that all sequence id are unique, so files are not overwritten.
-	*If there are more than 1,000 sequences in a multi-fasta file or you use the -d flag on the command line a datastore structure will be used. see DATASTORE in this document.
-        *If sequence ids contain characters that are illegal in file names, those characters will be replaced automatically before building output file names.
+*The names of output files are based on sequence ids.  If giving maker a multi-fasta file, it is important to verify that all sequence id are unique, so files are not overwritten.
+*If there are more than 1,000 sequences in a multi-fasta file or you use the -d flag on the command line a datastore structure will be used. see DATASTORE in this document.
+*If sequence ids contain characters that are illegal in file names, those characters will be replaced automatically before building output file names.
 
 
 
@@ -187,11 +212,9 @@ A. maker_exe.ctl - includes information about programs executed by MAKER and how
 
 Here is what the standard maker_exe.ctl control file looks like:
 
-setdb:/usr/local/blast/setdb
-pressdb:/usr/local/blast/pressdb
+xdformat:/usr/local/blast/xdformat
 blastn:/usr/local/blast/blastn
 blastx:/usr/local/blast/blastx
-tblastx:/usr/local/blast/tblastx
 snap:/usr/local/SNAP/snap
 RepeatMasker:/usr/local/RepeatMasker/RepeatMasker
 exonerate:/usr/local/bin/exonerate
@@ -204,7 +227,6 @@ B. maker_bopts.ctl - includes information about the options for executables run 
 
 Here is the example maker_bopts.ctl
 
-max_dna_len:100000 #the max DNA length used for sequence similarity comparisons.
 percov_blastn:0.80 #Blastn Percent Coverage Threhold EST-Genome Alignments
 percid_blastn:0.85 #Blastn Percent Identity Threshold EST-Genome Aligments
 eval_blastn:1e-10 #Blastn eval cutoff
@@ -216,8 +238,7 @@ bit_blastx:30 #Blastx bit cutoff
 e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments
 ep_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide
 en_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate protein
-model_org:drosophila #Model Organism use for finding repeat sequences by RepeatMasker
-snaphmm:/usr/local/SNAP/HMM/Dm.hmm #SNAP HMM Model - This can be organism specific by iterating MAKER see HMM BUILDING
+
 
 
 C. maker_opts.ctl
@@ -227,7 +248,6 @@ est:directory_where_maker_is/maker/data/dpp_transcripts.fasta #EST sequence file
 repeat_protein:directory_where_maker_is/maker/data/te_proteins.fasta #A transposable Elements Library
 clean_up:0 #remove theVoid directory: 1 = yes, 0 = no
 rmlib: #An organism specific Repeat Library
-use_seq_dir:0 #place files in same directory as sequence file: 1 = yes, 0 = no, yes is only possibly when the sequence file is in a directory is other than the working directory, then all output files would be put in the same directory at the genome sequence file.
 split_hit:10000 #length of the splitting of hits, could be seen as a maximum intron length
 snap_flank:200 #number of bp surrounding SNAP predictions used in attempts to extend gene by MAKER
 te_remove:1 #Mask Regions with Excess Similarity to Transposable Element Proteins, 1 = yes, 0 = no
@@ -250,7 +270,7 @@ each GFF file will have a sister file called sequence.wutr.gff3
 #----------
 APOLLO
 
-Maker is bundled with a configuration file that improves the color and display of maker annotations and evidence in the Apollo genome browser.  The configuration file is called "fly.tiers" and is located in the maker/Apollo/ directory.  The file should be copied to the conf/ sub_directory which is located under the Apollo instalation directory.
+Maker is bundled with a configuration file that improves the color and display of maker annotations and evidence in the Apollo genome browser.  The configuration file is called "gff3.tiers" and is located in the maker/Apollo/ directory.  The file should be copied to the conf/ sub_directory which is located under the Apollo instalation directory.  Using the Mac version of Apollo the conf/ directory is located at /Applications/Apollo.app/Contents/Resources/app/conf/.
 
 
 
@@ -319,3 +339,5 @@ Last is to build an HMM.
 
 
 Lastly, you will want to add the location of your hmm file to your maker_opts.ctl file.
+
+*For more information see SNAP documentation on how to build an HMM
