@@ -216,7 +216,7 @@ sub careful_cluster {
 }
 #------------------------------------------------------------------------
 sub mani_sort {
-	criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a);
+	criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a) || criteria_3($a) <=> criteria_3($b);
 }
 #------------------------------------------------------------------------
 sub criteria {
@@ -242,7 +242,20 @@ sub criteria_2 {
 	return $hit->score()              if $ref =~/snap/;	
 	return $hit->score()              if $ref =~/augustus/;
 	die "UNKNOWN CLASS(".ref($hit).") in cluster::criteria_2\n";
+}
+#------------------------------------------------------------------------
+#third citeria used to address order issue with mpi vs standard maker
+sub criteria_3 {
+    my $hit = shift;
 
+    my $ref = ref($hit);
+
+    return  $hit->hsp('best')->evalue if $ref =~ /blast/;
+    return  1                         if $ref =~ /repeatmasker/;
+    return  1                         if $ref =~ /2genome/;
+    return  1                         if $ref =~/snap/;
+    return  1                         if $ref =~/augustus/;
+    die "UNKNOWN CLASS(".ref($hit).") in cluster::criteria_3\n";
 }
 #------------------------------------------------------------------------
 sub shadow_cluster {

@@ -319,8 +319,8 @@ sub run {
       my $chunk_count = ++$self->{VARS}{chunk_count};
       
       if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
-	 $self->{LEVEL}{CURRENT} = 4;
-	 $self->_initiate_level(4);
+	 $self->{LEVEL}{CURRENT} = 5;
+	 $self->_initiate_level(5);
       }
 
       return $self->run;

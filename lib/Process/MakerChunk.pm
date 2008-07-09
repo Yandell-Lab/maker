@@ -329,13 +329,13 @@ sub run {
       #-- merge and collect blastn results
       my $blastn_keepers = collect_blastn($chunk, 
 					  $blastn_res_dir,
-					  $CTL_OPTIONS{eval_blastx},
-					  $CTL_OPTIONS{bit_blastx},
-					  $CTL_OPTIONS{percov_blastx},
-					  $CTL_OPTIONS{percid_blastx},
+					  $CTL_OPTIONS{eval_blastn},
+					  $CTL_OPTIONS{bit_blastn},
+					  $CTL_OPTIONS{percov_blastn},
+					  $CTL_OPTIONS{percid_blastn},
 					  $CTL_OPTIONS{split_hit},
 					  $opt_f
-					 );
+					 );      
       #-------------------------CHUNK
 	
       #------------------------RESULTS
@@ -1515,7 +1515,7 @@ sub runBlastn {
    my $opt_f = shift;
 
    my $command  = $blastn;
-   $command .= " $db $q_file B=10000 V=10000 E=$eval_blastn";
+   $command .= " $db $q_file B=100000 V=100000 E=$eval_blastn";
    $command .= " wordmask=seg";
    $command .= " R=3";
    $command .= " W=15";
@@ -1676,7 +1676,7 @@ sub runBlastx {
    my $opt_f = shift;
 
    my $command  = $blastx;
-   $command .= " $db $q_file B=10000 V=10000 E=$eval_blastx";
+   $command .= " $db $q_file B=100000 V=100000 E=$eval_blastx";
    $command .= " wordmask=seg";
    #$command .= " T=20";
    #$command .= " W=5";
