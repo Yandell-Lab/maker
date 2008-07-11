@@ -52,11 +52,12 @@ sub get_blocks {
 }
 #-------------------------------------------------------------------------------
 sub get_exon_coors_r {
-       my $v      = shift;
-	my $type  = shift;
+        my $v      = shift;
+        my $type  = shift;
 
         my $pos_q = $v->{q_b};
         my $pos_t = $v->{t_b};
+
         my $exon = 0;
 
         my @data;
@@ -65,11 +66,23 @@ sub get_exon_coors_r {
 
                         #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
 
-                        $data[$exon]{q}{b} = $pos_q
-                        unless defined($data[$exon]{q}{b});
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+			}
+			else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+			}
 
-                        $data[$exon]{t}{b} = $pos_t     
-                        unless defined($data[$exon]{t}{b});
+			if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1 
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t 
+				unless defined($data[$exon]{t}{b});
+                        }
 
                         if ($v->{q_strand} == 1){
                                 $pos_q += $o->{q};
@@ -108,11 +121,23 @@ sub get_exon_coors_r {
                 }
                 elsif ($o->{state} eq '3'){
 			if ($type eq '3I5'){
-                        	$data[$exon]{q}{e} = $pos_q; 
-                        	$data[$exon]{t}{e} = $pos_t; 
+        			if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q; 
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1; 
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t; 
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
 
-                        	$data[$exon]{q}{strand} = $v->{q_strand};
-                        	$data[$exon]{t}{strand} = $v->{t_strand};
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
+
                         	#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
 				$exon++;
 			}
@@ -133,11 +158,23 @@ sub get_exon_coors_r {
                 }
                 elsif ($o->{state} eq '5'){
 			if ($type eq '5I3'){
-                        	$data[$exon]{q}{e} = $pos_q;
-                        	$data[$exon]{t}{e} = $pos_t;
+			        if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q;
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1;
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t;
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
 
-                        	$data[$exon]{q}{strand} = $v->{q_strand};
-                        	$data[$exon]{t}{strand} = $v->{t_strand};
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
+
 				$exon++;
 			}
                         #print "ZEEEEEEEEE:$pos_q exon:$exon\n";
@@ -213,15 +250,26 @@ sub get_exon_coors_r {
                 }
 
         }
-        $data[$exon]{q}{e} = $pos_q;
-        $data[$exon]{t}{e} = $pos_t;
 
-        $data[$exon]{q}{strand} = $v->{q_strand};
-        $data[$exon]{t}{strand} = $v->{t_strand};
+	if ($v->{q_b} < $v->{q_e}){
+	    $data[$exon]{q}{e} = $pos_q;
+	}
+	else{
+	    $data[$exon]{q}{e} = $pos_q + 1;
+	}
+
+	if ($v->{t_b} < $v->{t_e}){
+	    $data[$exon]{t}{e} = $pos_t;
+	}
+	else{
+	    $data[$exon]{t}{e} = $pos_t + 1;
+	}
+	$data[$exon]{q}{strand} = $v->{q_strand};
+	$data[$exon]{t}{strand} = $v->{t_strand};
         
-        my $new_data = fix_exon_coors(\@data);
-        return $new_data;
-
+        #my $new_data = fix_exon_coors(\@data);
+        #return $new_data;
+        return \@data;
 }
 #-------------------------------------------------------------------------------
 sub get_exon_coors_f {
@@ -230,19 +278,31 @@ sub get_exon_coors_f {
 
 	my $pos_q = $v->{q_b};
 	my $pos_t = $v->{t_b};
+
 	my $exon = 0;
 
 	my @data;
         foreach my $o (@{$v->{operations}}){
 		if    ($o->{state} eq 'M'){
 
-			#print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
+		        #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+		        }
+		        else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+		        }
 
-			$data[$exon]{q}{b} = $pos_q
-			unless defined($data[$exon]{q}{b});
-
-			$data[$exon]{t}{b} = $pos_t	
-			unless defined($data[$exon]{t}{b});
+                        if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+                        }
 
                      	if ($v->{q_strand} == 1){
                                 $pos_q += $o->{q};
@@ -281,11 +341,22 @@ sub get_exon_coors_f {
                 }
                 elsif ($o->{state} eq '5'){
 			if ($type eq '5I3'){
-				$data[$exon]{q}{e} = $pos_q; 
-				$data[$exon]{t}{e} = $pos_t; 
+			        if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q;
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1;
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t;
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
 
-      				$data[$exon]{q}{strand} = $v->{q_strand};
-        			$data[$exon]{t}{strand} = $v->{t_strand};
 				#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
 				$exon++;
 			}
@@ -306,12 +377,22 @@ sub get_exon_coors_f {
                 }
                 elsif ($o->{state} eq '3'){
 			if ($type eq '3I5'){
-                		$data[$exon]{q}{e} = $pos_q;
-                        	$data[$exon]{t}{e} = $pos_t;
-
-                        	$data[$exon]{q}{strand} = $v->{q_strand};
-                        	$data[$exon]{t}{strand} = $v->{t_strand};
-
+			        if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q;
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1;
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t;
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
+                						
 				#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
 				$exon++;
 			}
@@ -387,14 +468,25 @@ sub get_exon_coors_f {
 
         }
 
-	$data[$exon]{q}{e} = $pos_q;
-	$data[$exon]{t}{e} = $pos_t;
+        if ($v->{q_b} < $v->{q_e}){
+            $data[$exon]{q}{e} = $pos_q;
+        }
+        else{
+            $data[$exon]{q}{e} = $pos_q + 1;
+        }
 
-	$data[$exon]{q}{strand} = $v->{q_strand};
+        if ($v->{t_b} < $v->{t_e}){
+            $data[$exon]{t}{e} = $pos_t;
+        }
+        else{
+            $data[$exon]{t}{e} = $pos_t + 1;
+        }
+        $data[$exon]{q}{strand} = $v->{q_strand};
         $data[$exon]{t}{strand} = $v->{t_strand};
 	
-	my $new_data = fix_exon_coors(\@data);
-	return $new_data;
+	#my $new_data = fix_exon_coors(\@data);
+	#return $new_data;
+	return \@data;
 }
 #-------------------------------------------------------------------------------
 sub fix_exon_coors {
