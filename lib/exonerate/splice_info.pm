@@ -13,6 +13,7 @@ use PhatHit_utils;
 use SimpleCluster;
 use compare;
 use cluster;
+use CGL::TranslationMachine;
 
 @ISA = qw(
        );
@@ -66,8 +67,26 @@ sub get_numbers {
 sub needs_to_be_revcomped {
 	my $hit = shift;
 
-	return 0 if $hit->num_hsps == 1 && $hit->strand('hit') ==  1;
-	return 1 if $hit->num_hsps == 1 && $hit->strand('hit') == -1;
+	if ($hit->num_hsps == 1){
+	        my $seq = [$hit->hsps()]->[0]->seq('query')->seq();
+		$seq =~ s/[\-\_\+\=\|]//g;
+
+		my $r_seq = [$hit->hsps()]->[0]->seq('query')->revcom()->seq;
+		$r_seq =~ s/[\-\_\+\=\|]//g;
+		
+		my $tM = new CGL::TranslationMachine();
+		(my $p_seq , undef) = $tM->longest_translation($seq);
+		(my $r_p_seq , undef) = $tM->longest_translation($r_seq);
+
+		if( length($p_seq) >= length($r_p_seq) ){
+		        return 0 if $hit->strand('hit') ==  1;
+		        return 1 if $hit->strand('hit') == -1;
+		}
+		else{
+		        return 1 if $hit->strand('hit') ==  1;
+		        return 0 if $hit->strand('hit') == -1;
+		}
+	}
 
 	my $str = get_splice_str($hit);
 
