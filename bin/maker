@@ -1604,7 +1604,6 @@ sub load_control_files {
 
    #use command line defined genome
    $CTL_OPTIONS{'genome'} = $OPT{g} if (defined $OPT{g});
-   $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
     
    #use command line defined predictor
    $CTL_OPTIONS{'predictor'} = $OPT{predictor} if (defined $OPT{predictor});
@@ -1623,16 +1622,25 @@ sub load_control_files {
    push (@infiles, 'rm_gff') if ($OPT{GFF});
    push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
 
+   my $error;
+
    foreach my $in (@infiles) {
       if (not $CTL_OPTIONS{$in}) {
-	 die "You have failed to provide a value for \'$in\' in the control files\n;"
+	 $error .= "You have failed to provide a value for \'$in\' in the control files\n";
+	 next;
       }
 
       if (not -e $CTL_OPTIONS{$in}) {
-	 die "The \'$in\' file $CTL_OPTIONS{$in} does not exist.".
-	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n";
+	 $error .= "The \'$in\' file $CTL_OPTIONS{$in} does not exist.\n".
+	           "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n";
+	 next;
       }
+
+      #set the absolute path to the file to reduce ambiguity
+      $CTL_OPTIONS{$in} = abs_path($CTL_OPTIONS{$in});
    }
+
+   die $error if (defined $error);
 
    if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
       warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
