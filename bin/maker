@@ -43,10 +43,6 @@ use maker::sens_spec;
 
 $|  = 1;
 
-#--delete these later
-my $masked_fasta;
-#--
-
 my $usage = "
 Usage:
 
@@ -117,7 +113,7 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "PREDS" => \$OPT{SNAPS},
 	   "predictor=s" =>\$OPT{predictor},
 	   "CTL" => sub {generate_control_files(); exit;},
-	   "help|?" => sub {die $usage;},
+	   "help|?" => sub {print $usage; exit;},
 	  );
 
 #-----------------------------------------------------------------------------
@@ -134,7 +130,9 @@ if (not @ctlfiles) {
       @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
    }
    else {
-      die $usage;
+      print STDERR "ERROR: Control files not found\n";
+      print $usage;
+      exit;
    }
 }
 
@@ -201,6 +199,8 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    #-set up void directory where analysis is stored
    my $the_void  = build_the_void($seq_out_name, $out_dir);
 
+   #-proccess the run log if any
+   my %run_log = run_log($the_void);
 
    #==from here on fastas are proccessed as chunks
 
@@ -211,10 +211,6 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
    my $masked_total_seq;
    my $p_fastas;
    my $t_fastas;
-   my $p_snap_fastas;
-   my $t_snap_fastas;
-   my $p_augus_fastas;
-   my $t_augus_fastas;
 
    my $GFF3 = new Dumper::GFF::GFFV3();
    $GFF3->seq($query_seq);
@@ -288,7 +284,7 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       }
    }
    
-   $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_total_seq);
+   my $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_total_seq);
    FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
 
    #==SNAP ab initio here
@@ -360,28 +356,39 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
 				  $CTL_OPTIONS{cpus}
 				 );
 
-      #==get just the snaps that overlap this chunk
-      my $snaps_on_chunk = get_snaps_on_chunk($snaps,
-					      $chunk
-					     );
-
-      #==get just the augustus that overlap this chunk
-      my $augus_on_chunk = get_snaps_on_chunk($augus,
+      #-- decide which gene finder to use to build annotations 
+      my $pred_command;
+      my $preds_on_chunk;
+      if ($CTL_OPTIONS{predictor} eq 'augustus'){
+	 $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
+	 $preds_on_chunk = get_snaps_on_chunk($augus,
                                               $chunk
                                              );
+      }
+      elsif ($CTL_OPTIONS{predictor} eq 'snap'){
+	 $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
+	 $preds_on_chunk = get_snaps_on_chunk($snaps,
+					      $chunk
+					     );
+      }
+      elsif($CTL_OPTIONS{predictor} eq 'est2genome'){
+	 $pred_command = '';
+	 $preds_on_chunk = [];
+      }
+      else{
+	 die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
+      }
 
       #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
       if(not $chunk->is_last){ #if not last chunk
 	 ($holdover_chunk,
 	  $blastx_keepers,
 	  $blastn_keepers,
-	  $snaps_on_chunk,
-	  $augus_on_chunk) = process_the_chunk_divide($chunk,
+	  $preds_on_chunk) = process_the_chunk_divide($chunk,
 						      $CTL_OPTIONS{'split_hit'},
 						      $blastx_keepers,
 						      $blastn_keepers,
-						      $snaps_on_chunk,
-						      $augus_on_chunk,
+						      $preds_on_chunk
 						     );
       }
 
@@ -445,26 +452,7 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       my $exonerate_p_data = flatten($exonerate_p_clusters, 'exonerate:p');
       my $exonerate_e_data = flatten($exonerate_e_clusters, 'exonerate:e');
       
-      #-- decide which gene finder to use to build annotations 
-      my $pred_command;
-      my $preds_on_chunk;
-      if ($CTL_OPTIONS{predictor} eq 'augustus'){
-	 $pred_command = $CTL_OPTIONS{augustus} .' --species='.$CTL_OPTIONS{augustus_species};
-	 $preds_on_chunk = $augus_on_chunk;
-      }
-      elsif ($CTL_OPTIONS{predictor} eq 'snap'){
-	 $pred_command = $CTL_OPTIONS{snap}.' '.$CTL_OPTIONS{snaphmm};
-	 $preds_on_chunk = $snaps_on_chunk;
-      }
-      elsif($CTL_OPTIONS{predictor} eq 'est2genome'){
-	 $pred_command = '';
-	 $preds_on_chunk = [];
-      }
-      else{
-	 die "ERROR: invalid predictor type: $CTL_OPTIONS{predictor}\n";
-      }
       #-auto-annotate the input file
-      
       my $annotations = maker::auto_annotator::annotate($fasta,
 							$$masked_fasta,
 							$chunk->number(),
@@ -485,8 +473,6 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       
       #--- GFF3      
       $GFF3->genes($annotations);
-      $GFF3->predictions($snaps_on_chunk);
-      $GFF3->predictions($augus_on_chunk);
       $GFF3->phat_hits($blastx_data);
       $GFF3->phat_hits($blastn_data);
       $GFF3->phat_hits($exonerate_p_data);
@@ -536,22 +522,17 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       #   $IOX->Game();
 
 
-      #--- building fastas
+      #--- building fastas for annotations (grows with itteration)
       my ($p_fasta, $t_fasta) = get_maker_p_and_t_fastas($annotations);
       $p_fastas .= $p_fasta;
       $t_fastas .= $t_fasta;
-   
-      my ($p_snap_fasta, $t_snap_fasta) = get_snap_p_and_t_fastas($query_seq, $snaps_on_chunk);
-      $p_snap_fastas .= $p_snap_fasta;
-      $t_snap_fastas .= $t_snap_fasta;
+   }   
 
-      my ($p_augus_fasta, $t_augus_fasta) = get_snap_p_and_t_fastas($query_seq, $augus_on_chunk);
-      $p_augus_fastas .= $p_augus_fasta;
-      $t_augus_fastas .= $t_augus_fasta;
+   #--- building fastas of predictions
+   my ($p_snap_fastas, $t_snap_fastas) = get_snap_p_and_t_fastas($query_seq, $snaps);
+   my ($p_augus_fastas, $t_augus_fastas) = get_snap_p_and_t_fastas($query_seq, $augus);
 
-   }
-
-   #--Write fasta files and gff3 files now that all chunks are finished
+   #--Write fasta files now that all chunks are finished
    FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
    FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
    FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
@@ -560,6 +541,10 @@ while (my $fasta     = $fasta_iterator->nextEntry()) {
       FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
       FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
    }
+
+   #--- add predictions to GFF and write
+   $GFF3->predictions($snaps_on_chunk);
+   $GFF3->predictions($augus_on_chunk);
    $GFF3->print($out_dir."/".$seq_out_name.".gff");
 
    #--cleanup maker files created with each fasta sequence
@@ -572,6 +557,65 @@ exit(0);
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
+sub run_log {
+   my $the_void = shift;
+   my $CTL_OPTIONS = shift;
+
+   my $run_log;
+
+   if (-e "$the_void/run_log"){
+      open (IN, "< $the_void/run_log");
+      
+      while( defined (my $line = <IN>)){
+	 chomp $line;
+
+	 my ($state, $value) = split ("\t", $line);
+
+	 $run_log{$state}{$value}++;
+      }
+
+      close(IN);
+
+      while (my $state = each %{$CTL_OPTIONS}){
+	 my $value = $CTL_OPTIONS->{$state};
+
+	 my %static = (te_remove => undef,
+		       max_dna_len => undef,
+		      );
+
+	 #if previous log options are not the same as current control file options
+	 if (exists $run_log{$state} && ! exists $run_log{$state}{$value}){
+	    $log_value = [keys %{ $run_log{$state}}]->[0];
+
+	    print STDERR "WARNING: Control file option \'$state\' does not hold\n".
+	                 "the same value as the previous Maker run.\n".
+			 "Old:$log_value\tNew:$value\n".
+			 "A new log file will be made holding the new value.\n";
+
+	    if($state =~ /^genome|^est|^protein|^repeat_protein|^rm_lib/){
+	       
+	       last;
+	       p_exonerate, est_exonerate, blastx, blastn, augustus, snap, cat, out, tbl 
+	    }
+	    
+	    if($state eq ''){
+	    }
+	    
+	    if($state eq ''){
+	    }
+	    
+	    if($state eq ''){
+	    }
+	    
+	    if($state eq ''){
+	    }
+	 }
+      }
+   }
+
+   return $run_log;
+}
 #-----------------------------------------------------------------------------
 sub get_snaps_on_chunk {
    my $snaps = shift;
@@ -1660,7 +1704,11 @@ sub load_control_files {
        $CTL_OPTIONS{'snaphmm'} = "fly";
    }
    if (! -e $CTL_OPTIONS{'snaphmm'} &&
+<<<<<<< .mine
+       (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}."/"./$CTL_OPTIONS{'snaphmm'})
+=======
        (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}."/".$CTL_OPTIONS{'snaphmm'})
+>>>>>>> .r55
       ){
       
       die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";
