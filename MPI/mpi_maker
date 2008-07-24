@@ -8,18 +8,34 @@ use strict "refs";
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
+use vars qw($RANK $LOG);
 
 BEGIN{
-   $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
-   $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
-      if not ($ENV{CGL_GO_SOURCE});
-   
-   $SIG{'__WARN__'} =
-   sub {
-      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-		      $_[0] !~ /Can\'t store item CODE/
-		    );
-   }
+    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
+    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
+	if not ($ENV{CGL_GO_SOURCE});
+    
+    #filter warning signals for warnings from storable module
+    $SIG{'__WARN__'} =
+	sub { warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+			      $_[0] !~ /Can\'t store item CODE/
+			    );
+	};
+    
+    #output to log file of seq that caused rank to die
+    $SIG{'__DIE__'} =
+	sub {
+	    if (defined ($LOG) && defined ($RANK) && defined $_[0]){
+		open (OUT, ">> $LOG");
+		print OUT "DIED\trank_$RANK\n";
+		close (OUT);
+
+		die $_[0];
+	    }
+	    else{
+		die;
+	    }
+	};
 }
 
 use Process::MakerChunk;
@@ -124,6 +140,7 @@ $Storable::forgive_me = 1;
 #------INITIATE MPI VARIABLES------
 my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
 my $size = MPI_Comm_size(MPI_COMM_WORLD); #how many proccesses
+$RANK = $rank;
 
 #--mpi message tags
 my $who_I_am       = 1111;
@@ -162,10 +179,6 @@ my $no_c_res      = 0;
 my $yes_chunk = 1;
 my $no_chunk  = 0;
 
-#--------------------------------------
-#---------PRIMARY MPI PROCCESS---------
-#--------------------------------------
-
 #---variables for threads in the root node
 my @c_results;
 my @res_loc;
@@ -183,6 +196,10 @@ my $t_terminate :shared;
 #---global variables
 my %OPT;
 my $root = 0;
+
+#--------------------------------------
+#---------PRIMARY MPI PROCCESS---------
+#--------------------------------------
 
 #--check if root node
 if ($rank == $root) {
@@ -516,6 +533,7 @@ if ($rank == $root) {
 }
 #------SECONDARY MPI PROCESSES------
 else {
+die " help me" if ($rank == 2);
    my $go_mpi_status = 1;
    my $tier_result;
    my $tier;

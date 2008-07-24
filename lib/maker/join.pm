@@ -114,7 +114,7 @@ sub find_best_five {
                 my $e_to_g_str = $datum->[1];
                 my $est        = $datum->[2];
 
-		print STDERR " PRIOR find_best_five e_to_g_str:$e_to_g_str g_to_e_str:$g_to_e_str\n";
+		#print STDERR " PRIOR find_best_five e_to_g_str:$e_to_g_str g_to_e_str:$g_to_e_str\n";
                 #sleep 3;
 
 		# always bad, but rules out single exon genes too!
@@ -134,7 +134,7 @@ sub find_best_five {
 
                 my ($pre, $pos) = $e_to_g_str =~ /(0*[ZbA1])(.*)$/;
                 
-                print STDERR " POST find_best_five e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
+                #print STDERR " POST find_best_five e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
                 #sleep 3;
 
 		push(@candidates, load_candidate($e_to_g_str, $est, $pre, $pos));
@@ -156,7 +156,7 @@ sub find_best_three {
 		my $e_to_g_str = $datum->[1];
 		my $est        = $datum->[2];
 
-		print STDERR " PRIOR find_best_three e_to_g_str:$e_to_g_str g_to_e_str:$g_to_e_str\n";
+		#print STDERR " PRIOR find_best_three e_to_g_str:$e_to_g_str g_to_e_str:$g_to_e_str\n";
                 #sleep 3;
 
 		# no extension to be had
@@ -180,7 +180,7 @@ sub find_best_three {
 
 		my ($pre, $pos) = $e_to_g_str =~ /(.*)([a1]0*)$/;
 		
-		print STDERR " POST find_best_three e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
+		#print STDERR " POST find_best_three e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
 		#sleep 3;
 
 	       push(@candidates, load_candidate($e_to_g_str, $est, $pre, $pos));

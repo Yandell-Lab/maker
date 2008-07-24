@@ -847,8 +847,10 @@ sub pneu {
 		$b_3 = maker::join::find_best_three($g, $ests);
 	}
 
+	my $pred_source = ($OPT_PRED eq 'est2genome') ? 'exonerate' : $OPT_PRED;
+
 	my $anno_transcript = 
-	maker::join::join_f($b_5, $g, $b_3, $q_seq, $OPT_PRED);
+	maker::join::join_f($b_5, $g, $b_3, $q_seq, $pred_source);
 
 	#return $g;
 	return $anno_transcript;

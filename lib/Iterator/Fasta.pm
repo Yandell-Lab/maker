@@ -75,7 +75,10 @@ sub nextEntry {
 	my $fh = $self->fileHandle();
 	$/ = "\n>";
 
-	return undef unless (openhandle($fh)); #checks to see if file handle is open
+	unless (openhandle($fh)){ #checks to see if file handle is open
+	    $/ = "\n";
+	    return undef; 
+	}
 
 	while(my $line = <$fh>){
                 $line =~ s/>//;

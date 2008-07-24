@@ -661,7 +661,7 @@ sub merge_hits {
 
                 next unless $b_hit->strand('hit') eq $l_hit->strand('hit');
 
-                print STDERR "adding new hsp to ".$b_hit->name." ".$b_hit->description."\n";
+                #print STDERR "adding new hsp to ".$b_hit->name." ".$b_hit->description."\n";
 
 		$was_merged{$l_hit->hsp(0)->hit->seq_id}++;
 
@@ -677,6 +677,7 @@ sub merge_hits {
 
 		$b_hit->hsps(\@new_b_hsps);
 		$b_hit->{'_sequenceschanged'} = 1;
+		$b_hit->{'_sequences_was_merged'} = 1;
 		push(@merged, $b_hit)	
 	}
 

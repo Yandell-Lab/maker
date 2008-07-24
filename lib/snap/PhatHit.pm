@@ -27,49 +27,6 @@ sub new {
 	return $self;
 }
 #------------------------------------------------------------------------
-sub nB {
-        my $self = shift;
-        my $w    = shift;
-
-        my $sorted;
-        my $hsp;
-
-        if    ($self->strand($w) == -1){
-                $sorted = $self->revSortFeatures($w);
-                $hsp = shift(@{$sorted});
-                return  $hsp->end($w);
-        }
-        elsif ($self->strand($w) == 1){
-                $sorted = $self->sortFeatures($w);
-                $hsp = shift(@{$sorted});
-                return  $hsp->start($w);
-        }
-        else {
-                die "dead in snap::PhatHit::nB\n";
-        }
-}
-#------------------------------------------------------------------------
-sub nE {
-        my $self = shift;
-        my $w    = shift;
-        my $sorted;
-        my $hsp;
-        if    ($self->strand($w) == -1){
-                $sorted = $self->revSortFeatures($w);
-                $hsp = pop(@{$sorted});
-                return  $hsp->start($w);
-        }
-        elsif ($self->strand($w) == 1){
-                $sorted = $self->sortFeatures($w);
-                $hsp = pop(@{$sorted});
-                return  $hsp->end($w);
-        }
-        else {
-                die "dead in snap::PhatHit::nE\n";
-        }
-
-}
-#------------------------------------------------------------------------
 sub show {
 	my $self = shift;
 
@@ -122,5 +79,3 @@ sub AUTOLOAD {
 }
 #------------------------------------------------------------------------
 1;
-
-
