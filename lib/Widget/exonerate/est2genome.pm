@@ -117,7 +117,7 @@ sub get_exon_coors_r {
                         }
                 }
                 elsif ($o->{state} eq 'N'){
-                        die "dead in protein2genomic::get_hsp_coors:N\n";
+                        die "dead in est2genomic::get_hsp_coors:N\n";
                 }
                 elsif ($o->{state} eq '3'){
 			if ($type eq '3I5'){
@@ -212,6 +212,23 @@ sub get_exon_coors_r {
 
                 }
                 elsif ($o->{state} eq 'S'){
+           		if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+		        }
+		        else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+		        }
+
+                        if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+                        }
 
                         if ($v->{q_strand} == 1){
                                 $pos_q += $o->{q};
@@ -337,7 +354,7 @@ sub get_exon_coors_f {
                         }
 		}
                 elsif ($o->{state} eq 'N'){
-			die "dead in protein2genomic::get_hsp_coors:N\n";
+			die "dead in est2genomic::get_hsp_coors:N\n";
                 }
                 elsif ($o->{state} eq '5'){
 			if ($type eq '5I3'){
@@ -429,6 +446,23 @@ sub get_exon_coors_f {
 
                 }
                 elsif ($o->{state} eq 'S'){
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+		        }
+		        else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+		        }
+
+                        if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+                        }
 
                         if ($v->{q_strand} == 1){
                                 $pos_q += $o->{q};
@@ -489,7 +523,7 @@ sub get_exon_coors_f {
 	return \@data;
 }
 #-------------------------------------------------------------------------------
-sub fix_exon_coors {
+sub fix_exon_coors { #no longer needed 7-26-2008
 	my $data = shift;
 
 	my @new_data;

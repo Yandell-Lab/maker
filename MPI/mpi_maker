@@ -8,36 +8,43 @@ use strict "refs";
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use vars qw($RANK $LOG);
+use vars qw($RANK $LOG $COMMAND_LINE_ARGS);
 
 BEGIN{
     $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
     $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
 	if not ($ENV{CGL_GO_SOURCE});
+
+    $COMMAND_LINE_ARGS = join(' ', @ARGV);
     
+    $SIG{'INT'} = sub {print STDERR "\n\nMaker aborted by user!!\n\n"; exit (1);};    
+
     #filter warning signals for warnings from storable module
     $SIG{'__WARN__'} =
 	sub { warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
 			      $_[0] !~ /Can\'t store item CODE/
 			    );
 	};
-    
-    #output to log file of seq that caused rank to die
-    $SIG{'__DIE__'} =
-	sub {
-	    if (defined ($LOG) && defined ($RANK) && defined $_[0]){
-		open (OUT, ">> $LOG");
-		print OUT "DIED\trank_$RANK\n";
-		close (OUT);
 
-		die $_[0];
-	    }
-	    else{
-		die;
-	    }
-	};
+   #output to log file of seq that caused rank to die                                                                               
+   $SIG{'__DIE__'} =
+   sub {
+      if (defined ($LOG) && defined $_[0]) {
+	 my $die_count = $LOG->get_die_count();
+	 $die_count++;
+
+	 $LOG->add_entry("DIED","RANK",$RANK);
+	 $LOG->add_entry("DIED","COUNT",$die_count);
+      }
+	 die "#----------------------\n",
+	     "FATAL: failed!!\n",
+	     "#----------------------\n",
+	      $_[0] . "\n";
+   };
 }
 
+use Error qw(:try);
+use Error::Simple;
 use Process::MakerChunk;
 use Process::MakerTiers;
 use Storable qw (freeze thaw);
@@ -52,6 +59,8 @@ use Bio::DB::Fasta;
 use Iterator::Fasta;
 use threads;
 use threads::shared;
+use runlog;
+use Shared_Functions;
 
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
@@ -165,6 +174,7 @@ my $yes_tier       = 2;
 my $yes_helper     = 3;
 my $no_helper      = 4;
 my $go_chunk       = 5;
+my $reset          = 6;
 my $terminate      = 0;
 
 #--results_status signals
@@ -181,6 +191,7 @@ my $no_chunk  = 0;
 
 #---variables for threads in the root node
 my @c_results;
+my @failed;
 my @res_loc;
 my @helper_stack;
 my @active;
@@ -203,107 +214,135 @@ my $root = 0;
 
 #--check if root node
 if ($rank == $root) {
-   #--Process arguments and the command line 
-   GetOptions("RM_off|R" => \$OPT{R},
-	      "force|f" => \$OPT{f},
-	      "datastore|d" => \$OPT{d},
-	      "genome|g=s" => \$OPT{g},
-	      "cpus|c=i" => \$OPT{c},
-	      "GFF"=> \$OPT{GFF},
-	      "PREDS" => \$OPT{SNAPS},
-	      "predictor=s" =>\$OPT{predictor},
-	      "CTL" => sub {generate_control_files(); exit;},
-	      "help|?" => sub {die $usage;},
-	     );
-   
-   #get arguments off the command line
-   my @ctlfiles = @ARGV;
-   
-   if (not @ctlfiles) {
-      if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
-	 @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
-      }
-      else {
-	 die $usage;
+
+   try{
+      #--Process arguments and the command line 
+      GetOptions("RM_off|R" => \$OPT{R},
+		 "force|f" => \$OPT{f},
+		 "datastore|d" => \$OPT{d},
+		 "genome|g=s" => \$OPT{g},
+		 "cpus|c=i" => \$OPT{c},
+		 "GFF"=> \$OPT{GFF},
+		 "PREDS" => \$OPT{SNAPS},
+		 "predictor=s" =>\$OPT{predictor},
+		 "retry=i" =>\$OPT{retry},
+		 "CTL" => sub {generate_control_files(); exit(0);},
+		 "help|?" => sub {print $usage; exit(0)},
+		);
+
+      if (defined($OPT{retry}) && $OPT{retry} <= 0) {
+	 print STDERR "WARNING: the retry flag must be set to a value greater than zero\n";
+	 $OPT{retry} = 1;
       }
    }
-
-   if ($size < 0) {
-      my $options = '';
-      $options .= " -R" if ($OPT{R});
-      $options .= " -f" if ($OPT{f});
-      $options .= " -d" if ($OPT{d});
-      $options .= " -g $OPT{g}" if ($OPT{g});
-      $options .= " -c $OPT{c}" if ($OPT{c});
-      $options .= " -GFF" if ($OPT{GFF});
-      $options .= " -PREDS" if ($OPT{SNAPS});
-      $options .= " -predictor $OPT{predicor}" if ($OPT{predictor});
+   catch Error::Simple with{
+      my $E = shift;
       
-      warn ("ERROR:  You are running mpi_maker on fewer than 2 processors.\n",
- 	    "Switching to regular maker.\n\n",
- 	    "If you are trying to test the mpi_maker installation, restart\n".
- 	    "mpi_maker using 2 or more processors.\n".
- 	    "(using at least 3 processors is recommended)\n\n"
- 	   );
+      print STDERR $E->{-text};
+      print STDERR "\n\nMaker failed parsing command line options!!\n\n";
+      my $code = 2;
+      $code = $E->{-value} if (defined($E->{-value}));
       
-      system ("perl $FindBin::Bin/maker $options " . join (" ", @ARGV));
-      exit;
-   }
+      exit($code);
+   };
 
-   #--Control file processing
-   
-   #set up control options from control files
-   my %CTL_OPTIONS = load_control_files(@ctlfiles);
-
-   #---load genome fasta file
-   my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
-
-   if ($fasta_iterator->number_of_entries() == 0) {
-      die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
-   }
-   
-   #---decide whether to use datastore 
-   if ($fasta_iterator->number_of_entries() > 1000) {
-      print STDERR "\n\n".
-      "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
-      "Datastore will be used to avoid overloading the data structure of\n".
-      "the output directory.\n\n";
-      
-      $OPT{d} = 1;
-   }
-   
+   #varibles that are persistent outside of try
+   my %CTL_OPTIONS;
+   my $fasta_iterator;
    my $DS_FH;
 
-   if ($OPT{d}) {
-      %CTL_OPTIONS = build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
-      $DS_FH = new FileHandle();
-      $DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
-      $DS_FH->autoflush(1);
-   }
+   try{
+      #get arguments off the command line
+      my @ctlfiles = @ARGV;
+      
+      if (not @ctlfiles) {
+	 if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
+	    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
+	 }
+	 else {
+	    die $usage;
+	 }
+      }
+      
+      if ($size < 0) {
+      
+	 warn ("ERROR:  You are running mpi_maker on fewer than 2 processors.\n",
+	       "Switching to regular maker.\n\n",
+	       "If you are trying to test the mpi_maker installation, restart\n".
+	       "mpi_maker using 2 or more processors.\n".
+	       "(using at least 3 processors is recommended)\n\n"
+	      );
+	 
+	 system ("perl $FindBin::Bin/maker $COMMAND_LINE_ARGS " . join (" ", @ARGV));
+	 exit(0);
+      }
 
-   #---set up blast databases for analyisis
-   create_blastdb(\%CTL_OPTIONS);
+      #--Control file processing
+      
+      #set up control options from control files
+      %CTL_OPTIONS = Shared_Functions::load_control_files(\@ctlfiles, \%OPT);
+      
+      #---load genome fasta file
+      $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
+      
+      if ($fasta_iterator->number_of_entries() == 0) {
+	 die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
+      }
+   
+      #---decide whether to use datastore 
+      if ($fasta_iterator->number_of_entries() > 1000) {
+	 print STDERR "\n\n".
+	 "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
+	 "Datastore will be used to avoid overloading the data structure of\n".
+	 "the output directory.\n\n";
+	 
+	 $OPT{d} = 1;
+      }
+      
+      if ($OPT{d}) {
+	 %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
+	 $DS_FH = new FileHandle();
+	 $DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
+	 $DS_FH->autoflush(1);
+      }
+      
+      #---set up blast databases for analyisis
+      Shared_Functions::create_mpi_blastdb(\%CTL_OPTIONS, \%OPT, $size);
+   }
+   catch Error::Simple with{
+      my $E = shift;
+      print STDERR $E->{-text};
+      print STDERR "\n\nMaker failed while examining startup data (control files and input fasta files)!!\n\n";
+      my $code = 2;
+      $code = $E->{-value} if (defined($E->{-value}));
+      
+      exit($code);
+   };
 
    #build indexes of databases
-   my $thread = threads->create(\&build_all_indexes,
-				$CTL_OPTIONS{old_protein},
-				$CTL_OPTIONS{old_est}
-			       );
-   $thread->detach();
+   Shared_Functions::build_all_indexes($CTL_OPTIONS{old_protein},
+				       $CTL_OPTIONS{old_est}
+				      );
 
+   #====MPI COMMUNICATION
+   
    #---main code for distribution of mpi data here
-   my $go_mpi_status = 1;
-   my $limbo_count = 0;
    my $thr = threads->create(\&node_thread);
+   my $go_mpi_status = 1;
+   $t_need_flag = 1;
 
    while($go_mpi_status){
+      #====INTERNAL TIER THREAD
+
       #check on results from internal thread
       if (defined($t_tier_result)){
 	 my $t_res = ${thaw($t_tier_result)};
 	 $t_tier_result = undef;
 	 $active[$root] = 0;
-	 print STDERR $t_res;
-	 $go_mpi_status = 0 if ($limbo_count == $size - 1);
+
+	 if ($t_res->{-failed}){
+	    push(@failed, $t_res->{-fasta});
+	 }
       }
       if (defined($t_chunk_result)){
 	 my $chunk =  ${thaw($t_chunk_result)};
@@ -315,7 +354,7 @@ if ($rank == $root) {
       }
 
       #see if there are chunks to get from the internal thread
-      while((@helper_stack > 0) && (@chunks > 1) && (my $chunk = shift @chunks)){
+      while((@helper_stack > 0) && (@chunks > 0) && (my $chunk = shift @chunks)){
 	 my $helper = shift @helper_stack;
 	 $chunk = ${thaw($chunk)};
 	 
@@ -327,189 +366,217 @@ if ($rank == $root) {
 	 
 	 #send the chunk
 	 MPI_SendII(\$chunk, $helper, $mpi_data, MPI_COMM_WORLD);
-	 $limbo_count--; #take helper chunk out of limbo
       }
 
-      #if all nodes are in limbo only work with the thread
-      if ($limbo_count == $size - 1){
-	 sleep 1;
-	 next; #skip all mpi for now
-      }
-
-      my $who;
-      my $what;
-      my $rs_type;
-
-      #see who asks for a file
-      MPI_Recv(\$who, 1,  MPI_INT, -2, $who_I_am, MPI_COMM_WORLD);
-
-      #see what the mpi node wants
-      MPI_Recv(\$what, 1, MPI_INT, $who, $what_I_want, MPI_COMM_WORLD);
-
-      #if the node wants a tier to process, do this
-      if($what == $need_tier){
-	 #receive result status
-	 MPI_Recv(\$rs_type, 1,  MPI_INT, $who, $result_status, MPI_COMM_WORLD); 
-	 
-	 #print result if available
-	 if($rs_type == $yes_result){
-	    my $result;
-	    MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
-	    print STDERR $result;
-	 }
-
-	 #if a contig is available send tier
-	 if(my $fasta = $fasta_iterator->nextEntry()){
-	    my $tier = Process::MakerTiers->new($fasta,
-						\%CTL_OPTIONS,
-						\%OPT,
-						$who
-					       );
+      #get tier for internal thread
+      if($t_need_flag > 0){
+	 my $tier;
+	 while (my $fasta = $fasta_iterator->nextEntry() || shift @failed){
+	    $tier = Process::MakerTiers->new($fasta,
+					     \%CTL_OPTIONS,
+					     \%OPT,
+					     $root
+					    );
 	    
 	    print $DS_FH $tier->DS() . "\n" if($OPT{d});
-	    
-	    #say tier is available and send it
-	    MPI_Send(\$yes_tier, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
-	    MPI_SendII(\$tier, $who, $mpi_data, MPI_COMM_WORLD );
-	    $active[$who] = 1;
-	 }
-	 else{
-	    MPI_Send(\$wait_as_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
-	    push(@helper_stack, $who);
-	    $active[$who] = 0;
-	    $limbo_count++;
-	 }
-      }
-      #if the node wants a helper or needs a chunk result, do this
-      elsif($what == $need_helper || $what == $need_c_res){
-	 #--first send c_res_status
-	 # send ids of nodes with chunk results
-	 if(defined ($res_loc[$who])){
-	    MPI_Send(\$yes_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
-	    MPI_SendII(\$res_loc[$who], $who, $mpi_data, MPI_COMM_WORLD);
 
-	    my @locs = @{$res_loc[$who]};
-	    $res_loc[$who] = undef;
-
-	    #if primary node has chunk result to send then send them
-	    while (defined(my $loc = shift @locs)){
-	       if ($loc == $root){
-		  my $res = shift @{$c_results[$who]};
-		  MPI_SendII(\$res, $who, $mpi_data, MPI_COMM_WORLD);
-	       }
-	    }
+	    last if(! $tier->terminated);
 	 }
-	 #no one has anything yet
-	 else{
-	    MPI_Send(\$no_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
-	 }
-
-	 #continue the rest if the node needs a helper
-	 if($what == $need_helper){
-	    #find the number of helpers required
-	    my $num_helpers_req;
-	    MPI_Recv(\$num_helpers_req, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
-	    
-	    #number of secondary node helpers available
-	    my $sec_node_avail = @helper_stack;
-
-	    #number of primary node threads available
-	    my $thr_avail = ($t_need_flag == 2 && ! defined $t_chunk) ? 1 : 0;
-	    
-	    #signal that no helpers are available
-	    if($sec_node_avail == 0 && $thr_avail == 0){
-	       MPI_Send(\$no_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
-	    }
-	    else{#if node helpers are available
-	       #helpers to send
-	       my $helpers = [];
-	       
-	       #secondary node helpers
-	       if($sec_node_avail > 0){
-		  #seperate the helpers
-		  while(@{$helpers} < $num_helpers_req && @helper_stack > 0){
-		     my $helper = shift @helper_stack;
-		     push(@{$helpers}, $helper);
-		     $limbo_count--; #count nodes taken out of limbo
-		  }
-		  
-		  $num_helpers_req -= @{$helpers};
-	       }
-
-	       #primary node thread helper
-	       if ($thr_avail && $num_helpers_req > 0){
-		  my $helper = $root;
-		  unshift(@{$helpers}, $helper);
-	       }
-	       
-	       #say helper is available and send ids of the helpers
-	       MPI_Send(\$yes_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
-	       MPI_SendII(\$helpers, $who, $mpi_data, MPI_COMM_WORLD);
-	       
-	       #take chunk as a helper
-	       if($thr_avail && $num_helpers_req > 0){
-		  #see who's one who needs help
-		  my $who2;
-		  MPI_Recv(\$who2, 1,  MPI_INT, $who, $who_I_am, MPI_COMM_WORLD);
-		  
-		  #get go_chunk request_status
-		  my $req_stat;
-		  MPI_Recv(\$req_stat, 1, MPI_INT, $who2, $request_status, MPI_COMM_WORLD );
-		  die "ERROR: Logic error in getting chunk as a helper\n" if ($req_stat != $go_chunk);
-		  
-		  #get the chunk
-		  my $chnk;
-		  MPI_RecvII(\$chnk, $who2, $mpi_data, MPI_COMM_WORLD);
-		  
-		  $t_need_flag = 0;
-		  $t_chunk = freeze(\$chnk);
-	       }
-	    }
-	 }
-      }
-      #if the node has a chunk result, do this
-      elsif($what == $have_c_res){
-	 #get the owner of the result
-	 my $owner;
-	 MPI_Recv(\$owner, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
-	 
-	 if($owner == $root){
-	    my $chunk_res;
-	    MPI_RecvII(\$chunk_res, $who, $mpi_data, MPI_COMM_WORLD);
-	    push(@returned_chunks, freeze(\$chunk_res));
-	 }
-	 else{
-	    push(@{$res_loc[$owner]}, $who);
-	 }
-      }
-      else{
-	 die "ERROR: Invalid request type\n";
-      }
-
-      #start internal thread
-      if($t_need_flag == 1){
-	 if(my $fasta = $fasta_iterator->nextEntry()){
-	    my $tier = Process::MakerTiers->new($fasta,
-						\%CTL_OPTIONS,
-						\%OPT,
-						$root
-					       );
-	    
-	    print $DS_FH $tier->DS() . "\n" if($OPT{d});
-	    
+	 if(defined $tier){
 	    $t_need_flag = 0;
 	    my $t_val = freeze(\$tier);
 	    $t_tier = $t_val;
 	    $active[$root] = 1;
 	 }
 	 else{
-	    $t_need_flag = 2;
+	    $t_need_flag = 2; #take tier or chunk
 	 }
       }
 
+
+      #take a node out of limbo if there are failed contigs
+      if(@helper_stack && @failed){
+	 my $helper = shift @helper_stack;
+
+	 #tell helper node who I am
+	 MPI_Send(\$rank, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD);
+	 
+	 #tell helper node that no chunk is coming (resets to ask for tier)
+	 MPI_Send(\$reset, 1, MPI_INT, $helper, $request_status, MPI_COMM_WORLD );
+      }
+
+
+      #don't work with mpi if all are waiting in limbo
+      if (@helper_stack < $size - 1){
+	 my $who;
+	 my $what;
+	 my $rs_type;
+	 
+	 #see who asks for a file
+	 MPI_Recv(\$who, 1,  MPI_INT, -2, $who_I_am, MPI_COMM_WORLD);
+	 
+	 #see what the mpi node wants
+	 MPI_Recv(\$what, 1, MPI_INT, $who, $what_I_want, MPI_COMM_WORLD);
+	 
+	 #if the node wants a tier to process, do this
+	 if($what == $need_tier){
+	    #receive result status
+	    MPI_Recv(\$rs_type, 1,  MPI_INT, $who, $result_status, MPI_COMM_WORLD); 
+	    
+	    #get result if available
+	    if($rs_type == $yes_result){
+	       my $result;
+	       MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
+	       if ($result->{-failed}){
+		  push(@failed, $result->{-fasta});
+	       }
+	    }
+	    
+	    #if a contig is available send tier
+	    my $tier;
+	    while (my $fasta = $fasta_iterator->nextEntry() || shift @failed){
+	       $tier = Process::MakerTiers->new($fasta,
+						\%CTL_OPTIONS,
+						\%OPT,
+						$who
+					       );
+	       
+	       print $DS_FH $tier->DS() . "\n" if($OPT{d});
+	       
+	       last if(! $tier->terminated);
+	    }
+	    if(defined $tier){
+	       #say tier is available and send it
+	       MPI_Send(\$yes_tier, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
+	       MPI_SendII(\$tier, $who, $mpi_data, MPI_COMM_WORLD );
+	       $active[$who] = 1;
+	    }
+	    else{
+	       MPI_Send(\$wait_as_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
+	       push(@helper_stack, $who);
+	       $active[$who] = 0;
+	    }
+	 }
+	 #if the node wants a helper or needs a chunk result, do this
+	 elsif($what == $need_helper || $what == $need_c_res){
+	    #--first send c_res_status
+	    # send ids of nodes with chunk results
+	    if(defined ($res_loc[$who])){
+	       MPI_Send(\$yes_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
+	       MPI_SendII(\$res_loc[$who], $who, $mpi_data, MPI_COMM_WORLD);
+	       
+	       my @locs = @{$res_loc[$who]};
+	       $res_loc[$who] = undef;
+	       
+	       #if primary node has chunk result to send then send them
+	       while (defined(my $loc = shift @locs)){
+		  if ($loc == $root){
+		     my $res = shift @{$c_results[$who]};
+		     MPI_SendII(\$res, $who, $mpi_data, MPI_COMM_WORLD);
+		  }
+	       }
+	    }
+	    #no one has anything yet
+	    else{
+	       MPI_Send(\$no_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
+	    }
+	    
+	    #continue the rest if the node needs a helper
+	    if($what == $need_helper){
+	       #find the number of helpers required
+	       my $num_helpers_req;
+	       MPI_Recv(\$num_helpers_req, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
+	       
+	       #number of secondary node helpers available
+	       my $sec_node_avail = @helper_stack;
+	       
+	       #number of primary node threads available
+	       my $thr_avail = ($t_need_flag == 2 && ! defined $t_chunk) ? 1 : 0;
+	       
+	       #signal that no helpers are available
+	       if($sec_node_avail == 0 && $thr_avail == 0){
+		  MPI_Send(\$no_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
+	       }
+	       else{#if node helpers are available
+		  #helpers to send
+		  my $helpers = [];
+		  
+		  #secondary node helpers
+		  if($sec_node_avail > 0){
+		     #seperate the helpers
+		     while(@{$helpers} < $num_helpers_req && @helper_stack > 0){
+			my $helper = shift @helper_stack;
+			push(@{$helpers}, $helper);
+		     }
+		     
+		     $num_helpers_req -= @{$helpers};
+		  }
+		  
+		  #primary node thread helper
+		  my $root_helper_flag = 0;
+		  if ($thr_avail && $num_helpers_req > 0){
+		     my $helper = $root;
+		     #aways make root node first
+		     unshift(@{$helpers}, $helper);
+		     $root_helper_flag = 1;
+		  }
+		  
+		  #say helper is available and send ids of the helpers
+		  MPI_Send(\$yes_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
+		  MPI_SendII(\$helpers, $who, $mpi_data, MPI_COMM_WORLD);
+	       
+		  #take chunk as a helper
+		  if($root_helper_flag){
+		     #see who's one who needs help
+		     my $who2;
+		     MPI_Recv(\$who2, 1,  MPI_INT, $who, $who_I_am, MPI_COMM_WORLD);
+		     
+		     #get go_chunk request_status
+		     my $req_stat;
+		     MPI_Recv(\$req_stat, 1, MPI_INT, $who2, $request_status, MPI_COMM_WORLD );
+		     if ($req_stat == $go_chunk){
+			#get the chunk
+			my $chnk;
+			MPI_RecvII(\$chnk, $who2, $mpi_data, MPI_COMM_WORLD);
+			
+			$t_need_flag = 0;
+			$t_chunk = freeze(\$chnk);
+		     }
+		     elsif($req_stat == $reset){
+			#do nothing
+		     }
+		     else{
+			die "ERROR: Logic error in getting chunk as a helper\n";
+		     }
+		  }
+	       }
+	    }
+	 }
+	 #if the node has a chunk result, do this
+	 elsif($what == $have_c_res){
+	    #get the owner of the result
+	    my $owner;
+	    MPI_Recv(\$owner, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
+	    
+	    if($owner == $root){
+	       my $chunk_res;
+	       MPI_RecvII(\$chunk_res, $who, $mpi_data, MPI_COMM_WORLD);
+	       push(@returned_chunks, freeze(\$chunk_res));
+	    }
+	    else{
+	       push(@{$res_loc[$owner]}, $who);
+	    }
+	 }
+	 #if what the node wants is something else
+	 else{
+	    die "ERROR: Invalid request type\n";
+	 }
+      }
+
+      #see if all contigs are finished
       $go_mpi_status = 0;
-      foreach my $n (@active){
-	 if(defined($n) && $n == 1){
+      foreach my $n (@active ){
+	 if((defined($n) && $n == 1) || @failed){
 	    $go_mpi_status = 1;
 	    last;
 	 }
@@ -533,7 +600,6 @@ if ($rank == $root) {
 }
 #------SECONDARY MPI PROCESSES------
 else {
-die " help me" if ($rank == 2);
    my $go_mpi_status = 1;
    my $tier_result;
    my $tier;
@@ -552,7 +618,11 @@ die " help me" if ($rank == 2);
       }
       elsif(!defined($tier) || $tier->terminated){
 	 $what = $need_tier;
-	 $tier_result = $tier->error if(defined($tier));
+	 if(defined($tier)){
+	    $tier_result->{-error} = $tier->error;
+	    $tier_result->{-failed} = $tier->failed;
+	    $tier_result->{-fasta} = $tier->fasta if($tier->failed);
+	 }
       }
       elsif(($chunk = $tier->next_chunk) && ($tier->num_chunks > 0)){
 	 $what = $need_helper;
@@ -602,6 +672,10 @@ die " help me" if ($rank == 2);
 	       #run chunk
 	       $chnk->run($rank);
 	       $chunk_result = $chnk;
+	    }
+	    #if the reset signal is received do this
+	    elsif($chunk_status == $reset){
+	       #do nothing
 	    }
 	    #if the terminate signal is received do this
 	    elsif($chunk_status == $terminate){
@@ -698,6 +772,8 @@ die " help me" if ($rank == 2);
 #-----------------------------------
 MPI_Finalize();			#terminate MPI
 
+exit(0);
+
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
@@ -723,15 +799,25 @@ sub node_thread {
 	 #run the tier as far as possible
 	 $tier->run;
 
-	 #build list of all chunks available
-	 while(my $chnk = $tier->next_chunk){
-	    $chnk = freeze(\$chnk);
-	    push (@chunks, $chnk);
+	 #get all chunks available
+	 my $chnk = $tier->next_chunk;
+	 while(my $o_chnk = $tier->next_chunk){
+	    $o_chnk = freeze(\$o_chnk);
+	    push (@chunks, $o_chnk);
 	 }
 
 	 #run chunks one at a time
-	 while(my $chnk = shift @chunks){
+	 $chnk->run($rank) if ($chnk);
+	 $tier->update_chunk($chnk) if ($chnk);
+
+	 while($chnk = shift @chunks){
 	    $chnk = ${thaw($chnk)};
+
+	    if($tier->failed){ #skip chunks after failure
+	       $tier->update_chunk($chnk);
+	       last;
+	    }
+
 	    $chnk->run($rank);
 	    $tier->update_chunk($chnk);
 	 }
@@ -741,7 +827,11 @@ sub node_thread {
 
 	 #terminate tier, wait, or continue
 	 if($tier->terminated){
-	    my $tier_result = $tier->error;
+	    my $tier_result;
+	    $tier_result->{-error} = $tier->error;
+	    $tier_result->{-failed} = $tier->failed;
+	    $tier_result->{-fasta} = $tier->fasta if ($tier->failed);
+
 	    sleep 1 while (defined ($t_tier_result)); #pause incase result will be overwritten
 	    $t_tier_result = freeze(\$tier_result);
 	    $tier = undef;
@@ -764,260 +854,13 @@ sub node_thread {
 	 sleep 1 while (defined ($t_chunk_result)); #pause incase result will be overwritten
 	 $t_chunk_result = freeze(\$chunk);
 	 $chunk = undef;
-	 $t_need_flag = 2;
+	 $t_need_flag = 1;
 	 next;
       }
       else{
 	 sleep 1;
       }
    }
-}
-#-----------------------------------------------------------------------------
-sub build_datastore {
-   my %CTL_OPTIONS = %{shift @_};
-
-   $CTL_OPTIONS{'dsroot'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_datastore";
-   
-   $CTL_OPTIONS{'dsindex'} = "$CTL_OPTIONS{'out_base'}/$CTL_OPTIONS{'out_name'}_master_datastore.index";
-
-   print STDERR "A data structure will be created for you at:\n".
-                "$CTL_OPTIONS{'dsroot'}\n\n".
-                "To access files for individual sequences use the datastore index:\n".
-                "$CTL_OPTIONS{'dsindex'}\n\n";
-    
-   $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
-
-   return %CTL_OPTIONS;
-}
-#----------------------------------------------------------------------------
-sub create_blastdb {
-   my $CTL_OPTIONS = shift @_;
-
-   $CTL_OPTIONS->{'old_protein'}        = $CTL_OPTIONS->{'protein'};
-   $CTL_OPTIONS->{'old_est'}            = $CTL_OPTIONS->{'est'};
-   $CTL_OPTIONS->{'old_repeat_protein'} = $CTL_OPTIONS->{'repeat_protein'};
-    
-   $CTL_OPTIONS->{'protein'} = split_db($CTL_OPTIONS->{'protein'});
-   $CTL_OPTIONS->{'est'} = split_db($CTL_OPTIONS->{'est'});
-   
-   $CTL_OPTIONS->{'repeat_protein'} = split_db($CTL_OPTIONS->{'repeat_protein'})
-       unless($OPT{R});
-}
-#----------------------------------------------------------------------------
-sub split_db {
-   my $file = shift @_;
-    
-   my $fasta_iterator = new Iterator::Fasta($file);
-   my $db_size = $fasta_iterator->number_of_entries();
-   my $bins = $size;
-   $bins = $db_size if ($db_size < $bins);
-
-   my @fhs;
-   my @db_files;
-
-   if ($bins == 1) {
-      push (@db_files, $file);
-	
-      return \@db_files;
-   }
-    
-   my $dir = tempdir("dbXXXXX", DIR => cwd(), CLEANUP => 1);
-
-   for (my $i = 0; $i < $bins; $i++) {
-      my ($fh, $name) = tempfile("dbXXXXX",
-				 DIR => $dir,
-				 SUFFIX => '.fasta',
-				 UNLINK => 1
-				);
-      push (@fhs, $fh);
-      push (@db_files, $name);
-   }
-
-   while (my $fasta = $fasta_iterator->nextEntry()) {
-      my $fh = shift @fhs;
-      print $fh "$fasta\n";
-      push (@fhs, $fh);
-   }
-
-   foreach my $fh (@fhs) {
-      close ($fh);
-   }
-
-   return \@db_files;
-}
-#----------------------------------------------------------------------------
-sub load_control_files {
-   my @ctlfiles = @_;
-   my %CTL_OPTIONS;
-   my %OK_FIELDS;
-
-   my @MAKER_OPTS_PARAMS = ('genome',
-			    'est',
-			    'protein',
-			    'repeat_protein',
-			    'rmlib',
-			    'rm_gff',
-			    'predictor',
-			    'snaphmm',
-			    'augustus_species',
-			    'model_org',
-			    'max_dna_len',
-			    'split_hit',
-			    'snap_flank',
-			    'te_remove',
-			    'single_exon',
-			    'use_seq_dir',
-			    'clean_up',
-			    'cpus',
-			    'alt_peptide'
-			   );
-    
-   my @MAKER_BOPTS_PARAMS = ('percov_blastn',
-			     'percid_blastn',
-			     'eval_blastn',
-			     'bit_blastn',
-			     'percov_blastx',
-			     'percid_blastx',
-			     'eval_blastx',
-			     'bit_blastx',
-			     'e_perc_cov',
-			     'ep_score_limit',
-			     'en_score_limit'
-			    );
-
-   my @MAKER_EXE_PARAMS = ('xdformat',
-			   'blastn',
-			   'blastx',
-			   'snap',
-			   'augustus',
-			   'RepeatMasker',
-			   'exonerate',
-			  );
-
-
-   foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
-      $OK_FIELDS{$attr}++;
-   }
-
-   #set default values for certain control options
-   $CTL_OPTIONS{'clean_up'} = 0;
-   $CTL_OPTIONS{'max_dna_len'} = 100000;
-   $CTL_OPTIONS{'percov_blastn'} = 0.80;
-   $CTL_OPTIONS{'percid_blastn'} = 0.85;
-   $CTL_OPTIONS{'eval_blastn'} = 1e-10;
-   $CTL_OPTIONS{'bit_blastn'} = 40;
-   $CTL_OPTIONS{'percov_blastx'} = 0.50;
-   $CTL_OPTIONS{'percid_blastx'} = 0.40;
-   $CTL_OPTIONS{'eval_blastx'} = 1e-6;
-   $CTL_OPTIONS{'bit_blastx'} = 30;
-   $CTL_OPTIONS{'e_perc_cov'} = 50;
-   $CTL_OPTIONS{'alt_peptide'} = 'c';
-   $CTL_OPTIONS{'en_score_limit'} = 20;
-   $CTL_OPTIONS{'ep_score_limit'} = 20;
-   $CTL_OPTIONS{'predictor'} = 'snap';
-
-   #load values from control files
-   foreach my $ctlfile (@ctlfiles) {
-      open (CTL, "< $ctlfile") or die "ERROR: Could not open control files.\n$usage";
-	
-      while (my $line = <CTL>) {
-	 chomp($line);
-	    
-	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\s\t\n]+)/) {
-	    my $key = $1;
-	    my $value = $2;
-	    if (exists $OK_FIELDS{$key}) {
-	       if ($value =~ /\$/) {
-		  $value = `echo $value`;
-		  chomp($value);
-	       }
-	       $CTL_OPTIONS{$key} = $value unless (not defined $value);
-	    }
-	    else {
-	       warn "ERROR: Invalid option \"$key\" in control file $ctlfile\n";
-	    }
-	 }
-      }
-   }
-
-    #use command line defined genome
-   $CTL_OPTIONS{'genome'} = $OPT{g} if (defined $OPT{g});
-   $CTL_OPTIONS{'genome'} = abs_path($CTL_OPTIONS{'genome'});
-    
-   #use command line defined predictor
-   $CTL_OPTIONS{'predictor'} = $OPT{predictor} if (defined $OPT{predictor});
-   die "ERROR: Invalid predictor defined: $CTL_OPTIONS{'predictor'}\n".
-       "Must be set to 'snap', 'augustus, or 'es2genome'\n"
-       unless ($CTL_OPTIONS{'predictor'} =~ /snap|augustus|est2genome/);
-
-   #validate required values from control files
-   my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn',
-		  'blastx', 'exonerate', 'snap'
-		 );
-
-   #sometimes required
-   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove});
-   push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
-   push (@infiles, 'rm_gff') if ($OPT{GFF});
-   push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
- 
-   foreach my $in (@infiles) {
-      if (not $CTL_OPTIONS{$in}) {
-	 die "You have failed to provide a value for \'$in\' in the control files\n;"
-      }
-
-      if (not -e $CTL_OPTIONS{$in}) {
-	 die "The \'$in\' file $CTL_OPTIONS{$in} does not exist.".
-	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n";
-      }
-   }
-
-   if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
-      warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
-	  "As a result the default (drosophila) will be used.\n";
-      $CTL_OPTIONS{'model_org'} = "drosophila";
-   }
-   if ( ($CTL_OPTIONS{'predictor'} eq 'augustus' || $CTL_OPTIONS{'augustus'}) &&
-	not $CTL_OPTIONS{'augustus_species'}
-      ) {
-       warn "There is no species specified for Augustus in maker_opts.ctl : augustus_species.\n".
-	   "As a result the default (fly) will be used.\n";
-       $CTL_OPTIONS{'augustus_species'} = "fly";
-   }
-   if (not $CTL_OPTIONS{'snaphmm'}) {
-       warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
-	   "As a result, the default (fly) will be used.\n";
-       $CTL_OPTIONS{'snaphmm'} = "fly";
-   }
-   if (! (-e $CTL_OPTIONS{'snaphmm'}) &&
-       (! (exists $ENV{'ZOE'}) || ! (-e $ENV{'ZOE'}/$CTL_OPTIONS{'snaphmm'}))
-      ){
-      
-      die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";
-   }
-   if ($CTL_OPTIONS{'max_dna_len'} < 50000){
-       warn "ERROR: max_dna_len is set too low.  The minimum value permited is 50,000\n".
-	   "max_dna_len wil be reset to 50,000\n\n";
-       $CTL_OPTIONS{'max_dna_len'} = 50000;
-   }
-
-   #set values for datastructure    
-   $CTL_OPTIONS{'genome'} =~ /([^\/]+)$/;
-   $CTL_OPTIONS{'out_name'} = $1;
-   $CTL_OPTIONS{'out_name'} =~ s/\.[^\.]+$//;
-   $CTL_OPTIONS{'out_base'} = cwd();
-
-   if ($CTL_OPTIONS{'use_seq_dir'}) {
-      my @file_struct = split(/\//, $CTL_OPTIONS{'genome'});
-      pop @file_struct;
-      $CTL_OPTIONS{'out_base'} = join("/", @file_struct);
-   }
-    
-   if (not $CTL_OPTIONS{'out_base'}) {
-      die "No working directory, check your use_seq_dir option\n";
-   }
-
-   return %CTL_OPTIONS;
 }
 #----------------------------------------------------------------------------
 sub totemp{
@@ -1058,88 +901,4 @@ sub MPI_RecvII{
    MPI_Recv(\$recv, $length, MPI_CHAR, $source, $tag, $communicator); #receive line
 
    ${$ref} = ${thaw($recv)};
-}
-#-----------------------------------------------------------------------------
-sub build_all_indexes {
-   my @dbs = @_;
-
-   foreach my $db (@dbs) {
-      my $index = new Bio::DB::Fasta($db);
-   }
-}
-#-----------------------------------------------------------------------------
-sub generate_control_files {
-   #--build maker_opts.ctl file
-   my $repeat_protein = abs_path("$FindBin::Bin/../data/te_proteins.fasta");
-
-   open (OUT, "> maker_opts.ctl");
-   print OUT "#-----sequence and library files\n";
-   print OUT "genome: #genome sequence file (required)\n";
-   print OUT "est: #EST sequence file (required)\n";
-   print OUT "protein:  #protein sequence file (required)\n";
-   print OUT "repeat_protein:$repeat_protein #a database of transposable element proteins\n";
-   print OUT "rmlib: #an organism specific repeat library (optional)\n";
-   print OUT "rm_gff: #a gff3 format file of repeat elements (only used with -GFF flag)\n";
-   print OUT "\n";
-   print OUT "#-----external application specific options\n";
-   print OUT "snaphmm:fly #SNAP HMM model\n";
-   print OUT "augustus_species:fly #Augustus gene prediction model\n";
-   print OUT "model_org:all #RepeatMasker model organism\n";
-   print OUT "alt_peptide:c #amino acid used to replace non standard amino acids in xdformat\n";
-   print OUT "cpus:2 #max number of cpus to use in BLAST and RepeatMasker\n";
-   print OUT "\n";
-   print OUT "#-----Maker specific options\n";
-   print OUT "predictor:snap #identifies which gene prediction program to use for annotations\n";
-   print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
-   print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
-   print OUT "split_hit:10000 #length of the splitting of hits (max intron size for EST and protein alignments)\n";
-   print OUT "snap_flank:200 #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
-   print OUT "single_exon:0 #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no\n";
-   print OUT "use_seq_dir:1 #place output files in same directory as sequence file: 1 = yes, 0 = no\n";
-   print OUT "clean_up:0 #remove theVoid directory: 1 = yes, 0 = no\n";
-   close (OUT);
-
-   #--build maker_bopts.ctl file
-   open (OUT, "> maker_bopts.ctl");
-   print OUT "#-----BLAST and Exonerate statistics thresholds\n";
-   print OUT "percov_blastn:0.80 #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
-   print OUT "percid_blastn:0.85 #Blastn Percent Identity Threshold EST-Genome Aligments\n";
-   print OUT "eval_blastn:1e-10 #Blastn eval cutoff\n";
-   print OUT "bit_blastn:40 #Blastn bit cutoff\n";
-   print OUT "percov_blastx:0.50 #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
-   print OUT "percid_blastx:0.40 #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
-   print OUT "eval_blastx:1e-6 #Blastx eval cutoff\n";
-   print OUT "bit_blastx:30 #Blastx bit cutoff\n";
-   print OUT "e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments\n";
-   print OUT "ep_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide\n";
-   print OUT "en_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate protein\n";
-   close(OUT);
-
-   #--build maker_exe.ctl file
-   my %executables = ( xdformat => '',
-		       blastn => '',
-		       blastx => '',
-		       snap => '',
-		       augustus => '',
-		       exonerate => '',
-		       RepeatMasker => '',
-		       exonerate => ''
-		     );
-
-   while (my $exe = each %executables){
-      my $loc = `which $exe`;
-      chomp $loc;
-      $executables{$exe} = $loc unless ($loc =~ /^no $exe/);
-   }
-
-   open (OUT, "> maker_exe.ctl");
-   print OUT "#-----Location of executables required by Maker\n";
-   print OUT "xdformat:".$executables{xdformat}." #location of xdformat executable\n";
-   print OUT "blastn:".$executables{blastn}." #location of blastn executable\n";
-   print OUT "blastx:".$executables{blastx}." #location of blastn executable\n";
-   print OUT "snap:".$executables{snap}." #location of snap executable\n";
-   print OUT "augustus:".$executables{augustus}." #location of augustus executable (optional)\n";
-   print OUT "RepeatMasker:".$executables{RepeatMasker}." #location of RepeatMasker executable\n";
-   print OUT "exonerate:".$executables{exonerate}." #location of exonerate executable\n";
-   close(OUT);
 }

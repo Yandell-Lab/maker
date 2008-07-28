@@ -49,27 +49,43 @@ sub get_blocks {
 }
 #-------------------------------------------------------------------------------
 sub get_exon_coors {
-
-	my $v = shift;
-
-	#PostData($v);
+	my $v    = shift;
+	my $type = shift;
 
 	my $pos_q = $v->{q_b};
 	my $pos_t = $v->{t_b};
-	#print "AAAAAAAA:$pos_q\n";
+
 	my $exon = 0;
+
 	my @data;
         foreach my $o (@{$v->{operations}}){
-		#print "STATE:".$o->{state}."\n";
 		if    ($o->{state} eq 'M'){
 
-			$data[$exon]{q}{b} = $pos_q
-			unless defined($data[$exon]{q}{b});
+		        #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+		        }
+		        else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+		        }
 
-			$data[$exon]{t}{b} = $pos_t	
-			unless defined($data[$exon]{t}{b});
+                        if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+                        }
 
-			$pos_q += $o->{q};
+                     	if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
 			if ($v->{t_strand} == 1){
 				$pos_t += $o->{t};
@@ -78,11 +94,16 @@ sub get_exon_coors {
 				$pos_t -= $o->{t};
 			}
 
-			#print "BBBBBBB:$pos_q\n";
+			#print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
 		}
 		elsif ($o->{state} eq 'G'){
 
-			$pos_q += $o->{q};
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -90,19 +111,37 @@ sub get_exon_coors {
                         else {
                                 $pos_t -= $o->{t};
                         }
-			#die "dead in :protein2genomic::get_hsp_coors:G\n";
 		}
                 elsif ($o->{state} eq 'N'){
-			die "dead in protein2genomic::get_hsp_coors:N\n";
+			die "dead in est2genomic::get_hsp_coors:N\n";
                 }
                 elsif ($o->{state} eq '5'){
-			$data[$exon]{q}{e} = $pos_q; 
-			$data[$exon]{t}{e} = $pos_t; 
+			if ($type eq '5I3'){
+			        if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q;
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1;
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t;
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
 
-      			$data[$exon]{q}{strand} = $v->{q_strand};
-        		$data[$exon]{t}{strand} = $v->{t_strand};
-
-                    	$pos_q += $o->{q};
+				#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+				$exon++;
+			}
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -111,10 +150,34 @@ sub get_exon_coors {
                                 $pos_t -= $o->{t};
                         }
 
-			$exon++;
                 }
                 elsif ($o->{state} eq '3'){
-                    	$pos_q += $o->{q};
+			if ($type eq '3I5'){
+			        if ($v->{q_b} < $v->{q_e}){
+				    $data[$exon]{q}{e} = $pos_q;
+				}
+				else{
+				    $data[$exon]{q}{e} = $pos_q + 1;
+				}
+				
+				if ($v->{t_b} < $v->{t_e}){
+				    $data[$exon]{t}{e} = $pos_t;
+				}
+				else{
+				    $data[$exon]{t}{e} = $pos_t + 1;
+				}
+				$data[$exon]{q}{strand} = $v->{q_strand};
+				$data[$exon]{t}{strand} = $v->{t_strand};
+                						
+				#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
+				$exon++;
+			}
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -125,7 +188,13 @@ sub get_exon_coors {
 
                 }
                 elsif ($o->{state} eq 'I'){
-			$pos_q += $o->{q};
+
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -136,8 +205,30 @@ sub get_exon_coors {
 
                 }
                 elsif ($o->{state} eq 'S'){
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+		        }
+		        else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+		        }
 
-                        $pos_q += $o->{q};
+                        if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+                        }
+                        else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+                        }
+		   
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -149,7 +240,12 @@ sub get_exon_coors {
                 }
                 elsif ($o->{state} eq 'F'){
 
-                       $pos_q += $o->{q};
+                        if ($v->{q_strand} == 1){
+                                $pos_q += $o->{q};
+                        }
+                        else {
+                                $pos_q -= $o->{q};
+                        }
 
                         if ($v->{t_strand} == 1){
                                 $pos_t += $o->{t};
@@ -159,22 +255,35 @@ sub get_exon_coors {
                         }
 
                 }
+		else {
+			die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
+		}
 
         }
 
-	$data[$exon]{q}{e} = $pos_q;
-	$data[$exon]{t}{e} = $pos_t;
+        if ($v->{q_b} < $v->{q_e}){
+            $data[$exon]{q}{e} = $pos_q;
+        }
+        else{
+            $data[$exon]{q}{e} = $pos_q + 1;
+        }
 
-	#PostData($v);
-	$data[$exon]{q}{strand} = $v->{q_strand};
+        if ($v->{t_b} < $v->{t_e}){
+            $data[$exon]{t}{e} = $pos_t;
+        }
+        else{
+            $data[$exon]{t}{e} = $pos_t + 1;
+        }
+        $data[$exon]{q}{strand} = $v->{q_strand};
         $data[$exon]{t}{strand} = $v->{t_strand};
-
-	fix_exon_coors(\@data);
-
+	
+	#my $new_data = fix_exon_coors(\@data);
+	#return $new_data;
 	return \@data;
 }
+
 #-------------------------------------------------------------------------------
-sub fix_exon_coors {
+sub fix_exon_coors {#no longer needed 7-26-2008
         my $data = shift;
         foreach my $exon (@{$data}){
 
@@ -193,6 +302,31 @@ sub fix_exon_coors {
         }
 }
 #-------------------------------------------------------------------------------
+sub get_model_order {
+	my $v = shift;
+
+	my $str = '';
+	foreach my $o (@{$v->{operations}}){
+		$str .= $o->{state};
+	}
+
+	my $type;
+	if ($str =~ /3I5/ && $str =~ /5I3/){
+		$type = 'mixed';
+		warn "MIXED MODEL in Widget/est2genome!\n";
+		warn "TELL MARK Y!\n";
+		sleep 5;
+	}
+	elsif ($str =~ /5I3/){
+		$type = '5I3';
+	}
+	elsif ($str =~ /3I5/){
+		$type = '3I5';
+	}
+
+	return $type;
+}
+#-------------------------------------------------------------------------------
 sub assemble {
 	my $bhd       = shift;
 	my $bad       = shift;
@@ -200,7 +334,9 @@ sub assemble {
 	my $q_seq_len = shift;
 	my $t_seq_len = shift;
 
-	my $exons = get_exon_coors($v);
+	my $type = get_model_order($v);
+
+	my $exons = get_exon_coors($v, $type);
 
 	add_align_strs($bad, $exons);
 	add_align_attr($exons, $q_seq_len, $t_seq_len);

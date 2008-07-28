@@ -5,6 +5,7 @@ package runlog;
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
+use File::Find::Rule;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -123,7 +124,7 @@ sub _clean_files{
 	 }
 	 elsif ($OPT{retry}){
 	    $continue_flag = 2;	#rerun died
-	    $continue_flag = -3 if($self->{die_count} >= $OPT{retry}); #only let die up to count
+	    $continue_flag = -3 if($self->{die_count} > $OPT{retry}); #only let die up to count
 	    $rm_key{retry}++ if ($continue_flag == 2);
 	 }
 	 else{
@@ -159,13 +160,18 @@ sub _clean_files{
 	       }
 	    }
 	 }
-      
+	 
 	 #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	 while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
+	    #needed only for MPI
+	    if (defined $CTL_OPTIONS{"old_$key"}){
+	       $CTL_OPTIONS{$key} = $CTL_OPTIONS{"old_$key"};
+	    }
+
 	    my $log_val = $logged_vals{CTL_OPTIONS}{$key};
 	    my $ctl_val = '';
-	    $ctl_val = $CTL_OPTIONS{$key} unless (! defined $CTL_OPTIONS{$key});
-	 
+	    $ctl_val = $CTL_OPTIONS{$key} if(defined $CTL_OPTIONS{$key});
+
 	    #if previous log options are not the same as current control file options
 	    if ($log_val ne $ctl_val) {
 	       print STDERR "WARNING: Control file option \'$key\' has changed\n".
@@ -359,8 +365,13 @@ sub _write_new_log {
    
    #log control file options
    foreach my $key (@ctl_to_log) {
+      #needed only for MPI
+      if (defined $CTL_OPTIONS{"old_$key"}){
+	 $CTL_OPTIONS{$key} = $CTL_OPTIONS{"old_$key"};
+      }
+
       my $ctl_val = '';
-      $ctl_val = $CTL_OPTIONS{$key} unless (! defined $CTL_OPTIONS{$key});
+      $ctl_val = $CTL_OPTIONS{$key} if(defined $CTL_OPTIONS{$key});
 				  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }

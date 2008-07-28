@@ -40,17 +40,17 @@ sub polish {
 	polisher::prep($g_file, $e_file);
 
 	my $hits = e_exonerate($g_file, 
-			    $e_file, 
-		            $the_void, 
-		            $g_id, 	
-		            $e_id, 
-		            $e_len, 
-		            $g_len,
-			    $ext,
-		            $exe,
-			    $percent,
-			    $matrix,
-		);
+			       $e_file, 
+			       $the_void, 
+			       $g_id, 	
+			       $e_id, 
+			       $e_len, 
+			       $g_len,
+			       $ext,
+			       $exe,
+			       $percent,
+			       $matrix,
+			      );
 
 
 	return undef unless $hits->[0];
@@ -86,7 +86,7 @@ sub e_exonerate {
 
         runExonerate($g_file, $e_file, $o_file, $exe, $percent, $matrix);
 
-        Widget::exonerate::est2genome::parse($o_file, $e_len, $g_len);
+        return Widget::exonerate::est2genome::parse($o_file, $e_len, $g_len);
 
 }
 #-----------------------------------------------------------------------------

@@ -6,9 +6,13 @@ use FindBin;
 use lib "$FindBin::Bin/../..";
 
 use strict;
+use Error qw(:try);
+use Error::Simple;
 use Process::MakerChunk;
 use File::Path;
 use URI::Escape;
+use runlog;
+use Shared_Functions;
 
 #-----------------------------------------------------------------------------
 #------------------------------GLOBAL VARIABLES-------------------------------
@@ -40,6 +44,7 @@ sub new {
 	 $self->{TERMINATE} = 0;
 	 $self->{LEVEL}{CURRENT} = -1;
 	 $self->_initialize();
+	 $self->_continue();
       }
    }
 
@@ -56,73 +61,182 @@ sub _initialize {
    my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
    my %OPT         = %{$self->{VARS}{OPT}};
 
-   $self->{VARS}{query_def} = Fasta::getDef($fasta); #Get fasta header
-   ($self->{VARS}{seq_id})  = $self->{VARS}{query_def} =~ /^>(\S+)/; #Get identifier
-   $self->{VARS}{query_seq} = Fasta::getSeq($fasta); #Get fasta Sequence
-    
-   #--error checking for non-unique ids in multi-fasta
-   if (exists $SEEN{$self->{VARS}{seq_id}}) {
-      warn "ERROR:  The multi-fasta file contains non-unique sequence ids.\n",
-      "The id " . $self->{VARS}{seq_id} . " occurs more than once.\n";
+   try{
+      $self->{VARS}{query_def} = Fasta::getDef($fasta); #Get fasta header
+      ($self->{VARS}{seq_id})  = $self->{VARS}{query_def} =~ /^>(\S+)/; #Get identifier
+      $self->{VARS}{query_seq} = Fasta::getSeq($fasta); #Get fasta Sequence
+      
+      #--build a safe name for file names from the sequence identifier  
+      $self->{VARS}{seq_out_name} = uri_escape($self->{VARS}{seq_id},
+					       '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+					      );
+      
+      #set up base directory for output
+      $self->{VARS}{out_dir} = $CTL_OPTIONS{'out_base'};
+      
+      #use datastore as base if datastore flag is set
+      if (exists $CTL_OPTIONS{'datastore'}) {
+	 $self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
+	 $CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
+	    die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
+      }
+      
+      
+      #--set up void directory where analysis is stored
+      $self->{VARS}{the_void}  = Shared_Functions::build_the_void($self->{VARS}{seq_out_name},
+								  $self->{VARS}{out_dir}
+								 );
 
-      $SEEN{$self->{VARS}{seq_id}}++;
-      my $new_id = $self->{VARS}{seq_id}.".V".$SEEN{$self->{VARS}{seq_id}};
-
-      warn "\n\n\nThe id ".$self->{VARS}{seq_id}." will now be changed to $new_id \n";
-
-      $self->{VARS}{seq_id} = $new_id;
-      $SEEN{$new_id}++;
    }
-   else {
-      $SEEN{$self->{VARS}{seq_id}}++;
+   catch Error::Simple with{
+      my $E = shift;
+      
+      print STDERR $E->{-text};
+      print STDERR "\n\nMaker failed while examining contents of the fasta file!!\n\n";
+      my $code = 2;
+      $code = $E->{-value} if (defined($E->{-value}));
+      
+      exit($code);
+   };
+
+   try{
+      #-build and proccess the run log
+      $self->{LOG} = runlog->new(\%CTL_OPTIONS, \%OPT, $self->{VARS}{the_void}, "run.log");
    }
-
-   #--build a safe name for file names from the sequence identifier  
-   $self->{VARS}{seq_out_name} = uri_escape($self->{VARS}{seq_id},
-					    '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-					   );
-
-   #set up base directory for output
-   $self->{VARS}{out_dir} = $CTL_OPTIONS{'out_base'};
-
-   #use datastore as base if datastore flag is set
-   if (exists $CTL_OPTIONS{'datastore'}) {
-      $self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
-      $CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
-          die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
-   }
-
-   #skip this fasta if gff3 output already exists
-   if (-e $self->{VARS}{out_dir}."/".$self->{VARS}{seq_out_name}.".gff" && ! $OPT{f}){
-      print STDERR "#----------------------------------------------------------------------\n",
-                   "The contig:".$self->{VARS}{seq_id}." has already been processed!!\n",
-                   "Maker will now skip to the next contig.\n",
-                   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
-		   "#----------------------------------------------------------------------\n\n\n";
-      $self->{TERMINATE} = 1;
-      return;
-   }
-
-   #--set up void directory where analysis is stored
-   $self->{VARS}{the_void}  = build_the_void($self->{VARS}{seq_out_name},
-					     $self->{VARS}{out_dir}
-					    );
-
-   #-set up variables that are heldover from last chunk
-   $self->{VARS}{holdover_chunk} = undef;
-
-   #-set up variables that are the result of chunk accumulation
-   $self->{VARS}{masked_total_seq} = '';
-   $self->{VARS}{p_fastas} = '';
-   $self->{VARS}{t_fastas} = '';
-   $self->{VARS}{p_snap_fastas} = '';
-   $self->{VARS}{t_snap_fastas} = '';
-
-   $self->{VARS}{GFF3} = new Dumper::GFF::GFFV3();    
-   $self->{VARS}{GFF3}->seq($self->{VARS}{query_seq});
-   $self->{VARS}{GFF3}->seq_id($self->{VARS}{seq_id});
-
+   catch Error::Simple with{
+      my $E = shift;
+      
+      print STDERR $E->{-text};
+      print STDERR "\n\nMaker failed while trying to building/processing the run.log file!!\n\n";
+      my $code = 2;
+      $code = $E->{-value} if (defined($E->{-value}));
+      
+      exit($code);
+   };
+   
    return;
+}
+#--------------------------------------------------------------
+#decide whether to continue with contig based on LOG continue flag
+sub _continue {
+   my $self = shift;
+
+   return $self->{CONTINUE} if (defined($self->{CONTINUE}));
+
+   my $LOG = $self->{LOG};
+
+   #get variables
+   my %OPT = %{$self->{VARS}{OPT}};
+   my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
+   my $seq_id = $self->{VARS}{seq_id};
+   my $out_dir = $self->{VARS}{out_dir};
+   my $seq_out_name = $self->{VARS}{seq_out_name};
+
+   my $continue_flag = $LOG->get_continue_flag();
+
+   #==Decide whether to skip the current seq or continue
+   if ($continue_flag == 1) {
+      print STDERR "#----------------------------------------------------------------------\n",
+                   "Now processing the contig:$seq_id!!\n",
+                   "#----------------------------------------------------------------------\n\n\n";
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tSTARTED";
+      }
+   }
+   elsif ($continue_flag == 0) {
+      print STDERR "#----------------------------------------------------------------------\n",
+      "The contig:$seq_id has already been processed!!\n",
+      "Maker will now skip to the next contig.\n",
+      "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+      "#----------------------------------------------------------------------\n\n\n";
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tFINISHED";
+      }
+
+      $self->{TERMINATE} = 1;
+   }
+   elsif ($continue_flag == -1) {
+      print STDERR "#----------------------------------------------------------------------\n",
+      "The contig:$seq_id failed on the last run!!\n",
+      "Maker will now skip to the next contig rather than try again.\n",
+      "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+      "Run maker with the -died flag to have Maker retry data that failed.\n",
+      "#----------------------------------------------------------------------\n\n\n";
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tDIED_SKIPPED";
+      }
+
+      $self->{TERMINATE} = 1;
+   }
+   elsif ($continue_flag == 2) {
+      print STDERR "#----------------------------------------------------------------------\n",
+      "The failed contig:$seq_id will now run again!!\n",
+      "#----------------------------------------------------------------------\n\n\n";
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tRETRY";
+      }
+   }
+   elsif ($continue_flag == -2) {
+      print STDERR "#----------------------------------------------------------------------\n",
+      "Skipping the contig:$seq_id!!\n",
+      "However this contig is still not finished!!\n",
+      "#----------------------------------------------------------------------\n\n\n";
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tSKIPPED";
+      }
+
+      $self->{TERMINATE} = 1;
+   }
+   elsif ($continue_flag == -3) {
+      my $die_count = $LOG->get_die_count();
+      print STDERR "#----------------------------------------------------------------------\n",
+      "The contig:$seq_id failed $die_count time!!\n",
+      "Maker will not try again!!\n",
+      "The contig will be stored in $out_dir/$seq_out_name.died.fasta\n",
+      "You can use this fasta file to debug and re-run this sequence\n",
+      "#----------------------------------------------------------------------\n\n\n";
+
+      open (DFAS, "> $out_dir/$seq_out_name.died.fasta");
+      print DFAS $self->{VARS}{fasta};
+      close (DFAS);
+
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tDIED_SKIPPED_PERMANENT";
+      }
+
+      $self->{TERMINATE} = 1;
+   }
+
+   $self->{CONTINUE} = $continue_flag;
+   
+   return $self->{CONTINUE};
+}
+#--------------------------------------------------------------
+#exception handler
+sub _handler {
+   my $self = shift;
+   my $E = shift;
+   my $extra = shift;
+
+   my $seq_id = $self->{VARS}{seq_id};
+   my $LOG = $self->{LOG};
+
+   print STDERR $E->{-text};
+   print STDERR $extra;
+   print STDERR "FAILED CONTIG:$seq_id\n\n";
+   
+   my $die_count = $LOG->get_die_count();
+   $die_count++;
+   
+   $LOG->add_entry("DIED","RANK","non_mpi");
+   $LOG->add_entry("DIED","COUNT",$die_count);
+
+   $self->{FAILED} = 1;
 }
 #--------------------------------------------------------------
 #runs the MakerTier until multiple chunks are available to distribute
@@ -132,10 +246,10 @@ sub run {
    my $current_level = $self->{LEVEL}{CURRENT};
 
    #---debug
-   print STDERR "\n\n\nNow in LEVEL: $current_level\n\n\n";
+   #print STDERR "\n\n\nNow in LEVEL: $current_level\n\n\n";
    #---debug
 
-   return undef if ($self->terminated);
+   return undef if ($self->terminated || $self->failed);
    return undef if ($self->_level_started && ! $self->_level_finished);
    return $self->run if($self->_next_level);
 
@@ -143,200 +257,309 @@ sub run {
    my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
 
    if ($current_level == -1){
+      #-set up variables that are heldover from last chunk
+      $self->{VARS}{holdover_blastn} = [];
+      $self->{VARS}{holdover_blastx} = [];
+      $self->{VARS}{holdover_preds} = [];
+
+      #-set up variables that are the result of chunk accumulation
+      $self->{VARS}{masked_total_seq} = '';
+      $self->{VARS}{p_fastas} = '';
+      $self->{VARS}{t_fastas} = '';
+      
+      $self->{VARS}{GFF3} = new Dumper::GFF::GFFV3();    
+      $self->{VARS}{GFF3}->seq($self->{VARS}{query_seq});
+      $self->{VARS}{GFF3}->seq_id($self->{VARS}{seq_id});
+
       #==DECIDE REPEAT MASKING HERE
       if($OPT{R}){
-	 print STDERR "Repeatmasking skipped!!\n";
-	 $self->{VARS}{masked_total_seq} = ${$self->{VARS}{query_seq}};
+	 try{
+	    print STDERR "Repeatmasking skipped!!\n";
+	    $self->{VARS}{masked_total_seq} = ${$self->{VARS}{query_seq}};
+	    
+	    $self->{LEVEL}{CURRENT} = 3;
+	    $self->_initiate_level(3);
+	 }
+	 catch Error::Simple with{
+	    my $E = shift;
+	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	 };
 
-	 $self->{LEVEL}{CURRENT} = 3;
-	 $self->_initiate_level(3);
 	 return $self->run;
       }
       elsif($OPT{GFF}){
-	 $self->{VARS}{masked_total_seq} = repeat_mask_seq::gff(uc(${$self->{VARS}{query_seq}}), 
-								$self->{VARS}{seq_id},
-								$CTL_OPTIONS{'rm_gff'}
-							       );
+	 try{
+	    $self->{VARS}{masked_total_seq} = repeat_mask_seq::gff(uc(${$self->{VARS}{query_seq}}), 
+								   $self->{VARS}{seq_id},
+								   $CTL_OPTIONS{'rm_gff'}
+								  );
+	    
+	    $self->{LEVEL}{CURRENT} = 3;
+	    $self->_initiate_level(3);
+	 }
+	 catch Error::Simple with{
+	    my $E = shift;
+	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	 };
 
-	 $self->{LEVEL}{CURRENT} = 3;
-	 $self->_initiate_level(3);
 	 return $self->run;
       }
       else{
-	 #---
-	 my $fasta_chunker = new FastaChunker();
-	 $fasta_chunker->parent_fasta($self->{VARS}{fasta});
-	 $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
-	 $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
-	 $fasta_chunker->load_chunks();
-
-	 my $chunk_count = 0;
-
-	 $self->{VARS}{fasta_chunker} = $fasta_chunker;
-	 $self->{VARS}{chunk_count} = $chunk_count;
-	 $self->{VARS}{f_chunk} = $fasta_chunker->get_chunk($chunk_count);
-	 #---
-
-	 $self->{LEVEL}{CURRENT} = 0;
-	 $self->_initiate_level(0);
+	 try{
+	    #---
+	    my $fasta_chunker = new FastaChunker();
+	    $fasta_chunker->parent_fasta($self->{VARS}{fasta});
+	    $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
+	    $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
+	    $fasta_chunker->load_chunks();
+	    
+	    my $chunk_count = 0;
+	    
+	    $self->{VARS}{fasta_chunker} = $fasta_chunker;
+	    $self->{VARS}{chunk_count} = $chunk_count;
+	    $self->{VARS}{f_chunk} = $fasta_chunker->get_chunk($chunk_count);
+	    #---
+	    
+	    $self->{LEVEL}{CURRENT} = 0;
+	    $self->_initiate_level(0);
+	 }
+	 catch Error::Simple with{
+	    my $E = shift;
+	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	 };
 
 	 return $self->run;
       }
    }
    elsif($current_level == 0){#repeat masking individual chunk
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 1){#repeatmask blastx multiple makerChunks
-      $self->_load_chunks_for_level($current_level);
+      try{
+	 $self->_load_chunks_for_level($current_level);
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return; #pause here;
    }
    elsif($current_level == 2){#collecting repeatmask blastx results
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 3){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
-
-      my $chunk_count = ++$self->{VARS}{chunk_count};
-      
-      if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
-	 $self->{LEVEL}{CURRENT} = 0;
-	 $self->_initiate_level(0);
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+	 
+	 my $chunk_count = ++$self->{VARS}{chunk_count};
+	 
+	 if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
+	    $self->{LEVEL}{CURRENT} = 0;
+	    $self->_initiate_level(0);
+	 }
       }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 4){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 5){
-      #---get curent fasta chunk
-      my $chunk_count = $self->{VARS}{chunk_count};
-      $self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count);
-      #---
+      try{
+	 #---get curent fasta chunk
+	 my $chunk_count = $self->{VARS}{chunk_count};
+	 $self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count);
+	 #---
+	 
+	 $self->_load_chunks_for_level($current_level);
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
-
-      return $self->run;
+      return undef; #pause here
    }
    elsif($current_level == 6){
-      $self->_load_chunks_for_level($current_level);
-
-      return undef; #pause here
-   }
-   elsif($current_level == 7){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
-   elsif($current_level == 8){
-      $self->_load_chunks_for_level($current_level);
+   elsif($current_level == 7){
+      try{
+	 $self->_load_chunks_for_level($current_level);
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return undef; #pause here
    }
+   elsif($current_level == 8){
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
+
+      return $self->run;
+   }
    elsif($current_level == 9){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 10){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $chunk = $self->next_chunk;
+	 $chunk->run($self->id);
+	 $self->update_chunk($chunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 11){
-      $self->_load_chunks_for_level($current_level);
-      my $chunk = $self->next_chunk;
-      $chunk->run($self->id);
-      $self->update_chunk($chunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 12){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $chunk = $self->next_chunk;
+	 $chunk->run($self->id);
+	 $self->update_chunk($chunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 13){
-      $self->_load_chunks_for_level($current_level);
-      my $chunk = $self->next_chunk;
-      $chunk->run($self->id);
-      $self->update_chunk($chunk);
-      $self->_polish_results();
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $chunk = $self->next_chunk;
+	 $chunk->run($self->id);
+	 $self->update_chunk($chunk);
+	 $self->_polish_results();
+	 
+	 my $chunk_count = ++$self->{VARS}{chunk_count};
+	 
+	 if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
+	    $self->{LEVEL}{CURRENT} = 5;
+	    $self->_initiate_level(5);
+	 }
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
    elsif($current_level == 14){
-      $self->_load_chunks_for_level($current_level);
-      my $chunk = $self->next_chunk;
-      $chunk->run($self->id);
-      $self->update_chunk($chunk);
-      $self->_polish_results();
-
-      my $chunk_count = ++$self->{VARS}{chunk_count};
-      
-      if ($self->{VARS}{f_chunk} = $self->{VARS}{fasta_chunker}->get_chunk($chunk_count)){
-	 $self->{LEVEL}{CURRENT} = 5;
-	 $self->_initiate_level(5);
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
       }
-
-      return $self->run;
-   }
-   elsif($current_level == 15){
-      $self->_load_chunks_for_level($current_level);
-      my $mChunk = $self->next_chunk;
-      $mChunk->run($self->id);
-      $self->update_chunk($mChunk);
-      $self->_polish_results();
-
-      #output error log for this contig
-      my $err_file = $self->{VARS}{out_dir}."/".$self->{VARS}{seq_out_name}.".error";
-      open(OUT, "> $err_file");
-      print OUT $self->error;
-      close(OUT);
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
 
       return $self->run;
    }
@@ -369,6 +592,15 @@ sub next_chunk {
 
 
    if (my $chunk = shift @{$self->{LEVEL}{$current_level}{CHUNKS}}) {
+
+      if($self->failed){ #clear the queue
+	 $self->update_chunk($chunk);
+	 while (my $chunk = shift @{$self->{LEVEL}{$current_level}{CHUNKS}}) {
+	    $self->update_chunk($chunk);
+	 }
+	 return undef;
+      }
+
       return $chunk;
    }
    else{
@@ -386,7 +618,7 @@ sub _next_level {
    if ($level  == -1) {
       return undef;
    }
-   elsif($self->terminated){
+   elsif($self->terminated || $self->failed){
       return undef;
    }
    elsif (! $self->_level_started){
@@ -432,6 +664,8 @@ sub _initiate_level {
 sub _load_chunks_for_level {
    my $self = shift;
    my $level = shift;
+
+   return undef if ($self->terminated || $self->failed);
 
    $self->{LEVEL}{$level}{STARTED} = 1;
 
@@ -526,28 +760,17 @@ sub _load_chunks_for_level {
    }
    elsif ($level == 5) {
       #----------------------CLEAR_MEMORY
-      $self->{VARS}{blastn_keepers} = [];
-      $self->{VARS}{blastx_keepers} = [];
       $self->{VARS}{snaps_on_chunk} = [];
       $self->{VARS}{augus_on_chunk} = [];
+      $self->{VARS}{blastn_keepers} = [];
+      $self->{VARS}{blastx_keepers} = [];
       $self->{VARS}{blastn_data} = [];
       $self->{VARS}{blastx_data} = [];
       $self->{VARS}{exonerate_e_data} = []; 
       $self->{VARS}{exonerate_p_data} = []; 
-      $self->{VARS}{annotations} = []; 
+      $self->{VARS}{annotations} = [];
       #----------------------CLEAR_MEMORY
 
-      #------------------------ARGS_IN
-      my @args =( $self->{VARS}{holdover_chunk},
-		  $self->{VARS}{f_chunk}
-		);
-      #------------------------ARGS_IN
-      
-      #-------------------------CHUNK
-      $self->_build_chunk($level,\@args);
-      #-------------------------CHUNK
-   }
-   elsif ($level == 6) {
       foreach my $transcripts (@{$self->{VARS}{CTL_OPTIONS}{est}}) {
 	 #------------------------ARGS_IN
 	 my @args =( $self->{VARS}{f_chunk},
@@ -566,7 +789,7 @@ sub _load_chunks_for_level {
 
       return 1;
    }
-   elsif ($level == 7) {
+   elsif ($level == 6) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{f_chunk},
 		  $self->{VARS}{blastn_res_dir},
@@ -579,7 +802,7 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 8) {
+   elsif ($level == 7) {
       foreach my $proteins (@{$self->{VARS}{CTL_OPTIONS}{protein}}) {
 	 #------------------------ARGS_IN
 	 my @args =( $self->{VARS}{f_chunk},
@@ -598,7 +821,7 @@ sub _load_chunks_for_level {
 
       return 1;
    }
-   elsif ($level == 9) {
+   elsif ($level == 8) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{f_chunk},
 		  $self->{VARS}{blastx_res_dir},
@@ -611,17 +834,37 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 10) {
+   elsif ($level == 9) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{f_chunk},
-		  $self->{VARS}{holdover_chunk},
+		  $self->{VARS}{masked_fasta},
 		  $self->{VARS}{snaps},
 		  $self->{VARS}{augus},
-		  $self->{VARS}{blastx_keepers},
 		  $self->{VARS}{blastn_keepers},
+		  $self->{VARS}{blastx_keepers},
+		  $self->{VARS}{fasta_t_index},
+		  $self->{VARS}{fasta_p_index},
+		  $self->{VARS}{holdover_blastn},
+		  $self->{VARS}{holdover_blastx},
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      $self->_build_chunk($level,\@args);
+      #-------------------------CHUNK
+   }
+   elsif ($level == 10) {
+      #------------------------ARGS_IN
+      my @args =( $self->{VARS}{fasta},
+		  $self->{VARS}{blastx_keepers},
 		  $self->{VARS}{query_seq},
-		  $self->{VARS}{CTL_OPTIONS}{split_hit},
-		  $self->{VARS}{the_void}
+		  $self->{VARS}{fasta_p_index},
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
 		);
       #------------------------ARGS_IN
 
@@ -632,8 +875,9 @@ sub _load_chunks_for_level {
    elsif ($level == 11) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{fasta},
-		  $self->{VARS}{blastx_keepers},
+		  $self->{VARS}{blastn_keepers},
 		  $self->{VARS}{query_seq},
+		  $self->{VARS}{fasta_t_index},
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{CTL_OPTIONS},
 		  $self->{VARS}{OPT}{f}
@@ -647,28 +891,12 @@ sub _load_chunks_for_level {
    elsif ($level == 12) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{fasta},
-		  $self->{VARS}{blastn_keepers},
-		  $self->{VARS}{query_seq},
-		  $self->{VARS}{the_void},
-		  $self->{VARS}{CTL_OPTIONS},
-		  $self->{VARS}{OPT}{f}
-		);
-      #------------------------ARGS_IN
-
-      #-------------------------CHUNK
-      $self->_build_chunk($level,\@args);
-      #-------------------------CHUNK
-   }
-   elsif ($level == 13) {
-      #------------------------ARGS_IN
-      my @args =( $self->{VARS}{fasta},
 		  $self->{VARS}{masked_fasta},
 		  $self->{VARS}{f_chunk}->number,
 		  $self->{VARS}{exonerate_p_data},
 		  $self->{VARS}{exonerate_e_data},
 		  $self->{VARS}{blastx_data},
-		  $self->{VARS}{snaps_on_chunk},
-		  $self->{VARS}{augus_on_chunk},
+		  $self->{VARS}{preds_on_chunk},
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{CTL_OPTIONS},
 		  $self->{VARS}{OPT}{f},
@@ -680,22 +908,15 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 14) {
+   elsif ($level == 13) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{blastx_data},
 		  $self->{VARS}{blastn_data},
 		  $self->{VARS}{exonerate_p_data},
 		  $self->{VARS}{exonerate_e_data},
 		  $self->{VARS}{annotations},
-		  $self->{VARS}{query_seq},
-		  $self->{VARS}{snaps_on_chunk},
-		  $self->{VARS}{augus_on_chunk},
 		  $self->{VARS}{p_fastas},
 		  $self->{VARS}{t_fastas},
-		  $self->{VARS}{p_snap_fastas},
-		  $self->{VARS}{t_snap_fastas},
-		  $self->{VARS}{p_augus_fastas},
-		  $self->{VARS}{t_augus_fastas},
 		  $self->{VARS}{GFF3}
 		);
       #------------------------ARGS_IN
@@ -704,7 +925,7 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 15) {
+   elsif ($level == 14) {
       #----------------------CLEAR_MEMORY
       $self->{VARS}{blastn_keepers} = [];
       $self->{VARS}{blastx_keepers} = [];
@@ -718,16 +939,15 @@ sub _load_chunks_for_level {
       #----------------------CLEAR_MEMORY
 
       #------------------------ARGS_IN
-      my @args =( $self->{VARS}{p_fastas},
+      my @args =( $self->{VARS}{snaps},
+		  $self->{VARS}{augus},
+		  $self->{VARS}{p_fastas},
 		  $self->{VARS}{t_fastas},
-		  $self->{VARS}{p_snap_fastas},
-		  $self->{VARS}{t_snap_fastas},
-		  $self->{VARS}{p_augus_fastas},
-		  $self->{VARS}{t_augus_fastas},
 		  $self->{VARS}{GFF3},
 		  $self->{VARS}{seq_out_name},
 		  $self->{VARS}{out_dir},
 		  $self->{VARS}{the_void},
+		  $self->{VARS}{query_seq},
 		  $self->{VARS}{CTL_OPTIONS}
 		);
       #------------------------ARGS_IN
@@ -749,6 +969,8 @@ sub _polish_results{
    my $self = shift;
    my $level = $self->{LEVEL}{CURRENT};
 
+   return undef if($self->terminated || $self->failed);
+
    if ($level < 0 || ! $self->_level_finished()){
       return undef;
    }
@@ -761,10 +983,10 @@ sub _polish_results{
    if ($level == 1) {
        $self->{VARS}{repeat_blastx_keepers} = [];
    }
-   elsif ($level == 7) {
+   elsif ($level == 6) {
        $self->{VARS}{blastn_keepers} = [];
    }
-   elsif ($level == 9) {
+   elsif ($level == 8) {
        $self->{VARS}{blastx_keepers} = [];
    }
 
@@ -802,71 +1024,65 @@ sub _polish_results{
 	 $self->{VARS}{augus}         = shift @results;
 	 $self->{VARS}{fasta_chunker} = shift @results;
 	 $self->{VARS}{chunk_count}   = shift @results;
+	 $self->{VARS}{fasta_t_index}   = shift @results;
+	 $self->{VARS}{fasta_p_index}   = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 5) {
 	 #------------------------RESULTS
-	 $self->{VARS}{f_chunk} = shift @results;
+	 $self->{VARS}{blastn_res_dir} = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 6) {
 	 #------------------------RESULTS
-	 $self->{VARS}{blastn_res_dir} = shift @results;
+	 $self->{VARS}{blastn_keepers} = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 7) {
 	 #------------------------RESULTS
-	 $self->{VARS}{blastn_keepers} = shift @results;
+	 $self->{VARS}{blastx_res_dir} = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 8) {
 	 #------------------------RESULTS
-	 $self->{VARS}{blastx_res_dir} = shift @results;
+	 $self->{VARS}{blastx_keepers} = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 9) {
 	 #------------------------RESULTS
-	 $self->{VARS}{blastx_keepers} = shift @results;
+	 $self->{VARS}{holdover_blastn} = shift @results;
+	 $self->{VARS}{holdover_blastx} = shift @results;
+	 $self->{VARS}{holdover_preds}  = shift @results;
+	 $self->{VARS}{blastn_keepers}  = shift @results;
+	 $self->{VARS}{blastx_keepers}  = shift @results;
+	 $self->{VARS}{preds_on_chunk}  = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 10) {
-	 #------------------------RESULTS
-	 $self->{VARS}{holdover_chunk} = shift @results;
-	 $self->{VARS}{blastx_keepers} = shift @results;
-	 $self->{VARS}{blastn_keepers} = shift @results;
-	 $self->{VARS}{snaps_on_chunk} = shift @results;
-	 $self->{VARS}{augus_on_chunk} = shift @results;
-	 #------------------------RESULTS
-      }
-      elsif ($level == 11) {
 	 #------------------------RESULTS
 	 $self->{VARS}{blastx_data}      = shift @results;
 	 $self->{VARS}{exonerate_p_data} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 12) {
+      elsif ($level == 11) {
 	 #------------------------RESULTS
 	 $self->{VARS}{blastn_data}      = shift @results;
 	 $self->{VARS}{exonerate_e_data} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 13) {
+      elsif ($level == 12) {
 	 #------------------------RESULTS
 	 $self->{VARS}{annotations} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 14) {
+      elsif ($level == 13) {
 	 #------------------------RESULTS
 	 $self->{VARS}{GFF3}           = shift @results;
 	 $self->{VARS}{p_fastas}       = shift @results;
 	 $self->{VARS}{t_fastas}       = shift @results;
-	 $self->{VARS}{p_snap_fastas}  = shift @results;
-	 $self->{VARS}{t_snap_fastas}  = shift @results;
-	 $self->{VARS}{p_augus_fastas} = shift @results;
-	 $self->{VARS}{t_augus_fastas} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 15) {
+      elsif ($level == 14) {
 	 #------------------------RESULTS
 	 #------------------------RESULTS
       }
@@ -885,7 +1101,7 @@ sub _build_chunk {
 
    my $chunk_id = $self->id().":".$level.":". $self->{LEVEL}{$level}{CHUNK_COUNT};
     
-   my $chunk = Process::MakerChunk->new($level, $args, $chunk_id);
+   my $chunk = Process::MakerChunk->new($level, $args, $chunk_id,  $self->{LOG});
    push (@{$self->{LEVEL}{$level}{CHUNKS}}, $chunk);
    $self->{LEVEL}{$level}{CHUNK_COUNT}++;
 }
@@ -895,7 +1111,7 @@ sub _build_chunk {
 
 sub DS {
    my $self = shift;
-   return $self->{VARS}{seq_id} . "\t" . $self->{VARS}{out_dir};
+   return $self->{DS} || $self->{VARS}{seq_id} . "\t" . $self->{VARS}{out_dir};
 }
 
 #--------------------------------------------------------------
@@ -951,6 +1167,8 @@ sub _level_started {
 sub terminated {
    my $self = shift;
 
+   $self->{TERMINATE} = 1 if ($self->failed && $self->_level_finished);
+
    return $self->{TERMINATE};
 }
 
@@ -971,16 +1189,32 @@ sub update_chunk {
     
    $self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
    $self->{ERROR} .= $chunk->error();
+
+   if($chunk->failed){
+      my $E = $chunk->exception;
+      $self->_handler($E, "\n\nMaker failed at !!\n");
+
+      $self->{FAILED} = 1;
+   }
    print STDERR $chunk->error();
+}
+#-------------------------------------------------------------
+sub failed{
+   my $self = shift;
+   return $self->{FAILED} || undef;
+}
+#-------------------------------------------------------------
+sub fasta{
+   my $self = shift;
+   return $self->{VARS}{fasta};
 }
 #-------------------------------------------------------------
 sub error{
    my $self = shift;
-   return $self->{ERROR};
+   return $self->{ERROR} || '';
 }
 #-------------------------------------------------------------
 #returns the id of the tier
-
 sub id {
    my $self = shift @_;
    return $self->{TIER_ID};
@@ -988,19 +1222,5 @@ sub id {
 
 #-----------------------------------------------------------------------------
 #------------------------------------SUBS-------------------------------------
-#-----------------------------------------------------------------------------
-sub build_the_void {
-   my $seq_id  = shift;
-   my $out_dir = shift;
-
-   $out_dir =~ s/\/$//;
-
-   my $vid = "theVoid\.$seq_id";
-   my $the_void = "$out_dir/$vid";
-   mkpath ($the_void);
-
-   return $the_void;
-}
-
 #-----------------------------------------------------------------------------
 1;

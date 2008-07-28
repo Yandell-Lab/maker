@@ -76,7 +76,7 @@ sub p_exonerate {
 	
         runExonerate($g_file, $p_file, $o_file, $exe, $percent, $matrix);
 
-        Widget::exonerate::protein2genome::parse($o_file, $p_len, $g_len);
+        return Widget::exonerate::protein2genome::parse($o_file, $p_len, $g_len);
 	
     }
 #-----------------------------------------------------------------------------
