@@ -1662,7 +1662,7 @@ sub load_control_files {
       $CTL_OPTIONS{'snaphmm'} = "fly";
    }
    if (! -e $CTL_OPTIONS{'snaphmm'} &&
-       (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}."/".$CTL_OPTIONS{'snaphmm'})
+       (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}."/HMM/".$CTL_OPTIONS{'snaphmm'})
       ) {
       
       die "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n";

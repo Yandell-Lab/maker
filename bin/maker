@@ -114,7 +114,7 @@ Options:
 
      -CTL                     Generates generic control files in the current working directory.
 
-     -retry     <integer>     Re-run failed contigs up to the spcified number of re-tries.
+     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
 
      -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
                               contorol file value).
@@ -145,7 +145,7 @@ try{
 	      "PREDS" => \$OPT{SNAPS},
 	      "predictor=s" =>\$OPT{predictor},
 	      "retry=i" =>\$OPT{retry},
-	      "CTL" => sub {generate_control_files(); exit(0);},
+	      "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},
 	      "help|?" => sub {print $usage; exit(0)},
 	     );
    
@@ -911,7 +911,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 #   $IOX->Game();
 	 
 	 #--- building fastas for annotations (grows with itteration)
-	 my ($p_fasta, $t_fasta) = get_maker_p_and_t_fastas($annotations);
+	 my ($p_fasta, $t_fasta) = Shared_Functions::get_maker_p_and_t_fastas($annotations);
 	 $p_fastas .= $p_fasta;
 	 $t_fastas .= $t_fasta;
       }

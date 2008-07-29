@@ -62,6 +62,11 @@ use threads::shared;
 use runlog;
 use Shared_Functions;
 
+unless($threads::VERSION >= 1.67){
+   die "mpi_maker requires threads version 1.67 or greater\n",
+       "You have version ". $threads::VERSION ."\n";
+}
+
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
 #--This is a hack to solve the problem
@@ -124,6 +129,8 @@ Options:
                               -predictor flag ).
 
      -CTL                     Generates generic control files in the current working directory.
+
+     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
 
      -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
                               contorol file value).
@@ -226,7 +233,7 @@ if ($rank == $root) {
 		 "PREDS" => \$OPT{SNAPS},
 		 "predictor=s" =>\$OPT{predictor},
 		 "retry=i" =>\$OPT{retry},
-		 "CTL" => sub {generate_control_files(); exit(0);},
+		 "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},
 		 "help|?" => sub {print $usage; exit(0)},
 		);
 

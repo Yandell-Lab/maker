@@ -3,38 +3,43 @@
 #----------
 INSTALLATION INSTUCTIONS FOR MAKER
 
+*Step by step instructions are also available in the INSTALL text file.
+
 To install maker, you will first need to install the following external programs:
 
-*PERL 5.8.0 or higher
-*BioPerl 1.5 (www.bioperl.org)
-*Wu-BLAST 2.0 (blast.wustl.edu)
-*SNAP version 2006-07-28 (homepage.mac.com/iankorf)
-*RepeatMasker 3.1.6 (www.repeatmasker.org)
-*Exonerate 1.4 or 2.0 (www.ebi.ac.uk/~guy/exonerate)
-
+     *PERL 5.8.0 or higher
+     *BioPerl 1.5 or higher (www.bioperl.org)
+     *Wu-BLAST 2.0  or higher (blast.wustl.edu)
+     *SNAP version 2006-07-28  or higher (homepage.mac.com/iankorf)
+     *RepeatMasker 3.1.6  or higher (www.repeatmasker.org)
+     *Exonerate 1.4  or higher (www.ebi.ac.uk/~guy/exonerate)
 
 
 You might want to also install these optional external programs:
 
-*Augustus 2.0 (augustus.gobics.de)
+     *Augustus 2.0  or higher (augustus.gobics.de)
 
 
-You will need to install the following perl modules from CPAN as well(search.cpan.org):
+You will also need to install the following perl modules if not already installed:
 
-*URI:Escape
-*threads v1.71 or higher (only needed for mpi_maker, otherwise ignore this)
+     *URI:Escape (search.cpan.org)
+     *Error (search.cpan.org)
+     *threads 1.67 or higher (search.cpan.org)
+     *Datastore (http://www.yandell-lab.org/software/cgl.html)
+
 
 
 To install mpi_maker, you must have an mpi package installed, try the following:
 
-*MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
+     *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
+
 note:  Remember to install MPICH2 with the --enable-sharedlibs flag set to the appropriate value (See MPICH2 Installer's Guide at http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs).
 
 
 Notes: 
-1) RepeatMaker requires Wu-BLAST, so please install Wu-BLAST before installing RepeatMaker
+1) RepeatMasker requires Wu-BLAST and a single file executable called TRF (see RepeatMasker website for details), so please install these before installing RepeatMasker
 2) Exonerate Binaries can be downloaded from the website.  If you have Mac OSX, however, binaries are only available for version 1.0.  This verion will work too.  If you would like to compile exonerate, it requires GLIB, a C-library, that has a link from the exonerate website.  If you have Mac OSX, this can downloaded using FINK.
-3) RepeatMasker requires a repeat library file, which is downloaded from Repbase(http://www.girinst.org/), this is explained on the RepeatMasker website.
+3) RepeatMasker requires a repeat library file, which is downloaded from Repbase (http://www.girinst.org/), this is explained on the RepeatMasker website.
 4) Please note the location of all of the programs that you have installed.  You will need this information in the maker.exe file, one of MAKER's 3 control files.
 
 
@@ -49,22 +54,25 @@ This will create a directory called maker with 5 sub directories:
         MPI - contains MPI specific data to configure maker to run on a cluster that supports MPI.
         Apollo - contains gff3.tiers file (See section titled APOLLO below)
 	data  - contains some sample data used to make sure everything works
-	config - contains the 3 configuration files for MAKER:
 
-	     1. maker_exe.ctl - contains the path information for needed executables
-	     2. maker_bopts - contains filtering statistics for BLAST and Exonerate
-	     3. maker_opts.ctl - contains all other information for MAKER, including the location of the genome file.
+Maker uses control files to guide each run.  Generic control files can be built using the -CTL flag in maker.  These control files can then be edited by the user to identify the location of all required input data and statistics.  Control files are run specific and seperate control will need to be built for each genome given to maker.  Maker will look for control files in the current working directory, so it is recomended that maker should be ran in a seperate directory containing unique control files for each genome.
+
+Control files:
+
+         1. maker_exe.ctl - contains the path information for needed executables
+	 2. maker_bopts - contains filtering statistics for BLAST and Exonerate
+	 3. maker_opts.ctl - contains all other information for MAKER, including the location of the input genome file.
 
 
-These configuration files will have to be examined for changes in order to use MAKER for your specific data
+Always remember to be examine the control files before each run of MAKER on your specific data
 
 
-You must also set some environmental variables:
+Programs required by maker rely on certain environmental variables being set.  If you have not set these variables per the installation instructions of the external programs, a reminder list is provided below:
 
 for tcsh:
 setenv PERL5LIB where_bioperl_is_installed
 setenv WUBLASTMAT where_wublast_is_installed/matrix
-setenv ZOE where_snap_installation_folder_is
+setenv ZOE where_snap_is_installed
 setenv WUBLASTFILTER where_wublast_is_installed/filter
 setenv AUGUSTUS_CONFIG_PATH where_augustus_is_installed/config
 
@@ -77,7 +85,7 @@ export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
 
 
 #----------
-MPI MAKER
+MPI MAKER INSTALL
 
 If you are running maker on an MPI capable cluster, you can install an MPI version of maker by doing the following:
 
@@ -100,7 +108,7 @@ Please see the documentation for the MPI environment you use for how to initiate
 
 
 #----------
-RUNNING MAKER
+MAKER USAGE STATEMENT
 
 Usage:
 
@@ -146,6 +154,8 @@ Options:
 
      -CTL                     Generates generic control files in the current working directory.
 
+     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
+
      -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
                               contorol file value).
 
@@ -190,13 +200,13 @@ WARNING:
 #----------
 DATASTORE
 
-"Many filesystems have performance problems with large numbers of subdirectories in a directory and even when the underlying filesystems handle things gracefully, access via network filesystems can be an issue.  The Datastore modules create a hiearchy of subdirectory layers, starting from a 'base', and mapping end-user's identifiers to the corresponding subdirectory." - quote from http://www.yandell-lab.org/cgl/  (See site for more information on Datastores)
+"Many filesystems have performance problems with large numbers of subdirectories and files within a single directory and even when the underlying filesystems handle things gracefully, access via network filesystems can be an issue.  The Datastore modules create a hiearchy of subdirectory layers, starting from a 'base', and mapping end-user's identifiers to the corresponding subdirectory." - quote from http://www.yandell-lab.org/  (See site for more information on the Datastore module)
 
-Datastore will be used by maker If there are more than 1,000 sequences in a multi-fasta file or you use the -d flag on the command line.
+Datastore will be used by maker if there are more than 1,000 sequences in a multi-fasta file or you use the -d flag on the command line.
 
 When datastore is implemented, the output files described above will not appear where you would normally expect them to be.  Instead they will be located in a series of sub-directory under a new base-directory whose name is determined from the input genome file name, i.e. current_working_directory/input_genome_datastore/EE/Af/seq_name/seq_name.gff.  A master_datastore_index file will be made in the current working directory to help you find the output files from each sequence.
 
-The master_datastore_index file contains two columns of text.  The first column shows the sequence identifier from each fasta header, and the second column shows the location of the output files for that sequence. 
+The master_datastore_index file is a file created to allow the user to easily find the exact output directory corresponding to contigs from the input genome file.  The The master_datastore_index file contains two columns of text; the first column shows the sequence identifier from each fasta header, and the second column shows the location of the output files for that sequence. 
 
 
 
@@ -208,51 +218,77 @@ Lines in the maker control files have the format key:value whith no spaces befor
 
 MAKER has 3 control files for configuration options.
 
-A. maker_exe.ctl - includes information about programs executed by MAKER and how many processors are available to MAKER.
+A. maker_exe.ctl - includes information about programs executed by MAKER.
 
 Here is what the standard maker_exe.ctl control file looks like:
+====================================
 
-xdformat:/usr/local/blast/xdformat
-blastn:/usr/local/blast/blastn
-blastx:/usr/local/blast/blastx
-snap:/usr/local/SNAP/snap
-RepeatMasker:/usr/local/RepeatMasker/RepeatMasker
-exonerate:/usr/local/bin/exonerate
-cpus:2 #max number of cpus to use
+#-----Location of executables required by Maker
+xdformat:/usr/local/wublast/xdformat              #location of xdformat executable
+blastn:/usr/local/wublast/blastn                  #location of blastn executable
+blastx:/usr/local/wublast/blastx                  #location of blastn executable
+snap:/usr/local/snap/snap                         #location of snap executable
+augustus:/usr/local/augustus/bin/augustus         #location of augustus executable (optional)
+RepeatMasker:/usr/local/RepeatMasker/RepeatMasker #location of RepeatMasker executable
+exonerate:/usr/local/exonerate/bin/exonerate      #location of exonerate executable
+
+====================================
 
 Note that for all control files the comments written to help users begin with a pound sign(#).  In addition, options before the colon(:) can not be changed, nor should there be a space before or after the colon.
 
 
-B. maker_bopts.ctl - includes information about the options for executables run by MAKER
+B. maker_bopts.ctl - contains statistics for fltering blast and exonerate data
 
-Here is the example maker_bopts.ctl
+Here an example maker_bopts.ctl:
+====================================
 
+#-----BLAST and Exonerate statistics thresholds
 percov_blastn:0.80 #Blastn Percent Coverage Threhold EST-Genome Alignments
 percid_blastn:0.85 #Blastn Percent Identity Threshold EST-Genome Aligments
-eval_blastn:1e-10 #Blastn eval cutoff
-bit_blastn:40 #Blastn bit cutoff
+eval_blastn:1e-10  #Blastn eval cutoff
+bit_blastn:40      #Blastn bit cutoff
 percov_blastx:0.50 #Blastx Percent Coverage Threhold Protein-Genome Alignments
 percid_blastx:0.40 #Blastx Percent Identity Threshold Protein-Genome Aligments
-eval_blastx:1e-5 #Blastx eval cutoff
-bit_blastx:30 #Blastx bit cutoff
-e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments
-ep_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide
-en_score_limit:10 #Report  alignments scoring at least this percentage of the maximal score exonerate protein
+eval_blastx:1e-6   #Blastx eval cutoff
+bit_blastx:30      #Blastx bit cutoff
+e_perc_cov:50      #Exonerate Percent Coverage Thresshold EST_Genome Alignments
+ep_score_limit:20  #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide
+en_score_limit:20  #Report  alignments scoring at least this percentage of the maximal score exonerate protein
+
+====================================
 
 
+C. maker_opts.ctl - contains options for maker and external programs used by maker
 
-C. maker_opts.ctl
-genome:directory_where_maker_is/maker/data/dpp_contig.fasta #genome sequence file.
-protein:directory_where_maker_is/maker/data/dpp_proteins.fasta #protein sequence file.
-est:directory_where_maker_is/maker/data/dpp_transcripts.fasta #EST sequence file.
-repeat_protein:directory_where_maker_is/maker/data/te_proteins.fasta #A transposable Elements Library
-clean_up:0 #remove theVoid directory: 1 = yes, 0 = no
-rmlib: #An organism specific Repeat Library
-split_hit:10000 #length of the splitting of hits, could be seen as a maximum intron length
-snap_flank:200 #number of bp surrounding SNAP predictions used in attempts to extend gene by MAKER
-te_remove:1 #Mask Regions with Excess Similarity to Transposable Element Proteins, 1 = yes, 0 = no
-single_exon:0 #Includes est hits aligning to single exons, 1 = yes, 0 = no
+Here an example maker_opts.ctl:
+====================================
 
+#-----sequence and library files
+genome:fly_assembly.fasta        #genome sequence file (required)
+est:fly_est.fasta                #EST sequence file (required)
+protein:uniprot.fasta            #protein sequence file (required)
+repeat_protein:te_proteins.fasta #a database of transposable element proteins
+rmlib:fly_specific_repeats.fasta #an organism specific repeat library (optional)
+rm_gff:                          #a gff3 format file of repeat elements (only used with -GFF flag)
+
+#-----external application specific options
+snaphmm:fly          #SNAP HMM model
+augustus_species:fly #Augustus gene prediction model
+model_org:all        #RepeatMasker model organism
+alt_peptide:c        #amino acid used to replace non standard amino acids in xdformat
+cpus:2               #max number of cpus to use in BLAST and RepeatMasker
+
+#-----Maker specific options
+predictor:snap     #identifies which gene prediction program to use for annotations
+te_remove:1        #mask regions with excess similarity to transposable element proteins
+max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)
+split_hit:10000    #length of the splitting of hits (max intron size for EST and protein alignments)
+snap_flank:200     #length of sequence surrounding EST and protein evidence used to extend gene predictions
+single_exon:0      #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no
+use_seq_dir:1      #place output files in same directory as sequence file: 1 = yes, 0 = no
+clean_up:0         #remove theVoid directory: 1 = yes, 0 = no
+
+====================================
 
 
 #----------
@@ -266,30 +302,37 @@ maker2zff.pl <directory>
 each GFF file will have a sister file called sequence.wutr.gff3
 
 
-
 #----------
 APOLLO
 
 Maker is bundled with a configuration file that improves the color and display of maker annotations and evidence in the Apollo genome browser.  The configuration file is called "gff3.tiers" and is located in the maker/Apollo/ directory.  The file should be copied to the conf/ sub_directory which is located under the Apollo instalation directory.  Using the Mac version of Apollo the conf/ directory is located at /Applications/Apollo.app/Contents/Resources/app/conf/.
 
 
-
 #----------
-HMM BUILDING
+HMM BUILDING (based snap documentation)
 
-A. First you will need to determine the genes used to model future genes, by determining a high quality gene set and then covert them into ZFF format.  You can do this by using maker2zff.pl found in maker/bin.
-This program is run with the following command
+A.  First you will need to determine the genes used to model future genes, by determining a high quality gene set (annotations for the high quality gene should be in GFF3 format).  The high quality gene set can then be coverted into snap ZFF format using maker2zff.pl found in maker/bin.
 
-maker2zff.pl <directory> genome
-	
-<directory> is the directory where all of your GFF files are located
-geneome is the name for the outfile:
+This program is run with the following command:
 
-genome.ann
-genome.dna
+      maker2zff.pl <directory> genome
+
+*<directory> is the directory where all of your GFF3 files are located
+*geneome is the name for the outfile
+
+Files Created:
+
+      genome.ann
+      genome.dna
+
+Note:  A convenient way to identify and initial high quality gene set for the HMM is to use the -predictor est2genome option in maker.  This will produce gene annotations based solely on EST evidence.  These annoations can then seed the first HMM.  After running maker again using this new HMM and the -predictor snap option, you can use the second round of annotations as the seed for an even better HMM model.  In this way the HMM model progressively improves with each run of maker.
+
+Another strategy for identifying an initial gene set to model the HMM is to use the program CEGMA (http://korflab.ucdavis.edu/software.html).  CEGMA builds a highly reliable set of gene annotations in the absence of experimental data by identifying DNA regions with homology to a set of 458 proteins that are highly conserved among taxa.
+
+Combining both CEGMA and maker datasets to build the first HMM is also a good strategy.
 
 
-C. Next you will use the dna and zff file (genome.ann) to produce a SNAP HMM as described in documation provided by SNAP, which we have provided below:
+B.  Next you will use the dna and zff file (genome.dna and genome.ann) to produce a SNAP HMM as described in the SNAP documation (which we have provided below):
 
 The first step is to look at some features of the genes:
 
