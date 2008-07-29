@@ -1658,7 +1658,7 @@ sub load_control_files {
       }
 
       #set the absolute path to the file to reduce ambiguity
-      #$CTL_OPTIONS{$in} = Cwd::abs_path($CTL_OPTIONS{$in});
+      $CTL_OPTIONS{$in} = Cwd::abs_path($CTL_OPTIONS{$in}) unless ($in =~ /^blastn$|^blastx$/);
    }
 
    die $error if (defined $error);
