@@ -217,7 +217,7 @@ sub reblast_merged_hits {
       #==run the blast search
       if ($type eq 'blastx') {
 
-	 print STDERR "re-running blast against $t_id...\n";
+	 print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
 			      $t_file,
 			      $the_void,
@@ -234,11 +234,11 @@ sub reblast_merged_hits {
 			     );
 
 	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n";
+	 print STDERR "...finished\n" unless $main::quiet;
       }
       elsif ($type eq 'blastn') {
 
-	 print STDERR "re-running blast against $t_id...\n";
+	 print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
 	 my $keepers = blastn($chunk, 
 			      $t_file,
 			      $the_void,
@@ -255,7 +255,7 @@ sub reblast_merged_hits {
 			     );
 	 
 	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n";
+	 print STDERR "...finished\n" unless $main::quiet;
       }
       else {
 	 die "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
@@ -379,7 +379,8 @@ sub build_datastore {
    print STDERR "A data structure will be created for you at:\n".
                 "$CTL_OPTIONS{'dsroot'}\n\n".
                 "To access files for individual sequences use the datastore index:\n".
-                "$CTL_OPTIONS{'dsindex'}\n\n";
+                "$CTL_OPTIONS{'dsindex'}\n\n"
+	unless $main::quiet;
     
    $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
 #   $CTL_OPTIONS{'fh_dsindex'} = new FileHandle();
@@ -688,11 +689,11 @@ sub runSnap {
    my $w = new Widget::snap();
 	
    if (-e $out_file && ! $opt_f) {
-      print STDERR "re reading snap report.\n";
-      print STDERR "$out_file\n";
+      print STDERR "re reading snap report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
    }
    else {
-      print STDERR "running  snap.\n";
+      print STDERR "running  snap.\n" unless $main::quiet;
       $w->run($command);
    }
 }
@@ -752,11 +753,11 @@ sub runAugustus {
    my $w = new Widget::augustus();
 
    if (-e $out_file && ! $opt_f) {
-      print STDERR "re reading augustus report.\n";
-      print STDERR "$out_file\n";
+      print STDERR "re reading augustus report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
    }
    else {
-      print STDERR "running  augustus.\n";
+      print STDERR "running  augustus.\n" unless $main::quiet;
       $w->run($command);
    }
 }
@@ -1006,8 +1007,8 @@ sub blastn_as_chunks {
       print STDERR "===============END XDFORMAT==============\n";
    }
    elsif (-e $blast_finished && ! $opt_f) {
-      print STDERR "re reading blast report.\n";
-      print STDERR "$blast_finished\n";
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$blast_finished\n" unless $main::quiet;
       return $blast_dir;
    }
 	
@@ -1174,11 +1175,11 @@ sub runBlastn {
 	
    my $w = new Widget::blastn();
    if (-e $out_file && ! $opt_f) {
-      print STDERR "re reading blast report.\n";
-      print STDERR "$out_file\n";
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
    }
    else {
-      print STDERR "running  blast search.\n";
+      print STDERR "running  blast search.\n" unless $main::quiet;
       my $dir = $out_file;
       $dir =~ s/[^\/]+$//;
       File::Path::mkpath($dir);
@@ -1231,8 +1232,8 @@ sub blastx_as_chunks {
       print STDERR "===============END XDFORMAT==============\n";
    }
    elsif (-e $blast_finished && ! $opt_f) {
-      print STDERR "re reading blast report.\n";
-      print STDERR "$blast_finished\n";
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$blast_finished\n" unless $main::quiet;
       return $blast_dir;
    }
 
@@ -1416,11 +1417,11 @@ sub runBlastx {
    my $w = new Widget::blastx();
 
    if (-e $out_file  && !  $opt_f) {
-      print STDERR "re reading blast report.\n";
-      print STDERR "$out_file\n";
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
    }
    else {
-      print STDERR "running  blast search.\n";
+      print STDERR "running  blast search.\n" unless $main::quiet;
       my $dir = $out_file;
       $dir =~ s/[^\/]+$//;
       File::Path::mkpath($dir);
@@ -1502,11 +1503,11 @@ sub runRepeatMasker {
 	
    my $w = new Widget::RepeatMasker();
    if (-e $o_file && ! $opt_f) {
-      print STDERR "re reading repeat masker report.\n";
-      print STDERR "$o_file\n";
+      print STDERR "re reading repeat masker report.\n" unless $main::quiet;
+      print STDERR "$o_file\n" unless $main::quiet;
    }
    else {
-      print STDERR "running  repeat masker.\n";
+      print STDERR "running  repeat masker.\n" unless $main::quiet;
       $w->run($command);
    }
 }

@@ -98,7 +98,7 @@ sub keepers {
 	}
 	my $end     = @keepers;
         my $deleted = $start - $end;
-        print STDERR "deleted:$deleted hits\n";
+        print STDERR "deleted:$deleted hits\n" unless $main::quiet;
 
         return \@keepers;
 }
@@ -155,8 +155,9 @@ sub AUTOLOAD {
         $call =~/DESTROY/ && return;
 
         print STDERR "Widget::tblastx::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+              "\$self->$call","()\n" unless $main::quiet;
+        print STDERR "call to AutoLoader issued from: ", $caller, "\n"
+		unless $main::quiet;
 
         if (defined($arg)){
                 $self->{$call} = $arg;

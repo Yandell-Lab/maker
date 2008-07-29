@@ -109,7 +109,7 @@ sub keepers {
 
    my $end     = @keepers;
    my $deleted = $start - $end;
-   print STDERR "deleted:$deleted hits\n";
+   print STDERR "deleted:$deleted hits\n" unless $main::quiet;
    
    return \@keepers;
 }

@@ -175,11 +175,11 @@ sub snap {
 
 
         if (-e $o_file && ! $OPT_F){
-                print STDERR "re reading snap report.\n";
-                print STDERR "$o_file\n";
+                print STDERR "re reading snap report.\n" unless $main::quiet;
+                print STDERR "$o_file\n" unless $main::quiet;
         }
         else {
-                print STDERR "running  snap.\n";
+                print STDERR "running  snap.\n" unless $main::quiet;
 		my $w = new Widget::snap();
                 $w->run($command);
         }
@@ -525,7 +525,7 @@ sub keepers {
 	}
         my $end     = @keepers;
         my $deleted = $start - $end;
-        print STDERR "deleted:$deleted genes\n";
+        print STDERR "deleted:$deleted genes\n" unless $main::quiet;
 
         return \@keepers;
 }
@@ -539,8 +539,9 @@ sub AUTOLOAD {
         $call =~/DESTROY/ && return;
 
         print STDERR "Widget::snap::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+              "\$self->$call","()\n" unless $main::quiet;
+        print STDERR "call to AutoLoader issued from: ", $caller, "\n"
+		unless $main::quiet;
 
         if (defined($arg)){
                 $self->{$call} = $arg;

@@ -32,7 +32,7 @@ sub clean_and_cluster {
 	my @clusters = (@{$p_clusters}, @{$m_clusters});
 
 	my $num_c = @clusters;
-	print STDERR "cleaning clusters....\n";
+	print STDERR "cleaning clusters....\n" unless $main::quiet;
 	my $counter = 0;
 	my @clean_clusters;
 
@@ -40,7 +40,8 @@ sub clean_and_cluster {
 	#die;
 
 	foreach my $c (@clusters){
-		print STDERR "total clusters:$num_c now processing $counter\n";
+		print STDERR "total clusters:$num_c now processing $counter\n"
+			unless $main::quiet;
 		my $alts = clean::get_best_alt_splices($c, $seq, 10);
 		my $i = 0;
 		my @new_cluster;
@@ -171,7 +172,8 @@ sub careful_cluster {
 		
 		$temp_id++;
 	}
-	print STDERR "now careful_clustering....\n";
+	print STDERR "now careful_clustering....\n"
+		unless $main::quiet;
 	my %lookup;
 	my %matrix;
 	for (my $i = 0; $i < @{$phat_hits} - 1;$i++){
@@ -277,17 +279,19 @@ sub shadow_cluster {
         my $i_size = @{$phat_hits};
         my $j_size = @{$pieces};
 
-        print STDERR " in cluster:shadow cluster...\n";
-        print STDERR "    i_size:$i_size j_size:$j_size\n";;
+        print STDERR " in cluster:shadow cluster...\n" unless $main::quiet;
+        print STDERR "    i_size:$i_size j_size:$j_size\n"
+		unless $main::quiet;
 
 	my $i = 0;
 	my %c_size;
 
-	print STDERR " sorting hits in shadow cluster...\n";
+	print STDERR " sorting hits in shadow cluster...\n"
+		unless $main::quiet;
 
 	my @sorted = sort mani_sort @{$phat_hits};
  
-	print STDERR "... finished.\n";
+	print STDERR "... finished.\n" unless $main::quiet;
 
 	foreach my $hit (@sorted){
 
@@ -319,7 +323,7 @@ sub shadow_cluster {
 			$j++;
 		}
 
-		print STDERR " i_size:$i_size   current i:$i\n";
+		print STDERR " i_size:$i_size   current i:$i\n" unless $main::quiet;
 		$i++;
 	}
 
@@ -344,8 +348,8 @@ sub shadow_cluster_old {
 	my $i = 0;
 	my $i_size = @{$pieces};
 	my $j_size = @{$phat_hits};
-	print STDERR " in cluster:shadow cluster...\n";
-	print STDERR "    i_size:$i_size j_size:$j_size\n";;
+	print STDERR " in cluster:shadow cluster...\n" unless $main::quiet;
+	print STDERR "    i_size:$i_size j_size:$j_size\n" unless $main::quiet;
 	my %clustered;
         foreach my $s (@{$pieces}){
         	my $sB = $s->{b};
@@ -356,8 +360,9 @@ sub shadow_cluster_old {
 
 			next if defined($clustered{$hit->{temp_id}});
 
-			print STDERR "     i:$i   i_size:$i_size j_size:$j_size\n";	
-			print STDERR "          n:$n\n";
+			print STDERR "     i:$i   i_size:$i_size j_size:$j_size\n"
+				unless $main::quiet;
+			print STDERR "          n:$n\n" unless $main::quiet;
 		        my ($nB, $nE) = 
 			PhatHit_utils::get_span_of_hit($hit, 'query');
 

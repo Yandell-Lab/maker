@@ -114,7 +114,9 @@ Options:
 
      -CTL                     Generates generic control files in the current working directory.
 
-     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
+     -quiet		      Silence all the status message of MAKER.
+
+     -retry     <integer>     Re-run failed contigs up to the spcified number of re-tries.
 
      -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
                               contorol file value).
@@ -145,6 +147,7 @@ try{
 	      "PREDS" => \$OPT{SNAPS},
 	      "predictor=s" =>\$OPT{predictor},
 	      "retry=i" =>\$OPT{retry},
+	      "quiet" => \$main::quiet,
 	      "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},
 	      "help|?" => sub {print $usage; exit(0)},
 	     );
@@ -716,7 +719,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
       try{ #coresponds to level 10 in mpi_maker
 	 #-cluster the blastx hits
-	 print STDERR "cleaning blastx...\n";
+	 print STDERR "cleaning blastx...\n" unless $main::quiet;
 	 
 	 my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
 							  $query_seq,
@@ -769,7 +772,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
       try{ #coresponds to levels 11 in mpi_maker
 	 #-cluster the blastn hits
-	 print STDERR "cleaning blastn...\n";
+	 print STDERR "cleaning blastn...\n" unless $main::quiet;
 	 my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 							  $query_seq,
 							  10
@@ -979,7 +982,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    $LOG = undef;
 }
 
-print STDERR "\n\nMaker is now finished!!!\n\n";
+print STDERR "\n\nMaker is now finished!!!\n\n" unless $main::quiet;
 
 exit(0);
 
