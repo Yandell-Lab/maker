@@ -200,21 +200,7 @@ sub reblast_merged_hits {
       FastaFile::writeFile($fasta, $t_file);
       
       #build db for blast using xdformat
-      my $command = $CTL_OPTIONS{xdformat};
-      if ( $type eq 'blastx' && ! -e $t_file.'.xpd') {
-	  $command .= " -p -C ".$CTL_OPTIONS{'alt_peptide'}." $t_file";
-	  $command .= " &> /dev/null" if ($main::quiet);
-	  print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
-	  system($command);
-	  print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
-      }
-      elsif ( $type eq 'blastn' && ! -e $t_file.'.xnd') {
-         $command .= " -n $t_file";
-	 $command .= " &> /dev/null" if ($main::quiet);
-         print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
-	 system($command);
-	 print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
-      }
+      xdformat($CTL_OPTIONS{xdformat}, $t_file, $type, $CTL_OPTIONS{alt_peptide});
 
       #==run the blast search
       if ($type eq 'blastx') {
@@ -481,27 +467,10 @@ sub create_blastdb {
    my %CTL_OPTIONS = %{shift @_};
    my %OPT =  %{shift @_};
 
-   if (! -e $CTL_OPTIONS{'protein'}.'.xpd') {
-      my $command  = $CTL_OPTIONS{xdformat}. " -p -C $CTL_OPTIONS{'alt_peptide'} $CTL_OPTIONS{'protein'}";
-      $command .= " &> /dev/null" if ($main::quiet);
-      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
-      system($command);
-      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
-   }
-   if (! -e $CTL_OPTIONS{'est'}.'.xnd') {
-      my $command  = $CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'est'}";
-      $command .= " &> /dev/null" if ($main::quiet);
-      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
-      system($command);
-      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
-   }
-   if (! $OPT{R} && ! -e $CTL_OPTIONS{'repeat_protein'}.'.xpd') {
-      my $command  = $CTL_OPTIONS{xdformat}. " -p $CTL_OPTIONS{'repeat_protein'}";
-      $command .= " &> /dev/null" if ($main::quiet);
-      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
-      system($command);
-      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
-   }
+   xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'protein'}, 'blastx', $CTL_OPTIONS{'alt_peptide'});
+   xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'est'}, 'blastn');
+   xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'repeat_protein'}, 'blastx', $CTL_OPTIONS{'alt_peptide'})
+       if (! $OPT{R} && ! $OPT{GFF});
 }
 #----------------------------------------------------------------------------
 sub create_mpi_blastdb {
@@ -972,6 +941,39 @@ sub build_all_indexes {
    }
 }
 #-----------------------------------------------------------------------------
+sub xdformat {
+    my $xdformat = shift;
+    my $file = shift;
+    my $type = shift;
+    my $alt_peptide = shift || 'c';
+
+    die "ERROR: Can not find xdformat executable\n" if(! -e $xdformat);
+    die "ERROR: Can not find the db file $file\n" if(! -e $file);
+    die "ERROR: You must define a type (blastn|blastx)\n" if(! $type);
+
+    my $command = $xdformat;
+    if ( $type eq 'blastx') {
+	$command .= " -p -C $alt_peptide $file";
+    }
+    elsif ($type eq 'blastn'){
+	$command .= " -n $file";
+    }
+    else{
+	die "ERROR: Unsuported type $type\n";
+    }
+
+    if (($type eq 'blastn' && ! -e $file.'.xnd') ||
+	($type eq 'blastx' && ! -e $file.'.xpd')
+       ) {
+	open (XDF, "$command 2>&1 |");
+	print STDERR "\n=================XDFORMAT=================\n",
+	             join('', <XDF>),
+	             "===============END XDFORMAT===============\n\n"
+			 unless ($main::quiet);
+	close(XDF);
+    }
+}
+#-----------------------------------------------------------------------------
 sub blastn_as_chunks {
    my $chunk      = shift;
    my $db         = shift;
@@ -1010,11 +1012,7 @@ sub blastn_as_chunks {
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
-      my $cmd = "$xdformat -n $tmp_db";
-      $cmd .= " &> /dev/null" if ($main::quiet);
-      print STDERR "=============XDFORMAT OUTPUT=============\n" unless($main::quiet);
-      system($cmd);
-      print STDERR "===============END XDFORMAT==============\n" unless($main::quiet);
+      xdformat($xdformat, $tmp_db, 'blastn');
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1208,6 +1206,7 @@ sub blastx_as_chunks {
    my $cpus          = shift;
    my $old_db        = shift;
    my $xdformat      = shift;
+   my $alt_peptide    = shift;
    my $rank          = shift;
    my $opt_f         = shift;
    my $LOG = shift;
@@ -1236,12 +1235,8 @@ sub blastx_as_chunks {
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
-      my $cmd = "$xdformat -p $tmp_db";
-      $cmd .= " &> /dev/null" if ($main::quiet);
-      print STDERR "=============XDFORMAT OUTPUT=============\n" unless($main::quiet);
-      system($cmd);
-      print STDERR "===============END XDFORMAT==============\n" unless($main::quiet);
-   }
+      xdformat($xdformat, $tmp_db, 'blastx', $alt_peptide);
+  }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$blast_finished\n" unless $main::quiet;
