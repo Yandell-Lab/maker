@@ -847,6 +847,8 @@ sub pneu {
 		$b_3 = maker::join::find_best_three($g, $ests);
 	}
 
+        my $pred_source = $OPT_PREDICTOR;
+
 	my $anno_transcript = 
 	maker::join::join_f($b_5, $g, $b_3, $q_seq, $pred_source);
 
