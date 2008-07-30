@@ -123,9 +123,8 @@ sub AUTOLOAD {
         $call =~/DESTROY/ && return;
 
         print STDERR "Widget::blastx::AutoLoader called for: ",
-              "\$self->$call","()\n" unless $main::quiet;
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n"
-		unless $main::quiet;
+              "\$self->$call","()\n";
+        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (defined($arg)){
                 $self->{$call} = $arg;

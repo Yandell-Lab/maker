@@ -379,8 +379,7 @@ sub build_datastore {
    print STDERR "A data structure will be created for you at:\n".
                 "$CTL_OPTIONS{'dsroot'}\n\n".
                 "To access files for individual sequences use the datastore index:\n".
-                "$CTL_OPTIONS{'dsindex'}\n\n"
-	unless $main::quiet;
+                "$CTL_OPTIONS{'dsindex'}\n\n";
     
    $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
 #   $CTL_OPTIONS{'fh_dsindex'} = new FileHandle();

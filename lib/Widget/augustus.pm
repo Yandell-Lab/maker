@@ -192,10 +192,8 @@ sub augustus {
 
 
         if (-e $o_file && ! $OPT_F){
-                print STDERR "re reading augustus report.\n"
-			unless $main::quiet;
-                print STDERR "$o_file\n"
-			unless $main::quiet;
+                print STDERR "re reading augustus report.\n" unless $main::quiet;
+                print STDERR "$o_file\n" unless $main::quiet;
         }
         else {
                 print STDERR "running  augustus.\n" unless $main::quiet;
@@ -619,9 +617,8 @@ sub AUTOLOAD {
         $call =~/DESTROY/ && return;
 
         print STDERR "Widget::augustus::AutoLoader called for: ",
-              "\$self->$call","()\n" unless $main::quiet;
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n"
-		unless $main::quiet;
+              "\$self->$call","()\n";
+        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 
         if (defined($arg)){
                 $self->{$call} = $arg;

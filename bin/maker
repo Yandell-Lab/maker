@@ -204,7 +204,7 @@ try{
    }
    
    #---decide whether to use datastore 
-   if ($fasta_iterator->number_of_entries() > 1000) {
+   if ($fasta_iterator->number_of_entries() > 1000 || ! $OPT{d}) {
       print STDERR "\n\n".
       "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
       "Datastore will be used to avoid overloading the data structure of\n".
@@ -984,7 +984,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    $LOG = undef;
 }
 
-print STDERR "\n\nMaker is now finished!!!\n\n" unless $main::quiet;
+print STDERR "\n\nMaker is now finished!!!\n\n";
 
 exit(0);
 
