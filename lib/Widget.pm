@@ -33,15 +33,15 @@ sub print_command {
 	my $self    = shift;
 	my $command = shift;
 
-	print STDERR "#--------- command -------------#\n";
-	print STDERR ref($self).":\n";
+	print STDERR "#--------- command -------------#\n" unless ($main::quiet);
+	print STDERR ref($self).":\n" unless ($main::quiet);
 	if (defined($command)){
-		print STDERR $command."\n";
+		print STDERR $command."\n" unless ($main::quiet);
 	}
 	else {
-		print STDERR "executing default command...\n";
+		print STDERR "executing default command...\n" unless ($main::quiet);
 	}
-	print STDERR "#-------------------------------#\n";
+	print STDERR "#-------------------------------#\n" unless ($main::quiet);
 }
 #-------------------------------------------------------------------------------
 sub queryName {

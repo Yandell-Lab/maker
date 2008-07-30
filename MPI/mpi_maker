@@ -17,7 +17,10 @@ BEGIN{
 
     $COMMAND_LINE_ARGS = join(' ', @ARGV);
     
-    $SIG{'INT'} = sub {print STDERR "\n\nMaker aborted by user!!\n\n"; exit (1);};    
+    $SIG{'INT'} = sub {
+	print STDERR "\n\nMaker aborted by user!!\n\n";
+	exit (1);
+    };    
 
     #filter warning signals for warnings from storable module
     $SIG{'__WARN__'} =

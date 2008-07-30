@@ -147,7 +147,7 @@ sub segment_preds {
 		$spans{$s->{temp_id}} = [$sB, $sE];
 	}
 
-        print STDERR "Segmenting predctions\n";
+        print STDERR "Segmenting predictions\n" unless ($main::quiet);
 
 	my $i = 0;
         foreach my $c (@{$careful_clusters}){

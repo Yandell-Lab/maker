@@ -203,15 +203,17 @@ sub reblast_merged_hits {
       my $command = $CTL_OPTIONS{xdformat};
       if ( $type eq 'blastx' && ! -e $t_file.'.xpd') {
 	  $command .= " -p -C ".$CTL_OPTIONS{'alt_peptide'}." $t_file";
-	  print STDERR "=============XDFORMAT OUTPUT=============\n";
+	  $command .= " &> /dev/null" if ($main::quiet);
+	  print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
 	  system($command);
-	  print STDERR "===============END XDFORMAT==============\n";
+	  print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
       }
       elsif ( $type eq 'blastn' && ! -e $t_file.'.xnd') {
          $command .= " -n $t_file";
-         print STDERR "=============XDFORMAT OUTPUT=============\n";
+	 $command .= " &> /dev/null" if ($main::quiet);
+         print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
 	 system($command);
-	 print STDERR "===============END XDFORMAT==============\n";
+	 print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
       }
 
       #==run the blast search
@@ -481,21 +483,24 @@ sub create_blastdb {
 
    if (! -e $CTL_OPTIONS{'protein'}.'.xpd') {
       my $command  = $CTL_OPTIONS{xdformat}. " -p -C $CTL_OPTIONS{'alt_peptide'} $CTL_OPTIONS{'protein'}";
-      print STDERR "=============XDFORMAT OUTPUT=============\n";
+      $command .= " &> /dev/null" if ($main::quiet);
+      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
       system($command);
-      print STDERR "===============END XDFORMAT==============\n";
+      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
    }
    if (! -e $CTL_OPTIONS{'est'}.'.xnd') {
       my $command  = $CTL_OPTIONS{xdformat}. " -n $CTL_OPTIONS{'est'}";
-      print STDERR "=============XDFORMAT OUTPUT=============\n";
+      $command .= " &> /dev/null" if ($main::quiet);
+      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
       system($command);
-      print STDERR "===============END XDFORMAT==============\n";
+      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
    }
    if (! $OPT{R} && ! -e $CTL_OPTIONS{'repeat_protein'}.'.xpd') {
       my $command  = $CTL_OPTIONS{xdformat}. " -p $CTL_OPTIONS{'repeat_protein'}";
-      print STDERR "=============XDFORMAT OUTPUT=============\n";
+      $command .= " &> /dev/null" if ($main::quiet);
+      print STDERR "=============XDFORMAT OUTPUT=============\n" unless ($main::quiet);
       system($command);
-      print STDERR "===============END XDFORMAT==============\n";
+      print STDERR "===============END XDFORMAT==============\n" unless ($main::quiet);
    }
 }
 #----------------------------------------------------------------------------
@@ -994,16 +999,17 @@ sub blastn_as_chunks {
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.blastn";
 
-   $db =~ /([^\/]+$)/;
+   $db =~ /([^\/]+)$/;
    my $tmp_db = "$t_dir/$1";
 
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
       my $cmd = "$xdformat -n $tmp_db";
-      print STDERR "=============XDFORMAT OUTPUT=============\n";
+      $cmd .= " &> /dev/null" if ($main::quiet);
+      print STDERR "=============XDFORMAT OUTPUT=============\n" unless($main::quiet);
       system($cmd);
-      print STDERR "===============END XDFORMAT==============\n";
+      print STDERR "===============END XDFORMAT==============\n" unless($main::quiet);
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1202,6 +1208,8 @@ sub blastx_as_chunks {
    my $LOG = shift;
    my $LOG_FLAG = shift;
 
+   print "\n\n\n\n$db\n\n\n\n";
+
    #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1219,16 +1227,17 @@ sub blastx_as_chunks {
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.blastx";
     
-   $db =~ /([^\/]+$)/;
+   $db =~ /([^\/]+)$/;
    my $tmp_db = "$t_dir/$1";
 
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
       my $cmd = "$xdformat -p $tmp_db";
-      print STDERR "=============XDFORMAT OUTPUT=============\n";
+      $cmd .= " &> /dev/null" if ($main::quiet);
+      print STDERR "=============XDFORMAT OUTPUT=============\n" unless($main::quiet);
       system($cmd);
-      print STDERR "===============END XDFORMAT==============\n";
+      print STDERR "===============END XDFORMAT==============\n" unless($main::quiet);
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;

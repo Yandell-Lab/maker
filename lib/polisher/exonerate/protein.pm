@@ -100,12 +100,12 @@ sub runExonerate {
         my $w = new Widget::exonerate::protein2genome();
 	
         if (-e $o_file && ! $OPT_F){
-	    print STDERR "re reading exonerate report.\n";
-	    print STDERR "$o_file\n";
+	    print STDERR "re reading exonerate report.\n" unless($main::quiet);
+	    print STDERR "$o_file\n" unless($main::quiet);
         }
         else {
-	    print STDERR "running  exonerate search.\n";
-                $w->run($command);
+	    print STDERR "running  exonerate search.\n" unless($main::quiet);
+	    $w->run($command) unless($main::quiet);
         }
 	
 	

@@ -24,7 +24,7 @@ sub pairs {
         my $matrix    = shift;
         my $threshold = shift;
 
-	print STDERR "getting Pairs\n";
+	print STDERR "getting Pairs\n" unless($main::quiet);
         my @pairs;
          while (my $iUid = each %{$matrix}){
                  while (my $jUid = each %{$matrix->{$iUid}}) {
@@ -45,7 +45,7 @@ sub singleLinkageClusters {
         my $cId = -1;
         my %cIds;
         my %rMap;
-        print STDERR "doing single linkage clustering\n";
+        print STDERR "doing single linkage clustering\n" unless($main::quiet);
         foreach my $pair (@{$pairs}){
                 my ($mUidI, $mUidJ) = @{$pair};
                 if    (!defined($cIds{$mUidI}) && !defined($cIds{$mUidJ})){

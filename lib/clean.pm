@@ -72,7 +72,7 @@ sub remove_redundant_alt_splices {
         my $num = @sorted;
         my %dead;
         for (my $i = 0; $i < @sorted -1 ;$i++){
-                print STDERR " ...processing $i of $num\n";
+                print STDERR " ...processing $i of $num\n" unless($main::quiet);
                 my $hit_i = $sorted[$i];
                 if (defined($dead{$i})){
                         next;
@@ -109,7 +109,7 @@ sub get_best_alt_splices {
 	my $num = @sorted;
         my %dead;
         for (my $i = 0; $i < @sorted -1 ;$i++){
-		print STDERR " ...processing $i of $num\n";
+		print STDERR " ...processing $i of $num\n" unless($main::quiet);
 		my $hit_i = $sorted[$i];
 		if (defined($dead{$i})){
 			next;
