@@ -560,7 +560,6 @@ sub split_db {
       open ($fh, "> $name");
 
       push (@fhs, $fh);
-      push (@db_files, $name);
    }
 
    while (my $fasta = $fasta_iterator->nextEntry()) {
@@ -575,7 +574,13 @@ sub split_db {
 
    print `mv $t_dir $f_dir`;
 
-   return \@db_files;
+   if(-e "$f_dir"){
+       @db_files = File::Find::Rule->file->name("*$d_name\.*")->in( "$f_dir");
+       return \@db_files;
+   }
+   else{
+       die "ERROR: Could not split db\n";
+   }
 }
 #----------------------------------------------------------------------------
 sub load_anno_hsps {
@@ -1207,8 +1212,6 @@ sub blastx_as_chunks {
    my $opt_f         = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
-
-   print "\n\n\n\n$db\n\n\n\n";
 
    #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
