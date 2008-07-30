@@ -583,10 +583,13 @@ if ($rank == $root) {
       #see if all contigs are finished
       $go_mpi_status = 0;
       foreach my $n (@active ){
-	 if((defined($n) && $n == 1) || @failed){
+	 if((defined($n) && $n == 1)){
 	    $go_mpi_status = 1;
 	    last;
 	 }
+      }
+      if(! $fasta_iterator->finished || @failed > 0){
+	  $go_mpi_status = 1;
       }
    }
 
