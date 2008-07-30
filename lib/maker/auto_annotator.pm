@@ -23,8 +23,8 @@ use Widget::augustus;
        );
 
 my $OPT_F; #GLOBAL VARIABLE
-my $OPT_SNAPS; #GLOBAL VARIABLE
-my $OPT_PRED; #GLOBAL VARIABLE
+my $OPT_PREDS; #GLOBAL VARIABLE
+my $OPT_PREDICTOR; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -260,7 +260,7 @@ sub prep_blastx_data {
         	foreach my $mia (@{$gomias}){
         	        push(@data, {'gomiph' => $gomiph,
                                      'ests'   => $ests_in_cluster,
-				     'preds'  => $OPT_PRED eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
+				     'preds'  => $OPT_PREDICTOR eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
                                      'mia'    => $mia,
                                      'c_id'   => $c_id});
 
@@ -268,7 +268,7 @@ sub prep_blastx_data {
         }
         else {
         	push(@data, {'gomiph' => $gomiph,
-			     'preds'  => $OPT_PRED eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
+			     'preds'  => $OPT_PREDICTOR eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
                              'ests'   => undef,
                              'mia'    => undef,
                              'c_id'   => $c_id});
@@ -356,8 +356,8 @@ sub annotate {
 	my $pred_flank       = shift;
 	my $single_exon      = shift;
 	$OPT_F               = shift;
-	$OPT_SNAPS           = shift;
-	$OPT_PRED            = shift;
+	$OPT_PREDS           = shift;
+	$OPT_PREDICTOR       = shift;
 
         my $def   = Fasta::getDef($masked_fasta);
         my $seq   = Fasta::getSeq($masked_fasta);
@@ -421,7 +421,7 @@ sub run_it {
 
 		my ($snap_shots, $strand);
 
-                if ($OPT_PRED eq 'est2genome' && defined($mia)){
+                if ($OPT_PREDICTOR eq 'est2genome' && defined($mia)){
                         my $transcript = pneu($ests, $mia, $seq);
                         push(@transcripts, [$transcript, $set, undef]);
 
@@ -438,7 +438,7 @@ sub run_it {
 					    $pred_flank, 
 					    $pred_command,
 					    $OPT_F,
-					  ) if $OPT_PRED eq 'snap';
+					  ) if $OPT_PREDICTOR eq 'snap';
 
 		my ($q_id) = $def =~ />(\S+).*/;
 
@@ -452,14 +452,14 @@ sub run_it {
                                                $pred_command,
 					       $q_id,
 					       $OPT_F,
-                                              ) if $OPT_PRED eq 'augustus';
+                                              ) if $OPT_PREDICTOR eq 'augustus';
 
 
 
 		my $best_pred       = get_best_snap_shot($strand, $snap_shots);
 		my $on_right_strand = get_best_snap_shots($strand, $snap_shots);
 
-		if  (!defined($best_pred) && defined($mia) && $OPT_PRED ne 'est2genome' ){
+		if  (!defined($best_pred) && defined($mia) && $OPT_PREDICTOR ne 'est2genome' ){
 		    	my $transcript = pneu($ests, $mia, $seq);
 		    	push(@transcripts, [$transcript, $set, undef]);
 		}
@@ -506,7 +506,7 @@ sub load_transcript_struct {
 	
 	my $qi = defined($evi)
 	? maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$abinits, $l_trans)
-	: 'non-overlapping-'.$OPT_PRED;
+	: 'non-overlapping-'.$OPT_PREDICTOR;
 
 	my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
 
@@ -569,7 +569,7 @@ sub group_transcripts {
 	}
 
 	#-- add the non overlapping ab initio snap predictions
-	if ($OPT_SNAPS){
+	if ($OPT_PREDS){
 	   my $non_overlapping_snap_abinits = get_non_overlapping(\@transcripts,
 								  $snap_abinits
 								 );
@@ -846,8 +846,6 @@ sub pneu {
 		$b_5 = maker::join::find_best_five($g, $ests);
 		$b_3 = maker::join::find_best_three($g, $ests);
 	}
-
-	my $pred_source = ($OPT_PRED eq 'est2genome') ? 'exonerate' : $OPT_PRED;
 
 	my $anno_transcript = 
 	maker::join::join_f($b_5, $g, $b_3, $q_seq, $pred_source);

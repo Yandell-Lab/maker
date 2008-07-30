@@ -600,7 +600,7 @@ sub _run {
       my $the_void         = shift @{$vars};
       my %CTL_OPTIONS      = %{shift @{$vars}};
       my $opt_f            = shift @{$vars};
-      my $opt_snaps        = shift @{$vars};
+      my $opt_preds        = shift @{$vars};
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
@@ -636,7 +636,7 @@ sub _run {
 							$CTL_OPTIONS{'snap_flank'},
 							$CTL_OPTIONS{'single_exon'},
 							$opt_f,
-							$opt_snaps,
+							$opt_preds,
 							$CTL_OPTIONS{predictor},
 							$self->{LOG}
 						       );

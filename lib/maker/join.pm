@@ -351,6 +351,8 @@ sub join_f {
         }
 
 	my $hit_class = $pred_source.'::PhatHit';
+	$hit_class = "exonerate::PhatHit::est2genome" if($pred_source eq 'est2genome');
+
 	my $new_f = new $hit_class('-name'         => $g->name." annotation",
                                    '-description'  => 'derived from:'.$pred_source,
                                    '-algorithm'    => 'auto_annotator',

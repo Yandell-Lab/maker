@@ -233,7 +233,7 @@ if ($rank == $root) {
 		 "genome|g=s" => \$OPT{g},
 		 "cpus|c=i" => \$OPT{c},
 		 "GFF"=> \$OPT{GFF},
-		 "PREDS" => \$OPT{SNAPS},
+		 "PREDS" => \$OPT{PREDS},
 		 "predictor=s" =>\$OPT{predictor},
 		 "retry=i" =>\$OPT{retry},
 		 "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},

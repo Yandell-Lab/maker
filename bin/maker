@@ -144,7 +144,7 @@ try{
 	      "genome|g=s" => \$OPT{g},
 	      "cpus|c=i" => \$OPT{c},
 	      "GFF"=> \$OPT{GFF},
-	      "PREDS" => \$OPT{SNAPS},
+	      "PREDS" => \$OPT{PREDS},
 	      "predictor=s" =>\$OPT{predictor},
 	      "retry=i" =>\$OPT{retry},
 	      "quiet" => \$main::quiet,
@@ -839,7 +839,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							$CTL_OPTIONS{snap_flank},
 							$CTL_OPTIONS{'single_exon'},
 							$OPT{f},
-							$OPT{SNAPS},
+							$OPT{PREDS},
 							$CTL_OPTIONS{predictor},
 							$LOG
 						       );

@@ -900,7 +900,7 @@ sub _load_chunks_for_level {
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{CTL_OPTIONS},
 		  $self->{VARS}{OPT}{f},
-		  $self->{VARS}{OPT}{SNAPS}
+		  $self->{VARS}{OPT}{PREDS}
 		);
       #------------------------ARGS_IN
 

@@ -41,7 +41,7 @@ my @ctl_to_log = ('est',
    
 my @opt_to_log = ('R',
 		  'GFF',
-		  'SNAPS'
+		  'PREDS'
 		 );
 
 my %SEEN;
