@@ -248,6 +248,11 @@ sub _clean_files{
 	       print STDERR "WARNING: The file $key from the last run did not\n".
 	       "finish and must be erased\n";
 	       push(@files, $key);
+	       $key =~ /([^\/]+)$/;
+	       my $rm_f_name = $1;
+	       $rm_f_name =~ s/\.fasta$//;
+	       my @d = File::Find::Rule->directory()->name( '*$rm_f_name*' )->in($the_void);
+	       push (@dirs, @d);
 	    }
 	 }
       }
