@@ -187,7 +187,9 @@ try{
 	 @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
       }
       else {
-	 die "ERROR: Control files not found\n";
+	 print STDERR  "ERROR: Control files not found\n";
+	 print $usage;
+	 exit(0);
       }
    }
 
