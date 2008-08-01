@@ -1,14 +1,12 @@
 #------------------------------------------------------------------------
-#----                          PhatHit_utils                         ---- 
+#----                         Shared_Functios                        ---- 
 #------------------------------------------------------------------------
 package Shared_Functions;
 
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
-
 use FileHandle;
-use File::Util;
 use File::Temp qw(tempfile);
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
@@ -128,8 +126,7 @@ sub reblast_merged_hits {
    my $par_seq = Fasta::getSeq($$g_fasta);
 
    #get seq id off def line
-   my $p_id  = $par_def;
-   $p_id =~ s/\s+/_/g;
+   my ($p_id)  = $par_def =~ /^([^\s\t\n]+)/;
    $p_id =~ s/\|/_/g;
 
    #build a safe name for file names from the sequence identifier
@@ -201,55 +198,57 @@ sub reblast_merged_hits {
       
       #build db for blast using xdformat
       xdformat($CTL_OPTIONS{xdformat}, $t_file, $type, $CTL_OPTIONS{alt_peptide});
-
+      
       #==run the blast search
       if ($type eq 'blastx') {
-
-	 print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
-	 my $keepers = blastx($chunk, 
-			      $t_file,
-			      $the_void,
-			      $p_safe_id."-2-".$t_safe_id,
-			      $CTL_OPTIONS{blastx},
-			      $CTL_OPTIONS{eval_blastx},
-			      $CTL_OPTIONS{bit_blastx},
-			      $CTL_OPTIONS{percov_blastx},
-			      $CTL_OPTIONS{percid_blastx},
-			      $CTL_OPTIONS{split_hit},
-			      $CTL_OPTIONS{cpus},
-			      $OPT_f,
-			      $LOG
-			     );
-
-	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n" unless $main::quiet;
+	  
+	  print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
+	  my $keepers = blastx($chunk, 
+			       $t_file,
+			       $the_void,
+			       $p_safe_id."-2-".$t_safe_id,
+			       $CTL_OPTIONS{blastx},
+			       $CTL_OPTIONS{eval_blastx},
+			       $CTL_OPTIONS{bit_blastx},
+			       $CTL_OPTIONS{percov_blastx},
+			       $CTL_OPTIONS{percid_blastx},
+			       $CTL_OPTIONS{split_hit},
+			       $CTL_OPTIONS{cpus},
+			       $OPT_f,
+			       $LOG
+			      );
+	  
+	  push(@blast_keepers, @{$keepers});
+	  print STDERR "...finished\n" unless $main::quiet;
       }
       elsif ($type eq 'blastn') {
-
-	 print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
-	 my $keepers = blastn($chunk, 
-			      $t_file,
-			      $the_void,
-			      $p_safe_id."-2-".$t_safe_id,,
-			      $CTL_OPTIONS{blastn},
-			      $CTL_OPTIONS{eval_blastn},
-			      $CTL_OPTIONS{bit_blastn},
-			      $CTL_OPTIONS{percov_blastn},
-			      $CTL_OPTIONS{percid_blastn},
-			      $CTL_OPTIONS{split_hit},
-			      $CTL_OPTIONS{cpus},
-			      $OPT_f,
-			      $LOG
-			     );
-	 
-	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n" unless $main::quiet;
+	  
+	  print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
+	  my $keepers = blastn($chunk, 
+			       $t_file,
+			       $the_void,
+			       $p_safe_id."-2-".$t_safe_id,,
+			       $CTL_OPTIONS{blastn},
+			       $CTL_OPTIONS{eval_blastn},
+			       $CTL_OPTIONS{bit_blastn},
+			       $CTL_OPTIONS{percov_blastn},
+			       $CTL_OPTIONS{percid_blastn},
+			       $CTL_OPTIONS{split_hit},
+			       $CTL_OPTIONS{cpus},
+			       $OPT_f,
+			       $LOG
+			      );
+	  
+	  push(@blast_keepers, @{$keepers});
+	  print STDERR "...finished\n" unless $main::quiet;
       }
       else {
-	 die "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
+	  die "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
       }
-   }
 
+      unlink <$t_file.x??>;
+  }
+   
    #==return hits
    return (\@blast_keepers);
 }

@@ -9,8 +9,6 @@ use Storable qw (freeze thaw dclone);
 
 use FindBin;
 use lib "$FindBin::Bin/../..";
-
-use File::Util;
 use File::Temp qw(tempfile);
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
@@ -219,18 +217,6 @@ sub _run {
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
-      #merge blast reports
-      my($f_util) = File::Util->new();
-      my(@dirs) = $f_util->list_dir($the_void, '--dirs-only');
-      @dirs = grep (/\.blastx\.temp_dir$/, @dirs);
-      
-      foreach my $dir (@dirs) {
-	 my $blast_finished = $dir;
-	 $blast_finished =~ s/\.temp_dir$//;
-	 system ("cat $the_void/$dir/*.blastx > $the_void/$blast_finished");
-	 File::Path::rmtree ("$the_void/$dir");
-      }
-
       #-mask the chunk using blastx hits
       $chunk = repeat_mask_seq::mask_chunk($chunk, $repeat_blastx_keepers);
       
