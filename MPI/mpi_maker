@@ -270,21 +270,17 @@ if ($rank == $root) {
 	    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
 	 }
 	 else {
-	    die $usage;
+	     print STDERR  "ERROR: Control files not found\n";
+	     print $usage;
+	     exit(0);
 	 }
       }
       
-      if ($size < 0) {
-      
-	 warn ("ERROR:  You are running mpi_maker on fewer than 2 processors.\n",
-	       "Switching to regular maker.\n\n",
-	       "If you are trying to test the mpi_maker installation, restart\n".
-	       "mpi_maker using 2 or more processors.\n".
-	       "(using at least 3 processors is recommended)\n\n"
+      if ($size < 2) {
+	 warn ("WARNING:  You are running mpi_maker on fewer than 2 processors.\n",
+	       "Using at least 2 processors is required for MPI.\n",
+	       "mpi_maker will now act like a really slow version of regular maker\n\n"
 	      );
-	 
-	 system ("perl $FindBin::Bin/maker $COMMAND_LINE_ARGS " . join (" ", @ARGV));
-	 exit(0);
       }
 
       #--Control file processing
