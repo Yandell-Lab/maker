@@ -26,6 +26,8 @@ use Widget::blastx;
 use Widget::tblastx;
 use Widget::blastn;
 use Widget::snap; 
+use Widget::augustus;
+use Widget::xdformat;
 use PhatHit_utils;
 use Shadower;
 use Bio::DB::Fasta;
@@ -342,17 +344,6 @@ sub process_the_chunk_divide{
    my $sub_strt = $abs_cutoff - $chunk->offset - 1;
    $sub_strt = 0 if($sub_strt < 0);
 
-   #   my $new_chunk = Storable::dclone($chunk); 
-   #      $new_chunk->p_cutoff($p_cutoff);
-   #      $new_chunk->m_cutoff($m_cutoff);
-   #      $new_chunk->length($chunk->length - ($abs_cutoff - $chunk->offset - 1));
-   #      $new_chunk->offset($abs_cutoff - 1);
-   #      $new_chunk->seq(substr($new_chunk->seq,
-   #			     $sub_strt,
-   #			     $new_chunk->length
-   #			    )
-   #		     );
-
    #hit holdovers and keepers are returned in same order given by user
    return @holdovers, @keepers; 
 }
@@ -369,9 +360,6 @@ sub build_datastore {
                 "$CTL_OPTIONS{'dsindex'}\n\n";
     
    $CTL_OPTIONS{'datastore'} = new Datastore::MD5('root' => $CTL_OPTIONS{'dsroot'}, 'depth' => 2);
-#   $CTL_OPTIONS{'fh_dsindex'} = new FileHandle();
-#   $CTL_OPTIONS{'fh_dsindex'}->open("> $CTL_OPTIONS{'dsindex'}");
-#   $CTL_OPTIONS{'fh_dsindex'}->autoflush(1);
 
    return %CTL_OPTIONS;
 }
@@ -964,12 +952,9 @@ sub xdformat {
     if (($type eq 'blastn' && ! -e $file.'.xnd') ||
 	($type eq 'blastx' && ! -e $file.'.xpd')
        ) {
-	open (XDF, "$command 2>&1 |");
-	print STDERR "\n=================XDFORMAT=================\n",
-	             join('', <XDF>),
-	             "===============END XDFORMAT===============\n\n"
-			 unless ($main::quiet);
-	close(XDF);
+       my $w = new Widget::xdformat();
+       print STDERR "running  xdformat.\n" unless $main::quiet;
+       $w->run($command);
     }
 }
 #-----------------------------------------------------------------------------
@@ -1008,6 +993,8 @@ sub blastn_as_chunks {
    $db =~ /([^\/]+)$/;
    my $tmp_db = "$t_dir/$1";
 
+   $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
+
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
@@ -1020,9 +1007,7 @@ sub blastn_as_chunks {
    }
 	
    #call blast executable
-   $chunk->write_file($t_file_name);
-
-   $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);   
+   $chunk->write_file($t_file_name);  
 
    runBlastn($t_file_name,
 	     $tmp_db,
@@ -1231,6 +1216,8 @@ sub blastx_as_chunks {
    $db =~ /([^\/]+)$/;
    my $tmp_db = "$t_dir/$1";
 
+   $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
+
    #copy db to local tmp dir and run xdformat 
    if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
       system("cp $db $tmp_db");
@@ -1244,8 +1231,6 @@ sub blastx_as_chunks {
 
    #call blast executable	     
    $chunk->write_file($t_file_name);
-
-   $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
    runBlastx($t_file_name,
 	     $tmp_db,
@@ -1550,6 +1535,7 @@ sub load_control_files {
 			    'augustus_species',
 			    'model_org',
 			    'max_dna_len',
+			    'min_contig',
 			    'split_hit',
 			    'snap_flank',
 			    'te_remove',
@@ -1591,6 +1577,7 @@ sub load_control_files {
    #set default values for certain control options
    $CTL_OPTIONS{'clean_up'} = 0;
    $CTL_OPTIONS{'max_dna_len'} = 100000;
+   $CTL_OPTIONS{'min_contig'} = 10000;
    $CTL_OPTIONS{'percov_blastn'} = 0.80;
    $CTL_OPTIONS{'percid_blastn'} = 0.85;
    $CTL_OPTIONS{'eval_blastn'} = 1e-10;
@@ -1736,12 +1723,13 @@ sub generate_control_files {
    print OUT "augustus_species:fly #Augustus gene prediction model\n";
    print OUT "model_org:all #RepeatMasker model organism\n";
    print OUT "alt_peptide:c #amino acid used to replace non standard amino acids in xdformat\n";
-   print OUT "cpus:2 #max number of cpus to use in BLAST and RepeatMasker\n";
+   print OUT "cpus:1 #max number of cpus to use in BLAST and RepeatMasker\n";
    print OUT "\n";
    print OUT "#-----Maker specific options\n";
    print OUT "predictor:snap #identifies which gene prediction program to use for annotations\n";
    print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
    print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
+   print OUT "min_contig:10000 #all contigs from the input genome file below this size are skipped\n";
    print OUT "split_hit:10000 #length of the splitting of hits (max intron size for EST and protein alignments)\n";
    print OUT "snap_flank:200 #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
    print OUT "single_exon:0 #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no\n";

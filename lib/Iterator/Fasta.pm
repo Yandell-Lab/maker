@@ -73,10 +73,9 @@ sub nextEntry {
 	my $self = shift;
 
 	my $fh = $self->fileHandle();
-	$/ = "\n>";
+	local $/ = "\n>";
 
-	unless (openhandle($fh)){ #checks to see if file handle is open
-	    $/ = "\n";
+	if (! openhandle($fh)){ #checks to see if file handle is open
 	    return undef; 
 	}
 
@@ -88,7 +87,6 @@ sub nextEntry {
 		$/ = "\n";
 		return $line;
 	}
-	$/ = "\n";
 	
 	$fh->close();
 	return undef;

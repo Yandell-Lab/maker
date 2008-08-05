@@ -22,6 +22,7 @@ use URI::Escape;
        );
 
 my $OPT_F; #GLOBAL VALUE
+my $LOG;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -35,6 +36,7 @@ sub polish {
 	my $percent    = shift;
 	my $matrix     = shift;
 	$OPT_F         = shift;
+	$LOG           = shift;
 
 	my ($g_id, $e_id, $e_len, $g_len) = 
 	polisher::prep($g_file, $e_file);
@@ -84,7 +86,9 @@ sub e_exonerate {
 
         my $o_file    = "$the_void/$safe_g_id\.$safe_e_id\.$ext\.est_exonerate";
 
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);   
         runExonerate($g_file, $e_file, $o_file, $exe, $percent, $matrix);
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);   
 
         return Widget::exonerate::est2genome::parse($o_file, $e_len, $g_len);
 
@@ -115,7 +119,7 @@ sub runExonerate {
         }
         else {
 	    print STDERR "running  est2genome search.\n"unless($main::quiet);
-	    $w->run($command) unless($main::quiet);
+	    $w->run($command);
         }
 	
 }

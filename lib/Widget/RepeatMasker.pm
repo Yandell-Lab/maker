@@ -11,6 +11,8 @@ use Widget;
 use Bio::DB::Fasta;
 use repeatmasker::PhatHit;
 use repeatmasker::PhatHsp;
+use IPC::Open3;
+
 @ISA = qw(
 	Widget
        );
@@ -39,7 +41,11 @@ sub run {
 
 	if (defined($command)){
 		$self->print_command($command);
-		system("$command > /dev/null");
+		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		local $/ = \1;
+		while (my $line = <CHLD_ERR>){
+		   print STDERR $line unless($main::quiet);
+		}
 	}
 	else {
 		$self->print_command();
@@ -104,7 +110,7 @@ sub parse {
 	my $q_length = shift;
 
 	my $fh = new FileHandle();
-	   $fh->open("$file");
+	   $fh->open("$file") || die "ERROR: Could not open \'$file\'\n";
 
 	my %hsps;
 	while (my $line = <$fh>){

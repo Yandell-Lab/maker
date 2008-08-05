@@ -44,6 +44,84 @@ sub print_command {
 	print STDERR "#-------------------------------#\n" unless ($main::quiet);
 }
 #-------------------------------------------------------------------------------
+sub build_redirect {
+   my $self = shift;
+   my $command = shift;
+
+   my $current = '';
+   my $last = '';
+   my $next2last = '';
+   
+   my $ignore = 0;
+   my $quote = '';
+   my $record = 0;
+   my $redirect = 1;
+   my $line;
+   
+   while ($$command =~ /(.)/g){
+      $next2last = $last;
+      $last = $current;
+      $current = $1;
+      
+      if($current eq "\'" && $last ne "\\"){
+	 if ($quote eq $current){
+	    $ignore = 0;
+	    $quote = '';
+	 }
+	 elsif($quote eq "\""){
+	    #do nothing
+	 }
+	 else{
+	    $ignore = 1;
+	    $quote = $current;
+	 }
+      }
+      elsif($current eq "\"" && $last ne "\\"){
+	 if ($quote eq $current){
+	    $ignore = 0;
+	    $quote = '';
+	 }
+	 elsif($quote eq "\'"){
+	    #do nothing
+	 }
+	 else{
+	    $ignore = 1;
+	    $quote = $current;
+	 }
+      }
+      elsif($current eq "\>" && !$ignore && $last ne "\\" ){
+	 if ($last =~ /\d/ && $next2last =~ /[\s\t]/){
+	    if ($last eq '1'){#alternate STDOUT redirect
+	       $record = 1;
+	       $line .= $last if (!defined($line))
+	    }
+	    elsif($last eq '2'){#can't redirect STDERR
+	       $redirect = 0;
+	    }
+	 }
+	 elsif($last eq "\&" && $next2last ne "\\"){#can't redirect STDERR
+	    $redirect = 0;
+	 }
+	 else{
+	    $record = 1;
+	 }
+      }
+      
+      if($record){
+	 $line .= $current;
+      }
+   }
+   
+   if ($redirect){
+      if (defined $line){
+	 $$command =~ s/$line$//;
+      }
+      
+      $$command .= " 2>&1";
+      $$command .= " " . $line if (defined($line));
+   }
+}
+#-------------------------------------------------------------------------------
 sub queryName {
 	my $self = shift;
 	my $name = shift;

@@ -25,6 +25,7 @@ use Widget::augustus;
 my $OPT_F; #GLOBAL VARIABLE
 my $OPT_PREDS; #GLOBAL VARIABLE
 my $OPT_PREDICTOR; #GLOBAL VARIABLE
+my $LOG; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -358,6 +359,7 @@ sub annotate {
 	$OPT_F               = shift;
 	$OPT_PREDS           = shift;
 	$OPT_PREDICTOR       = shift;
+	$LOG                 = shift;
 
         my $def   = Fasta::getDef($masked_fasta);
         my $seq   = Fasta::getSeq($masked_fasta);
@@ -438,6 +440,7 @@ sub run_it {
 					    $pred_flank, 
 					    $pred_command,
 					    $OPT_F,
+					    $LOG
 					  ) if $OPT_PREDICTOR eq 'snap';
 
 		my ($q_id) = $def =~ />(\S+).*/;
@@ -452,6 +455,7 @@ sub run_it {
                                                $pred_command,
 					       $q_id,
 					       $OPT_F,
+					       $LOG
                                               ) if $OPT_PREDICTOR eq 'augustus';
 
 

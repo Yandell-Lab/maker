@@ -5,7 +5,6 @@ package runlog;
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
-use File::Find::Rule;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -78,7 +77,9 @@ sub _load_old_log {
    my $log_file = $self->{file};
    my %logged_vals;
 
+   print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
    if (-e $log_file){
+      print STDERR "Processing run.log file...\n" unless($main::quiet);
       open (IN, "< $log_file");      
       while( defined (my $line = <IN>)){
 	 chomp $line;
@@ -146,7 +147,7 @@ sub _clean_files{
 	 
 	    #if previous log options are not the same as current the options
 	    if ($log_val ne $opt_val) {
-	       print STDERR "WARNING: Change in command line flag \'$key\' since last run\n";
+	       print STDERR "MAKER WARNING: Change in command line flag \'$key\' since last run\n";
 	       $continue_flag = 1; #re-run because opts changed
 	    
 	       if (-e $gff_file) {
@@ -174,7 +175,7 @@ sub _clean_files{
 
 	    #if previous log options are not the same as current control file options
 	    if ($log_val ne $ctl_val) {
-	       print STDERR "WARNING: Control file option \'$key\' has changed\n".
+	       print STDERR "MAKER WARNING: Control file option \'$key\' has changed\n".
 	       "Old:$log_val\tNew:$ctl_val\n\n";
 	    
 	       $continue_flag = 1; #re-run because ctlopts changed
@@ -245,14 +246,16 @@ sub _clean_files{
 	 #CHECK FOR FILES THAT DID NOT FINISH
 	 while (my $key = each %{$logged_vals{STARTED}}) {
 	    if (! exists $logged_vals{FINISHED}{$key}) {
-	       print STDERR "WARNING: The file $key from the last run did not\n".
-	       "finish and must be erased\n";
+	       print STDERR "MAKER WARNING: The file $key\n".
+	       "did not finish on the last run and must be erased\n";
 	       push(@files, $key);
 	       $key =~ /([^\/]+)$/;
 	       my $rm_f_name = $1;
 	       $rm_f_name =~ s/\.fasta$//;
-	       my @d = File::Find::Rule->directory()->name( '*$rm_f_name*' )->in($the_void);
-	       push (@dirs, @d);
+	       my @d = <$the_void/*$rm_f_name*>;
+	       foreach my $d (@d){
+		  push (@dirs, $d) if (-d $d);
+	       }
 	    }
 	 }
       }
@@ -261,7 +264,7 @@ sub _clean_files{
    
       #-print file type specific warnings and delete files
       if (exists $rm_key{retry}) {
-	 print STDERR "WARNING: Old data must be removed before re-running this sequence\n";
+	 print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n";
       
 	 #delete everything in the void
 	 File::Path::rmtree($the_void);
@@ -269,7 +272,7 @@ sub _clean_files{
 	 unlink($gff_file) if(-e $gff_file);
       }
       elsif (exists $rm_key{force}) {
-	 print STDERR "WARNING: All old files will be erased before continuing\n";
+	 print STDERR "MAKER WARNING: All old files will be erased before continuing\n";
       
 	 #delete everything in the void
 	 File::Path::rmtree($the_void);
@@ -277,7 +280,7 @@ sub _clean_files{
 	 unlink($gff_file) if(-e $gff_file);
       }
       elsif (exists $rm_key{all}) {
-	 print STDERR "WARNING: Changes in control files make re-use of all old data impossible\n".
+	 print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
 	 "All old files will be erased before continuing\n";
       
 	 #delete everything in the void
@@ -287,48 +290,48 @@ sub _clean_files{
       }
       else {
 	 if (exists $rm_key{snap}) {
-	    print STDERR "WARNING: Changes in control files make re-use of old Snap data impossible\n".
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
 	    "Old Snap files will be erased before continuing\n";
 	 
-	    my @f = File::Find::Rule->file()->name( '*snap' )->in($the_void);
+	    my @f = <$the_void/*snap*>;
 	    push (@files, @f);
 	 }
 	 if (exists $rm_key{augustus} && defined($logged_vals{CTL_OPTIONS}{augustus})) {
-	    print STDERR "WARNING: Changes in control files make re-use of old Augustus data impossible\n".
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
 	    "Old Augustus files will be erased before continuing\n";
 	 
-	    my @f = File::Find::Rule->file()->name( '*augustus' )->in($the_void);
+	    my @f = <$the_void/*augustus*>;
 	    push (@files, @f);
 	 }
 	 if (exists $rm_key{blastn}) {
-	    print STDERR "WARNING: Changes in control files make re-use of old Blastn data impossible\n".
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastn data impossible\n".
 	    "Old Blastn files will be erased before continuing\n";
 	 
-	    my @f = File::Find::Rule->file()->name( '*blastn*' )->in($the_void);
-	    push (@files, @f);
-	 
-	    my @d = File::Find::Rule->directory()->name( '*blastn*' )->in($the_void);
-	    push (@dirs, @d);
+	    my @f = <$the_void/*blastn*>;
+	    foreach my $f (@f){
+	       push (@files, $f) if (-f $f);
+	       push (@dirs, $f) if (-d $f);
+	    }
 	 }
 	 if (exists $rm_key{blastx}) {
-	    print STDERR "WARNING: Changes in control files make re-use of old Blastx data impossible\n".
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
 	    "Old Blastx files will be erased before continuing\n";
 	 
-	    my @f = File::Find::Rule->file()->name( '*blastx' )->in($the_void);
-	    push (@files, @f);
-	 
-	    my @d = File::Find::Rule->directory()->name( '*blastx*' )->in($the_void);
-	    push (@dirs, @d);
+	    my @f = <$the_void/*blastx*>;
+	    foreach my $f (@f){
+	       push (@files, $f) if (-f $f);
+	       push (@dirs, $f) if (-d $f);
+	    }
 	 }
 	 if (exists $rm_key{exonerate}) {
-	    print STDERR "WARNING: Changes in control files make re-use of old Exonerate data impossible\n".
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Exonerate data impossible\n".
 	    "Old Exonerate files will be erased before continuing\n";
 	 
-	    my @f = File::Find::Rule->file()->name( '*exonerate' )->in($the_void);
+	    my @f = <$the_void/*exonerate*>;
 	    push (@files, @f);
 	 }
 	 if (exists $rm_key{gff}) {
-	    print STDERR "WARNING: The gff file $gff_file must now be removed.\n";
+	    print STDERR "MAKER WARNING: The gff file $gff_file must now be removed.\n";
 	    push (@files, $gff_file);
 	 }
       

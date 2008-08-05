@@ -5,14 +5,17 @@ use strict "refs";
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use vars qw($LOG $COMMAND_LINE);
+use vars qw($LOG $CMD_ARGS);
 
 BEGIN{
    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo" if not ($ENV{CGL_GO_SOURCE});
-   $COMMAND_LINE = $0 . ' '.join(' ', @ARGV);
+   $CMD_ARGS = join(' ', @ARGV);
 
-   $SIG{'INT'} = sub {print STDERR "\n\nMaker aborted by user!!\n\n"; exit (1);};
+   $SIG{'INT'} = sub {
+      print STDERR "\n\nMaker aborted by user!!\n\n";
+      exit (1);
+   };
 
    #output to log file of seq that caused rank to die                                                                               
    $SIG{'__DIE__'} =
@@ -32,7 +35,7 @@ BEGIN{
    };
 }
 
-use Error qw(:try);
+use Error qw(:try :warndie);
 use Error::Simple;
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
@@ -40,7 +43,6 @@ use Datastore::MD5;
 use URI::Escape;
 use Storable;
 use File::Path;
-use File::Find::Rule;
 use Data::Dumper;
 use Getopt::Long;
 use FileHandle;
@@ -93,20 +95,20 @@ Options:
 
      -predictor <snap>        Selects the gene predictor to use when building annotations (Default
                 <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
-                <est2genome>  from the EST evidence.
+                <est2genome>  from the EST evidence. This can also be set in the control files.
 
      -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
                               You must set rm_gff in maker_opts.ctl to the files location.  This
                               option turns off all other repeat masking.
 
-     -RM_off|R                Turns repeat masking off (* See Warning)
+     -RM_off|R                Turns all repeat masking off (* See Warning)
 
-     -force|f                 Forces maker to rerun all analyses (replaces all previous output).
+     -force|f                 Forces maker to rerun all analyses (erases all previous output).
 
      -datastore|d             Causes output to be written using datastore.  This option is
-                              automatically enabled if there are more than 1000 fasta entries
-                              in the input file.  Output can then accessed using the
-                              master_datastore_index file created by the program.
+                              automatically enabled if there are more than 1000 fasta entries in
+                              the input genome file.  Output can then be accessed using the
+                              master_datastore_index file created by the maker.
 
      -PREDS                   Outputs ab-initio predictions that do not overlap maker annotation
                               as gene annotations in the final gff3 output file (based on the
@@ -114,9 +116,9 @@ Options:
 
      -CTL                     Generates generic control files in the current working directory.
 
-     -quiet		      Silence all the status message of MAKER.
+     -quiet		      Silences most of the status messages.
 
-     -retry     <integer>     Re-run failed contigs up to the spcified number of re-tries.
+     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
 
      -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
                               contorol file value).
@@ -126,9 +128,10 @@ Options:
 
 Warning:
       
-        *When using the -R flag, maker expects that the input genome file is already masked.
-         Also if your genome file contains lower case characters, maker will consider those
-         characers to be soft masked.
+        *When using the -R flag, maker expects that the input genome file is already masked. Also
+         if your genome file contains lower case characters, maker will consider those characers
+         to be soft masked.  So if your fasta file is all in lower case, nothing will align to it,
+         and there will be no maker output.
 
 ";
 
@@ -204,7 +207,7 @@ try{
    }
    
    #---decide whether to use datastore 
-   if ($fasta_iterator->number_of_entries() > 1000 || ! $OPT{d}) {
+   if ($fasta_iterator->number_of_entries() > 1000 && ! $OPT{d}) {
       print STDERR "\n\n".
       "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
       "Datastore will be used to avoid overloading the data structure of\n".
@@ -213,8 +216,9 @@ try{
       $OPT{d} = 1;
    }
    
+   #alter control options to use datastore
    if ($OPT{d}) {
-      %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
+      %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS);
 
       $DS_FH = new FileHandle();
       $DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
@@ -227,7 +231,8 @@ try{
 catch Error::Simple with{
    my $E = shift;
    print STDERR $E->{-text};
-   print STDERR "\n\nMaker failed while examining startup data (control files and input fasta files)!!\n\n";
+   print STDERR "\n\nMaker failed while examining startup data\n",
+                "(control files and input fasta files)!!\n\n";
    my $code = 2;
    $code = $E->{-value} if (defined($E->{-value}));
 
@@ -238,6 +243,7 @@ my @failed; #holds failed contigs;
    
 #---iterate over each sequence in the fasta
 CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
+   next if ();
    my $failed_contig = 0; #set failure flag to false
    $LOG = undef;
 
@@ -250,10 +256,11 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    my $the_void;
 
    try{
+      #get fasta parts
       $query_def = Fasta::getDef($fasta);  #Get fasta header
       $query_seq = Fasta::getSeq($fasta);  #Get fasta sequence
       ($seq_id)  = $query_def =~ /^>(\S+)/; #Get sequence identifier off of fasta header
-      
+
       #-build a safe name for file names from the sequence identifier
       $seq_out_name = uri_escape($seq_id,  
 				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
@@ -265,7 +272,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       #use datastore as base if datastore flag is set
       if ($OPT{d}) {
 	 $out_dir = $CTL_OPTIONS{'datastore'}->id_to_dir($seq_out_name);
-	 $CTL_OPTIONS{'datastore'}->mkdir($seq_out_name) || die "ERROR: could not make directory $out_dir\n";
+	 $CTL_OPTIONS{'datastore'}->mkdir($seq_out_name) ||
+	      die "ERROR: could not make directory $out_dir\n";
       }
       
       #-set up void directory where analysis is stored
@@ -297,24 +305,36 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       exit($code);
    };
 
-   my $continue_flag = $LOG->get_continue_flag();
+   #skip contig if too short
+   if (length($query_seq) < $CTL_OPTIONS{min_contig}){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Skipping the contig \'$seq_id\' because it is too small\n",
+                   "#---------------------------------------------------------------------\n\n\n";
 
-   #==Decide whether to skip the current seq or continue
+      if ($OPT{d}) {
+	 print $DS_FH "$seq_id\t$out_dir\tSKIPPED_SMALL\n";
+      }
+
+      next;
+   }
+
+   #==Decide whether to skip the current contig based on log
+   my $continue_flag = $LOG->get_continue_flag();
    if ($continue_flag == 1) {
-      print STDERR "#----------------------------------------------------------------------\n",
-                   "Now processing the contig:$seq_id!!\n",
-                   "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Now starting the contig:$seq_id!!\n",
+                   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 print $DS_FH "$seq_id\t$out_dir\tSTARTED\n";
       }
    }
    elsif ($continue_flag == 0) {
-      print STDERR "#----------------------------------------------------------------------\n",
-      "The contig:$seq_id has already been processed!!\n",
-      "Maker will now skip to the next contig.\n",
-      "Run maker with the -f flag to force Maker to recompute all contig data.\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The contig:$seq_id has already been processed!!\n",
+                   "Maker will now skip to the next contig.\n",
+		   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+		   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 print $DS_FH "$seq_id\t$out_dir\tFINISHED\n";
@@ -323,12 +343,12 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       next;
    }
    elsif ($continue_flag == -1) {
-      print STDERR "#----------------------------------------------------------------------\n",
-      "The contig:$seq_id failed on the last run!!\n",
-      "Maker will now skip to the next contig rather than try again.\n",
-      "Run maker with the -f flag to force Maker to recompute all contig data.\n",
-      "Run maker with the -died flag to have Maker retry data that failed.\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The contig:$seq_id failed on the last run!!\n",
+		   "Maker will now skip to the next contig rather than try again.\n",
+		   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+		   "Run maker with the -died flag to have Maker retry data that failed.\n",
+		   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 print $DS_FH "$seq_id\t$out_dir\tDIED_SKIPPED\n";
@@ -337,19 +357,19 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       next;
    }
    elsif ($continue_flag == 2) {
-      print STDERR "#----------------------------------------------------------------------\n",
-      "The failed contig:$seq_id will now run again!!\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The failed contig:$seq_id will now run again!!\n",
+		   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 print $DS_FH "$seq_id\t$out_dir\tRETRY\n";
       }
    }
    elsif ($continue_flag == -2) {
-      print STDERR "#----------------------------------------------------------------------\n",
-      "Skipping the contig:$seq_id!!\n",
-      "However this contig is still not finished!!\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Skipping the contig:$seq_id!!\n",
+		   "However this contig is still not finished!!\n",
+		   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 print $DS_FH "$seq_id\t$out_dir\tSKIPPED\n";
@@ -359,12 +379,12 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    }
    elsif ($continue_flag == -3) {
       my $die_count = $LOG->get_die_count();
-      print STDERR "#----------------------------------------------------------------------\n",
-      "The contig:$seq_id failed $die_count time!!\n",
-      "Maker will not try again!!\n",
-      "The contig will be stored in $out_dir/$seq_out_name.died.fasta\n",
-      "You can use this fasta file to debug and re-run this sequence\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The contig:$seq_id failed $die_count time!!\n",
+		   "Maker will not try again!!\n",
+		   "The contig will be stored in $out_dir/$seq_out_name.died.fasta\n",
+		   "You can use this fasta file to debug and re-run this sequence\n",
+		   "#---------------------------------------------------------------------\n\n\n";
 
       open (D_FASTA, "> $out_dir/$seq_out_name.died.fasta");
       print D_FASTA $fasta;
@@ -528,14 +548,13 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       $fasta_t_index     = Shared_Functions::build_fasta_index($transcripts); 
       $fasta_p_index     = Shared_Functions::build_fasta_index($proteins);
       
-      #--run blast analysis in these new chunks
+      #--run future blast analysis in these new chunks
       $fasta_chunker = new FastaChunker();
       $fasta_chunker = new FastaChunker();
       $fasta_chunker->parent_fasta($$masked_fasta);
       $fasta_chunker->chunk_size($CTL_OPTIONS{'max_dna_len'});
       $fasta_chunker->min_size($CTL_OPTIONS{'split_hit'});
       $fasta_chunker->load_chunks();
-
 
       $chunk_count = 0;
    }
@@ -664,6 +683,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 }
 
 	 #==merge heldover Phathits from last round
+	 #reviews heldover hits, then merges and reblasts them if they cross the divide
 	 if ($chunk->number != 0) { #if not first chunk
 	    ($blastn_keepers,
 	     $blastx_keepers) = Shared_Functions::merge_and_resolve_hits($masked_fasta,
@@ -680,7 +700,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 									);
 	 }
 	 
-	 #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS   
+	 #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
+	 #holdover hits that are too close to the divide for review with next chunk
 	 if (not $chunk->is_last) { #if not last chunk
 	    ($holdover_blastn,
 	     $holdover_blastx,
@@ -727,7 +748,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							  $query_seq,
 							  10);
 	 
-	 undef $blastx_keepers;
+	 undef $blastx_keepers; #free up memory
 	 
 	 #-make a multi-fasta of the seqs in the blastx_clusters 
 	 #-polish the blastx hits with exonerate
@@ -780,7 +801,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							  10
 							 );
 	 
-	 undef $blastn_keepers;
+	 undef $blastn_keepers; #free up memory
 	 
 	 #-polish blastn hits with exonerate
 	 my $exonerate_e_clusters = Shared_Functions::polish_exonerate($fasta,
@@ -872,23 +893,10 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 $GFF3->phat_hits($exonerate_p_data);
 	 $GFF3->phat_hits($exonerate_e_data);
 	 
-	 #--- GAME XML
+	 #--- GAME XML output was removed and the module is broken
+
 	 
-	 #my $IOX= new Dumper::XML::Game->init(FastaFile=>$CTL_OPTIONS{'genome'},
-	 #                                     WriteFile=>$out_dir."/".$seq_out_name.".xml"
-	 #                                    );
-	 #$IOX->add_hits($rm_keepers);
-	 #$IOX->add_hits($blastx_keepers);
-	 #$IOX->add_hits($blastn_keepers);
-	 #foreach my $pp (@$exonerate_p_clusters) {
-	 #   $IOX->add_hits($pp);
-	 #}
-	 #foreach my $ee (@$exonerate_e_clusters) {
-	 #   $IOX->add_hits($ee);
-	 #}      
-	 #$IOX->add_hits($snaps);
-	 
-	 #---adding auto annotations
+	 #---quality indices
 	 
 	 #my @quality_indices;
 	 #foreach my $an (@$annotations) {
@@ -907,13 +915,10 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 #       $p_fastas .= $$p_fasta;
 	 #
 	 #       push (@temp_ant,$a) if defined($a->{hit});
-	 #       $IOX->add_autoant($a) if defined($a->{hit});
 	 #   }
 	 #}
 	 #Write the quality index of the mRNAs to a separate file.
 	 #write_quality_data(\@quality_indices, $seq_id);
-	 #
-	 #   $IOX->Game();
 	 
 	 #--- building fastas for annotations (grows with itteration)
 	 my ($p_fasta, $t_fasta) = Shared_Functions::get_maker_p_and_t_fastas($annotations);
@@ -941,17 +946,19 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
    try{	#coresponds to levels 14 in mpi_maker
       #--- building fastas of predictions
-      my ($p_snap_fastas, $t_snap_fastas) = Shared_Functions::get_snap_p_and_t_fastas($query_seq, $snaps);
-      my ($p_augus_fastas, $t_augus_fastas) = Shared_Functions::get_snap_p_and_t_fastas($query_seq, $augus);
+      my ($p_snap_fastas, $t_snap_fastas) =
+           Shared_Functions::get_snap_p_and_t_fastas($query_seq, $snaps);
+      my ($p_augus_fastas, $t_augus_fastas) =
+           Shared_Functions::get_snap_p_and_t_fastas($query_seq, $augus);
       
       #--Write fasta files now that all chunks are finished
-      FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
-      FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
-      FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
-      FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+      FastaFile::writeFile(\$p_fastas ,"$out_dir/$seq_out_name.maker.proteins.fasta");
+      FastaFile::writeFile(\$t_fastas ,"$out_dir/$seq_out_name.maker.transcripts.fasta");
+      FastaFile::writeFile(\$p_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.proteins.fasta");
+      FastaFile::writeFile(\$t_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.transcript.fasta");
       if ($CTL_OPTIONS{'augustus'}) {
-	 FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
-	 FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");
+	 FastaFile::writeFile(\$p_augus_fastas,"$out_dir/$seq_out_name.maker.augus.proteins.fasta");
+	 FastaFile::writeFile(\$t_augus_fastas,"$out_dir/$seq_out_name.maker.augus.transcript.fasta");
       }
       
       #--- add predictions to GFF and write
@@ -980,10 +987,16 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
    next CONTIG if ($failed_contig);
 
+   #-- write to dsindex the finished files
+   if($OPT{d}){
+       print $DS_FH "$seq_id\t$out_dir\tFINISHED\n";;
+   }
+
    #--- clear the log variable
    $LOG = undef;
 }
 
+#lets me know when maker is finished
 print STDERR "\n\nMaker is now finished!!!\n\n";
 
 exit(0);

@@ -10,6 +10,7 @@ use PostData;
 use FileHandle;
 use Widget;
 use PhatHit_utils;
+use IPC::Open3;
 
 @ISA = qw(
 	Widget
@@ -34,7 +35,11 @@ sub run {
 
 	if (defined($command)){
 		$self->print_command($command);
-		system("$command");
+		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		local $/ = \1;
+		while (my $line = <CHLD_ERR>){
+		    print STDERR $line unless($main::quiet);
+		}
 	}
 	else {
 		die "you must give Widget::blastn a command to run!\n";

@@ -14,11 +14,14 @@ use Iterator::Fasta;
 use snap::PhatHit;
 use snap::PhatHsp;
 use PhatHit_utils;
+use IPC::Open3;
+
 @ISA = qw(
 	Widget
        );
 
-my $OPT_F; # global varible for maker clean up.
+my $OPT_F; # global varible for maker clean up
+my $LOG; # global varible for maker runlog
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -113,6 +116,7 @@ sub get_snap_shot {
         my $snap_flank    = shift;
         my $snap_command  = shift;
 	   $OPT_F         = shift;
+	   $LOG           = shift;
 
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $snap_flank);
@@ -173,6 +177,7 @@ sub snap {
          $command .= " $file_name";
          $command .= " > $o_file";
 
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
         if (-e $o_file && ! $OPT_F){
                 print STDERR "re reading snap report.\n" unless $main::quiet;
@@ -184,6 +189,7 @@ sub snap {
                 $w->run($command);
         }
 
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
          my %params;
         $params{min_exon_score}  = -100;
@@ -208,8 +214,12 @@ sub run {
 	my $command = shift;
 
 	if (defined($command)){
-		$self->print_command($command);
-		system("$command");
+	        $self->print_command($command);
+		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		local $/ = \1;
+		while (my $line = <CHLD_ERR>){
+		   print STDERR $line unless($main::quiet);
+		}
 	}
 	else {
 		die "you must give Widget::snap a command to run!\n";

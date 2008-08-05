@@ -13,6 +13,8 @@ use File::Path;
 use URI::Escape;
 use runlog;
 use Shared_Functions;
+use File::Temp qw(tempfile);
+use File::Copy;
 
 #-----------------------------------------------------------------------------
 #------------------------------GLOBAL VARIABLES-------------------------------
@@ -78,7 +80,7 @@ sub _initialize {
       if (exists $CTL_OPTIONS{'datastore'}) {
 	 $self->{VARS}{out_dir} = $CTL_OPTIONS{'datastore'}->id_to_dir($self->{VARS}{seq_out_name});
 	 $CTL_OPTIONS{'datastore'}->mkdir($self->{VARS}{seq_out_name}) ||
-	    die "ERROR: could not make directory $self->{VARS}{out_dir}\n";
+	    die "ERROR: could not make directory ".$self->{VARS}{out_dir}."\n";
       }
       
       
@@ -117,11 +119,14 @@ sub _initialize {
    return;
 }
 #--------------------------------------------------------------
-#decide whether to continue with contig based on LOG continue flag
+#decide whether to continue with contig based on length and LOG continue flag
 sub _continue {
    my $self = shift;
 
-   return $self->{CONTINUE} if (defined($self->{CONTINUE}));
+   if (defined($self->{CONTINUE})){
+      $self->{TERMINATE} = 1 if ($self->{CONTINUE} <= 0);
+      return $self->{CONTINUE};
+  }
 
    my $LOG = $self->{LOG};
 
@@ -132,24 +137,38 @@ sub _continue {
    my $out_dir = $self->{VARS}{out_dir};
    my $seq_out_name = $self->{VARS}{seq_out_name};
 
-   my $continue_flag = $LOG->get_continue_flag();
+   #skip contig if too short
+   if (length($self->{VARS}{query_seq}) < $CTL_OPTIONS{min_contig}){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Skipping the contig \'$seq_id\' because it is too short\n",
+                   "#---------------------------------------------------------------------\n\n\n";
 
-   #==Decide whether to skip the current seq or continue
+      if ($OPT{d}) {
+	 $self->{DS} = "$seq_id\t$out_dir\tSKIPPED_SMALL\n";
+      }
+      
+      $self->{CONTINUE} = -2; #skipped signal is -2
+      $self->{TERMINATE} = 1;
+      return $self->{CONTINUE};
+   }
+
+   #==Decide whether to skip the current contig based on log
+   my $continue_flag = $LOG->get_continue_flag();
    if ($continue_flag == 1) {
-      print STDERR "#----------------------------------------------------------------------\n",
-                   "Now processing the contig:$seq_id!!\n",
-                   "#----------------------------------------------------------------------\n\n\n";
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Now starting the contig:$seq_id!!\n",
+                   "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 $self->{DS} = "$seq_id\t$out_dir\tSTARTED";
       }
    }
    elsif ($continue_flag == 0) {
-      print STDERR "#----------------------------------------------------------------------\n",
+      print STDERR "#---------------------------------------------------------------------\n",
       "The contig:$seq_id has already been processed!!\n",
       "Maker will now skip to the next contig.\n",
       "Run maker with the -f flag to force Maker to recompute all contig data.\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 $self->{DS} = "$seq_id\t$out_dir\tFINISHED";
@@ -158,12 +177,12 @@ sub _continue {
       $self->{TERMINATE} = 1;
    }
    elsif ($continue_flag == -1) {
-      print STDERR "#----------------------------------------------------------------------\n",
+      print STDERR "#---------------------------------------------------------------------\n",
       "The contig:$seq_id failed on the last run!!\n",
       "Maker will now skip to the next contig rather than try again.\n",
       "Run maker with the -f flag to force Maker to recompute all contig data.\n",
       "Run maker with the -died flag to have Maker retry data that failed.\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 $self->{DS} = "$seq_id\t$out_dir\tDIED_SKIPPED";
@@ -172,19 +191,19 @@ sub _continue {
       $self->{TERMINATE} = 1;
    }
    elsif ($continue_flag == 2) {
-      print STDERR "#----------------------------------------------------------------------\n",
+      print STDERR "#---------------------------------------------------------------------\n",
       "The failed contig:$seq_id will now run again!!\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 $self->{DS} = "$seq_id\t$out_dir\tRETRY";
       }
    }
    elsif ($continue_flag == -2) {
-      print STDERR "#----------------------------------------------------------------------\n",
+      print STDERR "#---------------------------------------------------------------------\n",
       "Skipping the contig:$seq_id!!\n",
       "However this contig is still not finished!!\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      "#---------------------------------------------------------------------\n\n\n";
 
       if ($OPT{d}) {
 	 $self->{DS} = "$seq_id\t$out_dir\tSKIPPED";
@@ -194,12 +213,12 @@ sub _continue {
    }
    elsif ($continue_flag == -3) {
       my $die_count = $LOG->get_die_count();
-      print STDERR "#----------------------------------------------------------------------\n",
+      print STDERR "#---------------------------------------------------------------------\n",
       "The contig:$seq_id failed $die_count time!!\n",
       "Maker will not try again!!\n",
       "The contig will be stored in $out_dir/$seq_out_name.died.fasta\n",
       "You can use this fasta file to debug and re-run this sequence\n",
-      "#----------------------------------------------------------------------\n\n\n";
+      "#---------------------------------------------------------------------\n\n\n";
 
       open (DFAS, "> $out_dir/$seq_out_name.died.fasta");
       print DFAS $self->{VARS}{fasta};
@@ -239,9 +258,17 @@ sub _handler {
    $self->{FAILED} = 1;
 }
 #--------------------------------------------------------------
+sub run {
+   my $self = shift;
+
+   my $ret = $self->_run();
+
+   return $ret;
+}
+#--------------------------------------------------------------
 #runs the MakerTier until multiple chunks are available to distribute
 
-sub run {
+sub _run {
    my $self = shift;
    my $current_level = $self->{LEVEL}{CURRENT};
 
@@ -256,7 +283,7 @@ sub run {
    my %OPT = %{$self->{VARS}{OPT}};
    my %CTL_OPTIONS = %{$self->{VARS}{CTL_OPTIONS}};
 
-   if ($current_level == -1){
+   if ($current_level == -1){#initiation level no chunk associated
       #-set up variables that are heldover from last chunk
       $self->{VARS}{holdover_blastn} = [];
       $self->{VARS}{holdover_blastx} = [];
@@ -277,8 +304,8 @@ sub run {
 	    print STDERR "Repeatmasking skipped!!\n";
 	    $self->{VARS}{masked_total_seq} = ${$self->{VARS}{query_seq}};
 	    
-	    $self->{LEVEL}{CURRENT} = 3;
-	    $self->_initiate_level(3);
+	    $self->{LEVEL}{CURRENT} = 4;
+	    $self->_initiate_level(4);
 	 }
 	 catch Error::Simple with{
 	    my $E = shift;
@@ -294,8 +321,8 @@ sub run {
 								   $CTL_OPTIONS{'rm_gff'}
 								  );
 	    
-	    $self->{LEVEL}{CURRENT} = 3;
-	    $self->_initiate_level(3);
+	    $self->{LEVEL}{CURRENT} = 4;
+	    $self->_initiate_level(4);
 	 }
 	 catch Error::Simple with{
 	    my $E = shift;
@@ -1187,7 +1214,7 @@ sub update_chunk {
    push (@{$self->{LEVEL}{$level_num}{RESULTS}}, $result);
    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;
     
-   $self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
+   #$self->{LEVEL}{$level_num}{ERROR} .= $chunk->error();
    $self->{ERROR} .= $chunk->error();
 
    if($chunk->failed){

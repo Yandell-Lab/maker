@@ -20,6 +20,7 @@ use FastaFile;
        );
 
 my $OPT_F; #GLOBAL VALUE
+my $LOG;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -33,6 +34,7 @@ sub polish {
 	my $percent    = shift;
 	my $matrix     = shift;
 	$OPT_F         = shift;
+	$LOG           = shift;
 
 	my ($g_id, $p_id, $p_len, $g_len) = 
 	polisher::prep($g_file, $p_file);
@@ -74,7 +76,9 @@ sub p_exonerate {
 
         my $o_file    = "$the_void/$g_id\.$p_id\.$ext\.p_exonerate";
 	
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
         runExonerate($g_file, $p_file, $o_file, $exe, $percent, $matrix);
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
         return Widget::exonerate::protein2genome::parse($o_file, $p_len, $g_len);
 	
@@ -105,7 +109,7 @@ sub runExonerate {
         }
         else {
 	    print STDERR "running  exonerate search.\n" unless($main::quiet);
-	    $w->run($command) unless($main::quiet);
+	    $w->run($command);
         }
 	
 	

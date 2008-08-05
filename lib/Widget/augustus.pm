@@ -14,12 +14,14 @@ use Iterator::Fasta;
 use augustus::PhatHit;
 use augustus::PhatHsp;
 use PhatHit_utils;
+use IPC::Open3;
 
 @ISA = qw(
 	Widget
        );
 
 my $OPT_F; # global option -f to force cleanup
+my $LOG; #global varible for maker runlog
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -43,6 +45,7 @@ sub get_aug_shot {
         my $pred_command  = shift;
         my $q_id          = shift;
 	   $OPT_F         = shift;
+	   $LOG           = shift;
 
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $pred_flank, $id, $q_id);
@@ -190,6 +193,7 @@ sub augustus {
             $command .= " $file_name";
             $command .= " > $o_file";
 
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
         if (-e $o_file && ! $OPT_F){
                 print STDERR "re reading augustus report.\n" unless $main::quiet;
@@ -201,6 +205,7 @@ sub augustus {
                 $w->run($command);
         }
 
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
         my %params;
            $params{min_exon_score}  = -100;
@@ -223,11 +228,15 @@ sub run {
 	my $command = shift;
 
 	if (defined($command)){
-		$self->print_command($command);
-		system("$command");
+	   $self->print_command($command);
+	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	   local $/ = \1;
+	   while (my $line = <CHLD_ERR>){
+	      print STDERR $line unless($main::quiet);
+	   }
 	}
 	else {
-		die "you must give Widget::augustus a command to run!\n";
+	   die "you must give Widget::augustus a command to run!\n";
 	}
 }
 #-------------------------------------------------------------------------------

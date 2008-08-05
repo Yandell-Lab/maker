@@ -8,17 +8,23 @@ use strict "refs";
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use vars qw($RANK $LOG $COMMAND_LINE_ARGS);
+use vars qw($RANK $LOG $CMD_ARGS);
+use threads;
+use threads::shared;
 
 BEGIN{
     $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
     $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
 	if not ($ENV{CGL_GO_SOURCE});
 
-    $COMMAND_LINE_ARGS = join(' ', @ARGV);
+    $CMD_ARGS = join(' ', @ARGV);
     
     $SIG{'INT'} = sub {
 	print STDERR "\n\nMaker aborted by user!!\n\n";
+	my @threads = threads->list;
+	foreach my $thr (@threads){
+	   $thr->detach;
+	}
 	exit (1);
     };    
 
@@ -39,10 +45,16 @@ BEGIN{
 	 $LOG->add_entry("DIED","RANK",$RANK);
 	 $LOG->add_entry("DIED","COUNT",$die_count);
       }
-	 die "#----------------------\n",
-	     "FATAL: failed!!\n",
-	     "#----------------------\n",
-	      $_[0] . "\n";
+
+      my @threads = threads->list;
+      foreach my $thr (@threads){
+	 $thr->detach;
+      }
+
+      die "#----------------------\n",
+          "FATAL: failed!!\n",
+	  "#----------------------\n",
+	  $_[0] . "\n";
    };
 }
 
@@ -60,8 +72,6 @@ use FileHandle;
 use Cwd qw(cwd abs_path);
 use Bio::DB::Fasta;
 use Iterator::Fasta;
-use threads;
-use threads::shared;
 use runlog;
 use Shared_Functions;
 
@@ -112,26 +122,28 @@ Options:
 
      -predictor <snap>        Selects the gene predictor to use when building annotations (Default
                 <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
-                <est2genome>  from the EST evidence.
+                <est2genome>  from the EST evidence. This can also be set in the control files.
 
      -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
                               You must set rm_gff in maker_opts.ctl to the files location.  This
                               option turns off all other repeat masking.
 
-     -RM_off|R                Turns repeat masking off (* See Warning)
+     -RM_off|R                Turns all repeat masking off (* See Warning)
 
-     -force|f                 Forces maker to rerun all analyses (replaces all previous output).
+     -force|f                 Forces maker to rerun all analyses (erases all previous output).
 
      -datastore|d             Causes output to be written using datastore.  This option is
-                              automatically enabled if there are more than 1000 fasta entries
-                              in the input file.  Output can then accessed using the
-                              master_datastore_index file created by the program.
+                              automatically enabled if there are more than 1000 fasta entries in
+                              the input genome file.  Output can then be accessed using the
+                              master_datastore_index file created by the maker.
 
      -PREDS                   Outputs ab-initio predictions that do not overlap maker annotation
                               as gene annotations in the final gff3 output file (based on the
                               -predictor flag ).
 
      -CTL                     Generates generic control files in the current working directory.
+
+     -quiet		      Silences most of the status messages.
 
      -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
 
@@ -143,9 +155,10 @@ Options:
 
 Warning:
       
-        *When using the -R flag, maker expects that the input genome file is already masked.
-         Also if your genome file contains lower case characters, maker will consider those
-         characers to be soft masked.
+        *When using the -R flag, maker expects that the input genome file is already masked. Also
+         if your genome file contains lower case characters, maker will consider those characers
+         to be soft masked.  So if your fasta file is all in lower case, nothing will align to it,
+         and there will be no maker output.
 
 ";
 
@@ -154,13 +167,14 @@ Warning:
 #-----------------------------------------------------------------------------
 
 #--set object variables for serialization of data
-$Storable::forgive_me = 1;
+$Storable::forgive_me = 1; #allows serializaion of objects with code refs
 
 #------INITIATE MPI VARIABLES------
 my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
 my $size = MPI_Comm_size(MPI_COMM_WORLD); #how many proccesses
 $RANK = $rank;
 
+#MPI SIGNAL CODES
 #--mpi message tags
 my $who_I_am       = 1111;
 my $what_I_want    = 2222;
@@ -199,7 +213,7 @@ my $no_c_res      = 0;
 my $yes_chunk = 1;
 my $no_chunk  = 0;
 
-#---variables for threads in the root node
+#---variables for thread and the root node
 my @c_results;
 my @failed;
 my @res_loc;
@@ -216,7 +230,7 @@ my $t_terminate :shared;
 
 #---global variables
 my %OPT;
-my $root = 0;
+my $root = 0; #define root node (only changed for debugging)
 
 #--------------------------------------
 #---------PRIMARY MPI PROCCESS---------
@@ -236,6 +250,7 @@ if ($rank == $root) {
 		 "PREDS" => \$OPT{PREDS},
 		 "predictor=s" =>\$OPT{predictor},
 		 "retry=i" =>\$OPT{retry},
+		 "quiet" =>\$main::quiet,
 		 "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},
 		 "help|?" => sub {print $usage; exit(0)},
 		);
@@ -276,10 +291,11 @@ if ($rank == $root) {
 	 }
       }
       
+      #warn if not true mpi
       if ($size < 2) {
-	 warn ("WARNING:  You are running mpi_maker on fewer than 2 processors.\n",
-	       "Using at least 2 processors is required for MPI.\n",
-	       "mpi_maker will now act like a really slow version of regular maker\n\n"
+	 warn ("WARNING:  You are running mpi_maker on fewer than 2 nodes.\n",
+	       "Using at least 2 nodes is required for MPI to work.\n",
+	       "mpi_maker will now act like a really slow version of regular maker.\n\n"
 	      );
       }
 
@@ -291,7 +307,7 @@ if ($rank == $root) {
       #---load genome fasta file
       $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
       
-      if ($fasta_iterator->number_of_entries() == 0) {
+      if ($fasta_iterator->number_of_entries() == 0  && ! $OPT{d}) {
 	 die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
       }
    
@@ -304,21 +320,23 @@ if ($rank == $root) {
 	 
 	 $OPT{d} = 1;
       }
-      
+
+      #alter control options to use datastore
       if ($OPT{d}) {
-	 %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS); #alter control options to use datastore
+	 %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS);
 	 $DS_FH = new FileHandle();
 	 $DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
 	 $DS_FH->autoflush(1);
       }
       
-      #---set up blast databases for analyisis
+      #---set up split blast databases for analyisis
       Shared_Functions::create_mpi_blastdb(\%CTL_OPTIONS, \%OPT, $size);
    }
    catch Error::Simple with{
       my $E = shift;
       print STDERR $E->{-text};
-      print STDERR "\n\nMaker failed while examining startup data (control files and input fasta files)!!\n\n";
+      print STDERR "\n\nMaker failed while examining startup data\n",
+                   "(control files and input fasta files)!!\n\n";
       my $code = 2;
       $code = $E->{-value} if (defined($E->{-value}));
       
@@ -330,16 +348,17 @@ if ($rank == $root) {
 				       $CTL_OPTIONS{old_est}
 				      );
 
-   #====MPI COMMUNICATION
+   #====ACTUAL MPI COMMUNICATION
    
-   #---main code for distribution of mpi data here
+   #---main code for distribution of mpi data starts here
+
+   #thread for root node to other things than just manage mpi
    my $thr = threads->create(\&node_thread);
    my $go_mpi_status = 1;
    $t_need_flag = 1;
 
    while($go_mpi_status){
       #====INTERNAL TIER THREAD
-
       #check on results from internal thread
       if (defined($t_tier_result)){
 	 my $t_res = ${thaw($t_tier_result)};
@@ -384,6 +403,7 @@ if ($rank == $root) {
 					     $root
 					    );
 	    
+	    #print to master datastore index
 	    print $DS_FH $tier->DS() . "\n" if($OPT{d});
 
 	    last if(! $tier->terminated);
@@ -412,7 +432,7 @@ if ($rank == $root) {
       }
 
 
-      #don't work with mpi if all are waiting in limbo
+      #work with mpi nodes or skip mpi if all nodes are waiting in limbo
       if (@helper_stack < $size - 1){
 	 my $who;
 	 my $what;
@@ -564,12 +584,12 @@ if ($rank == $root) {
 	    my $owner;
 	    MPI_Recv(\$owner, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
 	    
-	    if($owner == $root){
+	    if($owner == $root){#if root is owner get result
 	       my $chunk_res;
 	       MPI_RecvII(\$chunk_res, $who, $mpi_data, MPI_COMM_WORLD);
 	       push(@returned_chunks, freeze(\$chunk_res));
 	    }
-	    else{
+	    else{#take note of owner to tell him he has a result waiting
 	       push(@{$res_loc[$owner]}, $who);
 	    }
 	 }
@@ -577,6 +597,10 @@ if ($rank == $root) {
 	 else{
 	    die "ERROR: Invalid request type\n";
 	 }
+      }
+      else{ #take a break if mpi was skipped
+	 #this keeps the root node from hogging resources if only the thread is active
+	 sleep 2;
       }
 
       #see if all contigs are finished
@@ -602,7 +626,7 @@ if ($rank == $root) {
    }
    
    #---release thread
-   $t_terminate = 1;
+   $t_terminate = 1; #signals to thread to clean up
    $thr->detach();
 
    print STDERR "\n\nMaker is now finished!!!\n\n";
@@ -628,6 +652,7 @@ else {
       elsif(!defined($tier) || $tier->terminated){
 	 $what = $need_tier;
 	 if(defined($tier)){
+	    #collect errors and failures if any
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
 	    $tier_result->{-fasta} = $tier->fasta if($tier->failed);
@@ -643,7 +668,7 @@ else {
       #--tell primary node what this node needs
       MPI_Send(\$what, 1, MPI_INT, $root, $what_I_want, MPI_COMM_WORLD );
 
-      #if tier is needed do this
+      #if what I want is a tier do this
       if($what == $need_tier){
 	 #Send result status
 	 my $rs_type = (defined($tier_result)) ? $yes_result: $no_result;
@@ -655,20 +680,21 @@ else {
 	    undef $tier_result;
 	 }
 
-	 #get request_status
+	 #get request_status for the tier
 	 my $req_status;
 	 MPI_Recv(\$req_status, 1, MPI_INT, $root, $request_status, MPI_COMM_WORLD );
-	
+
+	 #get tier and run if it if there is one
 	 if($req_status == $yes_tier){
 	    MPI_RecvII(\$tier, $root, $mpi_data, MPI_COMM_WORLD );
 	    $tier->run;
-	 }
+	 }#wait as helper if asked to
 	 elsif($req_status == $wait_as_helper){
 	    #see who needs help
 	    my $who;
 	    MPI_Recv(\$who, 1,  MPI_INT, -2, $who_I_am, MPI_COMM_WORLD);
 
-	    #get request_status
+	    #get request_status for chunk
 	    my $chunk_status;
 	    MPI_Recv(\$chunk_status, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD );
 
@@ -698,7 +724,7 @@ else {
 	 else{
 	    die "ERROR: Invalid request status type\n";
 	 }
-      }
+      }#if what I want is help or the result from a helper do this
       elsif ($what == $need_helper || $what == $need_c_res){
 	 # check c_result_status
 	 my $c_res_stat;
@@ -778,7 +804,7 @@ else {
    }
 }
 
-#-----------------------------------
+#---------ALL NODES----------
 MPI_Finalize();			#terminate MPI
 
 exit(0);
@@ -786,18 +812,21 @@ exit(0);
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
+#other things for root node to do
+#(thread allows root to process tiers like a secondary node)
 sub node_thread {
    my $tier;
    my $chunk;
    $t_need_flag = 1;
 
    while(not $t_terminate){
+      #load serialized tier into tier
       if(! defined ($tier) && defined ($t_tier)){
 	 $t_need_flag = 0;
 	 $tier = ${thaw($t_tier)};
 	 $t_tier = undef;
 	 next;
-      }
+      }#process tier
       elsif(defined($tier)){
 	 #get chunk results from other nodes
 	 while(my $res = shift @returned_chunks){
@@ -818,7 +847,6 @@ sub node_thread {
 	 #run chunks one at a time
 	 $chnk->run($rank) if ($chnk);
 	 $tier->update_chunk($chnk) if ($chnk);
-
 	 while($chnk = shift @chunks){
 	    $chnk = ${thaw($chnk)};
 
@@ -845,19 +873,20 @@ sub node_thread {
 	    $t_tier_result = freeze(\$tier_result);
 	    $tier = undef;
 	    $t_need_flag = 1;
-	 }
+	 }#take a break
 	 elsif($tier->num_chunks == 0){
+	    #keeps thread from hogging resources while waiting for external results
 	    sleep 1;
 	 }
 
 	 next;
-      }
+      }#load serialized chunk into chunk
       elsif(! defined ($chunk) && defined ($t_chunk)){
 	 $t_need_flag = 0;
 	 $chunk = ${thaw($t_chunk)};
 	 $t_chunk = undef;
 	 next;
-      }
+      }#process chunk
       elsif(defined($chunk)){
 	 $chunk->run($rank);
 	 sleep 1 while (defined ($t_chunk_result)); #pause incase result will be overwritten
@@ -865,13 +894,15 @@ sub node_thread {
 	 $chunk = undef;
 	 $t_need_flag = 1;
 	 next;
-      }
+      }#take a break
       else{
+	 #keeps thread form hogging resources when there is nothing to do
 	 sleep 1;
       }
    }
 }
 #----------------------------------------------------------------------------
+#easy dump of string to a tempfile
 sub totemp{
    my $data = shift @_;
 
@@ -882,6 +913,8 @@ sub totemp{
    return $name;
 }
 #----------------------------------------------------------------------------
+#sends scalar variable contents via serialization
+#scalar can hold ref to other data structures
 sub MPI_SendII{
    my $msg = shift @_;
    my $target = shift @_;
@@ -896,6 +929,8 @@ sub MPI_SendII{
 
 }
 #----------------------------------------------------------------------------
+#receives serialized scalar variable
+#scalar can hold ref to other data structures
 sub MPI_RecvII{
    my $ref = shift @_;
    my $source = shift @_;

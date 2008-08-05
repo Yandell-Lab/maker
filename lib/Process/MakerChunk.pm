@@ -106,13 +106,6 @@ sub _run {
    my $vars = $self->{VARS};
    my @results;
 
-   #--redirect STDERR to a log file
-   #open (OLDERR, ">&STDERR");
-   #my (undef, $t_name) = tempfile();
-   #close(STDERR);
-   #open(STDERR, "| tee $t_name >&2");
-   #select((select(STDERR), $|=1)[0]);
-
    if ($level == 0) {
       #------------------------ARGS_IN
       my $chunk        = shift @{$vars};
@@ -157,21 +150,22 @@ sub _run {
 
       #-------------------------CHUNK
       #-- blastx against a repeat library (for better masking)
-      my $rep_blastx_res_dir = Shared_Functions::blastx_as_chunks($chunk,
-	      						  $repeat_protein,
-								  $the_void,
-								  $seq_out_name,
-								  $CTL_OPTIONS{blastx},
-								  $CTL_OPTIONS{eval_blastx},
-								  $CTL_OPTIONS{cpus},
-								  $CTL_OPTIONS{old_repeat_protein},
-								  $CTL_OPTIONS{xdformat},
-								  $CTL_OPTIONS{alt_peptide},
-								  $self->{RANK},
-								  $opt_f,
-								  $self->{LOG},
-								  $self->{LOG_FLAG}
-								 );
+      my $rep_blastx_res_dir = '';
+       $rep_blastx_res_dir = Shared_Functions::blastx_as_chunks($chunk,
+								$repeat_protein,
+								$the_void,
+								$seq_out_name,
+								$CTL_OPTIONS{blastx},
+								$CTL_OPTIONS{eval_blastx},
+								$CTL_OPTIONS{cpus},
+								$CTL_OPTIONS{old_repeat_protein},
+								$CTL_OPTIONS{xdformat},
+								$CTL_OPTIONS{alt_peptide},
+								$self->{RANK},
+								$opt_f,
+								$self->{LOG},
+								$self->{LOG_FLAG}
+							       ) if ($CTL_OPTIONS{te_remove});
       #-------------------------CHUNK
 	    
       #------------------------RESULTS
@@ -188,16 +182,17 @@ sub _run {
 
       #-------------------------CHUNK
       #-- merge and collect blastx results
-      my $repeat_blastx_keepers = Shared_Functions::collect_blastx($chunk,
-								   $rep_blastx_res_dir,
-								   $CTL_OPTIONS{eval_blastx},
-								   $CTL_OPTIONS{bit_blastx},
-								   $CTL_OPTIONS{percov_blastx},
-								   $CTL_OPTIONS{percid_blastx},
-								   $CTL_OPTIONS{split_hit},
-								   $opt_f,
-								   $self->{LOG}
-								  );
+      my $repeat_blastx_keepers = [];
+      $repeat_blastx_keepers = Shared_Functions::collect_blastx($chunk,
+								$rep_blastx_res_dir,
+								$CTL_OPTIONS{eval_blastx},
+								$CTL_OPTIONS{bit_blastx},
+								$CTL_OPTIONS{percov_blastx},
+								$CTL_OPTIONS{percid_blastx},
+								$CTL_OPTIONS{split_hit},
+								$opt_f,
+								$self->{LOG}
+							       ) if($CTL_OPTIONS{te_remove});
       #-------------------------CHUNK
 	
       #------------------------RESULTS
@@ -502,7 +497,7 @@ sub _run {
 
       #-------------------------CHUNK
       #-cluster the blastx hits
-      print STDERR "cleaning blastx...\n";
+      print STDERR "cleaning blastx...\n" unless($main::quiet);
       my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
 						       $query_seq,
 						       10);
@@ -545,7 +540,7 @@ sub _run {
 
       #-------------------------CHUNK
       #-- Cluster the blastn hits
-      print STDERR "cleaning blastn...\n";
+      print STDERR "cleaning blastn...\n" unless($main::quiet);
       my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 						       $query_seq,
 						       10);
@@ -707,15 +702,6 @@ sub _run {
       return undef;
    }
    
-   #--redirect STDERR back to STDERR
-   #close(STDERR);
-   #open (STDERR, ">&OLDERR");
-   #close(OLDERR);
-
-   #--collect STDERR log file data
-   #open (IN, "< $t_name");
-   #$self->{ERROR} = join('', <IN>);
-   #close(IN);
    $self->{RESULT} = \@results;
 }
 
