@@ -388,6 +388,8 @@ sub parse_gene {
                 }
                 elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'intron'){
                 }
+                elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'exon'){
+                }
                 elsif ($fields[1] eq 'protein' && $fields[2]  eq 'sequence'){
                 }
                 elsif ($fields[0] eq '#'){
