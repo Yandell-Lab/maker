@@ -15,6 +15,7 @@ use augustus::PhatHit;
 use augustus::PhatHsp;
 use PhatHit_utils;
 use IPC::Open3;
+use FindBin;
 
 @ISA = qw(
 	Widget
@@ -184,11 +185,15 @@ sub augustus {
 
         my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.augustus";
 
+        my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
+
         write_xdef_file($xdef, $xdef_file) if defined $xdef;
 
         FastaFile::writeFile(\$fasta, $file_name);
 
+	$command .= ' --UTR=off';
         $command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
+        $command .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
 
             $command .= " $file_name";
             $command .= " > $o_file";
@@ -389,6 +394,19 @@ sub parse_gene {
                 elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'intron'){
                 }
                 elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'exon'){
+		    my $strand = $fields[6] eq '+' ? 1 : -1;
+
+		    push(@{$this_gene{exons}}, {'b'      => $fields[3],
+					        'e'      => $fields[4],
+					        'strand' => $strand,
+					        'frame'  => $fields[7],
+					        'score'  => $score,
+					        'type'   => 'exon',
+					       });
+                }
+                elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'tts'){
+                }
+                elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'tss'){
                 }
                 elsif ($fields[1] eq 'protein' && $fields[2]  eq 'sequence'){
                 }
@@ -417,7 +435,7 @@ sub parse {
 
         my ($q_name)  = $def =~ /^>(.+)/;
 
-	$/ = "### gene";
+	local $/ = "### gene";
 
 	my $fh = new FileHandle();
 	   $fh->open($report);
@@ -434,7 +452,7 @@ sub parse {
 		push(@genes, $gene);
 	}
 
-	$/= "\n";
+	local $/= "\n";
 
 	$fh->close();
 
@@ -498,7 +516,9 @@ sub load_phat_hits {
                 $f->queryLength($q_len);
 
 		my $hit_start = 1;
-		foreach my $exon (@{$g->{CDS}}){
+		my $features = $g->{CDS};
+		$features = $g->{exons} if (defined $g->{exons});
+		foreach my $exon (@{$features}){
 			my @args;
 			my $exon_seq = get_exon_seq($exon, $q_seq); # revcomped!
 			my $hit_end = abs($exon->{e} - $exon->{b}) + $hit_start;
@@ -641,5 +661,3 @@ sub AUTOLOAD {
 #------------------------------------------------------------------------
 
 1;
-
-

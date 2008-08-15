@@ -1668,6 +1668,12 @@ sub load_control_files {
            "As a result the default (fly) will be used.\n";
       $CTL_OPTIONS{'augustus_species'} = "fly";
    }
+   if ( ($CTL_OPTIONS{'predictor'} eq 'augustus' || $CTL_OPTIONS{'augustus'}) &&
+        (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -e "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg")
+	) {
+       die "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set or is not set correctly\n",
+           "Please set this in your profile per Augustus installation instructions\n";
+   }
    if (not $CTL_OPTIONS{'snaphmm'}) {
       warn "There is no model specified for for Snap in maker_opts.ctl : snaphmm.\n".
            "As a result, the default (fly) will be used.\n";
