@@ -39,6 +39,7 @@ sub run {
 		while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		}
+		waitpid $pid, 0;
 	}
 	else {
 		die "you must give Widget::xdformat a command to run!\n";

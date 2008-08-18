@@ -38,6 +38,7 @@ sub run {
 		while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		}
+		waitpid $pid, 0;
 	}
 	else {
 		die " Widget::exonerate::run needs a command!\n";

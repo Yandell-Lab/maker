@@ -1146,7 +1146,7 @@ sub runBlastn {
    my $opt_f = shift;
 
    my $command  = $blastn;
-   $command .= " $db $q_file B=10000 V=10000 E=$eval_blastn";
+   $command .= " $db $q_file B=100000 V=100000 E=$eval_blastn";
    $command .= " wordmask=seg";
    $command .= " R=3";
    $command .= " W=15";
