@@ -503,7 +503,12 @@ sub split_db {
    my $t_dir = "/tmp/$d_name";
 
    if(-e "$f_dir"){
-      @db_files = File::Find::Rule->file->name("*$d_name\.*")->in( "$f_dir");
+      my @t_db = <$f_dir/*$d_name\.*>;
+
+      foreach my $f(@t_db){
+	  push (@db_files, $f) if (! -d $f);
+      }
+      
       return \@db_files;
    }
 
@@ -531,7 +536,12 @@ sub split_db {
    print `mv $t_dir $f_dir`;
 
    if(-e "$f_dir"){
-       @db_files = File::Find::Rule->file->name("*$d_name\.*")->in( "$f_dir");
+       my @t_db = <$f_dir/*$d_name\.*>;
+
+       foreach my $f(@t_db){
+	   push (@db_files, $f) if (! -d $f);
+       }
+
        return \@db_files;
    }
    else{
