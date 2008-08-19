@@ -798,7 +798,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "cleaning blastn...\n" unless $main::quiet;
 	 my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 							  $query_seq,
-							  10000000
+							  10
 							 );
 	 
 	 undef $blastn_keepers; #free up memory
