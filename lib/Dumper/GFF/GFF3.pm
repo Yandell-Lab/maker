@@ -24,11 +24,6 @@ use FastaChunker;
 use Iterator::Fasta;
 #------------- Requires-------------------------------------------
 
-BEGIN {
-	$ENV{ZOE} = '/usr/local/SNAP'
-}
-
-
 #<classdef>--------------------------------------------------------------------
 struct Dumper::GFF::GFF3 =>
 {

@@ -126,7 +126,7 @@ sub _continue {
    if (defined($self->{CONTINUE})){
       $self->{TERMINATE} = 1 if ($self->{CONTINUE} <= 0);
       return $self->{CONTINUE};
-  }
+   }
 
    my $LOG = $self->{LOG};
 
@@ -138,7 +138,7 @@ sub _continue {
    my $seq_out_name = $self->{VARS}{seq_out_name};
 
    #skip contig if too short
-   if (length($self->{VARS}{query_seq}) < $CTL_OPTIONS{min_contig}){
+   if (length(${$self->{VARS}{query_seq}}) < $CTL_OPTIONS{min_contig}){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Skipping the contig \'$seq_id\' because it is too short\n",
                    "#---------------------------------------------------------------------\n\n\n";

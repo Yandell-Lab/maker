@@ -1577,7 +1577,7 @@ sub load_control_files {
    #set default values for certain control options
    $CTL_OPTIONS{'clean_up'} = 0;
    $CTL_OPTIONS{'max_dna_len'} = 100000;
-   $CTL_OPTIONS{'min_contig'} = 10000;
+   $CTL_OPTIONS{'min_contig'} = 1;
    $CTL_OPTIONS{'percov_blastn'} = 0.80;
    $CTL_OPTIONS{'percid_blastn'} = 0.85;
    $CTL_OPTIONS{'eval_blastn'} = 1e-10;
@@ -1735,7 +1735,7 @@ sub generate_control_files {
    print OUT "predictor:snap #identifies which gene prediction program to use for annotations\n";
    print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
    print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
-   print OUT "min_contig:10000 #all contigs from the input genome file below this size are skipped\n";
+   print OUT "min_contig:1 #all contigs from the input genome file below this size are skipped\n";
    print OUT "split_hit:10000 #length of the splitting of hits (max intron size for EST and protein alignments)\n";
    print OUT "snap_flank:200 #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
    print OUT "single_exon:0 #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no\n";

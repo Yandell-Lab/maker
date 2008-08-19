@@ -306,7 +306,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    };
 
    #skip contig if too short
-   if (length($query_seq) < $CTL_OPTIONS{min_contig}){
+   if (length($$query_seq) < $CTL_OPTIONS{min_contig}){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Skipping the contig \'$seq_id\' because it is too small\n",
                    "#---------------------------------------------------------------------\n\n\n";
