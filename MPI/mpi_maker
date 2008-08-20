@@ -365,6 +365,7 @@ if ($rank == $root) {
 	 $t_tier_result = undef;
 	 $active[$root] = 0;
 
+	 print $DS_FH $t_res->{-DS}."\n" if ($OPT{d});
 	 if ($t_res->{-failed}){
 	    push(@failed, $t_res->{-fasta});
 	 }
@@ -453,6 +454,7 @@ if ($rank == $root) {
 	    if($rs_type == $yes_result){
 	       my $result;
 	       MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
+	       print $DS_FH $result->{-DS}."\n" if ($OPT{d});
 	       if ($result->{-failed}){
 		  push(@failed, $result->{-fasta});
 	       }
@@ -655,6 +657,7 @@ else {
 	    #collect errors and failures if any
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
+	    $tier_result->{-DS} = $tier->DS;
 	    $tier_result->{-fasta} = $tier->fasta if($tier->failed);
 	 }
       }
@@ -867,6 +870,7 @@ sub node_thread {
 	    my $tier_result;
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
+	    $tier_result->{-DS} = $tier->DS;
 	    $tier_result->{-fasta} = $tier->fasta if ($tier->failed);
 
 	    sleep 1 while (defined ($t_tier_result)); #pause incase result will be overwritten

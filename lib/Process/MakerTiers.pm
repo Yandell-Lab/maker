@@ -255,6 +255,7 @@ sub _handler {
    $LOG->add_entry("DIED","RANK","non_mpi");
    $LOG->add_entry("DIED","COUNT",$die_count);
 
+   $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tDIED";
    $self->{FAILED} = 1;
 }
 #--------------------------------------------------------------
@@ -592,6 +593,7 @@ sub _run {
    }
    else{
       $self->{TERMINATE} = 1;
+      $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tFINISHED";
 
       return undef; #stop here
    }
@@ -1222,6 +1224,7 @@ sub update_chunk {
       $self->_handler($E, "\n\nMaker failed at !!\n");
 
       $self->{FAILED} = 1;
+      $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tDIED";
    }
    print STDERR $chunk->error();
 }

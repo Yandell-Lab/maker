@@ -495,9 +495,11 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       print STDERR "\n\nMaker failed while repeat masking!!\n";
       print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+      print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
       my $die_count = $LOG->get_die_count();
       $die_count++;
-      
+
       $LOG->add_entry("DIED","RANK","non_mpi");
       $LOG->add_entry("DIED","COUNT",$die_count);
       $failed_contig = 1;
@@ -565,6 +567,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       print STDERR "\n\nMaker failed at ab-initio gene predictions!!\n";
       print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+      print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
       my $die_count = $LOG->get_die_count();
       $die_count++;
       
@@ -606,6 +610,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed at blastn of ESTs!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 	 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
       
@@ -644,6 +650,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed at blastx of proteins!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 	 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
       
@@ -723,6 +731,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed while proccessing the chunk divide!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
@@ -778,6 +788,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed at exonerate against proteins!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
@@ -829,6 +841,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed at exonerate against transcripts!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
@@ -871,6 +885,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR $E->{-text};
 	 print STDERR "\n\nMaker failed at annotation generation!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
+
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
 
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
@@ -932,6 +948,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "\n\nMaker failed at processing annotations on chunk!!\n";
 	 print STDERR "FAILED CONTIG:$seq_id\n\n";
 
+	 print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
@@ -975,6 +993,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       print STDERR $E->{-text};
       print STDERR "\n\nMaker failed while writing final data!!\n";
       print STDERR "FAILED CONTIG:$seq_id\n\n";
+
+      print $DS_FH "$seq_id\t$out_dir\tDIED\n";
 
       my $die_count = $LOG->get_die_count();
       $die_count++;
