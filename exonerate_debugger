@@ -1,0 +1,48 @@
+#! /usr/bin/perl -w
+
+use lib ('/Users/myandell/anno_engine_debug/dev/GI/lib',
+	);
+
+use strict;
+use Getopt::Std;
+use FileHandle;
+use PostData;
+use Cwd;
+use Fasta;
+use Iterator::Fasta;
+use FastaChunker;
+use Widget::exonerate::est2genome;
+use exonerate::splice_info;
+
+$|  = 1;
+
+use vars qw($opt_a);
+getopts('a:');
+
+
+my $usage = "
+
+
+";
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+
+my $o_file = $ARGV[0];
+
+die $usage unless (defined $o_file);
+;
+
+
+
+my $hits = Widget::exonerate::est2genome::parse($o_file, 100, 100);
+
+foreach my $hit (@{$hits}){
+	$hit->show();
+}
+exit(0);
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------

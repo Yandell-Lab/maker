@@ -1,0 +1,129 @@
+#! /usr/bin/perl -w
+
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+my $usage = "
+Usage:
+
+        maker_manager [options]
+
+        This application is used to streamline the annotation proccess when running
+        large multi-fasta files with maker.  Large input files can be problematic
+        because they may contain unseen errors that can cause maker to fail.
+        maker_manager restarts maker whenever the exit status of maker indicates a
+        failure.  The maker application will then automatically skip the contig from
+        the fasta file that caused the failure.  Upon completion, maker_manager will
+        attempt to re-run all contigs that caused maker to fail up to a specified
+        number of retries.
+
+
+Options:
+
+    --maker_options <options>   Pass option through to maker.
+
+    --mpi   <mpi_environment>   Specify an MPI environment and give opions for the
+                                MPI. (i.e. mpiexec).  When --mpi is set mpi_maker
+                                will be called.
+
+    --die_count     <integer>   Specify number of retries for failed contigs.
+
+
+Example:
+
+       maker_manager --maker_options -R -PREDS --die_count 2
+
+       maker_manager --mpi mpiexec -n 2 --maker_options -R -PREDS --die_count 2
+
+";
+
+my @mpi;
+my @maker;
+my $die_count = 2;
+
+GetOpts_Local(\@maker,
+	      \@mpi,
+	      \$die_count
+	     );
+
+my $maker_exe = "$FindBin::Bin/maker";
+my $mpi_maker_exe = "$FindBin::Bin/mpi_maker";
+my $mpi_line = join(" ", @mpi);
+my $maker_line = join(" ", @maker);
+$maker_line =~ s/\-+DIED[\s\t]+\d+//g;
+
+my $command = "$maker_exe $maker_line";
+$command = "$mpi_line $mpi_maker_exe $maker_line" if (@mpi >= 1);
+
+system($command);
+
+while($? ne '0'){
+    system($command);
+}
+
+system($command . " -DIED $die_count");
+
+while($? ne '0'){
+    system($command . " -DIED $die_count");
+}
+
+#------------------------------------------------------------------------------
+#--get options off the command line (need capabilities not provided by GetOpts)
+sub GetOpts_Local{
+   my $maker = shift;
+   my $mpi = shift;
+   my $die_count = shift;
+
+   my $go_maker;
+   my $go_mpi;
+   my $go_die;
+
+   my ($help) = grep (/^--\?$|^--help$/, @ARGV);
+
+   if (defined ($help)){
+      print $usage;
+      exit;
+   }
+
+   while (defined(my $opt = shift @ARGV)){
+      if($opt =~ /^--/){
+	 if($opt eq "--maker_options"){
+	    $go_maker = 1;
+	    $go_mpi = 0;
+	    $go_die = 0;
+	 }
+	 elsif($opt eq "--mpi"){
+	    $go_mpi = 1;
+	    $go_maker = 0;
+	    $go_die = 0;
+	 }
+	 elsif($opt eq "--die_count"){
+	    $go_die = 1;
+	    $go_maker = 0;
+	    $go_mpi = 0;
+	 }
+	 else{
+	    die "Invalid option $opt\n";
+	 }
+      }
+      elsif($go_maker){
+	 push(@{$maker}, $opt);
+      }
+      elsif($go_mpi){
+	 push(@{$mpi}, $opt);
+      }
+      elsif($go_die){
+	 if($opt =~ /^\d+|^\-\d+|^\+\d+/ && $opt > 0){
+	    ${$die_count} = $opt;
+	    $go_die = 0;
+	 }
+	 else{
+	    die "--die_count requires a numeric argument greater than 0.\n";
+	 }
+      }
+      else{
+	 warn "Invalid command line argument $opt\n";
+      }
+   }
+}
