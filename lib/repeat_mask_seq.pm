@@ -116,7 +116,7 @@ sub _hard_mask_seq {
       my $first = $b - $flank;
       my $last = $e + $flank;
       $b = ($first > 0) ? $b - $flank : 1;
-      $e = ($last <= length($$seq)) ? $e + $flank : length($seq);
+      $e = ($last <= length($$seq)) ? $e + $flank : length($$seq);
    
       my $l = $e - $b + 1;
       
@@ -141,7 +141,7 @@ sub _soft_mask_seq {
       my $first = $b - $flank;
       my $last = $e + $flank;
       $b = ($first > 0) ? $b - $flank : 1;
-      $e = ($last <= length($$seq)) ? $e + $flank : length($seq);      
+      $e = ($last <= length($$seq)) ? $e + $flank : length($$seq);      
    
       my $l = $e - $b + 1;
       
