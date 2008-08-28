@@ -248,14 +248,15 @@ sub _run {
       FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
       
       #==SNAP ab initio here
-      my $snaps = Shared_Functions::snap($masked_fasta,
-					 $the_void,
-					 $seq_out_name,
-					 $CTL_OPTIONS{snap},
-					 $CTL_OPTIONS{'snaphmm'},
-					 $opt_f,
-					 $self->{LOG}
-					);
+      my $snaps = [];
+      $snaps = Shared_Functions::snap($masked_fasta,
+				      $the_void,
+				      $seq_out_name,
+				      $CTL_OPTIONS{snap},
+				      $CTL_OPTIONS{'snaphmm'},
+				      $opt_f,
+				      $self->{LOG}
+				      ) if ($CTL_OPTIONS{'snap'});
 
       #==AUGUSTUS ab initio here
       my $augus = [];

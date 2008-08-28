@@ -1636,14 +1636,13 @@ sub load_control_files {
        unless ($CTL_OPTIONS{'predictor'} =~ /snap|augustus|est2genome/);
 
    #validate required values from control files
-   my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn',
-		  'blastx', 'exonerate', 'snap'
-		 );
+   my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn', 'blastx', 'exonerate');
 
    #sometimes required
    push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove});
    push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
    push (@infiles, 'rm_gff') if ($OPT{GFF});
+   push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap' || $CTL_OPTIONS{'snap'});
    push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
 
    my $error;
@@ -1689,7 +1688,8 @@ sub load_control_files {
            "As a result, the default (fly) will be used.\n";
       $CTL_OPTIONS{'snaphmm'} = "fly";
    }
-   if (! -e $CTL_OPTIONS{'snaphmm'} &&
+   if (($CTL_OPTIONS{'predictor'} eq 'snap' || $CTL_OPTIONS{'snap'}) &&
+       ! -e $CTL_OPTIONS{'snaphmm'} &&
        (! exists $ENV{'ZOE'} || ! -e $ENV{'ZOE'}."/HMM/".$CTL_OPTIONS{'snaphmm'})
       ) {
       

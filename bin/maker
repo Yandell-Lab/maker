@@ -524,6 +524,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       FastaFile::writeFile($masked_fasta ,$the_void."/query.masked.fasta");
 
       #==SNAP ab initio here
+      $snaps = [];
       $snaps = Shared_Functions::snap($masked_fasta,
 				      $the_void,
 				      $seq_out_name,
@@ -531,7 +532,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 				      $CTL_OPTIONS{'snaphmm'},
 				      $OPT{f},
 				      $LOG
-				     );
+				     )if ($CTL_OPTIONS{'snap'});
       
       #==AUGUSTUS ab initio here
       $augus = [];
