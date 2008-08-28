@@ -113,15 +113,15 @@ sub _hard_mask_seq {
       
       ($b, $e) = ($e, $b) if $e < $b;
       
-      my $f = $b - $flank;
-      
-      $b = $f > 0 ? $b - $flank : 1;
-      $e = $e + $flank;
+      my $first = $b - $flank;
+      my $last = $e + $flank;
+      $b = ($first > 0) ? $b - $flank : 1;
+      $e = ($last <= length($seq)) ? $e + $flank : length($seq);
    
       my $l = $e - $b + 1;
       
-      my $replace_string = '';
-      $replace_string .= $replace while(length($replace_string) < $l);
+      my $replace_string = substr($$seq, $b -1 , $l);
+      $replace_string =~ s/./$replace/g;
 
       substr($$seq, $b -1 , $l, $replace_string);
    }  
@@ -137,11 +137,11 @@ sub _soft_mask_seq {
       my $e = $p->[1];
       
       ($b, $e) = ($e, $b) if $e < $b;
-      
-      my $f = $b - $flank;
-      
-      $b = $f > 0 ? $b - $flank : 1;
-      $e = $e + $flank;
+
+      my $first = $b - $flank;
+      my $last = $e + $flank;
+      $b = ($first > 0) ? $b - $flank : 1;
+      $e = ($last <= length($seq)) ? $e + $flank : length($seq);      
    
       my $l = $e - $b + 1;
       
