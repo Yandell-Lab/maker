@@ -3,7 +3,6 @@ MANIFEST.SKIP
 MPIcar.pm
 MPIcar.xs
 Makefile.PL
-mpi_maker
 contrib/cpi/Makefile
 contrib/cpi/cpi.PL
 contrib/cpi/cpi.c
