@@ -17,7 +17,7 @@ WriteMakefile(
     'LIBS'	=> [''],
     'DEFINE'	=> '-DFLOAT_HACK',
     'INC'	=> "-I$MPIDIR",
-    'EXE_FILES' => ['mpi_maker'],
+    'EXE_FILES' => [''],
     'DESTDIR' => "$FindBin::Bin/../../",
     'INSTALLDIRS' => "perl",
     'INSTALLMAN1DIR' => "none",

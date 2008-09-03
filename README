@@ -20,15 +20,6 @@ You might want to also install these optional external programs:
      *Augustus 2.0  or higher (augustus.gobics.de)
 
 
-You will also need to install the following perl modules if not already installed:
-
-     *URI:Escape (search.cpan.org)
-     *Error (search.cpan.org)
-     *threads 1.67 or higher (search.cpan.org)
-     *Datastore (http://www.yandell-lab.org/software/cgl.html)
-
-
-
 To install mpi_maker, you must have an mpi package installed, try the following:
 
      *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
@@ -91,9 +82,7 @@ If you are running maker on an MPI capable cluster, you can install an MPI versi
 
 	1. Install standard maker and verify that it runs.
 	2. Use cd to change to the MPI subdirectory in the maker instalation folder (i.e. maker/MPI/)
-	3. Run Makefile.PL by typing:	 perl Makefile.PL
-	4. Compile needed binaries by typing:	make
-	5. Install mpi_maker and all needed libraries by typing:	make install 	
+	3. Run Install.PL by typing:	 perl Install.PL
 
 A new version of maker called mpi_maker should now be installed under maker/bin.
 

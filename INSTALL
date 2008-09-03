@@ -123,14 +123,4 @@ password to log in as root once root is enabled.
       readme file.
 
 
-
-NOTE:
-
-You will also need to install the following perl modules if not already installed:
-
-	*URI:Escape (search.cpan.org)
-	*Error (search.cpan.org)
-	*threads 1.67 or higher (search.cpan.org)
-	*Datastore (http://www.yandell-lab.org/software/cgl.html)
-
 See the README for instruction on installing mpi_maker
