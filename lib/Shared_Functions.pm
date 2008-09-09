@@ -1170,7 +1170,7 @@ sub runBlastn {
    $command .= " gspmax=100";
    $command .= " hspsepqmax=10000";
    $command .= " lcmask";
-   $command .= " filter=seg";
+   $command .= " wordmask=seg";
    $command .= " gi";
    #$command .= " mformat=2"; # remove for full report
    $command .= " > $out_file";
@@ -1410,7 +1410,7 @@ sub runBlastx {
    $command .= " gspmax=100";
    $command .= " hspsepqmax=10000";
    $command .= " lcfilter";
-   $command .= " filter=seg";
+   $command .= " wordmask=seg";
    $command .= " gi";
    #$command .= " mformat=2"; # remove for full report
    $command .= " > $out_file";

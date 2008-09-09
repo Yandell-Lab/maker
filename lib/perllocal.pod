@@ -42,29 +42,7 @@ C<EXE_FILES: >
 
 =back
 
-=head2 Thu Sep  4 12:02:14 2008: C<Module> L<threads|threads>
-
-=over 4
-
-=item *
-
-C<installed into: lib/>
-
-=item *
-
-C<LINKTYPE: dynamic>
-
-=item *
-
-C<VERSION: 1.71>
-
-=item *
-
-C<EXE_FILES: >
-
-=back
-
-=head2 Thu Sep  4 12:02:30 2008: C<Module> L<Parallel::MPIcar|Parallel::MPIcar>
+=head2 Thu Aug 28 11:06:18 2008: C<Module> L<Parallel::MPIcar|Parallel::MPIcar>
 
 =over 4
 
@@ -82,7 +60,7 @@ C<VERSION: 0.03>
 
 =item *
 
-C<EXE_FILES: >
+C<EXE_FILES: mpi_maker>
 
 =back
 
