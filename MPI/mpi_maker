@@ -28,7 +28,7 @@ BEGIN{
 	exit (1);
     };    
 
-    #filter warning signals for warnings from storable module
+    #supress warnings from storable module
     $SIG{'__WARN__'} =
 	sub { warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
 			      $_[0] !~ /Can\'t store item CODE/
@@ -366,6 +366,7 @@ if ($rank == $root) {
 	 $active[$root] = 0;
 
 	 print $DS_FH $t_res->{-DS}."\n" if ($OPT{d});
+
 	 if ($t_res->{-failed}){
 	    push(@failed, $t_res->{-fasta});
 	 }
@@ -409,7 +410,7 @@ if ($rank == $root) {
 
 	    last if(! $tier->terminated);
 	 }
-	 if(defined $tier){
+	 if(defined $tier && ! $tier->terminated){
 	    $t_need_flag = 0;
 	    my $t_val = freeze(\$tier);
 	    $t_tier = $t_val;
@@ -455,6 +456,7 @@ if ($rank == $root) {
 	       my $result;
 	       MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
 	       print $DS_FH $result->{-DS}."\n" if ($OPT{d});
+
 	       if ($result->{-failed}){
 		  push(@failed, $result->{-fasta});
 	       }
@@ -462,6 +464,7 @@ if ($rank == $root) {
 	    
 	    #if a contig is available send tier
 	    my $tier;
+
 	    while (my $fasta = $fasta_iterator->nextEntry() || shift @failed){
 	       $tier = Process::MakerTiers->new($fasta,
 						\%CTL_OPTIONS,
@@ -470,10 +473,10 @@ if ($rank == $root) {
 					       );
 	       
 	       print $DS_FH $tier->DS() . "\n" if($OPT{d});
-	       
+
 	       last if(! $tier->terminated);
 	    }
-	    if(defined $tier){
+	    if(defined $tier && ! $tier->terminated){
 	       #say tier is available and send it
 	       MPI_Send(\$yes_tier, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
 	       MPI_SendII(\$tier, $who, $mpi_data, MPI_COMM_WORLD );
@@ -629,7 +632,7 @@ if ($rank == $root) {
    
    #---release thread
    $t_terminate = 1; #signals to thread to clean up
-   $thr->detach();
+   $thr->detach() unless($thr->is_detached);
 
    print STDERR "\n\nMaker is now finished!!!\n\n";
 }
@@ -659,6 +662,7 @@ else {
 	    $tier_result->{-failed} = $tier->failed;
 	    $tier_result->{-DS} = $tier->DS;
 	    $tier_result->{-fasta} = $tier->fasta if($tier->failed);
+	    $tier = undef;
 	 }
       }
       elsif(($chunk = $tier->next_chunk) && ($tier->num_chunks > 0)){
@@ -680,7 +684,7 @@ else {
 	 #Send result if available
 	 if($rs_type == $yes_result){
 	    MPI_SendII(\$tier_result, $root, $mpi_data, MPI_COMM_WORLD);
-	    undef $tier_result;
+	    $tier_result = undef;
 	 }
 
 	 #get request_status for the tier
@@ -852,10 +856,9 @@ sub node_thread {
 	 $tier->update_chunk($chnk) if ($chnk);
 	 while($chnk = shift @chunks){
 	    $chnk = ${thaw($chnk)};
-
 	    if($tier->failed){ #skip chunks after failure
-	       $tier->update_chunk($chnk);
-	       last;
+		$tier->update_chunk($chnk);
+		next;
 	    }
 
 	    $chnk->run($rank);

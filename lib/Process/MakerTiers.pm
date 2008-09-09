@@ -44,6 +44,7 @@ sub new {
 	 $self->{VARS}{OPT} = shift @args;
 	 $self->{TIER_ID} = shift @args;
 	 $self->{TERMINATE} = 0;
+	 $self->{FAILED} = 0;
 	 $self->{LEVEL}{CURRENT} = -1;
 	 $self->_initialize();
 	 $self->_continue();
@@ -252,7 +253,7 @@ sub _handler {
    my $die_count = $LOG->get_die_count();
    $die_count++;
    
-   $LOG->add_entry("DIED","RANK","non_mpi");
+   $LOG->add_entry("DIED","RANK", $self->id);
    $LOG->add_entry("DIED","COUNT",$die_count);
 
    $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tDIED";
@@ -1222,16 +1223,13 @@ sub update_chunk {
    if($chunk->failed){
       my $E = $chunk->exception;
       $self->_handler($E, "\n\nMaker failed at !!\n");
-
-      $self->{FAILED} = 1;
-      $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tDIED";
    }
    print STDERR $chunk->error();
 }
 #-------------------------------------------------------------
 sub failed{
    my $self = shift;
-   return $self->{FAILED} || undef;
+   return $self->{FAILED};
 }
 #-------------------------------------------------------------
 sub fasta{
