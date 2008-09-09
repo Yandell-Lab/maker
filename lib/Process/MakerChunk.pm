@@ -501,7 +501,7 @@ sub _run {
       print STDERR "cleaning blastx...\n" unless($main::quiet);
       my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
 						       $query_seq,
-						       10);
+						       1000000);
 
       #-- make a multi-fasta of the seqs in the blastx_clusters 
       #-- polish the blastx hits with exonerate
@@ -544,7 +544,7 @@ sub _run {
       print STDERR "cleaning blastn...\n" unless($main::quiet);
       my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 						       $query_seq,
-						       10);
+						       100000);
 
       #-- polish blastn hits with exonerate
       my $exonerate_e_clusters = Shared_Functions::polish_exonerate($fasta,
@@ -680,8 +680,10 @@ sub _run {
       #--Write fasta files and gff3 files now that all chunks are finished
       FastaFile::writeFile(\$p_fastas ,"$out_dir\/$seq_out_name\.maker.proteins.fasta");
       FastaFile::writeFile(\$t_fastas ,"$out_dir\/$seq_out_name\.maker.transcripts.fasta");
-      FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
-      FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+      if ($CTL_OPTIONS{'snap'}) {
+	  FastaFile::writeFile(\$p_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.proteins.fasta");
+	  FastaFile::writeFile(\$t_snap_fastas ,"$out_dir\/$seq_out_name\.maker.snap.transcript.fasta");
+      }
       if ($CTL_OPTIONS{'augustus'}) {
 	 FastaFile::writeFile(\$p_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.proteins.fasta");
 	 FastaFile::writeFile(\$t_augus_fastas ,"$out_dir\/$seq_out_name\.maker.augus.transcript.fasta");

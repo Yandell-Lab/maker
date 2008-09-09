@@ -973,8 +973,10 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       #--Write fasta files now that all chunks are finished
       FastaFile::writeFile(\$p_fastas ,"$out_dir/$seq_out_name.maker.proteins.fasta");
       FastaFile::writeFile(\$t_fastas ,"$out_dir/$seq_out_name.maker.transcripts.fasta");
-      FastaFile::writeFile(\$p_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.proteins.fasta");
-      FastaFile::writeFile(\$t_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.transcript.fasta");
+      if ($CTL_OPTIONS{'snap'}) {
+	  FastaFile::writeFile(\$p_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.proteins.fasta");
+	    FastaFile::writeFile(\$t_snap_fastas ,"$out_dir/$seq_out_name.maker.snap.transcript.fasta");
+      }
       if ($CTL_OPTIONS{'augustus'}) {
 	 FastaFile::writeFile(\$p_augus_fastas,"$out_dir/$seq_out_name.maker.augus.proteins.fasta");
 	 FastaFile::writeFile(\$t_augus_fastas,"$out_dir/$seq_out_name.maker.augus.transcript.fasta");
