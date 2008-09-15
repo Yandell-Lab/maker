@@ -184,8 +184,14 @@ sub reblast_merged_hits {
       #search db index
       my $fastaObj = $db_index->get_Seq_by_id($hit->name);
       if (not $fastaObj) {
-	 print STDERR "stop here:".$hit->name."\n";
-	 die "ERROR: Fasta index error\n";
+	  #rebuild index and try again
+	  my $db_file = $db_index->{dirname} ."/". $db_index->{offsets}->{__file_0};
+	  $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
+	  $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	  if (not $fastaObj) {
+	      print STDERR "stop here:".$hit->name."\n";
+	      die "ERROR: Fasta index error\n";
+	  }
       }
       
       #get fasta def and seq
@@ -790,8 +796,14 @@ sub polish_exonerate {
 	 $id =~ s/\|/_/g;
 	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
 	 if (not $fastaObj) {
-	    print "stop here:".$hit->name."\n";
-	    die "ERROR: Fasta index error\n";
+	     #rebuild index and try again
+	     my $db_file = $db_index->{dirname} ."/".$db_index->{offsets}->{__file_0};
+	     $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
+	     $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	     if (not $fastaObj) {
+		 print STDERR "stop here:".$hit->name."\n";
+		 die "ERROR: Fasta index error\n";
+	     }
 	 }
 	 my $seq      = $fastaObj->seq();
 	 my $def      = $db_index->header($hit->name);

@@ -270,8 +270,27 @@ sub _run {
 					 ) if ($CTL_OPTIONS{'augustus'});
 
       #-- build an index of the databases
-      my $fasta_t_index     = Shared_Functions::build_fasta_index($CTL_OPTIONS{old_est});
-      my $fasta_p_index     = Shared_Functions::build_fasta_index($CTL_OPTIONS{old_protein});
+      my $t_dir = "/tmp/rank".$self->{RANK};
+      File::Path::mkpath($t_dir);
+
+      my $t_name = $CTL_OPTIONS{old_est};
+      my $p_name = $CTL_OPTIONS{old_protein};
+
+      $t_name =~ /.*([^\/]+)$/$1/s;
+      $p_name =~ /.*([^\/]+)$/$1/s;
+
+      my $trans_file = $t_dir."/".$t_name;
+      my $prot_file = $t_dir."/".$p_name;
+
+      if (! -e $trans_file) {
+	  system("cp $CTL_OPTIONS{old_est} $trans_file");
+      }
+      if (! -e $prot_file) {
+          system("cp $CTL_OPTIONS{old_protein} $prot_file");
+      }
+
+      my $fasta_t_index     = Shared_Functions::build_fasta_index($trans_file);
+      my $fasta_p_index     = Shared_Functions::build_fasta_index($prot_file);
 
       #--set up new chunks for remaining levels
       my $fasta_chunker = new FastaChunker();

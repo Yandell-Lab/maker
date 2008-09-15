@@ -344,9 +344,9 @@ if ($rank == $root) {
    };
 
    #build indexes of databases
-   Shared_Functions::build_all_indexes($CTL_OPTIONS{old_protein},
-				       $CTL_OPTIONS{old_est}
-				      );
+   #Shared_Functions::build_all_indexes($CTL_OPTIONS{old_protein},
+   #				       $CTL_OPTIONS{old_est}
+   #				      );
 
    #====ACTUAL MPI COMMUNICATION
    
