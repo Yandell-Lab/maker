@@ -3,13 +3,15 @@
 package Process::MakerChunk;
 
 use strict;
+use vars qw($TMP);
+
 use Error qw(:try);
 use Error::Simple;
 use Storable qw (freeze thaw dclone);
 
 use FindBin;
 use lib "$FindBin::Bin/../..";
-use File::Temp qw(tempfile);
+use File::Temp qw(tempfile tempdir);
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use Datastore::MD5;
@@ -39,6 +41,8 @@ use repeat_mask_seq;
 use maker::sens_spec;
 use runlog;
 use Shared_Functions;
+
+$TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
@@ -270,14 +274,16 @@ sub _run {
 					 ) if ($CTL_OPTIONS{'augustus'});
 
       #-- build an index of the databases
-      my $t_dir = "/tmp/rank".$self->{RANK};
+      my $t_dir = $TMP."/rank".$self->{RANK};
       File::Path::mkpath($t_dir);
 
-      my $t_name = $CTL_OPTIONS{old_est};
-      my $p_name = $CTL_OPTIONS{old_protein};
+      $CTL_OPTIONS{old_est} =~ /([^\/]+)$/;
+      my $t_name = $1;
 
-      $t_name =~ /.*([^\/]+)$/$1/s;
-      $p_name =~ /.*([^\/]+)$/$1/s;
+      $CTL_OPTIONS{old_protein} =~ /([^\/]+)$/;
+      my $p_name = $1;
+
+
 
       my $trans_file = $t_dir."/".$t_name;
       my $prot_file = $t_dir."/".$p_name;

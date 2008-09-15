@@ -18,7 +18,7 @@ BEGIN{
 	if not ($ENV{CGL_GO_SOURCE});
 
     $CMD_ARGS = join(' ', @ARGV);
-    
+
     $SIG{'INT'} = sub {
 	print STDERR "\n\nMaker aborted by user!!\n\n";
 	my @threads = threads->list;
@@ -63,10 +63,10 @@ use Error::Simple;
 use Process::MakerChunk;
 use Process::MakerTiers;
 use Storable qw (freeze thaw);
-use File::Temp qw(tempfile tempdir);
 use Parallel::MPIcar qw(:all);
 use Datastore::MD5;
 use File::Path;
+use File::Temp qw(tempfile tempdir);
 use Getopt::Long;
 use FileHandle;
 use Cwd qw(cwd abs_path);

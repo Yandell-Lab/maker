@@ -4,10 +4,10 @@
 package Shared_Functions;
 
 use strict;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION $TMP);
 use Exporter;
 use FileHandle;
-use File::Temp qw(tempfile);
+use File::Temp qw(tempfile tempdir);
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use Datastore::MD5;
@@ -40,6 +40,8 @@ use maker::sens_spec;
 
 @ISA = qw(
        );
+
+$TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 #------------------------------------------------------------------------
 #--------------------------- CLASS FUNCTIONS ----------------------------
 #------------------------------------------------------------------------
@@ -506,7 +508,7 @@ sub split_db {
    my $d_name = "$f_name\.mpi\.$mpi_size";
    my $b_dir = cwd(). "/mpi_blastdb";
    my $f_dir = "$b_dir/$d_name";
-   my $t_dir = "/tmp/$d_name";
+   my $t_dir = $TMP."/$d_name";
 
    if(-e "$f_dir"){
       my @t_db = <$f_dir/*$d_name\.*>;
@@ -1005,7 +1007,7 @@ sub blastn_as_chunks {
    $db_old_n  =~ s/\.fasta$//;
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastn";
 
-   my $t_dir = "/tmp/rank".$rank;
+   my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
@@ -1228,7 +1230,7 @@ sub blastx_as_chunks {
    $db_old_n  =~ s/\.fasta$//;
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastx";
     
-   my $t_dir = "/tmp/rank".$rank;
+   my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
