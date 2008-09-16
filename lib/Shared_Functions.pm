@@ -178,7 +178,7 @@ sub reblast_merged_hits {
       my $t_id  = $hit->name();
       $t_id =~ s/\s+/_/g;
       $t_id =~ s/\|/_/g;
-      
+
       #build a safe name for file names from the sequence identifier
       my $t_safe_id = uri_escape($t_id, 
 				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
@@ -212,7 +212,7 @@ sub reblast_merged_hits {
       #==run the blast search
       if ($type eq 'blastx') {
 	  
-	  print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
+	  print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	  my $keepers = blastx($chunk, 
 			       $t_file,
 			       $the_void,
@@ -233,11 +233,11 @@ sub reblast_merged_hits {
       }
       elsif ($type eq 'blastn') {
 	  
-	  print STDERR "re-running blast against $t_id...\n" unless $main::quiet;
+	  print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	  my $keepers = blastn($chunk, 
 			       $t_file,
 			       $the_void,
-			       $p_safe_id."-2-".$t_safe_id,,
+			       $p_safe_id."-2-".$t_safe_id,
 			       $CTL_OPTIONS{blastn},
 			       $CTL_OPTIONS{eval_blastn},
 			       $CTL_OPTIONS{bit_blastn},
