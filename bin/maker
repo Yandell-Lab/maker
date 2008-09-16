@@ -758,7 +758,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 
 	 my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
 							  $query_seq,
-							  10);
+							  10
+							 );
 	 
 	 undef $blastx_keepers; #free up memory
 	 

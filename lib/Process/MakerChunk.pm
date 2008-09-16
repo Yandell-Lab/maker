@@ -526,7 +526,7 @@ sub _run {
       print STDERR "cleaning blastx...\n" unless($main::quiet);
       my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
 						       $query_seq,
-						       1000000);
+						       10);
 
       #-- make a multi-fasta of the seqs in the blastx_clusters 
       #-- polish the blastx hits with exonerate
@@ -569,7 +569,7 @@ sub _run {
       print STDERR "cleaning blastn...\n" unless($main::quiet);
       my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 						       $query_seq,
-						       100000);
+						       10);
 
       #-- polish blastn hits with exonerate
       my $exonerate_e_clusters = Shared_Functions::polish_exonerate($fasta,
