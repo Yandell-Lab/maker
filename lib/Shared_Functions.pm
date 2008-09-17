@@ -174,9 +174,8 @@ sub reblast_merged_hits {
 
       #==build new fasta and db for blast search from hit name and db index
       
-      #get name to search db index
+      #get name
       my $t_id  = $hit->name();
-      $t_id =~ s/\s+/_/g;
       $t_id =~ s/\|/_/g;
 
       #build a safe name for file names from the sequence identifier
@@ -199,7 +198,6 @@ sub reblast_merged_hits {
       #get fasta def and seq
       my $t_seq      = $fastaObj->seq();
       my $t_def      = $db_index->header($hit->name);
-      $t_def =~ s/\|/_/g;
       
       #write fasta file
       my $fasta = Fasta::toFasta('>'.$t_def, \$t_seq);
@@ -784,6 +782,7 @@ sub polish_exonerate {
 	 my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
 	 my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
 	 my ($name) = $p_def =~ />([^\s\t\n]+)/;
+	 $name =~ s/\|/_/g;
 
 	 #build a safe name for file names from the sequence identifier
 	 my $safe_name = uri_escape($name,
@@ -794,8 +793,8 @@ sub polish_exonerate {
 	 FastaFile::writeFile($p_fasta, $d_file);
 	 my $offset = $p->[0]->{b} - 1;
 	 my $id  = $hit->name();
-	 $id =~ s/\s+/_/g;
 	 $id =~ s/\|/_/g;
+
 	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
 	 if (not $fastaObj) {
 	     #rebuild index and try again
@@ -809,7 +808,7 @@ sub polish_exonerate {
 	 }
 	 my $seq      = $fastaObj->seq();
 	 my $def      = $db_index->header($hit->name);
-	 $def =~ s/\|/_/g;
+
 	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 
 	 #build a safe name for file names from the sequence identifier
