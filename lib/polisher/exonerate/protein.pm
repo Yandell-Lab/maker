@@ -14,6 +14,8 @@ use PostData;
 use Exporter;
 use Fasta;
 use FastaFile;
+use URI::Escape;
+
 @ISA = qw(
 	polisher::exonerate
 	polisher
@@ -74,7 +76,15 @@ sub p_exonerate {
 	my $percent  = shift;
 	my $matrix   = shift;
 
-        my $o_file    = "$the_void/$g_id\.$p_id\.$ext\.p_exonerate";
+        my $safe_g_id = uri_escape($g_id,  #build a safe name for file names from the sequence identifier
+                                   '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+                                   );
+
+        my $safe_p_id = uri_escape($p_id,  #build a safe name for file names from the sequence identifier
+                                   '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+                                   );
+
+        my $o_file    = "$the_void/$safe_g_id\.$safe_p_id\.$ext\.p_exonerate";
 	
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
         runExonerate($g_file, $p_file, $o_file, $exe, $percent, $matrix);
