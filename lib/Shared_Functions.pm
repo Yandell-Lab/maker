@@ -131,6 +131,7 @@ sub reblast_merged_hits {
 
    #get seq id off def line
    my ($p_id)  = $par_def =~ /^([^\s\t\n]+)/;
+   $p_id =~ s/^\>//g; #just in case
    $p_id =~ s/\|/_/g;
 
    #build a safe name for file names from the sequence identifier
@@ -166,7 +167,7 @@ sub reblast_merged_hits {
       $chunk->def($piece_def);
       $chunk->parent_def($par_def);
       $chunk->size(length($$par_seq));	     #the max size of a chunk
-      $chunk->length(length($chunk->seq())); #the actual size of a chunk                                                
+      $chunk->length(length($chunk->seq())); #the actual size of a chunk
       $chunk->offset($offset);
       $chunk->number(0);
       $chunk->is_last(1);
@@ -214,7 +215,7 @@ sub reblast_merged_hits {
 	  my $keepers = blastx($chunk, 
 			       $t_file,
 			       $the_void,
-			       $p_safe_id."-2-".$t_safe_id,
+			       $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
 			       $CTL_OPTIONS{blastx},
 			       $CTL_OPTIONS{eval_blastx},
 			       $CTL_OPTIONS{bit_blastx},
@@ -235,7 +236,7 @@ sub reblast_merged_hits {
 	  my $keepers = blastn($chunk, 
 			       $t_file,
 			       $the_void,
-			       $p_safe_id."-2-".$t_safe_id,
+			       $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
 			       $CTL_OPTIONS{blastn},
 			       $CTL_OPTIONS{eval_blastn},
 			       $CTL_OPTIONS{bit_blastn},
