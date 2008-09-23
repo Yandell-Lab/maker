@@ -617,7 +617,7 @@ sub group_transcripts {
 		my $sources = join ('-', keys %pred_sources);
 
 		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => "maker-gene-$sources-$chunk_number.$c_id", #affects GFFV3.pm
+		                   'g_name'    => "maker-$seq_id-$sources-gene-$chunk_number.$c_id", #affects GFFV3.pm
 				   'g_start'   => $g_start,
 			           'g_end'     => $g_end,
 				   'g_strand'  => $g_strand,
