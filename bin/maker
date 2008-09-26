@@ -403,6 +403,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    #-set up variables that are heldover from last chunk
    my $holdover_blastn;
    my $holdover_blastx;
+   my $holdover_tblastx;
    my $holdover_preds;
 
    #-set up variables that are the result of chunk accumulation
@@ -517,8 +518,10 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
    my $chunk_count;
    my $proteins;
    my $transcripts;
+   my $alt_ests;
    my $fasta_t_index;
    my $fasta_p_index;
+   my $fasta_a_index;
 
    try{	#coresponds to level 4 in mpi-maker
       $masked_fasta = Fasta::toFasta($query_def.' masked', \$masked_total_seq);
@@ -549,9 +552,11 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       #--build an index of the databases
       $proteins = $CTL_OPTIONS{'protein'};
       $transcripts = $CTL_OPTIONS{'est'};
+      $alt_ests = $CTL_OPTIONS{'alt_est'};
       $fasta_t_index     = Shared_Functions::build_fasta_index($transcripts); 
       $fasta_p_index     = Shared_Functions::build_fasta_index($proteins);
-      
+      $fasta_a_index     = Shared_Functions::build_fasta_index($alt_ests) if($alt_ests); 
+
       #--run future blast analysis in these new chunks
       $fasta_chunker = new FastaChunker();
       $fasta_chunker = new FastaChunker();
@@ -666,10 +671,50 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       next CONTIG if ($failed_contig);
 
       #variables that are persistent outside of try block
+      my $tblastx_keepers = [];
+
+      try{ #coresponds to levels 9-10 in mpi_maker
+         #-tblastx search the masked input file
+         $tblastx_keepers = Shared_Functions::tblastx($chunk,
+						      $alt_ests,
+						      $the_void,
+						      $seq_out_name,
+						      $CTL_OPTIONS{tblastx},
+						      $CTL_OPTIONS{eval_tblastx},
+						      $CTL_OPTIONS{bit_tblastx},
+						      $CTL_OPTIONS{percov_tblastx},
+						      $CTL_OPTIONS{percid_tblastx},
+						      $CTL_OPTIONS{split_hit},
+						      $CTL_OPTIONS{cpus},
+						      $OPT{f},
+						      $LOG
+						    ) if $alt_ests;
+     }
+      catch Error::Simple with{
+	  my $E = shift;
+
+	  print STDERR $E->{-text};
+	  print STDERR "\n\nMaker failed at tblastx of alternate ests!!\n";
+	  print STDERR "FAILED CONTIG:$seq_id\n\n";
+
+	  print $DS_FH "$seq_id\t$out_dir\tDIED\n";
+
+	  my $die_count = $LOG->get_die_count();
+	  $die_count++;
+
+	  $LOG->add_entry("DIED","RANK","non_mpi");
+	  $LOG->add_entry("DIED","COUNT",$die_count);
+	  $failed_contig = 1;
+	  push(@failed, $fasta);
+      };
+
+      next CONTIG if ($failed_contig);
+
+      #variables that are persistent outside of try block
       my $pred_command;
       my $preds_on_chunk;
 
-      try{ #coresponds to level 9 in mpi_maker
+      try{ #coresponds to level 11 in mpi_maker
 	 #-- decide which gene finder to use to build annotations 
 
 	 if ($CTL_OPTIONS{predictor} eq 'augustus') {
@@ -696,18 +741,22 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 #reviews heldover hits, then merges and reblasts them if they cross the divide
 	 if ($chunk->number != 0) { #if not first chunk
 	    ($blastn_keepers,
-	     $blastx_keepers) = Shared_Functions::merge_and_resolve_hits($masked_fasta,
-									 $fasta_t_index,
-									 $fasta_p_index,
-									 $blastn_keepers,
-									 $blastx_keepers,
-									 $holdover_blastn,
-									 $holdover_blastx,
-									 $the_void,
-									 \%CTL_OPTIONS,
-									 $OPT{f},
-									 $LOG
-									);
+	     $blastx_keepers,
+	     $tblastx_keepers) = Shared_Functions::merge_and_resolve_hits($masked_fasta,
+									  $fasta_t_index,
+									  $fasta_p_index,
+									  $fasta_a_index,
+									  $blastn_keepers,
+									  $blastx_keepers,
+									  $tblastx_keepers,
+									  $holdover_blastn,
+									  $holdover_blastx,
+									  $holdover_tblastx,
+									  $the_void,
+									  \%CTL_OPTIONS,
+									  $OPT{f},
+									  $LOG
+									 );
 	 }
 	 
 	 #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS
@@ -715,13 +764,16 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 if (not $chunk->is_last) { #if not last chunk
 	    ($holdover_blastn,
 	     $holdover_blastx,
+	     $holdover_tblastx,
 	     $holdover_preds,
 	     $blastn_keepers,
 	     $blastx_keepers,
+	     $tblastx_keepers,
 	     $preds_on_chunk) = Shared_Functions::process_the_chunk_divide($chunk,
 									   $CTL_OPTIONS{'split_hit'},
 									   $blastn_keepers,
 									   $blastx_keepers,
+									   $tblastx_keepers,
 									   $preds_on_chunk
 									  );
 	 }
@@ -752,7 +804,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       my $blastx_data;
       my $exonerate_p_data;
 
-      try{ #coresponds to level 10 in mpi_maker
+      try{ #coresponds to level 12 in mpi_maker
 	 #-cluster the blastx hits
 	 print STDERR "cleaning blastx...\n" unless $main::quiet;
 	 
@@ -806,9 +858,21 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
       #variables that are persistent outside of try block
       my $blastn_data;
+      my $tblastx_data;
       my $exonerate_e_data;
 
-      try{ #coresponds to levels 11 in mpi_maker
+      try{ #coresponds to levels 13 in mpi_maker
+	 #-cluster the tblastx hits
+	 print STDERR "cleaning tblastx...\n" unless $main::quiet;
+	 my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
+							   $query_seq,
+							   10
+							  );
+	 
+	 undef $tblastx_keepers; #free up memory
+	 $tblastx_data      = Shared_Functions::flatten($tblastx_clusters);
+
+
 	 #-cluster the blastn hits
 	 print STDERR "cleaning blastn...\n" unless $main::quiet;
 	 my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
@@ -863,7 +927,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       #variables that are persistent outside of try block
       my $annotations;
 
-      try{ #coresponds to level 12 in mpi_maker
+      try{ #coresponds to level 14 in mpi_maker
 	 #-auto-annotate the input file
 	 $annotations = maker::auto_annotator::annotate($fasta,
 							$$masked_fasta,
@@ -902,13 +966,14 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 
       next CONTIG if ($failed_contig);
 
-      try{ #coresponds to levels 13 in mpi_maker
+      try{ #coresponds to levels 15 in mpi_maker
 	 #==OUTPUT DATA HERE
 	 
 	 #--- GFF3      
 	 $GFF3->genes($annotations);
 	 $GFF3->phat_hits($blastx_data);
 	 $GFF3->phat_hits($blastn_data);
+	 $GFF3->phat_hits($tblastx_data);
 	 $GFF3->phat_hits($exonerate_p_data);
 	 $GFF3->phat_hits($exonerate_e_data);
 	 
@@ -965,7 +1030,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
       next CONTIG if ($failed_contig);
    }				#END CONTIG
 
-   try{	#coresponds to levels 14 in mpi_maker
+   try{	#coresponds to levels 16 in mpi_maker
       #--- building fastas of predictions
       my ($p_snap_fastas, $t_snap_fastas) =
            Shared_Functions::get_snap_p_and_t_fastas($query_seq, $snaps);

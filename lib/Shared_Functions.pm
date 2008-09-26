@@ -69,10 +69,13 @@ sub merge_and_resolve_hits{
    my $fasta = shift @_;
    my $fasta_t_index = shift @_;
    my $fasta_p_index = shift @_;
+   my $fasta_a_index = shift @_;
    my $blastn_keepers = shift @_;
    my $blastx_keepers = shift @_;
+   my $tblastx_keepers = shift @_;
    my $blastn_holdovers = shift @_;
    my $blastx_holdovers = shift @_;
+   my $tblastx_holdovers = shift @_;
    my $the_void = shift @_;
    my %CTL_OPTIONS = %{shift @_};
    my $OPT_f = shift @_;
@@ -89,6 +92,12 @@ sub merge_and_resolve_hits{
 			     $CTL_OPTIONS{split_hit},
 			    );
    @{$blastx_holdovers} = ();
+
+   PhatHit_utils::merge_hits($tblastx_keepers,
+                             $tblastx_holdovers,
+			     $CTL_OPTIONS{split_hit},
+			     );
+   @{$tblastx_holdovers} = ();
 
    $blastn_keepers = reblast_merged_hits($fasta,
 					 $blastn_keepers,
@@ -110,7 +119,17 @@ sub merge_and_resolve_hits{
 					 $LOG
 					);
 
-   return ($blastn_keepers, $blastx_keepers);
+   $tblastx_keepers = reblast_merged_hits($fasta,
+					  $tblastx_keepers,
+					  $fasta_a_index,
+					  $the_void,
+					  'tblastx',
+					  \%CTL_OPTIONS,
+					  $OPT_f,
+					  $LOG
+					  );
+
+   return ($blastn_keepers, $blastx_keepers, $tblastx_keepers);
 }
 #-----------------------------------------------------------------------------
 sub reblast_merged_hits {
@@ -250,6 +269,27 @@ sub reblast_merged_hits {
 	  
 	  push(@blast_keepers, @{$keepers});
 	  print STDERR "...finished\n" unless $main::quiet;
+      }
+      elsif ($type eq 'tblastx') {
+
+          print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
+          my $keepers = tblastx($chunk,
+				$t_file,
+				$the_void,
+				$p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
+				$CTL_OPTIONS{tblastx},
+				$CTL_OPTIONS{eval_tblastx},
+				$CTL_OPTIONS{bit_tblastx},
+				$CTL_OPTIONS{percov_tblastx},
+				$CTL_OPTIONS{percid_tblastx},
+				$CTL_OPTIONS{split_hit},
+				$CTL_OPTIONS{cpus},
+				$OPT_f,
+				$LOG
+			       );
+
+          push(@blast_keepers, @{$keepers});
+          print STDERR "...finished\n" unless $main::quiet;
       }
       else {
 	  die "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
@@ -463,8 +503,10 @@ sub create_blastdb {
 
    xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'protein'}, 'blastx', $CTL_OPTIONS{'alt_peptide'});
    xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'est'}, 'blastn');
+   xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'alt_est'}, 'tblastx')
+       if($CTL_OPTIONS{'alt_est'});
    xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'repeat_protein'}, 'blastx', $CTL_OPTIONS{'alt_peptide'})
-       if (! $OPT{R} && ! $OPT{GFF});
+       if (! $OPT{R} && ! $OPT{GFF} && $CTL_OPTIONS{te_remove});
 }
 #----------------------------------------------------------------------------
 sub create_mpi_blastdb {
@@ -474,13 +516,15 @@ sub create_mpi_blastdb {
 
    $CTL_OPTIONS->{'old_protein'}        = $CTL_OPTIONS->{'protein'};
    $CTL_OPTIONS->{'old_est'}            = $CTL_OPTIONS->{'est'};
+   $CTL_OPTIONS->{'old_alt_est'}        = $CTL_OPTIONS->{'alt_est'};
    $CTL_OPTIONS->{'old_repeat_protein'} = $CTL_OPTIONS->{'repeat_protein'};
     
    $CTL_OPTIONS->{'protein'} = split_db($CTL_OPTIONS->{'protein'}, $mpi_size);
    $CTL_OPTIONS->{'est'} = split_db($CTL_OPTIONS->{'est'}, $mpi_size);
+   $CTL_OPTIONS->{'alt_est'} = split_db($CTL_OPTIONS->{'alt_est'}, $mpi_size) if ($CTL_OPTIONS->{'alt_est'});
    
    $CTL_OPTIONS->{'repeat_protein'} = split_db($CTL_OPTIONS->{'repeat_protein'}, $mpi_size)
-       unless($OPT->{R});
+       if (! $OPT->{R} && ! $OPT->{GFF} && $CTL_OPTIONS->{te_remove});
 }
 #----------------------------------------------------------------------------
 sub split_db {
@@ -960,13 +1004,13 @@ sub xdformat {
 
     die "ERROR: Can not find xdformat executable\n" if(! -e $xdformat);
     die "ERROR: Can not find the db file $file\n" if(! -e $file);
-    die "ERROR: You must define a type (blastn|blastx)\n" if(! $type);
+    die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
     my $command = $xdformat;
     if ( $type eq 'blastx') {
 	$command .= " -p -C $alt_peptide $file";
     }
-    elsif ($type eq 'blastn'){
+    elsif ($type eq 'blastn' || $type eq 'tblastx'){
 	$command .= " -n $file";
     }
     else{
@@ -974,7 +1018,8 @@ sub xdformat {
     }
 
     if (($type eq 'blastn' && ! -e $file.'.xnd') ||
-	($type eq 'blastx' && ! -e $file.'.xpd')
+	($type eq 'blastx' && ! -e $file.'.xpd') ||
+	($type eq 'tblastx' && ! -e $file.'.xnd')
        ) {
        my $w = new Widget::xdformat();
        print STDERR "running  xdformat.\n" unless $main::quiet;
@@ -989,6 +1034,7 @@ sub blastn_as_chunks {
    my $seq_id     = shift;
    my $blastn = shift;
    my $eval_blastn = shift;
+   my $split_hit = shift;
    my $cpus = shift;
    my $old_db = shift;
    my $xdformat = shift;
@@ -1038,6 +1084,7 @@ sub blastn_as_chunks {
 	     $o_file,
 	     $blastn,
 	     $eval_blastn,
+	     $split_hit,
 	     $cpus,
 	     $opt_f
 	    );
@@ -1134,6 +1181,7 @@ sub blastn {
 	     $o_file,
 	     $blastn,
 	     $eval_blastn,
+	     $split_hit,
 	     $cpus,
 	     $opt_f
 	    );
@@ -1166,6 +1214,7 @@ sub runBlastn {
    my $out_file = shift;
    my $blastn = shift;
    my $eval_blastn = shift;
+   my $split_hit = shift;
    my $cpus = shift;
    my $opt_f = shift;
 
@@ -1177,12 +1226,13 @@ sub runBlastn {
    $command .= " M=1";
    $command .= " N=-3";
    $command .= " Q=3";
-   $command .= " Z=128000000";
+   $command .= " Z=1000";
+   $command .= " Y=500000000";
    $command .= " cpus=$cpus";	
    $command .= " topcomboN=1";
    $command .= " hspmax=100";
    $command .= " gspmax=100";
-   $command .= " hspsepqmax=10000";
+   $command .= " hspsepqmax=$split_hit";
    $command .= " lcmask";
    $command .= " wordmask=seg";
    $command .= " gi";
@@ -1201,7 +1251,6 @@ sub runBlastn {
       File::Path::mkpath($dir);
       $w->run($command);
    }
-
 }
 #-----------------------------------------------------------------------------
 sub blastx_as_chunks {
@@ -1211,6 +1260,7 @@ sub blastx_as_chunks {
    my $seq_id        = shift;
    my $blastx        = shift;
    my $eval_blastx   = shift;
+   my $split_hit     = shift;
    my $cpus          = shift;
    my $old_db        = shift;
    my $xdformat      = shift;
@@ -1261,6 +1311,7 @@ sub blastx_as_chunks {
 	     $o_file,
 	     $blastx,
 	     $eval_blastx,
+	     $split_hit,
 	     $cpus,
 	     $opt_f
 	    );
@@ -1359,6 +1410,7 @@ sub blastx {
 	     $o_file,
 	     $blastx,
 	     $eval_blastx,
+	     $split_hit,
 	     $cpus,
 	     $opt_f
 	    );
@@ -1408,6 +1460,7 @@ sub runBlastx {
    my $out_file = shift;
    my $blastx = shift;
    my $eval_blastx = shift;
+   my $split_hit = shift;
    my $cpus = shift;
    my $opt_f = shift;
 
@@ -1422,12 +1475,14 @@ sub runBlastx {
    $command .= " hspmax=100";
    $command .= " cpus=$cpus";
    $command .= " gspmax=100";
-   $command .= " hspsepqmax=10000";
-   $command .= " lcfilter";
+   #$command .= " hspsepqmax=10000";
+   $command .= " lcmask";
+   $command .= " kap";
    $command .= " wordmask=seg";
    $command .= " gi";
    #$command .= " mformat=2"; # remove for full report
    $command .= " > $out_file";
+
    my $w = new Widget::blastx();
 
    if (-e $out_file  && !  $opt_f) {
@@ -1441,6 +1496,228 @@ sub runBlastx {
       File::Path::mkpath($dir);
       $w->run($command);
    }
+}
+#-----------------------------------------------------------------------------
+sub tblastx_as_chunks {
+   my $chunk      = shift;
+   my $db         = shift;
+   my $the_void    = shift;
+   my $seq_id     = shift;
+   my $tblastx = shift;
+   my $eval_tblastx = shift;
+   my $split_hit = shift;
+   my $cpus = shift;
+   my $old_db = shift;
+   my $xdformat = shift;
+   my $rank = shift;
+   my $opt_f = shift;
+   my $LOG = shift;
+   my $LOG_FLAG = shift;
+
+   #build names for files to use and copy
+   my ($db_n) = $db =~ /([^\/]+)$/;
+   $db_n  =~ s/\.fasta$//;
+	
+   my $chunk_number = $chunk->number();
+ 
+   my ($db_old_n) = $old_db =~ /([^\/]+)$/;
+   $db_old_n  =~ s/\.fasta$//;
+   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
+
+   my $t_dir = $TMP."/rank".$rank;
+   File::Path::mkpath($t_dir);
+
+   my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
+   my $blast_dir = "$blast_finished\.temp_dir";
+   my $o_file    = "$blast_dir/$db_n\.tblastx";
+
+   $db =~ /([^\/]+)$/;
+   my $tmp_db = "$t_dir/$1";
+
+   $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
+
+   #copy db to local tmp dir and run xdformat 
+   if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
+      system("cp $db $tmp_db");
+      xdformat($xdformat, $tmp_db, 'tblastx');
+   }
+   elsif (-e $blast_finished && ! $opt_f) {
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$blast_finished\n" unless $main::quiet;
+      return $blast_dir;
+   }
+	
+   #call blast executable
+   $chunk->write_file($t_file_name);  
+
+   runtBlastx($t_file_name,
+	     $tmp_db,
+	     $o_file,
+	     $tblastx,
+	     $eval_tblastx,
+	     $split_hit,
+	     $cpus,
+	     $opt_f
+	    );
+
+   $chunk->erase_fasta_file();
+
+   return $blast_dir;
+}
+#-----------------------------------------------------------------------------
+sub collect_tblastx{
+   my $chunk      = shift;
+   my $blast_dir    = shift;
+   my $eval_tblastx = shift;
+   my $bit_tblastx = shift,
+   my $percov_tblastx = shift;
+   my $percid_tblastx = shift;
+   my $split_hit = shift;
+   my $opt_f = shift;
+   my $LOG = shift;
+
+   my $blast_finished = $blast_dir;
+   $blast_finished =~ s/\.temp_dir$//;
+
+   #merge blast reports
+   if (! -e $blast_finished || $opt_f) {
+      system ("cat $blast_dir/*blast* > $blast_finished");
+      File::Path::rmtree ("$blast_dir");
+   }
+
+   my %params;
+   $params{significance}  = $eval_tblastx;
+   $params{hsp_bit_min}   = $bit_tblastx;
+   $params{percov}        = $percov_tblastx;
+   $params{percid}        = $percid_tblastx;
+   $params{split_hit}     = $split_hit;
+
+   my $chunk_keepers = Widget::tblastx::parse($blast_finished,
+					      \%params,
+					     );
+
+   $LOG->add_entry("FINISHED", $blast_finished, "");
+   
+   PhatHit_utils::add_offset($chunk_keepers,
+			     $chunk->offset(),
+			    );
+
+   if ($chunk->p_cutoff || $chunk->m_cutoff) {
+      my @keepers;
+      
+      foreach my $hit (@{$chunk_keepers}) {
+	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
+	    push (@keepers, $hit)
+	 }
+	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
+	    push (@keepers, $hit)
+	 }
+      }
+      
+      return \@keepers;
+   }
+   else {
+      return $chunk_keepers
+   }
+}
+#-----------------------------------------------------------------------------
+sub tblastx {
+   my $chunk      = shift;
+   my $db         = shift;
+   my $the_void    = shift;
+   my $seq_id     = shift;
+   my $tblastx = shift;
+   my $eval_tblastx = shift;
+   my $bit_tblastx = shift,
+   my $percov_tblastx = shift;
+   my $percid_tblastx = shift;
+   my $split_hit = shift;
+   my $cpus = shift;
+   my $opt_f = shift;
+   my $LOG = shift;
+
+   my ($db_n) = $db =~ /([^\/]+)$/;
+   $db_n  =~ s/\.fasta$//;
+	
+   my $chunk_number = $chunk->number();
+   my $q_length = $chunk->parent_seq_length();
+   my $file_name = "$the_void/$seq_id\.$chunk_number";
+   my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.tblastx";
+
+   $LOG->add_entry("STARTED", $o_file, ""); 
+
+   $chunk->write_file($file_name);
+   runtBlastx($file_name,
+	     $db,
+	     $o_file,
+	     $tblastx,
+	     $eval_tblastx,
+	     $split_hit,
+	     $cpus,
+	     $opt_f
+	    );
+
+   my %params;
+   $params{significance}  = $eval_tblastx;
+   $params{hsp_bit_min}   = $bit_tblastx;
+   $params{percov}        = $percov_tblastx;
+   $params{percid}        = $percid_tblastx;
+   $params{split_hit}     = $split_hit;
+
+   my $chunk_keepers = Widget::tblastx::parse($o_file,
+					      \%params,
+					     );
+
+   $LOG->add_entry("FINISHED", $o_file, "");
+
+   PhatHit_utils::add_offset($chunk_keepers,
+			     $chunk->offset(),
+			    );
+
+   $chunk->erase_fasta_file();
+
+   return $chunk_keepers
+}
+#-----------------------------------------------------------------------------
+sub runtBlastx {
+   my $q_file   = shift;
+   my $db       = shift;
+   my $out_file = shift;
+   my $tblastx = shift;
+   my $eval_tblastx = shift;
+   my $split_hit = shift;
+   my $cpus = shift;
+   my $opt_f = shift;
+
+   my $command  = $tblastx;
+   $command .= " $db $q_file B=100000 V=100000 E=$eval_tblastx";
+   $command .= " wordmask=seg";
+   #$command .= " W=15";
+   $command .= " Z=128000000";
+   $command .= " cpus=$cpus";	
+   $command .= " topcomboN=1";
+   $command .= " hspmax=100";
+   $command .= " gspmax=100";
+   $command .= " hspsepqmax=$split_hit";
+   $command .= " lcmask";
+   $command .= " wordmask=seg";
+   $command .= " gi";
+   #$command .= " mformat=2"; # remove for full report
+   $command .= " > $out_file";
+	
+   my $w = new Widget::tblastx();
+   if (-e $out_file && ! $opt_f) {
+      print STDERR "re reading blast report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
+   }
+   else {
+      print STDERR "running  blast search.\n" unless $main::quiet;
+      my $dir = $out_file;
+      $dir =~ s/[^\/]+$//;
+      File::Path::mkpath($dir);
+      $w->run($command);
+   }
+
 }
 #-----------------------------------------------------------------------------
 sub repeatmask {
@@ -1551,6 +1828,7 @@ sub load_control_files {
    my @MAKER_OPTS_PARAMS = ('genome',
 			    'est',
 			    'protein',
+			    'alt_est',
 			    'repeat_protein',
 			    'rmlib',
 			    'rm_gff',
@@ -1578,6 +1856,10 @@ sub load_control_files {
 			     'percid_blastx',
 			     'eval_blastx',
 			     'bit_blastx',
+			     'percov_tblastx',
+			     'percid_tblastx',
+			     'eval_tblastx',
+			     'bit_tblastx',
 			     'e_perc_cov',
 			     'ep_score_limit',
 			     'en_score_limit'
@@ -1586,6 +1868,7 @@ sub load_control_files {
    my @MAKER_EXE_PARAMS = ('xdformat',
 			   'blastn',
 			   'blastx',
+			   'tblastx',
 			   'snap',
 			   'augustus',
 			   'RepeatMasker',
@@ -1610,6 +1893,10 @@ sub load_control_files {
    $CTL_OPTIONS{'percid_blastx'} = 0.40;
    $CTL_OPTIONS{'eval_blastx'} = 1e-6;
    $CTL_OPTIONS{'bit_blastx'} = 30;
+   $CTL_OPTIONS{'percov_tblastx'} = 0.80;
+   $CTL_OPTIONS{'percid_tblastx'} = 0.85;
+   $CTL_OPTIONS{'eval_tblastx'} = 1e-10;
+   $CTL_OPTIONS{'bit_tblastx'} = 40;
    $CTL_OPTIONS{'e_perc_cov'} = 50;
    $CTL_OPTIONS{'alt_peptide'} = 'c';
    $CTL_OPTIONS{'en_score_limit'} = 20;
@@ -1653,7 +1940,9 @@ sub load_control_files {
    my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn', 'blastx', 'exonerate');
 
    #sometimes required
-   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove});
+   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove} && !$OPT{R} && ! $OPT{GFF});
+   push (@infiles, 'tblastx') if($CTL_OPTIONS{alt_est});
+   push (@infiles, 'alt_est') if($CTL_OPTIONS{alt_est}); 
    push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
    push (@infiles, 'rm_gff') if ($OPT{GFF});
    push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap' || $CTL_OPTIONS{'snap'});
@@ -1674,7 +1963,7 @@ sub load_control_files {
       }
 
       #set the absolute path to the file to reduce ambiguity
-      $CTL_OPTIONS{$in} = Cwd::abs_path($CTL_OPTIONS{$in}) unless ($in =~ /^blastn$|^blastx$/);
+      $CTL_OPTIONS{$in} = Cwd::abs_path($CTL_OPTIONS{$in}) unless ($in =~ /^blastn$|^blastx$|^tblastx$/);
    }
 
    die $error if (defined $error);
@@ -1778,6 +2067,10 @@ sub generate_control_files {
    print OUT "percid_blastx:0.40 #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
    print OUT "eval_blastx:1e-6 #Blastx eval cutoff\n";
    print OUT "bit_blastx:30 #Blastx bit cutoff\n";
+   print OUT "percov_tblastx:0.80 #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
+   print OUT "percid_tblastx:0.85 #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
+   print OUT "eval_tblastx:1e-10 #tBlastx eval cutoff\n";
+   print OUT "bit_tblastx:40 #tBlastx bit cutoff\n";
    print OUT "e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments\n";
    print OUT "ep_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide\n";
    print OUT "en_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate protein\n";
@@ -1787,6 +2080,7 @@ sub generate_control_files {
    my %executables = ( xdformat => '',
 		       blastn => '',
 		       blastx => '',
+		       tblastx => '',
 		       snap => '',
 		       augustus => '',
 		       exonerate => '',
@@ -1805,6 +2099,7 @@ sub generate_control_files {
    print OUT "xdformat:".$executables{xdformat}." #location of xdformat executable\n";
    print OUT "blastn:".$executables{blastn}." #location of blastn executable\n";
    print OUT "blastx:".$executables{blastx}." #location of blastn executable\n";
+   print OUT "tblastx:".$executables{tblastx}." #location of tblastx executable\n";
    print OUT "snap:".$executables{snap}." #location of snap executable\n";
    print OUT "augustus:".$executables{augustus}." #location of augustus executable (optional)\n";
    print OUT "RepeatMasker:".$executables{RepeatMasker}." #location of RepeatMasker executable\n";

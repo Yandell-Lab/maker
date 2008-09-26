@@ -12,6 +12,7 @@ $VERSION = 0.1;
 #===make list of internal variables to log
 my @ctl_to_log = ('est',
 		  'protein',
+		  'alt_est',
 		  'repeat_protein',
 		  'rmlib',
 		  'rm_gff',
@@ -33,6 +34,10 @@ my @ctl_to_log = ('est',
 		  'percid_blastx',
 		  'eval_blastx',
 		  'bit_blastx',
+		  'percov_tblastx',
+		  'percid_tblastx',
+		  'eval_tblastx',
+		  'bit_tblastx',
 		  'e_perc_cov',
 		  'ep_score_limit',
 		  'en_score_limit',
@@ -235,11 +240,19 @@ sub _clean_files{
 	       }
 	    
 	       if ($key eq 'est' ||
-		   $key eq 'eval_blastn'
+		   $key eq 'eval_blastn' ||
+		   $key eq 'split_hit'
 		  ) {
 		  $rm_key{blastn}++;
 		  $rm_key{exonerate}++;
 	       }
+
+               if ($key eq 'alt_est' ||
+                   $key eq 'eval_tblastx' ||
+		   $key eq 'split_hit'
+		   ) {
+		   $rm_key{tblastx}++;
+               }
 	    }
 	 }
       
@@ -313,6 +326,16 @@ sub _clean_files{
 	       push (@dirs, $f) if (-d $f);
 	    }
 	 }
+         if (exists $rm_key{tblastx}) {
+            print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
+		"Old tBlastx files will be erased before continuing\n";
+
+            my @f = <$the_void/*tblastx*>;
+            foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+            }
+	}
 	 if (exists $rm_key{blastx}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
 	    "Old Blastx files will be erased before continuing\n";

@@ -613,7 +613,7 @@ sub merge_hits {
                 return;
         }
 
-	print STDERR "merging blast reports...\n";
+	print STDERR "merging blast reports...\n" unless($main::quiet);
 
 	#-- working
 	my %big_names;
@@ -690,7 +690,7 @@ sub merge_hits {
 		push(@merged, $l_hit);
         }
 
-	print STDERR "...finished\n";
+	print STDERR "...finished\n" unless($main::quiet);
         @{$big_fish} = @merged;
 }
 #------------------------------------------------------------------------

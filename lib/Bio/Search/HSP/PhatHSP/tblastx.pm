@@ -134,6 +134,7 @@ sub new
 
  Usage     : How to use this function/method
 
+
 =for example
  use Bio::Search::HSP::PhatHSP::Base;
  my $hsps = Bio::Search::HSP::PhatHSP::Base::_getTestHSPs('tblastx',
@@ -142,17 +143,19 @@ sub new
 =for example begin
 
  my $hsp = $hsps->[0];		# $hsps is filled in by test harness
- my $q_char = $hsp->whatIsThere('query', 869); # the first match starts here
- my $h_char = $hsp->whatIsThere('hit', 70542); # ditto in subject
+ my $q_char = $hsp->whatIsThere('query', 23); # the first match starts here
+ my $h_char = $hsp->whatIsThere('hit', 16827); # ditto in subject
 
- my $h_gap = $hsp->whatIsThere('hit', 70559); # ditto in subject
+ my $q_gap = $hsp->whatIsThere('query', 38); # there's a query gap here
+ my $h_gap = $hsp->whatIsThere('hit', 16847);
 
 =for example end
 
 =for example_testing
-  is($q_char, "S", "check amino acid at postition 869 in query.");
-  is($h_char, "S", "check amino acid at postition 70542 in hit.");
-  is($h_gap, "E", "check amino acid at postition 70559 in hit.");
+  is($q_char, "A", "check base at postition 23 in query.");
+  is($h_char, "A", "check base at postition 16827 in hit.");
+  is($q_gap, "T", "check for the gap at pos 38 in query.");
+  is($h_gap, "G", "check base at postition 16847 in hit.");
 
  Purpose   : What the subroutine does.
  Returns   : The types and values it returns.
@@ -166,52 +169,35 @@ sub new
 
 ################################################## subroutine header end ##
 
-sub whatIsThere
- {
+sub whatIsThere  {
         my $self = shift;
         my $w    = shift;
         my $pos  = shift;
 
-	my ($q_i, $h_i, $q, $h, $m) = $self->_scan($w, $pos);
-        if ($w eq 'query'){
-		my ($q_i, $h_i, $q, $h, $m) = $self->_scan($w, $pos);
-		return undef unless defined($q_i);
-                if ($q eq '-'){
-                        return undef;
+	my @a = $w eq 'query' ?
+	  split('',$self->query_string()) :  split('',$self->hit_string());
+ 
+	my $i = $self->nB($w);
+
+	my $delta = $self->strand($w) == 1 ? 1 : -1; 
+
+        while (my $nuc = shift(@a)){
+                if ($nuc ne '-'){
+                        return $nuc if $i == $pos;
+                        $i+= $delta;
                 }
                 else {
-                        return $q;
-                }
-
-        }
-        else {
-                my ($q_i, $h_i, $q, $h, $m) = $self->_scan($w, $pos);
-                return undef unless defined($h_i);
-                if ($h eq '-'){
-                        return undef;
-                }
-                else {
-                        return $h;
+                        #
                 }
         }
-
+        return undef;
 }
 
 ################################################ subroutine header begin ##
 
-=head2 show
+=head2 debug_show
 
  Usage     : How to use this function/method
-
-=for example begin
-
-  use PROTO;
-  my $foo = new PROTO;
-
-=for example end
-
-=for example_testing
-  isa_ok($foo, "PROTO", "Check if it's the right type.");
 
  Purpose   : What the subroutine does.
  Returns   : The types and values it returns.
@@ -225,7 +211,7 @@ sub whatIsThere
 
 ################################################## subroutine header end ##
 
-sub show
+sub debug_show
  {
 	my $self = shift;
 
@@ -259,7 +245,7 @@ sub show
 =for example end
 
 =for example_testing
-  is($name, "Contig190.4:0", "Check the hit's name.");
+  is($name, "3197985", "Check the name of the sequence that was hit.");
 
  Purpose   : What the subroutine does.
  Returns   : The types and values it returns.
@@ -277,7 +263,7 @@ sub name
  {
 	my $self = shift;
 	
-	return $self->hit->seqname();
+	return $self->hit->seq_id();
 }
 
 ################################################ subroutine header begin ##
@@ -300,8 +286,8 @@ sub name
 =for example end
 
 =for example_testing
-  is($q_natural_begin, 869, "Check the beginning of the query.");
-  is($h_natural_begin, 70542, "Check the beginning of the hit.");
+  is($q_natural_begin, 23, "check query's natural begin.");
+  is($h_natural_begin, 16827, "check hit's natural begin.");
 
  Purpose   : What the subroutine does.
  Returns   : The types and values it returns.
@@ -317,20 +303,20 @@ sub name
 
 sub nB
  {
-	my $self = shift;
-	my $w    = shift;
+        my $self = shift;
+        my $w    = shift;
 
-	die unless defined($w);
+        die unless defined($w);
 
-	if ($self->strand($w) == 1){
-		return $self->start($w);
-	}
-	elsif ($w eq 'query' && $self->strand($w) == 0){
-		return $self->start($w);
-	}
-	else {
-		return $self->end($w);
-	}
+        if ($self->strand($w) == 1){
+                return $self->start($w);
+        }
+        elsif ($w eq 'query' && $self->strand($w) == 0){
+                return $self->start($w);
+        }
+        else {
+                return $self->end($w);
+        }
 }
 
 ################################################ subroutine header begin ##
@@ -353,8 +339,8 @@ sub nB
 =for example end
 
 =for example_testing
-  is($q_natural_end, 3412, "Check the end of the query.");
-  is($h_natural_end, 73097, "Check the end of the hit.");
+  is($q_natural_end, 698, "check query's natural begin.");
+  is($h_natural_end, 17492, "check hit's natural begin.");
 
  Purpose   : What the subroutine does.
  Returns   : The types and values it returns.
@@ -414,62 +400,17 @@ sub _check
 	my $q    = shift;
 	my $h    = shift;
 
-	#print "q_i:$q_i h_i:$h_i w:$w pos:$pos m:$m q:$q h:$h\n";
 	if ($w eq 'query'){
-		if    ($q_i == $pos){
-	              return ($q_i, $h_i, $q, $h, $m);
-		}
-		elsif ($self->strand('query') == 1){
-			return undef if $pos < $self->nB('query');
-			return undef if $pos > $self->nE('query');
-                        if ($pos <=  $self->nE('query')
-                        &&  $pos - $q_i < 3
-                        &&  $pos - $q_i >= 0){
-				 return ($q_i, $h_i, $q, $h, $m);
-			}
-
-		}
-		elsif ($self->strand('query') == -1){
-			return undef if $pos < $self->nE('query');
-			return undef if $pos > $self->nB('query');
-			if ($self->nE('query') - $pos  < 3
-			&&  $h_i - $pos < 3){
-				return ($q_i, $h_i, $q, $h, $m);
-			}
-		}
-		else {
-			die "dead in PhatHsp::_check err:1\n";	
-		}
+		return ($q_i, $h_i, $q, $h, $m) if $q_i == $pos;
 	}
 	elsif ($w eq 'hit') {
-		#print "q_i:$q_i h_i:$h_i w:$w pos:$pos m:$m q:$q h:$h\n";
 		return ($q_i, $h_i, $q, $h, $m) if $h_i == $pos;
-		if ($pos == $self->nE('hit') && $h_i == $pos){
-			if ($self->strand('hit') == 1){
-				return ($q_i, $h_i - 2, $q, $h, $m);
-			}
-			else {
-				return ($q_i, $h_i, $q, $h, $m);
-			}
-		}
-		elsif ($self->strand('hit') == 1){
-			my $distance = $pos - $h_i;
-
-			return ($q_i, $h_i, $q, $h, $m)
-			if ($distance > 0 && $distance < 3);
-		}
-		else {
-
-		        my $distance = $h_i - $pos;
-			return ($q_i, $h_i, $q, $h, $m)
-                        if ($distance > 0 && $distance < 3);
-		}
 	}
 	else {
-		die "dead in PhatHsp::_check err:2\n";
 	}
 
 	return undef;
+
 }
 
 ################################################ subroutine header begin ##
@@ -497,6 +438,7 @@ sub _set_i
 	my $qs   = shift;
 	my $hs   = shift;
 
+
 	my ($m, $m_i, $q, $q_i, $h, $h_i);
 
 	$m   = $ms->[0];
@@ -517,27 +459,32 @@ sub _set_i
         }
 
 	if   ($m eq $q && $q eq $h){
-		if ($self->strand('hit') == -1){$h_i-=3} else{$h_i+=3};
-		if ($self->strand('query') == -1){$q_i-=3} else{$q_i+=3};
+		$h_i++;
+		$q_i++;
 		$m_i++;
 	}
 	elsif ($m eq '+'){
-		if ($self->strand('hit') == -1){$h_i-=3} else{$h_i+=3};
-		if ($self->strand('query') == -1){$q_i-=3} else{$q_i+=3};
+		$h_i++;
+		$q_i++;
+		$m_i++;
+	}
+	elsif ($m eq '|'){	# XXXX george added this
+		$h_i++;
+		$q_i++;
 		$m_i++;
 	}
 	elsif ($m eq ' ' && $q ne '-' && $h ne '-'){
-		if ($self->strand('hit') == -1){$h_i-=3} else{$h_i+=3};
-		if ($self->strand('query') == -1){$q_i-=3} else{$q_i+=3};
+		$h_i++;
+		$q_i++;
 		$m_i++;
 	}
         elsif ($m eq ' ' && $q eq '-' && $h ne '-'){
-                if ($self->strand('hit') == -1){$h_i-=3} else{$h_i+=3};
+		$h_i++;
                 $m_i++;
         }
         elsif ($m eq ' ' && $q ne '-' && $h eq '-'){
-		if ($self->strand('query') == -1){$q_i-=3} else{$q_i+=3};
                 $m_i++;
+		$q_i++;
         }
 
 
@@ -554,23 +501,30 @@ sub _set_i
  Returns   :
  Argument  :
  Throws    :
- Comments  : handle falling off of the end of HSP (both ends, name is
-           : historical (hysterical?)
+ Comments  :
+           :
  See Also  :
 
 =cut
 
 ################################################## subroutine header end ##
 
-# XXXX This is the same as tblastn but probably shouldn't be, looks like
-# XXXX a cut and pasto.
-
-sub _set_exit {
+sub _set_exit
+ {
 	my $self = shift;
-	my $m_i  = shift;	# position in middle string
-	my $q_i  = shift;	# position in query string
-	my $h_i  = shift;	# position in hit string
+	my $m_i  = shift;
+	my $q_i  = shift;
+	my $h_i  = shift;
 
+# XXXX NoOp...
+	if ($self->nE('query') == $q_i){
+		if ($self->strand('hit') == 0){
+			#$h_i -=2;
+		}
+		else {
+			#$h_i +=2;
+		}
+	}
 	return ($m_i, $q_i, $h_i);
 }
 
@@ -606,7 +560,6 @@ sub AUTOLOAD
 	    "\$self->$call","()\n";
 	    print STDERR "call to AutoLoader issued from: ", $caller, "\n";
 	}
-
         if (@_){
                 $self->{$call} = shift;
         }

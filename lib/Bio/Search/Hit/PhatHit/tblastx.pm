@@ -161,7 +161,7 @@ sub show
 	#print "pAq:". $self->pAq."\n";
 	#print "pAH:". $self->pAh."\n";
 	print "E/P:". $self->significance()."\n";
-	#print "queryLength:".$self->queryLength()."\n";
+	print "queryLength:".$self->queryLength()."\n";
 	print "sbjctLength:".$self->length()."\n";
 	my $i = 0;
 	foreach my $hsp ($self->hsps){
