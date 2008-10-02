@@ -312,7 +312,7 @@ sub _run {
 	 }
 	 catch Error::Simple with{
 	    my $E = shift;
-	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	    $self->_handler($E, "\n\nMaker failed after skip repeat masking prep!!\n");
 	 };
 
 	 return $self->run;
@@ -329,7 +329,7 @@ sub _run {
 	 }
 	 catch Error::Simple with{
 	    my $E = shift;
-	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	    $self->_handler($E, "\n\nMaker failed at repeat GFF proccessing!!\n");
 	 };
 
 	 return $self->run;
@@ -355,7 +355,7 @@ sub _run {
 	 }
 	 catch Error::Simple with{
 	    my $E = shift;
-	    $self->_handler($E, "\n\nMaker failed at !!\n");
+	    $self->_handler($E, "\n\nMaker failed at rpeat masking preperation!!\n");
 	 };
 
 	 return $self->run;
@@ -371,7 +371,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at RepeatMasker!!\n");
       };
 
       return $self->run;
@@ -382,7 +382,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at transposable element masking!!\n");
       };
 
       return; #pause here;
@@ -397,7 +397,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed while collecting transposable element alignments!!\n");
       };
 
       return $self->run;
@@ -419,7 +419,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at masking chunk with repeats!!\n");
       };
 
       return $self->run;
