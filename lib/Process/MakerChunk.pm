@@ -98,6 +98,7 @@ sub run {
 
    return $ret;
 }
+
 #--------------------------------------------------------------
 sub _run {
    my $self = shift;
@@ -123,12 +124,13 @@ sub _run {
       #-- repeatmask the input file
       $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
 
-      my $rma_keepers = Shared_Functions::repeatmask($chunk, 
+      my $rma_keepers = Shared_Functions::repeatmask($chunk,
 						     $the_void,
 						     $seq_out_name,
 						     $CTL_OPTIONS{'model_org'},
 						     $CTL_OPTIONS{'RepeatMasker'},
 						     $CTL_OPTIONS{'rmlib'},
+						     $CTL_OPTIONS{'rmlib_only'},
 						     $CTL_OPTIONS{'cpus'},
 						     $opt_f,
 						     $self->{LOG}
@@ -136,6 +138,7 @@ sub _run {
 
       #-mask the chunk using repeatmasker hits
       $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers);
+
       #-------------------------CHUNK
 
       #------------------------RESULTS
@@ -161,6 +164,7 @@ sub _run {
 								$seq_out_name,
 								$CTL_OPTIONS{blastx},
 								$CTL_OPTIONS{eval_blastx},
+								$CTL_OPTIONS{split_hit},
 								$CTL_OPTIONS{cpus},
 								$CTL_OPTIONS{old_repeat_protein},
 								$CTL_OPTIONS{xdformat},
@@ -283,10 +287,15 @@ sub _run {
       $CTL_OPTIONS{old_protein} =~ /([^\/]+)$/;
       my $p_name = $1;
 
-
+      my $a_name = '';
+      if($CTL_OPTIONS{old_alt_est}){
+	  $CTL_OPTIONS{old_alt_est} =~ /([^\/]+)$/;  
+	  $a_name = $1;;
+      }
 
       my $trans_file = $t_dir."/".$t_name;
       my $prot_file = $t_dir."/".$p_name;
+      my $alt_est_file = $t_dir."/".$a_name;
 
       if (! -e $trans_file) {
 	  system("cp $CTL_OPTIONS{old_est} $trans_file");
@@ -294,9 +303,14 @@ sub _run {
       if (! -e $prot_file) {
           system("cp $CTL_OPTIONS{old_protein} $prot_file");
       }
+      if (! -e $alt_est_file) {
+          system("cp $CTL_OPTIONS{old_alt_est} $alt_est_file");
+      }
 
       my $fasta_t_index     = Shared_Functions::build_fasta_index($trans_file);
       my $fasta_p_index     = Shared_Functions::build_fasta_index($prot_file);
+      my $fasta_a_index;
+      $fasta_a_index = Shared_Functions::build_fasta_index($alt_est_file) if ($alt_est_file);
 
       #--set up new chunks for remaining levels
       my $fasta_chunker = new FastaChunker();
@@ -310,7 +324,7 @@ sub _run {
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($masked_fasta, $snaps, $augus, $fasta_chunker, $chunk_count, $fasta_t_index, $fasta_p_index);
+      @results = ($masked_fasta, $snaps, $augus, $fasta_chunker, $chunk_count, $fasta_t_index, $fasta_p_index, $fasta_a_index);
       #------------------------RESULTS
    }
    elsif ($level == 5) {
@@ -331,6 +345,7 @@ sub _run {
 							      $seq_out_name,
 							      $CTL_OPTIONS{blastn},
 							      $CTL_OPTIONS{eval_blastn},
+							      $CTL_OPTIONS{split_hit},
 							      $CTL_OPTIONS{cpus},
 							      $CTL_OPTIONS{old_est},
 							      $CTL_OPTIONS{xdformat},
@@ -389,6 +404,7 @@ sub _run {
 							      $seq_out_name,
 							      $CTL_OPTIONS{blastx},
 							      $CTL_OPTIONS{eval_blastx},
+							      $CTL_OPTIONS{split_hit},
 							      $CTL_OPTIONS{cpus},
 							      $CTL_OPTIONS{old_protein},
 							      $CTL_OPTIONS{xdformat},
@@ -432,19 +448,84 @@ sub _run {
    }
    elsif ($level == 9) {
       #------------------------ARGS_IN
+      my $chunk        = shift @{$vars};
+      my $alt_ests     = shift @{$vars};
+      my $the_void     = shift @{$vars};
+      my $seq_out_name = shift @{$vars};
+      my %CTL_OPTIONS  = %{shift @{$vars}};
+      my $opt_f        = shift @{$vars};
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      #-- blastx search  the masked input file
+      my $tblastx_res_dir = '';
+      $tblastx_res_dir = Shared_Functions::tblastx_as_chunks($chunk,
+							     $alt_ests,
+							     $the_void,
+							     $seq_out_name,
+							     $CTL_OPTIONS{tblastx},
+							     $CTL_OPTIONS{eval_tblastx},
+							     $CTL_OPTIONS{split_hit},
+							     $CTL_OPTIONS{cpus},
+							     $CTL_OPTIONS{old_alt_ests},
+							     $CTL_OPTIONS{xdformat},
+							     $CTL_OPTIONS{alt_peptide},
+							     $self->{RANK},
+							     $opt_f,
+							     $self->{LOG},
+							     $self->{LOG_FLAG}
+							    ) if($alt_ests);
+      #-------------------------CHUNK
+
+      #------------------------RESULTS
+      @results = ($tblastx_res_dir);
+      #------------------------RESULTS
+   }
+   elsif ($level == 10) {
+      #------------------------ARGS_IN
       my $chunk           = shift @{$vars};
-      my $masked_fasta    = shift @{$vars};
-      my $snaps           = shift @{$vars};
-      my $augus           = shift @{$vars};
-      my $blastn_keepers  = shift @{$vars};
-      my $blastx_keepers  = shift @{$vars};
-      my $fasta_t_index   = shift @{$vars};
-      my $fasta_p_index   = shift @{$vars};
-      my $holdover_blastn = shift @{$vars};
-      my $holdover_blastx = shift @{$vars};
-      my $the_void        = shift @{$vars};
+      my $tblastx_res_dir = shift @{$vars};
       my %CTL_OPTIONS     = %{shift @{$vars}};
       my $opt_f           = shift @{$vars};
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      #-- merge and collect blastx results
+      my $tblastx_keepers = [];
+      $tblastx_keepers = Shared_Functions::collect_tblastx($chunk,
+							   $tblastx_res_dir,
+							   $CTL_OPTIONS{eval_tblastx},
+							   $CTL_OPTIONS{bit_tblastx},
+							   $CTL_OPTIONS{percov_tblastx},
+							   $CTL_OPTIONS{percid_tblastx},
+							   $CTL_OPTIONS{split_hit},
+							   $opt_f,
+							   $self->{LOG}
+							  ) if($tblastx_res_dir);
+      #-------------------------CHUNK
+	
+      #------------------------RESULTS
+      @results = ($tblastx_keepers);
+      #------------------------RESULTS
+   }
+   elsif ($level == 11) {
+      #------------------------ARGS_IN
+      my $chunk            = shift @{$vars};
+      my $masked_fasta     = shift @{$vars};
+      my $snaps            = shift @{$vars};
+      my $augus            = shift @{$vars};
+      my $blastn_keepers   = shift @{$vars};
+      my $blastx_keepers   = shift @{$vars};
+      my $tblastx_keepers  = shift @{$vars};
+      my $fasta_t_index    = shift @{$vars};
+      my $fasta_p_index    = shift @{$vars};
+      my $fasta_a_index    = shift @{$vars};
+      my $holdover_blastn  = shift @{$vars};
+      my $holdover_blastx  = shift @{$vars};
+      my $holdover_tblastx = shift @{$vars};
+      my $the_void         = shift @{$vars};
+      my %CTL_OPTIONS      = %{shift @{$vars}};
+      my $opt_f            = shift @{$vars};
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
@@ -472,45 +553,54 @@ sub _run {
       #==merge heldover Phathits from last round
       if ($chunk->number != 0) { #if not first chunk
 	 ($blastn_keepers,
-	  $blastx_keepers) = Shared_Functions::merge_and_resolve_hits($masked_fasta,
-								      $fasta_t_index,
-								      $fasta_p_index,
-								      $blastn_keepers,
-								      $blastx_keepers,
-								      $holdover_blastn,
-								      $holdover_blastx,
-								      $the_void,
-								      \%CTL_OPTIONS,
-								      $opt_f,
-								      $self->{LOG}
-								     );
+	  $blastx_keepers,
+	  $tblastx_keepers) = Shared_Functions::merge_and_resolve_hits($masked_fasta,
+								       $fasta_t_index,
+								       $fasta_p_index,
+								       $fasta_a_index,
+								       $blastn_keepers,
+								       $blastx_keepers,
+								       $tblastx_keepers,
+								       $holdover_blastn,
+								       $holdover_blastx,
+								       $holdover_tblastx,
+								       $the_void,
+								       \%CTL_OPTIONS,
+								       $opt_f,
+								       $self->{LOG}
+								      );
       }
       
       #==PROCESS HITS CLOSE TOO CHUNK DIVISIONS 
       my $holdover_preds = [];
       $holdover_blastn = [];
       $holdover_blastx = [];
+      $holdover_tblastx = [];
   
       if (not $chunk->is_last) { #if not last chunk
 	 ($holdover_blastn,
 	  $holdover_blastx,
+	  $holdover_tblastx,
 	  $holdover_preds,
 	  $blastn_keepers,
 	  $blastx_keepers,
+	  $tblastx_keepers,
 	  $preds_on_chunk) = Shared_Functions::process_the_chunk_divide($chunk,
 									$CTL_OPTIONS{'split_hit'},
 									$blastn_keepers,
 									$blastx_keepers,
+									$tblastx_keepers,
 									$preds_on_chunk
 								       );
       }
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($holdover_blastn, $holdover_blastx, $holdover_preds, $blastn_keepers, $blastx_keepers, $preds_on_chunk);
+      @results = ($holdover_blastn, $holdover_blastx, $holdover_tblastx, $holdover_preds,
+		  $blastn_keepers, $blastx_keepers, $tblastx_keepers, $preds_on_chunk);
       #------------------------RESULTS
    }
-   elsif ($level == 10) {
+   elsif ($level == 12) {
       #------------------------ARGS_IN
       my $fasta           = shift @{$vars};
       my $blastx_keepers  = shift @{$vars};
@@ -553,10 +643,11 @@ sub _run {
       @results = ($blastx_data, $exonerate_p_data);
       #------------------------RESULTS
    }
-   elsif ($level == 11) {
+   elsif ($level == 13) {
       #------------------------ARGS_IN
       my $fasta           = shift @{$vars};
-      my $blastn_keepers = shift @{$vars};
+      my $blastn_keepers  = shift @{$vars};
+      my $tblastx_keepers = shift @{$vars};
       my $query_seq       = shift @{$vars};
       my $fasta_t_index   = shift @{$vars};
       my $the_void        = shift @{$vars};
@@ -565,11 +656,22 @@ sub _run {
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
+      #-cluster the tblastx hits
+      print STDERR "cleaning tblastx...\n" unless $main::quiet;
+      my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
+							$query_seq,
+							10
+						       );
+
+      undef $tblastx_keepers; #free up memory
+      my $tblastx_data      = Shared_Functions::flatten($tblastx_clusters);
+
       #-- Cluster the blastn hits
       print STDERR "cleaning blastn...\n" unless($main::quiet);
       my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
 						       $query_seq,
-						       10);
+						       10
+						      );
 
       #-- polish blastn hits with exonerate
       my $exonerate_e_clusters = Shared_Functions::polish_exonerate($fasta,
@@ -592,10 +694,10 @@ sub _run {
       #-------------------------CHUNK
 
       #------------------------RESULTS
-      @results = ($blastn_data, $exonerate_e_data);
+      @results = ($blastn_data, $tblastx_data, $exonerate_e_data);
       #------------------------RESULTS
    }
-   elsif ($level == 12) {
+   elsif ($level == 14) {
       #------------------------ARGS_IN
       my $fasta            = shift @{$vars};
       my $masked_fasta     = shift @{$vars};
@@ -653,10 +755,11 @@ sub _run {
       @results = ($annotations);
       #------------------------RESULTS
    }
-   elsif ($level == 13) {
+   elsif ($level == 15) {
       #------------------------ARGS_IN
       my $blastx_data      = shift @{$vars};
       my $blastn_data      = shift @{$vars};
+      my $tblastx_data     = shift @{$vars};
       my $exonerate_p_data = shift @{$vars};
       my $exonerate_e_data = shift @{$vars};
       my $annotations      = shift @{$vars};
@@ -670,6 +773,7 @@ sub _run {
       $GFF3->genes($annotations);
       $GFF3->phat_hits($blastx_data);
       $GFF3->phat_hits($blastn_data);
+      $GFF3->phat_hits($tblastx_data);
       $GFF3->phat_hits($exonerate_p_data);
       $GFF3->phat_hits($exonerate_e_data);
 	
@@ -683,7 +787,7 @@ sub _run {
       @results = ($GFF3, $p_fastas, $t_fastas);
       #------------------------RESULTS
    }
-   elsif ($level == 14) {
+   elsif ($level == 16) {
       #------------------------ARGS_IN
       my $snaps          = shift @{$vars};
       my $augus          = shift @{$vars};

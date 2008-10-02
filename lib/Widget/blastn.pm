@@ -41,6 +41,7 @@ sub run {
 		    print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
+		die "ERROR: Blastn failed\n" if $? > 0;
 	}
 	else {
 		die "you must give Widget::blastn a command to run!\n";

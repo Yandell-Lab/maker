@@ -240,6 +240,7 @@ sub run {
 	      print STDERR $line unless($main::quiet);
 	   }
 	   waitpid $pid, 0;
+	   die "ERROR: Augustus failed\n" if $? > 0;
 	}
 	else {
 	   die "you must give Widget::augustus a command to run!\n";
@@ -394,7 +395,7 @@ sub parse_gene {
                 }
                 elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'intron'){
                 }
-                elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'exon'){
+                elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  =~ /^exon$|^internal$|^initial$|^terminal$|UTR$|^single$/){
 		    my $strand = $fields[6] eq '+' ? 1 : -1;
 
 		    push(@{$this_gene{exons}}, {'b'      => $fields[3],

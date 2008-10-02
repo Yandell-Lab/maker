@@ -36,7 +36,7 @@ BEGIN{
    };
 }
 
-use Error qw(:try :warndie);
+use Error qw(:try);
 use Error::Simple;
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
@@ -447,6 +447,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							     $CTL_OPTIONS{'model_org'},
 							     $CTL_OPTIONS{'RepeatMasker'},
 							     $CTL_OPTIONS{'rmlib'},
+							     $CTL_OPTIONS{'rmlib_only'},
 							     $CTL_OPTIONS{'cpus'},
 							     $OPT{f},
 							     $LOG

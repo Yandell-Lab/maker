@@ -1727,47 +1727,91 @@ sub repeatmask {
    my $model_org    = shift;
    my $RepeatMasker = shift;
    my $rmlib        = shift;
+   my $rmlib_only   = shift;
    my $cpus         = shift;
    my $opt_f        = shift;
    my $LOG = shift;
 
-   my $chunk_number = $chunk->number();
-   my $file_name = "$the_void/$seq_id\.$chunk_number";
-   my $o_file    = "$the_void/$seq_id\.$chunk_number\.out";
-   my $q_length = $chunk->parent_seq_length();
-   my $query_def = $chunk->parent_def();
-   my $query_seq = $chunk->seq();
+   my $rm_chunk_keepers = [];
 
-   $LOG->add_entry("STARTED", $o_file, ""); 
+   if (! $rmlib_only){
+       my $chunk_number = $chunk->number();
+       my $file_name = "$the_void/$seq_id\.$chunk_number";
+       my $o_file    = "$the_void/$seq_id\.$chunk_number\.out";
+       my $q_length = $chunk->parent_seq_length();
+       my $query_def = $chunk->parent_def();
+       my $query_seq = $chunk->seq();
+       
+       $LOG->add_entry("STARTED", $o_file, ""); 
+       
+       $chunk->write_file($file_name);
+       
+       runRepeatMasker($file_name, 
+		       $model_org, 
+		       $the_void, 
+		       $o_file,
+		       $RepeatMasker,
+		       '',
+		       $cpus,
+		       $opt_f
+		       );		# -no_low
+       
+       $rm_chunk_keepers1 = Widget::RepeatMasker::parse($o_file, 
+							$seq_id, 
+							$q_length
+						       );
+       
+       $LOG->add_entry("FINISHED", $o_file, ""); 
+       
+       PhatHit_utils::add_offset($rm_chunk_keepers, 
+				 $chunk->offset(),
+				 );
+       #     PhatHit_utils::merge_hits($rm_keepers,  
+       # 			      $rm_chunk_keepers, 
+       # 			      20,
+       # 			     );
+       
+       $chunk->erase_fasta_file();
 
-   $chunk->write_file($file_name);
-		
-   runRepeatMasker($file_name, 
-		   $model_org, 
-		   $the_void, 
-		   $o_file,
-		   $RepeatMasker,
-		   $rmlib,
-		   $cpus,
-		   $opt_f
-		  );		# -no_low
-		
-   my $rm_chunk_keepers = Widget::RepeatMasker::parse($o_file, 
-						      $seq_id, 
-						      $q_length
-						     );
+       push(@{$rm_chunk_keepers}, @{$rm_chunk_keepers1});
+   }
+   if ($rmlib){
+       my $chunk_number = $chunk->number();
+       my $file_name = "$the_void/$seq_id\.$chunk_number\.specific";
+       my $o_file    = "$the_void/$seq_id\.$chunk_number\.specific\.out";
+       my $q_length = $chunk->parent_seq_length();
+       my $query_def = $chunk->parent_def();
+       my $query_seq = $chunk->seq();
+       
+       $LOG->add_entry("STARTED", $o_file, ""); 
+       
+       $chunk->write_file($file_name);
+       
+       runRepeatMasker($file_name, 
+		       $model_org, 
+		       $the_void, 
+		       $o_file,
+		       $RepeatMasker,
+		       $rmlib,
+		       $cpus,
+		       $opt_f
+		       );		# -no_low
+       
+       $rm_chunk_keepers2 = Widget::RepeatMasker::parse($o_file, 
+							$seq_id, 
+							$q_length
+						       );
+       
+       $LOG->add_entry("FINISHED", $o_file, ""); 
+       
+       PhatHit_utils::add_offset($rm_chunk_keepers, 
+				 $chunk->offset(),
+				 );
+       
+       $chunk->erase_fasta_file();
 
-   $LOG->add_entry("FINISHED", $o_file, ""); 
-  
-   PhatHit_utils::add_offset($rm_chunk_keepers, 
-			     $chunk->offset(),
-			    );
-   #     PhatHit_utils::merge_hits($rm_keepers,  
-   # 			      $rm_chunk_keepers, 
-   # 			      20,
-   # 			     );
-
-   $chunk->erase_fasta_file();
+       push(@{$rm_chunk_keepers}, @{$rm_chunk_keepers2});
+   }
 	
    return ($rm_chunk_keepers);
 }
@@ -1784,7 +1828,7 @@ sub runRepeatMasker {
    my $no_low   = shift;
 	
    my $command  = $RepeatMasker;
-    
+
    if ($rmlib) {
       $command .= " $q_file -lib $rmlib -dir $dir -pa $cpus";    
    } else {
@@ -1841,6 +1885,7 @@ sub load_control_files {
 			    'split_hit',
 			    'snap_flank',
 			    'te_remove',
+			    'rmlib_only',
 			    'single_exon',
 			    'use_seq_dir',
 			    'clean_up',
@@ -1856,11 +1901,14 @@ sub load_control_files {
 			     'percid_blastx',
 			     'eval_blastx',
 			     'bit_blastx',
+			     'percov_rep_blastx',
+			     'percid_rep_blastx',
+			     'eval_rep_blastx',
+			     'bit_rep_blastx',
 			     'percov_tblastx',
 			     'percid_tblastx',
 			     'eval_tblastx',
 			     'bit_tblastx',
-			     'e_perc_cov',
 			     'ep_score_limit',
 			     'en_score_limit'
 			    );
@@ -1883,6 +1931,8 @@ sub load_control_files {
 
    #set default values for certain control options
    $CTL_OPTIONS{'clean_up'} = 0;
+   $CTL_OPTIONS{'te_remove'} = 1;
+   $CTL_OPTIONS{'rmlib_only'} = 0;
    $CTL_OPTIONS{'max_dna_len'} = 100000;
    $CTL_OPTIONS{'min_contig'} = 1;
    $CTL_OPTIONS{'percov_blastn'} = 0.80;
@@ -1893,11 +1943,14 @@ sub load_control_files {
    $CTL_OPTIONS{'percid_blastx'} = 0.40;
    $CTL_OPTIONS{'eval_blastx'} = 1e-6;
    $CTL_OPTIONS{'bit_blastx'} = 30;
+   $CTL_OPTIONS{'percov_rep_blastx'} = 0.50;
+   $CTL_OPTIONS{'percid_rep_blastx'} = 0.40;
+   $CTL_OPTIONS{'eval_rep_blastx'} = 1e-6;
+   $CTL_OPTIONS{'bit_rep_blastx'} = 30;
    $CTL_OPTIONS{'percov_tblastx'} = 0.80;
    $CTL_OPTIONS{'percid_tblastx'} = 0.85;
    $CTL_OPTIONS{'eval_tblastx'} = 1e-10;
    $CTL_OPTIONS{'bit_tblastx'} = 40;
-   $CTL_OPTIONS{'e_perc_cov'} = 50;
    $CTL_OPTIONS{'alt_peptide'} = 'c';
    $CTL_OPTIONS{'en_score_limit'} = 20;
    $CTL_OPTIONS{'ep_score_limit'} = 20;
@@ -1944,7 +1997,7 @@ sub load_control_files {
    push (@infiles, 'tblastx') if($CTL_OPTIONS{alt_est});
    push (@infiles, 'alt_est') if($CTL_OPTIONS{alt_est}); 
    push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
-   push (@infiles, 'rm_gff') if ($OPT{GFF});
+   push (@infiles, 'rmlib') if (! $OPT{R} && ! $OPT{GFF} && ($CTL_OPTIONS{rmlib} || $CTL_OPTIONS{rmlib_only}));
    push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap' || $CTL_OPTIONS{'snap'});
    push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
 
@@ -1968,7 +2021,7 @@ sub load_control_files {
 
    die $error if (defined $error);
 
-   if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'}) {
+   if (! $OPT{R} && ! $CTL_OPTIONS{'model_org'} && ! $CTL_OPTIONS{rmlib_only}) {
       warn "There is no model specified for RepeatMasker in maker_opts.ctl : model_org.\n".
            "As a result the default (drosophila) will be used.\n";
       $CTL_OPTIONS{'model_org'} = "drosophila";
@@ -2033,9 +2086,10 @@ sub generate_control_files {
    print OUT "genome: #genome sequence file (required)\n";
    print OUT "est: #EST sequence file (required)\n";
    print OUT "protein:  #protein sequence file (required)\n";
-   print OUT "repeat_protein:$repeat_protein #a database of transposable element proteins\n";
-   print OUT "rmlib: #an organism specific repeat library (optional)\n";
-   print OUT "rm_gff: #a gff3 format file of repeat elements (only used with -GFF flag)\n";
+   print OUT "repeat_protein:$repeat_protein #a database of transposable element proteins (optional)\n";
+   print OUT "alt_est: #an EST sequence file from an alternate related organism (optional)\n";
+   print OUT "rmlib: #an additional organism specific repeat library (optional)\n";
+   print OUT "rm_gff: #a gff3 format file of repeat elements (optional: skips other repeat masking)\n";
    print OUT "\n";
    print OUT "#-----external application specific options\n";
    print OUT "snaphmm:fly #SNAP HMM model\n";
@@ -2045,8 +2099,9 @@ sub generate_control_files {
    print OUT "cpus:1 #max number of cpus to use in BLAST and RepeatMasker\n";
    print OUT "\n";
    print OUT "#-----Maker specific options\n";
-   print OUT "predictor:snap #identifies which gene prediction program to use for annotations\n";
+   print OUT "predictor:snap #identifies the primary gene prediction program to use for annotations\n";
    print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
+   print OUT "rmlib_only:0 #use only rmlib instead of combining rmlib with the RepBase library: 1 = yes, 0 = no\n";
    print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:1 #all contigs from the input genome file below this size are skipped\n";
    print OUT "split_hit:10000 #length of the splitting of hits (max intron size for EST and protein alignments)\n";
@@ -2067,11 +2122,14 @@ sub generate_control_files {
    print OUT "percid_blastx:0.40 #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
    print OUT "eval_blastx:1e-6 #Blastx eval cutoff\n";
    print OUT "bit_blastx:30 #Blastx bit cutoff\n";
+   print OUT "percov_rep_blastx:0.50 #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
+   print OUT "percid_rep_blastx:0.40 #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
+   print OUT "eval_rep_blastx:1e-6 #Blastx eval cutoff for transposable element masking\n";
+   print OUT "bit_rep_blastx:30 #Blastx bit cutoff for transposable element masking\n";
    print OUT "percov_tblastx:0.80 #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
    print OUT "percid_tblastx:0.85 #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
    print OUT "eval_tblastx:1e-10 #tBlastx eval cutoff\n";
    print OUT "bit_tblastx:40 #tBlastx bit cutoff\n";
-   print OUT "e_perc_cov:50 #Exonerate Percent Coverage Thresshold EST_Genome Alignments\n";
    print OUT "ep_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate nucleotide\n";
    print OUT "en_score_limit:20 #Report  alignments scoring at least this percentage of the maximal score exonerate protein\n";
    close(OUT);

@@ -289,6 +289,7 @@ sub _run {
       #-set up variables that are heldover from last chunk
       $self->{VARS}{holdover_blastn} = [];
       $self->{VARS}{holdover_blastx} = [];
+      $self->{VARS}{holdover_tblastx} = [];
       $self->{VARS}{holdover_preds} = [];
 
       #-set up variables that are the result of chunk accumulation
@@ -496,34 +497,30 @@ sub _run {
       return $self->run;
    }
    elsif($current_level == 9){
-      try{
-	 $self->_load_chunks_for_level($current_level);
-	 my $mChunk = $self->next_chunk;
-	 $mChunk->run($self->id);
-	 $self->update_chunk($mChunk);
-	 $self->_polish_results();
-      }
-      catch Error::Simple with{
-	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
-      };
+       try{
+	   $self->_load_chunks_for_level($current_level);
+       }
+       catch Error::Simple with{
+	   my $E = shift;
+	   $self->_handler($E, "\n\nMaker failed at !!\n");
+       };
 
-      return $self->run;
+       return undef; #pause here                                                                                                                                                                                                                                                     
    }
    elsif($current_level == 10){
-      try{
-	 $self->_load_chunks_for_level($current_level);
-	 my $chunk = $self->next_chunk;
-	 $chunk->run($self->id);
-	 $self->update_chunk($chunk);
-	 $self->_polish_results();
-      }
-      catch Error::Simple with{
-	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
-      };
+       try{
+	   $self->_load_chunks_for_level($current_level);
+	   my $mChunk = $self->next_chunk;
+	   $mChunk->run($self->id);
+	   $self->update_chunk($mChunk);
+	   $self->_polish_results();
+       }
+       catch Error::Simple with{
+	   my $E = shift;
+	   $self->_handler($E, "\n\nMaker failed at !!\n");
+       };
 
-      return $self->run;
+       return $self->run;
    }
    elsif($current_level == 11){
       try{
@@ -558,6 +555,36 @@ sub _run {
    elsif($current_level == 13){
       try{
 	 $self->_load_chunks_for_level($current_level);
+	 my $mChunk = $self->next_chunk;
+	 $mChunk->run($self->id);
+	 $self->update_chunk($mChunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
+
+      return $self->run;
+   }
+   elsif($current_level == 14){
+      try{
+	 $self->_load_chunks_for_level($current_level);
+	 my $chunk = $self->next_chunk;
+	 $chunk->run($self->id);
+	 $self->update_chunk($chunk);
+	 $self->_polish_results();
+      }
+      catch Error::Simple with{
+	 my $E = shift;
+	 $self->_handler($E, "\n\nMaker failed at !!\n");
+      };
+
+      return $self->run;
+   }
+   elsif($current_level == 15){
+      try{
+	 $self->_load_chunks_for_level($current_level);
 	 my $chunk = $self->next_chunk;
 	 $chunk->run($self->id);
 	 $self->update_chunk($chunk);
@@ -577,7 +604,7 @@ sub _run {
 
       return $self->run;
    }
-   elsif($current_level == 14){
+   elsif($current_level == 16){
       try{
 	 $self->_load_chunks_for_level($current_level);
 	 my $mChunk = $self->next_chunk;
@@ -682,8 +709,8 @@ sub _initiate_level {
    #--initiate level variables
    $self->{LEVEL}{$level}{CHUNK_COUNT} = 0;
    $self->{LEVEL}{$level}{RESULT_COUNT} = 0;
-   $self->{LEVEL}{$level}{CHUNKS} = undef;
-   $self->{LEVEL}{$level}{RESULTS} = undef;
+   $self->{LEVEL}{$level}{CHUNKS} = [];
+   $self->{LEVEL}{$level}{RESULTS} = [];
    $self->{LEVEL}{$level}{ERROR} = undef;
    $self->{LEVEL}{$level}{STARTED} = undef;
 }
@@ -794,8 +821,10 @@ sub _load_chunks_for_level {
       $self->{VARS}{augus_on_chunk} = [];
       $self->{VARS}{blastn_keepers} = [];
       $self->{VARS}{blastx_keepers} = [];
+      $self->{VARS}{tblastx_keepers} = [];
       $self->{VARS}{blastn_data} = [];
       $self->{VARS}{blastx_data} = [];
+      $self->{VARS}{tblastx_data} = [];
       $self->{VARS}{exonerate_e_data} = []; 
       $self->{VARS}{exonerate_p_data} = []; 
       $self->{VARS}{annotations} = [];
@@ -865,6 +894,43 @@ sub _load_chunks_for_level {
       #-------------------------CHUNK
    }
    elsif ($level == 9) {
+       foreach my $alt_ests (@{$self->{VARS}{CTL_OPTIONS}{alt_est}}) {
+         #------------------------ARGS_IN
+	   my @args =( $self->{VARS}{f_chunk},
+		       $alt_ests,
+		       $self->{VARS}{the_void},
+		       $self->{VARS}{seq_out_name},
+		       $self->{VARS}{CTL_OPTIONS},
+		       $self->{VARS}{OPT}{f}
+		       );
+         #------------------------ARGS_IN
+
+         #-------------------------CHUNK
+	   $self->_build_chunk($level,\@args);
+         #-------------------------CHUNK
+       }
+
+       return 1;
+   }
+   elsif ($level == 10) {
+       if($self->{VARS}{tblastx_res_dir}){
+	   #------------------------ARGS_IN
+	   my @args =( $self->{VARS}{f_chunk},
+		       $self->{VARS}{tblastx_res_dir},
+		       $self->{VARS}{CTL_OPTIONS},
+		       $self->{VARS}{OPT}{f}
+		       );
+	   #------------------------ARGS_IN
+	   
+	   #-------------------------CHUNK
+	   $self->_build_chunk($level,\@args);
+	   #-------------------------CHUNK
+       }
+       else{
+	   return 1;
+       }
+   }
+   elsif ($level == 11) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{f_chunk},
 		  $self->{VARS}{masked_fasta},
@@ -872,42 +938,13 @@ sub _load_chunks_for_level {
 		  $self->{VARS}{augus},
 		  $self->{VARS}{blastn_keepers},
 		  $self->{VARS}{blastx_keepers},
+		  $self->{VARS}{tblastx_keepers},
 		  $self->{VARS}{fasta_t_index},
 		  $self->{VARS}{fasta_p_index},
+		  $self->{VARS}{fasta_a_index},
 		  $self->{VARS}{holdover_blastn},
 		  $self->{VARS}{holdover_blastx},
-		  $self->{VARS}{the_void},
-		  $self->{VARS}{CTL_OPTIONS},
-		  $self->{VARS}{OPT}{f}
-		);
-      #------------------------ARGS_IN
-
-      #-------------------------CHUNK
-      $self->_build_chunk($level,\@args);
-      #-------------------------CHUNK
-   }
-   elsif ($level == 10) {
-      #------------------------ARGS_IN
-      my @args =( $self->{VARS}{fasta},
-		  $self->{VARS}{blastx_keepers},
-		  $self->{VARS}{query_seq},
-		  $self->{VARS}{fasta_p_index},
-		  $self->{VARS}{the_void},
-		  $self->{VARS}{CTL_OPTIONS},
-		  $self->{VARS}{OPT}{f}
-		);
-      #------------------------ARGS_IN
-
-      #-------------------------CHUNK
-      $self->_build_chunk($level,\@args);
-      #-------------------------CHUNK
-   }
-   elsif ($level == 11) {
-      #------------------------ARGS_IN
-      my @args =( $self->{VARS}{fasta},
-		  $self->{VARS}{blastn_keepers},
-		  $self->{VARS}{query_seq},
-		  $self->{VARS}{fasta_t_index},
+		  $self->{VARS}{holdover_tblastx},
 		  $self->{VARS}{the_void},
 		  $self->{VARS}{CTL_OPTIONS},
 		  $self->{VARS}{OPT}{f}
@@ -919,6 +956,39 @@ sub _load_chunks_for_level {
       #-------------------------CHUNK
    }
    elsif ($level == 12) {
+      #------------------------ARGS_IN
+      my @args =( $self->{VARS}{fasta},
+		  $self->{VARS}{blastx_keepers},
+		  $self->{VARS}{query_seq},
+		  $self->{VARS}{fasta_p_index},
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      $self->_build_chunk($level,\@args);
+      #-------------------------CHUNK
+   }
+   elsif ($level == 13) {
+      #------------------------ARGS_IN
+      my @args =( $self->{VARS}{fasta},
+		  $self->{VARS}{blastn_keepers},
+		  $self->{VARS}{tblastx_keepers},
+		  $self->{VARS}{query_seq},
+		  $self->{VARS}{fasta_t_index},
+		  $self->{VARS}{the_void},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+      #------------------------ARGS_IN
+
+      #-------------------------CHUNK
+      $self->_build_chunk($level,\@args);
+      #-------------------------CHUNK
+   }
+   elsif ($level == 14) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{fasta},
 		  $self->{VARS}{masked_fasta},
@@ -938,10 +1008,11 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 13) {
+   elsif ($level == 15) {
       #------------------------ARGS_IN
       my @args =( $self->{VARS}{blastx_data},
 		  $self->{VARS}{blastn_data},
+		  $self->{VARS}{tblastx_data},
 		  $self->{VARS}{exonerate_p_data},
 		  $self->{VARS}{exonerate_e_data},
 		  $self->{VARS}{annotations},
@@ -955,14 +1026,16 @@ sub _load_chunks_for_level {
       $self->_build_chunk($level,\@args);
       #-------------------------CHUNK
    }
-   elsif ($level == 14) {
+   elsif ($level == 16) {
       #----------------------CLEAR_MEMORY
       $self->{VARS}{blastn_keepers} = [];
       $self->{VARS}{blastx_keepers} = [];
+      $self->{VARS}{tblastx_keepers} = [];
       $self->{VARS}{snaps_on_chunk} = [];
       $self->{VARS}{augus_on_chunk} = [];
       $self->{VARS}{blastn_data} = [];
       $self->{VARS}{blastx_data} = [];
+      $self->{VARS}{tblastx_data} = [];
       $self->{VARS}{exonerate_e_data} = []; 
       $self->{VARS}{exonerate_p_data} = []; 
       $self->{VARS}{annotations} = []; 
@@ -1019,6 +1092,9 @@ sub _polish_results{
    elsif ($level == 8) {
        $self->{VARS}{blastx_keepers} = [];
    }
+   elsif ($level == 10) {
+       $self->{VARS}{tblastx_keepers} = [];
+   }
 
    #collect values from result
    foreach my $result (@{$self->{LEVEL}{$level}{RESULTS}}) {
@@ -1056,6 +1132,7 @@ sub _polish_results{
 	 $self->{VARS}{chunk_count}   = shift @results;
 	 $self->{VARS}{fasta_t_index}   = shift @results;
 	 $self->{VARS}{fasta_p_index}   = shift @results;
+	 $self->{VARS}{fasta_a_index}   = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 5) {
@@ -1080,39 +1157,52 @@ sub _polish_results{
       }
       elsif ($level == 9) {
 	 #------------------------RESULTS
-	 $self->{VARS}{holdover_blastn} = shift @results;
-	 $self->{VARS}{holdover_blastx} = shift @results;
-	 $self->{VARS}{holdover_preds}  = shift @results;
-	 $self->{VARS}{blastn_keepers}  = shift @results;
-	 $self->{VARS}{blastx_keepers}  = shift @results;
-	 $self->{VARS}{preds_on_chunk}  = shift @results;
+	 $self->{VARS}{tblastx_res_dir} = shift @results;
 	 #------------------------RESULTS
       }
       elsif ($level == 10) {
+	 #------------------------RESULTS
+	 $self->{VARS}{tblastx_keepers} = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 11) {
+	 #------------------------RESULTS
+	 $self->{VARS}{holdover_blastn}  = shift @results;
+	 $self->{VARS}{holdover_blastx}  = shift @results;
+	 $self->{VARS}{holdover_tblastx} = shift @results;
+	 $self->{VARS}{holdover_preds}   = shift @results;
+	 $self->{VARS}{blastn_keepers}   = shift @results;
+	 $self->{VARS}{blastx_keepers}   = shift @results;
+	 $self->{VARS}{tblastx_keepers}  = shift @results;
+	 $self->{VARS}{preds_on_chunk}   = shift @results;
+	 #------------------------RESULTS
+      }
+      elsif ($level == 12) {
 	 #------------------------RESULTS
 	 $self->{VARS}{blastx_data}      = shift @results;
 	 $self->{VARS}{exonerate_p_data} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 11) {
+      elsif ($level == 13) {
 	 #------------------------RESULTS
 	 $self->{VARS}{blastn_data}      = shift @results;
+	 $self->{VARS}{tblastx_data}      = shift @results;
 	 $self->{VARS}{exonerate_e_data} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 12) {
+      elsif ($level == 14) {
 	 #------------------------RESULTS
 	 $self->{VARS}{annotations} = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 13) {
+      elsif ($level == 15) {
 	 #------------------------RESULTS
 	 $self->{VARS}{GFF3}           = shift @results;
 	 $self->{VARS}{p_fastas}       = shift @results;
 	 $self->{VARS}{t_fastas}       = shift @results;
 	 #------------------------RESULTS
       }
-      elsif ($level == 14) {
+      elsif ($level == 16) {
 	 #------------------------RESULTS
 	 #------------------------RESULTS
       }

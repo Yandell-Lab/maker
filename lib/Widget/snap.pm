@@ -221,6 +221,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
+		die "ERROR: Snap failed\n" if $? > 0;
 	}
 	else {
 		die "you must give Widget::snap a command to run!\n";
