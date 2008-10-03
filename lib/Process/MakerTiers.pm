@@ -913,22 +913,17 @@ sub _load_chunks_for_level {
        return 1;
    }
    elsif ($level == 10) {
-       if($self->{VARS}{tblastx_res_dir}){
-	   #------------------------ARGS_IN
-	   my @args =( $self->{VARS}{f_chunk},
-		       $self->{VARS}{tblastx_res_dir},
-		       $self->{VARS}{CTL_OPTIONS},
-		       $self->{VARS}{OPT}{f}
-		       );
-	   #------------------------ARGS_IN
-	   
-	   #-------------------------CHUNK
-	   $self->_build_chunk($level,\@args);
-	   #-------------------------CHUNK
-       }
-       else{
-	   return 1;
-       }
+      #------------------------ARGS_IN
+      my @args =( $self->{VARS}{f_chunk},
+		  $self->{VARS}{tblastx_res_dir},
+		  $self->{VARS}{CTL_OPTIONS},
+		  $self->{VARS}{OPT}{f}
+		);
+      #------------------------ARGS_IN
+      
+      #-------------------------CHUNK
+      $self->_build_chunk($level,\@args);
+      #-------------------------CHUNK
    }
    elsif ($level == 11) {
       #------------------------ARGS_IN

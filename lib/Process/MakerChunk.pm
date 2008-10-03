@@ -324,7 +324,7 @@ sub _run {
       if (! -e $prot_file) {
           system("cp $CTL_OPTIONS{old_protein} $prot_file");
       }
-      if (! -e $alt_est_file) {
+      if (($CTL_OPTIONS{old_alt_est} && ! -e $alt_est_file) {
           system("cp $CTL_OPTIONS{old_alt_est} $alt_est_file");
       }
 
@@ -521,7 +521,7 @@ sub _run {
 							   $CTL_OPTIONS{split_hit},
 							   $opt_f,
 							   $self->{LOG}
-							  ) if($tblastx_res_dir);
+							  ) if($CTL_OPTIONS{old_alt_est});
       #-------------------------CHUNK
 	
       #------------------------RESULTS
