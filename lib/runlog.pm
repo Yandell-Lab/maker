@@ -23,7 +23,6 @@ my @ctl_to_log = ('est',
 		  'max_dna_len',
 		  'split_hit',
 		  'snap_flank',
-		  'te_remove',
 		  'single_exon',
 		  'alt_peptide',
 		  'percov_blastn',
@@ -38,13 +37,11 @@ my @ctl_to_log = ('est',
 		  'percid_tblastx',
 		  'eval_tblastx',
 		  'bit_tblastx',
-		  'e_perc_cov',
 		  'ep_score_limit',
 		  'en_score_limit',
 		 );
    
 my @opt_to_log = ('R',
-		  'GFF',
 		  'PREDS'
 		 );
 
@@ -159,9 +156,7 @@ sub _clean_files{
 		  $rm_key{gff}++; #always rebuild gff when some option has changed
 	       }       
 	    
-	       if ($key eq 'R' ||
-		   $key eq 'GFF'
-		  ) {
+	       if ($key eq 'R') {
 		  $rm_key{all}++;
 	       }
 	    }
@@ -194,17 +189,16 @@ sub _clean_files{
 	       }
 	    
 	       if ( ($key eq 'repeat_protein' ||
-		     $key eq 'rm_lib' ||
+		     $key eq 'rmlib' ||
 		     $key eq 'model_org' ||
-		     $key eq 'te_remove') &&
+		     $key eq 'rmlib_only') &&
 		    ! $OPT{R} &&
-		    ! $OPT{GFF}
+		    ! $CTL_OPTIONS{rm_gff}
 		  ) {
 		  $rm_key{all}++;
 	       }
 	    
 	       if ( $key eq 'rm_gff' &&  
-		    $OPT{GFF} &&
 		    ! $OPT{R}
 		  ) {
 		  $rm_key{all}++;

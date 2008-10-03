@@ -124,10 +124,6 @@ Options:
                 <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
                 <est2genome>  from the EST evidence. This can also be set in the control files.
 
-     -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
-                              You must set rm_gff in maker_opts.ctl to the files location.  This
-                              option turns off all other repeat masking.
-
      -RM_off|R                Turns all repeat masking off (* See Warning)
 
      -force|f                 Forces maker to rerun all analyses (erases all previous output).
@@ -246,7 +242,6 @@ if ($rank == $root) {
 		 "datastore|d" => \$OPT{d},
 		 "genome|g=s" => \$OPT{g},
 		 "cpus|c=i" => \$OPT{c},
-		 "GFF"=> \$OPT{GFF},
 		 "PREDS" => \$OPT{PREDS},
 		 "predictor=s" =>\$OPT{predictor},
 		 "retry=i" =>\$OPT{retry},

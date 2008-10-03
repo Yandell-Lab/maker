@@ -121,24 +121,45 @@ sub _run {
       #------------------------ARGS_IN
 
       #-------------------------CHUNK
+      my $rma_keepers = [];
+
       #-- repeatmask the input file
-      $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
+      if(! $CTL_OPTIONS{rmlib_only}){
+	 $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
+	 
+	 my $rma_keepers1 = Shared_Functions::repeatmask($chunk,
+							 $the_void,
+							 $seq_out_name,
+							 $CTL_OPTIONS{'model_org'},
+							 $CTL_OPTIONS{'RepeatMasker'},
+							 '',
+							 $CTL_OPTIONS{'cpus'},
+							 $opt_f,
+							 $self->{LOG}
+							);
+	 push(@{$rma_keepers}, @{$rma_keepers1});
 
-      my $rma_keepers = Shared_Functions::repeatmask($chunk,
-						     $the_void,
-						     $seq_out_name,
-						     $CTL_OPTIONS{'model_org'},
-						     $CTL_OPTIONS{'RepeatMasker'},
-						     $CTL_OPTIONS{'rmlib'},
-						     $CTL_OPTIONS{'rmlib_only'},
-						     $CTL_OPTIONS{'cpus'},
-						     $opt_f,
-						     $self->{LOG}
-						    );
+	 #-mask the chunk using repeatmasker hits
+	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers1);
+      }
 
-      #-mask the chunk using repeatmasker hits
-      $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers);
+      #-mask species specific repeats;
+      if($CTL_OPTIONS{rmlib}){
+	 my $rma_keepers2 = Shared_Functions::repeatmask($chunk,
+							 $the_void,
+							 $seq_out_name,
+							 $CTL_OPTIONS{'model_org'},
+							 $CTL_OPTIONS{'RepeatMasker'},
+							 $CTL_OPTIONS{'rmlib'},
+							 $CTL_OPTIONS{'cpus'},
+							 $opt_f,
+							 $self->{LOG}
+							);
+	 push(@{$rma_keepers}, @{$rma_keepers2});
 
+	 #-mask the chunk using repeatmasker hits
+	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers2);
+      }
       #-------------------------CHUNK
 
       #------------------------RESULTS
@@ -173,7 +194,7 @@ sub _run {
 								$opt_f,
 								$self->{LOG},
 								$self->{LOG_FLAG}
-							       ) if ($CTL_OPTIONS{te_remove});
+							       ) if ($CTL_OPTIONS{old_repeat_protein});
       #-------------------------CHUNK
 	    
       #------------------------RESULTS
@@ -200,7 +221,7 @@ sub _run {
 								$CTL_OPTIONS{split_hit},
 								$opt_f,
 								$self->{LOG}
-							       ) if($CTL_OPTIONS{te_remove});
+							       ) if($CTL_OPTIONS{old_repeat_protein});
       #-------------------------CHUNK
 	
       #------------------------RESULTS
@@ -287,7 +308,7 @@ sub _run {
       $CTL_OPTIONS{old_protein} =~ /([^\/]+)$/;
       my $p_name = $1;
 
-      my $a_name = '';
+      my $a_name;
       if($CTL_OPTIONS{old_alt_est}){
 	  $CTL_OPTIONS{old_alt_est} =~ /([^\/]+)$/;  
 	  $a_name = $1;;
@@ -295,7 +316,7 @@ sub _run {
 
       my $trans_file = $t_dir."/".$t_name;
       my $prot_file = $t_dir."/".$p_name;
-      my $alt_est_file = $t_dir."/".$a_name;
+      my $alt_est_file = $t_dir."/".$a_name if($CTL_OPTIONS{old_alt_est});
 
       if (! -e $trans_file) {
 	  system("cp $CTL_OPTIONS{old_est} $trans_file");
@@ -310,7 +331,7 @@ sub _run {
       my $fasta_t_index     = Shared_Functions::build_fasta_index($trans_file);
       my $fasta_p_index     = Shared_Functions::build_fasta_index($prot_file);
       my $fasta_a_index;
-      $fasta_a_index = Shared_Functions::build_fasta_index($alt_est_file) if ($alt_est_file);
+      $fasta_a_index = Shared_Functions::build_fasta_index($alt_est_file) if ($CTL_OPTIONS{old_alt_est});
 
       #--set up new chunks for remaining levels
       my $fasta_chunker = new FastaChunker();
@@ -467,9 +488,8 @@ sub _run {
 							     $CTL_OPTIONS{eval_tblastx},
 							     $CTL_OPTIONS{split_hit},
 							     $CTL_OPTIONS{cpus},
-							     $CTL_OPTIONS{old_alt_ests},
+							     $CTL_OPTIONS{old_alt_est},
 							     $CTL_OPTIONS{xdformat},
-							     $CTL_OPTIONS{alt_peptide},
 							     $self->{RANK},
 							     $opt_f,
 							     $self->{LOG},

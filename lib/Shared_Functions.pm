@@ -506,7 +506,7 @@ sub create_blastdb {
    xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'alt_est'}, 'tblastx')
        if($CTL_OPTIONS{'alt_est'});
    xdformat($CTL_OPTIONS{xdformat}, $CTL_OPTIONS{'repeat_protein'}, 'blastx', $CTL_OPTIONS{'alt_peptide'})
-       if (! $OPT{R} && ! $OPT{GFF} && $CTL_OPTIONS{te_remove});
+       if (! $OPT{R} && ! $CTL_OPTIONS{rm_gff});
 }
 #----------------------------------------------------------------------------
 sub create_mpi_blastdb {
@@ -524,7 +524,7 @@ sub create_mpi_blastdb {
    $CTL_OPTIONS->{'alt_est'} = split_db($CTL_OPTIONS->{'alt_est'}, $mpi_size) if ($CTL_OPTIONS->{'alt_est'});
    
    $CTL_OPTIONS->{'repeat_protein'} = split_db($CTL_OPTIONS->{'repeat_protein'}, $mpi_size)
-       if (! $OPT->{R} && ! $OPT->{GFF} && $CTL_OPTIONS->{te_remove});
+       if (! $OPT->{R} && ! $CTL_OPTIONS->{rm_gff} && $CTL_OPTIONS->{'repeat_protein'});
 }
 #----------------------------------------------------------------------------
 sub split_db {
@@ -1727,91 +1727,48 @@ sub repeatmask {
    my $model_org    = shift;
    my $RepeatMasker = shift;
    my $rmlib        = shift;
-   my $rmlib_only   = shift;
    my $cpus         = shift;
    my $opt_f        = shift;
    my $LOG = shift;
 
-   my $rm_chunk_keepers = [];
-
-   if (! $rmlib_only){
-       my $chunk_number = $chunk->number();
-       my $file_name = "$the_void/$seq_id\.$chunk_number";
-       my $o_file    = "$the_void/$seq_id\.$chunk_number\.out";
-       my $q_length = $chunk->parent_seq_length();
-       my $query_def = $chunk->parent_def();
-       my $query_seq = $chunk->seq();
-       
-       $LOG->add_entry("STARTED", $o_file, ""); 
-       
-       $chunk->write_file($file_name);
-       
-       runRepeatMasker($file_name, 
-		       $model_org, 
-		       $the_void, 
-		       $o_file,
-		       $RepeatMasker,
-		       '',
-		       $cpus,
-		       $opt_f
-		       );		# -no_low
-       
-       $rm_chunk_keepers1 = Widget::RepeatMasker::parse($o_file, 
-							$seq_id, 
-							$q_length
-						       );
-       
-       $LOG->add_entry("FINISHED", $o_file, ""); 
-       
-       PhatHit_utils::add_offset($rm_chunk_keepers, 
-				 $chunk->offset(),
-				 );
-       #     PhatHit_utils::merge_hits($rm_keepers,  
-       # 			      $rm_chunk_keepers, 
-       # 			      20,
-       # 			     );
-       
-       $chunk->erase_fasta_file();
-
-       push(@{$rm_chunk_keepers}, @{$rm_chunk_keepers1});
-   }
-   if ($rmlib){
-       my $chunk_number = $chunk->number();
-       my $file_name = "$the_void/$seq_id\.$chunk_number\.specific";
-       my $o_file    = "$the_void/$seq_id\.$chunk_number\.specific\.out";
-       my $q_length = $chunk->parent_seq_length();
-       my $query_def = $chunk->parent_def();
-       my $query_seq = $chunk->seq();
-       
-       $LOG->add_entry("STARTED", $o_file, ""); 
-       
-       $chunk->write_file($file_name);
-       
-       runRepeatMasker($file_name, 
-		       $model_org, 
-		       $the_void, 
-		       $o_file,
-		       $RepeatMasker,
-		       $rmlib,
-		       $cpus,
-		       $opt_f
-		       );		# -no_low
-       
-       $rm_chunk_keepers2 = Widget::RepeatMasker::parse($o_file, 
-							$seq_id, 
-							$q_length
-						       );
-       
-       $LOG->add_entry("FINISHED", $o_file, ""); 
-       
-       PhatHit_utils::add_offset($rm_chunk_keepers, 
-				 $chunk->offset(),
-				 );
-       
-       $chunk->erase_fasta_file();
-
-       push(@{$rm_chunk_keepers}, @{$rm_chunk_keepers2});
-   }
+   my $chunk_number = $chunk->number();
+   my $file_name = "$the_void/$seq_id\.$chunk_number";
+   $file_name .= ".specific" if($rmlib);
+   my $o_file    = "$file_name\.out";
+   my $q_length = $chunk->parent_seq_length();
+   my $query_def = $chunk->parent_def();
+   my $query_seq = $chunk->seq();
+   
+   $LOG->add_entry("STARTED", $o_file, ""); 
+   
+   $chunk->write_file($file_name);
+   
+   runRepeatMasker($file_name, 
+		   $model_org, 
+		   $the_void, 
+		   $o_file,
+		   $RepeatMasker,
+		   $rmlib,
+		   $cpus,
+		   $opt_f
+		  );		# -no_low
+   
+   my $rm_chunk_keepers = Widget::RepeatMasker::parse($o_file, 
+						      $seq_id, 
+						      $q_length
+						     );
+   
+   $LOG->add_entry("FINISHED", $o_file, ""); 
+   
+   PhatHit_utils::add_offset($rm_chunk_keepers, 
+			     $chunk->offset(),
+			    );
+   #     PhatHit_utils::merge_hits($rm_keepers,  
+   # 			      $rm_chunk_keepers, 
+   # 			      20,
+   # 			     );
+   
+   $chunk->erase_fasta_file();
 	
    return ($rm_chunk_keepers);
 }
@@ -1884,7 +1841,6 @@ sub load_control_files {
 			    'min_contig',
 			    'split_hit',
 			    'snap_flank',
-			    'te_remove',
 			    'rmlib_only',
 			    'single_exon',
 			    'use_seq_dir',
@@ -1931,7 +1887,6 @@ sub load_control_files {
 
    #set default values for certain control options
    $CTL_OPTIONS{'clean_up'} = 0;
-   $CTL_OPTIONS{'te_remove'} = 1;
    $CTL_OPTIONS{'rmlib_only'} = 0;
    $CTL_OPTIONS{'max_dna_len'} = 100000;
    $CTL_OPTIONS{'min_contig'} = 1;
@@ -1993,11 +1948,11 @@ sub load_control_files {
    my @infiles = ('genome', 'protein', 'est', 'xdformat', 'blastn', 'blastx', 'exonerate');
 
    #sometimes required
-   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{te_remove} && !$OPT{R} && ! $OPT{GFF});
+   push (@infiles, 'repeat_protein') if ($CTL_OPTIONS{repeat_protein} && !$OPT{R} && ! $CTL_OPTIONS{rm_gff});
    push (@infiles, 'tblastx') if($CTL_OPTIONS{alt_est});
    push (@infiles, 'alt_est') if($CTL_OPTIONS{alt_est}); 
-   push (@infiles, 'RepeatMasker') unless($OPT{R} || $OPT{GFF});
-   push (@infiles, 'rmlib') if (! $OPT{R} && ! $OPT{GFF} && ($CTL_OPTIONS{rmlib} || $CTL_OPTIONS{rmlib_only}));
+   push (@infiles, 'RepeatMasker') unless($OPT{R} || $CTL_OPTIONS{rm_gff});
+   push (@infiles, 'rmlib') if (! $OPT{R} && ! $CTL_OPTIONS{rm_gff} && ($CTL_OPTIONS{rmlib} || $CTL_OPTIONS{rmlib_only}));
    push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap' || $CTL_OPTIONS{'snap'});
    push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
 
@@ -2089,7 +2044,7 @@ sub generate_control_files {
    print OUT "repeat_protein:$repeat_protein #a database of transposable element proteins (optional)\n";
    print OUT "alt_est: #an EST sequence file from an alternate related organism (optional)\n";
    print OUT "rmlib: #an additional organism specific repeat library (optional)\n";
-   print OUT "rm_gff: #a gff3 format file of repeat elements (optional: skips other repeat masking)\n";
+   print OUT "rm_gff: #a gff3 format file of repeat elements (optional: overrides other repeat masking)\n";
    print OUT "\n";
    print OUT "#-----external application specific options\n";
    print OUT "snaphmm:fly #SNAP HMM model\n";
@@ -2100,7 +2055,6 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----Maker specific options\n";
    print OUT "predictor:snap #identifies the primary gene prediction program to use for annotations\n";
-   print OUT "te_remove:1 #mask regions with excess similarity to transposable element proteins\n";
    print OUT "rmlib_only:0 #use only rmlib instead of combining rmlib with the RepBase library: 1 = yes, 0 = no\n";
    print OUT "max_dna_len:100000 #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:1 #all contigs from the input genome file below this size are skipped\n";

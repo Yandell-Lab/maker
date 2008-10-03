@@ -98,10 +98,6 @@ Options:
                 <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
                 <est2genome>  from the EST evidence. This can also be set in the control files.
 
-     -GFF                     Use an input gff3 format file of repeat elements for repeat masking.
-                              You must set rm_gff in maker_opts.ctl to the files location.  This
-                              option turns off all other repeat masking.
-
      -RM_off|R                Turns all repeat masking off (* See Warning)
 
      -force|f                 Forces maker to rerun all analyses (erases all previous output).
@@ -147,7 +143,6 @@ try{
 	      "datastore|d" => \$OPT{d},
 	      "genome|g=s" => \$OPT{g},
 	      "cpus|c=i" => \$OPT{c},
-	      "GFF"=> \$OPT{GFF},
 	      "PREDS" => \$OPT{PREDS},
 	      "predictor=s" =>\$OPT{predictor},
 	      "retry=i" =>\$OPT{retry},
@@ -422,7 +417,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 print STDERR "Repeatmasking skipped!!\n";
 	 $masked_total_seq = $$query_seq;
       }
-      elsif ($OPT{GFF}) {
+      elsif ($CTL_OPTIONS{rm_gff}) {
 	 $masked_total_seq = repeat_mask_seq::gff(uc($$query_seq), 
 						  $seq_id,
 						  $CTL_OPTIONS{'rm_gff'}
@@ -439,22 +434,46 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 	 
 	 while (my $chunk = $fasta_chunker->get_chunk($chunk_count++)) {	 
 	    $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
-	    
-	    #-get repeatmask hits
-	    my ($rma_keepers) = Shared_Functions::repeatmask($chunk, 
-							     $the_void,
-							     $seq_out_name,
-							     $CTL_OPTIONS{'model_org'},
-							     $CTL_OPTIONS{'RepeatMasker'},
-							     $CTL_OPTIONS{'rmlib'},
-							     $CTL_OPTIONS{'rmlib_only'},
-							     $CTL_OPTIONS{'cpus'},
-							     $OPT{f},
-							     $LOG
-							    );
-	    
-	    #-mask the chunk using repeatmasker hits
-	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers);
+
+	    my $rma_keepers = [];
+
+	    #-- repeatmask the input file
+	    if(! $CTL_OPTIONS{rmlib_only}){
+	       $chunk->seq(uc($chunk->seq())); #must be upper case before soft masking
+	       
+	       my $rma_keepers1 = Shared_Functions::repeatmask($chunk,
+							       $the_void,
+							       $seq_out_name,
+							       $CTL_OPTIONS{'model_org'},
+							       $CTL_OPTIONS{'RepeatMasker'},
+							       '',
+							       $CTL_OPTIONS{'cpus'},
+							       $OPT{f},
+							       $LOG
+							      );
+	       push(@{$rma_keepers}, @{$rma_keepers1});
+	       
+	       #-mask the chunk using repeatmasker hits
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers1);
+	    }
+
+	    #-mask species specific repeats;
+	    if($CTL_OPTIONS{rmlib}){
+	       my $rma_keepers2 = Shared_Functions::repeatmask($chunk,
+							       $the_void,
+							       $seq_out_name,
+							       $CTL_OPTIONS{'model_org'},
+							       $CTL_OPTIONS{'RepeatMasker'},
+							       $CTL_OPTIONS{'rmlib'},
+							       $CTL_OPTIONS{'cpus'},
+							       $OPT{f},
+							       $LOG
+							      );
+	       push(@{$rma_keepers}, @{$rma_keepers2});
+
+	       #-mask the chunk using repeatmasker hits
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rma_keepers2);
+	    }	    
 	    
 	    #-blastx against a repeat library (for better masking)
 	    my $repeat_blastx_keepers = [];
@@ -471,7 +490,7 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							      $CTL_OPTIONS{cpus},
 							      $OPT{f},
 							      $LOG
-							     ) if($CTL_OPTIONS{'te_remove'});
+							     ) if($CTL_OPTIONS{'repeat_protein'});
 	    
 	    #-mask the chunk using blastx hits
 	    $chunk = repeat_mask_seq::mask_chunk($chunk, $repeat_blastx_keepers);

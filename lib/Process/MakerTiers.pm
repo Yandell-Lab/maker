@@ -317,7 +317,7 @@ sub _run {
 
 	 return $self->run;
       }
-      elsif($OPT{GFF}){
+      elsif($CTL_OPTIONS{rm_gff}){
 	 try{
 	    $self->{VARS}{masked_total_seq} = repeat_mask_seq::gff(uc(${$self->{VARS}{query_seq}}), 
 								   $self->{VARS}{seq_id},
@@ -434,7 +434,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at ab-initio gene predictions!!\n");
       };
 
       return $self->run;
@@ -450,7 +450,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at performing blastn of ESTs!!\n");
       };
 
       return undef; #pause here
@@ -465,7 +465,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at collecting blastn of ESTs!!\n");
       };
 
       return $self->run;
@@ -476,7 +476,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at performing blastx of proteins!!\n");
       };
 
       return undef; #pause here
@@ -491,7 +491,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at collecting blastx of proteins!!\n");
       };
 
       return $self->run;
@@ -502,7 +502,7 @@ sub _run {
        }
        catch Error::Simple with{
 	   my $E = shift;
-	   $self->_handler($E, "\n\nMaker failed at !!\n");
+	   $self->_handler($E, "\n\nMaker failed at performing tblastx of alt-ESTs!!\n");
        };
 
        return undef; #pause here                                                                                                                                                                                                                                                     
@@ -517,7 +517,7 @@ sub _run {
        }
        catch Error::Simple with{
 	   my $E = shift;
-	   $self->_handler($E, "\n\nMaker failed at !!\n");
+	   $self->_handler($E, "\n\nMaker failed at collecting tblastx of alt-ESTs!!\n");
        };
 
        return $self->run;
@@ -532,7 +532,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed while proccessing the chunk divide!!\n");
       };
 
       return $self->run;
@@ -547,7 +547,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at exonerate against proteins!!\n");
       };
 
       return $self->run;
@@ -562,7 +562,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at exonerate against transcripts!!\n");
       };
 
       return $self->run;
@@ -577,7 +577,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at annotation generation!!\n");
       };
 
       return $self->run;
@@ -599,7 +599,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed at processing annotations on chunk!!\n");
       };
 
       return $self->run;
@@ -614,7 +614,7 @@ sub _run {
       }
       catch Error::Simple with{
 	 my $E = shift;
-	 $self->_handler($E, "\n\nMaker failed at !!\n");
+	 $self->_handler($E, "\n\nMaker failed while writing final data!!\n");
       };
 
       return $self->run;
@@ -1312,7 +1312,7 @@ sub update_chunk {
 
    if($chunk->failed){
       my $E = $chunk->exception;
-      $self->_handler($E, "\n\nMaker failed at !!\n");
+      $self->_handler($E, "\n\nMaker failed at chunk update in level $level_num!!\n");
    }
    print STDERR $chunk->error();
 }
