@@ -324,7 +324,7 @@ sub _run {
       if (! -e $prot_file) {
           system("cp $CTL_OPTIONS{old_protein} $prot_file");
       }
-      if (($CTL_OPTIONS{old_alt_est} && ! -e $alt_est_file) {
+      if ($CTL_OPTIONS{old_alt_est} && ! -e $alt_est_file) {
           system("cp $CTL_OPTIONS{old_alt_est} $alt_est_file");
       }
 
