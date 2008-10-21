@@ -1,0 +1,82 @@
+#! /usr/local/bin/perl -w
+
+use strict;
+use Getopt::Long;
+use File::Temp qw(tempfile);
+
+my $usage = "
+Usage:
+        gff3_merge <file1.gff> <file2.gff>  -o <outfile.gff>
+        gff3_merge -d <datastore.index> -o <outfile.gff> 
+
+        This script merges multiple small gff3 files into a single large gff3 file.
+                                                                                                                                     
+Options:
+
+        -d    <file_name>   Give a maker datastore file that gives the location of all gff3 files
+        -o    <file_name>   Specify the output file for the combined gff3 file (required)
+
+";
+
+my $datastore;
+my @files;
+my $outfile;
+
+GetOptions ("datastor|d=s" => \$datastore,
+	    "o=s" => \$outfile,
+	    "help|?" => sub{print $usage; exit();}
+	    );
+
+@files = @ARGV unless($datastore);
+
+if(! $datastore && ! @files || ! $outfile){
+    print $usage;
+    exit();
+}
+
+die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
+if ($datastore){
+    open(IN, "< $datastore");
+
+    @files = <IN>;
+    @files = grep (/FINISHED/, @files);
+
+    my %uniq;
+    foreach my $file (@files){
+	chomp($file);
+	$file =~ s/^[^\t]+\t([^\t]+)\tFINISHED/$1/;
+	$file =~ /([^\/]+)\/$/;
+	$file = "$file/$1.gff";
+	$uniq{$file}++;
+    }
+    @files = keys %uniq;
+}
+
+my ($ANN, $ann_file) = tempfile();
+print $ANN "\#\#gff-version 3\n";
+my ($FAS, $fas_file) = tempfile();
+print $FAS "\#\#FASTA\n";
+
+foreach my $file (@files){
+    die "ERROR: The file \'$file\' does not exist\n" if (! -e $file);
+    open(IN, "< $file") || die "ERROR: Could not open file \'$file\'\n";
+
+    my $FH = $ANN;
+
+    while (defined(my $line = <IN>)){
+	next if ($line =~ /^\#\#gff-version 3/);
+	if ($line =~ /^\#\#FASTA/){
+	    $FH = $FAS;
+	    next;
+	}
+	chomp $line;
+	print $FH $line . "\n" if($line);
+    }
+}
+
+close($ANN);
+close($FAS);
+
+system ("mv $ann_file $outfile");
+system ("cat $fas_file >> $outfile");
+unlink("$fas_file");
