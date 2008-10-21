@@ -3,9 +3,6 @@
 #------------------------------------------------------------------------
 package Widget::fgenesh;
 use strict;
-use lib '~/maker/lib';
-use lib '/data1/hao/projects/MAKER-fgenesh/lib';
-
 use vars qw/@ISA/;
 use PostData;
 use FileHandle;
@@ -16,6 +13,7 @@ use Iterator::Fasta;
 use PhatHit_utils;
 use fgenesh::PhatHit;
 use fgenesh::PhatHsp;
+use IPC::Open3;
 
 @ISA = qw(
 	Widget
@@ -35,10 +33,6 @@ sub new {
 }
 
 #-------------------------------------------------------------------------------
-
-
-
-#-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
 sub write_xdef_file {
@@ -52,7 +46,6 @@ sub write_xdef_file {
                 print $fh $l."\n";
         }
         $fh->close();
-
 }
 #-------------------------------------------------------------------------------
 sub prep_for_genefinder {
@@ -128,13 +121,19 @@ sub prep_for_genefinder {
 sub run {
         my $self    = shift;
         my $command = shift;
-        
+
         if (defined($command)){
-                $self->print_command($command);
-                system("$command");
+	    $self->print_command($command);
+	    my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	    local $/ = \1;
+	    while (my $line = <CHLD_ERR>){
+		print STDERR $line unless($main::quiet);
+	    }
+	    waitpid $pid, 0;
+	    die "ERROR: Augustus failed\n" if $? > 0;
         }
-        else {  
-                die "you must give Widget::fgenesh a command to run!\n";
+        else {
+	    die "you must give Widget::fgenesh a command to run!\n";
         }
 }
 #-------------------------------------------------------------------------------
@@ -157,17 +156,10 @@ sub parse {
 	my %g;
 	my @content;
 
-	## get rid of the first nine lines of the output.
-	foreach (1..6) {
+	## get rid of the first lines of the output.
+	foreach (1..9) {
 		<$fh>;
 	}
-
-	my $line = <$fh>;
-
-	#($g{official_score}) = $line =~ /Score:(.+)\n/;
-	# the score that fgenesh assigned to the whole seq.
-
-	<$fh>;
 
 	while (my $line=<$fh>) {
 		next if $line =~ /^\n/;
@@ -182,7 +174,7 @@ sub parse {
 
 		my %item;
 
-		my (@stuff) = $line =~ /(\S+)/g;
+		my @stuff = $line =~ /(\S+)/g;
 		my $gene_num = $stuff[0];
 		my $gene_def = $q_name."-fgenesh.$gene_num";
 
