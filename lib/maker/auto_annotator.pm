@@ -19,6 +19,8 @@ use maker::join;
 use maker::quality_index;
 use Widget::snap;
 use Widget::augustus;
+use evaluator::evaluate;
+use evaluator::so_classifier;
 @ISA = qw(
        );
 
@@ -397,7 +399,10 @@ sub annotate {
 	                                    $v_seq, 
 	                                    $seq_id, 
 	                                    $chunk_number, 
-	                                    $predictions);
+	                                    $predictions,
+					    $exonerate_p_hits,
+					    $exonerate_e_hits,
+					    $blastx_hits);
 
         return $annotations;
 }
@@ -489,45 +494,19 @@ sub run_it {
 
 	return \@transcripts;
 }
+
 #------------------------------------------------------------------------
-sub load_transcript_struct {
-	my $f            = shift;
-	my $c_id         = shift;
-	my $i            = shift;
-	my $seq          = shift;
-	my $seq_id       = shift;
-	my $evi          = shift;
-	my $abinits      = shift;
+sub get_overlapping_hits {
+        my $eat  = shift;
+        my $hits = shift;
 
-	my $transcript_seq  = get_transcript_seq($f, $seq);
-
-        my ($translation_seq, $offset, $end) =
-           get_translation_seq($transcript_seq);
-	
-
-	my $len_3_utr = length($transcript_seq) - $end + 1;
-	my $l_trans =  length($translation_seq);
-	
-	my $qi = defined($evi)
-	? maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$abinits, $l_trans)
-	: 'non-overlapping-'.$OPT_PREDICTOR;
-
-	my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
-
-        my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i"; #affects GFFV3.pm
-           $t_name .= " $qi";
-
-        my $t_struct = {'hit'      => $f,
-                        't_seq'    => $transcript_seq,
-                        'p_seq'    => $translation_seq,
-                        't_offset' => $offset,
-                        't_end'    => $end,
-                        'c_id'     => $c_id,
-		        't_name'   => $t_name,
-			't_qi'       => $qi,
-                    };
-
-	return $t_struct;
+        my @keepers;
+        foreach my $hit (@{$hits}){
+                next unless $hit->strand eq $eat->strand;
+                push(@keepers, $hit) 
+                if compare::overlap($hit, $eat, 'query', 3);    
+        }
+        return \@keepers;
 }
 #------------------------------------------------------------------------
 sub get_non_overlapping {
@@ -554,6 +533,9 @@ sub group_transcripts {
 	my $seq_id       = shift;
 	my $chunk_number = shift;
 	my $snap_abinits = shift;
+	my $pol_p_hits   = shift;
+	my $pol_e_hits   = shift;
+	my $blastx_hits  = shift;
 
 	my @transcripts;
 	my %lookup;
@@ -598,6 +580,9 @@ sub group_transcripts {
 	foreach my $c (@keepers){
 		my @t_structs;
 		my $i = 1;
+		my $so_code = evaluator::so_classifier::so_code($c);
+		my $alt_spli_sup = evaluator::funs::alt_spli($c, $pol_e_hits, $seq, 
+			$seq_id, "$chunk_number.$c_id");
 		foreach my $f (@{$c}){
 
 			my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;
@@ -606,7 +591,7 @@ sub group_transcripts {
 			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
 
 			my $t_struct = 
-			load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits);
+				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $alt_spli_sup);
 			push(@t_structs, $t_struct);
 
 			$i++;
@@ -628,6 +613,54 @@ sub group_transcripts {
 	}
 
 	return \@annotations;
+}
+#------------------------------------------------------------------------
+sub load_transcript_struct {
+        my $f            = shift;
+        my $c_id         = shift;
+        my $i            = shift;
+        my $seq          = shift;
+        my $seq_id       = shift;
+        my $evi          = shift;
+        my $abinits      = shift;
+	my $so_code	 = shift;
+	my $alt_spli_sup = shift;
+
+        my $transcript_seq  = get_transcript_seq($f, $seq);
+
+        my ($translation_seq, $offset, $end) =
+           get_translation_seq($transcript_seq);
+        
+
+        my $len_3_utr = length($transcript_seq) - $end + 1;
+        my $l_trans =  length($translation_seq);
+      
+	## The reports of evaluator are all contained in $eva object. 
+	my $eva = evaluator::evaluate::evaluate_in_maker($f, $c_id, $i, $seq,
+		$seq_id, $evi, $abinits, $so_code, $OPT_PREDICTOR, 
+		$transcript_seq, $translation_seq, $offset, $end,
+		$len_3_utr, $l_trans, $alt_spli_sup); 
+
+	my $score = $eva->{score};
+	my $qi	  = $eva->{qi};
+
+        my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
+
+        my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i"; #affects GFFV3.pm
+           $t_name .= " $qi";
+
+        my $t_struct = {'hit'      => $f,
+                        't_seq'    => $transcript_seq,
+                        'p_seq'    => $translation_seq,
+                        't_offset' => $offset,
+                        't_end'    => $end,
+                        'c_id'     => $c_id,
+                        't_name'   => $t_name,
+			't_score'  => $score,
+                        't_qi'     => $qi,
+                    };
+
+        return $t_struct;
 }
 #------------------------------------------------------------------------
 sub get_start_and_end_on_seq {
