@@ -578,6 +578,9 @@ sub group_transcripts {
 	my %pred_sources;
 	my @annotations;
 	foreach my $c (@keepers){
+		my $sources = join ('-', keys %pred_sources);
+		my $g_name = "maker-$seq_id-$sources-gene-$chunk_number.$c_id";
+	
 		my @t_structs;
 		my $i = 1;
 		my $so_code = evaluator::so_classifier::so_code($c);
@@ -585,13 +588,15 @@ sub group_transcripts {
 			$seq_id, "$chunk_number.$c_id");
 		foreach my $f (@{$c}){
 
+			$f->{g_name} = $g_name;
+
 			my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;
 			$pred_sources{$source}++;
 
 			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
 
 			my $t_struct = 
-				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $alt_spli_sup);
+				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $alt_spli_sup, $pol_p_hits, $pol_e_hits, $blastx_hits);
 			push(@t_structs, $t_struct);
 
 			$i++;
@@ -599,10 +604,9 @@ sub group_transcripts {
 
 		my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
 
-		my $sources = join ('-', keys %pred_sources);
 
 		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => "maker-$seq_id-$sources-gene-$chunk_number.$c_id", #affects GFFV3.pm
+		                   'g_name'    => $g_name,
 				   'g_start'   => $g_start,
 			           'g_end'     => $g_end,
 				   'g_strand'  => $g_strand,
@@ -625,6 +629,13 @@ sub load_transcript_struct {
         my $abinits      = shift;
 	my $so_code	 = shift;
 	my $alt_spli_sup = shift;
+	my $pol_p_hits	 = shift;
+	my $pol_e_hits   = shift;
+	my $blastx_hits	 = shift;
+
+        my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
+        my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i"; #affects GFFV3.pm
+	$f->{t_name} = $t_name;
 
         my $transcript_seq  = get_transcript_seq($f, $seq);
 
@@ -636,18 +647,15 @@ sub load_transcript_struct {
         my $l_trans =  length($translation_seq);
       
 	## The reports of evaluator are all contained in $eva object. 
-	my $eva = evaluator::evaluate::evaluate_in_maker($f, $c_id, $i, $seq,
-		$seq_id, $evi, $abinits, $so_code, $OPT_PREDICTOR, 
-		$transcript_seq, $translation_seq, $offset, $end,
-		$len_3_utr, $l_trans, $alt_spli_sup); 
+	my $eva = evaluator::evaluate::power_evaluate($f, $seq, 
+		$pol_p_hits, $pol_e_hits, $blastx_hits, 
+		$abinits, $so_code, $alt_spli_sup);
 
 	my $score = $eva->{score};
 	my $qi	  = $eva->{qi};
 
-        my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
 
-        my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i"; #affects GFFV3.pm
-           $t_name .= " $qi";
+        $t_name .= " $qi";
 
         my $t_struct = {'hit'      => $f,
                         't_seq'    => $transcript_seq,

@@ -14,6 +14,8 @@ use evaluator::so_classifier;
 use Fasta;
 @ISA = qw(
        );
+
+use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -68,7 +70,6 @@ sub evaluate_in_maker {
 
 
 #-------------------------------------------------------------------------------
-=pod
 sub evaluate_for_gff {
         my $virgin_fasta     = shift;
         my $masked_fasta     = shift;
@@ -104,7 +105,7 @@ sub evaluate_for_gff {
 		foreach my $eat (@$gene) {
 			
 			my $evaluation = power_evaluate($eat, $seq,$exonerate_p_hits,
-				$exonerate_e_hits, $blastx_hits, $so_code, 
+				$exonerate_e_hits, $blastx_hits, $predictions,$so_code, 
 				$alt_spli_sup);
 			
 			##Output the evaluation here, or store it somewhere.
@@ -119,14 +120,116 @@ sub power_evaluate {
 	my $exonerate_p_hits = shift;
 	my $exonerate_e_hits = shift;
 	my $blastx_hits	= shift;
+	my $abinits_hits = shift;
 	my $so_code = shift;
 	my $alt_spli_sup = shift;
 
 	my $box = evaluator::funs::prepare_box_for_gff($eat, $seq, 
-		$exonerate_p_hits, $exonerate_e_hits, $blastx_hits);
+		$exonerate_p_hits, $exonerate_e_hits, 
+		$blastx_hits, $abinits_hits);
+	
+	my $qi = evaluator::funs::get_transcript_qi($box);
+
+	my $quality_seq	= evaluator::funs::get_quality_seq($box);
+
+	my $splice_sites = evaluator::funs::get_splice_j_locations($eat);
+
+	my $transcript_type = $box->{transcript_type};
+	
+	my $completion = evaluator::funs::completion($box);
+
+	my $alt = $alt_spli_sup->{$eat->{_tran_id}};
+
+	my $score = scoring($qi, $quality_seq, $so_code, $transcript_type,
+			$completion, $alt);
+
+	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
+			$transcript_type, $completion, $alt, $score, $so_code);
+
+        my $eva = { 'qi'                => $qi,
+                    'score'             => $score,
+                    'quality_seq'       => $quality_seq,
+                    'completion'        => $completion,
+                    'alt'               => $alt,
+                    'transcript_type'   => $transcript_type,
+		    'report'		=> $report,
+		    'so_code'		=> $so_code,
+                    
+                  };
+	print $report;
+
+	return $eva;
+}
 
 
-=cut
+#-------------------------------------------------------------------------------
+sub generate_report {
+	my $eat 		= shift;
+	my $box			= shift;
+	my $qi  		= shift;
+	my $quality_seq		= shift;
+	my $splice_sites	= shift;
+	my $type		= shift;
+	my $completion		= shift;
+	my $alt			= shift;
+	my $score		= shift;
+	my $so_code		= shift;
+
+	my $g_name = $eat->{g_name};
+	my $t_name = $eat->{t_name};
+	my $prefix = $t_name.'@'.$g_name;
+	($qi) = $qi =~ /QI:(.+)$/;
+
+	my $report;
+
+	$report .=
+	"##################################################################\n";
+	$report .= "#####          $t_name";
+	my $space_number = (46- length($t_name));
+	for(my $temp =1; $temp<= $space_number; $temp++) { $report .= ' ';}
+
+	$report .= "#####\n";
+
+	$report .=
+	"##################################################################\n";
+
+	$report .= $prefix."\t"."Quality_Index"."\t";
+	$report .= $qi."\n";
+
+	$report .= $prefix."\t"."translation_offset"."\t";
+	$report .= $box->{translation_offset}."\n";
+	
+	$report .= $prefix."\t"."translation_end"."\t";
+	$report .= $box->{translation_end}."\n";
+
+	$report .= $prefix."\t"."translation_length"."\t";
+	$report .= $box->{translational_length}."\n";
+
+	$report .= $prefix."\t"."splice_sites"."\t";
+	foreach my $junction (@$splice_sites) {
+		$report .= "$junction,";
+	}
+	chop $report if $report =~ /,$/;
+	$report .= "\n";
+
+	$report .= $prefix."\t"."completion_of_protein"."\t";
+	$report .= $completion."\n";
+
+	$report .= $prefix."\t"."transcript_type"."\t";
+	$report .= (defined $type)? ($type."\n"):('unknown'."\n");
+
+	$report .= $prefix."\t"."SO_CODE"."\t";
+	$report .= $so_code."\n";
+
+	$report .= $prefix."\t"."support_for_altsplicing"."\t";
+	$report .= $alt."\n";
+
+	$report .= $prefix."\t"."quality_sequence"."\t";
+	$report .= $$quality_seq."\n";
+
+	return $report;
+}
+	
 #-------------------------------------------------------------------------------
 sub scoring {
 	my $qi 		= shift;

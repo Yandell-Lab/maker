@@ -73,13 +73,13 @@ sub prepare_box_in_maker {
 }
 
 #------------------------------------------------------------------------
-=pod
 sub prepare_box_for_gff {
 	my $eat = shift;
 	my $seq = shift;
 	my $exonerate_p_hits = shift;
 	my $exonerate_e_hits = shift;
 	my $blastx_hits = shift;
+	my $abinits_hits = shift;
 
 	my $good_pol_p_hits = maker::auto_annotator::get_overlapping_hits
 		($eat, $exonerate_p_hits);
@@ -87,7 +87,51 @@ sub prepare_box_for_gff {
 		($eat, $exonerate_e_hits);
 	my $good_blastx_hits= maker::auto_annotator::get_overlapping_hits
 		($eat, $blastx_hits);
-=cut
+	my $good_abinits_hits = maker::auto_annotator::get_overlapping_hits
+		($eat, $abinits_hits);
+
+	my @bag;
+	push @bag, @$good_pol_p_hits;
+	push @bag, @$good_pol_e_hits;
+	push @bag, @$good_blastx_hits;
+
+	my @good_splicers;
+	push @good_splicers, @$good_pol_p_hits;
+	push @good_splicers, @$good_pol_e_hits;
+
+	my $transcription_seq = 
+		maker::auto_annotator::get_transcript_seq($eat, $seq);
+	my ($translation_seq, $offset, $end) =
+		maker::auto_annotator::get_translation_seq($transcription_seq);
+
+	my $len_3_utr = length($transcription_seq) - $end +1;
+	my $l_trans = length($translation_seq);
+
+	my $transcript_type = $eat->{type}; ## to be implemented
+
+	my %box = (
+		'transcript'		=> $eat,
+		'bag'			=> \@bag,
+		'good_splicers'		=> \@good_splicers,
+		'5_len'			=> $offset,
+		'3_len'			=> $len_3_utr,
+		'seq'			=> $seq,
+		'translational_length'	=> $l_trans,
+		'est'			=> $good_pol_e_hits,
+		'exonerate'		=> $good_pol_p_hits,
+		'blastx'		=> $good_blastx_hits,
+		'abinits'		=> $good_abinits_hits,
+		'transcription_seq'	=> \$transcription_seq,
+		'translation_seq'	=> \$translation_seq,
+		'transcript_type'	=> $transcript_type,
+		'translation_offset'	=> $offset,
+		'translation_end'	=> $end,
+	);
+	
+	return \%box;
+}
+
+
 #------------------------------------------------------------------------
 sub get_code_info {
         my $t    = shift;
@@ -309,7 +353,6 @@ sub get_transcript_qi {
 
 	my $t = 		$box->{transcript};
 	my $good_splicers =     $box->{good_splicers};
-	my $set = 		$box->{evidence};
 	my $length_5	 = 	$box->{'5_len'};
 	my $length_3	 = 	$box->{'3_len'};
 	my $abinits = 		$box->{abinits};
