@@ -276,8 +276,11 @@ if ($rank == $root) {
       my @ctlfiles = @ARGV;
       
       if (not @ctlfiles) {
-	 if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
-	    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl");
+	 if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl"
+		&& -e "eva.ctl") {
+	    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl",
+			 "eva.ctl"
+			 );
 	 }
 	 else {
 	     print STDERR  "ERROR: Control files not found\n";

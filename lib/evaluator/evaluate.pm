@@ -12,10 +12,9 @@ use evaluator::funs;
 use evaluator::scoring;
 use evaluator::so_classifier;
 use Fasta;
-@ISA = qw(
-       );
 
-use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG/;
+
+use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG $CTL/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -123,10 +122,14 @@ sub power_evaluate {
 	my $abinits_hits = shift;
 	my $so_code = shift;
 	my $alt_spli_sup = shift;
+	my $t_name = shift;
+	$CTL = shift;
+
+	print STDERR "\nEVALUATing transcript $t_name...\n" unless $main::quiet;
 
 	my $box = evaluator::funs::prepare_box_for_gff($eat, $seq, 
 		$exonerate_p_hits, $exonerate_e_hits, 
-		$blastx_hits, $abinits_hits);
+		$blastx_hits, $abinits_hits, $t_name);
 	
 	my $qi = evaluator::funs::get_transcript_qi($box);
 
@@ -140,11 +143,18 @@ sub power_evaluate {
 
 	my $alt = $alt_spli_sup->{$eat->{_tran_id}};
 
+	my $solexa_for_splices = evaluator::funs::solexa_support($CTL, $box,
+			$splice_sites);
+
 	my $score = scoring($qi, $quality_seq, $so_code, $transcript_type,
-			$completion, $alt);
+			$completion, $alt, $solexa_for_splices);
+
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
-			$transcript_type, $completion, $alt, $score, $so_code);
+			$transcript_type, $completion, $alt, $score, $so_code, 
+			$solexa_for_splices);
+
+	print STDERR "Finished.\n\n" unless $main::quiet;
 
         my $eva = { 'qi'                => $qi,
                     'score'             => $score,
@@ -174,6 +184,7 @@ sub generate_report {
 	my $alt			= shift;
 	my $score		= shift;
 	my $so_code		= shift;
+	my $solexa		= shift;
 
 	my $g_name = $eat->{g_name};
 	my $t_name = $eat->{t_name};
@@ -224,6 +235,16 @@ sub generate_report {
 	$report .= $prefix."\t"."support_for_altsplicing"."\t";
 	$report .= $alt."\n";
 
+	$report .= $prefix."\t"."splice_support_by_short_ests"."\t";
+	if (!defined $solexa) 	{ $report .= "NA\n";}
+	else {
+		foreach my $site (sort {$a <=> $b} (keys %$solexa)) {
+			$report .= ($site.'='.$solexa->{$site}.',');
+		}
+		chop $report;
+		$report .= "\n";
+	}
+
 	$report .= $prefix."\t"."quality_sequence"."\t";
 	$report .= $$quality_seq."\n";
 
@@ -238,6 +259,8 @@ sub scoring {
 	my $type	= shift;
 	my $completion	= shift;
 	my $alt 	= shift;
+	my $solexa_sup  = shift;  ## If doesn't allow to calculate solexa 
+				  ## support, this will be undef.
 
 	($qi) = $qi =~ /QI:(.+)$/;
 	my @qi = split /\|/, $qi;

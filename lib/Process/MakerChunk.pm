@@ -767,7 +767,8 @@ sub _run {
 							$opt_f,
 							$opt_preds,
 							$CTL_OPTIONS{predictor},
-							$self->{LOG}
+							$self->{LOG},
+							\%CTL_OPTIONS,
 						       );
       #-------------------------CHUNK
 

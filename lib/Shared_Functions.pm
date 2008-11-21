@@ -1879,8 +1879,24 @@ sub load_control_files {
 			   'exonerate',
 			  );
 
+   my @EVA_PARAMS = (   'eva_percov_blastn',
+			'eva_percid_blastn',
+			'eva_eval_blastn',
+			'eva_bit_blastn',
+			'use_solexa_ests',
+			'solexa_ests',
+			'side_thre',
+			'eva_cpus',
+			'eva_window_size',
+			'eva_split_hit',
+			'eva_hspmax',
+			'eva_gspmax',
+		    );
 
-   foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS) {
+
+
+   foreach my $attr (@MAKER_OPTS_PARAMS, @MAKER_BOPTS_PARAMS, @MAKER_EXE_PARAMS,
+			@EVA_PARAMS) {
       $OK_FIELDS{$attr}++;
    }
 
@@ -1910,7 +1926,19 @@ sub load_control_files {
    $CTL_OPTIONS{'en_score_limit'} = 20;
    $CTL_OPTIONS{'ep_score_limit'} = 20;
    $CTL_OPTIONS{'predictor'} = 'snap';
-   
+   $CTL_OPTIONS{'eva_percov_blastn'} = 0.8;
+   $CTL_OPTIONS{'eva_percid_blastn'} = 0.85;
+   $CTL_OPTIONS{'eva_eval_blastn'} = 1e-10;
+   $CTL_OPTIONS{'eva_bit_blastn'}  = 40;
+   $CTL_OPTIONS{'use_solexa_ests'} = 0;
+   $CTL_OPTIONS{'side_thre'} = 5;
+   $CTL_OPTIONS{'eva_cpus'} =5;
+   $CTL_OPTIONS{'eva_window_size'} = 70;
+   $CTL_OPTIONS{'eva_split_hit'} = 1;
+   $CTL_OPTIONS{'eva_hspmax'} = 100;
+   $CTL_OPTIONS{'eva_gspmax'} = 100;
+
+ 
    #load values from control files
    foreach my $ctlfile (@ctlfiles) {
       open (CTL, "< $ctlfile") or die"ERROR: Could not open control file \"$ctlfile\".\n";
@@ -1955,6 +1983,7 @@ sub load_control_files {
    push (@infiles, 'rmlib') if (! $OPT{R} && ! $CTL_OPTIONS{rm_gff} && ($CTL_OPTIONS{rmlib} || $CTL_OPTIONS{rmlib_only}));
    push (@infiles, 'snap') if ($CTL_OPTIONS{predictor} eq 'snap' || $CTL_OPTIONS{'snap'});
    push (@infiles, 'augustus') if ($CTL_OPTIONS{predictor} eq 'augustus' || $CTL_OPTIONS{'augustus'});
+   push (@infiles, 'solexa_ests') if ($CTL_OPTIONS{use_solexa_ests});
 
    my $error;
 
@@ -2117,6 +2146,22 @@ sub generate_control_files {
    print OUT "RepeatMasker:".$executables{RepeatMasker}." #location of RepeatMasker executable\n";
    print OUT "exonerate:".$executables{exonerate}." #location of exonerate executable\n";
    close(OUT);
+
+   open (OUT, "> eva.ctl");
+   print OUT "#----- EVALUATOR control options\n";
+   print OUT "eva_percov_blastn:0.80 #Blastn Percent Coverage Threshold EST-Genome Alignments\n";
+   print OUT "eva_percid_blastn:0.85 #Blastn Percent Identity Threshold EST-Genome Alignments\n";
+   print OUT "eva_eval_blastn:1e-10 #Blastn eval cutoff\n";
+   print OUT "eva_bit_blastn:40 #Blastn bit cutoff\n";
+   print OUT "use_solexa_ests:0\n";
+   print OUT "solexa_ests:\n";
+   print OUT "side_thre:5\n";
+   print OUT "eva_cpus:5\n";
+   print OUT "eva_window_size:70\n";
+   print OUT "eva_split_hit:1\n";
+   print OUT "eva_hspmax:100\n";
+   print OUT "eva_gspmax:100\n";
+   close (OUT); 
 }
 
 1;

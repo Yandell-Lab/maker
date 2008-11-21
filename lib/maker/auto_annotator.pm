@@ -28,6 +28,7 @@ my $OPT_F; #GLOBAL VARIABLE
 my $OPT_PREDS; #GLOBAL VARIABLE
 my $OPT_PREDICTOR; #GLOBAL VARIABLE
 my $LOG; #GLOBAL VARIABLE
+my $CTL; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -362,6 +363,9 @@ sub annotate {
 	$OPT_PREDS           = shift;
 	$OPT_PREDICTOR       = shift;
 	$LOG                 = shift;
+	$CTL		     = shift;
+
+	$CTL->{current_tmp_path} = $the_void;
 
         my $def   = Fasta::getDef($masked_fasta);
         my $seq   = Fasta::getSeq($masked_fasta);
@@ -402,7 +406,8 @@ sub annotate {
 	                                    $predictions,
 					    $exonerate_p_hits,
 					    $exonerate_e_hits,
-					    $blastx_hits);
+					    $blastx_hits,
+					    );
 
         return $annotations;
 }
@@ -649,7 +654,7 @@ sub load_transcript_struct {
 	## The reports of evaluator are all contained in $eva object. 
 	my $eva = evaluator::evaluate::power_evaluate($f, $seq, 
 		$pol_p_hits, $pol_e_hits, $blastx_hits, 
-		$abinits, $so_code, $alt_spli_sup);
+		$abinits, $so_code, $alt_spli_sup, $t_name, $CTL);
 
 	my $score = $eva->{score};
 	my $qi	  = $eva->{qi};

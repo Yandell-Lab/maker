@@ -14,6 +14,8 @@ use clean;
 use evaluator::quality_seq;
 use maker::auto_annotator;
 use compare;
+use evaluator::Widget::blast;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -80,6 +82,7 @@ sub prepare_box_for_gff {
 	my $exonerate_e_hits = shift;
 	my $blastx_hits = shift;
 	my $abinits_hits = shift;
+	my $t_name = shift;
 
 	my $good_pol_p_hits = maker::auto_annotator::get_overlapping_hits
 		($eat, $exonerate_p_hits);
@@ -110,6 +113,7 @@ sub prepare_box_for_gff {
 	my $transcript_type = $eat->{type}; ## to be implemented
 
 	my %box = (
+		't_name'		=> $t_name,
 		'transcript'		=> $eat,
 		'bag'			=> \@bag,
 		'good_splicers'		=> \@good_splicers,
@@ -131,6 +135,73 @@ sub prepare_box_for_gff {
 	return \%box;
 }
 
+
+#------------------------------------------------------------------------
+sub solexa_support {
+	my $CTL = shift;
+	my $box = shift;
+	my $splice_sites = shift;
+
+	return undef unless $CTL->{use_solexa_ests}==1 &&
+		(scalar @$splice_sites >0);
+
+	my $transcript_seq = $box->{transcription_seq};
+	my $path = $CTL->{current_tmp_path};
+	my $cpus = $CTL->{eva_cpus};
+	my $side_thre = $CTL->{side_thre};
+	my $est_file = $CTL->{solexa_ests};
+	my $percov = $CTL->{eva_percov_blastn};
+	my $percid = $CTL->{eva_percid_blastn};
+	my $expection = $CTL->{eva_eval_blastn};
+	my $bit = $CTL->{eva_bit_blastn};
+	my $t_name = $box->{t_name};
+	my $window_size = $CTL->{eva_window_size};	
+	my $blastn = $CTL->{blastn};
+	my $hspmax = $CTL->{eva_hspmax};
+	my $gspmax = $CTL->{eva_gspmax};
+	my $split_hit = $CTL->{eva_split_hit};
+	my $xdformat = $CTL->{xdformat};
+
+	$path = $path.'/'.'evalutor';
+	unless (-d $path) {
+		`mkdir $path`;
+	}
+
+	unless ((-e $est_file.'.xns') && (-e $est_file.'.xnt') 
+			&& (-e $est_file.'.xnd') ) {
+		`$xdformat -n $est_file`;
+	}
+
+        unless ((-e $est_file.'.xns') && (-e $est_file.'.xnt')
+                        && (-e $est_file.'.xnd') ) {
+		my $new_est_file = $path.'/'.'evaluator_solexa_reads_master_db.fasta';
+		`cp $est_file $new_est_file`;
+		$CTL->{solexa_ests} = $new_est_file;
+		$est_file = $new_est_file;
+		`$xdformat -n $est_file`;
+	}
+
+	my $solexa_support = evaluator::Widget::blast::short_est_support(
+		'path' => $path,
+		'cpus' => $cpus,
+		'seq'  => $transcript_seq,
+		'splice_sites' => $splice_sites,
+		'db' => $est_file,
+		't_name' => $t_name,
+		'window_size' => $window_size,
+		'expection' => $expection,
+		'blastn' => $blastn,
+		'side_thre' => $side_thre,
+		'hsp_bit_min' => $bit,
+		'percov' => $percov,
+		'percid' => $percid,
+		'split_hit' => $split_hit,
+		'hspmax' => $hspmax,
+		'gspmax' => $gspmax,
+	);
+	
+	return $solexa_support;
+}
 
 #------------------------------------------------------------------------
 sub get_code_info {
