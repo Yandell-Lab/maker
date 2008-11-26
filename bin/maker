@@ -963,7 +963,8 @@ CONTIG: while (my $fasta = $fasta_iterator->nextEntry() || shift @failed) {
 							$OPT{f},
 							$OPT{PREDS},
 							$CTL_OPTIONS{predictor},
-							$LOG
+							$LOG,
+							\%CTL_OPTIONS,
 						       );
       }
       catch Error::Simple with{
