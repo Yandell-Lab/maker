@@ -400,7 +400,7 @@ sub prep_polpro_data {
         my $c_id = shift;
         my $seq  = shift;
 
-        my $ests_in_cluster = get_selected_types($c, 'est2genome');
+        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff');
         my $ps_in_cluster   = get_selected_types($c,'protein2genome');
 
 	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
@@ -432,9 +432,9 @@ sub prep_polest_data {
         my $seq  = shift;
 
 
-        my $ests_in_cluster = get_selected_types($c, 'est2genome');
+        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff');
         my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-        my $bx_in_cluster   = get_selected_types($c,'blastx');
+        my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
 
         my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
 	my $best_p_set = clean::remove_redundant_alt_splices($i_set, $seq, 10); 
@@ -1003,12 +1003,16 @@ sub group_transcripts {
       
       #----evaluator here
       my @pol_e_hits;
+      my @pol_p_hits;
+      my @blastx_hits;
       foreach my $f (@{$c}) {
 	 my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : [];
-	 my $ests = get_selected_types($evi->{ests}, 'est2genome');
+	 my $ests = get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	 my $prot2gen = get_selected_types($evi->{gomiph}, 'protein2genome');
+	 my $prot = get_selected_types($evi->{gomiph}, 'blastx', 'protein_gff');
 	 
-	 #remove redundant ests (some added > 1 time)
-	 foreach my $e (@{$ests}){
+	 #remove redundant evidence (some added > 1 time)
+	 foreach my $e (@{$ests}, @{$prot2gen}, @{$prot}){
 	    $e->{_uniq_set} = 0;  #reset _uniq_set before beginning
 	 }
 	 foreach my $e (@{$ests}){
@@ -1017,11 +1021,23 @@ sub group_transcripts {
 	       push(@pol_e_hits, $e);
 	    }
 	 }
+         foreach my $e (@{$prot2gen}){
+	     if(! $e->{_uniq_set}){
+		 $e->{_uniq_set} = 1;
+		 push(@pol_p_hits, $e);
+	     }
+         }
+         foreach my $e (@{$prot}){
+	     if(! $e->{_uniq_set}){
+		 $e->{_uniq_set} = 1;
+		 push(@blastx_hits, $e);
+	     }
+         }
       }
       
       my $so_code = evaluator::so_classifier::so_code($c);
       my $alt_spli_sup = evaluator::funs::alt_spli($c, \@pol_e_hits, $seq);
-      my $geneAED = evaluator::AED::gene_AED($c, $pol_e_hits, $pol_p_hits, $blastx_hits, $seq);
+      my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, $seq);
       #----
       
       my $eval = 0;

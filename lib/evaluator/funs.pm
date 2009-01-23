@@ -39,9 +39,9 @@ sub prepare_box_in_maker {
 	push(@bag, @{$set->{gomiph}}) if defined($set->{gomiph});
         push(@bag, @{$set->{ests}})   if defined($set->{ests});
 
-        my $pol_est_hits = get_selected_type(\@bag, 'est2genome');
-        my $pol_pro_hits = get_selected_type(\@bag, 'protein2genome');
-	my $blastx_hits  = get_selected_type(\@bag, 'blastx');
+        my $pol_est_hits = maker::auto_annotator::get_selected_type(\@bag, 'est2genome', 'est_gff');
+        my $pol_pro_hits = maker::auto_annotator::get_selected_type(\@bag, 'protein2genome');
+	my $blastx_hits  = maker::auto_annotator::get_selected_type(\@bag, 'blastx', 'protein_gff');
 	
 	my @good_splicers;
         push(@good_splicers, @{$pol_est_hits});
@@ -385,18 +385,6 @@ sub overlaps {
                 }
         }
         return 0;
-}
-#------------------------------------------------------------------------
-sub get_selected_type {
-	my $hits = shift;
-	my $type = shift;
-
-	my @keepers;
-	foreach my $hit (@{$hits}){
-		push(@keepers, $hit) if ref($hit) =~ /$type$/;
-	}
-
-	return \@keepers;
 }
 #------------------------------------------------------------------------
 sub get_percent {

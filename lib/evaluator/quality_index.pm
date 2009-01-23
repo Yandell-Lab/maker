@@ -11,6 +11,7 @@ use PhatHit_utils;
 use compare;
 use cluster;
 use clean;
+use maker::auto_annotator;
 use CGL::TranslationMachine;
 
 @ISA = qw(
@@ -201,25 +202,6 @@ sub overlaps {
         return 0;
 }
 #------------------------------------------------------------------------
-sub get_selected_type {
-	my $hits = shift;
-	my $type = shift;
-
-	my @keepers;
-	foreach my $hit (@{$hits}){
-		if (ref($hit) =~ /$type$/) {
-			push(@keepers, $hit);
-		}
-		elsif (defined $hit->{pre}->{class}) {
-			push @keepers, $hit
-				if $hit->{pre}->{class} eq $type;
-		}
-		
-	}
-
-	return \@keepers;
-}
-#------------------------------------------------------------------------
 sub get_percent {
 	my $codes       = shift;
 	my $num_t_exons = shift;
@@ -283,8 +265,8 @@ sub get_transcript_qi {
 	push(@bag, @{$pol_ests})   if defined($pol_ests->[0]);
 	push(@bag, @{$pol_pro})    if defined($pol_pro->[0]);
 
-	my $pol_est_hits = get_selected_type(\@bag, 'est2genome');
-	my $pol_pro_hits = get_selected_type(\@bag, 'protein2genome');
+	my $pol_est_hits = maker::auto_annotator::get_selected_type(\@bag, 'est2genome', 'est_gff');
+	my $pol_pro_hits = maker::auto_annotator::get_selected_type(\@bag, 'protein2genome');
 
 	my @good_splicers;
 	push(@good_splicers, @{$pol_est_hits});
