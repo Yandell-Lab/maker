@@ -133,7 +133,9 @@ sub _clean_files{
    #get gff file name
    my $log_file = $self->{file_name};
    my $gff_file = $the_void;
+   my $out_base = $the_void;
    $gff_file =~ s/theVoid\.([^\/]+$)/$1.gff/;
+   $out_base =~ s/theVoid\.[^\/]+$//;
 
    #===id files types that can not be re-used
    my $continue_flag = 1; #signal whether to continue with this seq
@@ -439,6 +441,8 @@ sub _clean_files{
 	 if (exists $rm_key{gff}) {
 	    print STDERR "MAKER WARNING: The gff file $gff_file must now be removed.\n";
 	    push (@files, $gff_file);
+	    push (@files, <$out_base/evaluator/*.eva>);
+	    push (@files, <$out_base/*.maker.*.fasta>);
 	 }
       
 	 #delete files in the void

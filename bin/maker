@@ -727,6 +727,7 @@ while (my $fasta = $iterator->nextFasta()) {
  						    );
 
       my $maker_anno = maker::auto_annotator::best_annotations($annotations,
+							       $out_dir,
 							       \%CTL_OPT
 							      );
 

@@ -505,7 +505,7 @@ sub split_db {
    my $mpi_size = shift @_;
    my $alt = shift @_;
 
-   return [] if (not $file);
+   return ('', []) if (not $file);
 
    my $fasta_iterator = new Iterator::Fasta($file);
    my $db_size = $fasta_iterator->number_of_entries();
@@ -604,7 +604,7 @@ sub split_db {
 # 	 }
 #       }
 #    }
-#    return (\@coors, $i);;
+#    return` (\@coors, $i);;
 # }
 #-----------------------------------------------------------------------------
 # sub load_clust_hsps {

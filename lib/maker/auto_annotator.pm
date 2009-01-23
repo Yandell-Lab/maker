@@ -573,6 +573,7 @@ my %SCORE; #used for sort in function crit2
 #this subrutine returns finished MAKER annotations
 sub best_annotations {
    my $annotations = shift;
+   my $out_base = shift;
    my $CTL_OPTIONS = shift;
 
    my %order; #this is important for sorting
@@ -642,6 +643,19 @@ sub best_annotations {
    }
    
    push(@p_keepers, @m_keepers);
+
+   #write evaluator reports
+   foreach my $ann (@p_keepers){
+       foreach my $t (@{$ann->{t_structs}}){
+	   my $dir = "$out_base/evaluator";
+	   mkdir($dir) if(! -e $dir);
+	   my $file = "$dir/".Fasta::seqID2SafeID($t->{hit}->name).".eva";
+	   open(my $FH, "> $file");
+	   print $FH $t->{report};
+	   close($FH);
+       }       
+   }
+
    return \@p_keepers;
 }
 #------------------------------------------------------------------------
@@ -873,7 +887,8 @@ sub load_transcript_struct {
                         't_end'    => $end,
 		        't_name'   => $t_name,
 			't_qi'     => $qi,
-			'eval'     => $score
+			'eval'     => $score,
+			'report'   => $eva->{report}
                     };
 
 	return $t_struct;
