@@ -92,7 +92,7 @@ sub prep_hits {
 	   push(@bx_data, @{$bx}) if defined $bx;
 	   
 	   if(@{$models}){
-	       my $gf = prep_blastx_data($c, $c_id, $seq);
+	       my $gf = prep_gff_data($c, $c_id, $seq);
 	       push(@gf_data, @{$gf}) if defined $gf;
 	   }
 
