@@ -31,24 +31,19 @@ sub polish {
 	my $e_file     = shift;
 	my $the_void   = shift;
 	my $offset     = shift || 0;
-	my $ext        = shift || 0;
 	my $exe        = shift;
 	my $percent    = shift;
 	my $matrix     = shift;
 	$OPT_F         = shift;
 	$LOG           = shift;
 
-	my ($g_id, $e_id, $e_len, $g_len) = 
-	polisher::prep($g_file, $e_file);
+	my ($e_len, $g_len) = polisher::prep($g_file, $e_file);
 
 	my $hits = e_exonerate($g_file, 
 			       $e_file, 
 			       $the_void, 
-			       $g_id, 	
-			       $e_id, 
 			       $e_len, 
 			       $g_len,
-			       $ext,
 			       $exe,
 			       $percent,
 			       $matrix,
@@ -67,24 +62,18 @@ sub e_exonerate {
         my $g_file   = shift;
         my $e_file   = shift;
         my $the_void = shift;
-        my $g_id     = shift;
-        my $e_id     = shift;
         my $e_len    = shift;
         my $g_len    = shift;
-	my $ext      = shift;
 	my $exe      = shift;
 	my $percent  = shift; 
 	my $matrix   = shift;
 
-	my $safe_g_id = uri_escape($g_id,  #build a safe name for file names from the sequence identifier
-				   '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-				   );
+        my ($g_name) = $g_file =~ /([^\/]+)$/;
+        $g_name =~ s/\.fasta$//;
+        my ($e_name) = $e_file =~ /([^\/]+)$/;
+        $e_name =~ s/\.fasta$//;
 
-	my $safe_e_id = uri_escape($e_id,  #build a safe name for file names from the sequence identifier
-				   '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-				   );
-
-        my $o_file    = "$the_void/$safe_g_id\.$safe_e_id\.$ext\.est_exonerate";
+        my $o_file    = "$the_void/$g_name.$e_name.est_exonerate";
 
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);   
         runExonerate($g_file, $e_file, $o_file, $exe, $percent, $matrix);

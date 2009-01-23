@@ -1,0 +1,77 @@
+#! /usr/bin/perl -w
+
+use strict "vars";
+use strict "refs";
+
+use FindBin;
+
+use lib "$FindBin::Bin/../lib"
+
+use Getopt::Long;
+
+use evaluator::gff3_to_phatHit::gff3_classifier;
+use evaluator::evaluate;
+use maker_gff;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+     evaluator [options] gff3_type gff3_file fasta_file maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+
+Description:
+
+    Evaluator will evaluate the quality of a gene annotation based on
+    evidence from EST, cDNA, and protien data.
+
+    ### Add more detail ###
+
+    It should be passed four files on the command line.  A gff_file
+    for a single gene.  And three control files: maker_opts.ctl,
+    maker_bopts.ctl and maker_exe.ctl.  Please see maker documentation
+    to learn more about control file format.
+
+    ### Add more detail  ###
+
+Options:
+
+    -h Help
+    -a Run number.  An optional number with which to label this run.  Defaults
+       to 0.
+    -m Use maker gff3 file as the input. In this case multiple genes are allowed
+	in one gff file.
+";
+
+die $usage if $opt_h;
+
+$main::error_message = $opt_e;
+
+my $gff3_file = shift @ARGV;
+
+
+#---- build the gff3 objects here
+my $gff3_phat_hits = evaluator::gff3_to_phatHit::gff3_classifier->new ($gff3_file, $gff3_type, $CTL_OPTIONS{'genome'});
+my $maker_hits = maker_gff::parse($gff3_file) if $opt_m;
+
+while (my $eats = shift @{$gff3_phat_hits}) {
+   	my $eval = evaluator::evaluate::prepare($fasta,
+						$$masked_fasta,
+						$exonerate_p_hits,
+						$exonerate_e_hits,
+						$blastx_hits,
+						$snaps,
+						$the_void,
+						$snap_command,
+						$snap_flank,
+						$CTL_OPTIONS{'single_exon'},
+						$eats
+						);
+
+	print $$eval;
+}
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------

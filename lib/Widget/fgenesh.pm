@@ -3,6 +3,9 @@
 #------------------------------------------------------------------------
 package Widget::fgenesh;
 use strict;
+use lib '~/maker/lib';
+use lib '/data1/hao/projects/MAKER-fgenesh/lib';
+
 use vars qw/@ISA/;
 use PostData;
 use FileHandle;
@@ -11,14 +14,15 @@ use Fasta;
 use FastaFile;
 use Iterator::Fasta;
 use PhatHit_utils;
-use fgenesh::PhatHit;
-use fgenesh::PhatHsp;
 use IPC::Open3;
+use Bio::Search::Hit::PhatHit::fgenesh;
+use Bio::Search::HSP::PhatHSP::fgenesh;
 
 @ISA = qw(
 	Widget
        );
-my $OPT_F; 
+my $OPT_F;
+my $LOG;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -31,6 +35,10 @@ sub new {
         bless ($self, $class);
         return $self;
 }
+
+#-------------------------------------------------------------------------------
+
+
 
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
@@ -46,6 +54,7 @@ sub write_xdef_file {
                 print $fh $l."\n";
         }
         $fh->close();
+
 }
 #-------------------------------------------------------------------------------
 sub prep_for_genefinder {
@@ -55,13 +64,17 @@ sub prep_for_genefinder {
 
         my $gomiph = $set->{gomiph};
         my $mia    = $set->{mia};
-        my $augs  = $set->{preds};
+        my $models = $set->{gomod};
+	my $alts   = $set->{alt_ests};
+        my $preds  = $set->{preds};
         my $ests   = $set->{ests};
         my @t_data;
 
         push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$augs})   if defined($augs);
+        push(@t_data, @{$preds})   if defined($preds);
         push(@t_data, $mia)        if defined($mia);
+        push(@t_data, @{$alts})     if defined($alts);
+        push(@t_data, @{$models})   if defined($models);
         push(@t_data, @{$ests})    if defined($ests);
 
         my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
@@ -121,20 +134,20 @@ sub prep_for_genefinder {
 sub run {
         my $self    = shift;
         my $command = shift;
-
-        if (defined($command)){
-	    $self->print_command($command);
-	    my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
-	    local $/ = \1;
-	    while (my $line = <CHLD_ERR>){
-		print STDERR $line unless($main::quiet);
-	    }
-	    waitpid $pid, 0;
-	    die "ERROR: Augustus failed\n" if $? > 0;
-        }
-        else {
-	    die "you must give Widget::fgenesh a command to run!\n";
-        }
+        
+	if (defined($command)){
+	   $self->print_command($command);
+	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	   local $/ = \1; #read in everytime a byte becomes available
+	   while (my $line = <CHLD_ERR>){
+	      print STDERR $line unless($main::quiet);
+	   }
+	   waitpid $pid, 0;
+	   die "ERROR: FgenesH failed\n" if $? > 0;
+	}
+	else {
+	   die "you must give Widget::fgenesh a command to run!\n";
+	}
 }
 #-------------------------------------------------------------------------------
 sub parse {
@@ -146,7 +159,7 @@ sub parse {
         my $fasta = $iterator->nextEntry();
 
         my $def     = Fasta::getDef($fasta);
-        my $q_seq   = Fasta::getSeq($fasta);
+        my $q_seq   = Fasta::getSeqRef($fasta);
         
         my ($q_name)  = $def =~ /^>(.+?) /;
         
@@ -156,10 +169,17 @@ sub parse {
 	my %g;
 	my @content;
 
-	## get rid of the first lines of the output.
-	foreach (1..9) {
+	## get rid of the first nine lines of the output.
+	foreach (1..6) {
 		<$fh>;
 	}
+
+	my $line = <$fh>;
+
+	#($g{official_score}) = $line =~ /Score:(.+)\n/;
+	# the score that fgenesh assigned to the whole seq.
+
+	<$fh>;
 
 	while (my $line=<$fh>) {
 		next if $line =~ /^\n/;
@@ -174,7 +194,7 @@ sub parse {
 
 		my %item;
 
-		my @stuff = $line =~ /(\S+)/g;
+		my (@stuff) = $line =~ /(\S+)/g;
 		my $gene_num = $stuff[0];
 		my $gene_def = $q_name."-fgenesh.$gene_num";
 
@@ -219,7 +239,7 @@ sub total_score {
         return $total;
 }
 #-------------------------------------------------------------------------------
-sub get_fgenesh_shot {
+sub get_pred_shot {
 	my $seq           = shift;
         my $def           = shift;
         my $id            = shift;
@@ -228,11 +248,12 @@ sub get_fgenesh_shot {
         my $pred_flank    = shift;
         my $pred_command  = shift;
            $OPT_F         = shift;
+	   $LOG           = shift;
 
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $pred_flank);
 
-        my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
+        my $shadow_fasta = Fasta::toFastaRef($def." $id offset:$offset",
                                           $shadow_seq,
                                          );
 
@@ -274,6 +295,7 @@ sub fgenesh {
                            
         $command .= " > $o_file";
         
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
         if (-e $o_file && ! $OPT_F){
                 print STDERR "re reading fgenesh report.\n"
@@ -287,6 +309,7 @@ sub fgenesh {
                 $w->run($command);
         }
 
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
         
         my %params;
            $params{min_exon_score}  = -100;
@@ -317,7 +340,7 @@ sub get_exon_seq {
                 
         my $e_seq = substr($$q_seq, $e_b - 1, $length);
                         
-        $e_seq = Fasta::revComp($e_seq) if $exon->{strand} == -1;
+        $e_seq = Fasta::revCompRef($e_seq) if $exon->{strand} == -1;
 
         return $e_seq;  
 }
@@ -337,12 +360,12 @@ sub load_phat_hits {
                 
                 my %hsps;
                 my $i = 0;
-                my $f = fgenesh::PhatHit->new('-name'         => $gene,
-                                          '-description'  => 'NA',
-                                          '-algorithm'    => 'fgenesh',
-                                          '-length'       => $q_len,
-                                          '-score'        => $total_score,
-                                          );
+                my $f = Bio::Search::Hit::PhatHit::fgenesh->new('-name'        => $gene,
+								'-description' => 'NA',
+								'-algorithm'   => 'fgenesh',
+								'-length'      => $q_len,
+								'-score'       => $total_score,
+							       );
 
                 $f->queryLength($q_len);
        
@@ -418,7 +441,7 @@ sub load_phat_hits {
 
                         push(@args, '-hit_gaps');
                         push(@args, 0);
-                        my $hsp = new fgenesh::PhatHsp(@args);
+                        my $hsp = new Bio::Search::HSP::PhatHSP::fgenesh(@args);
                            $hsp->queryName($q_name);
                         #-------------------------------------------------
                         # setting strand because bioperl is all messed up!

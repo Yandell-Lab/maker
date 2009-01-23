@@ -10,10 +10,9 @@ use FileHandle;
 use PostData;
 use Exporter;
 use PhatHit_utils;
-use SimpleCluster;
 use clean;
 use compare;
-
+use SimpleCluster;
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -23,6 +22,8 @@ sub clean_and_cluster {
 	my $keepers = shift;
 	my $seq     = shift;
 	my $depth   = shift;
+
+	$depth = 0 if (! defined($depth) || $depth < 0);
 
 	my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $keepers);
 
@@ -42,12 +43,12 @@ sub clean_and_cluster {
 	foreach my $c (@clusters){
 		print STDERR "total clusters:$num_c now processing $counter\n"
 			unless $main::quiet;
-		my $alts = clean::get_best_alt_splices($c, $seq, $depth);
+		my $alts = clean::get_best_alt_splices($c, $seq, 10);
 		my $i = 0;
 		my @new_cluster;
 		foreach my $a (@{$alts}){
 			push(@new_cluster, $a);
-			last if $i > $depth;
+			last if ($i > $depth && $depth > 0);
 			$i++;
 		}
 		push(@{$clean_clusters[$counter]}, @new_cluster);
@@ -155,109 +156,55 @@ sub careful_cluster_phat_hits {
         return \@careful_clusters;
 }
 #------------------------------------------------------------------------
-sub careful_cluster {
-        my $seq       = shift;
-        my $phat_hits = shift;
-        my $flank     = shift;
-
-
-	my @careful_clusters;
-	if (!defined($phat_hits->[1])){
-		push(@careful_clusters, $phat_hits);
-		return \@careful_clusters;
-	}
-	my $temp_id = 0;
-	foreach my $hit (@{$phat_hits}){
-		$hit->{temp_id} = $temp_id;
-		
-		$temp_id++;
-	}
-	print STDERR "now careful_clustering....\n"
-		unless $main::quiet;
-	my %lookup;
-	my %matrix;
-	for (my $i = 0; $i < @{$phat_hits} - 1;$i++){
-		my $hit_i = $phat_hits->[$i];
-		$lookup{$hit_i->{temp_id}} = $hit_i;
-		for (my $j = $i +1 ; $j < @{$phat_hits}; $j++){
-			my $hit_j = $phat_hits->[$j];
-			$lookup{$hit_j->{temp_id}} = $hit_j;
-			if (compare::overlap($hit_i, $hit_j, 'query', $flank)){
-				$matrix{$hit_i->{temp_id}}{$hit_j->{temp_id}}++;
-			}
-			else {
-				#
-			}
-
-		}
-	}
-
-	my $pairs = SimpleCluster::pairs(\%matrix);
-	my $map   = SimpleCluster::singleLinkageClusters($pairs);
-
-	my %clustered;
-	my $i = 0;
-	foreach my $c (keys %{$map}){
-		foreach my $m (@{$map->{$c}}){
-			my $hit = $lookup{$m};
-			die "name not found in careful cluster!\n"
-			unless defined $m;
-			push(@{$careful_clusters[$i]}, $hit);
-			$clustered{$m}++;
-		}
-		$i++;
-	}
-	# get the left overs...
-	foreach my $temp_id (keys %lookup){
-		next if defined($clustered{$temp_id});
-		push(@{$careful_clusters[$i]}, $lookup{$temp_id});
-		$i++;
-	}
-	
-	return \@careful_clusters;
-}
-#------------------------------------------------------------------------
 sub mani_sort {
-	criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a) || criteria_3($a) <=> criteria_3($b);
+	criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a) || criteria_3($b) <=> criteria_3($a);
 }
 #------------------------------------------------------------------------
 sub criteria {
 	my $hit = shift;
 
-	my $ref = ref($hit);
+	my $ref = $hit->algorithm;
 
-	return  2 if $ref =~ /blast/;
-	return  3 if $ref =~ /2genome/;
-	return  1 if $ref =~ /snap/;
-	return  1 if $ref =~ /augustus/;
-	return  0;
+	return  0 if $ref =~ /repeat/i;
+	return  1 if $ref =~ /^snap$/i;
+	return  1 if $ref =~ /^augustus$/i;
+	return  1 if $ref =~ /^fgenesh$/i;
+	return  1 if $ref =~ /^twinscan$/i;
+	return  2 if $ref =~ /^blastn$/i;
+	return  2 if $ref =~ /^tblastx$/i;
+	return  3 if $ref =~ /^blastx$/i;
+	return  4 if $ref =~ /2genome$/i;
+	die "UNKNOWN CLASS(".ref($hit)."), ALGORITHM($ref), in cluster::criteria\n";
 }
 #------------------------------------------------------------------------
 sub criteria_2 {
         my $hit = shift;
 
-        my $ref = ref($hit);
+	my $score =  $hit->score();
+        #check if value is numerical ad adjust if not
+	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+	   $score = $hit->bits()
+	}
+	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+	    $score = $hit->significance;
+	    if($score =~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+		$score = 10000 - (10000 * $score);
+		$score = 0 if($score < 0);
+	    }
+	    else{
+		$score = 0;
+	    }
+	}
 
-        return  $hit->hsp('best')->score  if $ref =~ /blast/;
-	return  $hit->hsp('best')->score  if $ref =~ /repeatmasker/;
-	return  $hit->hsp('best')->bits   if $ref =~ /2genome/;
-	return $hit->score()              if $ref =~/snap/;	
-	return $hit->score()              if $ref =~/augustus/;
-	die "UNKNOWN CLASS(".ref($hit).") in cluster::criteria_2\n";
+	return $score;
 }
 #------------------------------------------------------------------------
 #third citeria used to address order issue with mpi vs standard maker
 sub criteria_3 {
     my $hit = shift;
 
-    my $ref = ref($hit);
-
-    return  $hit->hsp('best')->evalue if $ref =~ /blast/;
-    return  1                         if $ref =~ /repeatmasker/;
-    return  1                         if $ref =~ /2genome/;
-    return  1                         if $ref =~/snap/;
-    return  1                         if $ref =~/augustus/;
-    die "UNKNOWN CLASS(".ref($hit).") in cluster::criteria_3\n";
+    my ($lAq) = $hit->getLengths();
+    return $lAq;
 }
 #------------------------------------------------------------------------
 sub shadow_cluster {
@@ -265,6 +212,8 @@ sub shadow_cluster {
         my $seq       = shift;
         my $phat_hits = shift;
         my $flank     = shift;
+
+	$depth = 0 if (! defined($depth) || $depth < 0);
 
         my $coors  = PhatHit_utils::to_begin_and_end_coors($phat_hits, 'query');
         my $pieces = Shadower::getPieces($seq, $coors, $flank);
@@ -289,7 +238,7 @@ sub shadow_cluster {
 	print STDERR " sorting hits in shadow cluster...\n"
 		unless $main::quiet;
 
-	my @sorted = sort mani_sort @{$phat_hits};
+	my @sorted = ($depth == 0) ? @{$phat_hits} : sort mani_sort @{$phat_hits};
  
 	print STDERR "... finished.\n" unless $main::quiet;
 
@@ -301,7 +250,7 @@ sub shadow_cluster {
 		my $j = 0;
         	foreach my $s (@{$pieces}){
 
-		        if (defined($depth) &&
+		        if ($depth != 0 &&
 			    defined($c_size{$j}) &&
 			    $c_size{$j} >  $depth
 			   ){
@@ -316,8 +265,8 @@ sub shadow_cluster {
 
                         if ($class ne '0'){
                                 push(@{$clusters[$j]}, $hit); 
-
 				$c_size{$j}++;
+				last;
                         }
 			
 			$j++;
@@ -383,6 +332,133 @@ sub shadow_cluster_old {
 
 	#show_clusters(\@clusters);
 	return \@clusters;
+}
+#------------------------------------------------------------------------
+#for clustering multiple external_gff::PhatHit objects using the gene_id
+sub gene_cluster {
+   my $gff_hits = shift;
+
+   my %index;
+   my @clusters;
+
+   foreach my $trans (@{$gff_hits}){
+      my $gene_id = $trans->gene_id();
+
+      #external_gff::PhatHit hits must have a gene_id
+      die "ERROR: No gene id in hit\n" if (! defined $gene_id);
+
+      if(! exists $index{$gene_id}){
+	 push(@clusters, [$trans]);
+	 $index{$gene_id} = @clusters - 1;
+      }
+      else{
+	 my $c_id = $index{$gene_id};
+
+	 push(@{$clusters[$c_id]}, $trans);
+      }
+   }
+
+   return \@clusters;
+}
+#------------------------------------------------------------------------
+sub get_overlap_evidence {
+	my $p_hit     = shift;
+        my $phat_hits = shift;
+        my $depth     = shift;
+        my $flank     = shift;
+	
+	$flank = 0 if (!$flank || $flank < 0);
+	$depth = 0 if (!$depth || $depth < 0);
+
+	my ($sB, $sE) = PhatHit_utils::get_span_of_hit($p_hit, 'query');
+	($sB, $sE) = ($sE, $sB) if $sB > $sE;
+	
+	$sB = $sB - $flank;
+	$sE = $sE + $flank;    
+	
+	my @cluster;
+	push(@cluster, $p_hit); 
+	
+	my $i = 0;
+	foreach my $hit (@{$phat_hits}){	      
+	   if ($depth > 0 && $i >= $depth){
+	      last;
+	   }
+
+	   my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit, 'query');
+	   ($nB, $nE) = ($nE, $nB) if $nB > $nE;
+	   
+	   my $class = compare::compare($sB, $sE, $nB, $nE);
+	   
+	   if ($class ne '0'){
+	      push(@cluster, $hit);
+	      $i++;
+	   }
+	}
+
+	return \@cluster;
+}
+#------------------------------------------------------------------------
+sub careful_cluster {
+    my $seq       = shift;
+    my $phat_hits = shift;
+    my $flank     = shift;
+
+
+    my @careful_clusters;
+    if (!defined($phat_hits->[1])){
+	push(@careful_clusters, $phat_hits);
+	return \@careful_clusters;
+    }
+    my $temp_id = 0;
+    foreach my $hit (@{$phat_hits}){
+	$hit->{temp_id} = $temp_id;
+	
+	$temp_id++;
+    }
+    print STDERR "now careful_clustering....\n"
+	unless $main::quiet;
+    my %lookup;
+    my %matrix;
+    for (my $i = 0; $i < @{$phat_hits} - 1;$i++){
+	my $hit_i = $phat_hits->[$i];
+	$lookup{$hit_i->{temp_id}} = $hit_i;
+	for (my $j = $i +1 ; $j < @{$phat_hits}; $j++){
+	    my $hit_j = $phat_hits->[$j];
+	    $lookup{$hit_j->{temp_id}} = $hit_j;
+	    if (compare::overlap($hit_i, $hit_j, 'query', $flank)){
+		$matrix{$hit_i->{temp_id}}{$hit_j->{temp_id}}++;
+	    }
+	    else {
+		#
+	    }
+
+	}
+    }
+
+    my $pairs = SimpleCluster::pairs(\%matrix);
+    my $map   = SimpleCluster::singleLinkageClusters($pairs);
+
+    my %clustered;
+    my $i = 0;
+    foreach my $c (keys %{$map}){
+	foreach my $m (@{$map->{$c}}){
+	    my $hit = $lookup{$m};
+	    die "name not found in careful cluster!\n"
+		unless defined $m;
+	    push(@{$careful_clusters[$i]}, $hit);
+	    $clustered{$m}++;
+	}
+	$i++;
+    }
+    # get the left overs...
+    foreach my $temp_id (keys %lookup){
+	next if defined($clustered{$temp_id});
+	push(@{$careful_clusters[$i]}, $lookup{$temp_id});
+	$i++;
+    }
+    
+    return \@careful_clusters;
 }
 #------------------------------------------------------------------------
 sub show_clusters {

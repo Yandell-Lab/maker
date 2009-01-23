@@ -10,7 +10,6 @@ use FileHandle;
 use PostData;
 use Exporter;
 use PhatHit_utils;
-use SimpleCluster;
 use compare;
 use cluster;
 use clean;
@@ -24,11 +23,13 @@ use Bio::Search::HSP::PhatHSP::tblastx;
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub process {
-	my $rm_keepers            = shift;
-	my $repeat_blastx_keepers = shift;
-	my $query_seq = shift;
+	my $query_seq = pop;
 
-	my @features = (@{$rm_keepers}, @{$repeat_blastx_keepers});
+	my @features;  
+
+	while (my $f = shift){
+	   push(@features, @{$f});
+	}
 
 	my ($tes, $lcs) = seperate_types(\@features);
 
@@ -120,10 +121,11 @@ sub _hard_mask_seq {
    
       my $l = $e - $b + 1;
       
-      my $replace_string = substr($$seq, $b -1 , $l);
-      $replace_string =~ s/./$replace/g;
-
-      substr($$seq, $b -1 , $l, $replace_string);
+      #my $replace_string = substr($$seq, $b -1 , $l);
+      #$replace_string =~ s/./$replace/g;
+      
+      #substr($$seq, $b -1 , $l, $replace_string);
+      substr($$seq, $b -1 , $l, "$replace"x$l);
    }  
 }
 #-----------------------------------------------------------------------------
@@ -181,41 +183,48 @@ sub seperate_types {
 		elsif (ref($f) =~ /blastx/) {
 			push(@tes, $f);
 		}
+		elsif (ref($f) =~ /gff/){
+		    my $n = $f->hsp('best')->hit->seq_id();
+		    my $s = $f->algorithm;
+		    if ($n =~ /Simple_repeat/ || $n =~ /Low_complexity/){
+			push(@lcs, $f);
+		    }
+		    elsif($s =~ /blastx/i){
+			push(@tes, $f);
+		    }
+		    else {
+			push(@tes, $f);
+		    }
+		}
 	}
 	return (\@tes, \@lcs);
 }
 #-----------------------------------------------------------------------------
-sub gff {
-    my $qseq = shift @_;
-    my $qname = shift @_;
-    my $gff_file = shift @_;
-    my %repeat_regions;
-    my $parser = new Bio::Tools::GFF(-gff_version => 3,
-				     -file        => "$gff_file");
+#sub gff {
+#    my $chunk = shift @_;
+#    my $gff_file = shift @_;
+
+#     my %repeat_regions;
+#     my $parser = new Bio::Tools::GFF(-gff_version => 3,
+# 				     -file        => "$gff_file");
     
-    while (my $feature = $parser->next_feature()) {
-	my $tag = $feature->primary_tag;
-	my $chromosome = $feature->seq_id;
-	my $start = $feature->start;
-	my $end = $feature->end;
-	my $offset = int($start/1e6)*1e6;
-	my $chend = $offset + 1e6;
-	my $sname = join(":",$chromosome, ($offset+1));
-	my $seqname = join("..", $sname, $chend);
-	my $b = $start - $offset - 1;
-	my $e = $end - $offset - 1;
-	push @{$repeat_regions{$seqname}}, [$b, $e];
-    }
-    my @seq = split(//, $qseq);
-    foreach my $coor (@{$repeat_regions{$qname}}) {
-	my ($b, $e) = @{$coor};
-	foreach my $i ($b..$e) {
-	    $seq[$i] = "N";
-	}
-    }
-    my $mseq = join("", @seq);
-    return $mseq;
-}
+#     while (my $feature = $parser->next_feature()) {
+# 	my $tag = $feature->primary_tag;
+# 	my $id = $feature->seq_id;
+# 	my $b = $feature->start;
+# 	my $e = $feature->end;
+# 	push @{$repeat_regions{$id}}, [$b, $e];
+#     }
+#     my @seq = split(//, $qseq);
+#     foreach my $coor (@{$repeat_regions{$qname}}) {
+# 	my ($b, $e) = @{$coor};
+# 	foreach my $i ($b..$e) {
+# 	    $seq[$i] = "N";
+# 	}
+#     }
+#     my $mseq = join("", @seq);
+#    return $chunk;
+#}
 #-----------------------------------------------------------------------------
 1;
 

@@ -10,7 +10,6 @@ use FileHandle;
 use PostData;
 use Exporter;
 use PhatHit_utils;
-use SimpleCluster;
 use cluster;
 use clean;
 

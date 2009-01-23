@@ -5,44 +5,55 @@ package runlog;
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
+use Fasta;
 
 @ISA = qw();
 $VERSION = 0.1;
 
 #===make list of internal variables to log
 my @ctl_to_log = ('est',
+		  'est_reads',
+		  'altest',
+		  'est_gff',
+		  'altest_gff',
 		  'protein',
-		  'alt_est',
+		  'protein_gff',
+		  'model_org',
 		  'repeat_protein',
 		  'rmlib',
 		  'rm_gff',
 		  'predictor',
+		  'sort_base',
 		  'snaphmm',
 		  'augustus_species',
-		  'model_org',
+		  'fgenesh_species',
+		  'model_gff',
+		  'pred_gff',
 		  'max_dna_len',
 		  'split_hit',
-		  'snap_flank',
+		  'pred_flank',
 		  'single_exon',
+		  'keep_preds',
 		  'alt_peptide',
-		  'percov_blastn',
-		  'percid_blastn',
+		  'blast_type',
+		  'pcov_blastn',
+		  'pid_blastn',
 		  'eval_blastn',
 		  'bit_blastn',
-		  'percov_blastx',
-		  'percid_blastx',
+		  'pcov_rm_blastx',
+		  'pid_rm_blastx',
+		  'eval_rm_blastx',
+		  'bit_rm_blastx',
+		  'pcov_blastx',
+		  'pid_blastx',
 		  'eval_blastx',
 		  'bit_blastx',
-		  'percov_tblastx',
-		  'percid_tblastx',
+		  'pcov_tblastx',
+		  'pid_tblastx',
 		  'eval_tblastx',
 		  'bit_tblastx',
 		  'ep_score_limit',
 		  'en_score_limit',
-		 );
-   
-my @opt_to_log = ('R',
-		  'PREDS'
 		 );
 
 my %SEEN;
@@ -53,22 +64,39 @@ my %SEEN;
 sub new {
     my $self = {};
     my $class = shift;
+    my @args = @_;
 
-    bless ($self, $class);
+    bless ($self, $class);    
 
-    $self->{CTL_OPTIONS} = shift;
-    $self->{OPT} = shift;
-    $self->{the_void} = shift;
-    $self->{file_name} = shift || "run.log";
-    $self->{file} = $self->{the_void} . "/" . $self->{file_name};
+    if($self->_initialize(@args)){
+       $self->_load_old_log();
+       $self->_clean_files();
+       $self->_write_new_log();
+    }
 
-    $self->{file} =~ s/\/\//\//g;
-
-    $self->_load_old_log();
-    $self->_clean_files();
-    $self->_write_new_log();
+    $self->report_status();
 
     return $self;
+}
+#-------------------------------------------------------------------------------
+sub _initialize {
+   my $self = shift;
+   $self->{CTL_OPTIONS} = shift;
+   $self->{params} = shift;
+   $self->{file_name} = shift || "run.log";
+
+   print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
+
+   my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
+   my $length = $self->{params}->{seq_length};
+
+   if($length < $min_contig){#skip if this is a short contig
+      $self->{continue_flag} = -2; #skipped signal is -2
+
+      return 0;
+   }
+   
+   return 1;
 }
 #-------------------------------------------------------------------------------
 sub _load_old_log {
@@ -76,11 +104,10 @@ sub _load_old_log {
 
    $self->{die_count} = 0;
 
-   my $log_file = $self->{file};
+   my $log_file = $self->{file_name};
    my %logged_vals;
 
-   print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
-   if (-e $log_file){
+   if (-e $log_file){#load log file if available
       print STDERR "Processing run.log file...\n" unless($main::quiet);
       open (IN, "< $log_file");      
       while( defined (my $line = <IN>)){
@@ -100,12 +127,11 @@ sub _load_old_log {
 sub _clean_files{
    my $self = shift;
 
-   my $the_void = $self->{the_void};
+   my $the_void = $self->{params}->{the_void};
    my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
-   my %OPT = %{$self->{OPT}};
-   
+
    #get gff file name
-   my $log_file = $self->{file};
+   my $log_file = $self->{file_name};
    my $gff_file = $the_void;
    $gff_file =~ s/theVoid\.([^\/]+$)/$1.gff/;
 
@@ -119,59 +145,46 @@ sub _clean_files{
 
    if (-e $log_file) {
       if (exists $logged_vals{DIED}) {
-	 if($OPT{f} && ! $SEEN{$log_file}){
+	 if($CTL_OPTIONS{force} && ! $SEEN{$log_file}){
 	    $self->{die_count} = 0; #reset the die count
 	    $continue_flag = 1; #re-run
 	    $rm_key{force}++;
 	    $SEEN{$log_file}++;
 	 }
-	 elsif ($OPT{retry}){
+	 else{
 	    $continue_flag = 2;	#rerun died
-	    $continue_flag = -3 if($self->{die_count} > $OPT{retry}); #only let die up to count
+	    $continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
 	    $rm_key{retry}++ if ($continue_flag == 2);
 	 }
-	 else{
-	    $continue_flag = -1; #skip died
-	 }
       }
-      elsif ($OPT{f}) {
+      elsif ($CTL_OPTIONS{force}) {
 	 $rm_key{force}++;
 	 $continue_flag = 1;	#run/re-run
       }
       else {
 	 $continue_flag = 0 if (-e $gff_file); #don't re-run finished
       
-	 #CHECK COMMAND LINE OPTIONS FOR CHANGES
-	 while (my $key = each %{$logged_vals{OPT}}) {
-	    my $log_val = $logged_vals{OPT}{$key};
-	    my $opt_val = '';
-	    $opt_val = $OPT{$key} unless (! defined $OPT{$key});
-	 
-	    #if previous log options are not the same as current the options
-	    if ($log_val ne $opt_val) {
-	       print STDERR "MAKER WARNING: Change in command line flag \'$key\' since last run\n";
-	       $continue_flag = 1; #re-run because opts changed
+	 #CHECK CONTROL FILE OPTIONS FOR CHANGES
+	 my $cwd = Cwd::cwd();
+	 while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
+	    my $log_val = '';
+	    if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
+		$log_val = $logged_vals{CTL_OPTIONS}{$key};
+		if($key eq 'repeat_protein'){
+		   #don't care about absolute location
+		   $log_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+		}
+	    }
 	    
-	       if (-e $gff_file) {
-		  $rm_key{gff}++; #always rebuild gff when some option has changed
-	       }       
-	    
-	       if ($key eq 'R') {
-		  $rm_key{all}++;
+	    my $ctl_val = '';
+	    if(defined $CTL_OPTIONS{$key}){
+	       $ctl_val = $CTL_OPTIONS{$key};
+	       $ctl_val =~ s/^$cwd\/*//;
+	       if($key eq 'repeat_protein'){
+		  #don't care about absolute location
+		  $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
 	       }
 	    }
-	 }
-	 
-	 #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	 while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
-	    #needed only for MPI
-	    if (defined $CTL_OPTIONS{"old_$key"}){
-	       $CTL_OPTIONS{$key} = $CTL_OPTIONS{"old_$key"};
-	    }
-
-	    my $log_val = $logged_vals{CTL_OPTIONS}{$key};
-	    my $ctl_val = '';
-	    $ctl_val = $CTL_OPTIONS{$key} if(defined $CTL_OPTIONS{$key});
 
 	    #if previous log options are not the same as current control file options
 	    if ($log_val ne $ctl_val) {
@@ -180,49 +193,51 @@ sub _clean_files{
 	    
 	       $continue_flag = 1; #re-run because ctlopts changed
 	    
+	       $rm_key{preds}++; #all changes affect final predictions
+	       
 	       if (-e $gff_file) {
 		  $rm_key{gff}++; #always rebuild gff when some option has changed
 	       }
-	    
+	       
 	       if ($key eq 'max_dna_len') {
 		  $rm_key{all}++;
 	       }
-	    
-	       if ( ($key eq 'repeat_protein' ||
-		     $key eq 'rmlib' ||
-		     $key eq 'model_org' ||
-		     $key eq 'rmlib_only') &&
-		    ! $OPT{R} &&
-		    ! $CTL_OPTIONS{rm_gff}
+	       
+	       if ($key eq 'rm_gff' ||
+		   $key eq 'model_org' ||
+		   $key eq 'rmlib'		   
 		  ) {
 		  $rm_key{all}++;
 	       }
-	    
-	       if ( $key eq 'rm_gff' &&  
-		    ! $OPT{R}
+
+	       if ($key eq 'repeat_protein' ||
+		   $key eq 'pcov_rm_blastx' ||
+		   $key eq 'pcid_rm_blastx' ||
+		   $key eq 'eval_rm_blastx' ||
+		   $key eq 'bit_rm_blastx' ||
+		   $key eq 'blast_type'
 		  ) {
-		  $rm_key{all}++;
+		  $rm_key{all_but}++;
 	       }
-	    
-	       if ($key eq 'snaphmm' ||
-		   $key eq 'snap_flank' ||
-		   $key eq 'single_exon'
-		  ) {
+	       
+	       if ($key eq 'snaphmm') {
 		  $rm_key{snap}++;
 	       }
 	    
-	       if ($key eq 'augustus_species' ||
-		   $key eq 'snap_flank' ||
-		   $key eq 'single_exon'
-		  ) {
+	       if ($key eq 'augustus_species') {
 		  $rm_key{augustus}++;
+	       }
+
+	       if ($key eq 'fgenesh_species') {
+		  $rm_key{fgenesh}++;
 	       }
 	    
 	       if ($key eq 'split_hit' ||
 		   $key eq'ep_score_limit' ||
 		   $key eq'en_score_limit'
 		  ) {
-		  $rm_key{exonerate}++;
+		  $rm_key{e_exonerate}++;
+		  $rm_key{p_exonerate}++;
 	       }
 	    
 	       if ($key eq 'protein' ||
@@ -230,18 +245,26 @@ sub _clean_files{
 		   $key eq 'eval_blastx'
 		  ) {
 		  $rm_key{blastx}++;
-		  $rm_key{exonerate}++;
+		  $rm_key{p_exonerate}++;
 	       }
-	    
-	       if ($key eq 'est' ||
-		   $key eq 'eval_blastn' ||
+		    
+	       if ($key eq 'est') {
+		  $rm_key{est_blastn}++;
+		  $rm_key{e_exonerate}++;
+	       }
+
+	       if ($key eq 'est_reads') {
+		  $rm_key{read_blastn}++;
+	       }
+		    
+	       if ($key eq 'eval_blastn' ||
 		   $key eq 'split_hit'
 		  ) {
 		  $rm_key{blastn}++;
-		  $rm_key{exonerate}++;
+		  $rm_key{e_exonerate}++;
 	       }
 
-               if ($key eq 'alt_est' ||
+               if ($key eq 'altest' ||
                    $key eq 'eval_tblastx' ||
 		   $key eq 'split_hit'
 		   ) {
@@ -270,16 +293,16 @@ sub _clean_files{
       #===Remove files that can no longer be re-used
    
       #-print file type specific warnings and delete files
-      if (exists $rm_key{retry}) {
-	 print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n";
-      
+      if (exists $rm_key{force}) {
+	 print STDERR "MAKER WARNING: All old files will be erased before continuing\n";
+	 
 	 #delete everything in the void
 	 File::Path::rmtree($the_void);
 	 File::Path::mkpath($the_void);
 	 unlink($gff_file) if(-e $gff_file);
       }
-      elsif (exists $rm_key{force}) {
-	 print STDERR "MAKER WARNING: All old files will be erased before continuing\n";
+      elsif (exists $rm_key{retry}) {
+	 print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n";
       
 	 #delete everything in the void
 	 File::Path::rmtree($the_void);
@@ -295,24 +318,56 @@ sub _clean_files{
 	 File::Path::mkpath($the_void);
 	 unlink($gff_file) if(-e $gff_file);
       }
+      elsif (exists $rm_key{all_but}) {
+	 print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
+	 "All old non-RepeatMasker files will be erased before continuing\n";
+      
+	 #delete everything in the void
+	 my @f = <$the_void/*auto_annotator*>;
+	 @f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
+
+	 #delete files in the void
+	 foreach my $f (@f) {
+	    unlink($f) if(-f $f);
+	    File::Path::rmtree($f) if(-d $f);
+	 }
+      }
       else {
-	 if (exists $rm_key{snap}) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
-	    "Old Snap files will be erased before continuing\n";
+	 if (exists $rm_key{preds}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old prediction data impossible\n".
+	    "Old prediction files will be erased before continuing\n";
 	 
-	    my @f = <$the_void/*snap*>;
+	    my @f = <$the_void/*auto_annotator*>;
 	    push (@files, @f);
 	 }
-	 if (exists $rm_key{augustus} && defined($logged_vals{CTL_OPTIONS}{augustus})) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
-	    "Old Augustus files will be erased before continuing\n";
-	 
-	    my @f = <$the_void/*augustus*>;
-	    push (@files, @f);
+	 else
+	 {
+	    if (exists $rm_key{snap}) {
+	       print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
+	       "Old Snap files will be erased before continuing\n";
+	       
+	       my @f = <$the_void/*snap*>;
+	       push (@files, @f);
+	    }
+	    if (exists $rm_key{augustus}) {
+	       print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
+	       "Old Augustus files will be erased before continuing\n";
+	       
+	       my @f = <$the_void/*augustus*>;
+	       push (@files, @f);
+	    }
+	    if (exists $rm_key{fgenesh}) {
+	       print STDERR "MAKER WARNING: Changes in control files make re-use of old FgenesH data impossible\n".
+	       "Old FgenesH files will be erased before continuing\n";
+	       
+	       my @f = <$the_void/*fgenesh*>;
+	       push (@files, @f);
+	    }
 	 }
+
 	 if (exists $rm_key{blastn}) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastn data impossible\n".
-	    "Old Blastn files will be erased before continuing\n";
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
+	    "Old EST Blastn files will be erased before continuing\n";
 	 
 	    my @f = <$the_void/*blastn*>;
 	    foreach my $f (@f){
@@ -320,6 +375,29 @@ sub _clean_files{
 	       push (@dirs, $f) if (-d $f);
 	    }
 	 }
+	 else{
+	    if (exists $rm_key{est_blastn}) {
+	       print STDERR "MAKER WARNING: Changes in control files make re-use of assembled EST Blastn data impossible\n".
+	       "Old EST Blastn files will be erased before continuing\n";
+	       
+	       my @f = <$the_void/*est_blastn*>;
+	       foreach my $f (@f){
+		  push (@files, $f) if (-f $f);
+		  push (@dirs, $f) if (-d $f);
+	       }
+	    }
+	    elsif (exists $rm_key{read_blastn}) {
+	       print STDERR "MAKER WARNING: Changes in control files make re-use of unassembled EST read Blastn data impossible\n".
+	       "Old EST reads Blastn files will be erased before continuing\n";
+	       
+	       my @f = <$the_void/*read_blastn*>;
+	       foreach my $f (@f){
+		  push (@files, $f) if (-f $f);
+		  push (@dirs, $f) if (-d $f);
+	       }
+	    }
+	 }
+
          if (exists $rm_key{tblastx}) {
             print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
 		"Old tBlastx files will be erased before continuing\n";
@@ -329,7 +407,8 @@ sub _clean_files{
 		push (@files, $f) if (-f $f);
 		push (@dirs, $f) if (-d $f);
             }
-	}
+	 }
+
 	 if (exists $rm_key{blastx}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
 	    "Old Blastx files will be erased before continuing\n";
@@ -340,13 +419,23 @@ sub _clean_files{
 	       push (@dirs, $f) if (-d $f);
 	    }
 	 }
-	 if (exists $rm_key{exonerate}) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Exonerate data impossible\n".
-	    "Old Exonerate files will be erased before continuing\n";
+
+	 if (exists $rm_key{e_exonerate}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
+	    "Old EST Exonerate files will be erased before continuing\n";
 	 
-	    my @f = <$the_void/*exonerate*>;
+	    my @f = <$the_void/*est_exonerate*>;
 	    push (@files, @f);
 	 }
+
+	 if (exists $rm_key{p_exonerate}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
+	    "Old protein Exonerate files will be erased before continuing\n";
+	 
+	    my @f = <$the_void/*p_exonerate*>;
+	    push (@files, @f);
+	 }
+
 	 if (exists $rm_key{gff}) {
 	    print STDERR "MAKER WARNING: The gff file $gff_file must now be removed.\n";
 	    push (@files, $gff_file);
@@ -371,33 +460,26 @@ sub _clean_files{
 sub _write_new_log {
    my $self = shift;
 
-   my $log_file = $self->{file};
+   my $log_file = $self->{file_name};
    
    my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
-   my %OPT = %{$self->{OPT}};
 
    return if ($self->{continue_flag} <= 0);
 
    open (LOG, "> $log_file");
 
-   #log command line options
-   foreach my $key (@opt_to_log) {
-      my $opt_val = '';
-      $opt_val = $OPT{$key} unless (! defined $OPT{$key});
-      
-      print LOG "OPT\t$key\t$opt_val\n";
-   }
-   
    #log control file options
+   my $cwd = Cwd::cwd();
    foreach my $key (@ctl_to_log) {
-      #needed only for MPI
-      if (defined $CTL_OPTIONS{"old_$key"}){
-	 $CTL_OPTIONS{$key} = $CTL_OPTIONS{"old_$key"};
-      }
-
       my $ctl_val = '';
-      $ctl_val = $CTL_OPTIONS{$key} if(defined $CTL_OPTIONS{$key});
-				  
+      if(defined $CTL_OPTIONS{$key}){
+	 $ctl_val = $CTL_OPTIONS{$key} ;
+	 $ctl_val =~ s/^$cwd\/*//;
+	 if($key eq 'repeat_protein'){
+	    #don't care about absolute location
+	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+	 }
+      }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }
    close(LOG);
@@ -410,7 +492,7 @@ sub add_entry {
    my $key   = shift;
    my $value = shift;
 
-   my $log_file = $self->{file};
+   my $log_file = $self->{file_name};
 
    open(LOG, ">> $log_file");
    print LOG "$type\t$key\t$value\n";
@@ -423,19 +505,91 @@ sub get_die_count {
    return $self->{die_count};
 }
 #-------------------------------------------------------------------------------
+sub report_status {
+   my $self = shift;
+   my $flag = $self->{continue_flag};
+   my $die_count = $self->{die_count};
+   my $seq_id = $self->{params}->{seq_id};
+   my $seq_out_name = Fasta::seqID2SafeID($seq_id);
+   my $out_dir = $self->{params}->{out_dir};
+   my $fasta_ref = $self->{params}->{fasta_ref};
+   my $length = $self->{params}->{seq_length};
+
+   if($flag == 0){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The contig has already been processed!!\n",
+		   "Maker will now skip to the next contig.\n",
+		   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",		   
+		   "#---------------------------------------------------------------------\n\n\n";
+   }
+   elsif($flag == 1){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Now starting the contig!!\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+                   "#---------------------------------------------------------------------\n\n\n";
+   }
+   elsif($flag == 2){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Now retrying the contig!!\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+		   "Retry: $die_count!!\n",
+                   "#---------------------------------------------------------------------\n\n\n";
+   }
+   elsif($flag == -1){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "The contig failed $die_count time!!\n",
+		   "Maker will not try again!!\n",
+		   "The contig will be stored in a fasta file that you can use for debugging.\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+		   "FASTA: $out_dir/$seq_out_name.died.fasta\n",
+		   "#---------------------------------------------------------------------\n\n\n";
+
+      open (my $DFAS, "> $out_dir/$seq_out_name.died.fasta");
+      print $DFAS $$fasta_ref;
+      close ($DFAS);
+   }
+   elsif($flag == -2){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Skipping the contig because it is too short!!\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+		   "#---------------------------------------------------------------------\n\n\n";
+   }
+   else{
+      die "ERROR: No valid continue flag\n";
+   }
+}
+#-------------------------------------------------------------------------------
 sub get_continue_flag {
    my $self = shift;
+   my $flag = $self->{continue_flag};
+   my $message;
 
-   #-----------------
-   #  0 => already ran don't re-run
-   #  1 => run or re-run with current settings
-   #  2 => re-run previously died
-   # -1 => don't re-run, it died
-   # -2 => not finished but skip because $OPT{retry} is in force
-   # -3 => skip when $OPT{retry} is in force because die_count is too high
-   #-----------------
+   if($flag == 0){
+      $message = 'FINISHED'; #already ran don't re-run
+   }
+   elsif($flag == 1){
+      $message = 'STARTED'; #run with current settings
+   }
+   elsif($flag == 2){
+      $message = 'RETRY'; #re-run previously died
+   }
+   elsif($flag == -1){
+      $message = 'DIED_SKIPPED_PERMANENT'; #don't re-run, it died
+   }
+   elsif($flag == -2){
+      $message = 'SKIPPED_SMALL'; #not finished but skipped
+   }
+   else{
+      die "ERROR: No valid continue flag\n";
+   }
 
-   return $self->{continue_flag};
+   return $flag, $message;
 }
 #-------------------------------------------------------------------------------
 1;

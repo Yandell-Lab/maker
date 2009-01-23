@@ -10,7 +10,6 @@ use FileHandle;
 use PostData;
 use Exporter;
 use PhatHit_utils;
-use SimpleCluster;
 use compare;
 use cluster;
 use exonerate::splice_info;
@@ -22,15 +21,16 @@ use exonerate::splice_info;
 #------------------------------------------------------------------------
 sub throw_out_bad_splicers {
 	my $phat_hits = shift;
+	my $seq = shift;
+
         my @keepers;
         foreach my $hit (@{$phat_hits}){
-		die " clean::throw_out_bad_slicers only works on est2genome hits!\n"
-		unless ref($hit) =~ /est2genome$/;
+                if ($hit->num_hsps == 1){
+		    push(@keepers, $hit);
+		    next;
+		}
 
-                die " clean::throw_out_bad_slicers only works on spliced ests
-		call clean::purge_single_exon_hits first!\n"
-                if $hit->num_hsps == 1;
-
+		exonerate::splice_info::set_donors_acceptors($hit, $seq);
 		my $str = exonerate::splice_info::get_splice_str($hit);
 
 		my $num = exonerate::splice_info::get_numbers($str);
@@ -41,7 +41,6 @@ sub throw_out_bad_splicers {
                 push(@keepers, $hit);
         }
         return \@keepers;
-
 }
 #------------------------------------------------------------------------
 sub purge_single_exon_hits {

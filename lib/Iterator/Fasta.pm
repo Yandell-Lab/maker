@@ -25,14 +25,14 @@ sub new {
         my $self = {};
         bless $self;
 
-	$self->set_number_of_entries($arg);
+	$self->_set_number_of_entries($arg);
 
 	$self->fileHandle($arg);
 
 	return $self;
 }
 #-------------------------------------------------------------------------------
-sub set_number_of_entries {
+sub _set_number_of_entries {
 	my $self = shift;
 	my $arg  = shift;
 
@@ -40,7 +40,8 @@ sub set_number_of_entries {
 	   $fh->open($arg);
 
 	my $i = 0;
-	while (my $line = <$fh>){
+	my $line;
+	while ($line = <$fh>){
 		$i++ if $line =~ /^>/;
 	}
 	$fh->close();
@@ -57,10 +58,7 @@ sub find {
 	return $hash{$id} if defined($hash{$id});
 
 	while (my $query = $self->nextEntry()){
-	        my $query_def = Fasta::getDef($query);
-
-		my ($id) = $query_def =~ />(\S+)/;
-
+		my ($id) = Fasta::getSeqID(\$query);
 		$hash{$id} = $query;
 	}
 
@@ -78,8 +76,8 @@ sub nextEntry {
 	if (! openhandle($fh)){ #checks to see if file handle is open
 	    return undef; 
 	}
-
-	while(my $line = <$fh>){
+	my $line;
+	while($line = <$fh>){
                 $line =~ s/>//;
 		$line =~ s/>$//;
                 $line = ">".$line;
@@ -90,6 +88,11 @@ sub nextEntry {
 	
 	$fh->close();
 	return undef;
+}
+#-------------------------------------------------------------------------------
+sub nextFasta {#alias to nextEntry
+   my $self = shift;
+   return $self->nextEntry;
 }
 #-------------------------------------------------------------------------------
 sub finished {

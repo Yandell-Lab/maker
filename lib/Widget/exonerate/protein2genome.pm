@@ -8,8 +8,8 @@ use Exporter;
 use PostData;
 use FileHandle;
 use Widget::exonerate;
-use exonerate::PhatHit::protein2genome;
-use exonerate::PhatHSP::protein2genome;
+use Bio::Search::Hit::PhatHit::protein2genome;
+use Bio::Search::HSP::PhatHSP::protein2genome;
 @ISA = qw(
 	Widget::exonerate
        );
@@ -342,12 +342,11 @@ sub assemble {
 	add_align_attr($exons, $q_seq_len, $t_seq_len);
 
         my $phat_hit = 
-	new exonerate::PhatHit::protein2genome(
-	                          '-name'        => $v->{q_id},
-                                  '-description' => $v->{q_id},
-                                  '-algorithm'   => 'exonerate::protein2genome',
-                                   '-length'     => $q_seq_len,
-                                  );
+	new Bio::Search::Hit::PhatHit::protein2genome('-name'        => $v->{q_id},
+						      '-description' => $v->{q_id},
+						      '-algorithm'   => 'exonerate::protein2genome',
+						      '-length'     => $q_seq_len,
+						      );
 
         $phat_hit->queryLength($t_seq_len);
 
@@ -357,7 +356,7 @@ sub assemble {
 		#print "XXXXXXXXX $i XXXXXXXXXXXX\n";
 		#next unless $i ==3;
 		my $args = load_args($exon, $v);	
-		my $hsp = new exonerate::PhatHSP::protein2genome(@{$args});
+		my $hsp = new Bio::Search::HSP::PhatHSP::protein2genome(@{$args});
                    $hsp->queryName($v->{q_id});
 		#-------------------------------------------------
                 # setting strand because bioperl is all fucked up!

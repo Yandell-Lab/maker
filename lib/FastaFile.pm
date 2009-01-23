@@ -47,8 +47,10 @@ sub getFasta {
 }
 #-----------------------------------------------------------------------------
 sub writeFile {
-	my $fasta = shift;
+	my $f     = shift;
 	my $loc   = shift;
+
+	my $fasta = (ref($f) eq '') ? \$f : $f; 
 
         my $fh = new FileHandle();
            $fh->open(">$loc") || die "couldn't open $loc";

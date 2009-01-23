@@ -87,7 +87,7 @@ BEGIN {
 
 ################################################ subroutine header begin ##
 
-=head2 new
+=head1 new
 
  Usage     : How to use this function/method
 
@@ -132,7 +132,7 @@ sub new {
 
 ################################################ subroutine header begin ##
 
-=head2 nB
+=head1 nB
 
  Usage     : How to use this function/method
 
@@ -166,24 +166,39 @@ sub new {
 
 sub nB {
    my $self = shift;
-   my $w    = shift;
-     
-   if ($self->strand($w) == 1 || $self->strand($w) == 0) {
-      my $sorted = $self->sortFeatures($w);
-      return  $sorted->[0]->start($w);
+   my $w    = shift || 'query';
+
+   if ($w eq 'sbjct' || $w eq 'subject'){
+       $w = 'hit';
    }
-   elsif ($self->strand($w) == -1) {
-      my $sorted = $self->revSortFeatures($w);
-      return  $sorted->[0]->end($w);
+
+   #set both nB for query and hit on first time through
+   if(! defined $self->{nB}){
+       $self->{nB} = {};
+       $self->nB('query');
+       $self->nB('hit');
    }
-   else {
-      die "dead in PhatHit::Base::nB\n";
+
+   if(! defined $self->{nB}{$w}){
+       if ($self->strand($w) == 1 || $self->strand($w) == 0) {
+	   my $sorted = $self->sortFeatures($w);
+	   $self->{nB}{$w} =  $sorted->[0]->start($w);
+       }
+       elsif ($self->strand($w) == -1) {
+	   my $sorted = $self->revSortFeatures($w);
+	   $self->{nB}{$w} =  $sorted->[0]->end($w);
+       }
+       else {
+	   die "dead in PhatHit::Base::nB\n";
+       }
    }
+
+   return $self->{nB}{$w};
 }
 
 ################################################ subroutine header begin ##
 
-=head2 nE
+=head1 nE
 
  Usage     : How to use this function/method
 
@@ -217,24 +232,39 @@ sub nB {
 
 sub nE {
    my $self = shift;
-   my $w    = shift;
+   my $w    = shift || 'query';
 
-   if ($self->strand($w) == -1) {
-      my $sorted = $self->sortFeatures($w);
-      return  $sorted->[0]->start($w);
+   if ($w eq 'sbjct' || $w eq 'subject'){
+       $w = 'hit';
    }
-   elsif ($self->strand($w) == 1 || $self->strand($w) == 0) {
-      my $sorted = $self->revSortFeatures($w);
-      return  $sorted->[0]->end($w);
+
+   #set both nB for query and hit on first time through
+   if(! defined $self->{nE}){
+       $self->{nE} = {};
+       $self->nE('query');
+       $self->nE('hit');
    }
-   else {
-      die "dead in blastn::PhatHit::nE\n";
+
+   if(! defined $self->{nE}{$w}){
+       if ($self->strand($w) == -1) {
+	   my $sorted = $self->sortFeatures($w);
+	   $self->{nE}{$w} = $sorted->[0]->start($w);
+       }
+       elsif ($self->strand($w) == 1 || $self->strand($w) == 0) {
+	   my $sorted = $self->revSortFeatures($w);
+	   $self->{nE}{$w} = $sorted->[0]->end($w);
+       }
+       else {
+	   die "dead in blastn::PhatHit::nE\n";
+       }
    }
+
+   return $self->{nE}{$w};
 }
 
 ################################################ subroutine header begin ##
 
-=head2 nB
+=head1 nB
 
  Usage     : How to use this function/method
 
@@ -280,7 +310,7 @@ sub start {
 
 ################################################ subroutine header begin ##
 
-=head2 end
+=head1 end
 
  Usage     : How to use this function/method
 
@@ -327,7 +357,7 @@ sub end {
 
 ################################################ subroutine header begin ##
 
-=head2 id
+=head1 id
 
  Usage     : How to use this function/method
 
@@ -376,7 +406,7 @@ sub id
 
 ################################################ subroutine header begin ##
 
-=head2 strand
+=head1 strand
 
  Usage     : How to use this function/method
 
@@ -413,8 +443,7 @@ sub id
 
 ################################################## subroutine header end ##
 
-sub strand
-{
+sub strand {
    my ($self, $seqType) = @_;
 
    $seqType ||= (wantarray ? 'list' : 'query');
@@ -446,7 +475,7 @@ sub strand
 
 ################################################ subroutine header begin ##
 
-=head2 hsps
+=head1 hsps
 
  Usage     : How to use this function/method
 
@@ -482,8 +511,7 @@ sub strand
 # XXXX
 # think about changing this to return a reference, and to be in
 # cjm-normal-form.
-sub hsps
-{
+sub hsps {
    my $self = shift;
    my $hsps = shift;
 
@@ -502,7 +530,7 @@ sub hsps
 
 # XXXX percent aligned query
 
-=head2 pAq
+=head1 pAq
 
  Usage     : How to use this function/method
 
@@ -533,8 +561,7 @@ sub hsps
 
 ################################################## subroutine header end ##
 
-sub pAq
-{
+sub pAq {
    my $self    = shift;
    my $ql      = shift;
 
@@ -553,7 +580,7 @@ sub pAq
 ################################################ subroutine header begin ##
 
 # XXXX percent aligned hit
-=head2 pAh
+=head1 pAh
 
 Usage     : How to use this function/method
 
@@ -584,8 +611,7 @@ Usage     : How to use this function/method
 
 ################################################## subroutine header end ##
 
-sub pAh
-{
+sub pAh {
    my $self = shift;
 
    my ($laq, $lah) = $self->getLengths();
@@ -596,7 +622,7 @@ sub pAh
 
 ################################################ subroutine header begin ##
 
-=head2 getLengths
+=head1 getLengths
 
  Usage     : How to use this function/method
 
@@ -628,8 +654,7 @@ sub pAh
 
 ################################################## subroutine header end ##
 
-sub getLengths
-{
+sub getLengths {
    my $self = shift;
 
    if (defined ($self->{LAlnQ}) && defined ($self->{LAlnH})){
@@ -650,10 +675,8 @@ sub getLengths
    my $qOffset = $q_b - 1;
    my $hOffset = $h_b - 1;
 
-   my $q_seq = '';
-   my $h_seq = '';
-   $q_seq .= 'nnnnnnnnnnnnnnnnnnnn' while (length($q_seq) <= $qLen);
-   $h_seq .= 'nnnnnnnnnnnnnnnnnnnn' while (length($h_seq) <= $hLen);
+   my $q_seq = 'n'x$qLen;
+   my $h_seq = 'n'x$hLen;
 
    foreach my $s ($self->hsps) {
       my $q_hspLen = abs($s->end('query') - $s->start('query')) + 1;
@@ -686,7 +709,7 @@ sub getLengths
 
 ################################################ subroutine header begin ##
 
-=head2 show
+=head1 show
 
  Usage     : How to use this function/method
 
@@ -730,7 +753,7 @@ sub show
 
 ################################################ subroutine header begin ##
 
-=head2 revSortFeatures
+=head1 revSortFeatures
 
  Usage     : How to use this function/method
 
@@ -775,7 +798,7 @@ sub revSortFeatures
 
 ################################################ subroutine header begin ##
 
-=head2 sortFeatures
+=head1 sortFeatures
 
  Usage     : How to use this function/method
 
@@ -813,15 +836,14 @@ sub sortFeatures
    my $self = shift;
    my $who  = shift;
 
-   my @hsps =  $self->hsps;
+   my @subfeatures = sort {$a->start($who) <=> $b->start($who)} $self->hsps;
 
-   my @subfeatures = sort {$a->start($who) <=> $b->start($who)} @hsps;
    return \@subfeatures;
 }
 
 ################################################ subroutine header begin ##
 
-=head2 queryLength
+=head1 queryLength
 
  Usage     : How to use this function/method
 
@@ -865,7 +887,7 @@ sub queryLength
 
 ################################################ subroutine header begin ##
 
-=head2 _getTestHits
+=head1 _getTestHits
 
  Usage     : *private*
 
@@ -919,7 +941,7 @@ sub _getTestHits {
 
 ################################################ subroutine header begin ##
 
-=head2 AUTOLOAD
+=head1 AUTOLOAD
 
  Usage     : *private*
 

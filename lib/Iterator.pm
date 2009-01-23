@@ -29,12 +29,13 @@ sub nextEntry {
         my $self = shift;
 
         my $fh = $self->fileHandle();
-        while(my $line = <$fh>){
+	my $line;
+        while($line = <$fh>){
                 $self->offsetInFile(1);
                 return $line;
         }
         $fh->close();
-        return 0;
+        return undef;
 }
 #-------------------------------------------------------------------------------
 sub offsetInFile {

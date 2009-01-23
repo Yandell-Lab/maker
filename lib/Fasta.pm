@@ -7,6 +7,7 @@ use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use PostData;
 use FileHandle;
+use URI::Escape;
 
 @ISA = qw(
           );
@@ -102,11 +103,11 @@ sub def {
 #-------------------------------------------------------------------------------
 #------------------------------- SUBS ------------------------------------------
 #-------------------------------------------------------------------------------
-sub  getWantedFromMulti {
+sub getWantedFromMulti {
         my $multiFasta = shift;
         my $wanted     = shift;
 
-        $/ = "\n>";
+        local $/ = "\n>";
 
         my $fh = new FileHandle;
            $fh->open("$multiFasta");
@@ -119,7 +120,7 @@ sub  getWantedFromMulti {
 			push(@fastas, $line);
                 }
         }
-        $/ = "\n";
+        local $/ = "\n";
         $fh->close;
 
 	return \@fastas;
@@ -128,81 +129,190 @@ sub  getWantedFromMulti {
 sub getDef {
         my $fasta = shift;
 
-	my @fasta = split(/\n/, $fasta);
-        my $seq = '';
+	#always work with references
+	$fasta = $$fasta while(ref($fasta) eq 'REF');
+	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+	my @fasta = split(/\n/, $$fasta_ref);
         while(my $l = shift(@fasta)){
                 chomp($l);
                 return $l if $l =~ /^>/;
         }
+}
+#-----------------------------------------------------------------------------
+sub getSeqID {
+        my $fasta = shift;
 
+	#always work with references
+	$fasta = $$fasta while(ref($fasta) eq 'REF');
+	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+	my $def = Fasta::getDef($fasta_ref);
+	my $seq_id = Def2SeqID($def);
+
+	return $seq_id;
+}
+#-----------------------------------------------------------------------------
+sub def2SeqID {
+        my $def = shift;
+
+	my ($seq_id)  = $def =~ /^>(\S+)/;
+
+	return $seq_id;
+}
+#-----------------------------------------------------------------------------
+sub getSafeID {
+        my $fasta = shift;
+
+	#always work with references
+	$fasta = $$fasta while(ref($fasta) eq 'REF');
+	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+	my $seq_id = getSeqID($fasta_ref);
+	my $safe_id = SeqID2SafeID($seq_id);
+
+	return $safe_id;
+}
+#-----------------------------------------------------------------------------
+sub seqID2SafeID {
+    my $seq_id = shift;
+    
+    my $safe_id = uri_escape($seq_id,  
+			     '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
+			     );
+    
+    return $safe_id;
+}
+#-----------------------------------------------------------------------------
+sub safeID2SeqID {
+    my $seq_id = shift;
+
+    my $safe_id = uri_unescape($seq_id);
+    
+    return $safe_id;
 }
 #-------------------------------------------------------------------------------
 sub getSeq {
+    my $fasta = shift;
+
+    return ${getSeqRef(\$fasta)};
+}
+#-------------------------------------------------------------------------------
+sub getSeqRef {
+    my $fasta = shift;
+
+    #always work with references
+    $fasta = $$fasta while(ref($fasta) eq 'REF');
+    my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+    my @fasta = split(/\n/, $$fasta_ref);
+
+    my $seq = '';
+    while(my $l = shift(@fasta)){
+	chomp($l);
+	next if $l =~ /^>/;
+	$seq .= $l;
+    }
+
+    return \$seq;
+}
+#-------------------------------------------------------------------------------
+sub ucFasta{
+    my $fasta = shift;
+
+    return ${ucFastaRef(\$fasta)};
+}
+#-------------------------------------------------------------------------------
+sub ucFastaRef{
         my $fasta = shift;
 
-	my @fasta = split(/\n/, $fasta);
+	#always work with references
+	$fasta = $$fasta while(ref($fasta) eq 'REF');
+	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;	
 
-        my $seq = '';
-        while(my $l = shift(@fasta)){
-                chomp($l);
-                next if $l =~ /^>/;
-                $seq .= $l;
-        }
+	my $def = getDef($fasta_ref);
+	my $seq = uc(getSeq($fasta_ref));
 
-        return \$seq;
-
+        return toFastaRef($def, \$seq);
 }
 #-------------------------------------------------------------------------------
 sub revComp {
+    my $seq = shift;
+
+    return ${revCompRef(\$seq)};
+}
+#-------------------------------------------------------------------------------
+sub revCompRef {
 	my $seq = shift;
+
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;	
 
         my($rc);
 
-        $rc = $seq;
+        $rc = $$seq_ref;
         $rc =~ tr/acgtrymkswhbvdnxACGTRYMKSWHBVDNX
                  /tgcayrkmswdvbhnxTGCAYRKMSWDVBHNX/;
         $rc = reverse scalar ($rc);
 
-        return($rc);
-
+        return \$rc;
 }
 #-------------------------------------------------------------------------------
 sub toFasta {
+    my $def = shift;
+    my $seq = shift;
+
+    return ${toFastaRef($def, \$seq)};
+}
+#-------------------------------------------------------------------------------
+sub toFastaRef {
         my $def = shift;
         my $seq = shift;
 
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
+
         my $fasta = $def."\n";
 
-	$fasta .=  formatSeq($seq, 60);
+	$fasta .=  ${_formatSeq($seq_ref, 60)};
         return \$fasta;
-
 }
 #-------------------------------------------------------------------------------
-sub formatSeq {
+sub _formatSeq {
         my $seq = shift;
 	my $l   = shift;
 
-	my $fasta = '';
-        for (my $i=0; $i< length($$seq);$i+=$l){
-                $fasta .= substr($$seq, $i, $l)."\n";
-        }
-        return $fasta;
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
 
+	my $f_seq = '';
+        for (my $i=0; $i< length($$seq_ref);$i+=$l){
+                $f_seq .= substr($$seq_ref, $i, $l)."\n";
+        }
+
+        return \$f_seq;
 }
 #-------------------------------------------------------------------------------
 sub toBpos {
         my $def = shift;
         my $seq = shift;
 
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
+
         my $fasta = $def."\n";
 
-	my $bpos = "0 " x length($$seq);
+	my $bpos = "0 " x length($$seq_ref);
 
         for (my $i=0; $i< length($bpos);$i+=60){
                 $fasta .= substr($bpos, $i, 60)."\n";
         }
-        return \$fasta;
 
+        return $fasta;
 }
 
 #-------------------------------------------------------------------------------
@@ -210,9 +320,13 @@ sub toQual {
 	my $def = shift;
 	my $seq = shift;
 
-	$$seq  =~ s/^\s+//;
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
 
-	my @values = split(/\s+/, $$seq);
+	$$seq_ref  =~ s/^\s+//;
+
+	my @values = split(/\s+/, $$seq_ref);
         my $fasta  = $def."\n";
 
 	my $j = 0;
@@ -232,10 +346,9 @@ sub toQual {
 			die "dead in toQual\n";
 		}
         }
-	$fasta .= "\n" unless $fasta =~ /\n$/; 
+	$fasta .= "\n" unless $fasta =~ /\n$/;
 
-        return \$fasta;
-
+        return $fasta;
 }
 #-------------------------------------------------------------------------------
 sub shift2 (\@) {

@@ -48,7 +48,7 @@ sub evaluate_in_maker {
 	my $completion = evaluator::funs::completion($box);
 
 	## Get the alternative splicing support.
-	my $alt = $alt_spli_sup->{$f->{_tran_id}};
+	my $alt = $alt_spli_sup->{$f->{_splice_form}};
 
 	## Get the score for this struct.
 	my $score = scoring($qi, $quality_seq, $so_code, $transcript_type, 
@@ -128,9 +128,13 @@ sub power_evaluate {
 
 	print STDERR "\nEVALUATing transcript $t_name...\n" unless $main::quiet;
 
+	my ($g_name) = $t_name =~ /^(.*)-mRNA-\d+$/;
+	$eat->{g_name} = $g_name;
+	$eat->{t_name} = $t_name;
+
 	my $box = evaluator::funs::prepare_box_for_gff($eat, $seq, 
-		$exonerate_p_hits, $exonerate_e_hits, 
-		$blastx_hits, $abinits_hits, $t_name);
+						       $exonerate_p_hits, $exonerate_e_hits, 
+						       $blastx_hits, $abinits_hits, $t_name);
 	
 	my $qi = evaluator::funs::get_transcript_qi($box);
 
@@ -142,18 +146,18 @@ sub power_evaluate {
 	
 	my $completion = evaluator::funs::completion($box);
 
-	my $alt = $alt_spli_sup->{$eat->{_tran_id}};
+	my $alt = $alt_spli_sup->{$eat->{_splice_form}};
 
 	my $solexa_for_splices = evaluator::funs::solexa_support($CTL, $box,
 			$splice_sites);
 
 	my $score = scoring($qi, $quality_seq, $so_code, $transcript_type,
-			$completion, $alt, $solexa_for_splices);
+			    $completion, $alt, $solexa_for_splices);
 
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
-			$transcript_type, $completion, $alt, $score, $so_code, 
-			$geneAED, $solexa_for_splices);
+				     $transcript_type, $completion, $alt, $score, $so_code, 
+				     $geneAED, $solexa_for_splices);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -165,9 +169,8 @@ sub power_evaluate {
                     'transcript_type'   => $transcript_type,
 		    'report'		=> $report,
 		    'so_code'		=> $so_code,
-                    'gene_AED'		=> $geneAED,
+		    'gene_AED'          => $geneAED,
                   };
-	print $report;
 
 	return $eva;
 }
@@ -185,7 +188,7 @@ sub generate_report {
 	my $alt			= shift;
 	my $score		= shift;
 	my $so_code		= shift;
-	my $geneAED		= shift;
+	my $geneAED             = shift;
 	my $solexa		= shift;
 
 	my $g_name = $eat->{g_name};

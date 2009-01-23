@@ -16,60 +16,106 @@ use PhatHit_utils;
 #--------------------------- METHODS   ----------------------------------
 #------------------------------------------------------------------------
 sub new {
-    my $self = {};
-    bless $self;
-    return $self;
+   my $class = shift;
+   my $filename = shift;
+   my $build = shift || "Build1";;
+   my $t_dir = shift || "/tmp";
+
+   my $self = {};
+
+   bless ($self, $class);
+
+   $self->_initialize($filename, $build, $t_dir);
+
+   return $self;
+}
+#------------------------------------------------------------------------
+sub _initialize {
+   my $self = shift;
+   my $filename = shift;
+   my $build = shift;
+   my $t_dir = shift;
+
+   $self->{build} = $build;
+
+   my $gff_file = "$filename";
+   my ($name) = $filename =~ /([^\/]+)$/;
+   my $ann_file = "$t_dir/$name.ann";
+   my $seq_file = "$t_dir/$name.seq";
+
+   open(my $ANN, "> $ann_file") || die "ERROR: Could not open file: $ann_file\n";
+   print_txt($ANN, $self->header."\n");
+   close($ANN);
+
+   open(my $SEQ, "> $seq_file") || die "ERROR: Could not open file: $seq_file\n";
+   print_txt($SEQ, "##FASTA\n");
+   close($SEQ);
+
+   $self->{gff_file} = $gff_file;
+   $self->{ann_file} = $ann_file;
+   $self->{seq_file} = $seq_file;
 }
 #------------------------------------------------------------------------
 sub fasta {
     my $self  = shift;
-    my $fasta = Fasta::toFasta('>'.$self->seq_id, \(uc(${$self->seq})));
-    return $$fasta;
+
+    my $fasta_ref = Fasta::toFastaRef('>'.$self->{seq_id}, \uc(${$self->seq}));
+
+    return $fasta_ref;
 }
 #------------------------------------------------------------------------
-sub seq_id {
+sub resolved_flag {
     my $self   = shift;
-    my $seq_id = shift;
-    if (defined($seq_id)) {
-	$self->{seq_id} = $seq_id;
-    }
-    else {
-	return $self->{seq_id};
-    }
+
+    open(my $ANN, ">>", $self->{ann_file});
+    print_txt($ANN, "###\n");
+    close($ANN);
+}
+#------------------------------------------------------------------------
+sub set_current_contig {
+    my $self   = shift;
+
+    my $flag = 0;
+    $flag = 1 if (defined $self->{seq_id});
+    $self->{seq_id} = shift;
+    $self->{seq} = shift;
+
+    open(my $ANN, ">>", $self->{ann_file});
+    print_txt($ANN, "###\n") if($flag);
+    print_txt($ANN, $self->contig_comment."\n");
+    print_txt($ANN, $self->contig_line."\n"); 
+    close($ANN);
+
+    open(my $SEQ, ">>", $self->{seq_file});
+    print_txt($SEQ, ${$self->fasta});
+    close($SEQ);
 }
 #------------------------------------------------------------------------
 sub seq {
-    my $self  = shift;
-    my $seq = shift;
-    
-    if (defined($seq)) {
-	$self->{seq} = $seq;
-    }
-    else {
-	return $self->{seq};
-    }
+    my $self   = shift;
+
+    return $self->{seq} || undef;
+}
+
+#------------------------------------------------------------------------
+sub seq_id {
+    my $self   = shift;
+
+    return $self->{seq_id} || undef;
 }
 #------------------------------------------------------------------------
-sub print {
+sub finalize {
     my $self = shift;
-    my $file = shift;
-    my $fh;
-    if (defined($file)){
-	$fh = new FileHandle();
-	$fh->open(">$file");		
-    }
-    print_txt($fh, $self->header."\n");
-    print_txt($fh, $self->contig_comment."\n");
-    print_txt($fh, $self->contig_line."\n"); 
 
-    print_txt($fh, $self->genes); 
-    print_txt($fh, $self->predictions);
-    print_txt($fh, $self->repeat_hits);
-    print_txt($fh, $self->phat_hits);   
-    
-    print_txt($fh, "##FASTA\n");
-    print_txt($fh, $self->fasta);
-    $fh->close() if defined($file);
+    my $gff_f = $self->{gff_file};
+    my $ann_f = $self->{ann_file};
+    my $seq_f = $self->{seq_file};
+
+    system("cat $seq_f >> $ann_f");
+    unlink("$seq_f");
+    system("mv $ann_f $gff_f");
+
+    die "ERROR: GFF3 file not created\n" if(! -e $gff_f);
 }
 #------------------------------------------------------------------------
 sub contig_line {
@@ -100,10 +146,10 @@ sub contig_comment {
     die "no contig seq in Dumper::GFFV3::contig_comment\n"
         unless defined($self->seq);
 
-    my $seq = $self->seq();
+    my $seq = $self->seq;
 
     my $length = length($$seq);
-    my $id     = $self->seq_id();
+    my $id     = $self->seq_id;
     my $name   = $id;
     if ($id =~ m/gnl\%7Cv3\%7C(Contig\d+)/) {
         $name = $1;
@@ -113,13 +159,6 @@ sub contig_comment {
 
     my $l = join(" ", @data);
     return $l;
-}
-#------------------------------------------------------------------------
-sub print_fld {
-    my $data = shift;
-    my $fh   = shift;
-    
-    die "LLLLL\n";
 }
 #------------------------------------------------------------------------
 sub print_txt {
@@ -136,67 +175,56 @@ sub print_txt {
 #------------------------------------------------------------------------
 sub header {
 	my $self = shift;
-	
+
+	my $build = $self->{build};
 	my $h = "##gff-version 3";
-	
+	$h .= "\n##genome-build maker $build" if(defined $build);
+
 	return $h;
     }
 #------------------------------------------------------------------------
-sub predictions {
+sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
     
-    if (defined($hits) && defined($hits->[0])){
-       foreach my $p (@{$hits}){
-	  #$self->{predictions} .= pred_data($p, $self->seq_id);
-	  $self->{predictions} .= hit_data($p, $self->seq_id);
-       }
+    open(my $ANN, '>>', $self->{ann_file});
+    foreach my $p (@{$hits}){
+       print_txt($ANN, hit_data($p, $self->seq_id));
     }
-    else {
-	return $self->{predictions} || '';
-    }
+    close($ANN);
 }
 #------------------------------------------------------------------------
-sub phat_hits {
+sub add_phathits {
    my $self  = shift;
    my $hits  = shift;
    
-   if (defined($hits) && defined($hits->[0])){
-      foreach my $hit (@{$hits}){
-	 $self->{hits} .= hit_data($hit, $self->seq_id);
-      }
-   }
-   else {
-      return $self->{hits} || '';
-   }
+   open(my $ANN, '>>', $self->{ann_file});
+    foreach my $h (@{$hits}){
+       print_txt($ANN, hit_data($h, $self->seq_id));
+    }
+    close($ANN);
 }
 #------------------------------------------------------------------------
-sub repeat_hits {
+sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
    
-   if (defined($hits) && defined($hits->[0])){
-      foreach my $hit (@{$hits}){
-	 $self->{repeats} .= repeat_data($hit, $self->seq_id);
-      }
-   }
-   else {
-      return $self->{repeats} || '';
-   }
+   open(my $ANN, '>>', $self->{ann_file});
+    foreach my $r (@{$hits}){
+       print_txt($ANN, repeat_data($r, $self->seq_id));
+    }
+    close($ANN);
 }
 #------------------------------------------------------------------------
-sub genes {
+sub add_genes {
     my $self  = shift;
     my $genes = shift;
     
-    if (defined($genes) && defined($genes->[0])){
-       foreach my $g (@{$genes}){
-	  $self->{genes} .= gene_data($g, $self->seq_id);
-       }
+    open(my $ANN, '>>', $self->{ann_file});
+    foreach my $g (@{$genes}){
+       print_txt($ANN, gene_data($g, $self->seq_id));
     }
-    else {
-	return $self->{genes} || '';
-    }
+    close($ANN);
 }
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------
@@ -252,81 +280,6 @@ sub get_id_exon {
 }
 }
 #------------------------------------------------------------------------
-sub pred_data {
-    my $g      = shift;
-    my $seq_id = shift;
-    
-    my $g_name     = $g->name();
-    my $g_s        = $g->nB('query');
-    my $g_e        = $g->nE('query');
-    my $g_strand   = $g->strand('query') == 1 ? '+' : '-';
-    
-    $g_name =~ s/\s/-/g;
-    my $g_id = get_id_gene();
-
-    my $source;
-    if    (ref($g) =~ /snap/){
-	$source = 'snap';
-	$g_id = join("-", $source, $seq_id, $g_id);
-    }
-    elsif (ref($g) =~ /augustus/){
-	$source = 'augustus';
-	$g_id = join("-", $source, $seq_id, $g_id);
-    }
-    else {
-		die "unknown class:".ref($g)." in GFFV3::pred_data\n";
-    }
-
-    my $score = $g->score();
-    
-    ($g_s, $g_e) = ($g_e, $g_s) if $g_s > $g_e;
-
-
-	my ($class, $type) = get_class_and_type($g, 'hit');
-    
-    my @g_data;
-    push(@g_data, $seq_id, $class, 'gene', $g_s, $g_e, $score, $g_strand);
-    push(@g_data, '.', 'ID='.$g_id.';Name='.$g_name);
-    
-    my $g_l = join("\t", @g_data)."\n";
-    
-    my @transcripts = $g;
-    
-    my %epl;
-    foreach my $t (@transcripts){
-	#my $t_id = get_id_mRNA();
-	my $t_id = join(":", $t->name, get_id_mRNA());
-	#-------
-	my $t_s = $t->strand('query') == 1 ? '+' : '-';
-	
-	my ($t_b, $t_e) = PhatHit_utils::get_span_of_hit($t, 'query');
-	
-	($t_b, $t_e) = ($t_e, $t_b) if $t_b > $t_e;
-	
-	my ($p_b, $p_e) = PhatHit_utils::get_span_of_hit($t, 'hit');
-	
-	my $nine  = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t->name;
-	    $nine .= ';Target='.$t->name.' '.$p_b.' '.$p_e.' '.'+';
-	
-	my ($class, $type) = get_class_and_type($t, 'hsp');
-	
-	my @t_data;
-	push(@t_data, $seq_id, $class, $type, $t_b, $t_e, '.', $t_s, '.');
-        	push(@t_data, $nine);
-
-		my $t_l = join("\t", @t_data)."\n";
-	#--------
-	$g_l .= $t_l;
-	
-	grow_exon_data_lookup($t, $t_id, \%epl);
-    }
-    my $e_l = get_exon_data($seq_id, \%epl, $source);
-    
-    $g_l .= $e_l;
-    
-    return $g_l;
-}
-#------------------------------------------------------------------------
 sub gene_data {
     my $g      = shift;
     my $seq_id = shift;
@@ -334,15 +287,18 @@ sub gene_data {
     my $g_name     = $g->{g_name};
     #my $g_name     = join("-", "maker", $seq_id, (split("-", $g->{g_name}))[1..2]);
     my $g_s        = $g->{g_start};
-        my $g_e        = $g->{g_end};
-        my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
+    my $g_e        = $g->{g_end};
+    my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
     my $t_structs  = $g->{t_structs};
     
     #my $g_id = get_id_gene();
     my $g_id = $g_name;
+
     my @g_data;
-    push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand);
-    push(@g_data, '.', 'ID='.$g_id.';Name='.$g_name); 
+    push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
+    my $attributes = 'ID='.$g_id.';Name='.$g_name;
+    $attributes .= ';'.$g->{-attrib} if($g->{attrib});
+    push(@g_data, $attributes); 
     
     my $g_l = join("\t", @g_data)."\n";
     
@@ -353,9 +309,7 @@ sub gene_data {
     foreach my $t (@transcripts){
 	#my $t_id = get_id_mRNA();
 	my $t_id = (split(/\s+/, $t->{t_name}))[0];
-	my $t_l = 
-	    get_transcript_data($t, $t_id, $seq_id, $g_id, $g_name);
-	
+	my $t_l = get_transcript_data($t, $t_id, $seq_id, $g_id, $g_name);
 	$g_l .= $t_l."\n";
 	
 	grow_exon_data_lookup($t->{hit}, $t_id, \%epl);
@@ -397,18 +351,14 @@ sub hit_data {
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id);
-   my $score = $h->significance() || 'NA';
+   my $score = $h->score() || '.';
    $score .= 0 if $score eq '0.';
-   $score = '.' if $score eq 'NA';
-
-   my $alt_score = $h->score() || '.';
-   $score = $alt_score
-       if ($score eq '.' && $alt_score =~ /\d/);
-
+   
    my @h_data;
-   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str);
-   push(@h_data, '.', 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand);
-   my $h_l = join("\t", @h_data)."\n";
+   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
+   my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand;
+   $attributes .= $h->{-attrib} if($h->{-attrib});
+   my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
    
@@ -455,18 +405,14 @@ sub repeat_data {
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id);
-   my $score = $h->significance() || 'NA';
+   my $score = $h->score() || '.';
    $score .= 0 if $score eq '0.';
-   $score = '.' if $score eq 'NA';
-
-   my $alt_score = $h->score() || '.';
-   $score = $alt_score
-       if ($score eq '.' && $alt_score =~ /\d/);
 
    my @h_data;
-   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str);
-   push(@h_data, '.', 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand);
-   my $h_l = join("\t", @h_data)."\n";
+   push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
+   my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand;
+   $attributes .= ';'.$h->{-attrib} if($h->{-attrib});
+   my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
    
@@ -488,37 +434,46 @@ sub get_class_and_type {
 	my $h = shift;
 	my $k = shift;
 
-	my ($class) = ref($h) =~ /.*::(\S+)$/;
+	my ($class) = ref($h) =~ /.*::([^\:\s\t\n]+)$/;
+	$class = $h->algorithm if($class eq 'gff3');
 
 	my $type;
-	if    ($class eq 'blastx'){
+	if    ($class =~ /^blastx$/i){
 		$type = $k eq 'hit' ? 'protein_match' : 'match_part';
-	}elsif    ($class eq 'tblastx'){
+	}elsif    ($class =~ /^tblastx$/i){
 		$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
 	}
-	elsif ($class eq 'protein2genome'){
+	elsif ($class =~ /protein2genome/i){
 		$type = $k eq 'hit' ? 'protein_match' : 'match_part'; 
 	}
-        elsif ($class eq 'est2genome'){
+        elsif ($class =~ /est2genome/i){
                 $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
         }
-        elsif ($class eq 'blastn'){
+        elsif ($class =~ /^blastn$/i){
                 $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
         }
-        elsif (ref($h)  =~ /snap/){
+        elsif ($class =~ /snap/i){
                 $type = $k eq 'hit' ? 'match' : 'match_part' ;
 		$class= 'snap';
         }
-        elsif (ref($h)  =~ /augustus/){
+        elsif ($class =~ /augustus/i){
                 $type = $k eq 'hit' ? 'match' : 'match_part' ;
                 $class= 'augustus';
         }
-        elsif (ref($h)  =~ /repeatmasker/){
+        elsif ($class =~ /fgenesh/i){
+                $type = $k eq 'hit' ? 'match' : 'match_part' ;
+                $class= 'fgenesh';
+        }
+        elsif ($class =~ /twinscan/i){
+                $type = $k eq 'hit' ? 'match' : 'match_part' ;
+                $class= 'twinscan';
+        }
+        elsif ($class =~ /repeat/i){
                 $type = $k eq 'hit' ? 'match' : 'match_part';
 		$class= 'repeatmasker';
         }
 	else {
-		die "unknown class in GFFV3::get_class_and_type:".ref($h)."\n";
+		die "unknown class in GFFV3::get_class_and_type $class ".ref($h)."\n";
 	}
 
 	return ($class, $type);
@@ -555,11 +510,14 @@ sub get_exon_data {
 		
 		my $strand = $e->strand('query') == 1 ? '+': '-';
 
-		my $score = $source eq 'maker' ? '.' : $e->score();
+		my $score = $e->score() || '.';
+		$score .= 0 if $score eq '0.';
 
 		my @data;
-		push(@data, $seq_id, $source, 'exon', $nB, $nE, $score);
-		push(@data, $strand, '.','ID='.$e_id.';Parent='.$p); 
+		push(@data, $seq_id, $source, 'exon', $nB, $nE, $score, $strand, '.');
+		my $nine = 'ID='.$e_id.';Parent='.$p;
+		   $nine .= ';'.$e->{-attrib} if($e->{-attrib});
+		push(@data, $nine); 
 
 		$e_l .= join("\t", @data)."\n";
 	}
@@ -603,8 +561,10 @@ sub get_cds_data {
                 my $score = '.';
 
                 my @data;
-                push(@data, $seq_id, $source, 'CDS', $nB, $nE, $score);
-                push(@data, $strand, $phase,'ID='.$e_id.';Parent='.$p);
+                push(@data, $seq_id, $source, 'CDS', $nB, $nE, $score, $strand, $phase);
+		my $nine = 'ID='.$e_id.';Parent='.$p;
+		#$nine .= ';'.$e->{-attrib} if($e->{-attrib});
+                push(@data, $nine);
 
 		$phase = (3 - (($nE - $nB + 1) % 3)) % 3;
 
@@ -689,7 +649,7 @@ sub grow_cds_data_lookup {
 			push(@{$cdss->{cds}},  [$b, 
 			                        $e, 
 			                        $hsp->strand('query'), 
-			                        $hsp->name(),
+			                        $hsp->name()
 			                        ]); 
 
 			push(@{$cdss->{t_ids}->{$b}->{$e}},  $id);
@@ -722,7 +682,9 @@ sub get_transcript_data {
 
 	my @data;
 	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, '.', $t_s, '.');
-	push(@data, 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name);
+	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;;
+	   $nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
+	push(@data, $nine);
 
 
 	my $l = join("\t", @data);
@@ -739,14 +701,8 @@ sub get_hsp_data {
         my $hsp_str  = $hsp->strand('query') ==  1 ? '+' : '-';
 	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
 
-	my $score = $hsp->significance() || 'NA';
+	my $score = $hsp->score() || '.';
 	$score .= 0 if $score eq '0.';
-	$score = '.' if $score eq 'NA';
-	
-	my $alt_score = $hsp->score() || '.';
-	$score = $alt_score
-	    if ( $score eq '.' && $alt_score =~ /\d/);
-
 
 	my $nB = $hsp->nB('query');
 	my $nE = $hsp->nE('query');
@@ -766,7 +722,7 @@ sub get_hsp_data {
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand;
- 
+ 	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
         push(@data, $nine);
@@ -786,14 +742,8 @@ sub get_repeat_hsp_data {
 	#my $hsp_str  = '+';
 	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
 
-	my $score = $hsp->significance() || 'NA';
+	my $score = $hsp->score() || '.';
 	$score .= 0 if $score eq '0.';
-	$score = '.' if $score eq 'NA';
-	
-	my $alt_score = $hsp->score() || '.';
-	$score = $alt_score
-	    if ( $score eq '.' && $alt_score =~ /\d/);
-
 
 	my $nB = $hsp->nB('query');
 	my $nE = $hsp->nE('query');
@@ -815,7 +765,8 @@ sub get_repeat_hsp_data {
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
-	$nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand;
+	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand;
+	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
         push(@data, $nine);
 
         my $l = join("\t", @data);

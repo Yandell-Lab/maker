@@ -10,7 +10,6 @@ use FileHandle;
 use PostData;
 use Exporter;
 use PhatHit_utils;
-use SimpleCluster;
 use compare;
 use cluster;
 use CGL::TranslationMachine;
@@ -104,23 +103,55 @@ sub needs_to_be_revcomped {
 }
 #------------------------------------------------------------------------
 sub get_splice_str {
-        my $hit = shift;
-
-	my $sorted = PhatHit_utils::sort_hits($hit);
-
-	my $splice_str = '';
-	for (my $i = 1; $i < @{$sorted}; $i++){
-		my $pre_hsp = $sorted->[$i-1];
-		my $pos_hsp = $sorted->[$i];
- 
-		my $code = splice_code($pre_hsp->donor(),
-		                       $pos_hsp->acceptor(),
-				      );
-		$splice_str .= $code;
-	}
-
-	return $splice_str;
+    my $hit = shift;
+    
+    my $sorted = PhatHit_utils::sort_hits($hit);
+    
+    my $splice_str = '';
+    for (my $i = 1; $i < @{$sorted}; $i++){
+	my $pre_hsp = $sorted->[$i-1];
+	my $pos_hsp = $sorted->[$i];
+		
+	my $code = splice_code($pre_hsp->donor(),
+			       $pos_hsp->acceptor(),
+			       );
+	$splice_str .= $code;
+    }
+    
+    return $splice_str;
 }
+#------------------------------------------------------------------------
+sub set_donors_acceptors {
+    my $hit = shift;
+    my $seq = shift;
+
+    die "ERROR: No seq given in splice_info::set_donors_acceptors\n" if(! $seq);
+
+    my $sorted = PhatHit_utils::sort_hits($hit);
+    for (my $i = 1; $i < @{$sorted}; $i++){
+        my $pre_hsp = $sorted->[$i-1];
+        my $pos_hsp = $sorted->[$i];
+
+	if(! exists $pre_hsp->{donor}){
+	    my $strand = $pre_hsp->strand('query');
+	    my $E = $pre_hsp->nE('query') - 1; #make array space value
+	    my $length = 2; #substr length
+	    my $p = ($strand == 1) ? $E + 1 : $E - $length; #substr start position
+	    my $donor = substr($$seq, $p, $length);
+	    $donor = Fasta::revComp($donor) if($strand == -1);
+	    $pre_hsp->{donor} = $donor;
+	}
+	if(! exists $pos_hsp->{acceptor}){
+	    my $strand = $pos_hsp->strand('query');
+	    my $B = $pos_hsp->nB('query') - 1; #make array space value
+	    my $length = 2; #substr length
+	    my $p = ($strand == 1) ? $B - $length : $B + 1; #substr start position
+	    my $acceptor = substr($$seq, $p, $length);
+	    $acceptor = Fasta::revComp($acceptor) if($strand == -1);
+	    $pre_hsp->{acceptor} = $acceptor;
+	}
+    }
+} 
 #------------------------------------------------------------------------
 1;
 

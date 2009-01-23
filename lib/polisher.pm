@@ -24,24 +24,17 @@ sub prep {
 
 	my $g_iterator = new Iterator::Fasta($g_file);
 	my $g_fasta = $g_iterator->nextEntry();
-
-	my $g_def   = Fasta::getDef($g_fasta);
-	my $g_seq   = Fasta::getSeq($g_fasta);
-	my ($g_id)  = $g_def =~ /^>(\S+)/;
-
+	my $g_seq   = Fasta::getSeqRef($g_fasta);
 
 	my $p_iterator = new Iterator::Fasta($p_file);
 	my $p_fasta = $p_iterator->nextEntry();
-
-	my $p_def   = Fasta::getDef($p_fasta);
-	my $p_seq   = Fasta::getSeq($p_fasta);
-	my ($p_id)  = $p_def =~ /^>(\S+)/;
+	my $p_seq   = Fasta::getSeqRef($p_fasta);
 
 	my $g_len = length($$g_seq);
 	my $p_len = length($$p_seq);
 
 
-	return ($g_id, $p_id, $p_len, $g_len);	
+	return ($p_len, $g_len);	
 }
 #------------------------------------------------------------------------
 sub add_offset {

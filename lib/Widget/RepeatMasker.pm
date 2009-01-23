@@ -9,8 +9,8 @@ use PostData;
 use FileHandle;
 use Widget;
 use Bio::DB::Fasta;
-use repeatmasker::PhatHit;
-use repeatmasker::PhatHsp;
+use Bio::Search::Hit::PhatHit::repeatmasker;
+use Bio::Search::HSP::PhatHSP::repeatmasker;
 use IPC::Open3;
 
 @ISA = qw(
@@ -220,7 +220,7 @@ sub parse {
                 push(@args, '-hit_gaps');
                 push(@args, $h_gaps);
 
-		my $hsp = new repeatmasker::PhatHsp(@args);
+		my $hsp = Bio::Search::HSP::PhatHSP::repeatmasker->new(@args);
                    $hsp->queryName($q_name);
                 #-------------------------------------------------
                 # setting strand because bioperl is all fucked up!
@@ -249,11 +249,11 @@ sub parse {
 	my @keepers;
 	foreach my $key (keys %hsps){
 		 my $f =
-                 new repeatmasker::PhatHit('-name' => $q_name,
-                                           '-description'  => 'NA',
-                                           '-algorithm'    => 'repeat_masker',
-                                           '-length'       => $q_length,
-                                          );
+		     Bio::Search::Hit::PhatHit::repeatmasker->new('-name' => $q_name,
+								  '-description'  => 'NA',
+								  '-algorithm'    => 'repeat_masker',
+								  '-length'       => $q_length,
+								  );
 
 		$f->queryLength($q_length);
 		foreach my $hsp (@{$hsps{$key}}){

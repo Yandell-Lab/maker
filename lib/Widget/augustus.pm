@@ -11,8 +11,8 @@ use Widget;
 use Fasta;
 use FastaFile;
 use Iterator::Fasta;
-use augustus::PhatHit;
-use augustus::PhatHsp;
+use Bio::Search::Hit::PhatHit::augustus;
+use Bio::Search::HSP::PhatHSP::augustus;
 use PhatHit_utils;
 use IPC::Open3;
 use FindBin;
@@ -36,7 +36,7 @@ sub new {
         return $self;
 }
 #------------------------------------------------------------------------
-sub get_aug_shot {
+sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
         my $id            = shift;
@@ -44,9 +44,10 @@ sub get_aug_shot {
         my $set           = shift;
         my $pred_flank    = shift;
         my $pred_command  = shift;
-        my $q_id          = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
+
+	my $q_id = Fasta::def2SeqID($def);
 
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $pred_flank, $id, $q_id);
@@ -64,7 +65,7 @@ sub get_aug_shot {
                  $alt_aug_command = $pred_command.' --strand=backward';
         }
 
-        my $gene_preds = augustus($$shadow_fasta,
+        my $gene_preds = augustus($shadow_fasta,
                                   $the_void,
                                   $id,
                                   $strand,
@@ -86,13 +87,17 @@ sub prep_for_genefinder {
 
         my $gomiph = $set->{gomiph};
         my $mia    = $set->{mia};
-        my $augs  = $set->{preds};
+        my $models = $set->{gomod};
+        my $alts   = $set->{alt_ests};
+        my $preds  = $set->{preds};
         my $ests   = $set->{ests};
         my @t_data;
 
         push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$augs})   if defined($augs);
+        push(@t_data, @{$preds})   if defined($preds);
         push(@t_data, $mia)        if defined($mia);
+        push(@t_data, @{$alts})     if defined($alts);
+        push(@t_data, @{$models})   if defined($models);
         push(@t_data, @{$ests})    if defined($ests);
 
         my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
@@ -433,7 +438,7 @@ sub parse {
         my $fasta = $iterator->nextEntry();
 
         my $def     = Fasta::getDef($fasta);
-        my $q_seq   = Fasta::getSeq($fasta);
+        my $q_seq   = Fasta::getSeqRef($fasta);
 
         my ($q_name)  = $def =~ /^>(.+)/;
 
@@ -508,13 +513,13 @@ sub load_phat_hits {
 
 		my %hsps;
 		my $i = 0;
-		my $f = new augustus::PhatHit('-name'         => $g->{name},
-                                              '-description'  => 'NA',
-                                              '-algorithm'    => 'augustus',
-                                              '-length'       => $q_len,
-					      '-score'        => $total_score,
-                                             );
-
+		my $f = new Bio::Search::Hit::PhatHit::augustus('-name'         => $g->{name},
+								'-description'  => 'NA',
+								'-algorithm'    => 'augustus',
+								'-length'       => $q_len,
+								'-score'        => $total_score,
+								);
+		
                 $f->queryLength($q_len);
 
 		my $hit_start = 1;
@@ -587,7 +592,7 @@ sub load_phat_hits {
         		push(@args, '-hit_gaps');
         		push(@args, 0);
 
-        		my $hsp = new augustus::PhatHsp(@args);
+        		my $hsp = new Bio::Search::HSP::PhatHSP::augustus(@args);
         		   $hsp->queryName($q_name);
         		#-------------------------------------------------
         		# setting strand because bioperl is all messed up!

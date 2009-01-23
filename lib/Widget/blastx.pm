@@ -106,11 +106,13 @@ sub keepers {
 	 $significance = "1".$significance if  $significance =~ /^e/;
 	 $significance = 0                 if  $significance =~ /0\./;
 	 next unless $significance < $params->{significance};
-
 	 #next unless $hit->pAh > $params->{percov};
 	 #next unless $hit->hsp('best')->frac_identical() > $params->{percid};
 	 #next unless PhatHit_utils::is_contigous($hit);
-	 
+
+	 #fix strand for messed up ncbi blast
+	 $hit = PhatHit_utils::copy($hit, 'both') if ($hit->strand('hit') < 0);	 
+
 	 push(@keepers, $hit) if $hit->hsps();
       }
    }

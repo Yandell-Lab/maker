@@ -10,7 +10,6 @@ use Exporter;
 use FastaChunker;
 use Widget::snap;
 use PhatHit_utils;
-use SimpleCluster;
 use CGL::TranslationMachine;
 use compare;
 use cluster;
@@ -19,117 +18,114 @@ use maker::join;
 use maker::quality_index;
 use Widget::snap;
 use Widget::augustus;
-use evaluator::evaluate;
 use evaluator::so_classifier;
+use evaluator::evaluate;
+use evaluator::funs;
 use evaluator::AED;
+
 @ISA = qw(
        );
 
-my $OPT_F; #GLOBAL VARIABLE
 my $OPT_PREDS; #GLOBAL VARIABLE
-my $OPT_PREDICTOR; #GLOBAL VARIABLE
 my $LOG; #GLOBAL VARIABLE
-my $CTL; #GLOBAL VARIABLE
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub prep_hits {
-	my $exonerate_p_hits = shift;
-	my $exonerate_e_hits = shift;
-	my $blastx_keepers   = shift;
+	my $prot_hits        = shift;
+	my $est_hits         = shift;
+	my $alt_est_hits     = shift;
 	my $predictions      = shift;
+	my $models           = shift;
 	my $seq              = shift;
 	my $single_exon      = shift;
-	
-	my $clean_exonerate_e;
-	
+
+	#only ESTs from splice concious algorithms i.e. no blastn
+	my $clean_est = get_selected_types($est_hits,'est2genome', 'est_gff');
 	if ($single_exon == 1) {
-	    $clean_exonerate_e = $exonerate_e_hits;
+	    $clean_est = $clean_est;
 	}else {
-	    # don't use unpliced ESTs-- usually genomic contamination
-	    my $spliced_exonerate_e = clean::purge_single_exon_hits($exonerate_e_hits);
-	    # throw out the exonerate est hits with weird splice sites
-	    $clean_exonerate_e = clean::throw_out_bad_splicers($spliced_exonerate_e);
+	    # don't use unpliced single exon ESTs-- usually genomic contamination
+	    $clean_est = clean::purge_single_exon_hits($clean_est);
 	}
+
+	# throw out the exonerate est hits with weird splice sites
+	$clean_est = clean::throw_out_bad_splicers($clean_est, $seq);
+
 	
 	# combine puts type in order they are given
 	# important for later culstering, as hits in
 	# first arg more likey to make in into to cluster
 	# than second arg, etc
-
-	my $c_bag = combine($exonerate_p_hits,
-	                    $clean_exonerate_e, 
-		             $blastx_keepers,
-			    );
-
-        #my $s_bag = combine($exonerate_p_hits,
-        #                    $blastx_keepers
-        #                    );
-
-	# preferred method if the est data is good. This was standard untill 12/11/06
-	#my $careful_clusters = cluster::careful_cluster_phat_hits($c_bag, $seq, 50);
-
-	# -- BEGIN nGASP modification
-	# I  set this up to deal with nGASP
-        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
-
-        my $p_clusters = cluster::shadow_cluster(30, $seq, $p, 10);
-        my $m_clusters = cluster::shadow_cluster(30, $seq, $m, 10);
-
-	my $careful_clusters = [];
-
-	push(@{$careful_clusters}, @{$p_clusters}) if defined $p_clusters->[0];
-	push(@{$careful_clusters}, @{$m_clusters}) if defined $m_clusters->[0];
-
-        my $temp_id = 0;
-        foreach my $s (@{$predictions}){
-                $s->{temp_id} = $temp_id;
-                $temp_id++;
-        }
-
 	
-	# identify the snap ab-inits that fall within and between clusters
+	my $c_bag = combine($models,
+			    $prot_hits,
+	                    $clean_est, 
+			    $alt_est_hits
+			   );
+
+	#--- c_bag processing for gene prediction and gff3 models
+        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
+        my $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
+        my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+	my $careful_clusters = [];
+	push(@{$careful_clusters}, @{$p_clusters});
+	push(@{$careful_clusters}, @{$m_clusters});
+	
+	# identify the ab-inits that fall within and between clusters
 	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, 
 	                                                              $careful_clusters,
 	                                                              $seq,
-	                                                              );
-	
-	# add the ab-initio snaps that hit only a single cluster
-        foreach my $s (@{$hit_one}){
-                my @keys = keys %{$c_index->{$s->{temp_id}}};
-                my $i = $keys[0];
-                die "logic error in segment_preds\n" if defined($keys[1]);
-	
-                push(@{$careful_clusters->[$i]}, $s);
-        }
-	#--- end nGASP modification;
-
-	#compromise method becase we don't have reliable strand info for S. med.
-	# no longer needs because of exonerate::splice_info.pm
-	#my $careful_clusters = cluster::special_cluster_phat_hits($s_bag, 
-	#                                                          $clean_exonerate_e, 
-	#                                                          $seq, 
-	#                                                          50,
-	#                                                          );
-	
-	my @bx_data;
-	my @pp_data;
-	my @pe_data;
-	my $c_id = 0;
-	foreach my $c (@{$careful_clusters}){
-		my $bx = prep_blastx_data($c, $c_id, $seq);
-		push(@bx_data, @{$bx}) if defined $bx;
-
-		#my $pp = prep_polpro_data($c, $c_id, $seq);
-		#push(@pp_data, @{$pp}) if defined $pp;
-
-                #my $pe = prep_polest_data($c, $c_id, $seq);
-                #push(@pe_data, @{$pe}) if defined $pe;
-
-		$c_id++;
+								     );
+	foreach my $h (@{$hit_mult}){
+	    $h->{_hit_multi} = 1;
 	}
-	return (\@bx_data, \@pp_data, \@pe_data);
 
+	merge_into_cluster($hit_one, $careful_clusters, $c_index);
+	merge_into_cluster($hit_mult, $careful_clusters, $c_index);
+
+	my $c_id = 0;
+	my @bx_data;
+	my @gf_data;
+	foreach my $c (@{$careful_clusters}){
+	   my $bx = prep_blastx_data($c, $c_id, $seq);
+	   push(@bx_data, @{$bx}) if defined $bx;
+	   
+	   if(@{$models}){
+	       my $gf = prep_blastx_data($c, $c_id, $seq);
+	       push(@gf_data, @{$gf}) if defined $gf;
+	   }
+
+	   $c_id++;
+	}
+	#--- end c_bag
+
+	#--- processing for scoring ab-initio predictions
+	my @pr_data;
+	if(@{$predictions}){
+	   my $p_bag = combine($prot_hits,
+			       $clean_est,
+			       $alt_est_hits,
+			       $predictions
+			      );
+
+	   ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $p_bag);
+	   $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
+	   $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+	   my $careful_p_clusters = [];
+	   push(@{$careful_p_clusters}, @{$p_clusters});
+	   push(@{$careful_p_clusters}, @{$m_clusters});
+	   
+	   foreach my $c (@{$careful_p_clusters}){
+	      my $pr = prep_pred_data($c, $c_id, $seq);
+	      push(@pr_data, @{$pr}) if defined $pr;
+	      
+	      $c_id++;
+	   }
+	}
+	#--- end p_bag
+
+	return (\@bx_data, \@gf_data, \@pr_data);
 }
 #------------------------------------------------------------------------
 sub segment_preds {
@@ -137,6 +133,11 @@ sub segment_preds {
         my $careful_clusters = shift;
         my $seq              = shift;
 
+        my $temp_id = 0;
+        foreach my $s (@{$preds}){
+                $s->{temp_id} = $temp_id;
+                $temp_id++;
+        }
 
         my %clusters_hit;
 	my %counts;
@@ -176,7 +177,6 @@ sub segment_preds {
 		}
 
         	foreach my $s (@{$preds}){
-
                 	my $s_strand = $s->strand('query');
 
 			next if $s_strand != $c_strand;
@@ -216,26 +216,39 @@ sub segment_preds {
 
 }
 #------------------------------------------------------------------------
-sub purge_single_preds {
-   my $careful_clusters = shift;
+sub merge_into_cluster {
+   my $hits = shift;
+   my $clusters = shift;
+   my $c_index = shift;
 
-   my @c_keepers;
-   foreach my $c (@{$careful_clusters}){
-      my $ests_in_cluster  = get_selected_types($c, 'est2genome');
-      my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-      my $bx_in_cluster    = get_selected_types($c,'blastx');
-      my $snaps_in_cluster = get_selected_types($c,'snap');
-      my $augs_in_cluster = get_selected_types($c,'augustus');
-      if (defined($ests_in_cluster->[0]) ||
-	  defined($ps_in_cluster->[0]) ||
-	  defined($bx_in_cluster->[0])
-	 ){
-	    push (@c_keepers, $c);
+   foreach my $s (@{$hits}, ){
+      my @keys = keys %{$c_index->{$s->{temp_id}}};
+      foreach my $i (@keys){
+	 push(@{$clusters->[$i]}, $s);
       }
    }
-   
-   return (\@c_keepers);
 }
+#------------------------------------------------------------------------
+# sub purge_single_preds {
+#    my $careful_clusters = shift;
+
+#    my @c_keepers;
+#    foreach my $c (@{$careful_clusters}){
+#       my $ests_in_cluster  = get_selected_types($c, 'est2genome');
+#       my $ps_in_cluster    = get_selected_types($c,'protein2genome');
+#       my $bx_in_cluster    = get_selected_types($c,'blastx');
+#       my $snaps_in_cluster = get_selected_types($c,'snap');
+#       my $augs_in_cluster = get_selected_types($c,'augustus');
+#       if (defined($ests_in_cluster->[0]) ||
+# 	  defined($ps_in_cluster->[0]) ||
+# 	  defined($bx_in_cluster->[0])
+# 	 ){
+# 	    push (@c_keepers, $c);
+#       }
+#    }
+   
+#    return (\@c_keepers);
+# }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
 #ests => set of all ests
@@ -247,11 +260,14 @@ sub prep_blastx_data {
 	my $c_id = shift;
 	my $seq  = shift;
 
-        my $ests_in_cluster  = get_selected_types($c, 'est2genome');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-        my $bx_in_cluster    = get_selected_types($c,'blastx');
-	my $snaps_in_cluster = get_selected_types($c,'snap');
-	my $augs_in_cluster  = get_selected_types($c,'augustus');
+        my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+        my $alt_ests_in_cluster = get_selected_types($c,'tblastx');
+        my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+
+	my @single = grep {! $_->{_hits_multi}} @{$preds_in_cluster};
 
         # groups of most informative protein hits
 	# go ahead and inclde the proteion2genome data as well... why not?
@@ -262,22 +278,113 @@ sub prep_blastx_data {
 
 	my @data;
         if (defined($gomias->[0])){
-        	foreach my $mia (@{$gomias}){
-        	        push(@data, {'gomiph' => $gomiph,
-                                     'ests'   => $ests_in_cluster,
-				     'preds'  => $OPT_PREDICTOR eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
-                                     'mia'    => $mia,
-                                     'c_id'   => $c_id});
-
-               	}
+	   foreach my $mia (@{$gomias}){
+	      push(@data, {'gomiph'    => $gomiph,
+			   'preds'     => \@single,
+			   'all_preds' => $preds_in_cluster,
+			   'ests'      => $ests_in_cluster,
+			   'alt_ests'  => $alt_ests_in_cluster,
+			   'mia'       => $mia,
+			   'model'     => undef,
+			   'gomod'     => $models_in_cluster,
+			   'c_id'      => $c_id
+			  }
+		  );
+	   }
         }
         else {
-        	push(@data, {'gomiph' => $gomiph,
-			     'preds'  => $OPT_PREDICTOR eq 'snap' ? $snaps_in_cluster : $augs_in_cluster,
-                             'ests'   => undef,
-                             'mia'    => undef,
-                             'c_id'   => $c_id});
+	   push(@data, {'gomiph'    => $gomiph,
+			'preds'     => \@single,
+			'all_preds' => $preds_in_cluster,
+			'ests'      => $ests_in_cluster,
+			'alt_ests'  => $alt_ests_in_cluster,
+			'mia'       => undef,
+			'model'     => undef,
+			'gomod'     => $models_in_cluster,
+			'c_id'      => $c_id
+		       }
+	       );
+	}
 
+	return \@data;
+}
+#------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
+#ests => set of all ests
+#protein homology =>  set of combined protein exonerate and blastx data
+#alternative splice form => none
+#predictions included
+
+sub prep_gff_data {
+        my $c    = shift;
+	my $c_id = shift;
+	my $seq  = shift;
+
+        my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ps_in_cluster    = get_selected_types($c,'protein2genome');
+        my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+        my $alt_ests_in_cluster = get_selected_types($c,'tblastx');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+
+	my @single = grep {! $_->{_hits_multi}} @{$preds_in_cluster};
+
+        # groups of most informative protein hits
+        my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
+
+	my @data;
+
+	foreach my $model (@{$models_in_cluster}){
+	   push(@data, {'gomiph'    => $gomiph,
+			'preds'     => \@single,
+			'all_preds' => $preds_in_cluster,
+			'ests'      => $ests_in_cluster,
+			'alt_ests'  => $alt_ests_in_cluster,
+			'mia'       => undef,
+			'model'     => $model,
+			'gomod'     => undef,
+			'c_id'      => $c_id
+		       }
+	       );
+	}
+
+	return \@data;
+}
+#------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
+#ests => set of all ests
+#protein homology =>  set of combined protein exonerate and blastx data
+#alternative splice form => none
+#predictions included
+
+sub prep_pred_data {
+        my $c    = shift;
+	my $c_id = shift;
+	my $seq  = shift;
+
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ps_in_cluster    = get_selected_types($c,'protein2genome');
+        my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+        my $alt_ests_in_cluster = get_selected_types($c,'tblastx');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+
+        # groups of most informative protein hits
+        my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
+
+	my @data;
+
+	foreach my $pred (@{$preds_in_cluster}){
+	   push(@data, {'gomiph'    => $gomiph,
+			'preds'     => $preds_in_cluster,
+			'all_preds' => $preds_in_cluster,
+			'model'     => $pred,
+			'gomod'     => undef,
+			'ests'      => $ests_in_cluster,
+			'alt_ests'  => $alt_ests_in_cluster,
+			'mia'       => undef,
+			'c_id'      => $c_id
+		       }
+	       );
 	}
 
 	return \@data;
@@ -347,336 +454,639 @@ sub prep_polest_data {
         return \@data;
 }
 #------------------------------------------------------------------------
-#this subrutine returns finished MAKER annoations
+#this subrutine returns finished annoations for all predictors
 sub annotate {
         my $virgin_fasta     = shift;
         my $masked_fasta     = shift;
 	my $chunk_number     = shift; #required to name genes for each chunk
-        my $exonerate_p_hits = shift;
-        my $exonerate_e_hits = shift;
-        my $blastx_hits      = shift;
+        my $prot_evidence    = shift;
+        my $est_evidence     = shift;
+	my $alt_est_evidence = shift;
 	my $predictions      = shift;
+	my $models           = shift;
         my $the_void         = shift;
-	my $pred_command     = shift;
-	my $pred_flank       = shift;
-	my $single_exon      = shift;
-	$OPT_F               = shift;
-	$OPT_PREDS           = shift;
-	$OPT_PREDICTOR       = shift;
+	my $build            = shift;
+	my $CTL_OPTIONS      = shift;
 	$LOG                 = shift;
-	$CTL		     = shift;
-
-	$CTL->{current_tmp_path} = $the_void;
 
         my $def   = Fasta::getDef($masked_fasta);
-        my $seq   = Fasta::getSeq($masked_fasta);
-        my $v_seq = Fasta::getSeq($virgin_fasta);
+        my $seq_id  = Fasta::def2SeqID($def);
+        my $seq_ref   = Fasta::getSeqRef($masked_fasta);
+        my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
 
-	my ($bx_data, $pp_data, $pe_data) = prep_hits($exonerate_p_hits,
-	                                              $exonerate_e_hits,
-	                                              $blastx_hits,
+	my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
+						      $est_evidence,
+						      $alt_est_evidence,
 						      $predictions,
-	                                              $v_seq,
-						      $single_exon
+						      $models,
+						      $v_seq_ref,
+						      $CTL_OPTIONS->{single_exon}
 						     );
 
-        my ($seq_id)  = $def =~ /^>(\S+)/;
+        my %annotations;
+	my @bag;
 
-        my @annotations;
-        my $i = 0;
-	my $g_name;
+	#---model passthrough here
+	if(grep {/^gff$/} @{$CTL_OPTIONS->{_predictor}}){
+	   my $model_trans = run_it($gf_data,
+				    $the_void,
+				    $seq_ref,
+				    $v_seq_ref,
+				    $def,
+				    'gf',
+				    'gff',
+				    $the_void,
+				    $CTL_OPTIONS
+				   );
+	   
+	   $annotations{'gff'} = group_transcripts($model_trans,
+						   $v_seq_ref,
+						   $seq_id,
+						   $chunk_number,
+						   $build,
+						   'gff',
+						   $the_void,
+						   $CTL_OPTIONS
+						  );
+	   push(@bag, @{$annotations{'gff'}});
+	}
 
-	my $bx_transcripts = 
-	run_it($bx_data, $the_void, $seq, $v_seq, $def, 'bx', $pred_command, $pred_flank);
+	#---gene prediction here
+	foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
+	   next if($prdr eq 'gff');
+	   my $transcripts = run_it($bx_data,
+				    $the_void,
+				    $seq_ref,
+				    $v_seq_ref,
+				    $def,
+				    'bx',
+				    $prdr,
+				    $CTL_OPTIONS
+				   );
 
+	   my $annot = group_transcripts($transcripts,
+					 $v_seq_ref,
+					 $seq_id,
+					 $chunk_number,
+					 $build,
+					 $prdr,
+					 $the_void,
+					 $CTL_OPTIONS
+					);
 
-	#my $pp_transcripts = 
-	#run_it($pp_data, $the_void, $seq, $v_seq, $def, 'pp', $snap_command, $snap_flank);
+	   $annotations{$prdr} =  $annot;
+	   push(@bag, @{$annot});
+	}
 
-	#my $pe_transcripts = 
-	#run_it($pe_data, $the_void, $seq, $v_seq, $def, 'pe', $snap_command, $snap_flank);
-	
-	#my @transcripts = (@{$bx_transcripts}, @{$pp_transcripts}, @{$pe_transcripts});
+	#---abinit scoring here
+	my $pred_trans = run_it($pr_data,
+				$the_void,
+				$seq_ref,
+				$v_seq_ref,
+				$def,
+				'pr',
+				'abinit',
+				$CTL_OPTIONS
+			       );
 
-	my @transcripts = (@{$bx_transcripts});
+	my $all_ab = group_transcripts($pred_trans,
+				       $v_seq_ref,
+				       $seq_id,
+				       $chunk_number,
+				       $build,
+				       'abinit',
+				       $the_void,
+				       $CTL_OPTIONS
+				      );
 
-        my $annotations = group_transcripts(\@transcripts, 
-	                                    $v_seq, 
-	                                    $seq_id, 
-	                                    $chunk_number, 
-	                                    $predictions,
-					    $exonerate_p_hits,
-					    $exonerate_e_hits,
-					    $blastx_hits,
-					    );
+	#identify overlapping and non-overlapping abinits
+	my ($hit_some, $hit_none) = abinit_annotation_overlap($all_ab, \@bag);
 
-        return $annotations;
+	$annotations{'abinit'} = $hit_some; #only overlapping abinits
+	$annotations{'non_overlap'} = $hit_none; #only non overlapping 
+
+        return \%annotations;
+}
+#------------------------------------------------------------------------
+{
+my %SCORE; #used for sort in function crit2
+#this subrutine returns finished MAKER annotations
+sub best_annotations {
+   my $annotations = shift;
+   my $CTL_OPTIONS = shift;
+
+   my %order; #this is important for sorting
+   my @p_list;
+   my @m_list;
+   my $i = @{$CTL_OPTIONS->{_predictor}};
+   foreach my $p (@{$CTL_OPTIONS->{_predictor}}){
+      $order{$p} = $i;
+      $i--;
+      foreach my $g (@{$annotations->{$p}}){
+	 if($g->{g_strand} == 1){
+	    push(@p_list, $g);
+	 }
+	 elsif($g->{g_strand} == -1){
+	    push(@m_list, $g);
+	 }
+	 else{
+	    die "ERROR: Logic error in auto_annotator::best_annotations\n";
+	 }
+      }
+   }
+   %SCORE = %order; #must be set for sort to work correctly
+
+   @p_list = sort {crit1($b) <=> crit1($a) || crit2($b) <=> crit2($a) || crit3($b) cmp crit3($a)} @p_list;
+   @m_list = sort {crit1($b) <=> crit1($a) || crit2($b) <=> crit2($a)|| crit3($b) cmp crit3($a)} @m_list;
+
+   my @p_keepers;
+   foreach my $g (@p_list){
+      my $g_B = $g->{g_start};
+      my $g_E = $g->{g_end};
+
+      my $bad;
+      foreach my $k (@p_keepers){
+	 my $k_B = $k->{g_start};
+	 my $k_E = $k->{g_end};
+	 
+	 my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+
+	 if($class ne '0'){
+	    $bad = 1;
+	    last;
+	 }
+      }
+
+      push(@p_keepers, $g) if(! $bad);
+   }
+
+   my @m_keepers;
+   foreach my $g (@m_list){
+       my $g_B = $g->{g_start};
+       my $g_E = $g->{g_end};
+
+       my $bad;
+       foreach my $k (@m_keepers){
+	   my $k_B = $k->{g_start};
+	   my $k_E = $k->{g_end};
+
+	   my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+
+	   if($class ne '0'){
+	       $bad = 1;
+	       last;
+	   }
+       }
+
+       push(@m_keepers, $g) if(! $bad);
+   }
+   
+   push(@p_keepers, @m_keepers);
+   return \@p_keepers;
+}
+#------------------------------------------------------------------------
+#sort by evaluator score
+sub crit1 {
+   my $g = shift;
+   
+   return $g->{eval};
+}
+#------------------------------------------------------------------------
+#sort by order given in control files
+sub crit2 {
+   my $g = shift;
+   
+   my $score = $SCORE{$g->{predictor}} || 0;
+   return $score;
+}
+#------------------------------------------------------------------------
+#arbitrary alphabetical order (really only affects non-overlapping abinits)
+sub crit3 {
+   my $g = shift;
+   
+   return $g->{predictor};
+}
 }
 #------------------------------------------------------------------------
 sub run_it {
-	my $data         = shift;
-	my $the_void     = shift;
-	my $seq          = shift;
-	my $v_seq        = shift;
-	my $def          = shift;
-	my $id           = shift;
-	my $pred_command = shift;
-	my $pred_flank   = shift;
+   my $data         = shift;
+   my $the_void     = shift;
+   my $seq          = shift;
+   my $v_seq        = shift;
+   my $def          = shift;
+   my $id           = shift;
+   my $predictor    = shift;
+   my $CTL_OPTIONS  = shift;
 
-	my @transcripts;
-	my $i = 0;
-	foreach my $set (@{$data}){
+   my $q_id = Fasta::def2SeqID($def); 
+   my @transcripts;
+   my $i = 0;
+   foreach my $set (@{$data}) {
+      my $goimph   = $set->{gomiph};
+      my $mia      = $set->{mia};
+      my $c_id     = $set->{c_id};
+      my $ests     = $set->{ests};
+      my $alt_ests = $set->{alt_ests};
+      my $model    = $set->{model};
+	   
+      if ($predictor eq 'gff' || $predictor eq 'abinit') {
+	 next if(! defined $model);
+	 my $transcript = $model;
+	 push(@transcripts, [$transcript, $set, undef]);
+	 $i++;
+	 next;
+      }
 
-		my $goimph = $set->{gomiph};
-		my $mia    = $set->{mia};
-		my $c_id   = $set->{c_id};
-		my $ests   = $set->{ests};
+      if ($predictor eq 'est2genome') {
+	 next if (! defined $mia);
+	 my $transcript = pneu($ests, $mia, $seq);
+	 push(@transcripts, [$transcript, $set, undef]);
+	 $i++;
+	 next;
+      }	  
 
-		my ($snap_shots, $strand);
+      my ($pred_shots, $strand) = get_pred_shot($seq, 
+						$def, 
+						$id.'.'.$i, 
+						$the_void, 
+						$set,
+						$predictor,
+						$CTL_OPTIONS,
+						$LOG
+					       );
 
-                if ($OPT_PREDICTOR eq 'est2genome' && defined($mia)){
-                        my $transcript = pneu($ests, $mia, $seq);
-                        push(@transcripts, [$transcript, $set, undef]);
+      my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 
-			$i++;
-			next;
-                }
+      #commented out 12/11/2008 to remove redundancy when est2genome is also a predictor
+      #my $best_pred       = get_best_pred_shot($strand, $pred_shots);      
+      #if (!defined($best_pred) && defined($mia)) {
+      #   my $transcript = pneu($ests, $mia, $seq);
+      #   push(@transcripts, [$transcript, $set, undef]);
+      #}	  
+	   
+      foreach my $pred_shot (@{$on_right_strand}) {
+	 my $copy = $pred_shot;
+	 if (defined($pred_shot) && defined($mia)) {
+	    my $transcript = pneu($ests, $copy, $seq);
+	    if (defined($transcript)) {
+	       push(@transcripts, [$transcript, $set, $pred_shot])
+	    }
+	    else {
+	       push(@transcripts, [$copy, $set, $pred_shot])
+	    }
+	 }
+	 elsif (defined($pred_shot) && !defined($mia)) {
+	    push(@transcripts, [$copy, $set, $pred_shot]);
+	 }
+      }
+      $i++;
+   }
+	
+   return \@transcripts;
+}
+#------------------------------------------------------------------------
+sub get_pred_shot {
+   my $seq         = shift; 
+   my $def         = shift;
+   my $set_id      = shift;
+   my $the_void    = shift;
+   my $set         = shift;
+   my $predictor   = shift;
+   my $CTL_OPTIONS = shift;
+   my $LOG         = shift;
 
-		($snap_shots, $strand)   = 
-		Widget::snap::get_snap_shot($seq, 
-	 			            $def, 
-					    $id.'.'.$i, 
+   if($predictor eq 'snap'){
+      my $pred_command = $CTL_OPTIONS->{snap}.' '.$CTL_OPTIONS->{snaphmm};
+      return Widget::snap::get_pred_shot($seq, 
+					 $def, 
+					 $set_id, 
+					 $the_void, 
+					 $set, 
+					 $CTL_OPTIONS->{pred_flank}, 
+					 $pred_command,
+					 $CTL_OPTIONS->{force},
+					 $LOG
+					);
+   }
+   elsif($predictor eq 'augustus'){
+      my $pred_command = $CTL_OPTIONS->{augustus}.' --species='.$CTL_OPTIONS->{augustus_species};
+      return Widget::augustus::get_pred_shot($seq, 
+					     $def, 
+					     $set_id, 
+					     $the_void, 
+					     $set, 
+					     $CTL_OPTIONS->{pred_flank}, 
+					     $pred_command,
+					     $CTL_OPTIONS->{force},
+					     $LOG
+					    );
+   }
+   elsif($predictor eq 'fgenesh'){
+      my $pred_command = $CTL_OPTIONS->{fgenesh}.' '.$CTL_OPTIONS->{fgenesh_par_file};
+      return Widget::fgenesh::get_pred_shot($seq, 
+					    $def, 
+					    $set_id, 
 					    $the_void, 
 					    $set, 
-					    $pred_flank, 
+					    $CTL_OPTIONS->{pred_flank}, 
 					    $pred_command,
-					    $OPT_F,
+					    $CTL_OPTIONS->{force},
 					    $LOG
-					  ) if $OPT_PREDICTOR eq 'snap';
-
-		my ($q_id) = $def =~ />(\S+).*/;
-
-                ($snap_shots, $strand)   = 
-		Widget::augustus::get_aug_shot($seq,
-                                               $def,
-                                               $id.'.'.$i,
-                                               $the_void,
-                                               $set,
-                                               $pred_flank,
-                                               $pred_command,
-					       $q_id,
-					       $OPT_F,
-					       $LOG
-                                              ) if $OPT_PREDICTOR eq 'augustus';
-
-
-
-		my $best_pred       = get_best_snap_shot($strand, $snap_shots);
-		my $on_right_strand = get_best_snap_shots($strand, $snap_shots);
-
-		if  (!defined($best_pred) && defined($mia) && $OPT_PREDICTOR ne 'est2genome' ){
-		    	my $transcript = pneu($ests, $mia, $seq);
-		    	push(@transcripts, [$transcript, $set, undef]);
-		}
-		
-		foreach my $snap_shot (@{$on_right_strand}){
-		    my $copy = $snap_shot;
-		    if    (defined($snap_shot) && defined($mia)){
-			my $transcript = pneu($ests, $copy, $seq);
-			if (defined($transcript)){
-			    push(@transcripts, [$transcript, $set, $snap_shot])
-			}
-			else {
-			    push(@transcripts, [$copy, $set, $snap_shot])
-			}
-		    }
-		    elsif (defined($snap_shot) && !defined($mia)){
-			push(@transcripts, [$copy, $set, $snap_shot])
-			    if defined($copy);
-		    }
-		}
-		$i++;
-	}
-
-	return \@transcripts;
-}
-
-#------------------------------------------------------------------------
-sub get_overlapping_hits {
-        my $eat  = shift;
-        my $hits = shift;
-
-        my @keepers;
-        foreach my $hit (@{$hits}){
-                next unless $hit->strand eq $eat->strand;
-                push(@keepers, $hit) 
-                if compare::overlap($hit, $eat, 'query', 3);    
-        }
-        return \@keepers;
-}
-#------------------------------------------------------------------------
-sub get_non_overlapping {
-	my $hits_a = shift;
-	my $hits_b = shift;
-
-
-	my @keepers;
-	foreach my $b (@{$hits_b}){
-		my $hit_one = 0;
-		foreach my $a (@{$hits_a}){
-			$hit_one++ if compare::overlap($a, $b, 'query', 5);
-		}
-
-		push(@keepers, $b) unless $hit_one;
-	}
-	return \@keepers;
-
-}
-#------------------------------------------------------------------------
-sub group_transcripts {
-	my $data         = shift;
-	my $seq          = shift;
-	my $seq_id       = shift;
-	my $chunk_number = shift;
-	my $snap_abinits = shift;
-	my $pol_p_hits   = shift;
-	my $pol_e_hits   = shift;
-	my $blastx_hits  = shift;
-
-	my @transcripts;
-	my %lookup;
-	my %snap_lookup;
-	my $temp_id = 0;
-	foreach my $datum (@{$data}){
-		my $tra       = $datum->[0];
-		my $set       = $datum->[1];
-		my $o_snap    = $datum->[2]; # added 12-15
-		
-		$tra->{set_id} = $temp_id;
-
-		push(@transcripts, $tra);
-
-		$lookup{$temp_id} = $set;
-		$temp_id++;
-	}
-
-	#-- add the non overlapping ab initio snap predictions
-	if ($OPT_PREDS){
-	   my $non_overlapping_snap_abinits = get_non_overlapping(\@transcripts,
-								  $snap_abinits
-								 );
-	   
-	   push (@transcripts, @{$non_overlapping_snap_abinits});
-	}
-	#---
-	
-	my $careful_clusters = 
-	cluster::careful_cluster_phat_hits(\@transcripts, $seq);
-
-	my @keepers;
-	foreach my $c (@{$careful_clusters}){
-		my $best_alt_forms = 
-		clean::remove_redundant_alt_splices($c, $seq, 10);
-		push(@keepers, $best_alt_forms);
-	}	
-	my $c_id = 0;
-
-	my %pred_sources;
-	my @annotations;
-	foreach my $c (@keepers){
-		my $sources = join ('-', keys %pred_sources);
-		my $g_name = "maker-$seq_id-$sources-gene-$chunk_number.$c_id";
-	
-		my @t_structs;
-		my $i = 1;
-		my $so_code = evaluator::so_classifier::so_code($c);
-		my $alt_spli_sup = evaluator::funs::alt_spli($c, $pol_e_hits, $seq, 
-			$seq_id, "$chunk_number.$c_id");
-		my $geneAED = evaluator::AED::gene_AED($c, $pol_e_hits, $pol_p_hits, $blastx_hits, $seq);
-		foreach my $f (@{$c}){
-
-			$f->{g_name} = $g_name;
-
-			my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;
-			$pred_sources{$source}++;
-
-			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
-
-			my $t_struct = 
-				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $geneAED, $alt_spli_sup, $pol_p_hits, $pol_e_hits, $blastx_hits);
-			push(@t_structs, $t_struct);
-
-			$i++;
-		}
-
-		my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
-
-
-		my $annotation = { 't_structs' => \@t_structs,
-		                   'g_name'    => $g_name,
-				   'g_start'   => $g_start,
-			           'g_end'     => $g_end,
-				   'g_strand'  => $g_strand,
-				 };
-
-		push(@annotations, $annotation);
-		$c_id++;
-	}
-
-	return \@annotations;
+					   );
+   }
+   elsif($predictor eq 'twinscan'){
+      my $pred_command = $CTL_OPTIONS->{twinscan};
+      return Widget::twinscan::get_pred_shot($seq, 
+					     $def, 
+					     $set_id, 
+					     $the_void, 
+					     $set, 
+					     $CTL_OPTIONS->{pred_flank}, 
+					     $pred_command,
+					     $CTL_OPTIONS->{force},
+					     $LOG
+					    );
+   }
+   else{
+      die "ERROR: Not a valid predictor in auto_annoator::get_pred_shot\n";
+   }
 }
 #------------------------------------------------------------------------
 sub load_transcript_struct {
-        my $f            = shift;
-        my $c_id         = shift;
-        my $i            = shift;
-        my $seq          = shift;
-        my $seq_id       = shift;
-        my $evi          = shift;
-        my $abinits      = shift;
-	my $so_code	 = shift;
-	my $geneAED	 = shift;
+	my $f            = shift;
+	my $g_name       = shift;
+	my $i            = shift;
+	my $seq          = shift;
+	my $evi          = shift;
+	my $so_code      = shift;
+	my $geneAED      = shift;
 	my $alt_spli_sup = shift;
-	my $pol_p_hits	 = shift;
-	my $pol_e_hits   = shift;
-	my $blastx_hits	 = shift;
+	my $the_void     = shift;
+	my $CTL_OPTIONS  = shift;
 
-        my ($source) = ref($f) =~ /(\S+)\:\:PhatHit/;;
-        my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i"; #affects GFFV3.pm
-	$f->{t_name} = $t_name;
+	my $transcript_seq  = get_transcript_seq($f, $seq);
 
-        my $transcript_seq  = get_transcript_seq($f, $seq);
+        my ($translation_seq, $offset, $end) = get_translation_seq($transcript_seq);
+	
 
-        my ($translation_seq, $offset, $end) =
-           get_translation_seq($transcript_seq);
-        
+	my $len_3_utr = length($transcript_seq) - $end + 1;
+	my $l_trans =  length($translation_seq);
+	
+        my $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
+	$f->name($t_name);
 
-        my $len_3_utr = length($transcript_seq) - $end + 1;
-        my $l_trans =  length($translation_seq);
-      
-	## The reports of evaluator are all contained in $eva object. 
-	my $eva = evaluator::evaluate::power_evaluate($f, $seq, 
-		$pol_p_hits, $pol_e_hits, $blastx_hits, 
-		$abinits, $so_code, $geneAED, $alt_spli_sup, $t_name, $CTL);
+	my $qi =
+	maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 
-	my $score = $eva->{score};
-	my $qi	  = $eva->{qi};
+	#----evaluator here
+	my $pol_p_hits  = get_selected_types($evi->{gomiph}, 'protein2genome');
+	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	my $blastx_hits = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
+	my $abinits = $evi->{all_preds};
+	
+	#holds evalutor struct
+        my $eva = evaluator::evaluate::power_evaluate($f,
+						      $seq,
+						      $pol_p_hits,
+						      $pol_e_hits,
+						      $blastx_hits,
+						      $abinits,
+						      $so_code,
+						      $geneAED,
+						      $alt_spli_sup,
+						      $t_name,
+						      $CTL_OPTIONS
+						     );
+	
+        my $score = $eva->{score};
+        my $eva_qi    = $eva->{qi};
+	die "$qi\t$eva_qi\n" if ($qi ne $eva_qi);
+	#my $score = 0;
+	#----
 
-
-        $t_name .= " $qi";
+	$t_name .= " $qi";
 
         my $t_struct = {'hit'      => $f,
                         't_seq'    => $transcript_seq,
                         'p_seq'    => $translation_seq,
                         't_offset' => $offset,
                         't_end'    => $end,
-                        'c_id'     => $c_id,
-                        't_name'   => $t_name,
-			't_score'  => $score,
-                        't_qi'     => $qi,
+		        't_name'   => $t_name,
+			't_qi'     => $qi,
+			'eval'     => $score
                     };
 
-        return $t_struct;
+	return $t_struct;
+}
+#------------------------------------------------------------------------                                                           
+sub get_overlapping_hits {
+   my $eat  = shift;
+   my $hits = shift;
+   
+   my @keepers;
+   foreach my $hit (@{$hits}){
+      next unless $hit->strand eq $eat->strand;
+      push(@keepers, $hit)
+      if compare::overlap($hit, $eat, 'query', 3);
+   }
+   return \@keepers;
+}
+#------------------------------------------------------------------------
+sub get_non_overlapping {
+   my $hits_a = shift;
+   my $hits_b = shift;
+   
+   my @keepers;
+   foreach my $b (@{$hits_b}){
+      my $hit_one = 0;
+      foreach my $a (@{$hits_a}){
+	 $hit_one++ if compare::overlap($a, $b, 'query', 5);
+      }
+      
+      push(@keepers, $b) unless $hit_one;
+   }
+   return \@keepers;
+}
+#------------------------------------------------------------------------
+{
+my %SEEN; #holds names that have already been seen from gff passthrough
+sub group_transcripts {
+   my $data         = shift;
+   my $seq          = shift;
+   my $seq_id       = shift;
+   my $chunk_number = shift;
+   my $build        = shift;
+   my $predictor    = shift;
+   my $the_void     = shift;
+   my $CTL_OPTIONS  = shift;
+   
+   my @transcripts;
+   my %lookup;
+   my %snap_lookup;
+   my $temp_id = 0;
+   foreach my $datum (@{$data}) {
+      my $tra       = $datum->[0];
+      my $set       = $datum->[1];
+      my $o_snap    = $datum->[2]; # added 12-15-2006
+      
+      $tra->{set_id} = $temp_id;
+      
+      push(@transcripts, $tra);
+      
+      $lookup{$temp_id} = $set;
+      $temp_id++;
+   }
+   
+   my $careful_clusters = [];
+   if ($predictor eq 'gff' ) {
+      my %index;
+      my $i = 0;
+      foreach my $t (@transcripts) {
+	 my $j;
+	 if (exists $index{$t->{gene_id}}) {
+	    $j = $index{$t->{gene_id}};
+	 }
+	 else {
+	    $j = $i;
+	    $index{$t->{gene_id}} = $j;
+	    $i++;
+	 }
+	 push(@{$careful_clusters->[$j]}, $t);
+      }
+   }
+   elsif ($predictor eq 'abinit' ) {
+      foreach my $t (@transcripts) {
+	 push(@{$careful_clusters}, [$t])
+      }
+   }
+   else {
+      $careful_clusters = cluster::careful_cluster_phat_hits(\@transcripts, $seq);
+   }
+   
+   my @keepers;
+   foreach my $c (@{$careful_clusters}) {
+      my $best_alt_forms = 
+      clean::remove_redundant_alt_splices($c, $seq, 10);
+      push(@keepers, $best_alt_forms);
+   }	
+   my $c_id = 0;
+   
+   my @annotations;
+   foreach my $c (@keepers) {
+      my @t_structs;
+      
+      my %pred_sources;
+      foreach my $f (@{$c}) {
+	 my $source = $f->algorithm;
+	 $source =~ s/\:+/_/;
+	 $pred_sources{$source}++;
+      }
+      my $sources = join ('-', keys %pred_sources);
+      
+      my $g_name;
+      if ($predictor eq 'gff') {
+	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
+	 if ($g_name =~ /^maker-$seq_id/) {
+	    $SEEN{$g_name}++;
+	 }
+      }
+      elsif ($predictor eq 'abinit') {
+	 $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm	   
+	 $c_id++ while(exists $SEEN{"$g_name.$c_id"});
+	 $g_name = "$g_name.$c_id";
+      }
+      else {
+	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm	   
+	 $c_id++ while(exists $SEEN{"$g_name.$c_id"});
+	 $g_name = "$g_name.$c_id";
+      }
+      
+      #----evaluator here
+      my @pol_e_hits;
+      foreach my $f (@{$c}) {
+	 my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : [];
+	 my $ests = get_selected_types($evi->{ests}, 'est2genome');
+	 
+	 #remove redundant ests (some added > 1 time)
+	 foreach my $e (@{$ests}){
+	    $e->{_uniq_set} = 0;  #reset _uniq_set before beginning
+	 }
+	 foreach my $e (@{$ests}){
+	    if(! $e->{_uniq_set}){
+	       $e->{_uniq_set} = 1;
+	       push(@pol_e_hits, $e);
+	    }
+	 }
+      }
+      
+      my $so_code = evaluator::so_classifier::so_code($c);
+      my $alt_spli_sup = evaluator::funs::alt_spli($c, \@pol_e_hits, $seq);
+      my $geneAED = evaluator::AED::gene_AED($c, $pol_e_hits, $pol_p_hits, $blastx_hits, $seq);
+      #----
+      
+      my $eval = 0;
+      my $i = 1;
+      foreach my $f (@{$c}) {
+	 my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
+	 
+	 my $t_struct = 
+	 load_transcript_struct($f, $g_name, $i, $seq, $evidence, $so_code,
+				$geneAED, $alt_spli_sup, $the_void, $CTL_OPTIONS);
+	 push(@t_structs, $t_struct);
+	 $eval = $t_struct->{eval} if($t_struct->{eval} > $eval);
+	 $i++;
+      }
+      
+      my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
+      
+      my $annotation = { 't_structs' => \@t_structs,
+			 'g_name'    => $g_name,
+			 'g_start'   => $g_start,
+			 'g_end'     => $g_end,
+			 'g_strand'  => $g_strand,
+			 'eval'      => $eval,
+			 'predictor' => $predictor,
+			 'so_code'   => $so_code
+		       };
+      
+      push(@annotations, $annotation);
+      $c_id++;
+   }
+   
+   return \@annotations;
+}
+}
+#------------------------------------------------------------------------
+sub abinit_annotation_overlap {
+   my $abin_set = shift;
+   my $ann_set = shift;
+
+   my @overlap;
+   my @none;
+
+   foreach my $abin (@{$abin_set}){
+      my $over = 0;
+      foreach my $ann (@{$ann_set}){
+	 next if ($abin->{g_strand} != $ann->{g_strand});
+	 my $comp = compare::compare ($abin->{g_start},
+				      $abin->{g_end},
+				      $ann->{g_start},
+				      $ann->{g_end}
+				     );
+	 if($comp ne '0'){
+	    $over = 1;
+	    last;
+	 }
+      }
+      if($over){
+	 push (@overlap, $abin);
+      }
+      else{
+	 push (@none, $abin);
+      }
+   }
+   
+   return (\@overlap, \@none);
 }
 #------------------------------------------------------------------------
 sub get_start_and_end_on_seq {
@@ -708,15 +1118,15 @@ sub get_selected_types {
 	my @keepers;
 	foreach my $f (@{$c}){
 		foreach my $type (@_){
-			if (ref($f) =~ /$type$/){
-				push(@keepers, $f);
-			}
-			elsif (ref($f) eq 'snap::PhatHit' && $type eq 'snap'){
-				push(@keepers, $f);
-			}
-                        elsif (ref($f) eq 'augustus::PhatHit' && $type eq 'augustus'){
-                                push(@keepers, $f);
-                        }
+		   if ($f->algorithm =~ /^$type$/i){
+		      push(@keepers, $f);
+		   }
+		   elsif ($f->algorithm =~ /^$type\:/i){
+		      push(@keepers, $f);
+		   }
+		   elsif ($f->algorithm =~ /exonerate\:\:$type$/i){
+		      push(@keepers, $f);
+		   }
 		}
 	}
 
@@ -842,40 +1252,38 @@ sub get_translation_seq {
 	}
 }
 #------------------------------------------------------------------------
-sub get_best_snap_shot {
-	my $wanted_strand = shift;
-	my $gene_preds    = shift;
-
-	my @gs;
-	foreach my $g (@{$gene_preds}){
-
-		next unless defined($g);
-		next unless defined($g->strand('query'));
-		next unless $g->strand('query') == $wanted_strand;
-		my $total_score = PhatHit_utils::get_total_score_of_hit($g);
-		push(@gs, [$total_score, $g]);
-	}
-	my @sorted = sort {$b->[0] <=> $a->[0]} @gs;
-
-	my $best  = $sorted[0]->[1];
-	
-	return $best;
+sub get_best_pred_shot {
+   my $wanted_strand = shift;
+   my $gene_preds    = shift;
+   
+   my @gs;
+   foreach my $g (@{$gene_preds}){
+      next unless defined($g);
+      next unless defined($g->strand('query'));
+      next unless $g->strand('query') == $wanted_strand;
+      my $total_score = PhatHit_utils::get_total_score_of_hit($g);
+      push(@gs, [$total_score, $g]);
+   }
+   my @sorted = sort {$b->[0] <=> $a->[0]} @gs;
+   
+   my $best  = $sorted[0]->[1];
+   
+   return $best;
 }
 #------------------------------------------------------------------------
-sub get_best_snap_shots {
-        my $wanted_strand = shift;
-        my $gene_preds    = shift;
-
-        my @gs;
-        foreach my $g (@{$gene_preds}){
-
-                next unless defined($g);
-                next unless defined($g->strand('query'));
-                next unless $g->strand('query') == $wanted_strand;
-                push(@gs, $g);
-        }
-
-        return \@gs;
+sub get_best_pred_shots {
+   my $wanted_strand = shift;
+   my $gene_preds    = shift;
+   
+   my @gs;
+   foreach my $g (@{$gene_preds}){     
+      next unless defined($g);
+      next unless defined($g->strand('query'));
+      next unless $g->strand('query') == $wanted_strand;
+      push(@gs, $g);
+   }
+   
+   return \@gs;
 }
 #------------------------------------------------------------------------
 sub pneu {
@@ -896,21 +1304,18 @@ sub pneu {
 		($b_5, $b_3)  = maker::join::find_best_one($g, $ests);
 	}
 	else {
-		$b_5 = maker::join::find_best_five($g, $ests);
-		$b_3 = maker::join::find_best_three($g, $ests);
+	   $b_5 = maker::join::find_best_five($g, $ests);
+	   $b_3 = maker::join::find_best_three($g, $ests);
 	}
 
-        my $pred_source = $OPT_PREDICTOR;
-
 	my $anno_transcript = 
-	maker::join::join_f($b_5, $g, $b_3, $q_seq, $pred_source);
+	maker::join::join_f($b_5, $g, $b_3, $q_seq);
 
 	#return $g;
 	return $anno_transcript;
 }
 #------------------------------------------------------------------------
 sub combine {
-
 	my @bag;
 	while (my $hits = shift(@_)){
 		foreach my $hit (@{$hits}){

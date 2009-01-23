@@ -11,6 +11,8 @@ use PhatHit_utils;
 use compare;
 use cluster;
 use clean;
+use maker::auto_annotator;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -199,18 +201,6 @@ sub overlaps {
         return 0;
 }
 #------------------------------------------------------------------------
-sub get_selected_type {
-	my $hits = shift;
-	my $type = shift;
-
-	my @keepers;
-	foreach my $hit (@{$hits}){
-		push(@keepers, $hit) if ref($hit) =~ /$type$/;
-	}
-
-	return \@keepers;
-}
-#------------------------------------------------------------------------
 sub get_percent {
 	my $codes       = shift;
 	my $num_t_exons = shift;
@@ -236,18 +226,17 @@ sub get_transcript_qi {
         my $set          = shift;
         my $length_5     = shift;
 	my $length_3     = shift;
-	my $snap_abinits = shift;
 	my $l_trans      = shift;
 
-        my $goimph = $set->{gomiph};
+        my $gomiph = $set->{gomiph};
         my $ests   = $set->{ests};
-
+	my $snap_abinits = $set->{all_preds};
 	my @bag;
-	push(@bag, @{$set->{gomiph}}) if defined($set->{gomiph});
-	push(@bag, @{$set->{ests}})   if defined($set->{ests});
+	push(@bag, @{$gomiph}) if defined($gomiph);
+	push(@bag, @{$ests})   if defined($ests);
 
-	my $pol_est_hits = get_selected_type(\@bag, 'est2genome');
-	my $pol_pro_hits = get_selected_type(\@bag, 'protein2genome');
+	my $pol_est_hits = maker::auto_annotator::get_selected_types($ests, 'est2genome');
+	my $pol_pro_hits =  maker::auto_annotator::get_selected_types($gomiph, 'protein2genome');
 
 	my @good_splicers;
 	push(@good_splicers, @{$pol_est_hits});

@@ -11,8 +11,8 @@ use Widget;
 use Fasta;
 use FastaFile;
 use Iterator::Fasta;
-use snap::PhatHit;
-use snap::PhatHsp;
+use Bio::Search::Hit::PhatHit::snap;
+use Bio::Search::HSP::PhatHSP::snap;
 use PhatHit_utils;
 use IPC::Open3;
 
@@ -43,13 +43,17 @@ sub prep_for_genefinder {
 
         my $gomiph = $set->{gomiph};
         my $mia    = $set->{mia};
-        my $snaps  = $set->{preds};
+        my $models = $set->{gomod};
+        my $alts   = $set->{alt_ests};
+        my $preds  = $set->{preds};
         my $ests   = $set->{ests};
         my @t_data;
 
         push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$snaps})   if defined($snaps);
+        push(@t_data, @{$preds})   if defined($preds);
         push(@t_data, $mia)        if defined($mia);
+        push(@t_data, @{$alts})     if defined($alts);
+        push(@t_data, @{$models})   if defined($models);
         push(@t_data, @{$ests})    if defined($ests);
 
         my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
@@ -107,7 +111,7 @@ sub prep_for_genefinder {
         return (\$final_seq, $strand, $offset, $xdef);
 }
 #------------------------------------------------------------------------
-sub get_snap_shot {
+sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
         my $id            = shift;
@@ -138,14 +142,14 @@ sub get_snap_shot {
 
         $alt_snap_command .= $hmm;
 
-        my $gene_preds = snap($$shadow_fasta,
-                           $the_void,
-                           $id,
-                           $strand,
-                           $offset,
-                           $xdef,
-                           $alt_snap_command,
-                          );
+        my $gene_preds = snap($shadow_fasta,
+			      $the_void,
+			      $id,
+			      $strand,
+			      $offset,
+			      $xdef,
+			      $alt_snap_command,
+			     );
 
 
         return ($gene_preds, $strand);
@@ -239,7 +243,7 @@ sub parse {
         my $fasta = $iterator->nextEntry();
 
         my $def     = Fasta::getDef($fasta);
-        my $q_seq   = Fasta::getSeq($fasta);
+        my $q_seq   = Fasta::getSeqRef($fasta);
 
         my ($q_name)  = $def =~ /^>(.+)/;
 
@@ -411,12 +415,12 @@ sub load_phat_hits {
 
 		my %hsps;
 		my $i = 0;
-		my $f = new snap::PhatHit('-name'         => $gene,
-                                          '-description'  => 'NA',
-                                          '-algorithm'    => 'snap',
-                                          '-length'       => $q_len,
-					  '-score'        => $total_score,
-                                          );
+		my $f = new Bio::Search::Hit::PhatHit::snap('-name'         => $gene,
+							    '-description'  => 'NA',
+							    '-algorithm'    => 'snap',
+							    '-length'       => $q_len,
+							    '-score'        => $total_score,
+							    );
 
                 $f->queryLength($q_len);
 
@@ -488,7 +492,7 @@ sub load_phat_hits {
         		push(@args, '-hit_gaps');
         		push(@args, 0);
 
-        		my $hsp = new snap::PhatHsp(@args);
+        		my $hsp = new Bio::Search::HSP::PhatHSP::snap(@args);
         		   $hsp->queryName($q_name);
         		#-------------------------------------------------
         		# setting strand because bioperl is all messed up!

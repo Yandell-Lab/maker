@@ -24,12 +24,21 @@ sub prep {
 
 	our %MATRIX = get_matrix();
 
-	my $eat_t_bs   = get_binary_string([$eat], $seq,   'hsps');
-	my $eat_c_bs   = get_binary_string([$eat], $seq,   'cdss');
-	my $blastx_bs  = get_binary_string($blastx, $seq,  'hsps');
-	my $pol_est_bs = get_binary_string($pol_est, $seq, 'hsps');
-	my $pol_pro_bs = get_binary_string($pol_pro, $seq, 'hsps');
-	my $snaps_bs   = get_binary_string($snaps, $seq,   'hsps');
+#	my $eat_t_bs   = get_binary_string([$eat], $seq,   'hsps');
+#	my $eat_c_bs   = get_binary_string([$eat], $seq,   'cdss');
+#	my $blastx_bs  = get_binary_string($blastx, $seq,  'hsps');
+#	my $pol_est_bs = get_binary_string($pol_est, $seq, 'hsps');
+#	my $pol_pro_bs = get_binary_string($pol_pro, $seq, 'hsps');
+#	my $snaps_bs   = get_binary_string($snaps, $seq,   'hsps');
+	
+	#---mod
+	my $eat_t_bs   = get_binary_array([$eat], $eat,   'hsps');
+	my $eat_c_bs   = get_binary_array([$eat], $eat,   'cdss');
+	my $blastx_bs  = get_binary_array($blastx, $eat,  'hsps');
+	my $pol_est_bs = get_binary_array($pol_est, $eat, 'hsps');
+	my $pol_pro_bs = get_binary_array($pol_pro, $eat, 'hsps');
+	my $snaps_bs   = get_binary_array($snaps, $eat,   'hsps');
+	#---
 
 	my $q_data = 
 	get_q_seq($eat_t_bs, $eat_c_bs, $blastx_bs, $pol_est_bs, $pol_pro_bs , $snaps_bs);
@@ -96,36 +105,80 @@ sub get_matrix {
 }
 #------------------------------------------------------------------------
 sub get_q_seq {
-        my $eat_t_bs   = shift;
-        my $eat_c_bs   = shift;
-        my $blastx_bs  = shift;
-        my $pol_est_bs = shift;
-        my $pol_pro_bs = shift;
-        my $snaps_bs   = shift;
+   my $eat_t_bs   = shift;
+   my $eat_c_bs   = shift;
+   my $blastx_bs  = shift;
+   my $pol_est_bs = shift;
+   my $pol_pro_bs = shift;
+   my $snaps_bs   = shift;
+   
+   my @scores;
+   my $scale = 1;
+   for (my $i = 0; $i < @$eat_t_bs; $i++){
+      my $area;
+      if ($eat_c_bs->[$i] == 1){
+	 # in CDS
+	 $area = 'c';
+      }
+      elsif ($eat_t_bs->[$i] == 1 && $eat_c_bs->[$i] == 0){
+	 # in UTR
+	 $area = 'u';
+      }
+      elsif ($eat_t_bs->[$i] == 0){
+	 # intergenic or intron
+	 $area = 'i';
+      }
+   
+      my $key = '';
+      $key .= 'snap '    if $snaps_bs->[$i];
+      $key .= 'blastx '  if $blastx_bs->[$i];
+      $key .= 'pol_pro ' if $pol_pro_bs->[$i];
+      $key .= 'pol_est'  if $pol_est_bs->[$i];
+      $key = 'none' unless($key);
 
-	my @scores;
-	my $scale = 1;
-	for (my $i = 0; $i < length($$eat_t_bs); $i++){
-		my $eat_t   = substr($$eat_t_bs,   $i, $scale);
-		my $eat_c   = substr($$eat_c_bs,   $i, $scale);
-		my $blastx  = substr($$blastx_bs,  $i, $scale);
-		my $pol_est = substr($$pol_est_bs, $i, $scale);
-		my $pol_pro = substr($$pol_pro_bs, $i, $scale);
-		my $snaps   = substr($$snaps_bs,   $i, $scale);
-	
-		my $column = $eat_t.$eat_c.$snaps.$blastx.$pol_pro.$pol_est;
-
-		my $score = score_column($column);
-		push(@scores, $score);
-	} 
-
-	my $averages = average_scores(\@scores, 3);
-
-
-	my $q_seq = prune_to_transcript_only($averages, $eat_t_bs);
-
-	return $q_seq;
+      my $score = $MATRIX{$key}{$area};
+      push(@scores, $score);
+   } 
+   
+   my $averages = average_scores(\@scores, 3);
+   
+   my $q_seq = prune_to_transcript_only($averages, $eat_t_bs);
+   
+   return $q_seq;
 }
+#------------------------------------------------------------------------
+#old 12/15/2008
+# sub get_q_seq {
+#         my $eat_t_bs   = shift;
+#         my $eat_c_bs   = shift;
+#         my $blastx_bs  = shift;
+#         my $pol_est_bs = shift;
+#         my $pol_pro_bs = shift;
+#         my $snaps_bs   = shift;
+#
+# 	my @scores;
+# 	my $scale = 1;
+# 	for (my $i = 0; $i < length($$eat_t_bs); $i++){
+# 		my $eat_t   = substr($$eat_t_bs,   $i, $scale);
+# 		my $eat_c   = substr($$eat_c_bs,   $i, $scale);
+# 		my $blastx  = substr($$blastx_bs,  $i, $scale);
+# 		my $pol_est = substr($$pol_est_bs, $i, $scale);
+# 		my $pol_pro = substr($$pol_pro_bs, $i, $scale);
+# 		my $snaps   = substr($$snaps_bs,   $i, $scale);
+#	
+# 		my $column = $eat_t.$eat_c.$snaps.$blastx.$pol_pro.$pol_est;
+#
+# 		my $score = score_column($column);
+# 		push(@scores, $score);
+# 	} 
+#
+# 	my $averages = average_scores(\@scores, 3);
+#
+#
+# 	my $q_seq = prune_to_transcript_only($averages, $eat_t_bs);
+#
+# 	return $q_seq;
+# }
 #------------------------------------------------------------------------
 sub prune_to_transcript_only {
 	my $scores   = shift;
@@ -134,12 +187,12 @@ sub prune_to_transcript_only {
 	my $size = @{$scores};
 
 	die "Bad data in quality_seq::prune_to_transcript_only\n"
-	if length($$eat_t_bs) != $size;
+	if @{$eat_t_bs} != $size;
 
 	my @final;
-	for (my $i = 0; $i < length($$eat_t_bs); $i++){
+	for (my $i = 0; $i < @{$eat_t_bs}; $i++){
 		push(@final, $scores->[$i]) 
-		if substr($$eat_t_bs, $i, 1) == 1;
+		if ($eat_t_bs->[$i] == 1);
 	}
 	return \@final;
 }
@@ -218,6 +271,7 @@ sub get_binary_string {
 	my $hits = shift;
 	my $seq  = shift;
 	my $flag = shift;
+
 	my @coors;
 	foreach my $hit (@{$hits}){
 		my @hsps;
@@ -238,6 +292,42 @@ sub get_binary_string {
 	  $$masked_seq =~ s/[^1]/0/g;
 	
 	return $masked_seq;
+}
+#------------------------------------------------------------------------
+sub get_binary_array {
+	my $hits = shift;
+	my $tran = shift;
+	my $flag = shift;
+
+	my ($start, $end) = ($tran->start('query'), $tran->end('query'));
+	my $length = $end - $start + 1;
+	my $offset = $start; # do not - 1 so as to give array coors
+	my @b_seq = map {0} (1..$length);
+
+	my @coors;
+	foreach my $hit (@{$hits}){
+		my @hsps;
+		if ($flag eq 'hsps'){
+			@hsps = $hit->hsps() if defined $hit->hsps();
+		}
+		elsif ($flag eq 'cdss'){
+			@hsps = @{$hit->cdss()} if defined $hit->cdss();
+		}
+		else {
+		}
+
+		foreach my $hsp (@hsps){
+		   my $s = $hsp->start('query') - $offset;
+		   my $e = $hsp->end('query') - $offset;
+		   next if($s >= $length); #array space
+		   next if($e < 0); #array space
+		   $s = 0 if($s < 0); #array space
+		   $e = $length - 1 if($e >= $length); #array space
+		   @b_seq[$s..$e] = map {1} ($s..$e);
+		}
+	}
+		
+	return \@b_seq;
 }	
 #------------------------------------------------------------------------
 1;

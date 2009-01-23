@@ -1,0 +1,17 @@
+C   U   I
+10  -9  -9  snap blastx pol_pro pol_est
+ 8  -9  -8  blastx pol_pro pol_est
+10  -9  -9  snap pol_pro pol_est
+ 8  -9  -8  pol_pro pol_est
+ 8  -9  -9  snap blastx pol_est
+ 7  -2  -8  blastx pol_est
+ 6  -5  -8  snap pol_est
+ 5  10  -8  pol_est
+ 4  -9  -9  snap blastx pol_pro
+ 4  -8  -7  blastx pol_pro
+ 4  -8  -8  snap pol_pro
+ 3  -8  -7  pol_pro
+ 2  -7  -5  snap blastx
+ 1  -5  -3  blastx
+ 0  -4  -3  snap
+-9  -9  10  none

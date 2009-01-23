@@ -507,6 +507,62 @@ sub name
 	
 	return $self->hit->seq_id();
 }
+################################################ subroutine header begin ##
+
+=head2 strand
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::HSP::PhatHSP::Base;
+ my $hsps = Bio::Search::HSP::PhatHSP::Base::_getTestHSPs('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hsp = $hsps->[0];		# $hits is filled in by test harness
+ my $strand = $hsp->strand();
+
+=for example end
+
+=for example_testing
+  is($name, "3197985", "Check the name of the hit.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub strand
+ {
+	my $self = shift;
+	my $what = shift;
+
+	if ($what =~ /subject|sbjct/i){
+	    $what = 'hit';
+	}
+
+	if($what eq 'hit'){
+	    return $self->{_strand_hack}{hit} if(exists $self->{_strand_hack});
+	    return $self->{STRAND_HIT} if(exists $self->{STRAND_HIT});
+	    return $self->SUPER::strand('hit');
+	}
+	elsif($what eq 'query'){
+	    return $self->{_strand_hack}{query} if(exists $self->{_strand_hack});
+	    return $self->{STRAND_QUERY} if(exists $self->{STRAND_QUERY});
+	    return $self->SUPER::strand('query');
+	}
+	else{
+	    return $self->SUPER::strand($what);
+	}
+}
 
 ################################################ subroutine header begin ##
 

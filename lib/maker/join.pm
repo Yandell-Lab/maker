@@ -258,7 +258,6 @@ sub join_f {
 	my $g           = shift;
 	my $b_3         = shift;
 	my $q_seq       = shift;
-	my $pred_source = shift;
 
 	#$b_5->{f} = $b_5->{f}->name;
 	#$b_3->{f} = $b_3->{f}->name;
@@ -346,17 +345,18 @@ sub join_f {
         #die;
 
 	my $new_total_score = 0;
+	my $length = 0;
 	foreach my $hsp (@anno_hsps){
 		$new_total_score += $hsp->score();
+		$length += $hsp->length();
         }
 
-	my $hit_class = $pred_source.'::PhatHit';
-	$hit_class = "exonerate::PhatHit::est2genome" if($pred_source eq 'est2genome');
+	my $hit_class = ref($g);
 
-	my $new_f = new $hit_class('-name'         => $g->name." annotation",
-                                   '-description'  => 'derived from:'.$pred_source,
-                                   '-algorithm'    => 'auto_annotator',
-                                   '-length'       => length($$q_seq),
+	my $new_f = new $hit_class('-name'         => $g->name,
+                                   '-description'  => $g->description,
+                                   '-algorithm'    => $g->algorithm,
+                                   '-length'       => $length,
 			           '-score'        => $new_total_score, 
                                  );
 
@@ -366,16 +366,13 @@ sub join_f {
 	push(@evidence, $b_3->{f}->name) if defined($b_3->{f});
 
 	$new_f->evidence(\@evidence);
-
 	$new_f->queryLength(length($$q_seq));
-	
 
 	foreach my $hsp (@anno_hsps){
 		$new_f->add_hsp($hsp);
 	}
 
 	return $new_f;
-
 }
 #------------------------------------------------------------------------
 sub merge_hsp {

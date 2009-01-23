@@ -254,6 +254,9 @@ sub shatter_hit {
                                    '-description'  => $hit->description,
                                    '-algorithm'    => $hit->algorithm,
                                    '-length'       => $hit->length,
+				   '-score'        => $hsp->score,
+				   '-bits'         => $hsp->bits,
+				   '-significance' => $hsp->significance
                                    );
 
 		$new_hit->queryLength($hit->queryLength);
@@ -306,9 +309,12 @@ sub load_args {
                 push(@args, $q_s);
         }
         elsif ($action eq 'revq' || $action eq 'both'){
-                push(@args, Fasta::revComp($q_s))
-		unless ref($hsp) =~ /blastp/ 
-		    || ref($hsp) =~ /tblast/;
+	   if (ref($hsp) =~ /blastp|tblastn|blastx/ && ref($hsp) !~ /tblastx/){
+	      push(@args, $q_s);
+	   }
+	   else{
+	      push(@args, Fasta::revComp($q_s));
+	   }
         }
 
         push(@args, '-score');
@@ -329,21 +335,22 @@ sub load_args {
                 push(@args, $h_s);
         }
         elsif ($action eq 'revh' || $action eq 'both'){
-                push(@args, Fasta::revComp($h_s))
-                unless ref($hsp) =~ /blastp/
-                    || ref($hsp) =~ /tblast/
-		    || ref($hsp) =~ /protein/;
+	   if(ref($hsp) =~ /blastp|tblastn|blastx/ && ref($hsp) !~ /tblastx/){
+	       push(@args, $h_s);
+	   }
+	   else{
+	      push(@args, Fasta::revComp($h_s))
+           } 
         }
 
         push(@args, '-hsp_length');
         push(@args, $hsp->query->length);
-
 	
-	my $spaces = $hsp->homology_string =~ tr/ / /;
-	my $midd = length($hsp->homology_string) - $spaces;
+	#my $spaces = $hsp->homology_string =~ tr/ / /;
+	#my $midd = length($hsp->homology_string) - $spaces;
 
         push(@args, '-identical');
-        push(@args, $midd);
+        push(@args, $hsp->num_identical);
 
         push(@args, '-hit_length');
         push(@args, $hsp->hit->length);
@@ -370,7 +377,7 @@ sub load_args {
         push(@args, $hsp->end('query'));
 
         push(@args, '-conserved');
-        push(@args, $midd);
+        push(@args, $hsp->num_conserved);
 
         push(@args, '-hit_name');
         push(@args, $hsp->name());
@@ -382,8 +389,8 @@ sub load_args {
         push(@args, $hsp->gaps('query'));
 
         push(@args, '-hit_gaps');
-        push(@args, $hsp->gaps('hit'));
-	
+        push(@args, $hsp->gaps('hit'));	
+
 	return \@args;
 
 }
@@ -420,19 +427,18 @@ sub copy {
                 $new_hsp->queryName($hsp->queryName)
 		if defined($hsp->queryName);
 
-
 		my $n_q_s = $hsp->strand('query');
 		my $n_h_s = $hsp->strand('hit');
 
 		if    ($what eq 'both') {
-			$n_q_s = -1*$n_q_s;
-			$n_h_s = -1*$n_h_s;
+		   $n_q_s = -1*$n_q_s;
+		   $n_h_s = -1*$n_h_s;
 		}
 		elsif ($what eq 'revq'){
-			$n_q_s = -1*$n_q_s;
+		   $n_q_s = -1*$n_q_s;
 		}
 		elsif ($what eq 'revh'){
-			$n_h_s = -1*$n_h_s;
+		   $n_h_s = -1*$n_h_s;
 		}
 
                $new_hsp->{_strand_hack}->{query} = $n_q_s;
@@ -585,6 +591,8 @@ sub add_offset {
 			$hsp->query->location->end($new_end);
 			$hsp->{'_sequenceschanged'} = 1;
 		}
+		$f->{nB}{query} += $offset if (defined($f->{nB}) && defined($f->{nB}{query}));
+		$f->{nE}{query} += $offset if (defined($f->{nE}) && defined($f->{nE}{query})); 
 		$f->{'_sequenceschanged'} = 1;
 	} 
 

@@ -142,14 +142,14 @@ sub solexa_support {
 	my $box = shift;
 	my $splice_sites = shift;
 
-	return undef unless $CTL->{use_solexa_ests}==1 &&
-		(scalar @$splice_sites >0);
+	return undef unless ($CTL->{est_reads} &&
+		scalar @$splice_sites > 0);
 
 	my $transcript_seq = $box->{transcription_seq};
 	my $path = $CTL->{current_tmp_path};
-	my $cpus = $CTL->{eva_cpus};
+	my $cpus = $CTL->{cpus};
 	my $side_thre = $CTL->{side_thre};
-	my $est_file = $CTL->{solexa_ests};
+	my $est_file = $CTL->{est_reads};
 	my $percov = $CTL->{eva_percov_blastn};
 	my $percid = $CTL->{eva_percid_blastn};
 	my $expection = $CTL->{eva_eval_blastn};
@@ -176,7 +176,7 @@ sub solexa_support {
                         && (-e $est_file.'.xnd') ) {
 		my $new_est_file = $path.'/'.'evaluator_solexa_reads_master_db.fasta';
 		`cp $est_file $new_est_file`;
-		$CTL->{solexa_ests} = $new_est_file;
+		$CTL->{est_reads} = $new_est_file;
 		$est_file = $new_est_file;
 		`$xdformat -n $est_file`;
 	}
@@ -534,66 +534,58 @@ sub get_splice_j_locations {
 }
 #------------------------------------------------------------------------
 sub alt_spli {
-	my $eats = shift;
-	my $all_pol_e_hits = shift;
-	my $seq = shift;
-	my $seq_id = shift;
-	my $c_id = shift;
+    my $eats           = shift;
+    my $pol_e_hits     = shift;
+    my $seq            = shift;
 
-
-	my $pol_ests = []; ## The est set for all the transcripts in 
-			  ## that gene.
-
-	foreach my $eat (@$eats) {
-		
-		my $right_pol_est_hits = 
-			maker::auto_annotator::get_overlapping_hits($eat, $all_pol_e_hits);
-		push @$pol_ests, @$right_pol_est_hits;
+    
+    #pre-label alt splice forms
+    my $i = 1;
+    foreach my $eat (@{$eats}){
+	$eat->{_splice_form} = $i;
+	$i++;
+    }
+    
+    #find same alt_splice forms
+    my %how_many;
+    my %which_one;
+    my $temp_id = 0;
+    foreach my $est (@{$pol_e_hits}) {
+	$est->temp_id($temp_id);
+	
+	foreach my $eat (@{$eats}){
+	    if(compare::overlap($eat, $est, 'query', 0) &&
+	       compare::is_same_alt_form($eat, $est, $seq, 0)
+	       ){
+		$how_many{$est->temp_id}++;
+		push(@{$which_one{$eat->{_splice_form}}}, $est->temp_id); 
+	    }
+	}
+    }
+    
+    #quantify the alt_splice support
+    my $num_eats = @{$eats};    
+    my %is_supported;
+    foreach my $eat (@{$eats}){
+	if($num_eats == 1){
+	    $is_supported{$eat->{_splice_form}} = 'NA';
+	    next;
+	}
+	else{
+	    $is_supported{$eat->{_splice_form}} = 0;
 	}
 
-        my %how_many;
-        my $temp_id = 0;
-        foreach my $est (@{$pol_ests}){
-                $est->temp_id($temp_id);
-                foreach my $eat (@{$eats}){
-                        $how_many{$est->temp_id}++
-                        if compare::is_same_alt_form($eat, $est, $seq, 0);
-                }
-                $temp_id++;
-        }
-
-       my $num_eats = @{$eats};
-
-        my %is_supported;
-	my $i = 1;
-        foreach my $eat (@{$eats}){
-        	my ($source) = ref($eat) =~ /(\S+)\:\:PhatHit/;
-		my $t_name = "maker-$seq_id-$source-gene-$c_id-mRNA-$i";
-		$i++;
-
-                $eat->{_tran_id} = $t_name
-                        unless $eat->{_tran_id};
-                
-                $is_supported{$eat->{_tran_id}} = 0;
-                foreach my $est (@{$pol_ests}){
-                        my $how_many = $how_many{$est->temp_id};
-                        if ($num_eats == 1){
-                                $is_supported{$eat->{_tran_id}} = 'NA';
-                        }
-                        elsif (compare::is_same_alt_form($eat, $est, $seq, 0)){
-                                 $is_supported{$eat->{_tran_id}} += 
-                                ($num_eats - $how_many)/($num_eats- 1)
-                        }
-                        else {   
-                                 $is_supported{$eat->{_tran_id}} += 0;
-                        }
-                
-                } 
-        }
-        
-        return \%is_supported;
+	foreach my $id (@{$which_one{$eat->{_splice_form}}}){
+	    my $how_many = $how_many{$id};
+	    
+	    $is_supported{$eat->{_splice_form}} += 
+		($num_eats - $how_many)/($num_eats - 1);
+	}
+    } 
+    
+    return \%is_supported;
 }
-	
+
 #------------------------------------------------------------------------
 1;
 
