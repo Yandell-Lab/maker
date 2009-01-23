@@ -21,6 +21,7 @@ use Widget::snap;
 use Widget::augustus;
 use evaluator::evaluate;
 use evaluator::so_classifier;
+use evaluator::AED;
 @ISA = qw(
        );
 
@@ -591,6 +592,7 @@ sub group_transcripts {
 		my $so_code = evaluator::so_classifier::so_code($c);
 		my $alt_spli_sup = evaluator::funs::alt_spli($c, $pol_e_hits, $seq, 
 			$seq_id, "$chunk_number.$c_id");
+		my $geneAED = evaluator::AED::gene_AED($c, $pol_e_hits, $pol_p_hits, $blastx_hits, $seq);
 		foreach my $f (@{$c}){
 
 			$f->{g_name} = $g_name;
@@ -601,7 +603,7 @@ sub group_transcripts {
 			my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
 
 			my $t_struct = 
-				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $alt_spli_sup, $pol_p_hits, $pol_e_hits, $blastx_hits);
+				load_transcript_struct($f, "$chunk_number.$c_id", $i, $seq, $seq_id, $evidence, $snap_abinits, $so_code, $geneAED, $alt_spli_sup, $pol_p_hits, $pol_e_hits, $blastx_hits);
 			push(@t_structs, $t_struct);
 
 			$i++;
@@ -633,6 +635,7 @@ sub load_transcript_struct {
         my $evi          = shift;
         my $abinits      = shift;
 	my $so_code	 = shift;
+	my $geneAED	 = shift;
 	my $alt_spli_sup = shift;
 	my $pol_p_hits	 = shift;
 	my $pol_e_hits   = shift;
@@ -654,7 +657,7 @@ sub load_transcript_struct {
 	## The reports of evaluator are all contained in $eva object. 
 	my $eva = evaluator::evaluate::power_evaluate($f, $seq, 
 		$pol_p_hits, $pol_e_hits, $blastx_hits, 
-		$abinits, $so_code, $alt_spli_sup, $t_name, $CTL);
+		$abinits, $so_code, $geneAED, $alt_spli_sup, $t_name, $CTL);
 
 	my $score = $eva->{score};
 	my $qi	  = $eva->{qi};

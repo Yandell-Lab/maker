@@ -121,6 +121,7 @@ sub power_evaluate {
 	my $blastx_hits	= shift;
 	my $abinits_hits = shift;
 	my $so_code = shift;
+	my $geneAED = shift;
 	my $alt_spli_sup = shift;
 	my $t_name = shift;
 	$CTL = shift;
@@ -152,7 +153,7 @@ sub power_evaluate {
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 			$transcript_type, $completion, $alt, $score, $so_code, 
-			$solexa_for_splices);
+			$geneAED, $solexa_for_splices);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -164,7 +165,7 @@ sub power_evaluate {
                     'transcript_type'   => $transcript_type,
 		    'report'		=> $report,
 		    'so_code'		=> $so_code,
-                    
+                    'gene_AED'		=> $geneAED,
                   };
 	print $report;
 
@@ -184,6 +185,7 @@ sub generate_report {
 	my $alt			= shift;
 	my $score		= shift;
 	my $so_code		= shift;
+	my $geneAED		= shift;
 	my $solexa		= shift;
 
 	my $g_name = $eat->{g_name};
@@ -231,6 +233,9 @@ sub generate_report {
 
 	$report .= $prefix."\t"."SO_CODE"."\t";
 	$report .= $so_code."\n";
+
+	$report .= $prefix."\t"."geneAED"."\t";
+	$report .= $geneAED."\n";
 
 	$report .= $prefix."\t"."support_for_altsplicing"."\t";
 	$report .= $alt."\n";
