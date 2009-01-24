@@ -338,7 +338,7 @@ sub _add_type {
 	  next if ($line =~ /^\#/);
 	  
 	  my $l = $self->_parse_line(\$line, $table);
-	  $self->_add_to_db($dbh, $table, $l);
+	  $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
 	  
 	  my $count = 0;
 	  if($count == 10000){ #commit every 10000 entries
