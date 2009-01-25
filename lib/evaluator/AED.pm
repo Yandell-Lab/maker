@@ -6,10 +6,36 @@ use strict;
 use FileHandle;
 use PhatHit_utils;
 use Shadower;
-
-
+use cluster;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
+#------------------------------------------------------------------------------
+sub txnAED {
+	my $box = shift;
+	my $parameter = shift;
+
+	my $t =		$box->{transcript};
+	my $pol_e =	$box->{est};
+	my $pol_p =	$box->{exonerate};
+	my $seq =	$box->{seq};
+
+	my $bag = combine($pol_e, $pol_p);
+
+        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $bag);
+        my $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
+        my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+        my $careful_clusters = [];
+        push(@{$careful_clusters}, @{$p_clusters});
+        push(@{$careful_clusters}, @{$m_clusters});
+
+	my $min_AED = 1;
+	foreach my $cluster (@$careful_clusters) {
+		my $AED = cluster_AED($t, $cluster, $seq, $parameter);
+		$min_AED = $AED if $AED < $min_AED;
+	}
+
+	return $min_AED;
+}
 #------------------------------------------------------------------------------
 sub gene_AED {
 	my $c = shift; # The gene object;
@@ -235,8 +261,27 @@ sub cal {
 		
 
 #-------------------------------------------------------------------------------
+sub cluster_AED {
+	my $t = shift;
+	my $cluster = shift;
+	my $seq = shift;
+	my $para= shift;
 
+	return 1 if (scalar @$cluster == 0) ||
+			$t->strand ne $cluster->[0]->strand;
 
+	my $annotation_coors = PhatHit_utils::get_hsp_coors([$t], 'query');
+	my $annotation_pieces= Shadower::getPieces($seq, $annotation_coors, 0);
+
+	my $evi_coors = PhatHit_utils::get_hsp_coors($cluster, 'query');
+	my $evi_pieces= Shadower::getPieces($seq, $evi_coors, 0);
+
+	my $coorA = get_coor($annotation_pieces);
+	my $coorB = get_coor($evi_pieces);
+
+	my $AED = cal($coorA, $coorB, $para);
+	return $AED;
+}
 
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
@@ -289,7 +334,16 @@ sub get_boundary {
 	return [$left, $right];
 }
 #-------------------------------------------------------------------------------
-
+#------------------------------------------------------------------------
+sub combine {
+        my @bag;
+        while (my $hits = shift(@_)){
+                foreach my $hit (@{$hits}){
+                        push(@bag, $hit);
+                }
+        }
+        return \@bag;
+}
 
 #------------------------------------------------------------------------
 1;

@@ -386,7 +386,8 @@ while (my $fasta = $iterator->nextFasta()) {
    my $altests = $CTL_OPT{_altest};
    my $fasta_t_index = GI::build_fasta_index($trans) if($trans); 
    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
-   my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
+   my $fasta_a_index;
+   #my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
    
    #--reset fastachunker for masked chunks
    $fasta_chunker = new FastaChunker();

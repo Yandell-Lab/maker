@@ -11,6 +11,7 @@ use maker::auto_annotator;
 use evaluator::funs;
 use evaluator::scoring;
 use evaluator::so_classifier;
+use evaluator::AED;
 use Fasta;
 
 
@@ -135,6 +136,16 @@ sub power_evaluate {
 	my $box = evaluator::funs::prepare_box_for_gff($eat, $seq, 
 						       $exonerate_p_hits, $exonerate_e_hits, 
 						       $blastx_hits, $abinits_hits, $t_name);
+
+	my $txnAED = evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
+	my $overallAED =evaluator::AED::txnAED($box, {	'start'=>100,
+							'stop'=>100,
+							'donor'=>100,
+							'acceptor'=>100,
+							'exon'=>1,
+						     }  );
+						
+
 	
 	my $qi = evaluator::funs::get_transcript_qi($box);
 
@@ -156,8 +167,9 @@ sub power_evaluate {
 
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
-				     $transcript_type, $completion, $alt, $score, $so_code, 
-				     $geneAED, $solexa_for_splices);
+				     $transcript_type, $completion, $alt, $score, 
+					$so_code, $geneAED, $txnAED, $overallAED,
+					$solexa_for_splices);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -169,6 +181,8 @@ sub power_evaluate {
                     'transcript_type'   => $transcript_type,
 		    'report'		=> $report,
 		    'so_code'		=> $so_code,
+		    'txnAED'		=> $txnAED,
+		    'overallAED'	=> $overallAED,
 		    'gene_AED'          => $geneAED,
                   };
 
@@ -189,6 +203,8 @@ sub generate_report {
 	my $score		= shift;
 	my $so_code		= shift;
 	my $geneAED             = shift;
+	my $txnAED		= shift;
+	my $overallAED		= shift;
 	my $solexa		= shift;
 
 	my $g_name = $eat->{g_name};
@@ -240,6 +256,12 @@ sub generate_report {
 	$report .= $prefix."\t"."geneAED"."\t";
 	$report .= $geneAED."\n";
 
+        $report .= $prefix."\t"."txnAED"."\t";
+        $report .= $txnAED."\n";
+
+        $report .= $prefix."\t"."overallAED"."\t";
+        $report .= $overallAED."\n";
+	
 	$report .= $prefix."\t"."support_for_altsplicing"."\t";
 	$report .= $alt."\n";
 
