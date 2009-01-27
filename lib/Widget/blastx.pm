@@ -37,11 +37,14 @@ sub run {
 		$self->print_command($command);
 		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 		local $/ = \1;
+		my $all_err;
 		while (my $line = <CHLD_ERR>){
+		   $all_err .= $line;
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: Blastx failed\n" if $? > 0;
+		die "ERROR: Blastx failed\n"
+		if ($? > 0 && $all_err !~ /There are no valid contexts/);
 	}
 	else {
 		die "you must give Widget::blastx a command to run!\n";
