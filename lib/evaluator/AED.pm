@@ -8,6 +8,7 @@ use PhatHit_utils;
 use Shadower;
 use cluster;
 use compare;
+use evaluator::pseudo_hit;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -20,13 +21,24 @@ sub txnAED {
 	my $pol_p =	$box->{exonerate};
 	my $seq =	$box->{seq};
 
-	my $bag = combine($pol_e, $pol_p);
+	my $pseudo_transcript = evaluator::pseudo_hit::convert_to_pseudo_hit
+					($t);
 
-	my $same_alt_clusters = combine_same_alt_forms($bag, $seq);
+	my $hit_bag = combine($pol_e, $pol_p);
+	my @ph_bag;
+	foreach my $hit (@$hit_bag) {
+		my $ph = evaluator::pseudo_hit::convert_to_pseudo_hit($hit);
+		push @ph_bag, $ph;
+	}
+
+	my $combined_phs = combine_same_alt_forms(\@ph_bag);
+
+	my $polished_phs = remove_redundancy($combined_phs);
+
 
 	my $min_AED = 1;
-	foreach my $cluster (@$same_alt_clusters) {
-		my $AED = cluster_AED($t, $cluster, $seq, $parameter);
+	foreach my $ph (@$polished_phs) {
+		my $AED = ph_AED($pseudo_transcript, $ph, $parameter);
 		$min_AED = $AED if $AED < $min_AED;
 	}
 
@@ -38,13 +50,22 @@ sub gene_AED {
 	my $pol_e_hits = shift;
 	my $pol_p_hits = shift;
 	my $blastx_hits = shift;
+
 	my $seq = shift;
 
-	my $annotation_coors = PhatHit_utils::get_hsp_coors($c, 'query');
-	my $annotation_pieces = Shadower::getPieces($seq, 
-				$annotation_coors, 0);
-	my $gene_strand = $c->[0]->strand;
-	my $gene_boundary = get_boundary($annotation_pieces);
+	my @transcripts_in_gene;
+	foreach my $t (@$c) {
+		my $ph_transcript = evaluator::pseudo_hit::convert_to_pseudo_hit
+				($t);
+		push @transcripts_in_gene, $ph_transcript;
+	}
+	
+	my $gene_hit = evaluator::pseudo_hit::combine_pseudo_hit (
+				\@transcripts_in_gene);
+
+
+	my $gene_strand = $gene_hit->{strand};
+	my $gene_boundary = [$gene_hit->{b}, $gene_hit->{e}];
 
 	my @bag;
 	foreach my $hit (@$pol_e_hits) {
@@ -59,19 +80,16 @@ sub gene_AED {
 
 	my @good_hits;
 	foreach my $hit (@bag) {
-		push @good_hits, $hit if overlap($gene_boundary, 
-					$gene_strand, $hit);
+		my $ph = evaluator::pseudo_hit::convert_to_pseudo_hit($hit);
+		push @good_hits, $ph if overlap($gene_boundary, 
+					$gene_strand, $ph);
 	}
 
-	my $evi_coors = PhatHit_utils::get_hsp_coors(\@good_hits, 'query');
-	my $evi_pieces= Shadower::getPieces($seq, $evi_coors, 0);
-
-	my $coorA = get_coor($annotation_pieces);
-	my $coorB = get_coor($evi_pieces);
+	my $evi_ph = evaluator::pseudo_hit::combine_pseudo_hit(\@good_hits);
 
 	my $para = {'exon'=>1};
 
-	my $AED = cal($coorA, $coorB, $para);
+	my $AED = cal($gene_hit->{hsps}, $evi_ph->{hsps}, $para);
 	return $AED;
 }
 	
@@ -257,23 +275,15 @@ sub cal {
 		
 
 #-------------------------------------------------------------------------------
-sub cluster_AED {
-	my $t = shift;
-	my $cluster = shift;
-	my $seq = shift;
+sub ph_AED {
+	my $a = shift;
+	my $b = shift;
 	my $para= shift;
 
-	return 1 if (scalar @$cluster == 0) ||
-			$t->strand ne $cluster->[0]->strand;
+	return 1 if $a->{strand} != $b->{strand};
 
-	my $annotation_coors = PhatHit_utils::get_hsp_coors([$t], 'query');
-	my $annotation_pieces= Shadower::getPieces($seq, $annotation_coors, 0);
-
-	my $evi_coors = PhatHit_utils::get_hsp_coors($cluster, 'query');
-	my $evi_pieces= Shadower::getPieces($seq, $evi_coors, 0);
-
-	my $coorA = get_coor($annotation_pieces);
-	my $coorB = get_coor($evi_pieces);
+	my $coorA = $a->{hsps};
+	my $coorB = $b->{hsps};
 
 	my $AED = cal($coorA, $coorB, $para);
 	return $AED;
@@ -285,12 +295,12 @@ sub cluster_AED {
 sub overlap {
 	my $gene_boundary = shift;
 	my $gene_strand   = shift;
-	my $hit = shift;
+	my $ph = shift;
 
-	return 0 unless $hit->strand eq $gene_strand;
+	return 0 unless $ph->{strand} eq $gene_strand;
 
-	my $b = $hit->nB('query');
-	my $e = $hit->nE('query');
+	my $b = $ph->{b};
+	my $e = $ph->{e};
 
 	($b, $e) = ($e, $b) unless $b<=$e;
 
@@ -299,38 +309,6 @@ sub overlap {
 }
 	
 #-------------------------------------------------------------------------------
-sub get_coor {
-	my $pieces = shift;
-
-	my @coors;
-
-	foreach my $piece (@$pieces) {
-                my $b = $piece->{b};
-                my $e = $piece->{e};
-                
-                ($b, $e) = ($e, $b) if $b > $e;
-		push @coors, [$b, $e];
-	}
-	return \@coors;
-}
-#-------------------------------------------------------------------------------
-sub get_boundary {
-	my $pieces = shift;
-
-	my ($left, $right);
-	foreach my $piece (@$pieces) {
-		my $b = $piece->{b};
-		my $e = $piece->{e};
-
-		($b, $e) = ($e, $b) if $b > $e;
-
-		$left = $b if (not defined $left) || $left > $b;
-		$right= $e if (not defined $right)|| $right< $e;
-	}
-	return [$left, $right];
-}
-#-------------------------------------------------------------------------------
-#------------------------------------------------------------------------
 sub combine {
         my @bag;
         while (my $hits = shift(@_)){
@@ -344,44 +322,65 @@ sub combine {
 #------------------------------------------------------------------------
 sub combine_same_alt_forms {
 	my $bag = shift;
-	my $seq = shift;
-
-	my @clusters;
+	
+	my @combined_hits;
 
 	foreach my $hit (@$bag) {
-		my @clusters_to_be_added;
-		foreach my $cluster (@clusters) {
-			if (hit_agree_hits_alt_form($hit, $cluster, $seq)) {
-				my @new_cluster = @$cluster;
-				push @new_cluster, $hit;
-				push @clusters_to_be_added, \@new_cluster;
+		my @hits_to_be_added;
+		foreach my $combined_hit (@combined_hits) {
+			if (evaluator::pseudo_hit::is_same_alt_form(
+					$hit, $combined_hit)) {
+				my $ph = evaluator::pseudo_hit::combine_pseudo_hit
+					([$hit, $combined_hit]);
+				push @hits_to_be_added, $ph unless 
+					evaluator::pseudo_hit::are_same_pseudo_hits
+					($combined_hit, $ph);
 			}
 		}
-		push @clusters, @clusters_to_be_added;
-		push @clusters, [$hit];
+		push @combined_hits, @hits_to_be_added;
+		push @combined_hits, $hit;
 	}
 
 
 	## Maybe I need to get rid of the redundant clusters and 
 	## short clusters here as well!	
 
-	return \@clusters;
+	return \@combined_hits;
 }
 	
 #------------------------------------------------------------------------
-sub hit_agree_hits_alt_form {
-	my ($hit, $cluster, $seq ) = @_;
+sub remove_redundancy {
+	my $hits = shift;
 
-	if ($hit->strand ne $cluster->[0]->strand) { return 0; }
-	
-	foreach my $one_hit_in_cluster (@$cluster) {
-		return 0 unless compare::is_same_alt_form($hit, 
-				$one_hit_in_cluster, $seq, 0);
+	my $hits_num = -1;
+
+	while (scalar @$hits != $hits_num) {
+		$hits_num = scalar @$hits;
+
+		my @new_bag;
+		foreach my $hit (@$hits) {
+			my $status = 'not_redunt';
+
+			foreach my $polished (@new_bag) {
+				if (evaluator::pseudo_hit::is_same_alt_form
+					($polished, $hit)) {
+					my $combined = evaluator::pseudo_hit::combine_pseudo_hit
+						([$polished, $hit]);
+					$polished = $combined;
+				
+					$status = 'redunt';
+					last;
+				}
+			}
+
+			if ($status eq 'not_redunt') {
+				push @new_bag, $hit;
+			}
+		}
+		$hits = \@new_bag;
 	}
-	
-	return 1;
+	return $hits;
 }
-
 	
 #------------------------------------------------------------------------
 1;
