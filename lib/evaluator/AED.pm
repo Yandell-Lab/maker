@@ -7,6 +7,7 @@ use FileHandle;
 use PhatHit_utils;
 use Shadower;
 use cluster;
+use compare;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
@@ -21,15 +22,10 @@ sub txnAED {
 
 	my $bag = combine($pol_e, $pol_p);
 
-        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $bag);
-        my $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
-        my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
-        my $careful_clusters = [];
-        push(@{$careful_clusters}, @{$p_clusters});
-        push(@{$careful_clusters}, @{$m_clusters});
+	my $same_alt_clusters = combine_same_alt_forms($bag, $seq);
 
 	my $min_AED = 1;
-	foreach my $cluster (@$careful_clusters) {
+	foreach my $cluster (@$same_alt_clusters) {
 		my $AED = cluster_AED($t, $cluster, $seq, $parameter);
 		$min_AED = $AED if $AED < $min_AED;
 	}
@@ -345,6 +341,48 @@ sub combine {
         return \@bag;
 }
 
+#------------------------------------------------------------------------
+sub combine_same_alt_forms {
+	my $bag = shift;
+	my $seq = shift;
+
+	my @clusters;
+
+	foreach my $hit (@$bag) {
+		my @clusters_to_be_added;
+		foreach my $cluster (@clusters) {
+			if (hit_agree_hits_alt_form($hit, $cluster, $seq)) {
+				my @new_cluster = @$cluster;
+				push @new_cluster, $hit;
+				push @clusters_to_be_added, \@new_cluster;
+			}
+		}
+		push @clusters, @clusters_to_be_added;
+		push @clusters, [$hit];
+	}
+
+
+	## Maybe I need to get rid of the redundant clusters and 
+	## short clusters here as well!	
+
+	return \@clusters;
+}
+	
+#------------------------------------------------------------------------
+sub hit_agree_hits_alt_form {
+	my ($hit, $cluster, $seq ) = @_;
+
+	if ($hit->strand ne $cluster->[0]->strand) { return 0; }
+	
+	foreach my $one_hit_in_cluster (@$cluster) {
+		return 0 unless compare::is_same_alt_form($hit, 
+				$one_hit_in_cluster, $seq, 0);
+	}
+	
+	return 1;
+}
+
+	
 #------------------------------------------------------------------------
 1;
 
