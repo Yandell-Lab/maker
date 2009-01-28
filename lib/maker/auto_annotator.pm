@@ -1020,14 +1020,17 @@ sub group_transcripts {
       my @pol_e_hits;
       my @pol_p_hits;
       my @blastx_hits;
+      my @ab_inits;
+
       foreach my $f (@{$c}) {
 	 my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : [];
 	 my $ests = get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
 	 my $prot2gen = get_selected_types($evi->{gomiph}, 'protein2genome');
 	 my $prot = get_selected_types($evi->{gomiph}, 'blastx', 'protein_gff');
+	 my $ab_init = $evi->{all_preds};
 	 
 	 #remove redundant evidence (some added > 1 time)
-	 foreach my $e (@{$ests}, @{$prot2gen}, @{$prot}){
+	 foreach my $e (@{$ests}, @{$prot2gen}, @{$prot}, @{$ab_init}){
 	    $e->{_uniq_set} = 0;  #reset _uniq_set before beginning
 	 }
 	 foreach my $e (@{$ests}){
@@ -1048,11 +1051,18 @@ sub group_transcripts {
 		 push(@blastx_hits, $e);
 	     }
          }
+	 foreach my $e (@{$ab_init}) {
+             if(! $e->{_uniq_set}){
+                 $e->{_uniq_set} = 1;
+		 push(@ab_inits, $e) ;
+		}
+	 }
+
       }
       
       my $so_code = evaluator::so_classifier::so_code($c);
       my $alt_spli_sup = evaluator::funs::alt_spli($c, \@pol_e_hits, $seq);
-      my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, $seq);
+      my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
       #----
       
       my $eval = 0;

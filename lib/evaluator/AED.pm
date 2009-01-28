@@ -19,7 +19,6 @@ sub txnAED {
 	my $t =		$box->{transcript};
 	my $pol_e =	$box->{est};
 	my $pol_p =	$box->{exonerate};
-	my $seq =	$box->{seq};
 
 	my $pseudo_transcript = evaluator::pseudo_hit::convert_to_pseudo_hit
 					($t);
@@ -49,6 +48,7 @@ sub gene_AED {
 	my $c = shift; # The gene object;
 	my $pol_e_hits = shift;
 	my $pol_p_hits = shift;
+	my $ab_inits  = shift;
 	my $blastx_hits = shift;
 
 	my $seq = shift;
@@ -77,6 +77,9 @@ sub gene_AED {
 	foreach my $hit (@$blastx_hits) {
                 push @bag, $hit;
         }
+	foreach my $hit (@$ab_inits) {
+		push @bag, $hit;
+	}
 
 	my @good_hits;
 	foreach my $hit (@bag) {
