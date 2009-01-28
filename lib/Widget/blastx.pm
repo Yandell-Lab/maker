@@ -43,8 +43,17 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: Blastx failed\n"
-		if ($? > 0 && $all_err !~ /There are no valid contexts/);
+		if ($? > 0){
+		   if($all_err !~ /There are no valid contexts/){
+		      die "ERROR: Blastx failed\n";
+		   }
+		   else{
+		      print STDERR "NOTE: BLAST failed because the length of unmasked\n".
+		                   "sequence is too short to produce a statistically\n".
+				   "significant alignment.  You can usually ignore\n".
+				   "this error\n\n";
+		   }
+		}
 	}
 	else {
 		die "you must give Widget::blastx a command to run!\n";

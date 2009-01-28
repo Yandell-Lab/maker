@@ -37,11 +37,23 @@ sub run {
 		$self->print_command($command);
 		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 		local $/ = \1;
+		my $all_err;
 		while (my $line = <CHLD_ERR>){
-		    print STDERR $line unless($main::quiet);
+		   $all_err .= $line;
+		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: Blastn failed\n" if $? > 0;
+		if ($? > 0){
+		   if($all_err !~ /There are no valid contexts/){
+		      die "ERROR: Blastx failed\n";
+		   }
+		   else{
+		      print STDERR "NOTE: BLAST failed because the length of unmasked\n".
+		                   "sequence is too short to produce a statistically\n".
+				   "significant alignment.  You can usually ignore\n".
+				   "this error\n\n";
+		   }
+		}
 	}
 	else {
 		die "you must give Widget::blastn a command to run!\n";

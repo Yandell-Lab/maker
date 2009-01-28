@@ -331,6 +331,7 @@ sub _add_type {
     #parse gff3
     if(! $skip && $gff_file){
        open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n";
+       my $count = 0;
        while(defined(my $line = <$IN>)){
 	  chomp($line);
 	  last if ($line =~ /^\#\#FASTA/);
@@ -340,7 +341,6 @@ sub _add_type {
 	  my $l = $self->_parse_line(\$line, $table);
 	  $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
 	  
-	  my $count = 0;
 	  if($count == 10000){ #commit every 10000 entries
 	     $dbh->commit;
 	     $count = 0;
@@ -364,6 +364,10 @@ sub _parse_line{
 
     chomp $$line;
     my @data = split(/\t/, $$line);
+
+    foreach my $d (@data){
+	$d = uri_escape($d,'\'\"');
+    }
 
     $data[1] = "$tag:$data[1]" if($tag && $data[1] !~ /^$tag\:/);
 
