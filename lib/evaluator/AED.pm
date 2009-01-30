@@ -77,9 +77,11 @@ sub gene_AED {
 	foreach my $hit (@$blastx_hits) {
                 push @bag, $hit;
         }
+=pod
 	foreach my $hit (@$ab_inits) {
 		push @bag, $hit;
 	}
+=cut
 
 	my @good_hits;
 	foreach my $hit (@bag) {
@@ -88,6 +90,7 @@ sub gene_AED {
 					$gene_strand, $ph);
 	}
 
+	return 1 if (scalar @good_hits == 0);
 	my $evi_ph = evaluator::pseudo_hit::combine_pseudo_hit(\@good_hits);
 
 	my $para = {'exon'=>1};
@@ -355,6 +358,7 @@ sub combine_same_alt_forms {
 sub remove_redundancy {
 	my $hits = shift;
 
+	return $hits if (scalar @$hits == 0);
 	my $hits_num = -1;
 
 	while (scalar @$hits != $hits_num) {

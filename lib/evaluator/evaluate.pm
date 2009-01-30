@@ -129,6 +129,8 @@ sub power_evaluate {
 
 	print STDERR "\nEVALUATing transcript $t_name...\n" unless $main::quiet;
 
+	my $gff3_identity = get_identity($eat);
+
 	my ($g_name) = $t_name =~ /^(.*)-mRNA-\d+$/;
 	$eat->{g_name} = $g_name;
 	$eat->{t_name} = $t_name;
@@ -169,7 +171,7 @@ sub power_evaluate {
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 				     $transcript_type, $completion, $alt, $score, 
 					$so_code, $geneAED, $txnAED, $overallAED,
-					$solexa_for_splices);
+					$solexa_for_splices, $gff3_identity);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -206,6 +208,7 @@ sub generate_report {
 	my $txnAED		= shift;
 	my $overallAED		= shift;
 	my $solexa		= shift;
+	my $gff3_identity	= shift;
 
 	my $g_name = $eat->{g_name};
 	my $t_name = $eat->{t_name};
@@ -275,6 +278,11 @@ sub generate_report {
 		$report .= "\n";
 	}
 
+
+	$report .= $prefix."\t"."gff3_identity"."\t";
+	$report .= $gff3_identity->[0].';'.$gff3_identity->[1].';'.
+			$gff3_identity->[2].';'.$gff3_identity->[3]."\n";
+
 	$report .= $prefix."\t"."quality_sequence"."\t";
 	$report .= $$quality_seq."\n";
 
@@ -322,7 +330,33 @@ sub scoring {
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
+sub get_identity {
+	my $eat = shift;
 
+	my $gff3_g_name = 'UNKNOWN';
+	my $gff3_g_id = 'UNKNOWN';
+	my $gff3_t_name = 'UNKNOWN';
+	my $gff3_t_id = 'UNKNOWN';
+
+	if (defined $eat->{_description}) {
+		my $content = $eat->{_description};
+
+		my @items = split /;/, $content;
+		my %hash;
+
+		foreach my $item (@items) {
+			my ($first, $second) = split /=/, $item;
+			$hash{$first} = $second if defined $second;
+		}
+
+		$gff3_g_name = $hash{g_name} if defined $hash{g_name};
+		$gff3_g_id = $hash{g_id} if defined $hash{g_id};
+		$gff3_t_name = $hash{t_name} if defined $hash{t_name};
+		$gff3_t_id = $hash{t_id} if defined $hash{t_id};
+	}
+
+	return [$gff3_g_name, $gff3_g_id, $gff3_t_name, $gff3_t_id];
+}
 #-------------------------------------------------------------------------------
 
 

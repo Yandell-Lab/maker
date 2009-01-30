@@ -22,6 +22,7 @@ sub convert_to_pseudo_hit {
 	my $hit = shift;
 
 	my $strand = $hit->strand('query');
+
 	my $nB = $hit->nB('query');
 	my $nE = $hit->nE('query');
 	($nB, $nE) = ($nE, $nB) if ($nB > $nE);
