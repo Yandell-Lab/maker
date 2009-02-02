@@ -35,11 +35,13 @@ sub convert_to_pseudo_hit {
 		
 		push @hsps, [$start, $end];
 	}
+
+	my @sorted_hsps = sort {$a->[0] <=> $b->[0]} @hsps;
 	
 	my $combined_hit = { 'b'		=> $nB,
 		    'e'		=> $nE,
 		    'strand'	=> $strand,
-		    'hsps'	=> \@hsps,
+		    'hsps'	=> \@sorted_hsps,
 		  };
 
 	return $combined_hit;

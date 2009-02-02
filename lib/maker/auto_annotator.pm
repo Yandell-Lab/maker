@@ -869,7 +869,8 @@ sub load_transcript_struct {
 						      $geneAED,
 						      $alt_spli_sup,
 						      $t_name,
-						      $CTL_OPTIONS
+						      $CTL_OPTIONS,
+						      $the_void,
 						     );
 	
         my $score = $eva->{score};

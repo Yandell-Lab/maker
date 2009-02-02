@@ -12,6 +12,7 @@ use evaluator::funs;
 use evaluator::scoring;
 use evaluator::so_classifier;
 use evaluator::AED;
+use evaluator::fathom_utils;
 use Fasta;
 
 
@@ -126,6 +127,7 @@ sub power_evaluate {
 	my $alt_spli_sup = shift;
 	my $t_name = shift;
 	$CTL = shift;
+	my $the_void = shift;
 
 	print STDERR "\nEVALUATing transcript $t_name...\n" unless $main::quiet;
 
@@ -148,6 +150,10 @@ sub power_evaluate {
 						     }  );
 						
 
+	my $snap_backwards;
+	$snap_backwards = evaluator::fathom_utils::snap_backwards($box, $CTL
+			, $the_void) if 
+		$CTL->{enable_fathom} == 1;
 	
 	my $qi = evaluator::funs::get_transcript_qi($box);
 
@@ -171,7 +177,8 @@ sub power_evaluate {
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 				     $transcript_type, $completion, $alt, $score, 
 					$so_code, $geneAED, $txnAED, $overallAED,
-					$solexa_for_splices, $gff3_identity);
+					$solexa_for_splices, $gff3_identity,
+					$snap_backwards);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -186,6 +193,7 @@ sub power_evaluate {
 		    'txnAED'		=> $txnAED,
 		    'overallAED'	=> $overallAED,
 		    'gene_AED'          => $geneAED,
+		    'snap_backwards'    => $snap_backwards->{overall_score},
                   };
 
 	return $eva;
@@ -209,6 +217,7 @@ sub generate_report {
 	my $overallAED		= shift;
 	my $solexa		= shift;
 	my $gff3_identity	= shift;
+	my $snap_backwards	= shift;
 
 	my $g_name = $eat->{g_name};
 	my $t_name = $eat->{t_name};
@@ -282,6 +291,9 @@ sub generate_report {
 	$report .= $prefix."\t"."gff3_identity"."\t";
 	$report .= $gff3_identity->[0].';'.$gff3_identity->[1].';'.
 			$gff3_identity->[2].';'.$gff3_identity->[3]."\n";
+
+	$report .= $prefix."\t"."snap_backwards_score"."\t";
+	$report .= $snap_backwards->{overall_score}."\n";
 
 	$report .= $prefix."\t"."quality_sequence"."\t";
 	$report .= $$quality_seq."\n";

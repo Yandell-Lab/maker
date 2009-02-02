@@ -2044,7 +2044,8 @@ sub set_defaults {
 		  'fgenesh',
 		  'twinscan',
 		  'jigsaw',
-		  'qrna'
+		  'qrna',
+		  'fathom',
 		 );
 
       foreach my $exe (@exes) {
@@ -2070,6 +2071,8 @@ sub set_defaults {
       $CTL_OPT{'eva_split_hit'} = 1;
       $CTL_OPT{'eva_hspmax'} = 100;
       $CTL_OPT{'eva_gspmax'} = 100;
+      $CTL_OPT{'enable_fathom'} = 1;
+
    }
    
    return %CTL_OPT;
@@ -2282,12 +2285,13 @@ sub load_control_files {
       "or is not set correctly Please set this in your profile per Augustus\n".
       "installation instructions\n\n";
    }
-   if ($CTL_OPT{snap} && not $CTL_OPT{snaphmm}) {
+   if (($CTL_OPT{snap}||$CTL_OPT{enable_fathom}) && not $CTL_OPT{snaphmm}) {
       warn "WARNING: There is no model specified for for Snap in maker_opts.ctl snaphmm.\n".
       "As a result, the default (fly) will be used.\n\n";
       $CTL_OPT{snaphmm} = "fly";
    }
-   if ($CTL_OPT{snap} &&
+
+   if (($CTL_OPT{snap} || $CTL_OPT{enable_fathom}) &&
        ! -e $CTL_OPT{snaphmm} &&
        (! exists $ENV{ZOE} || ! -e $ENV{ZOE}."/HMM/".$CTL_OPT{snaphmm})
       ) {
@@ -2485,6 +2489,7 @@ sub generate_control_files {
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
    print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
+   print OUT "fathom:$O{fathom} #location of fathom executable\n";
    print OUT "\n";
    print OUT "#-----Other Algorithms\n";
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable\n";
@@ -2503,6 +2508,7 @@ sub generate_control_files {
    print OUT "eva_split_hit:$O{eva_split_hit}\n";
    print OUT "eva_hspmax:$O{eva_hspmax}\n";
    print OUT "eva_gspmax:$O{eva_gspmax}\n";
+   print OUT "enable_fathom:$O{enable_fathom}\n";
    close (OUT);
 }
 
