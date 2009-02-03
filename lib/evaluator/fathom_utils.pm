@@ -23,9 +23,10 @@ sub snap_backwards {
 				($eat);
 
 	my ($chop_hit, $chop_seq) = chophit($pseudo_hit, $seq, $CTL->{pred_flank});
+	my $noUTR_hit = remove_utr($chop_hit, $box->{'5_len'}, $box->{'3_len'});
 
 	my $fasta_file = create_fasta_file($chop_seq, $name, $the_void);
-	my $anno_file =  create_anno_file ($chop_hit, $name, $the_void);
+	my $anno_file =  create_anno_file ($noUTR_hit, $name, $the_void);
 	
 	my $fathom_report = run_fathom($fasta_file, $anno_file, $name, $the_void, $CTL);
 
@@ -42,6 +43,53 @@ sub snap_backwards {
 
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
+#-------------------------------------------------------------------------------
+sub remove_utr {
+	my $hit = shift;
+	my $five = shift;
+	my $three = shift;
+
+	($five, $three) = ($three, $five) if $hit->{strand} == -1;
+
+	my @hsp_1;
+	foreach my $hsp (@{$hit->{hsps}}) {
+		my $hsp_length = $hsp->[1]-$hsp->[0] +1;
+		if ($five == 0) {
+			push @hsp_1, [$hsp->[0], $hsp->[1]];
+		}
+		elsif ($hsp_length <= $five) {
+			$five -= $hsp_length;
+		}
+		else {
+			push @hsp_1, [(($hsp->[0]) + $five), $hsp->[1]];
+			$five = 0;
+		}
+	}
+
+	my @hsp_2;
+	for(my $i = $#hsp_1; $i>=0; $i--) {
+		my $hsp = $hsp_1[$i];
+		my $hsp_length = $hsp->[1] - $hsp->[0] + 1;
+		if ($three == 0) {
+			unshift @hsp_2, [$hsp->[0], $hsp->[1]];
+		}
+		elsif ($hsp_length <= $three) {
+			$three -= $hsp_length;
+		}
+		else {
+			unshift @hsp_2, [$hsp->[0], (($hsp->[1]) - $three)];
+			$three = 0;
+		}
+	}
+
+	my $new_hit = { 'b' => $hsp_2[0]->[0],
+			'e' => $hsp_2[$#hsp_2]->[1],
+			'strand' => $hit->{strand},
+			'hsps' => \@hsp_2,
+			};
+
+	return $new_hit;
+}		
 #-------------------------------------------------------------------------------
 sub parse_fathom_output {
 	my $file = shift;
@@ -166,6 +214,7 @@ sub chophit {
 	foreach my $hsp (@{$pseudo_hit->{hsps}}) {
 		push @new_hsps, [$hsp->[0]-$left+1, $hsp->[1]-$left+1];
 	}
+
 
 	my $chop_hit = { 'b'	=> $pseudo_hit->{b} - $left + 1,
 			 'e'	=> $pseudo_hit->{e} - $left + 1,
