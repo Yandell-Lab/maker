@@ -9,39 +9,44 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use vars qw($RANK $LOG $CMD_ARGS);
+use Storable qw(freeze thaw);
 use threads;
 use threads::shared;
 
 BEGIN{
-    $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo" if not ($ENV{CGL_SO_SOURCE});
-    $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
-	if not ($ENV{CGL_GO_SOURCE});
+   if (not ($ENV{CGL_SO_SOURCE})) {
+      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+   }
+   if (not ($ENV{CGL_GO_SOURCE})) {
+      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
+   }
+   
+   $CMD_ARGS = join(' ', @ARGV);
+   
+   #what to do on ^C
+   $SIG{'INT'} = sub {
+      print STDERR "\n\nMaker aborted by user!!\n\n";
+      my @threads = threads->list;
+      foreach my $thr (@threads){
+	 $thr->detach;
+      }
+      exit (1);
+   };    
+   
+   #supress warnings from storable module
+   $SIG{'__WARN__'} = sub {
+      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+		      $_[0] !~ /Can\'t store item CODE/
+		    );
+   };
 
-    $CMD_ARGS = join(' ', @ARGV);
-
-    $SIG{'INT'} = sub {
-	print STDERR "\n\nMaker aborted by user!!\n\n";
-	my @threads = threads->list;
-	foreach my $thr (@threads){
-	   $thr->detach;
-	}
-	exit (1);
-    };    
-
-    #supress warnings from storable module
-    $SIG{'__WARN__'} =
-	sub { warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-			      $_[0] !~ /Can\'t store item CODE/
-			    );
-	};
-
-   #output to log file of seq that caused rank to die                                                                               
+   #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} =
    sub {
       if (defined ($LOG) && defined $_[0]) {
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
-
+	 
 	 $LOG->add_entry("DIED","RANK",$RANK);
 	 $LOG->add_entry("DIED","COUNT",$die_count);
       }
@@ -58,22 +63,31 @@ BEGIN{
    };
 }
 
+use Cwd;
+use Storable;
+use FileHandle;
+use File::Path;
+use Getopt::Long;
+use File::Temp qw(tempfile tempdir);
+use Bio::DB::Fasta;
+use GI;
+use Dumper::GFF::GFFV3;
+use Iterator::Any;
+use Iterator::Fasta;
+use Iterator::GFF3;
+use Fasta;
+use FastaChunker;
+use maker::auto_annotator;
+use cluster;
+use repeat_mask_seq;
+use runlog;
+use ds_utility;
+use GFFDB;
 use Error qw(:try);
 use Error::Simple;
-use Process::MakerChunk;
-use Process::MakerTiers;
-use Storable qw (freeze thaw);
+use Process::MpiChunk;
+use Process::MpiTiers;
 use Parallel::MPIcar qw(:all);
-use Datastore::MD5;
-use File::Path;
-use File::Temp qw(tempfile tempdir);
-use Getopt::Long;
-use FileHandle;
-use Cwd qw(cwd abs_path);
-use Bio::DB::Fasta;
-use Iterator::Fasta;
-use runlog;
-use Shared_Functions;
 
 unless($threads::VERSION >= 1.67){
    die "mpi_maker requires threads version 1.67 or greater\n",
@@ -97,70 +111,70 @@ $| = 1;
 my $usage = "
 Usage:
 
-        mpi_maker [options] <maker_opts.ctl> <maker_bopts.ctl> <maker_exe.ctl>
+     mpi_maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
 
-        mpi_maker is to be used on mpi campatable systems only.  All MPI batches should be
-        run on more than 2 processors to see any kind of performance benefit over standard
-        maker (i.e. mpi_run -n 4 mpi_maker).
+     Maker is a program that produces gene annotations in gff3 file format using
+     evidence such as EST alignments and protein homology.  Maker can be used to
+     produce gene annotations for new genomes as well as update annoations from
+     existing genome databases.
 
-        The three input arguments are user control files that specify how maker should behave.
-        All input files listed in the control options files must be in fasta format.  Please
-        see maker documentation to learn more about control file format.  The program will
-        automatically try and locate the user control files in the current working
-        directory if these arguments are not supplied when initializing maker.
+     The four input arguments are user control files that specify how maker
+     should behave. The evaluator_opts file contains control options specific
+     for the evaluation of gene annotations. All options for maker should be set
+     in the control files, but a few can also be set on the command line.
+     Command line options provide a convenient machanism to override commonly
+     altered control file values.
 
-        It is important to note that maker does not try and recalculated data that it has
-        already calculated.  For example, if you run an analysis twice on the same fasta file
-        you will notice that maker does not rerun any of the blast analyses but instead uses
-        the blast analyses stored from the previous run.  To force maker to rerun all
-        analyses, use the -f flag.
+     Input files listed in the control options files must be in fasta format.
+     Please see maker documentation to learn more about control file
+     configuration.  Maker will automatically try and locate the user control
+     files in the current working directory if these arguments are not supplied
+     when initializing maker.
+
+     It is important to note that maker does not try and recalculated data that
+     it has already calculated.  For example, if you run an analysis twice on
+     the same dataset file you will notice that maker does not rerun any of the
+     blast analyses, but instead uses the blast analyses stored from the
+     previous run.  To force maker to rerun all analyses, use the -f flag.
+
 
 Options:
 
-     -genome|g  <file_name>   Give MAKER a different genome file (this overrides the
-                              control file value)
+     -genome|g <filename> Specify the genome file.
 
-     -predictor <snap>        Selects the gene predictor to use when building annotations (Default
-                <augustus>    is 'snap').  The option 'est2genome' builds annotations directly
-                <est2genome>  from the EST evidence. This can also be set in the control files.
+     -predictor|p <type>  Selects the predictor(s) to use when building
+                          annotations.  Use a ',' to seperate types (no spaces).
+                          i.e. -predictor=snap,augustus,fgenesh
 
-     -RM_off|R                Turns all repeat masking off (* See Warning)
+                          types: snap
+                                 augustus
+                                 fgenesh
+                                 twinscan
+                                 est2genome (Uses EST's directly)
+                                 abinit (ab-initio predictions)
+                                 gff (Passes through gff3 file annotations)
 
-     -force|f                 Forces maker to rerun all analyses (erases all previous output).
+     -RM_off|R           Turns all repeat masking off.
 
-     -datastore|d             Causes output to be written using datastore.  This option is
-                              automatically enabled if there are more than 1000 fasta entries in
-                              the input genome file.  Output can then be accessed using the
-                              master_datastore_index file created by the maker.
+     -retry   <integer>  Rerun failed contigs up to the specified count.
 
-     -PREDS                   Outputs ab-initio predictions that do not overlap maker annotation
-                              as gene annotations in the final gff3 output file (based on the
-                              -predictor flag ).
+     -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
-     -CTL                     Generates generic control files in the current working directory.
+     -force|f            Forces maker to delete old files before running again.
+                         This will require all blast analyses to be rerun.
 
-     -quiet		      Silences most of the status messages.
+     -quiet|q            Silences most of maker's status messages.
 
-     -retry     <integer>     Re-run failed contigs up to the specified number of re-tries.
+     -CTL                Generate empty control files in the current directory.
 
-     -cpus|c    <integer>     Tells how many cpus to use for Blast analysis (this overrides
-                              contorol file value).
+     -help|?             Prints this usage statement.
 
-     -help|?                  Prints this usage statement.
-
-
-Warning:
-      
-        *When using the -R flag, maker expects that the input genome file is already masked. Also
-         if your genome file contains lower case characters, maker will consider those characers
-         to be soft masked.  So if your fasta file is all in lower case, nothing will align to it,
-         and there will be no maker output.
 
 ";
 
-#-----------------------------------------------------------------------------
-#----------------------------------- MAIN ------------------------------------
-#-----------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#------------------------------------ MAIN -------------------------------------
+#-------------------------------------------------------------------------------
 
 #--set object variables for serialization of data
 $Storable::forgive_me = 1; #allows serializaion of objects with code refs
@@ -238,97 +252,70 @@ if ($rank == $root) {
    try{
       #--Process arguments and the command line 
       GetOptions("RM_off|R" => \$OPT{R},
-		 "force|f" => \$OPT{f},
-		 "datastore|d" => \$OPT{d},
-		 "genome|g=s" => \$OPT{g},
-		 "cpus|c=i" => \$OPT{c},
-		 "PREDS" => \$OPT{PREDS},
+		 "force|f" => \$OPT{force},
+		 "genome|g=s" => \$OPT{genome},
+		 "cpus|c=i" => \$OPT{cpus},
 		 "predictor=s" =>\$OPT{predictor},
 		 "retry=i" =>\$OPT{retry},
 		 "quiet" =>\$main::quiet,
-		 "CTL" => sub {Shared_Functions::generate_control_files(); exit(0);},
-		 "help|?" => sub {print $usage; exit(0)},
+		 "CTL" => sub {GI::generate_control_files(); exit(0);},
+		 "help|?" => sub {print $usage; exit(0)}
 		);
-
-      if (defined($OPT{retry}) && $OPT{retry} <= 0) {
-	 print STDERR "WARNING: the retry flag must be set to a value greater than zero\n";
-	 $OPT{retry} = 1;
-      }
    }
    catch Error::Simple with{
       my $E = shift;
       
       print STDERR $E->{-text};
-      print STDERR "\n\nMaker failed parsing command line options!!\n\n";
-      my $code = 2;
-      $code = $E->{-value} if (defined($E->{-value}));
-      
-      exit($code);
+      die "\n\nMaker failed parsing command line options!!\n\n";
    };
 
    #varibles that are persistent outside of try
-   my %CTL_OPTIONS;
-   my $fasta_iterator;
-   my $DS_FH;
+   my %CTL_OPT;
+   my $iterator;
+   my $DS_CTL;
+   my $GFF_DB;
+   my $build;
 
    try{
       #get arguments off the command line
       my @ctlfiles = @ARGV;
       
       if (not @ctlfiles) {
-	 if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl"
-		&& -e "eva.ctl") {
-	    @ctlfiles = ("maker_opts.ctl","maker_bopts.ctl","maker_exe.ctl",
-			 "eva.ctl"
-			 );
+	 if (-e "maker_opts.ctl" &&
+	     -e "maker_bopts.ctl" &&
+	     -e "maker_exe.ctl" &&
+	     -e "evaluator.ctl"
+	    ) {
+	    
+	    @ctlfiles = ("maker_opts.ctl",
+			 "maker_bopts.ctl",
+			 "maker_exe.ctl",
+			 "evaluator.ctl"
+			);
 	 }
 	 else {
-	     print STDERR  "ERROR: Control files not found\n";
-	     print $usage;
-	     exit(0);
+	    print STDERR  "ERROR: Control files not found\n";
+	    print $usage;
+	    exit(0);
 	 }
       }
       
-      #warn if not true mpi
-      if ($size < 2) {
-	 warn ("WARNING:  You are running mpi_maker on fewer than 2 nodes.\n",
-	       "Using at least 2 nodes is required for MPI to work.\n",
-	       "mpi_maker will now act like a really slow version of regular maker.\n\n"
-	      );
-      }
-
       #--Control file processing
       
       #set up control options from control files
-      %CTL_OPTIONS = Shared_Functions::load_control_files(\@ctlfiles, \%OPT);
+      %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
       
-      #---load genome fasta file
-      $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
+      #--open datastructure controller
+      $DS_CTL = ds_utility->new(\%CTL_OPT);
       
-      if ($fasta_iterator->number_of_entries() == 0  && ! $OPT{d}) {
-	 die "ERROR:  The genome file $CTL_OPTIONS{'genome'} contains no fasta sequences\n";
-      }
-   
-      #---decide whether to use datastore 
-      if ($fasta_iterator->number_of_entries() > 1000) {
-	 print STDERR "\n\n".
-	 "WARNING:  There are more than 1000 entries in the multi-fasta file.\n".
-	 "Datastore will be used to avoid overloading the data structure of\n".
-	 "the output directory.\n\n";
-	 
-	 $OPT{d} = 1;
-      }
-
-      #alter control options to use datastore
-      if ($OPT{d}) {
-	 %CTL_OPTIONS = Shared_Functions::build_datastore(\%CTL_OPTIONS);
-	 $DS_FH = new FileHandle();
-	 $DS_FH->open("> $CTL_OPTIONS{'dsindex'}");
-	 $DS_FH->autoflush(1);
-      }
+      #--set up gff database
+      $GFF_DB = new GFFDB(\%CTL_OPT);
+      $build = $GFF_DB->next_build;
       
-      #---set up split blast databases for analyisis
-      Shared_Functions::create_mpi_blastdb(\%CTL_OPTIONS, \%OPT, $size);
+      #---load genome multifasta/GFF3 file
+      $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
+				     -gff => $CTL_OPT{'genome_gff'},
+				   );
    }
    catch Error::Simple with{
       my $E = shift;
@@ -342,8 +329,8 @@ if ($rank == $root) {
    };
 
    #build indexes of databases
-   #Shared_Functions::build_all_indexes($CTL_OPTIONS{old_protein},
-   #				       $CTL_OPTIONS{old_est}
+   #Shared_Functions::build_all_indexes($CTL_OPT{old_protein},
+   #				       $CTL_OPT{old_est}
    #				      );
 
    #====ACTUAL MPI COMMUNICATION
@@ -363,7 +350,7 @@ if ($rank == $root) {
 	 $t_tier_result = undef;
 	 $active[$root] = 0;
 
-	 print $DS_FH $t_res->{-DS}."\n" if ($OPT{d});
+	 $DS_CTL->add_entry($t_res->{-DS});
 
 	 if ($t_res->{-failed}){
 	    push(@failed, $t_res->{-fasta});
@@ -396,15 +383,14 @@ if ($rank == $root) {
       #get tier for internal thread
       if($t_need_flag > 0){
 	 my $tier;
-	 while (my $fasta = $fasta_iterator->nextEntry() || shift @failed){
-	    $tier = Process::MakerTiers->new($fasta,
-					     \%CTL_OPTIONS,
-					     \%OPT,
-					     $root
-					    );
-	    
-	    #print to master datastore index
-	    print $DS_FH $tier->DS() . "\n" if($OPT{d});
+	 while (my $fasta = $iterator->nextEntry() || shift @failed){
+	    $tier = Process::MpiTiers->new({fasta =>$fasta,
+					    CTL_OPT => \%CTL_OPT,
+					    DS_CTL  => $DS_CTL,
+					    GFF_DB  => $GFF_DB,
+					    build   => $build},
+					   $root
+					  );
 
 	    last if(! $tier->terminated);
 	 }
@@ -453,7 +439,7 @@ if ($rank == $root) {
 	    if($rs_type == $yes_result){
 	       my $result;
 	       MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
-	       print $DS_FH $result->{-DS}."\n" if ($OPT{d});
+	       $DS_CTL->add_entry($result->{-DS});
 
 	       if ($result->{-failed}){
 		  push(@failed, $result->{-fasta});
@@ -463,14 +449,14 @@ if ($rank == $root) {
 	    #if a contig is available send tier
 	    my $tier;
 
-	    while (my $fasta = $fasta_iterator->nextEntry() || shift @failed){
-	       $tier = Process::MakerTiers->new($fasta,
-						\%CTL_OPTIONS,
-						\%OPT,
-						$who
-					       );
-	       
-	       print $DS_FH $tier->DS() . "\n" if($OPT{d});
+	    while (my $fasta = $iterator->nextEntry() || shift @failed){
+	       $tier = Process::MpiTiers->new({fasta => $fasta,
+					       CTL_OPT => \%CTL_OPT,
+					       DS_CTL  => $DS_CTL,
+					       GFF_DB  => $GFF_DB,
+					       build   => $build},
+					      $who
+					     );
 
 	       last if(! $tier->terminated);
 	    }
@@ -609,12 +595,16 @@ if ($rank == $root) {
       #see if all contigs are finished
       $go_mpi_status = 0;
       foreach my $n (@active ){
+	 if(@helper_stack < $size - 1){
+	    $go_mpi_status = 1;
+	    last;
+	 }
 	 if((defined($n) && $n == 1)){
 	    $go_mpi_status = 1;
 	    last;
 	 }
       }
-      if(! $fasta_iterator->finished || @failed > 0){
+      if(! $iterator->finished || @failed > 0){
 	  $go_mpi_status = 1;
       }
    }

@@ -31,7 +31,6 @@ BEGIN{
 	 
 	 $LOG->add_entry("DIED","RANK",$RANK);
 	 $LOG->add_entry("DIED","COUNT",$die_count);
-	 
       }
       die "#----------------------\n",
           "FATAL: failed!!\n",
@@ -45,11 +44,8 @@ use Cwd;
 use Storable;
 use FileHandle;
 use File::Path;
-use URI::Escape;
 use Getopt::Long;
 use File::Temp qw(tempfile tempdir);
-use Datastore::MD5;
-use PostData;
 use Bio::DB::Fasta;
 use GI;
 use Dumper::GFF::GFFV3;
@@ -148,15 +144,14 @@ my %OPT;
 
 #--Process arguments and the command line 
 GetOptions("RM_off|R" => \$OPT{R},
-	   "force|f" => \$OPT{f},
-	   "datastore|d" => \$OPT{d},
-	   "genome|g=s" => \$OPT{g},
-	   "cpus|c=i" => \$OPT{c},
+	   "force|f" => \$OPT{force},
+	   "genome|g=s" => \$OPT{genome},
+	   "cpus|c=i" => \$OPT{cpus},
 	   "predictor=s" =>\$OPT{predictor},
 	   "retry=i" =>\$OPT{retry},
 	   "quiet" => \$main::quiet,
 	   "CTL" => sub {GI::generate_control_files(); exit(0);},
-	   "help|?" => sub {print $usage; exit(0)},
+	   "help|?" => sub {print $usage; exit(0)}
 	  );
 
 #------------------------------------------------------------------------------#
@@ -164,8 +159,6 @@ GetOptions("RM_off|R" => \$OPT{R},
 #------------------------------------------------------------------------------#
 
 #---get arguments off the command line
-my $infile;
-
 my @ctlfiles = @ARGV;
 
 if (not @ctlfiles) {
@@ -196,6 +189,7 @@ my $DS_CTL = ds_utility->new(\%CTL_OPT);
 
 #--set up gff database
 my $GFF_DB = new GFFDB(\%CTL_OPT);
+my $build = $GFF_DB->next_build;
 
 #---load genome multifasta/GFF3 file
 my $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
@@ -205,8 +199,7 @@ my $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
 #---iterate over each sequence in the fasta
 while (my $fasta = $iterator->nextFasta()) {
    $LOG = undef;	   #reset global variable LOG with each contig
-
-   #build uppercase fasta
+  
    my $fasta = Fasta::ucFasta(\$fasta);
    
    #get fasta parts
@@ -252,7 +245,7 @@ while (my $fasta = $iterator->nextFasta()) {
    my $p_fastas;
    my $t_fastas;
    
-   my $build = $GFF_DB->next_build;
+
    my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
 				      $build,
 				      $the_void

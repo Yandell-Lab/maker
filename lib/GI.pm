@@ -490,8 +490,7 @@ sub get_p_and_t_fastas {
 #----------------------------------------------------------------------------
 sub create_blastdb {
    my $CTL_OPT = shift @_;
-   my $OPT = shift @_;
-   my $mpi_size = shift @_ || 1;
+   my $mpi_size = shift@_ || 1;
 
    ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT->{protein}, $mpi_size, $CTL_OPT->{alt_peptide});
    ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT->{est}, $mpi_size);
@@ -502,7 +501,7 @@ sub create_blastdb {
 #----------------------------------------------------------------------------
 sub split_db {
    my $file = shift @_;
-   my $mpi_size = shift @_;
+   my $mpi_size = shift @_ || 1;
    my $alt = shift @_;
 
    return ('', []) if (not $file);
@@ -2086,6 +2085,7 @@ sub set_defaults {
 sub load_control_files {
    my @ctlfiles = @{shift @_};
    my %OPT = %{shift @_};
+   my $mpi_size = shift @_ || 1; 
 
    #--set default values and control structure
    my %CTL_OPT = set_defaults();
@@ -2131,12 +2131,11 @@ sub load_control_files {
    }
 
    #--load command line options
-   $CTL_OPT{genome} = $OPT{g} if (defined $OPT{g});
-   $CTL_OPT{force} = $OPT{f} if (defined $OPT{f});
+   $CTL_OPT{genome} = $OPT{genome} if (defined $OPT{genome});
+   $CTL_OPT{force} = $OPT{force} if (defined $OPT{force});
    $CTL_OPT{predictor} = $OPT{predictor} if (defined $OPT{predictor});
    $CTL_OPT{retry} = $OPT{retry} if (defined $OPT{retry});
-   $CTL_OPT{cpus} = $OPT{c} if (defined $OPT{c});
-   $CTL_OPT{datastore} = $OPT{d} if (defined $OPT{d});
+   $CTL_OPT{cpus} = $OPT{cpus} if (defined $OPT{cpus});
 
    #skip repeat masking command line option
    if ($OPT{R}) {
@@ -2363,7 +2362,7 @@ sub load_control_files {
    }
 
    #---set up blast databases for analyisis
-   create_blastdb(\%CTL_OPT);
+   create_blastdb(\%CTL_OPT, $mpi_size);
 
    #--set values for datastructure
    my $genome = $CTL_OPT{genome};

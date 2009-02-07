@@ -471,8 +471,21 @@ sub phathits_on_contig {
     my $dbfile = $self->{dbfile};
     my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 
-    my $g_ary_ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type WHERE seqid = '$seqid' });
-    my $features = _ary_to_features($g_ary_ref);
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+
+    #get gff annotations
+    my $ref1 = [];
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+    }
+
+    #get maker annotations
+    my $ref2 = [];
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    }
+
+    my $features = _ary_to_features($ref1, $ref2);
 
     my $structs;
     if($h_type eq 'model'){
@@ -492,6 +505,8 @@ sub phathits_on_contig {
     }
     elsif($h_type eq 'pred'){
         $structs = _get_structs($features, $seq_ref);
+	my $structs2 = _get_genes($features, $seq_ref);
+	push(@{$structs}, @{$structs2});
     }
     elsif($h_type eq 'other'){
 	die "ERROR: Can not build phathits for type: \'other\'\n";

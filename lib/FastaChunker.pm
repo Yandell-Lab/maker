@@ -22,7 +22,7 @@ sub new {
         my $class = shift;
 
         my $self = {};
-        bless $self;
+        bless($self, $class);
 
 	$self->min_size(0);
 
@@ -51,6 +51,8 @@ sub load_chunks {
 
 	$self->total_chunks($t_c);
 	my $l = $self->chunk_size();
+	
+	$self->{INDEX} = 0;
 
 	my $c = 0;
         for (my $i=0; $i< $self->parent_seq_length; $i+=$l){
@@ -89,6 +91,13 @@ sub get_chunk {
 	my $i    = shift;
 
 	return $self->{chunks}->[$i];
+}
+#-------------------------------------------------------------------------------
+sub next_chunk {
+	my $self = shift;
+	my $i    = $self->{INDEX}++;
+
+	return $self->{chunks}->[$i] || undef;
 }
 #-------------------------------------------------------------------------------
 sub last_chunk {
