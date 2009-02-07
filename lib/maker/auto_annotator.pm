@@ -274,7 +274,8 @@ sub prep_blastx_data {
         my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
         # group of most informative alt splices
-        my $gomias = clean::get_best_alt_splices($ests_in_cluster, $seq, 10);
+        my $gomias = clean::purge_single_exon_hits($ests_in_cluster);
+	$gomias = clean::get_best_alt_splices($gomias, $seq, 10);
 
 	my @data;
         if (defined($gomias->[0])){

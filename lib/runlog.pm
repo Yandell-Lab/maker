@@ -174,7 +174,7 @@ sub _clean_files{
 		$log_val = $logged_vals{CTL_OPTIONS}{$key};
 		if($key eq 'repeat_protein'){
 		   #don't care about absolute location
-		   $log_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+		   $log_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
 		}
 	    }
 	    
@@ -184,7 +184,7 @@ sub _clean_files{
 	       $ctl_val =~ s/^$cwd\/*//;
 	       if($key eq 'repeat_protein'){
 		  #don't care about absolute location
-		  $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+		  $ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
 	       }
 	    }
 
@@ -481,7 +481,7 @@ sub _write_new_log {
 	 $ctl_val =~ s/^$cwd\/*//;
 	 if($key eq 'repeat_protein'){
 	    #don't care about absolute location
-	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+	    $ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
 	 }
       }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
@@ -497,6 +497,11 @@ sub add_entry {
    my $value = shift;
 
    my $log_file = $self->{file_name};
+   my $cwd = Cwd::cwd();
+
+   #this line hides unnecessarilly deep directory details
+   #this is important for maker webserver security
+   $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
 
    open(LOG, ">> $log_file");
    print LOG "$type\t$key\t$value\n";

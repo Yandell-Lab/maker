@@ -2223,7 +2223,10 @@ sub load_control_files {
    push (@infiles, 'exonerate') if($CTL_OPT{est}); 
    push (@infiles, 'exonerate') if($CTL_OPT{protein}); 
    push (@infiles, 'repeat_protein') if ($CTL_OPT{repeat_protein});
+   push (@infiles, 'est') if($CTL_OPT{est}); 
+   push (@infiles, 'protein') if($CTL_OPT{protein}); 
    push (@infiles, 'altest') if($CTL_OPT{altest}); 
+   push (@infiles, 'est_reads') if($CTL_OPT{est_reads}); 
    push (@infiles, 'RepeatMasker') if($CTL_OPT{rmlib});
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
