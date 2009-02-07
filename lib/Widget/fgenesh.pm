@@ -143,7 +143,7 @@ sub run {
 	      print STDERR $line unless($main::quiet);
 	   }
 	   waitpid $pid, 0;
-	   die "ERROR: FgenesH failed\n" if $? > 0;
+	   #die "ERROR: FgenesH failed\n" if $? > 0;
 	}
 	else {
 	   die "you must give Widget::fgenesh a command to run!\n";

@@ -549,18 +549,20 @@ sub split_db {
    my $FA;
    open($FA, "> $t_full");
    while (my $fasta = $fasta_iterator->nextEntry()) {
-      #fix non standard peptides
       my $def = Fasta::getDef(\$fasta);
       my $seq_ref = Fasta::getSeqRef(\$fasta);
-      my $fasta_ref = \$fasta;
+
+      #fix non standard peptides
       if (defined $alt) {
 	 $$seq_ref =~ s/\*//g;
 	 $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxABCDEFGHIKLMNPQRSTVWYZX\-\n]/$alt/g;
-	 $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
       }
 
       #Skip empty fasta entries
       next if($$seq_ref eq '');
+
+      #reformat fasta, just incase
+      my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
 
       my $fh = shift @fhs;
       print $fh $$fasta_ref;
@@ -1044,6 +1046,7 @@ sub make_multi_fasta {
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
    my $db = shift;
+   print "\n\n".$db."\n\n";
    my $index = new Bio::DB::Fasta($db);
    return $index;
 }
