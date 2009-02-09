@@ -149,7 +149,6 @@ Options:
                           types: snap
                                  augustus
                                  fgenesh
-                                 twinscan
                                  est2genome (Uses EST's directly)
                                  abinit (ab-initio predictions)
                                  gff (Passes through gff3 file annotations)

@@ -22,6 +22,7 @@ use evaluator::so_classifier;
 use evaluator::evaluate;
 use evaluator::funs;
 use evaluator::AED;
+use shadow_AED;
 
 @ISA = qw(
        );
@@ -664,7 +665,7 @@ sub best_annotations {
 sub crit1 {
    my $g = shift;
    
-   return $g->{eval};
+   return $g->{AED};
 }
 #------------------------------------------------------------------------
 #sort by order given in control files
@@ -850,15 +851,21 @@ sub load_transcript_struct {
         my $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
 	$f->name($t_name);
 
-	my $qi =
-	maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
+	#my $qi = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 
 	#----evaluator here
 	my $pol_p_hits  = get_selected_types($evi->{gomiph}, 'protein2genome');
 	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
 	my $blastx_hits = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
 	my $abinits = $evi->{all_preds};
-	
+
+	my @bag = (@$pol_p_hits,
+		   @$pol_e_hits,
+		   @$blastx_hits
+		  );
+
+	my $shadowAED = shadow_AED::get_AED(\@bag, $f);	
+
 	#holds evalutor struct
         my $eva = evaluator::evaluate::power_evaluate($f,
 						      $seq,
@@ -874,12 +881,12 @@ sub load_transcript_struct {
 						      $the_void,
 						     );
 	
+        my $AED   = $shadowAED; #$eva->{score};
         my $score = $eva->{score};
-        my $eva_qi    = $eva->{qi};
-	die "$qi\t$eva_qi\n" if ($qi ne $eva_qi);
-	#my $score = 0;
+        my $qi    = $eva->{qi};
 	#----
-
+	$t_name .= " AED:";
+	$t_name .= sprintf '%.2f', $AED; # two decimal places
 	$t_name .= " $qi";
 
         my $t_struct = {'hit'      => $f,
@@ -889,7 +896,8 @@ sub load_transcript_struct {
                         't_end'    => $end,
 		        't_name'   => $t_name,
 			't_qi'     => $qi,
-			'eval'     => $score,
+			'AED'      => $AED,
+			'score'    => $score,
 			'report'   => $eva->{report}
                     };
 
@@ -1067,7 +1075,8 @@ sub group_transcripts {
       my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
       #----
       
-      my $eval = 0;
+      my $AED = 0;
+      my $score = 0;
       my $i = 1;
       foreach my $f (@{$c}) {
 	 my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
@@ -1076,7 +1085,8 @@ sub group_transcripts {
 	 load_transcript_struct($f, $g_name, $i, $seq, $evidence, $so_code,
 				$geneAED, $alt_spli_sup, $the_void, $CTL_OPTIONS);
 	 push(@t_structs, $t_struct);
-	 $eval = $t_struct->{eval} if($t_struct->{eval} > $eval);
+	 $score = $t_struct->{score} if($t_struct->{score} > $AED);
+	 $AED = $t_struct->{AED} if($t_struct->{AED} > $AED);
 	 $i++;
       }
       
@@ -1087,7 +1097,8 @@ sub group_transcripts {
 			 'g_start'   => $g_start,
 			 'g_end'     => $g_end,
 			 'g_strand'  => $g_strand,
-			 'eval'      => $eval,
+			 'score'     => $score,
+			 'AED'       => $AED,
 			 'predictor' => $predictor,
 			 'so_code'   => $so_code
 		       };

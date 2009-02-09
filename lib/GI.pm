@@ -2157,7 +2157,7 @@ sub load_control_files {
 	 ) {
 	 $error .= "ERROR: Invalid predictor defined: $p\n".
 	 "Valid entries are: est2genome, abinit, gff, snap, augustus,\n".
-	 "fgenesh, jigsaw, or twinscan\n\n";
+	 "or fgenesh\n\n";
       }
    }
 
@@ -2493,12 +2493,12 @@ sub generate_control_files {
    print OUT "snap:$O{snap} #location of snap executable\n";
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
-   print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
+#   print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
    print OUT "fathom:$O{fathom} #location of fathom executable\n";
    print OUT "\n";
    print OUT "#-----Other Algorithms\n";
-   print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable\n";
-   print OUT "qrna:$O{qrna} #location of qrna executable\n";
+   print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
+   print OUT "qrna:$O{qrna} #location of qrna executable (not yet implemented)\n";
    close(OUT);
     
    #--build evaluator.ctl file

@@ -673,6 +673,8 @@ sub get_transcript_data {
 	my $t_end   = $t->{end};
 	my $t_name  = $t->{t_name};
 	my $t_qi    = $t->{qi};
+	my $AED     = $t->{AED};
+	my $score   = $t->{score};
 
 	my $t_s = $t_hit->strand('query') == 1 ? '+' : '-';
 
@@ -682,7 +684,8 @@ sub get_transcript_data {
 
 	my @data;
 	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, '.', $t_s, '.');
-	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;;
+	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;
+	   $nine .= ';aed='.$AED.'eval_score='.$score;
 	   $nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
 	push(@data, $nine);
 

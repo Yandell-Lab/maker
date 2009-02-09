@@ -15,7 +15,6 @@ use evaluator::AED;
 use evaluator::fathom_utils;
 use Fasta;
 
-
 use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG $CTL/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
@@ -141,14 +140,20 @@ sub power_evaluate {
 						       $exonerate_p_hits, $exonerate_e_hits, 
 						       $blastx_hits, $abinits_hits, $t_name);
 
-	my $txnAED = evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
-	my $overallAED =evaluator::AED::txnAED($box, {	'start'=>100,
-							'stop'=>100,
-							'donor'=>100,
-							'acceptor'=>100,
-							'exon'=>1,
-						     }  );
+
+	#-----temporary fix for oomycete
+	my $txnAED = '';#evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
+	my $overallAED = '';#evaluator::AED::txnAED($box, {	'start'=>100,
+			    #				'stop'=>100,
+			    #				'donor'=>100,
+			    #				'acceptor'=>100,
+			    #				'exon'=>1,
+			    #			     }  );
 						
+	#-----
+
+
+
 
 	my $snap_backwards;
 	$snap_backwards = evaluator::fathom_utils::snap_backwards($box, $CTL
@@ -176,9 +181,9 @@ sub power_evaluate {
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 				     $transcript_type, $completion, $alt, $score, 
-					$so_code, $geneAED, $txnAED, $overallAED,
-					$solexa_for_splices, $gff3_identity,
-					$snap_backwards);
+				     $so_code, $geneAED, $txnAED, $overallAED,
+				     $solexa_for_splices, $gff3_identity,
+				     $snap_backwards);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 

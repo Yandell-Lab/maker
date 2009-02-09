@@ -70,72 +70,58 @@ Usage:
 
      Maker is a program that produces gene annotations in gff3 file format using
      evidence such as EST alignments and protein homology.  Maker can be used to
-     produce gene annotations for new genome as well as update annoations from
+     produce gene annotations for new genomes as well as update annoations from
      existing genome databases.
 
      The four input arguments are user control files that specify how maker
-     should behave. All options for maker should be set in the control files,
-     but a few can also be set on the command line.  The evaluator_opts.ctl
-     file contains control options specific for the evaluation of gene
-     annotations.
+     should behave. The evaluator_opts file contains control options specific
+     for the evaluation of gene annotations. All options for maker should be set
+     in the control files, but a few can also be set on the command line.
+     Command line options provide a convenient machanism to override commonly
+     altered control file values.
 
      Input files listed in the control options files must be in fasta format.
-     Please see maker documentation to learn more about control file format.
-     The program will automatically try and locate the user control files in the
-     current working directory if these arguments are not supplied when
-     initializing maker.
+     Please see maker documentation to learn more about control file
+     configuration.  Maker will automatically try and locate the user control
+     files in the current working directory if these arguments are not supplied
+     when initializing maker.
 
      It is important to note that maker does not try and recalculated data that
      it has already calculated.  For example, if you run an analysis twice on
-     the same fasta file you will notice that maker does not rerun any of the
-     blast analyses but instead uses the blast analyses stored from the previous
-     run.  To force maker to rerun all analyses, use the -f flag.
+     the same dataset file you will notice that maker does not rerun any of the
+     blast analyses, but instead uses the blast analyses stored from the
+     previous run.  To force maker to rerun all analyses, use the -f flag.
 
 
 Options:
 
-     -genome|g  <filename>  Give MAKER a different genome file (this overrides
-                            the control file value).
+     -genome|g <filename> Specify the genome file.
 
-     -predictor|p  <type>   Selects the gene predictor/predictors to use when 
-                            building annotations (this overrides the control
-                            file value).  Use a ',' to seperate types (no 
-                            spaces), i.e. -predictor=snap,augustus,fgenesh
+     -predictor|p <type>  Selects the predictor(s) to use when building
+                          annotations.  Use a ',' to seperate types (no spaces).
+                          i.e. -predictor=snap,augustus,fgenesh
 
-                            Types: snap
-                                   augustus
-                                   fgenesh
-                                   twinscan
-                                   est2genome (Uses EST's directly)
-                                   gff (Passes through gff3 file annotations)
+                          types: snap
+                                 augustus
+                                 fgenesh
+                                 est2genome (Uses EST's directly)
+                                 abinit (ab-initio predictions)
+                                 gff (Passes through gff3 file annotations)
 
-     -RM_off|R               Turns all repeat masking off.  When using this
-                             flag, maker expects that the input genome file is
-                             already masked (This overrides all repeatmasking
-                             control file values).
+     -RM_off|R           Turns all repeat masking off.
 
-     -datastore|d            Causes output to be written using a datastore. This
-                             option is automatically enabled if there are more
-                             than 1000 fasta entries in the input genome file.
-                             Output can then be accessed using the
-                             master_datastore_index file created by the maker
-                             (this overrides the control file value).
+     -retry   <integer>  Rerun failed contigs up to the specified count.
 
-     -retry     <integer>    Re-run failed contigs up to the specified number of
-                             re-tries (This overrides the control file value).
+     -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
-     -cpus|c    <integer>    Tells how many cpus to use for BLAST analysis (this
-                             overrides contorol file value).
+     -force|f            Forces maker to delete old files before running again.
+                         This will require all blast analyses to be rerun.
 
-     -force|f                Forces maker to rerun all analyses (erases all
-                             previous output).
+     -quiet|q            Silences most of maker's status messages.
 
-     -quiet|q                Silences most of the status messages.
+     -CTL                Generate empty control files in the current directory.
 
-     -CTL                    Generates generic control files in the current
-                             working directory.
-
-     -help|?                 Prints this usage statement.
+     -help|?             Prints this usage statement.
 
 
 ";
@@ -320,7 +306,7 @@ while (my $fasta = $iterator->nextFasta()) {
 				 $CTL_OPT{eval_rm_blastx},
 				 $CTL_OPT{split_hit},
 				 $CTL_OPT{cpus},
-				 $CTL_OPT{_repeat_protein},
+				 $CTL_OPT{repeat_protein},
 				 $CTL_OPT{_formater},
 				 0,
 				 $CTL_OPT{force},
@@ -406,7 +392,7 @@ while (my $fasta = $iterator->nextFasta()) {
 					    $CTL_OPT{eval_blastn},
 					    $CTL_OPT{split_hit},
 					    $CTL_OPT{cpus},
-					    $CTL_OPT{_est},
+					    $CTL_OPT{est},
 					    $CTL_OPT{_formater},
 					    0,
 					    $CTL_OPT{force},
@@ -439,7 +425,7 @@ while (my $fasta = $iterator->nextFasta()) {
 					    $CTL_OPT{eval_blastx},
 					    $CTL_OPT{split_hit},
 					    $CTL_OPT{cpus},
-					    $CTL_OPT{_protein},
+					    $CTL_OPT{protein},
 					    $CTL_OPT{_formater},
 					    0,
 					    $CTL_OPT{force},
@@ -472,7 +458,7 @@ while (my $fasta = $iterator->nextFasta()) {
 					     $CTL_OPT{eval_tblastx},
 					     $CTL_OPT{split_hit},
 					     $CTL_OPT{cpus},
-					     $CTL_OPT{_altest},
+					     $CTL_OPT{altest},
 					     $CTL_OPT{_formater},
 					     0,
 					     $CTL_OPT{force},
