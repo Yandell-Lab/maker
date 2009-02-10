@@ -1,7 +1,7 @@
 # This Makefile is for the threads extension to perl.
 #
 # It was generated automatically by MakeMaker version
-# 6.46 (Revision: 66493) from the contents of
+# 6.30 (Revision: Revision: 4535 ) from the contents of
 # Makefile.PL. Don't edit this file, edit Makefile.PL instead.
 #
 #       ANY CHANGES MADE HERE WILL BE LOST!
@@ -13,7 +13,7 @@
 #     ABSTRACT_FROM => q[threads.pm]
 #     AUTHOR => q[Artur Bergman, Jerry D. Hedden <jdhedden AT cpan DOT org>]
 #     DEFINE => q[-DHAS_PPPORT_H]
-#     DESTDIR => q[/Users/cholt/Desktop/maker/MPI/threads-1.71/../../]
+#     DESTDIR => q[/home/cholt/usr/local/maker/MPI/threads-1.71/../../]
 #     INSTALLARCHLIB => q[lib/]
 #     INSTALLBIN => q[bin/]
 #     INSTALLDIRS => q[perl]
@@ -21,7 +21,7 @@
 #     INSTALLMAN3DIR => q[none]
 #     INSTALLPRIVLIB => q[lib/]
 #     INSTALLSCRIPT => q[bin/]
-#     LICENSE => q[perl]
+#     LIBS => [q[-lpthread]]
 #     NAME => q[threads]
 #     PM => { threads.pm=>q[$(INST_LIBDIR)/threads.pm] }
 #     PREREQ_PM => { warnings=>q[0], IO::File=>q[0], XSLoader=>q[0], overload=>q[0], Hash::Util=>q[0], Config=>q[0], ExtUtils::testlib=>q[0], Carp=>q[0], strict=>q[0], Test::More=>q[0] }
@@ -32,30 +32,31 @@
 
 # --- MakeMaker const_config section:
 
-# These definitions are from config.sh (via /System/Library/Perl/5.8.6/darwin-thread-multi-2level/Config.pm).
-# They may have been overridden via Makefile.PL or on the command line.
+# These definitions are from config.sh (via /usr/lib64/perl5/5.8.8/x86_64-linux-thread-multi/Config.pm)
+
+# They may have been overridden via Makefile.PL or on the command line
 AR = ar
-CC = cc
-CCCDLFLAGS =  
-CCDLFLAGS =  
-DLEXT = bundle
+CC = gcc
+CCCDLFLAGS = -fPIC
+CCDLFLAGS = -Wl,-E -Wl,-rpath,/usr/lib64/perl5/5.8.8/x86_64-linux-thread-multi/CORE
+DLEXT = so
 DLSRC = dl_dlopen.xs
-EXE_EXT = 
-FULL_AR = /usr/bin/ar
-LD = env MACOSX_DEPLOYMENT_TARGET=10.3 cc
-LDDLFLAGS = -bundle -undefined dynamic_lookup -L/usr/local/lib
-LDFLAGS = -L/usr/local/lib
-LIBC = /usr/lib/libc.dylib
+LD = gcc
+LDDLFLAGS = -shared -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic
+LDFLAGS = 
+LIBC = 
 LIB_EXT = .a
 OBJ_EXT = .o
-OSNAME = darwin
-OSVERS = 8.0
-RANLIB = /usr/bin/ar ts
-SITELIBEXP = /Library/Perl/5.8.6
-SITEARCHEXP = /Library/Perl/5.8.6/darwin-thread-multi-2level
-SO = dylib
-VENDORARCHEXP = /Network/Library/Perl/5.8.6/darwin-thread-multi-2level
-VENDORLIBEXP = /Network/Library/Perl/5.8.6
+OSNAME = linux
+OSVERS = 2.6.9-78.0.1.elsmp
+RANLIB = :
+SITELIBEXP = /usr/lib/perl5/site_perl/5.8.8
+SITEARCHEXP = /usr/lib64/perl5/site_perl/5.8.8/x86_64-linux-thread-multi
+SO = so
+EXE_EXT = 
+FULL_AR = /usr/bin/ar
+VENDORARCHEXP = /usr/lib64/perl5/vendor_perl/5.8.8/x86_64-linux-thread-multi
+VENDORLIBEXP = /usr/lib/perl5/vendor_perl/5.8.8
 
 
 # --- MakeMaker constants section:
@@ -80,55 +81,51 @@ INST_MAN3DIR = blib/man3
 MAN1EXT = 1
 MAN3EXT = 3pm
 INSTALLDIRS = perl
-DESTDIR = /Users/cholt/Desktop/maker/MPI/threads-1.71/../../
+DESTDIR = /home/cholt/usr/local/maker/MPI/threads-1.71/../../
 PREFIX = $(PERLPREFIX)
-PERLPREFIX = /
-SITEPREFIX = /usr/local
-VENDORPREFIX = /usr/local
+PERLPREFIX = /usr
+SITEPREFIX = /usr
+VENDORPREFIX = /usr
 INSTALLPRIVLIB = lib/
 DESTINSTALLPRIVLIB = $(DESTDIR)$(INSTALLPRIVLIB)
-INSTALLSITELIB = /Library/Perl/5.8.6
+INSTALLSITELIB = /usr/lib/perl5/site_perl/5.8.8
 DESTINSTALLSITELIB = $(DESTDIR)$(INSTALLSITELIB)
-INSTALLVENDORLIB = /Network/Library/Perl/5.8.6
+INSTALLVENDORLIB = /usr/lib/perl5/vendor_perl/5.8.8
 DESTINSTALLVENDORLIB = $(DESTDIR)$(INSTALLVENDORLIB)
 INSTALLARCHLIB = lib/
 DESTINSTALLARCHLIB = $(DESTDIR)$(INSTALLARCHLIB)
-INSTALLSITEARCH = /Library/Perl/5.8.6/darwin-thread-multi-2level
+INSTALLSITEARCH = /usr/lib64/perl5/site_perl/5.8.8/x86_64-linux-thread-multi
 DESTINSTALLSITEARCH = $(DESTDIR)$(INSTALLSITEARCH)
-INSTALLVENDORARCH = /Network/Library/Perl/5.8.6/darwin-thread-multi-2level
+INSTALLVENDORARCH = /usr/lib64/perl5/vendor_perl/5.8.8/x86_64-linux-thread-multi
 DESTINSTALLVENDORARCH = $(DESTDIR)$(INSTALLVENDORARCH)
 INSTALLBIN = bin/
 DESTINSTALLBIN = $(DESTDIR)$(INSTALLBIN)
-INSTALLSITEBIN = /usr/local/bin
+INSTALLSITEBIN = /usr/bin
 DESTINSTALLSITEBIN = $(DESTDIR)$(INSTALLSITEBIN)
-INSTALLVENDORBIN = /usr/local/bin
+INSTALLVENDORBIN = /usr/bin
 DESTINSTALLVENDORBIN = $(DESTDIR)$(INSTALLVENDORBIN)
 INSTALLSCRIPT = bin/
 DESTINSTALLSCRIPT = $(DESTDIR)$(INSTALLSCRIPT)
-INSTALLSITESCRIPT = /usr/local/bin
-DESTINSTALLSITESCRIPT = $(DESTDIR)$(INSTALLSITESCRIPT)
-INSTALLVENDORSCRIPT = /usr/local/bin
-DESTINSTALLVENDORSCRIPT = $(DESTDIR)$(INSTALLVENDORSCRIPT)
 INSTALLMAN1DIR = none
 DESTINSTALLMAN1DIR = $(DESTDIR)$(INSTALLMAN1DIR)
-INSTALLSITEMAN1DIR = /usr/local/man/man1
+INSTALLSITEMAN1DIR = /usr/share/man/man1
 DESTINSTALLSITEMAN1DIR = $(DESTDIR)$(INSTALLSITEMAN1DIR)
-INSTALLVENDORMAN1DIR = /usr/local/man/man1
+INSTALLVENDORMAN1DIR = /usr/share/man/man1
 DESTINSTALLVENDORMAN1DIR = $(DESTDIR)$(INSTALLVENDORMAN1DIR)
 INSTALLMAN3DIR = none
 DESTINSTALLMAN3DIR = $(DESTDIR)$(INSTALLMAN3DIR)
-INSTALLSITEMAN3DIR = /usr/local/man/man3
+INSTALLSITEMAN3DIR = /usr/share/man/man3
 DESTINSTALLSITEMAN3DIR = $(DESTDIR)$(INSTALLSITEMAN3DIR)
-INSTALLVENDORMAN3DIR = /usr/local/man/man3
+INSTALLVENDORMAN3DIR = /usr/share/man/man3
 DESTINSTALLVENDORMAN3DIR = $(DESTDIR)$(INSTALLVENDORMAN3DIR)
-PERL_LIB = /System/Library/Perl/5.8.6
-PERL_ARCHLIB = /System/Library/Perl/5.8.6/darwin-thread-multi-2level
+PERL_LIB = /usr/lib/perl5/5.8.8
+PERL_ARCHLIB = /usr/lib64/perl5/5.8.8/x86_64-linux-thread-multi
 LIBPERL_A = libperl.a
 FIRST_MAKEFILE = Makefile
 MAKEFILE_OLD = Makefile.old
 MAKE_APERL_FILE = Makefile.aperl
 PERLMAINCC = $(CC)
-PERL_INC = /System/Library/Perl/5.8.6/darwin-thread-multi-2level/CORE
+PERL_INC = /usr/lib64/perl5/5.8.8/x86_64-linux-thread-multi/CORE
 PERL = /usr/bin/perl
 FULLPERL = /usr/bin/perl
 ABSPERL = $(PERL)
@@ -142,15 +139,14 @@ PERL_CORE = 0
 PERM_RW = 644
 PERM_RWX = 755
 
-MAKEMAKER   = /System/Library/Perl/5.8.6/ExtUtils/MakeMaker.pm
-MM_VERSION  = 6.46
-MM_REVISION = 66493
+MAKEMAKER   = /usr/lib/perl5/5.8.8/ExtUtils/MakeMaker.pm
+MM_VERSION  = 6.30
+MM_REVISION = Revision: 4535 
 
 # FULLEXT = Pathname for extension directory (eg Foo/Bar/Oracle).
 # BASEEXT = Basename part of FULLEXT. May be just equal FULLEXT. (eg Oracle)
 # PARENT_NAME = NAME without BASEEXT and no trailing :: (eg Foo::Bar)
 # DLBASE  = Basename part of dynamic library. May be just equal BASEEXT.
-MAKE = make
 FULLEXT = threads
 BASEEXT = threads
 PARENT_NAME = 
@@ -198,24 +194,24 @@ PM_TO_BLIB = threads.pm \
 
 
 # --- MakeMaker platform_constants section:
-MM_Unix_VERSION = 6.46
+MM_Unix_VERSION = 1.50
 PERL_MALLOC_DEF = -DPERL_EXTMALLOC_DEF -Dmalloc=Perl_malloc -Dfree=Perl_mfree -Drealloc=Perl_realloc -Dcalloc=Perl_calloc
 
 
 # --- MakeMaker tool_autosplit section:
 # Usage: $(AUTOSPLITFILE) FileToSplit AutoDirToSplitInto
-AUTOSPLITFILE = $(ABSPERLRUN)  -e 'use AutoSplit;  autosplit($$ARGV[0], $$ARGV[1], 0, 1, 1)' --
+AUTOSPLITFILE = $(ABSPERLRUN)  -e 'use AutoSplit;  autosplit($$ARGV[0], $$ARGV[1], 0, 1, 1)'
 
 
 
 # --- MakeMaker tool_xsubpp section:
 
-XSUBPPDIR = /System/Library/Perl/5.8.6/ExtUtils
+XSUBPPDIR = /usr/lib/perl5/5.8.8/ExtUtils
 XSUBPP = $(XSUBPPDIR)$(DFSEP)xsubpp
 XSUBPPRUN = $(PERLRUN) $(XSUBPP)
 XSPROTOARG = 
-XSUBPPDEPS = /System/Library/Perl/5.8.6/ExtUtils/typemap $(XSUBPP)
-XSUBPPARGS = -typemap /System/Library/Perl/5.8.6/ExtUtils/typemap
+XSUBPPDEPS = /usr/lib/perl5/5.8.8/ExtUtils/typemap $(XSUBPP)
+XSUBPPARGS = -typemap /usr/lib/perl5/5.8.8/ExtUtils/typemap
 XSUBPP_EXTRA_ARGS = 
 
 
@@ -238,7 +234,7 @@ ECHO = echo
 ECHO_N = echo -n
 UNINST = 0
 VERBINST = 0
-MOD_INSTALL = $(ABSPERLRUN) -MExtUtils::Install -e 'install({@ARGV}, '\''$(VERBINST)'\'', 0, '\''$(UNINST)'\'');' --
+MOD_INSTALL = $(ABSPERLRUN) -MExtUtils::Install -e 'install({@ARGV}, '\''$(VERBINST)'\'', 0, '\''$(UNINST)'\'');'
 DOC_INSTALL = $(ABSPERLRUN) "-MExtUtils::Command::MM" -e perllocal_install
 UNINSTALL = $(ABSPERLRUN) "-MExtUtils::Command::MM" -e uninstall
 WARN_IF_OLD_PACKLIST = $(ABSPERLRUN) "-MExtUtils::Command::MM" -e warn_if_old_packlist
@@ -249,12 +245,12 @@ FIXIN = $(PERLRUN) "-MExtUtils::MY" -e "MY->fixin(shift)"
 
 
 # --- MakeMaker makemakerdflt section:
-makemakerdflt : all
+makemakerdflt: all
 	$(NOECHO) $(NOOP)
 
 
 # --- MakeMaker dist section:
-TAR = COPY_EXTENDED_ATTRIBUTES_DISABLE=1 COPYFILE_DISABLE=1 tar
+TAR = tar
 TARFLAGS = cvf
 ZIP = zip
 ZIPFLAGS = -r
@@ -280,8 +276,8 @@ DISTVNAME = threads-1.71
 
 # --- MakeMaker cflags section:
 
-CCFLAGS = -g -pipe -fno-common -DPERL_DARWIN -no-cpp-precomp -fno-strict-aliasing -I/usr/local/include
-OPTIMIZE = -O3
+CCFLAGS = -D_REENTRANT -D_GNU_SOURCE -fno-strict-aliasing -pipe -Wdeclaration-after-statement -I/usr/local/include -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -I/usr/include/gdbm
+OPTIMIZE = -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic
 PERLTYPE = 
 MPOLLUTE = 
 
@@ -291,6 +287,9 @@ MPOLLUTE =
 # threads might depend on some other libraries:
 # See ExtUtils::Liblist for details
 #
+EXTRALIBS = 
+LDLOADLIBS = -lpthread
+BSLOADLIBS = 
 
 
 # --- MakeMaker const_cccmd section:
@@ -321,7 +320,7 @@ PASTHRU = LIBPERL_A="$(LIBPERL_A)"\
 # --- MakeMaker c_o section:
 
 .c.i:
-	cc -E -c $(PASTHRU_INC) $(INC) \
+	gcc -E -c $(PASTHRU_INC) $(INC) \
 	$(CCFLAGS) $(OPTIMIZE) \
 	$(PERLTYPE) $(MPOLLUTE) $(DEFINE_VERSION) \
 	$(XS_DEFINE_VERSION) $(CCCDLFLAGS) "-I$(PERL_INC)" $(PASTHRU_DEFINE) $(DEFINE) $*.c > $*.i
@@ -332,6 +331,9 @@ PASTHRU = LIBPERL_A="$(LIBPERL_A)"\
 .c$(OBJ_EXT):
 	$(CCCMD) $(CCCDLFLAGS) "-I$(PERL_INC)" $(PASTHRU_DEFINE) $(DEFINE) $*.c
 
+.C$(OBJ_EXT):
+	$(CCCMD) $(CCCDLFLAGS) "-I$(PERL_INC)" $(PASTHRU_DEFINE) $(DEFINE) $*.C
+
 .cpp$(OBJ_EXT):
 	$(CCCMD) $(CCCDLFLAGS) "-I$(PERL_INC)" $(PASTHRU_DEFINE) $(DEFINE) $*.cpp
 
@@ -340,9 +342,6 @@ PASTHRU = LIBPERL_A="$(LIBPERL_A)"\
 
 .cc$(OBJ_EXT):
 	$(CCCMD) $(CCCDLFLAGS) "-I$(PERL_INC)" $(PASTHRU_DEFINE) $(DEFINE) $*.cc
-
-.C$(OBJ_EXT):
-	$(CCCMD) $*.C
 
 
 # --- MakeMaker xs_c section:
@@ -569,35 +568,26 @@ realclean purge ::  clean realclean_subdirs
 # --- MakeMaker metafile section:
 metafile : create_distdir
 	$(NOECHO) $(ECHO) Generating META.yml
-	$(NOECHO) $(ECHO) '--- #YAML:1.0' > META_new.yml
-	$(NOECHO) $(ECHO) 'name:               threads' >> META_new.yml
-	$(NOECHO) $(ECHO) 'version:            1.71' >> META_new.yml
-	$(NOECHO) $(ECHO) 'abstract:           Perl interpreter-based threads' >> META_new.yml
-	$(NOECHO) $(ECHO) 'author:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    - Artur Bergman, Jerry D. Hedden <jdhedden AT cpan DOT org>' >> META_new.yml
-	$(NOECHO) $(ECHO) 'license:            perl' >> META_new.yml
-	$(NOECHO) $(ECHO) 'distribution_type:  module' >> META_new.yml
-	$(NOECHO) $(ECHO) 'configure_requires:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    ExtUtils::MakeMaker:  0' >> META_new.yml
+	$(NOECHO) $(ECHO) '# http://module-build.sourceforge.net/META-spec.html' > META_new.yml
+	$(NOECHO) $(ECHO) '#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#' >> META_new.yml
+	$(NOECHO) $(ECHO) 'name:         threads' >> META_new.yml
+	$(NOECHO) $(ECHO) 'version:      1.71' >> META_new.yml
+	$(NOECHO) $(ECHO) 'version_from: threads.pm' >> META_new.yml
+	$(NOECHO) $(ECHO) 'installdirs:  perl' >> META_new.yml
 	$(NOECHO) $(ECHO) 'requires:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Carp:               0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Config:             0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    ExtUtils::testlib:  0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Hash::Util:         0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    IO::File:           0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    overload:           0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    strict:             0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    Test::More:         0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    warnings:           0' >> META_new.yml
-	$(NOECHO) $(ECHO) '    XSLoader:           0' >> META_new.yml
-	$(NOECHO) $(ECHO) 'no_index:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    directory:' >> META_new.yml
-	$(NOECHO) $(ECHO) '        - t' >> META_new.yml
-	$(NOECHO) $(ECHO) '        - inc' >> META_new.yml
-	$(NOECHO) $(ECHO) 'generated_by:       ExtUtils::MakeMaker version 6.46' >> META_new.yml
-	$(NOECHO) $(ECHO) 'meta-spec:' >> META_new.yml
-	$(NOECHO) $(ECHO) '    url:      http://module-build.sourceforge.net/META-spec-v1.4.html' >> META_new.yml
-	$(NOECHO) $(ECHO) '    version:  1.4' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Carp:                          0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Config:                        0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    ExtUtils::testlib:             0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Hash::Util:                    0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    IO::File:                      0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    overload:                      0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    strict:                        0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    Test::More:                    0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    warnings:                      0' >> META_new.yml
+	$(NOECHO) $(ECHO) '    XSLoader:                      0' >> META_new.yml
+	$(NOECHO) $(ECHO) '' >> META_new.yml
+	$(NOECHO) $(ECHO) 'distribution_type: module' >> META_new.yml
+	$(NOECHO) $(ECHO) 'generated_by: ExtUtils::MakeMaker version 6.30' >> META_new.yml
 	-$(NOECHO) $(MV) META_new.yml $(DISTVNAME)/META.yml
 
 
@@ -620,7 +610,7 @@ manifest :
 	$(PERLRUN) "-MExtUtils::Manifest=mkmanifest" -e mkmanifest
 
 veryclean : realclean
-	$(RM_F) *~ */*~ *.orig */*.orig *.bak */*.bak *.old */*.old 
+	$(RM_F) *~ *.orig */*~ */*.orig
 
 
 
@@ -628,7 +618,7 @@ veryclean : realclean
 
 dist : $(DIST_DEFAULT) $(FIRST_MAKEFILE)
 	$(NOECHO) $(ABSPERLRUN) -l -e 'print '\''Warning: Makefile possibly out of date with $(VERSION_FROM)'\''' \
-	  -e '    if -e '\''$(VERSION_FROM)'\'' and -M '\''$(VERSION_FROM)'\'' < -M '\''$(FIRST_MAKEFILE)'\'';' --
+	  -e '    if -e '\''$(VERSION_FROM)'\'' and -M '\''$(VERSION_FROM)'\'' < -M '\''$(FIRST_MAKEFILE)'\'';'
 
 tardist : $(DISTVNAME).tar$(SUFFIX)
 	$(NOECHO) $(NOOP)
@@ -691,14 +681,14 @@ ci :
 # --- MakeMaker distmeta section:
 distmeta : create_distdir metafile
 	$(NOECHO) cd $(DISTVNAME) && $(ABSPERLRUN) -MExtUtils::Manifest=maniadd -e 'eval { maniadd({q{META.yml} => q{Module meta-data (added by MakeMaker)}}) } ' \
-	  -e '    or print "Could not add META.yml to MANIFEST: $${'\''@'\''}\n"' --
+	  -e '    or print "Could not add META.yml to MANIFEST: $${'\''@'\''}\n"'
 
 
 
 # --- MakeMaker distsignature section:
 distsignature : create_distdir
 	$(NOECHO) cd $(DISTVNAME) && $(ABSPERLRUN) -MExtUtils::Manifest=maniadd -e 'eval { maniadd({q{SIGNATURE} => q{Public-key signature (added by MakeMaker)}}) } ' \
-	  -e '    or print "Could not add SIGNATURE to MANIFEST: $${'\''@'\''}\n"' --
+	  -e '    or print "Could not add SIGNATURE to MANIFEST: $${'\''@'\''}\n"'
 	$(NOECHO) cd $(DISTVNAME) && $(TOUCH) SIGNATURE
 	cd $(DISTVNAME) && cpansign -s
 
@@ -751,7 +741,7 @@ pure_site_install ::
 		$(INST_LIB) $(DESTINSTALLSITELIB) \
 		$(INST_ARCHLIB) $(DESTINSTALLSITEARCH) \
 		$(INST_BIN) $(DESTINSTALLSITEBIN) \
-		$(INST_SCRIPT) $(DESTINSTALLSITESCRIPT) \
+		$(INST_SCRIPT) $(DESTINSTALLSCRIPT) \
 		$(INST_MAN1DIR) $(DESTINSTALLSITEMAN1DIR) \
 		$(INST_MAN3DIR) $(DESTINSTALLSITEMAN3DIR)
 	$(NOECHO) $(WARN_IF_OLD_PACKLIST) \
@@ -764,7 +754,7 @@ pure_vendor_install ::
 		$(INST_LIB) $(DESTINSTALLVENDORLIB) \
 		$(INST_ARCHLIB) $(DESTINSTALLVENDORARCH) \
 		$(INST_BIN) $(DESTINSTALLVENDORBIN) \
-		$(INST_SCRIPT) $(DESTINSTALLVENDORSCRIPT) \
+		$(INST_SCRIPT) $(DESTINSTALLSCRIPT) \
 		$(INST_MAN1DIR) $(DESTINSTALLVENDORMAN1DIR) \
 		$(INST_MAN3DIR) $(DESTINSTALLVENDORMAN3DIR)
 
@@ -817,7 +807,7 @@ uninstall_from_vendordirs ::
 
 # --- MakeMaker force section:
 # Phony target to force checking subdirectories.
-FORCE :
+FORCE:
 	$(NOECHO) $(NOOP)
 
 
@@ -862,6 +852,7 @@ PERL_HDRS = \
 	$(PERL_INC)/regnodes.h		\
 	$(PERL_INC)/scope.h		\
 	$(PERL_INC)/sv.h		\
+	$(PERL_INC)/thrdvar.h		\
 	$(PERL_INC)/thread.h		\
 	$(PERL_INC)/unixish.h		\
 	$(PERL_INC)/util.h
@@ -917,11 +908,7 @@ TESTDB_SW = -d
 
 testdb :: testdb_$(LINKTYPE)
 
-test :: $(TEST_TYPE) subdirs-test
-
-subdirs-test ::
-	$(NOECHO) $(NOOP)
-
+test :: $(TEST_TYPE)
 
 test_dynamic :: pure_all
 	PERL_DL_NONLAZY=1 $(FULLPERLRUN) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(TEST_FILES)
@@ -941,7 +928,7 @@ testdb_static :: pure_all $(MAP_TARGET)
 
 # --- MakeMaker ppd section:
 # Creates a PPD (Perl Package Description) for a binary distribution.
-ppd :
+ppd:
 	$(NOECHO) $(ECHO) '<SOFTPKG NAME="$(DISTNAME)" VERSION="1,71,0,0">' > $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <TITLE>$(DISTNAME)</TITLE>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    <ABSTRACT>Perl interpreter-based threads</ABSTRACT>' >> $(DISTNAME).ppd
@@ -958,7 +945,7 @@ ppd :
 	$(NOECHO) $(ECHO) '        <DEPENDENCY NAME="strict" VERSION="0,0,0,0" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <DEPENDENCY NAME="warnings" VERSION="0,0,0,0" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <OS NAME="$(OSNAME)" />' >> $(DISTNAME).ppd
-	$(NOECHO) $(ECHO) '        <ARCHITECTURE NAME="darwin-thread-multi-2level-5.8" />' >> $(DISTNAME).ppd
+	$(NOECHO) $(ECHO) '        <ARCHITECTURE NAME="x86_64-linux-thread-multi" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '        <CODEBASE HREF="" />' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '    </IMPLEMENTATION>' >> $(DISTNAME).ppd
 	$(NOECHO) $(ECHO) '</SOFTPKG>' >> $(DISTNAME).ppd
@@ -967,7 +954,7 @@ ppd :
 # --- MakeMaker pm_to_blib section:
 
 pm_to_blib : $(TO_INST_PM)
-	$(NOECHO) $(ABSPERLRUN) -MExtUtils::Install -e 'pm_to_blib({@ARGV}, '\''$(INST_LIB)/auto'\'', '\''$(PM_FILTER)'\'')' -- \
+	$(NOECHO) $(ABSPERLRUN) -MExtUtils::Install -e 'pm_to_blib({@ARGV}, '\''$(INST_LIB)/auto'\'', '\''$(PM_FILTER)'\'')' \
 	  threads.pm $(INST_LIBDIR)/threads.pm 
 	$(NOECHO) $(TOUCH) pm_to_blib
 
