@@ -141,6 +141,10 @@ sub run_fathom {
 	$command .= " >$file_name";
 
 	print STDERR "Running fathom over $name ...\n";
+
+	if ($name eq 'maker-scf1117875582006-snap-gene-0.16-mRNA-1') {
+		print "COMMAND:  $command\n";
+	}
 	`$command`;
 
 	return $file_name;

@@ -24,13 +24,18 @@ sub txnAED {
 					($t);
 
 	my $hit_bag = combine($pol_e, $pol_p);
+
+	return 1 if scalar @$hit_bag == 0;
+
 	my @ph_bag;
 	foreach my $hit (@$hit_bag) {
 		my $ph = evaluator::pseudo_hit::convert_to_pseudo_hit($hit);
 		push @ph_bag, $ph;
 	}
 
-	my $combined_phs = combine_same_alt_forms(\@ph_bag);
+	my $extended_hits = extend_hit(\@ph_bag);
+
+	my $combined_phs = combine_same_alt_forms($extended_hits);
 
 	my $polished_phs = remove_redundancy($combined_phs);
 
@@ -86,8 +91,8 @@ sub gene_AED {
 	my @good_hits;
 	foreach my $hit (@bag) {
 		my $ph = evaluator::pseudo_hit::convert_to_pseudo_hit($hit);
-		push @good_hits, $ph if overlap($gene_boundary, 
-					$gene_strand, $ph);
+		push @good_hits, $ph ;
+				
 	}
 
 	return 1 if (scalar @good_hits == 0);
@@ -328,23 +333,36 @@ sub combine {
 #------------------------------------------------------------------------
 sub combine_same_alt_forms {
 	my $bag = shift;
-	
+
 	my @combined_hits;
 
-	foreach my $hit (@$bag) {
-		my @hits_to_be_added;
-		foreach my $combined_hit (@combined_hits) {
-			if (evaluator::pseudo_hit::is_same_alt_form(
-					$hit, $combined_hit)) {
-				my $ph = evaluator::pseudo_hit::combine_pseudo_hit
-					([$hit, $combined_hit]);
-				push @hits_to_be_added, $ph unless 
-					evaluator::pseudo_hit::are_same_pseudo_hits
-					($combined_hit, $ph);
+	@$bag = ensure_unique(@$bag);
+	my $count = -1;
+	while ($count != scalar @combined_hits) {
+
+		$count = @combined_hits;
+		foreach my $hit (@$bag) {
+			my @hits_to_be_added;
+
+			next if already_exist($hit, \@combined_hits);
+
+			foreach my $combined_hit (@combined_hits) {
+
+				if (evaluator::pseudo_hit::is_same_alt_form(
+						$hit, $combined_hit)) {
+					my $ph = evaluator::pseudo_hit::combine_pseudo_hit
+						([$hit, $combined_hit]);
+					push @hits_to_be_added, $ph unless 
+						evaluator::pseudo_hit::are_same_pseudo_hits
+						($combined_hit, $ph);
+				}
 			}
+			push @combined_hits, @hits_to_be_added;
+			push @combined_hits, $hit;
+
+			@combined_hits = ensure_unique(@combined_hits);
 		}
-		push @combined_hits, @hits_to_be_added;
-		push @combined_hits, $hit;
+
 	}
 
 
@@ -354,6 +372,39 @@ sub combine_same_alt_forms {
 	return \@combined_hits;
 }
 	
+#------------------------------------------------------------------------
+sub ensure_unique {
+	my @hits = @_;
+
+	my @polished;
+
+	foreach my $hit (@hits) {
+		my $unique = 1;
+
+		foreach my $one (@polished) {
+			if (evaluator::pseudo_hit::are_same_pseudo_hits
+				($one, $hit)) {
+				$unique = 0;
+				last; 
+			}
+		}
+		push @polished, $hit if $unique == 1;
+	}
+
+	return @polished;
+}
+#------------------------------------------------------------------------
+sub already_exist {
+	my $hit = shift;
+	my $bag = shift;
+
+	foreach my $one (@$bag) {
+		return 1 if evaluator::pseudo_hit::are_same_pseudo_hits
+				($one, $hit);
+	}
+
+	return 0;
+}
 #------------------------------------------------------------------------
 sub remove_redundancy {
 	my $hits = shift;
@@ -389,6 +440,125 @@ sub remove_redundancy {
 	return $hits;
 }
 	
+#------------------------------------------------------------------------
+sub extend_hit {
+	my $hits = shift;
+
+	my ($start, $end);
+	foreach my $hit (@$hits) {
+		$start = $hit->{b} 
+			if (!defined $start) || $start > $hit->{b};
+		$end = $hit->{e}
+			if (!defined $end) || $end < $hit->{e};
+	}
+
+	## 0 stands for nothing; 1 for coding; 2 for nocoding	
+	my @seq; 
+
+	for (my $i= 0; $i <= $end-$start; $i++) {
+		$seq[$i] = 0;
+	}
+
+	foreach my $hit (@$hits) {
+		my @cors;
+		foreach my $hsp (@{$hit->{hsps}}) {
+			push @cors, 
+				$hsp->[0]-$start+1, $hsp->[1]-$start+1;
+		}
+
+		for (my $i = 0; $i<=$#cors; $i++) {
+			next if $i == 0;
+			
+			my $b = $cors[$i-1] - 1;
+			my $e = $cors[$i] - 1;
+
+			if ( (int($i/2))*2 == $i ) {
+				for (my $j = $b+1; $j <= $e-1; $j++) {
+					$seq[$j] = 2;
+				}
+			}
+			else {
+				for (my $j = $b; $j <= $e; $j++) {
+					$seq[$j] = 1
+						if $seq[$j] == 0;
+				}
+			}
+		}
+	}
+
+	my @coding_region;
+	my ($left, $right);
+	for (my $i = 0; $i <= $#seq; $i++) {
+		next unless $seq[$i] == 1;
+
+		if ($i == 0 ||$seq[$i-1]!= 1) {
+			$left = $i;
+		}
+		if ($i == $#seq || $seq[$i+1] != 1) {
+			$right = $i;
+			push @coding_region, 
+				[$left+$start, $right+$start];
+		}
+	}
+
+	my @extended_hits;
+	foreach my $hit (@$hits) {
+		
+		my $new_b = $hit->{b};	
+		my $new_e = $hit->{e};
+
+		my @new_hsps;
+		foreach my $hsp (@{$hit->{hsps}}) {
+
+			my ($new_left, $new_right) = @$hsp;
+			if ($hsp->[0] == $hit->{b}) {
+				
+				$new_left = extend($hsp->[0], 
+					\@coding_region,'left');
+				$new_b = $new_left;
+			}
+			if ($hsp->[1] == $hit->{e}) {
+				$new_right = extend($hsp->[1],
+					\@coding_region, 'right');
+				$new_e = $new_right;
+			}
+
+			push @new_hsps, [$new_left, $new_right];
+		}
+
+		my $new_hit = {'b'=> $new_b, 'e'=> $new_e,
+				'hsps'=>\@new_hsps, 
+				'strand' => $hit->{strand},
+				};
+		push @extended_hits, $new_hit;
+	}
+
+	return \@extended_hits;
+}		
+#------------------------------------------------------------------------
+sub extend {
+	my $cor = shift;
+	my $coding_regions = shift;
+	my $tag = shift;
+
+	if ($tag eq 'left') {
+		foreach my $region (@$coding_regions) {
+			if ($cor >$region->[0] && $cor <= $region->[1]) {
+				return $region->[0];
+			}
+		}
+		return $cor;
+	}
+
+	else {
+		foreach my $region (@$coding_regions) {
+                        if ($cor <$region->[1] && $cor >= $region->[0]) {
+                                return $region->[1];
+                        }
+                }
+                return $cor;
+        }
+}
 #------------------------------------------------------------------------
 1;
 

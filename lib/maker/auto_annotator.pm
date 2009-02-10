@@ -671,12 +671,12 @@ sub crit1 {
 #sort by order given in control files
 sub crit2 {
    my $g = shift;
-   
+
    my $score = $SCORE{$g->{predictor}} || 0;
    return $score;
 }
 #------------------------------------------------------------------------
-#arbitrary alphabetical order (really only affects non-overlapping abinits)
+
 sub crit3 {
    my $g = shift;
    
@@ -864,8 +864,6 @@ sub load_transcript_struct {
 		   @$blastx_hits
 		  );
 
-	my $shadowAED = shadow_AED::get_AED(\@bag, $f);	
-
 	#holds evalutor struct
         my $eva = evaluator::evaluate::power_evaluate($f,
 						      $seq,
@@ -881,7 +879,7 @@ sub load_transcript_struct {
 						      $the_void,
 						     );
 	
-        my $AED   = $shadowAED; #$eva->{score};
+        my $AED   = $eva->{txnAED};
         my $score = $eva->{score};
         my $qi    = $eva->{qi};
 	#----
@@ -1075,7 +1073,6 @@ sub group_transcripts {
       my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
       #----
       
-      my $AED = 0;
       my $score = 0;
       my $i = 1;
       foreach my $f (@{$c}) {
@@ -1085,8 +1082,7 @@ sub group_transcripts {
 	 load_transcript_struct($f, $g_name, $i, $seq, $evidence, $so_code,
 				$geneAED, $alt_spli_sup, $the_void, $CTL_OPTIONS);
 	 push(@t_structs, $t_struct);
-	 $score = $t_struct->{score} if($t_struct->{score} > $AED);
-	 $AED = $t_struct->{AED} if($t_struct->{AED} > $AED);
+	 $score = $t_struct->{score} if($t_struct->{score} > $score);
 	 $i++;
       }
       
@@ -1098,7 +1094,7 @@ sub group_transcripts {
 			 'g_end'     => $g_end,
 			 'g_strand'  => $g_strand,
 			 'score'     => $score,
-			 'AED'       => $AED,
+			 'AED'       => $geneAED,
 			 'predictor' => $predictor,
 			 'so_code'   => $so_code
 		       };

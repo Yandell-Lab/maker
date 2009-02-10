@@ -85,6 +85,8 @@ sub is_same_alt_form {
 	unless defined($a) && defined($b);
 
 	if ($a->{strand} != $b->{strand}) {return 0;}
+	if ($a->{b} >$b->{e} || $a->{e} < $b->{b}) {return 0;}
+
 
 	my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $flank);
 
