@@ -5,6 +5,7 @@ package evaluator::fathom_utils;
 use strict;
 use FileHandle;
 use evaluator::pseudo_hit;
+use Fasta;
 
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
@@ -18,6 +19,7 @@ sub snap_backwards {
 	my $eat = $box->{transcript};
 	my $seq = $box->{seq};
 	my $name = $box->{t_name};
+	$name = Fasta::seqID2SafeID($name);
 
 	my $pseudo_hit = evaluator::pseudo_hit::convert_to_pseudo_hit
 				($eat);
