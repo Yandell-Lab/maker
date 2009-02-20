@@ -9,6 +9,7 @@ use PostData;
 use FileHandle;
 use PostData;
 use PhatHit_utils;
+use File::Copy;
 
 @ISA = qw(
        );
@@ -112,8 +113,8 @@ sub finalize {
     my $seq_f = $self->{seq_file};
 
     system("cat $seq_f >> $ann_f");
-    unlink("$seq_f");
-    system("mv $ann_f $gff_f");
+    unlink($seq_f);
+    move($ann_f, $gff_f);
 
     die "ERROR: GFF3 file not created\n" if(! -e $gff_f);
 }
@@ -439,41 +440,55 @@ sub get_class_and_type {
 
 	my $type;
 	if    ($class =~ /^blastx$/i){
-		$type = $k eq 'hit' ? 'protein_match' : 'match_part';
-	}elsif    ($class =~ /^tblastx$/i){
-		$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
+	    $type = $k eq 'hit' ? 'protein_match' : 'match_part';
 	}
-	elsif ($class =~ /protein2genome/i){
+	elsif ($class =~ /^protein2genome$/i){
 		$type = $k eq 'hit' ? 'protein_match' : 'match_part'; 
 	}
-        elsif ($class =~ /est2genome/i){
-                $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
+	elsif($class =~ /^protein_gff\:/i){
+	    $type = $k eq 'hit' ? 'protein_match' : 'match_part';
+	}
+	elsif    ($class =~ /^tblastx$/i){
+	    $type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
+	}
+	elsif    ($class =~ /^altest_gff/i){
+	    $type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
+	}
+        elsif ($class =~ /^est2genome$/i){
+	    $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
         }
         elsif ($class =~ /^blastn$/i){
-                $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
+	    $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
         }
-        elsif ($class =~ /snap/i){
-                $type = $k eq 'hit' ? 'match' : 'match_part' ;
-		$class= 'snap';
+        elsif ($class =~ /^est_gff\:/i){
+	    $type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
         }
-        elsif ($class =~ /augustus/i){
-                $type = $k eq 'hit' ? 'match' : 'match_part' ;
-                $class= 'augustus';
+        elsif ($class =~ /^snap$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
         }
-        elsif ($class =~ /fgenesh/i){
-                $type = $k eq 'hit' ? 'match' : 'match_part' ;
-                $class= 'fgenesh';
+        elsif ($class =~ /^augustus$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
         }
-        elsif ($class =~ /twinscan/i){
-                $type = $k eq 'hit' ? 'match' : 'match_part' ;
-                $class= 'twinscan';
+        elsif ($class =~ /^fgenesh$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
         }
-        elsif ($class =~ /repeat/i){
-                $type = $k eq 'hit' ? 'match' : 'match_part';
-		$class= 'repeatmasker';
+        elsif ($class =~ /^twinscan$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
+	}
+        elsif ($class =~ /^jigsaw$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
+        }
+        elsif ($class =~ /^pred_gff\:/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
+        }
+        elsif ($class =~ /^repeat_gff\:/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part';
+        }
+        elsif ($class =~ /^repeat/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part';
         }
 	else {
-		die "unknown class in GFFV3::get_class_and_type $class ".ref($h)."\n";
+	    die "unknown class in GFFV3::get_class_and_type $class ".ref($h)."\n";
 	}
 
 	return ($class, $type);
@@ -685,7 +700,7 @@ sub get_transcript_data {
 	my @data;
 	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, '.', $t_s, '.');
 	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;
-	   $nine .= ';aed='.$AED.'eval_score='.$score;
+	   $nine .= '';
 	   $nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
 	push(@data, $nine);
 

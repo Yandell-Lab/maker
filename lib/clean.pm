@@ -19,6 +19,23 @@ use exonerate::splice_info;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
+sub purge_short_single_exons {
+    my $phat_hits = shift;
+    my $min = shift;
+
+    my @keepers;
+    foreach my $hit (@{$phat_hits}){
+	if ($hit->num_hsps == 1){
+	    push(@keepers, $hit) if($hit->{_hsps}->[0]->length('query') >= $min);
+	}
+	else{
+	    push(@keepers, $hit);
+	}
+    }
+    
+    return \@keepers
+}
+#------------------------------------------------------------------------
 sub throw_out_bad_splicers {
 	my $phat_hits = shift;
 	my $seq = shift;
@@ -57,6 +74,23 @@ sub purge_single_exon_hits {
 #------------------------------------------------------------------------
 sub alt_sort {
         $b->num_hsps <=> $a->num_hsps || $b->length  <=>  $a->length;
+}
+#------------------------------------------------------------------------
+sub is_identical_form {
+    my $hit1 = shift;
+    my $hit2 = shift;
+
+    my @hsps1 = sort {$a->start('query') <=> $b->start('query')} $hit1->hsps;
+    my @hsps2 = sort {$a->start('query') <=> $b->start('query')} $hit2->hsps;
+
+    return if (@hsps1 != @hsps2);
+
+    for(my $i = 0; $i < @hsps1; $i++){
+	return if($hsps1[$i]->start('query') != $hsps2[$i]->start('query'));
+	return if($hsps1[$i]->end('query') != $hsps2[$i]->end('query'));
+    }
+
+    return 1;
 }
 #------------------------------------------------------------------------
 sub remove_redundant_alt_splices {

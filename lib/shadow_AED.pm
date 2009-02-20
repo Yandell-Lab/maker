@@ -8,7 +8,7 @@ sub get_AED {
    my $hits = shift;
    my $tran = shift;
 
-   return 0.5 if(! @{$hits} || ! $tran);
+   return 1 if(! @{$hits} || ! $tran);
 
    my ($start, $end) = ($tran->start('query'), $tran->end('query'));
 
@@ -67,7 +67,7 @@ sub get_AED {
 
    my $spec = $index{3}/($index{2} + $index{3}); #specificity
    my $sens = $index{3}/($index{1} + $index{3}); #sensitivity
-   my $AED = ($spec + $sens)/2;
+   my $AED = 1 - ($spec + $sens)/2;
 
    return $AED;
 }

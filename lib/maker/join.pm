@@ -347,8 +347,10 @@ sub join_f {
 	my $new_total_score = 0;
 	my $length = 0;
 	foreach my $hsp (@anno_hsps){
-		$new_total_score += $hsp->score();
-		$length += $hsp->length();
+	    my $score = $hsp->score();
+	    $score = 0 if( ! $score || $score eq '.' || $score eq 'NA');
+	    $new_total_score += $score;
+	    $length += $hsp->length();
         }
 
 	my $hit_class = ref($g);

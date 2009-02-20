@@ -178,6 +178,72 @@ sub longest_translation {
 
 ################################################ subroutine header begin ##
 
+=head2 longest_translation
+
+ Usage     :
+
+=for example
+  $seq = "atgaaaaaauaa";
+
+=for example begin
+
+  use CGL::TranslationMachine;
+  my $t = new CGL::TranslationMachine;
+  my ($longest_orf,$offset) = $t->longest_translation($seq);
+
+=for example end
+
+=for example_testing
+  is($longest_orf, "MKK", "Did it find the right orf?");
+  is($offset, 0, "Did it get the offset right?");
+
+ Purpose   : Find the longest open reading frame in any of three
+             frames in the input sequence.
+ Returns   : A list of the amino acid sequence of the longest
+             open reading frame and the offset at which it begins in
+             the input sequence.
+ Arguments : A translatable sequence.
+ Throws    :
+ Comments  :
+           :
+ See Also  : Bio::Tools::CodonTable
+
+=cut
+
+################################################## subroutine header end ##
+
+sub longest_translation_plus_stop {
+    my $self = shift;
+    my $seq  = shift;
+    my $seqlength = length($seq);
+
+    my ($longest,$longest_len,$offset,@frames) = ('',0,0);
+    for( my $i = 0; $i < FRAMES; $i++ ) {
+	my $counter = $i;
+	foreach my $orf ( split(/\*/,$self->translate(substr($seq,$i))) ) {
+	    my $orflen = length($orf);
+	    if( $orflen > $longest_len ) {
+		$longest = $orf;
+		$offset  = $counter;
+		$longest_len = $orflen;
+		my $c_start = ($orflen * 3) + $offset;
+		my $codon = ($c_start < $seqlength) ? substr($seq, $c_start, 3) : '';
+		if(length($codon) == 3 && $self->translate($codon) eq '*'){
+		    $longest .= '*';
+		}
+            }
+	    # multi by 3 for aa->codon
+	    # 1 for the stop codon (included
+	    # in seq but not in length)	
+	    $counter += ($orflen + 1)*3;
+	}
+    }
+
+    return ($longest,$offset);
+}
+
+################################################ subroutine header begin ##
+
 =head2 translate_from_offset
 
  Usage     :

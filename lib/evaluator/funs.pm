@@ -492,6 +492,8 @@ sub completion {
 	my $box = shift;
 
 	my $seq = $box->{transcription_seq};
+	my $length = length($$seq);
+
 	my $first_codon = uc(substr($$seq, $box->{translation_offset}, 3));
 	my $last_codon  = uc(substr($$seq, $box->{translation_end}-4, 3));
 

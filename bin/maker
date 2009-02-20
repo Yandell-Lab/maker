@@ -6,7 +6,7 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use vars qw($LOG $RANK);
-use Error qw(:warndie);
+
 BEGIN{
    $RANK = 'non_mpi';		#default value of rank
 
@@ -23,9 +23,16 @@ BEGIN{
       exit (1);
    };
 
+   #supress warnings from storable module
+   $SIG{'__WARN__'} = sub {
+       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+		       $_[0] !~ /Can\'t store item CODE/
+		       );
+   };
+   
    #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} = sub {
-      if (defined ($LOG) && defined $_[0]) {
+      if (defined ($LOG) && $_[0]) {
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
@@ -513,7 +520,7 @@ while (my $fasta = $iterator->nextFasta()) {
 	 #-pred passthrough
 	 $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							$q_seq_ref,
-							'repeat'
+							'pred'
 						       );
       }
       

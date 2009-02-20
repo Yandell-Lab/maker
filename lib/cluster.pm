@@ -442,6 +442,7 @@ sub careful_cluster {
     my %clustered;
     my $i = 0;
     foreach my $c (keys %{$map}){
+	next if(! defined $map->{$c});
 	foreach my $m (@{$map->{$c}}){
 	    my $hit = $lookup{$m};
 	    die "name not found in careful cluster!\n"

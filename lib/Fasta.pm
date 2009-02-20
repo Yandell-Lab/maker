@@ -148,7 +148,7 @@ sub getSeqID {
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
 	my $def = Fasta::getDef($fasta_ref);
-	my $seq_id = Def2SeqID($def);
+	my $seq_id = def2SeqID($def);
 
 	return $seq_id;
 }

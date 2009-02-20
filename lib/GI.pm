@@ -12,6 +12,7 @@ use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use URI::Escape;
 use File::Path;
+use File::Copy;
 use Data::Dumper;
 use Getopt::Long;
 use FileHandle;
@@ -1045,7 +1046,6 @@ sub make_multi_fasta {
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
    my $db = shift;
-   print "\n\n".$db."\n\n";
    my $index = new Bio::DB::Fasta($db);
    return $index;
 }
@@ -1068,7 +1068,7 @@ sub dbformat {
    die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
 
-   if ($command =~ /xdformat$/) {
+   if ($command =~ /xdformat/) {
       if (($type eq 'blastn' && ! -e $file.'.xnd') ||
 	  ($type eq 'blastx' && ! -e $file.'.xpd') ||
 	  ($type eq 'tblastx' && ! -e $file.'.xnd')
@@ -1082,7 +1082,7 @@ sub dbformat {
 	 $w->run($command);
       }
    }
-   elsif ($command =~ /formatdb$/) {
+   elsif ($command =~ /formatdb/) {
       if (($type eq 'blastn' && ! -e $file.'.nsq') ||
 	  ($type eq 'blastx' && ! -e $file.'.psq') ||
 	  ($type eq 'tblastx' && ! -e $file.'.nsq')
@@ -1097,7 +1097,7 @@ sub dbformat {
       }
    }
    else {
-      die "ERROR: databases can only be formated by xdformat or formatdb\n";
+      die "ERROR: databases can only be formated by xdformat or formatdb not \'$command\'\n";
    }
 }
 #-----------------------------------------------------------------------------
@@ -1141,7 +1141,7 @@ sub blastn_as_chunks {
 
    #copy db to local tmp dir and run xdformat or formatdb 
    if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
-      system("cp $db $tmp_db");
+      copy($db, $tmp_db);
       dbformat($formater, $tmp_db, 'blastn');
    }
    elsif (-e $blast_finished && ! $opt_f) {
@@ -1390,8 +1390,8 @@ sub blastx_as_chunks {
 
    #copy db to local tmp dir and run xdformat or format db 
    if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
-      system("cp $db $tmp_db");
-      dbformat($formater, $tmp_db, 'blastx');
+       copy($db, $tmp_db);
+       dbformat($formater, $tmp_db, 'blastx');
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1651,7 +1651,7 @@ sub tblastx_as_chunks {
 
    #copy db to local tmp dir and run xdformat or formatdb
    if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
-      system("cp $db $tmp_db");
+      copy($db, $tmp_db);
       dbformat($formater, $tmp_db, 'tblastx');
    }
    elsif (-e $blast_finished && ! $opt_f) {
@@ -2494,7 +2494,7 @@ sub generate_control_files {
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
 #   print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
-   print OUT "fathom:$O{fathom} #location of fathom executable\n";
+#   print OUT "fathom:$O{fathom} #location of fathom executable\n";
    print OUT "\n";
    print OUT "#-----Other Algorithms\n";
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
@@ -2513,7 +2513,7 @@ sub generate_control_files {
    print OUT "eva_split_hit:$O{eva_split_hit}\n";
    print OUT "eva_hspmax:$O{eva_hspmax}\n";
    print OUT "eva_gspmax:$O{eva_gspmax}\n";
-   print OUT "enable_fathom:$O{enable_fathom}\n";
+#   print OUT "enable_fathom:$O{enable_fathom}\n";
    close (OUT);
 }
 

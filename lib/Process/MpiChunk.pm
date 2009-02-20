@@ -4,7 +4,7 @@ package Process::MpiChunk;
 
 use strict;
 
-use Error qw(:try);
+use Error qw(:try :warndie);
 use Error::Simple;
 use Storable;
 use runlog;
@@ -622,6 +622,7 @@ sub _go {
 			safe_seq_id
 			q_def
 			masked_total_seq
+			fasta
 			LOG
 			CTL_OPT}
 		    );
@@ -632,6 +633,7 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_def = $VARS->{q_def};
 	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $fasta = $VARS->{fasta};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
@@ -639,16 +641,28 @@ sub _go {
 	 
 	    my $masked_fasta = Fasta::toFasta($q_def.' masked', \$masked_total_seq);
 	    my $masked_file = $the_void."/query.masked.fasta";
-	    FastaFile::writeFile(\$masked_fasta ,$masked_file);
+	    FastaFile::writeFile(\$masked_fasta, $masked_file);
 	 
+	    my $unmasked_file = $the_void."/query.fasta";
+	    FastaFile::writeFile(\$fasta, $unmasked_file);
+
 	    #==ab initio predictions here
-	    my $preds = GI::abinits($masked_file,
-				    $the_void,
-				    $safe_seq_id,
-				    \%CTL_OPT,
-				    $LOG
-				   );
-	 
+	    my $masked_preds = GI::abinits($masked_file,
+					   $the_void,
+					   $safe_seq_id,
+					   \%CTL_OPT,
+					   $LOG
+					   );
+
+            my $preds = GI::abinits($unmasked_file,
+                                    $the_void,
+                                    $safe_seq_id,
+                                    \%CTL_OPT,
+                                    $LOG
+				    );
+
+	    push(@$preds, @$masked_preds);
+
 	    #==QRNA noncoding RNA prediction here
 	    my $qra_preds = [];
 	    #-------------------------CODE
@@ -1155,7 +1169,7 @@ sub _go {
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
-							      'repeat'
+							      'pred'
 							     );
 	    }
       
@@ -1668,7 +1682,7 @@ sub _go {
 	    File::Path::rmtree ($the_void) if $CTL_OPT{clean_up}; #rm temp directory
 	    
 	    #-- write to DS log the finished files
-	    $DS_CTL->add_entry($seq_id, $out_dir, 'FINISHED');
+	    #$DS_CTL->add_entry($seq_id, $out_dir, 'FINISHED');
 	    
 	    #--- clear the log variable
 	    $VARS->{LOG} = undef;

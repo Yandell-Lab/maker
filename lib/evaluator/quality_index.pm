@@ -257,7 +257,7 @@ sub get_transcript_qi {
 
 
 	my $l_trans = get_length_protein($t);
-;
+
 	my ($length_5, $length_3) = get_length_of_utrs($t);
 
 	my @bag;

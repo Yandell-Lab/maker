@@ -461,8 +461,9 @@ sub strand {
 	 $qstr{ $q }++;
 	 $hstr{ $h }++;
       }
-      my $qstr = join( '/', sort keys %qstr);
-      my $hstr = join( '/', sort keys %hstr);
+      #changed 2/12/2009 to act like current version of Bioperl
+      my ($qstr) = sort {$qstr{$b} <=> $qstr{$a}} keys %qstr;
+      my ($hstr) = sort {$hstr{$b} <=> $hstr{$a}} keys %hstr;
       if ($seqType =~ /list|array/i) {
 	 return ($qstr, $hstr);
       } elsif ( $seqType eq 'query' ) {

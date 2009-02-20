@@ -370,6 +370,7 @@ sub _parse_line{
     }
 
     $data[1] = "$tag:$data[1]" if($tag && $data[1] !~ /^$tag\:/);
+    $data[6] = '+' if($data[6] =~ /^\.$|^0$/); #fixes some repeat entries
 
     my %l = (seqid  => $data[0],
 	     source => $data[1],
@@ -442,7 +443,9 @@ sub phathits_on_chunk {
        $structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'pred'){
-       $structs = _get_structs($features, $seq_ref);
+       $structs = _get_genes($features, $seq_ref);
+       my $structs2 = _get_structs($features, $seq_ref);
+       push(@$structs, @$structs2); 
     }
     elsif($h_type eq 'other'){
        die "ERROR: Can not build phathits for type: \'other\'\n";
@@ -599,8 +602,9 @@ sub _load_hits {
     foreach my $t (@{$g->{mRNAs}}){
 
 	my $tran_id   = $t->{id};
-	my $tran_name = $t->{name};;
-	   $tran_name =~ s/\s*QI\:([\d\|\.-]+)$//;
+	my $tran_name = $t->{name};
+	   ($tran_name) = $tran_name =~ /(^[^\s]+)/;
+	    $tran_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
 
 	my $description = "g_name=$gene_name;g_id=$gene_id;t_name=$tran_name;t_id=$tran_id" unless(! $gene_name);
 	
@@ -677,8 +681,9 @@ sub _load_cdss {
     my $hit_start = 1;
     my $hit_strand = 1;
     my $hit_name = $t->{name};
-       $hit_name =~ s/\s*QI\:([\d\|\.-]+)$//;
-
+    ($hit_name) = $hit_name =~ /(^[^\s]+)/;
+    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
+    
     foreach my $e (@{$t->{cdss}}){
 	my @args;
 	my $hit_end = $e->{f}->end - $e->{f}->start + $hit_start;
@@ -785,8 +790,8 @@ sub _load_hsps {
     my $hit_start = 1;
     my $hit_strand = 1;
     my $hit_name = $t->{name};
-    $hit_name =~ s/\s*QI\:([\d\|\.-]+)$//;
-
+    ($hit_name) = $hit_name =~ /(^[^\s]+)/;
+    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
 
     foreach my $e (@{$t->{exons}}){
 	my @args;
@@ -906,6 +911,7 @@ sub _get_genes {
     my $exons = _grab(['exon'], $features);
     my $cdss  = _grab(['CDS'],  $features);
     my $mRNAs = _grab(['mRNA'], $features);
+    my $UTRs = _grab(['five_prime_UTR', 'three_prime_UTR'], $features);
 
     foreach my $p_id (keys %{$mRNAs}){
 	for (my $i = 0; $ i < @{$mRNAs->{$p_id}}; $i++) {
@@ -925,6 +931,14 @@ sub _get_genes {
 	if ($tag eq 'gene') {	    
 	    my $id=_get_annotation($f,'ID');
 	    my $name=_get_annotation($f,'Name');
+
+	    #take care of wormbases incorrect parentage
+	    if(exists $exons->{$id}){
+		foreach my $mRNA (@{$mRNAs->{$id}}){
+		    my $t_id = $mRNA->{id};
+		    $mRNA->{exons} = _fix_wormbase($exons->{$id}, $cdss->{$t_id}, $UTRs->{$t_id});
+		}
+	    }
 	    
 	    push(@genes, {'f'       => $f,
 			  'mRNAs'   => $mRNAs->{$id},
@@ -948,6 +962,76 @@ sub _get_genes {
     return (\@valid_genes);
 }
 #-------------------------------------------------------------------------------
+#try and discover the exon parantage for wormbase entries
+sub _fix_wormbase {
+    my $exons = shift || [];
+    my $cdss = shift || [];
+    my $UTRs = shift || [];
+
+    my @keepers;
+    foreach my $exon (@$exons){
+	my $e = $exon->{f};
+	my $eB = $e->start;
+	my $eE = $e->end;
+
+	my $ok = 0;
+	my $okB = 0;
+	my $okE = 0;
+
+	#check if exon goes with this CDS
+	foreach my $piece (@$cdss){
+	    my $p = $piece->{f};
+	    my $pB = $p->start;
+	    my $pE = $p->end;
+
+	    if($pB == $eB && $pE == $eE){
+		$ok = 1;
+	    }
+	    elsif($pB == $eB && $pE != $eE){
+		$okB = 1;
+	    }
+	    elsif($pB != $eB && $pE == $eE){
+		$okE = 1;
+	    }
+
+	    last if($ok);
+	}
+
+	if($ok){
+	    push(@keepers, $exon);
+	    next;
+	}
+
+	#check if exon goes with or is completed by this UTR
+	foreach my $piece (@$UTRs){
+            my $p = $piece->{f};
+            my $pB = $p->start;
+            my $pE = $p->end;
+
+            if($pB == $eB && $pE == $eE){
+                $ok = 1;
+            }
+            elsif($pB == $eB && $pE != $eE){
+		$okB = 1;
+                $ok = 1 if($okE);
+            }
+            elsif($pB != $eB && $pE == $eE){
+		$okE = 1;
+                $ok = 1 if($okB);
+            }
+
+	    last if($ok);
+        }
+
+	if($ok){
+            push(@keepers, $exon);
+            next;
+        }
+    }
+
+    return \@keepers;
+}
+#-------------------------------------------------------------------------------
 #try too build a sructure similar to that producd by _get_genes
 #but for non gene hits in the gff3
 sub _get_structs {
@@ -958,6 +1042,9 @@ sub _get_structs {
     my %index;
     foreach my $f (@{$features}){
 	my $tag_t = $f->primary_tag();
+
+	next if($tag_t =~ /^gene$|^mRNA$|^exon$|^CDS$/);
+
 	my $id = _get_annotation($f,'ID');
 	my $name = _get_annotation($f, 'Name');	
 	my $p_ids = _get_p_ids($f);
@@ -1265,7 +1352,8 @@ sub _sort_exons {
     my $t = shift;
 
     my @sorted;
-    if    ($t->{f}->strand() ==  1){
+
+    if ($t->{f}->strand() ==  1){
 	@sorted = 
 	    sort {$a->{f}->start <=> $b->{f}->start} @{$t->{exons}}; 
     }

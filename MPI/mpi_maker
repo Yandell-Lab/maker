@@ -241,33 +241,32 @@ my $t_terminate :shared;
 my %OPT;
 my $root = 0; #define root node (only changed for debugging)
 
+#---Process options on the command line 
+try{
+    GetOptions("RM_off|R" => \$OPT{R},
+	       "force|f" => \$OPT{force},
+	       "genome|g=s" => \$OPT{genome},
+	       "cpus|c=i" => \$OPT{cpus},
+	       "predictor=s" =>\$OPT{predictor},
+	       "retry=i" =>\$OPT{retry},
+	       "quiet" =>\$main::quiet,
+	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
+	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
+	       );
+}
+catch Error::Simple with{
+    my $E = shift;
+    
+    print STDERR $E->{-text};
+    die "\n\nMaker failed parsing command line options!!\n\n";
+};
+
 #--------------------------------------
 #---------PRIMARY MPI PROCCESS---------
 #--------------------------------------
 
 #--check if root node
 if ($rank == $root) {
-
-   try{
-      #--Process arguments and the command line 
-      GetOptions("RM_off|R" => \$OPT{R},
-		 "force|f" => \$OPT{force},
-		 "genome|g=s" => \$OPT{genome},
-		 "cpus|c=i" => \$OPT{cpus},
-		 "predictor=s" =>\$OPT{predictor},
-		 "retry=i" =>\$OPT{retry},
-		 "quiet" =>\$main::quiet,
-		 "CTL" => sub {GI::generate_control_files(); exit(0);},
-		 "help|?" => sub {print $usage; exit(0)}
-		);
-   }
-   catch Error::Simple with{
-      my $E = shift;
-      
-      print STDERR $E->{-text};
-      die "\n\nMaker failed parsing command line options!!\n\n";
-   };
-
    #varibles that are persistent outside of try
    my %CTL_OPT;
    my $iterator;
@@ -382,7 +381,7 @@ if ($rank == $root) {
       #get tier for internal thread
       if($t_need_flag > 0){
 	 my $tier;
-	 while (my $fasta = $iterator->nextEntry() || shift @failed){
+	 while (my $fasta = $iterator->nextFasta() || shift @failed){
 	    $tier = Process::MpiTiers->new({fasta =>$fasta,
 					    CTL_OPT => \%CTL_OPT,
 					    DS_CTL  => $DS_CTL,
@@ -448,7 +447,7 @@ if ($rank == $root) {
 	    #if a contig is available send tier
 	    my $tier;
 
-	    while (my $fasta = $iterator->nextEntry() || shift @failed){
+	    while (my $fasta = $iterator->nextFasta() || shift @failed){
 	       $tier = Process::MpiTiers->new({fasta => $fasta,
 					       CTL_OPT => \%CTL_OPT,
 					       DS_CTL  => $DS_CTL,

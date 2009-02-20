@@ -1,4 +1,4 @@
-#! /usr/local/perl -w
+#! /usr/bin/perl -w
 
 use strict;
 use Getopt::Long;
@@ -10,13 +10,13 @@ my $datastore;
 my @files;
 my $outfile;
 
-GetOptions ("datastor|d" => \$datastore,
+GetOptions ("datastor|d=s" => \$datastore,
 	    "i=s" => \@files,
 	    "o=s" => \$outfile,
 	    "help|?" => sub{print $usage; exit();}
 	    );
 
-if(! $datastore && ! @files){
+if((! $datastore && ! @files) || ! $outfile){
     print $usage;
     exit();
 }
@@ -25,8 +25,16 @@ die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $da
 if ($datastore){
     open(IN, "< $datastore");
 
-    @files = <IN>;
-    @files = grep (/FINISHED/, @files);
+    #uniq the entries
+    my %entries;
+    @entries{@{[<IN>]}} = ();
+    
+    foreach my $e (keys %entries){
+	next unless ($e =~ /FINISHED/);
+	chomp $e;
+	my ($id, $dir, $status) = split("\t", $e);
+	push(@files, $dir);
+    }
 
     foreach my $file (@files){
 	$file =~ /([^\/]+)$/;
@@ -34,11 +42,16 @@ if ($datastore){
     }
 }
 
+@files = sort @files;
+
+open(my $GFF, "> $outfile");
+print $GFF "\#\#gff-version 3\n";
+
 my ($ANN, $ann_file) = tempfile();
-print $ANN "\#\#gff-version 3\n";
 my ($FAS, $fas_file) = tempfile();
 print $FAS "\#\#FASTA\n";
 
+my %uniq;
 foreach my $file (@files){
     die "ERROR: The file \'$file\' does not exist\n" if (! -e $file);
     open(IN, "< $file") || die "ERROR: Could not open file \'$file\'\n";
@@ -47,6 +60,18 @@ foreach my $file (@files){
 
     while (defined(my $line = <IN>)){
 	next if ($line =~ /^\#\#gff-version 3/);
+	if($line =~ /^\#\#genome-build/){
+	    next if exists $uniq{$line};
+	    $uniq{$line}++;
+	    print $GFF $line;
+	    next;
+	}
+	if($line =~ /^\#\#sequence-region/){
+            die "ERROR: This contig has already been added\: $line\n" if exists $uniq{$line};
+            $uniq{$line}++;
+            print $GFF $line;
+            next;
+        }
 	if ($line =~ /^\#\#FASTA/){
 	    $FH = $FAS;
 	    next;
@@ -55,10 +80,11 @@ foreach my $file (@files){
 	print $FH $line . "\n" if($line);
     }
 }
-
+close($GFF);
 close($ANN);
 close($FAS);
 
-system ("mv $ann_file $outfile");
+system ("cat $ann_file >> $outfile");
 system ("cat $fas_file >> $outfile");
+unlink("$ann_file");
 unlink("$fas_file");

@@ -358,7 +358,7 @@ sub parse_gene {
 			$this_gene{name}  = $gene_name;
 			$this_gene{score} = $score;
 		}
-		if ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'CDS' ){
+		elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'CDS' ){
 			my $strand = $fields[6] eq '+' ? 1 : -1;
 
 			push(@{$this_gene{CDS}}, {'b'      => $fields[3],
@@ -393,8 +393,6 @@ sub parse_gene {
 						  'type'   => 'stop_codon',
                                                   };
 
-		}
-		elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'gene'){
 		}
                 elsif ($fields[1] eq 'AUGUSTUS' && $fields[2]  eq 'transcript'){
                 }
@@ -454,6 +452,39 @@ sub parse {
 		chomp($line);
 
 		my @stuff = split(/\n/, $line);
+
+		my $t_count = grep {/^[^\#]/ && /^[^\s]+\s+AUGUSTUS\s+transcript\s+/} @stuff;
+
+		#augustus can call multiple transcripts for inconsistent hints
+		if($t_count > 1){
+		    my @multi_stuff;
+		    my $count;
+		    foreach my $l (@stuff){
+			if($l =~ /^\#/){ #maybe important someday
+			    foreach my $s (@multi_stuff){
+				push(@$s, $l);
+			    }
+			}
+			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+gene\s+/){
+			    foreach my $s (@multi_stuff){
+				push(@$s, $l);
+			    }
+			}
+			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+transcript\s+/){
+			    $count++;
+			    push(@{$multi_stuff[$count-1]}, $l);
+                        }
+			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+[^\s]+\s+/){
+			    push(@{$multi_stuff[$count-1]}, $l);
+			}
+		    }
+
+		    foreach my $s (@multi_stuff){
+			my $gene = parse_gene($s);
+			push(@genes, $gene);
+		    }
+		    next;
+		}
 
 		my $gene = parse_gene(\@stuff);
 		push(@genes, $gene);

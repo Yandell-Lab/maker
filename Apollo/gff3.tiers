@@ -514,6 +514,21 @@ column : GENOMIC_LENGTH
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
+label : GENMARK
+tiername : Gene Prediction
+datatype : genemark:dummy
+datatype : GeneMark
+datatype : pred_gff:GeneMark
+glyph : DrawableResultFeatureSet
+color : 103,155,104
+column : SCORE
+column : GENOMIC_RANGE
+column : query_frame
+column : GENOMIC_LENGTH
+sortbycolumn : GENOMIC_RANGE
+
+
+[Type]
 label : SNAP
 tiername : Gene Prediction
 datatype : snap:dummy
