@@ -760,17 +760,17 @@ sub best_annotations {
    $m_keepers = _best($m_keepers);
    push(@$p_keepers, @$m_keepers);
 
-   #write evaluator reports
-   #foreach my $ann (@$p_keepers){
-   #    foreach my $t (@{$ann->{t_structs}}){
-   #	   my $dir = "$out_base/evaluator";
-   #	   mkdir($dir) if(! -e $dir);
-   #	   my $file = "$dir/".Fasta::seqID2SafeID($t->{hit}->name).".eva";
-   #	   open(my $FH, "> $file");
-   #	   print $FH $t->{report};
-   #	   close($FH);
-   #    }       
-   #}
+   write evaluator reports
+   foreach my $ann (@$p_keepers){
+       foreach my $t (@{$ann->{t_structs}}){
+   	   my $dir = "$out_base/evaluator";
+   	   mkdir($dir) if(! -e $dir);
+   	   my $file = "$dir/".Fasta::seqID2SafeID($t->{hit}->name).".eva";
+   	   open(my $FH, "> $file");
+   	   print $FH $t->{report};
+   	   close($FH);
+       }       
+   }
 
    return $p_keepers;
 }
@@ -1016,25 +1016,25 @@ sub load_transcript_struct {
 		  );
 
 	#holds evalutor struct
-        #my $eva = evaluator::evaluate::power_evaluate($f,
-	#					      $seq,
-	#					      $pol_p_hits,
-	#					      $pol_e_hits,
-	#					      $blastx_hits,
-	#					      $abinits,
-	#					      $so_code,
-	#					      $geneAED,
-	#					      $alt_spli_sup,
-	#					      $t_name,
-	#					      $CTL_OPTIONS,
-	#					      $the_void,
-	#					     );
+        my $eva = evaluator::evaluate::power_evaluate($f,
+						      $seq,
+						      $pol_p_hits,
+						      $pol_e_hits,
+						      $blastx_hits,
+						      $abinits,
+						      $so_code,
+						      $geneAED,
+						      $alt_spli_sup,
+						      $t_name,
+						      $CTL_OPTIONS,
+						      $the_void,
+						     );
 	
         my $AED   = shadow_AED::get_AED(\@bag, $f);#$eva->{txnAED};
 
-        my $score = 0;#$eva->{score};
-        my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);#$eva->{qi};
-	my $report = '';#$eva->{report};
+        my $score = $eva->{score};
+        my $qi    = $eva->{qi};#maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);#
+	my $report = $eva->{report};
 	#----
 	$t_name .= " AED:";
 	$t_name .= sprintf '%.2f', $AED; # two decimal places
@@ -1222,9 +1222,9 @@ sub group_transcripts {
 
       }
       
-      my $so_code = '';#evaluator::so_classifier::so_code($c);
-      my $alt_spli_sup ='';# evaluator::funs::alt_spli($c, \@pol_e_hits, $seq);
-      my $geneAED = '';#evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
+      my $so_code = evaluator::so_classifier::so_code($c);
+      my $alt_spli_sup = evaluator::funs::alt_spli($c, \@pol_e_hits, $seq);
+      my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
       #----
       
       my $score = 0;
@@ -1255,7 +1255,7 @@ sub group_transcripts {
 			 'g_end'     => $g_end,
 			 'g_strand'  => $g_strand,
 			 'score'     => $score,
-			 'AED'       => $AED,#$geneAED,
+			 'AED'       => $geneAED,
 			 'predictor' => $predictor,
 			 'so_code'   => $so_code
 		       };
