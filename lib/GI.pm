@@ -2073,7 +2073,7 @@ sub set_defaults {
       $CTL_OPT{'eva_split_hit'} = 1;
       $CTL_OPT{'eva_hspmax'} = 100;
       $CTL_OPT{'eva_gspmax'} = 100;
-      $CTL_OPT{'enable_fathom'} = 1;
+      $CTL_OPT{'enable_fathom'} = 0;
 
    }
    
@@ -2494,7 +2494,7 @@ sub generate_control_files {
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
 #   print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
-#   print OUT "fathom:$O{fathom} #location of fathom executable\n";
+   print OUT "fathom:$O{fathom} #location of fathom executable\n";
    print OUT "\n";
    print OUT "#-----Other Algorithms\n";
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
@@ -2513,7 +2513,7 @@ sub generate_control_files {
    print OUT "eva_split_hit:$O{eva_split_hit}\n";
    print OUT "eva_hspmax:$O{eva_hspmax}\n";
    print OUT "eva_gspmax:$O{eva_gspmax}\n";
-#   print OUT "enable_fathom:$O{enable_fathom}\n";
+   print OUT "enable_fathom:$O{enable_fathom}\n";
    close (OUT);
 }
 
