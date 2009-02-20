@@ -1,0 +1,94 @@
+#! /usr/bin/perl -w
+
+use strict;
+use Getopt::Long;
+use File::Temp qw(tempfile);
+
+my $usage = "";
+
+my $datastore;
+my @files;
+my $outfile;
+
+GetOptions ("datastor|d=s" => \$datastore,
+	    "i=s" => \@files,
+	    "o=s" => \$outfile,
+	    "help|?" => sub{print $usage; exit();}
+	    );
+
+if((! $datastore && ! @files) || ! $outfile){
+    print $usage;
+    exit();
+}
+
+die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
+if ($datastore){
+    open(IN, "< $datastore");
+
+    #uniq the entries
+    my %entries;
+    @entries{@{[<IN>]}} = ();
+    
+    my @dirs;
+    foreach my $e (keys %entries){
+	next unless ($e =~ /FINISHED/);
+	chomp $e;
+	my ($id, $dir, $status) = split("\t", $e);
+	push(@dirs, $dir);
+    }
+
+    foreach my $dir (@dirs){
+	my @f_files = <$dir/*.transcripts.fasta>;
+	push(@files, @f_files);
+	@f_files = <$dir/*.proteins.fasta>;
+	push(@files, @f_files);
+    }
+}
+
+my %groups;
+
+foreach my $file (@files){
+    if($file =~ /([^\.]+)\.transcripts\.fasta$/){
+	my $key = $1;
+	push(@{$groups{$key}{transcripts}}, $file);
+    }
+    elsif($file =~ /([^\.]+)\.proteins\.fasta$/){
+	my $key = $1;
+	push(@{$groups{$key}{proteins}}, $file);
+    }
+    else{
+	push(@{$groups{all}}, $file);
+    }
+}
+
+while(my $key = each %groups){
+    if($key eq 'all'){
+	my $all = [sort @{$groups{$key}}];
+	dump_it($all, "$outfile.fasta");
+	next;
+    }
+
+    #maker standard naming convention
+    my $source = 'maker';
+    $source .= ".$key" if($key ne 'maker');
+    
+    #protein and transcript files
+    my $trans = [sort @{$groups{$key}{transcripts}}];
+    my $prot  = [sort @{$groups{$key}{proteins}}];
+
+    
+    dump_it($trans, "$outfile.all.$source.transcripts.fasta");
+    dump_it($prot, "$outfile.all.$source.proteinss.fasta");
+}
+
+sub dump_it {
+    my $files = shift;
+    my $name = shift;
+
+    system("touch $name");
+
+    foreach my $file (@{$files}){
+	die "ERROR: The file \'$file\' does not exist\n" if (! -e $file);
+	system("cat $file >> $name");
+    }
+}
