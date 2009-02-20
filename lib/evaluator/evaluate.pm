@@ -150,7 +150,7 @@ sub power_evaluate {
 						     }  );
 						
 
-	my $snap_backwards = 'NA';
+	my $snap_backwards = {overall_score => 'NA'};
 	$snap_backwards = evaluator::fathom_utils::snap_backwards($box, $CTL
 			, $the_void) if 
 		$CTL->{enable_fathom} == 1;

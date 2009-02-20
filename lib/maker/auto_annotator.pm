@@ -760,7 +760,7 @@ sub best_annotations {
    $m_keepers = _best($m_keepers);
    push(@$p_keepers, @$m_keepers);
 
-   write evaluator reports
+   #write evaluator reports
    foreach my $ann (@$p_keepers){
        foreach my $t (@{$ann->{t_structs}}){
    	   my $dir = "$out_base/evaluator";
