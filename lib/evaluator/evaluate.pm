@@ -149,6 +149,7 @@ sub power_evaluate {
 							'exon'=>1,
 						     }  );
 						
+	my $gene_length = abs($eat->nB('query') - $eat->nE('query'));
 
 	my $snap_backwards = {overall_score => 'NA'};
 	$snap_backwards = evaluator::fathom_utils::snap_backwards($box, $CTL
@@ -178,7 +179,7 @@ sub power_evaluate {
 				     $transcript_type, $completion, $alt, $score, 
 					$so_code, $geneAED, $txnAED, $overallAED,
 					$solexa_for_splices, $gff3_identity,
-					$snap_backwards);
+					$snap_backwards, $gene_length);
 
 	print STDERR "Finished.\n\n" unless $main::quiet;
 
@@ -195,6 +196,7 @@ sub power_evaluate {
 		    'gene_AED'          => $geneAED,
 		    'snap_backwards'    => $snap_backwards->{overall_score},
 		    'gff3_identity'	=> $gff3_identity,
+		    'gene_length'	=> $gene_length,
                   };
 
 	return $eva;
@@ -219,6 +221,7 @@ sub generate_report {
 	my $solexa		= shift;
 	my $gff3_identity	= shift;
 	my $snap_backwards	= shift;
+	my $gene_length		= shift;
 
 	my $g_name = $eat->{g_name};
 	my $t_name = $eat->{t_name};
@@ -249,6 +252,9 @@ sub generate_report {
 
 	$report .= $prefix."\t"."translation_length"."\t";
 	$report .= $box->{translational_length}."\n";
+
+	$report .= $prefix."\t"."gene_length"."\t";
+	$report .= $gene_length."\n";
 
 	$report .= $prefix."\t"."splice_sites"."\t";
 	foreach my $junction (@$splice_sites) {

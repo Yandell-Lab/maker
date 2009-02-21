@@ -655,8 +655,9 @@ sub best_annotations {
    my $out_base = shift;
    my $CTL_OPTIONS = shift;
 
-   return $annotations->{gff} 
-      if(@{$CTL_OPTIONS->{_predictor}} == 1 && grep {/^gff$/} @{$CTL_OPTIONS->{_predictor}});
+   my $p_keepers;
+
+   if(@{$CTL_OPTIONS->{_predictor}} == 1 && grep {/^gff$/} @{$CTL_OPTIONS->{_predictor}}) {
 
    my %order; #this is important for sorting
    my $p_list = [];
@@ -750,7 +751,7 @@ sub best_annotations {
 
    @$p_m_list = sort {crit1($a) <=> crit1($b) || crit2($b) <=> crit2($a)|| crit3($b) cmp crit3($a)} @$p_m_list;
    @$m_m_list  = sort {crit1($a) <=> crit1($b) || crit2($b) <=> crit2($a)|| crit3($b) cmp crit3($a)} @$m_m_list;
-   my $p_keepers = _best($p_m_list);
+   $p_keepers = _best($p_m_list);
    my $m_keepers = _best($m_m_list);
 
    #now combine mergers with other keepers
@@ -760,6 +761,11 @@ sub best_annotations {
    $m_keepers = _best($m_keepers);
    push(@$p_keepers, @$m_keepers);
 
+   }
+
+   else {
+   $p_keepers = $annotations->{gff};
+   }
    #write evaluator reports
    foreach my $ann (@$p_keepers){
        foreach my $t (@{$ann->{t_structs}}){
