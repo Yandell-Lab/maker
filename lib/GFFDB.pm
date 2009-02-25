@@ -119,7 +119,7 @@ sub add_maker {
     return unless($self->{go_gffdb});
 
     my @types;
-    push(@types, 'repeat_maker')  if($codes{repeat_pass});
+    push(@types, 'repeat_maker')  if($codes{rm_pass});
     push(@types, 'est_maker')     if($codes{est_pass});
     push(@types, 'altest_maker')  if($codes{altest_pass});
     push(@types, 'protein_maker') if($codes{protein_pass});

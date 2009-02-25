@@ -140,6 +140,7 @@ sub run_fathom {
 	$command .= " $anno_file $fasta_file";
 	$command .= " -score-genes ";
 	$command .= $CTL->{snaphmm};
+	$command .= " -errors-ok";
 	$command .= " >$file_name";
 
 	print STDERR "Running fathom over $name ...\n";
