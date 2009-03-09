@@ -23,6 +23,7 @@ my @ctl_to_log = ('est',
 		  'rmlib',
 		  'rm_gff',
 		  'predictor',
+		  'eval_pred',
 		  'sort_base',
 		  'snaphmm',
 		  'augustus_species',
@@ -33,8 +34,10 @@ my @ctl_to_log = ('est',
 		  'split_hit',
 		  'pred_flank',
 		  'single_exon',
+		  'single_length',
 		  'keep_preds',
 		  'alt_peptide',
+		  'evaluate',
 		  'blast_type',
 		  'pcov_blastn',
 		  'pid_blastn',
@@ -54,6 +57,7 @@ my @ctl_to_log = ('est',
 		  'bit_tblastx',
 		  'ep_score_limit',
 		  'en_score_limit',
+		  'enable_fathom'
 		 );
 
 my %SEEN;
@@ -154,7 +158,7 @@ sub _clean_files{
 	    $SEEN{$log_file}++;
 	 }
 	 else{
-	    $continue_flag = 2;	#rerun died
+	    $continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 	    $continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
 	    $rm_key{retry}++ if ($continue_flag == 2);
 	 }
@@ -195,8 +199,11 @@ sub _clean_files{
 	    
 	       $continue_flag = 1; #re-run because ctlopts changed
 	    
-	       $rm_key{preds}++; #all changes affect final predictions
-	       
+	       if($key ne 'evaluate' &&
+		  $key ne 'enable_fathom'){
+		   $rm_key{preds}++; #almost all changes affect final predictions
+	       }
+
 	       if (-e $gff_file) {
 		  $rm_key{gff}++; #always rebuild gff when some option has changed
 	       }
@@ -543,6 +550,15 @@ sub report_status {
    elsif($flag == 2){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now retrying the contig!!\n",
+                   "All contig related data will be erased before continuing!!\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+		   "Retry: $die_count!!\n",
+                   "#---------------------------------------------------------------------\n\n\n";
+   }
+   elsif($flag == 3){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Now retrying the contig!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
 		   "Retry: $die_count!!\n",
@@ -586,7 +602,10 @@ sub get_continue_flag {
       $message = 'STARTED'; #run with current settings
    }
    elsif($flag == 2){
-      $message = 'RETRY'; #re-run previously died
+      $message = 'RETRY_CLEAN'; #re-run previously died
+   }
+   elsif($flag == 3){
+       $message = 'RETRY'; #re-run previously died
    }
    elsif($flag == -1){
       $message = 'DIED_SKIPPED_PERMANENT'; #don't re-run, it died

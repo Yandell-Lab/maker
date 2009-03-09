@@ -484,7 +484,13 @@ sub get_class_and_type {
         elsif ($class =~ /^repeat_gff\:/i){
 	    $type = $k eq 'hit' ? 'match' : 'match_part';
         }
-        elsif ($class =~ /^repeat/i){
+        elsif ($class =~ /^blastx\:repeat/i){
+	    $type = $k eq 'hit' ? 'protein_match' : 'match_part';
+        }
+        elsif ($class =~ /^repeatmasker$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part';
+        }
+        elsif ($class =~ /^maker$/i){ #pasthrough maker annotation as evidence
 	    $type = $k eq 'hit' ? 'match' : 'match_part';
         }
 	else {

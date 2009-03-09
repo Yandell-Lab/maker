@@ -156,12 +156,11 @@ sub parse {
         my $q_file = shift;
 
         my $iterator = new Iterator::Fasta($q_file);
-        my $fasta = $iterator->nextEntry();
+        my $fasta = $iterator->nextFasta();
 
         my $def     = Fasta::getDef($fasta);
         my $q_seq   = Fasta::getSeqRef($fasta);
-        
-        my ($q_name)  = $def =~ /^>(.+?) /;
+        my $q_name  = Fasta::def2SeqID($def);;
         
         my $fh = new FileHandle();
            $fh->open($report);

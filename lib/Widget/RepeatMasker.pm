@@ -249,7 +249,7 @@ sub parse {
 	my @keepers;
 	foreach my $key (keys %hsps){
 		 my $f =
-		     Bio::Search::Hit::PhatHit::repeatmasker->new('-name' => $q_name,
+		     Bio::Search::Hit::PhatHit::repeatmasker->new('-name' => $key,
 								  '-description'  => 'NA',
 								  '-algorithm'    => 'repeat_masker',
 								  '-length'       => $q_length,

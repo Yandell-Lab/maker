@@ -13,6 +13,8 @@ use PhatHit_utils;
 use clean;
 use compare;
 use SimpleCluster;
+use Shadower;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -165,15 +167,23 @@ sub criteria {
 
 	my $ref = $hit->algorithm;
 
-	return  0 if $ref =~ /repeat/i;
+	return  0 if $ref =~ /^repeat/i;
+	return  0 if $ref =~ /^repeat_gff\:/i;
 	return  1 if $ref =~ /^snap$/i;
 	return  1 if $ref =~ /^augustus$/i;
 	return  1 if $ref =~ /^fgenesh$/i;
 	return  1 if $ref =~ /^twinscan$/i;
+	return  1 if $ref =~ /^jigsaw$/i;
+	return  1 if $ref =~ /^pred_gff\:/i;
 	return  2 if $ref =~ /^blastn$/i;
 	return  2 if $ref =~ /^tblastx$/i;
+	return  2 if $ref =~ /^altest_gff\:/i;
 	return  3 if $ref =~ /^blastx$/i;
+	return  3 if $ref =~ /^protein_gff\:/i;
 	return  4 if $ref =~ /2genome$/i;
+	return  4 if $ref =~ /^est_gff\:/i;
+	return  5 if $ref =~ /^maker$/i;
+	return  5 if $ref =~ /^model_gff\:/i;
 	die "UNKNOWN CLASS(".ref($hit)."), ALGORITHM($ref), in cluster::criteria\n";
 }
 #------------------------------------------------------------------------
@@ -181,12 +191,15 @@ sub criteria_2 {
         my $hit = shift;
 
 	my $score =  $hit->score();
+	$score = '' if(! defined $score);
         #check if value is numerical ad adjust if not
 	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
-	   $score = $hit->bits()
+	    $score = $hit->bits();
+	    $score = '' if(! defined $score);
 	}
 	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
 	    $score = $hit->significance;
+	    $score = '' if(! defined $score);
 	    if($score =~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
 		$score = 10000 - (10000 * $score);
 		$score = 0 if($score < 0);

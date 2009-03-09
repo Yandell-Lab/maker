@@ -249,6 +249,7 @@ try{
 	       "cpus|c=i" => \$OPT{cpus},
 	       "predictor=s" =>\$OPT{predictor},
 	       "retry=i" =>\$OPT{retry},
+	       "ignore" =>\$OPT{ignore},
 	       "quiet" =>\$main::quiet,
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}

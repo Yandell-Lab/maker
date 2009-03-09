@@ -129,8 +129,8 @@ sub prepare {
       
       #-set up variables that are the result of chunk accumulation
       $VARS->{masked_total_seq} = '';
-      $VARS->{p_fastas} = '';
-      $VARS->{t_fastas} = '';
+      $VARS->{p_fastas} = {};
+      $VARS->{t_fastas} = {};
 
       #--prebuild an index of the databases
       my $proteins = $VARS->{CTL_OPT}{_protein};
@@ -649,7 +649,7 @@ sub _go {
 	    #==ab initio predictions here
 	    my $masked_preds = GI::abinits($masked_file,
 					   $the_void,
-					   $safe_seq_id,
+					   $safe_seq_id.".masked",
 					   \%CTL_OPT,
 					   $LOG
 					   );
@@ -1526,11 +1526,14 @@ sub _go {
 								     $out_dir,
 								     \%CTL_OPT
 								    );
-	    
+
+	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
+									     $annotations->{abinit}
+									     );	    
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
-	    %results = (maker_anno => $maker_anno);
+	    %results = (maker_anno => $maker_anno, annotations => $annotations, non_over => $non_over);
 	    #------------------------RESULTS
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1550,6 +1553,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			maker_anno
+			non_over
+			annotations
 			blastx_data
 			blastn_data
 			tblastx_data
@@ -1568,8 +1573,10 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $chunk = $VARS->{chunk};
-	    my $maker_anno = $VARS->{maker_anno};
+	    my $chunk       = $VARS->{chunk};
+	    my $maker_anno  = $VARS->{maker_anno};
+	    my $non_over    = $VARS->{non_over};
+	    my $annotations = $VARS->{annotations};
 	    my $blastx_data = $VARS->{blastx_data};
 	    my $blastn_data = $VARS->{blastn_data};
 	    my $tblastx_data = $VARS->{tblastx_data};
@@ -1600,10 +1607,13 @@ sub _go {
 	    $GFF3->add_phathits($pred_gff_keepers);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
-	    #--- building fastas for annotations (grows with itteration)
-	    my ($p_fasta, $t_fasta) = GI::maker_p_and_t_fastas($maker_anno);
-	    $p_fastas .= $p_fasta;
-	    $t_fastas .= $t_fasta;
+	    #--- building fastas for annotations (grows with iteration)
+	    GI::maker_p_and_t_fastas($maker_anno,
+				     $non_over,
+				     $annotations->{abinit},
+				     $p_fastas,
+				     $t_fastas,
+				   );
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -1660,20 +1670,7 @@ sub _go {
 
 
 	    #--- write fastas for ab-initio predictions
-	    my ($p_snap_fastas,
-		$t_snap_fastas) = GI::abinit_p_and_t_fastas($preds,
-							    $safe_seq_id,
-							    $q_seq_ref,
-							    $out_dir
-							   );
-	    
-	    #--Write fasta files now that all chunks are finished
-	    FastaFile::writeFile(\$p_fastas,
-				 "$out_dir/$safe_seq_id.maker.proteins.fasta"
-				);
-	    FastaFile::writeFile(\$t_fastas,
-				 "$out_dir/$safe_seq_id.maker.transcripts.fasta"
-				);
+	    GI::write_p_and_t_fastas($p_fastas, $t_fastas, $safe_seq_id, $out_dir);
 	    
 	    #--- write GFF3 file
 	    $GFF3->finalize();
@@ -1820,7 +1817,7 @@ sub _handler {
    my $extra = shift;
    my $tag = shift || 'throw';
 
-   $E->{-text} = "ERROR: Failed while ".$extra."!!\n\n";
+   $E->{-text} .= "ERROR: Failed while ".$extra."!!\n\n" if($extra);
    
    if($tag eq 'handle'){
       $self->{FAILED} = 1;

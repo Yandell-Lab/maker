@@ -259,7 +259,7 @@ sub update_chunk {
    #check run status
    if($chunk->failed){
       my $E = $chunk->exception;
-      $self->_handler($E, "ERROR: Chunk failed at level $level_num\n");
+      $self->_handler($E, "Chunk failed at level $level_num\n");
    }
    else{
        #let the chunk add results to $self->{VARS}

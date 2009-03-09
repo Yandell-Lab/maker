@@ -180,7 +180,7 @@ sub add_maker {
 	  my $l = $self->_parse_line(\$line);
 	  
 	  my $table;
-	  if($l->{source} =~ /^repeatmasker$|^blastx\:repeatmask$|^repeat_gff\:/i){
+	  if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
 	     next if (! $codes{rm_pass});
 	     next if ($skip{repeat_maker});
 	     $table = 'repeat_maker';
@@ -617,6 +617,7 @@ sub _load_hits {
 
 	$f->{gene_id} = $gene_id unless(! $gene_id);
 	$f->{gene_name} = $gene_name unless(! $gene_name);
+	$f->{_tran_name} = $tran_name unless(! $gene_name);
 	$f->{_tran_id}   = $tran_id unless(! $tran_id);
 	$f->{maker_qi}  = $t->{maker_qi} unless(! $t->{maker_qi});
 	$f->{gene_attrib} = $gene_attrib unless(! $gene_attrib);

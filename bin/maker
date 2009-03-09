@@ -142,6 +142,8 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "cpus|c=i" => \$OPT{cpus},
 	   "predictor=s" =>\$OPT{predictor},
 	   "retry=i" =>\$OPT{retry},
+	   "clean_try" =>\$OPT{clean_try},
+	   "evaluate" =>\$OPT{evaluate},
 	   "quiet" => \$main::quiet,
 	   "CTL" => sub {GI::generate_control_files(); exit(0);},
 	   "help|?" => sub {print $usage; exit(0)}
@@ -235,9 +237,8 @@ while (my $fasta = $iterator->nextFasta()) {
    
    #-set up variables that are the result of chunk accumulation
    my $masked_total_seq;
-   my $p_fastas;
-   my $t_fastas;
-   
+   my %p_fastas;
+   my %t_fastas;
 
    my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
 				      $build,
@@ -717,6 +718,10 @@ while (my $fasta = $iterator->nextFasta()) {
 							       \%CTL_OPT
 							      );
 
+      my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
+								       $annotations->{abinit}
+								       );
+      
       #==OUTPUT DATA HERE
       
       #--- GFF3
@@ -733,28 +738,20 @@ while (my $fasta = $iterator->nextFasta()) {
       $GFF3->add_phathits($pred_gff_keepers);
       $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
-      #--- building fastas for annotations (grows with itteration)
-      my ($p_fasta, $t_fasta) = GI::maker_p_and_t_fastas($maker_anno);
-      $p_fastas .= $p_fasta;
-      $t_fastas .= $t_fasta;
+      #--- building fastas for annotations (grows with iteration)
+      GI::maker_p_and_t_fastas($maker_anno,
+			       $non_over,
+			       $annotations->{abinit},
+			       \%p_fastas,
+			       \%t_fastas,
+			       );
    }
    #END CONTIG
    
    #--- write fastas for ab-initio predictions
-   my ($p_snap_fastas,
-       $t_snap_fastas) = GI::abinit_p_and_t_fastas($preds,
-						   $safe_seq_id,
-						   $q_seq_ref,
-						   $out_dir
-						  );
    
-   #--Write fasta files now that all chunks are finished
-   FastaFile::writeFile(\$p_fastas,
-			"$out_dir/$safe_seq_id.maker.proteins.fasta"
-		       );
-   FastaFile::writeFile(\$t_fastas,
-			"$out_dir/$safe_seq_id.maker.transcripts.fasta"
-		       );
+   #--Write annotation fasta files now that all chunks are finished
+   GI::write_p_and_t_fastas(\%p_fastas, \%t_fastas, $safe_seq_id, $out_dir);
    
    #--- write GFF3 file
    $GFF3->finalize();

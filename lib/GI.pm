@@ -38,6 +38,7 @@ use maker::auto_annotator;
 use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
+use File::NFSLock;
 
 @ISA = qw(
 	);
@@ -45,6 +46,12 @@ use maker::sens_spec;
 $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 #------------------------------------------------------------------------
 #--------------------------- CLASS FUNCTIONS ----------------------------
+#------------------------------------------------------------------------
+sub set_global_temp {
+    my $dir = shift;
+
+    $TMP = $dir;
+}
 #------------------------------------------------------------------------
 sub get_preds_on_chunk {
    my $preds = shift;
@@ -413,62 +420,38 @@ sub process_the_chunk_divide{
 #    $fh->close();
 # }
 #-----------------------------------------------------------------------------
-sub abinit_p_and_t_fastas {
-   my $preds = shift;
-   my $id = shift;
-   my $seq_ref = shift;
-   my $out_dir = shift;
-
-   my %fhs;
-
-   foreach my $hit (@{$preds}) {
-      my $source = $hit->algorithm;
-      $source = uri_escape($source,
-			   '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-			  );
-      my $t_name = $hit->name(); # note this is being set in GFFV3::pred_data
-      my $t_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq_ref);	
-		
-      my ($p_seq, $offset, $end) = 
-      maker::auto_annotator::get_translation_seq($t_seq);
-		
-      my $score = 0;
-      foreach my $hsp ($hit->hsps) {
-	 $score += $hsp->score();
-      }
-      my $t_def = ">$t_name transcript offset:$offset score:$score";
-      my $p_def = ">$t_name protein score:$score";
-      
-      if (! exists $fhs{$source}) {
-	 open(my $t_fh, "> $out_dir/$id.maker.$source.transcripts.fasta");
-	 open(my $p_fh, "> $out_dir/$id.maker.$source.proteins.fasta");
-	 $fhs{$source}{t} = $t_fh;
-	 $fhs{$source}{p} = $p_fh;
-      }
-
-      my $t_fh = $fhs{$source}{t};
-      my $p_fh = $fhs{$source}{p};
-
-      print $t_fh Fasta::toFasta($t_def, \$t_seq);
-      print $p_fh Fasta::toFasta($p_def, \$p_seq);
-   }
-}
-#-----------------------------------------------------------------------------
 sub maker_p_and_t_fastas {
-   my $annotations = shift @_;
+   my $maker    = shift @_;
+   my $non_over = shift @_;
+   my $abinit   = shift @_;
+   my $p_fastas = shift @_;
+   my $t_fastas = shift @_;
    
-   my $p_fastas = '';
-   my $t_fastas = '';
-   
-   foreach my $an (@$annotations) {
+   foreach my $an (@$maker) {
       foreach my $a (@{$an->{t_structs}}) {
 	 my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
-	 $p_fastas .= $p_fasta;
-	 $t_fastas .= $t_fasta;
+	 $p_fastas->{maker} .= $p_fasta;
+	 $t_fastas->{maker} .= $t_fasta;
       }
    }
+
+   foreach my $an (@$non_over) {
+       foreach my $a (@{$an->{t_structs}}) {
+	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+	   $p_fastas->{non_overlapping_ab_initio} .= $p_fasta;
+	   $t_fastas->{non_overlapping_ab_initio} .= $t_fasta;
+       }
+   }
    
-   return $p_fastas, $t_fastas;
+   foreach my $an (@$abinit) {
+       foreach my $a (@{$an->{t_structs}}) {
+	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+	   my $source = $a->{hit}->algorithm;
+	   $source =~ s/pred_gff\://;
+	   $p_fastas->{$source} .= $p_fasta;
+	   $t_fastas->{$source} .= $t_fasta;
+       }
+   }
 }
 
 #-----------------------------------------------------------------------------
@@ -487,6 +470,33 @@ sub get_p_and_t_fastas {
    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
 	
    return($p_fasta, $t_fasta);
+}
+#----------------------------------------------------------------------------
+sub write_p_and_t_fastas{
+    my $p_fastas = shift @_;
+    my $t_fastas = shift @_;
+    my $safe_seq_id = shift @_;
+    my $out_dir = shift @_;
+
+    while( my $key = each %$p_fastas){
+	my $name = "$out_dir/$safe_seq_id.maker";
+	$name .= ".$key" unless($key eq 'maker');
+	$name .= "\.proteins.fasta";
+
+	FastaFile::writeFile(\$p_fastas->{$key},
+			     $name,
+	                    );
+    }
+
+    while( my $key = each %$t_fastas){
+	my $name = "$out_dir/$safe_seq_id.maker";
+	$name .= ".$key" unless($key eq 'maker');
+	$name .= "\.transcripts.fasta";
+
+	FastaFile::writeFile(\$t_fastas->{$key},
+			     $name,
+	                    );
+    }
 }
 #----------------------------------------------------------------------------
 sub create_blastdb {
@@ -1051,10 +1061,18 @@ sub build_fasta_index {
 }
 #-----------------------------------------------------------------------------
 sub build_all_indexes {
-   my @dbs = @_;
+   my $CTL_OPT = shift;
 
-   foreach my $db (@dbs) {
-      my $index = new Bio::DB::Fasta($db);
+   my @dbs = ($CTL_OPT->{_est},
+	      $CTL_OPT->{_protein},
+	      $CTL_OPT->{_repeat_protein},
+	      $CTL_OPT->{_est_reads},
+	      $CTL_OPT->{_altest}
+	     );
+
+   foreach my $db (@dbs){
+       next if(! $db);
+       new Bio::DB::Fasta($db);
    }
 }
 #-----------------------------------------------------------------------------
@@ -1135,14 +1153,17 @@ sub blastn_as_chunks {
    my $o_file    = "$blast_dir/$db_n\.blastn";
 
    $db =~ /([^\/]+)$/;
-   my $tmp_db = "$t_dir/$1";
+   my $tmp_db = "$TMP/$1";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
-   #copy db to local tmp dir and run xdformat or formatdb 
-   if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
-      copy($db, $tmp_db);
-      dbformat($formater, $tmp_db, 'blastn');
+   #copy db to local tmp dir and run xdformat or formatdb
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f)) {
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+	   copy($db, $tmp_db) if(! -e $tmp_db);
+	   dbformat($formater, $tmp_db, 'blastn');
+	   $lock->unlock;
+       }
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1384,14 +1405,17 @@ sub blastx_as_chunks {
    my $o_file    = "$blast_dir/$db_n\.blastx";
     
    $db =~ /([^\/]+)$/;
-   my $tmp_db = "$t_dir/$1";
+   my $tmp_db = "$TMP/$1";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
    #copy db to local tmp dir and run xdformat or format db 
-   if (! @{[<$tmp_db.xp?*>]} && (! -e $blast_finished || $opt_f) ) {
-       copy($db, $tmp_db);
-       dbformat($formater, $tmp_db, 'blastx');
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f) ) {
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+           copy($db, $tmp_db) if(! -e $tmp_db);
+	   dbformat($formater, $tmp_db, 'blastx');
+           $lock->unlock;
+       }
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1645,14 +1669,17 @@ sub tblastx_as_chunks {
    my $o_file    = "$blast_dir/$db_n\.tblastx";
 
    $db =~ /([^\/]+)$/;
-   my $tmp_db = "$t_dir/$1";
+   my $tmp_db = "$TMP/$1";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if (! @{[<$tmp_db.xn?*>]} && (! -e $blast_finished || $opt_f) ) {
-      copy($db, $tmp_db);
-      dbformat($formater, $tmp_db, 'tblastx');
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f) ) {
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+           copy($db, $tmp_db) if(! -e $tmp_db);
+	   dbformat($formater, $tmp_db, 'tblastx');
+           $lock->unlock;
+       }
    }
    elsif (-e $blast_finished && ! $opt_f) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
@@ -1976,7 +2003,7 @@ sub set_defaults {
       $CTL_OPT{'rm_pass'} = 0;
       $CTL_OPT{'model_pass'} = 1;
       $CTL_OPT{'pred_pass'} = 0;
-      $CTL_OPT{'other_pass'} = 1;
+      $CTL_OPT{'other_pass'} = 0;
       $CTL_OPT{'est'} = '';
       $CTL_OPT{'est_reads'} = '';
       $CTL_OPT{'altest'} = '';
@@ -1989,22 +2016,29 @@ sub set_defaults {
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'predictor'} = 'est2genome';
+      $CTL_OPT{'predictor'} = 'gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = 'fly';
       $CTL_OPT{'augustus_species'} = 'fly';
       $CTL_OPT{'fgenesh_par_file'} = 'Dicots';
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'other_gff'} = '';
-      $CTL_OPT{'alt_peptide'} = 'c';
+      $CTL_OPT{'alt_peptide'} = 'C';
       $CTL_OPT{'cpus'} = 1;
+      $CTL_OPT{'evaluate'} = 0;
+      $CTL_OPT{'evaluate'} = 1 if($main::eva);
       $CTL_OPT{'max_dna_len'} = 100000;
       $CTL_OPT{'min_contig'} = 1;
       $CTL_OPT{'split_hit'} = 10000;
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'single_exon'} = 0;
+      $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'retry'} = 1;
-      $CTL_OPT{'datastore'} = 0;
+      $CTL_OPT{'clean_try'} = 0;
+      $CTL_OPT{'TMP'} = '';
+      $CTL_OPT{'eval_pred'} = '';
+      $CTL_OPT{'eval_pred'} = 'snap' if($main::eva);
       $CTL_OPT{'clean_up'} = 0;
    }
 
@@ -2074,7 +2108,7 @@ sub set_defaults {
       $CTL_OPT{'eva_hspmax'} = 100;
       $CTL_OPT{'eva_gspmax'} = 100;
       $CTL_OPT{'enable_fathom'} = 0;
-
+      $CTL_OPT{'enable_fathom'} = 1 if($main::eva);
    }
    
    return %CTL_OPT;
@@ -2132,10 +2166,12 @@ sub load_control_files {
 
    #--load command line options
    $CTL_OPT{genome} = $OPT{genome} if (defined $OPT{genome});
+   $CTL_OPT{genome_gff} = $OPT{genome_gff} if (defined $OPT{genome_gff});
    $CTL_OPT{force} = $OPT{force} if (defined $OPT{force});
    $CTL_OPT{predictor} = $OPT{predictor} if (defined $OPT{predictor});
    $CTL_OPT{retry} = $OPT{retry} if (defined $OPT{retry});
    $CTL_OPT{cpus} = $OPT{cpus} if (defined $OPT{cpus});
+   $CTL_OPT{clean_try} = $OPT{clean_try} if (defined $OPT{clean_try});
 
    #skip repeat masking command line option
    if ($OPT{R}) {
@@ -2146,10 +2182,14 @@ sub load_control_files {
       $CTL_OPT{rm_pass} = 0;
    }
 
+   #required for evaluator to work
+   $CTL_OPT{predictor} = 'gff' if($main::eva);
+   $CTL_OPT{model_pass} = 1 if($main::eva);
+
    #parse predictor and error check
    $CTL_OPT{predictor} =~ s/\s+//g;
    my @predictors = split(',', $CTL_OPT{predictor});
-   $CTL_OPT{_predictor} = \ @predictors;
+   $CTL_OPT{_predictor} = \@predictors;
 
    foreach my $p (@predictors) {
       if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
@@ -2158,6 +2198,18 @@ sub load_control_files {
 	 $error .= "ERROR: Invalid predictor defined: $p\n".
 	 "Valid entries are: est2genome, abinit, gff, snap, augustus,\n".
 	 "or fgenesh\n\n";
+      }
+   }
+
+   #parse eval_pred and error check
+   $CTL_OPT{eval_pred} =~ s/\s+//g;
+   my @eval_preds = split(',', $CTL_OPT{eval_pred});
+   $CTL_OPT{_eval_pred} = \@eval_preds;
+
+   foreach my $p (@eval_preds) {
+      if ($p !~ /^snap$|^augustus$|^fgenesh$|^twinscan$|^jigsaw$|^gff$/) {
+	 $error .= "ERROR: Invalid eval_pred defined: $p\n".
+	 "Valid entries are: gff, snap, augustus, or fgenesh\n\n";
       }
    }
 
@@ -2231,16 +2283,16 @@ sub load_control_files {
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'snap') if (grep (/snap/, $CTL_OPT{predictor}));
-   push (@infiles, 'snap') if ($CTL_OPT{snap});
    push (@infiles, 'augustus') if (grep (/augustus/, $CTL_OPT{predictor})); 
-   push (@infiles, 'augustus') if ($CTL_OPT{augustus});
    push (@infiles, 'fgenesh') if (grep (/fgenesh/, $CTL_OPT{predictor}));
-   push (@infiles, 'fgenesh') if ($CTL_OPT{fgenesh});
    push (@infiles, 'twinscan') if (grep (/twinscan/, $CTL_OPT{predictor}));
-   push (@infiles, 'twinscan') if ($CTL_OPT{twinscan});
    push (@infiles, 'jigsaw') if (grep (/jigsaw/, $CTL_OPT{predictor}));
-   push (@infiles, 'jigsaw') if ($CTL_OPT{jigsaw});
-   push (@infiles, 'qrna') if ($CTL_OPT{qrna});
+   push (@infiles, 'snap') if (grep (/snap/, $CTL_OPT{eval_red}));
+   push (@infiles, 'augustus') if (grep (/augustus/, $CTL_OPT{eval_pred})); 
+   push (@infiles, 'fgenesh') if (grep (/fgenesh/, $CTL_OPT{eval_pred}));
+   push (@infiles, 'twinscan') if (grep (/twinscan/, $CTL_OPT{eval_pred}));
+   push (@infiles, 'jigsaw') if (grep (/jigsaw/, $CTL_OPT{eval_pred}));
+   push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom});
    push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
    push (@infiles, 'protein_gff') if($CTL_OPT{protein_gff});
@@ -2265,8 +2317,7 @@ sub load_control_files {
 	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files\n\n";
 	 next;
       }
-
-      if (not -e $CTL_OPT{$in}) {
+      elsif (not -e $CTL_OPT{$in}) {
 	 $error .= "ERROR: The \'$in\' file $CTL_OPT{$in} does not exist.\n".
 	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n\n";
 	 next;
@@ -2278,31 +2329,29 @@ sub load_control_files {
    }
 			       
    #--error check that values are meaningful
-   if ($CTL_OPT{augustus} && not $CTL_OPT{augustus_species}) {
+   if (grep (/^augustus$/, @infiles) && not $CTL_OPT{augustus_species}) {
       warn "WARNING: There is no species specified for Augustus in maker_opts.ctl augustus_species.\n".
       "As a result the default (fly) will be used.\n\n";
       $CTL_OPT{augustus_species} = "fly";
    }
-   if ($CTL_OPT{augustus} &&
+   if (grep (/^augustus$/, @infiles) &&
        (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -e "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg")
       ) {
       $error .= "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set\n".
       "or is not set correctly Please set this in your profile per Augustus\n".
-      "installation instructions\n\n";
+      "installation instructions then try again.\n\n";
    }
-   if (($CTL_OPT{snap}||$CTL_OPT{enable_fathom}) && not $CTL_OPT{snaphmm}) {
-      warn "WARNING: There is no model specified for for Snap in maker_opts.ctl snaphmm.\n".
+   if (grep (/^snaps$|^fathom$/, @infiles) && not $CTL_OPT{snaphmm}) {
+      warn "WARNING: There is no model specified for for Snap/Fathom in maker_opts.ctl snaphmm.\n".
       "As a result, the default (fly) will be used.\n\n";
       $CTL_OPT{snaphmm} = "fly";
    }
-
-   if (($CTL_OPT{snap} || $CTL_OPT{enable_fathom}) &&
-       ! -e $CTL_OPT{snaphmm} &&
+   if (grep (/^snap$|^fathom$/, @infiles) && ! -e $CTL_OPT{snaphmm} &&
        (! exists $ENV{ZOE} || ! -e $ENV{ZOE}."/HMM/".$CTL_OPT{snaphmm})
       ) {
-      $error .= "ERROR: The snaphmm specified for Snap in maker_opts.ctl does not exist.\n\n";
+      $error .= "ERROR: The snaphmm specified for Snap/Fathom in maker_opts.ctl does not exist.\n\n";
    }
-   if ($CTL_OPT{fgenesh}) {
+   if (grep (/^fgenesh$/, @infiles)) {
       if (! $CTL_OPT{fgenesh_par_file}) {
 	 $error .= "ERROR: There is no parameter file secified for for FgenesH in\n".
 	 "maker_opts.ctl fgenesh_par_file\n\n";
@@ -2322,10 +2371,14 @@ sub load_control_files {
       $CTL_OPT{min_contig} = 1;
    }
    if ($CTL_OPT{retry} < 0) {
-      warn "WARNING: \'retry\' must be set to 0 or greater.\n\n";
+      warn "WARNING: \'retry\' must be set to 0 or greater.\n".
+	   "It will now be set to 0\n\n";
       $CTL_OPT{retry} = 0;
+   } 
+   if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
+       $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist\n";
    }
-
+   
    die $error if ($error);   
 
    #--check genome fasta file
@@ -2341,7 +2394,7 @@ sub load_control_files {
    #--decide whether to force datastore 
    if ($iterator->number_of_entries() > 1000 && ! $CTL_OPT{datastore}) {
       warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
-      "Datastore will be used to avoid overloading the data structure of\n".
+      "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n";
       
       $CTL_OPT{datastore} = 1;
@@ -2364,8 +2417,14 @@ sub load_control_files {
       $CTL_OPT{alt_peptide} = 'C';
    }
 
-   #---set up blast databases for analyisis
+   #---set up blast databases and indexes for analyisis
    create_blastdb(\%CTL_OPT, $mpi_size);
+   build_all_indexes(\%CTL_OPT);
+
+   #--set up optional global TMP
+   if($CTL_OPT{TMP}){
+       $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => 1);
+   }
 
    #--set values for datastructure
    my $genome = $CTL_OPT{genome};
@@ -2389,67 +2448,83 @@ sub load_control_files {
 sub generate_control_files {
    my $dir = shift || Cwd::cwd();
    my %O = (@_) ? @_ : set_defaults();
+   $main::eva = 1;
+   my $ev = $main::eva;
 
-   #--build maker_opts.ctl file
-   open (OUT, "> $dir/maker_opts.ctl");
-   print OUT "#-----Genome (Required for De-Novo Annotations)\n";
-   print OUT "genome:$O{genome} #genome sequence file in fasta format\n";
-   print OUT "\n";
-   print OUT "#-----Re-annotation Options\n";
-   print OUT "genome_gff:$O{genome_gff} #re-annotate genome based on this gff3 file\n";
+   #--build opts.ctl file
+   open (OUT, "> $dir/eval_opts.ctl") if($ev);
+   open (OUT, "> $dir/maker_opts.ctl") if(!$ev);
+   print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
+   print OUT "genome:$O{genome} #genome sequence file in fasta format\n"if(!$ev);
+   print OUT "\n"if(!$ev);
+   print OUT "#-----Re-annotation Options (Only Maker derived GFF3)\n" if(!$ev);
+   print OUT "#-----Maker Derived GFF3 Annotations to Evaluate (genome fasta is internal to GFF3)\n" if($ev);
+   print OUT "genome_gff:$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
+   print OUT "genome_gff:$O{genome_gff} #Maker derived gff3 file\n" if($ev);
    print OUT "est_pass:$O{est_pass} #use ests in genome_gff: 1 = yes, 0 = no\n";
    print OUT "altest_pass:$O{altest_pass} #use alternate organism ests in genome_gff: 1 = yes, 0 = no\n";
    print OUT "protein_pass:$O{protein_pass} #use proteins in genome_gff: 1 = yes, 0 = no\n";
-   print OUT "rm_pass:$O{protein_pass} #use repeats in genome_gff: 1 = yes, 0 = no\n";
-   print OUT "model_pass:$O{protein_pass} #use gene models in genome_gff: 1 = yes, 0 = no\n";
+   print OUT "rm_pass:$O{rm_pass} #use repeats in genome_gff: 1 = yes, 0 = no\n";
+   print OUT "model_pass:$O{model_pass} #use gene models in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
    print OUT "pred_pass:$O{pred_pass} #use ab-initio predictions in genome_gff: 1 = yes, 0 = no\n";
-   print OUT "other_pass:$O{protein_pass} #passthrough everything else in genome_gff: 1 = yes, 0 = no\n";
+   print OUT "other_pass:$O{other_pass} #passthrough everything else in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
    print OUT "\n";
-   print OUT "#-----EST Evidence (you must provide a value for at least one)\n";
+   print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
+   print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file\n" if($ev);
+   print OUT "genome:$O{genome} #genome sequence file in fasta format for GFF3\n"if($ev);
+   print OUT "\n"if($ev);
+   print OUT "#-----EST Evidence (you should provide a value for at least one)\n";
    print OUT "est:$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
    print OUT "est_reads:$O{est_reads} #un-assembled EST reads in fasta format (for deep nextgen mRNASeq)\n";
    print OUT "altest:$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
-   print OUT "est_gff:$O{est_gff} #EST evidence from a seperate gff3 file\n";
+   print OUT "est_gff:$O{est_gff} #EST evidence from an external gff3 file\n";
    print OUT "altest_gff:$O{altest_gff} #Alternate organism EST evidence from a seperate gff3 file\n";
    print OUT "\n";
-   print OUT "#-----Protein Homology Evidence (you must provide a value for at least one)\n";
+   print OUT "#-----Protein Homology Evidence (you should provide a value for at least one)\n";
    print OUT "protein:$O{protein}  #protein sequence file in fasta format\n";
-   print OUT "protein_gff:$O{protein_gff}  #protein homology evidence from a gff3 file\n";
+   print OUT "protein_gff:$O{protein_gff}  #protein homology evidence from an external gff3 file\n";
    print OUT "\n";
    print OUT "#-----Repeat Masking (leave values blank to skip)\n";
    print OUT "model_org:$O{model_org} #model organism for RepBase masking in RepeatMasker\n";
    print OUT "repeat_protein:$O{repeat_protein} #a database of transposable element proteins in fasta format\n";
    print OUT "rmlib:$O{rmlib} #an organism specific repeat library in fasta format\n";
-   print OUT "rm_gff:$O{rm_gff} #repeat elements from a gff3 file\n";
+   print OUT "rm_gff:$O{rm_gff} #repeat elements from an external gff3 file\n";
    print OUT "\n";
-   print OUT "#-----Gene Prediction Options\n";
-   print OUT "predictor:$O{predictor} #prediction method for annotations (seperate multiple values by ',')\n";
+   print OUT "#-----Gene Prediction Options\n" if(!$ev);
+   print OUT "#-----Evaluator Ab-Initio Comparison Options\n" if($ev);
+   print OUT "predictor:$O{predictor} #prediction method for annotations (seperate multiple values by ',')\n" if(!$ev);
+   print OUT "eval_pred:$O{eval_pred} #prediction method for comparisons (seperate multiple values by ',')\n" if($ev);
    print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
    print OUT "augustus_species:$O{augustus_species} #Augustus gene prediction model\n";
    print OUT "fgenesh_par_file:$O{fgenesh_par_file} #Fgenesh parameter file\n";
-   print OUT "model_gff:$O{model_gff} #gene models from a gff3 file (annotation passthrough)\n";
-   print OUT "pred_gff:$O{model_gff} #ab-initio predictions from a gff3 file\n";
+   print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
+   print OUT "pred_gff:$O{model_gff} #ab-initio predictions from an external gff3 file\n";
    print OUT "\n";
-   print OUT "#-----Other Annotation Type Options (features maker doesn't recognize)\n";
-   print OUT "other_gff:$O{other_gff} #features to passthrough to final output from a gff3 file\n";
-   print OUT "\n";
+   print OUT "#-----Other Annotation Type Options (features maker doesn't recognize)\n" if(!$ev);
+   print OUT "other_gff:$O{other_gff} #features to pass-through to final output from an extenal gff3 file\n" if(!$ev);
+   print OUT "\n" if(!$ev);
    print OUT "#-----External Application Specific Options\n";
    print OUT "alt_peptide:$O{alt_peptide} #amino acid used to replace non standard amino acids in blast databases\n";
    print OUT "cpus:$O{cpus} #max number of cpus to use in BLAST and RepeatMasker\n";
    print OUT "\n";
    print OUT "#-----Maker Specific Options\n";
+   print OUT "evaluate:$O{evaluate} #run Evaluator on all annotations\n" if(!$ev);
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
-   print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for EST and protein alignments)\n";
+   print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
    print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
-   print OUT "single_exon:$O{single_exon} #consider EST hits aligning to single exons when generating annotations, 1 = yes, 0 = no\n";
-   print OUT "keep_preds:$O{keep_preds} #keep ab-initio predictions that do not overlap a maker annotation, 1 = yes, 0 = no\n";
+   print OUT "single_exon:$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
+   print OUT "single_length:$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
+   print OUT "keep_preds:$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "retry:$O{retry} #number of times to retry a contig if annotation fails for some reason\n";
-   print OUT "clean_up:$O{clean_up} #remove theVoid directory: 1 = yes, 0 = no\n";
+   print OUT "clean_try:$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
+   print OUT "TMP:$O{TMP} #secify a directory other than the system default temporary directory for temporary files\n";
+   print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
    close (OUT);
     
-   #--build maker_bopts.ctl file
-   open (OUT, "> $dir/maker_bopts.ctl");
+   #--build bopts.ctl file
+   open (OUT, "> $dir/eval_bopts.ctl") if($ev);
+   open (OUT, "> $dir/maker_bopts.ctl") if(!$ev);
    print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
    print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
    print OUT "\n";
@@ -2478,8 +2553,9 @@ sub generate_control_files {
    close(OUT);
     
    #--build maker_exe.ctl file
-   open (OUT, "> $dir/maker_exe.ctl");
-   print OUT "#-----Location of Executables Used by Maker\n";
+   open (OUT, "> $dir/eval_exe.ctl") if($ev);
+   open (OUT, "> $dir/maker_exe.ctl") if(!$ev);
+   print OUT "#-----Location of Executables Used by Maker/Evaluator\n";
    print OUT "formatdb:$O{formatdb} #location of NCBI formatdb executable\n";
    print OUT "blastall:$O{blastall} #location of NCBI blastall executable\n";
    print OUT "xdformat:$O{xdformat} #location of WUBLAST xdformat executable\n";
@@ -2493,12 +2569,12 @@ sub generate_control_files {
    print OUT "snap:$O{snap} #location of snap executable\n";
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
-#   print OUT "twinscan:$O{twinscan} #location of twinscan executable\n";
-   print OUT "fathom:$O{fathom} #location of fathom executable\n";
+   print OUT "twinscan:$O{twinscan} #location of twinscan executable (not yet implemented)\n";
    print OUT "\n";
    print OUT "#-----Other Algorithms\n";
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
    print OUT "qrna:$O{qrna} #location of qrna executable (not yet implemented)\n";
+   print OUT "fathom:$O{fathom} #location of fathom executable (not yet implemented)\n";
    close(OUT);
     
    #--build evaluator.ctl file

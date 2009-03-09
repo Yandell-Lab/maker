@@ -20,7 +20,6 @@ use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG $CTL/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
-
 sub evaluate_in_maker {
 
 	my  ($f, $c_id, $i, $seq,
@@ -113,7 +112,93 @@ sub evaluate_for_gff {
 		}
 	}
 }
+#-------------------------------------------------------------------------------
+sub evaluate_maker_annotations {
+    my $annotations = shift;
+    my $seq         = shift;
+    my $out_base    = shift;
+    my $the_void    = shift;
+    my $CTL_OPTIONS = shift;
 
+    #iterate over each gene annotation
+    foreach my $ann (@$annotations){
+	my @t_cluster;
+	my @pol_p_hits;
+	my @pol_e_hits;
+	my @blastx_hits;
+	my @tblastx_hits;
+	my @ab_inits;
+
+	#collect all evidence and transcripts hit for the gene
+	foreach my $t_struct (@{$ann->{t_structs}}){
+	    my $hit = $t_struct->{hit};
+	    my $evi = $t_struct->{evi};
+
+	    $pol_p   = maker::auto_annotator::get_selected_types($evi->{gomiph}, 'protein2genome');
+	    $pol_e   = maker::auto_annotator::get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	    $blastx  = maker::auto_annotator::get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
+	    $tblastx = maker::auto_annotator::get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
+	    $ab      = $evi->{all_preds};
+
+	    push(@t_cluster, $hit);
+	    push(@pol_p_hits, @$pol_p);
+	    push(@pol_e_hits, @$pol_e);
+	    push(@blastx_hits, @$blastx);
+	    push(@tblastx_hits, @$tblastx);
+	    push(@ab_inits, @$ab);
+	}
+
+	#unique the set of evidence
+	foreach my $hit (@pol_p_hits, @pol_e_hits, @blastx_hits, @tblastx_hits, @ab_inits){
+	    $hit->{_uniq_set} = 0;
+	}
+	@pol_p_hits   = grep {$_->{_uniq_set}++ == 0} @pol_p_hits;
+        @pol_e_hits   = grep {$_->{_uniq_set}++ == 0} @pol_e_hits;
+        @blastx_hits  = grep {$_->{_uniq_set}++ == 0} @blastx_hits;
+        @tblastx_hits = grep {$_->{_uniq_set}++ == 0} @tblastx_hits;
+        @ab_inits     = grep {$_->{_uniq_set}++ == 0} @ab_inits;
+
+	#get gene level statistics
+	my $so_code = evaluator::so_classifier::so_code(\@t_cluster);
+	my $alt_spli_sup = evaluator::funs::alt_spli(\@t_cluster, \@pol_e_hits, $seq);
+	my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
+
+	$ann->{geneAED} = $geneAED;
+	$ann->{so_code} = $so_code;
+
+	#get transcript level statistics;
+	foreach my $t_struct (@{$ann->{t_structs}}){
+	    my $t_name = $t_struct->{t_name};
+
+	    #run evaluator
+	    my $eva = power_evaluate($f,
+				     $seq,
+				     \@pol_p_hits,
+				     \@pol_e_hits,
+				     \@blastx_hits,
+				     \@abinits,
+				     $so_code,
+				     $geneAED,
+				     $alt_spli_sup,
+				     $t_name,
+				     $CTL_OPTIONS,
+				     $the_void,
+				     );
+
+	    $t_struct->{report} = $eva->{report};
+
+	    #print report
+	    my $dir = "$out_base/evaluator";
+	    mkdir($dir) if(! -e $dir);	    
+	    my $file = "$dir/".Fasta::seqID2SafeID($t->{hit}->name);
+	    ($file) = $file =~ /^([^\s\t\n]+)/;
+	    $file . = ".eva";
+	    open(my $FH, "> $file");
+	    print $FH $t->{report};
+	    close($FH);
+	}
+    }
+}
 #-------------------------------------------------------------------------------
 sub power_evaluate {
 	my $eat = shift;
