@@ -269,7 +269,7 @@ sub join_f {
 	#$g->show();
 	#print "PPPPPPPPPPPPP\n";
 
-	return $g unless (defined($b_5) || defined($b_3));
+	#return $g unless (defined($b_5) || defined($b_3));
 
 	my $sorted_g = PhatHit_utils::sort_hits($g, 'query');
 
@@ -288,12 +288,12 @@ sub join_f {
 	my $i = 0;
 	foreach my $hsp (@{$sorted_5}){
 		last if $i ==  $b_5->{five_j};
-		push(@anno_hsps, $hsp);	
+		push(@anno_hsps, clone_hsp($hsp));	
 		$i++;
 	}
 	#-- merge the 5-prime overlaping features
 	if ( !defined($join_offset_5) || $join_offset_5 == -1){
-		push(@anno_hsps, $sorted_g->[0]);
+		push(@anno_hsps, clone_hsp($sorted_g->[0]));
 	}
 	else {
 		my $merged_hsp = merge_hsp($b_5,
@@ -307,13 +307,13 @@ sub join_f {
 
 	#-- push on the gene pred's interior hsps
 	for (my $i = 1; $i < @{$sorted_g} -1; $i++){
-		push(@anno_hsps, $sorted_g->[$i]);
+		push(@anno_hsps, clone_hsp($sorted_g->[$i]));
 	}
 
         #-- merge the 3-prime overlaping features
 	my $omega = $#{$sorted_g};
         if (!defined($join_offset_3) || $join_offset_3 == -1){
-                push(@anno_hsps, $sorted_g->[$omega]);
+                push(@anno_hsps, clone_hsp($sorted_g->[$omega]));
         }
         else {
 		# sepcial case for single exon genes
@@ -336,7 +336,7 @@ sub join_f {
         #-- push on b_3's downsteam hsps added 52006
 	if (defined($b_3->{three_j})){
 		for (my $i = $b_3->{three_j} + 1; $i < @{$sorted_3}; $i++){
-			push(@anno_hsps, $sorted_3->[$i]);
+			push(@anno_hsps, clone_hsp($sorted_3->[$i]));
 		} 
 	}
 
@@ -377,12 +377,93 @@ sub join_f {
 	return $new_f;
 }
 #------------------------------------------------------------------------
+sub clone_hsp{
+    my $hsp = shift;
+
+    my @args;
+
+    push(@args, '-query_start');
+    push(@args, $hsp->{QUERY_START});
+
+    push(@args, '-query_seq');
+    push(@args, $hsp->{QUERY_SEQ});
+
+    push(@args, '-score');
+    push(@args, $hsp->{SCORE});
+
+    push(@args, '-homology_seq');
+    push(@args, $hsp->{HOMOLOGY_SEQ});
+
+    push(@args, '-hit_start');
+    push(@args, $hsp->{HIT_START});
+
+    push(@args, '-hit_seq');
+    push(@args, $hsp->{HIT_SEQ});
+
+    push(@args, '-hsp_length');
+    push(@args, $hsp->{HSP_LENGTH});
+
+    push(@args, '-identical');
+    push(@args, $hsp->{IDENTICAL});
+
+    push(@args, '-hit_length');
+    push(@args, $hsp->{HIT_LENGTH});
+
+    push(@args, '-query_name');
+    push(@args, $hsp->{QUERY_NAME});
+
+    push(@args, '-algorithm');
+    push(@args, $hsp->{ALGORITHM});
+
+    push(@args, '-bits');
+    push(@args, $hsp->{BITS});
+
+    push(@args, '-evalue');
+    push(@args, $hsp->{EVALUE});
+
+    push(@args, '-pvalue');
+    push(@args, $hsp->{PVALUE});
+
+    push(@args, '-query_length');
+    push(@args, $hsp->{QUERY_LENGTH});
+
+    push(@args, '-query_end');
+    push(@args, $hsp->{QUERY_END});
+
+    push(@args, '-conserved');
+    push(@args, $hsp->{CONSERVED});
+
+    push(@args, '-hit_name');
+    push(@args, $hsp->{HIT_NAME});
+
+    push(@args, '-hit_end');
+    push(@args, $hsp->{HIT_END});
+
+    push(@args, '-query_gaps');
+    push(@args, $hsp->{QUERY_GAPS});
+
+    push(@args, '-hit_gaps');
+    push(@args, $hsp->{HIT_GAPS});
+
+    my $REF = ref($hsp);
+    my $clone = new $REF(@args);
+
+    $clone->{queryName} = $hsp->{queryName};
+    #-------------------------------------------------
+    # setting strand because bioperl is all messed up!
+    #------------------------------------------------
+
+    $clone->{_strand_hack}->{query} = $hsp->{_strand_hack}->{query};
+    $clone->{_strand_hack}->{hit}   = $hsp->{_strand_hack}->{query};
+
+    return $clone;
+}
+#------------------------------------------------------------------------
 sub merge_hsp {
 	my $ext   = shift;
 	my $g_hsp = shift;
 	my $q_seq = shift;
 	my $type  = shift;
-
 
 	my $offset;
 	my $class;
@@ -397,6 +478,8 @@ sub merge_hsp {
 
 	my $sorted_ext = PhatHit_utils::sort_hits($ext->{f}, 'query');
 	my $ext_hsp = $sorted_ext->[$offset];
+
+	$g_hsp = clone_hsp($g_hsp);
 
 	if     ($class eq '1'){
 		return $g_hsp;

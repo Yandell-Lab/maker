@@ -23,7 +23,6 @@ use Widget::augustus;
 #use evaluator::funs;
 #use evaluator::AED;
 use shadow_AED;
-use Storable qw(dclone);
 
 $Storable::forgive_me = 1; 
 
@@ -581,26 +580,25 @@ sub annotate {
 				    $seq_ref,
 				    $v_seq_ref,
 				    $def,
-				    'gf',
-				    'gff',
+				    'model_gff',
 				    $the_void,
 				    $CTL_OPTIONS
 				   );
 	   
-	   $annotations{'gff'} = group_transcripts($model_trans,
-						   $v_seq_ref,
-						   $seq_id,
-						   $chunk_number,
-						   $build,
-						   'gff',
-						   $the_void,
-						   $CTL_OPTIONS
-						  );
+	   $annotations{'model_gff'} = group_transcripts($model_trans,
+							 $v_seq_ref,
+							 $seq_id,
+							 $chunk_number,
+							 $build,
+							 'model_gff',
+							 $the_void,
+							 $CTL_OPTIONS
+							 );
 	}
 
 	#---hint based gene prediction here
 	foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
-	   next if($prdr eq 'gff' || $prdr eq 'abinit');
+	   next if($prdr eq 'model_gff' || $prdr eq 'abinit');
 	   print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
 
 	   my $transcripts = run_it($bx_data,
@@ -608,7 +606,6 @@ sub annotate {
 				    $seq_ref,
 				    $v_seq_ref,
 				    $def,
-				    'bx',
 				    $prdr,
 				    $CTL_OPTIONS
 				   );
@@ -634,7 +631,6 @@ sub annotate {
 				$seq_ref,
 				$v_seq_ref,
 				$def,
-				'pr',
 				'abinit',
 				$CTL_OPTIONS
 			       );
@@ -686,6 +682,17 @@ sub get_n_count{
     return $index[1];
 }
 #------------------------------------------------------------------------
+sub gene2all_phathits {
+    my $g = shift;
+    
+    my @hits;
+    foreach my $t (@{$g->{t_structs}}){
+	push (@hits, $t->{hit});
+    }
+
+    return \@hits;
+}
+#------------------------------------------------------------------------
 #this subrutine returns finished MAKER annotations
 sub best_annotations {
     my $annotations = shift;
@@ -701,22 +708,48 @@ sub best_annotations {
 	
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
+	my @p_bag;
+	my @m_bag;
 	foreach my $p (@{$CTL_OPTIONS->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
-		next unless($g->{AED} < 1 || $p eq 'gff');
-
 		if($g->{g_strand} == 1){
-		    push(@$p_list, $g);
+		    push(@$p_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
+		    my $hits = gene2all_phathits($g);
+		    push(@p_bag, @$hits);
 		}
-		elsif($g->{g_strand} == -1){
-		    push(@$m_list, $g);
+		elsif($g->{g_strand} == -1) {
+		    push(@$m_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
+		    my $hits = gene2all_phathits($g);
+		    push(@m_bag, @$hits);
 		}
 		else{
 		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
 		}
 	    }
 	}
-	
+
+	foreach my $g ($p_list){
+	    my $hits = get_hits_overlapping_gene($g, \@p_bag);
+	    my $abAED = 1;
+	    foreach my $t ($g->{t_structs}){
+		my $f = $t->{hit};
+		my $ab = shadow_AED::get_abAED($hits, $f);
+		$abAED = $ab if($ab < $abAED);
+	    }
+	    $g->{abAED} = $abAED;
+	}
+
+	foreach my $g ($m_list){
+            my $hits = get_hits_overlapping_gene($g, \@m_bag);
+            my $abAED = 1;
+            foreach my $t ($g->{t_structs}){
+                my $f = $t->{hit};
+                my $AED = shadow_AED::get_abAED($hits, $f);
+                $abAED = $AED if($AED < $abAED);
+            }
+            $g->{abAED} = $abAED;
+        }
+
 	#remove low scoring overlaping genes
 	#@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
 	#@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
@@ -732,7 +765,7 @@ sub best_annotations {
     elsif(@{$CTL_OPTIONS->{_predictor}}){
 	my $key = $CTL_OPTIONS->{_predictor}->[0];
 	foreach my $g (@{$annotations->{$key}}){
-	    push(@keepers, $g) if($g->{AED} < 1  || $key eq 'gff');
+	    push(@keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
 	}
     }
 
@@ -802,7 +835,6 @@ sub run_it {
     my $seq          = shift;
     my $v_seq        = shift;
     my $def          = shift;
-    my $id           = shift;
     my $predictor    = shift;
     my $CTL_OPTIONS  = shift;
     
@@ -815,14 +847,32 @@ sub run_it {
 	my $model    = $set->{model};
 
 	#------gff passthrough and ab-init passthrough
-	if ($predictor eq 'gff' || $predictor eq 'abinit') {
+	if ($predictor eq 'model_gff' || $predictor eq 'abinit') {
 	    next if(! defined $model);
 	    my $transcript = $model;
 	    
 	    #add UTR to ab-inits
 	    if($predictor eq 'abinit' && defined($ests)){
-		my $copy = dclone($transcript);
-		my $utr_trans = pneu($ests, $copy, $seq);
+		my $utr_trans = pneu($ests, $transcript, $seq);
+		if (! clean::is_identical_form($utr_trans, $transcript)){
+		    push(@transcripts, [$utr_trans, $set, $transcript]);
+		}
+	    }
+	    
+	    push(@transcripts, [$transcript, $set, undef]);
+	    
+	    $i++;
+	    next;
+	}
+
+	#------ab-init passthrough
+	if ($predictor eq 'model_gff' || $predictor eq 'abinit') {
+	    next if(! defined $model);
+	    my $transcript = $model;
+	    
+	    #add UTR to ab-inits
+	    if($predictor eq 'abinit' && defined($ests)){
+		my $utr_trans = pneu($ests, $transcript, $seq);
 		if (! clean::is_identical_form($utr_trans, $transcript)){
 		    push(@transcripts, [$utr_trans, $set, $transcript]);
 		}
@@ -837,8 +887,7 @@ sub run_it {
 	#------est2genome
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
-	    my $copy = dclone($mia);
-	    my $transcript = pneu($ests, $copy, $seq);
+	    my $transcript = pneu($ests, $mia, $seq);
 	    push(@transcripts, [$transcript, $set, $mia]) if $transcript;
 	    $i++;
 	    next;
@@ -853,7 +902,7 @@ sub run_it {
 	
 	my ($pred_shots, $strand) = get_pred_shot($seq, 
 						  $def, 
-						  $id.'.'.$i, 
+						  $i, 
 						  $the_void, 
 						  $set,
 						  $predictor,
@@ -880,11 +929,11 @@ sub run_it {
 	    if (defined($pred_shot) && defined($mia)) {
 		my $transcript = pneu($ests, $copy, $seq);
 		if (defined($transcript)) {
-		    push(@transcripts, [$transcript, $set, $pred_shot])
-		    }
+		    push(@transcripts, [$transcript, $set, $pred_shot]);
+		}
 		else {
-		    push(@transcripts, [$copy, $set, $pred_shot])
-		    }
+		    push(@transcripts, [$copy, $set, $pred_shot]);
+		}
 	    }
 	    elsif (defined($pred_shot) && !defined($mia)) {
 		push(@transcripts, [$copy, $set, $pred_shot]);
@@ -993,19 +1042,8 @@ sub load_transcript_struct {
 		   @$tblastx_hits
 		  );
 	
-	
 	#evidence AED
         my $AED = shadow_AED::get_AED(\@bag, $f);
-
-	#average the AED from ab-inits
-	my $abinit_AED = 0;
-	foreach my $ab (@$abinits){
-	    $abinit_AED += shadow_AED::get_AED([$ab], $f);
-	}
-	$abinit_AED = (@$abinits) ? $abinit_AED/@$abinits : 1;
-
-	#combined abinit and evidence AED
-	my $X_AED = ($abinit_AED + $AED) / 2;
 
         my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 
@@ -1022,24 +1060,33 @@ sub load_transcript_struct {
 		        't_name'   => $t_name,
 			't_qi'     => $qi,
 			'AED'      => $AED,
-			'ab_AED'   => $abinit_AED,
-			'X_AED'    => $X_AED,
 			'evi'      => $evi
                     };
 
 	return $t_struct;
 }
 #------------------------------------------------------------------------                                                           
-sub get_overlapping_hits {
-   my $eat  = shift;
+sub get_hits_overlapping_gene {
+   my $g  = shift;
    my $hits = shift;
-   
+
+   my $B = $g->{g_start};
+   my $E = $g->{g_end};
+
    my @keepers;
    foreach my $hit (@{$hits}){
-      next unless $hit->strand eq $eat->strand;
-      push(@keepers, $hit)
-      if compare::overlap($hit, $eat, 'query', 3);
+      next unless $hit->strand eq $g->{g_strand};
+
+      my $comp = compare::compare ($B,
+				   $E,
+				   $hit->start,
+				   $hit->end
+				  );
+      if($comp ne '0'){
+	  push(@keepers, $hit);
+      }
    }
+
    return \@keepers;
 }
 #------------------------------------------------------------------------
@@ -1089,7 +1136,7 @@ sub group_transcripts {
    }
    
    my $careful_clusters = [];
-   if ($predictor eq 'gff' ) {
+   if ($predictor eq 'model_gff' ) {
       my %index;
       my $i = 0;
       foreach my $t (@transcripts) {
@@ -1107,7 +1154,7 @@ sub group_transcripts {
    }
    elsif ($predictor eq 'abinit' ) {
       foreach my $t (@transcripts) {
-	 push(@{$careful_clusters}, [$t])
+	  push(@{$careful_clusters}, [$t]);
       }
    }
    else {
@@ -1135,7 +1182,7 @@ sub group_transcripts {
       my $sources = join ('-', keys %pred_sources);
       
       my $g_name;
-      if ($predictor eq 'gff') {
+      if ($predictor eq 'model_gff') {
 	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
 	 if ($g_name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	    $SEEN{$g_name}++;

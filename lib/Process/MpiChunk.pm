@@ -647,21 +647,32 @@ sub _go {
 	    FastaFile::writeFile(\$fasta, $unmasked_file);
 
 	    #==ab initio predictions here
-	    my $masked_preds = GI::abinits($masked_file,
-					   $the_void,
-					   $safe_seq_id.".masked",
-					   \%CTL_OPT,
-					   $LOG
-					   );
+	    #do masked predictions first
+	    my $preds = GI::abinits($masked_file,
+				    $the_void,
+				    $safe_seq_id.".masked",
+				    \%CTL_OPT,
+				    $LOG
+				   );
+	    
+	    #add tag that says these are masked
+	    foreach my $p (@$masked_preds){
+	       my $alg = $p->algorithm();
+	       $p->algorithm("$alg\_masked");
+	    }
 
-            my $preds = GI::abinits($unmasked_file,
-                                    $the_void,
-                                    $safe_seq_id,
-                                    \%CTL_OPT,
-                                    $LOG
-				    );
+	    #now do unmasked predictions
+            my $unmasked_preds = [];
+	    if($CTL_OPT{unmask}){
+	       $unmasked_preds = GI::abinits($unmasked_file,
+					     $the_void,
+					     $safe_seq_id,
+					     \%CTL_OPT,
+					     $LOG
+					    );
+	    }
 
-	    push(@$preds, @$masked_preds);
+	    push(@$preds, @$unmasked_preds);
 
 	    #==QRNA noncoding RNA prediction here
 	    my $qra_preds = [];

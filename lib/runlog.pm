@@ -23,7 +23,7 @@ my @ctl_to_log = ('est',
 		  'rmlib',
 		  'rm_gff',
 		  'predictor',
-		  'eval_pred',
+		  'run',
 		  'sort_base',
 		  'snaphmm',
 		  'augustus_species',
@@ -57,7 +57,8 @@ my @ctl_to_log = ('est',
 		  'bit_tblastx',
 		  'ep_score_limit',
 		  'en_score_limit',
-		  'enable_fathom'
+		  'enable_fathom',
+		  'unmask'
 		 );
 
 my %SEEN;
@@ -180,6 +181,11 @@ sub _clean_files{
 		   #don't care about absolute location
 		   $log_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
 		}
+		elsif($key eq 'run'){
+		   #don't care about order
+		   my @set = sort @{$logged_vals{CTL_OPTIONS}{_run}};
+		   $log_val = join(",", @set);
+		}
 	    }
 	    
 	    my $ctl_val = '';
@@ -189,6 +195,11 @@ sub _clean_files{
 	       if($key eq 'repeat_protein'){
 		  #don't care about absolute location
 		  $ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
+	       }
+	       elsif($key eq 'run'){
+		  #don't care about order
+		  my @set = sort @{$CTL_OPTIONS{_run}};
+		  $ctl_val = join(",", @set);
 	       }
 	    }
 

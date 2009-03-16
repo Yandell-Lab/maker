@@ -693,11 +693,11 @@ sub snap {
    my $exe    = $CTL_OPT->{snap};
    my $snaphmm = $CTL_OPT->{snaphmm};
    
-   return [] if(not $exe);
-	
+   return [] if(! grep {/snap/} @{$CTL_OPT->{_run}});
+   
    my %params;
    my $out_file = "$the_void/$seq_id\.all\.snap";
-
+   
    $LOG->add_entry("STARTED", $out_file, "");   
 
    my $command  = $exe;
@@ -739,7 +739,7 @@ sub augustus {
    my $exe = $CTL_OPT->{augustus};
    my $org = $CTL_OPT->{augustus_species};
 
-   return [] if(not $exe);
+   return [] if(! grep {/augustus/} @{$CTL_OPT->{_run}});
 
    my %params;
    my $out_file    = "$the_void/$seq_id\.all\.augustus";
@@ -785,7 +785,7 @@ sub fgenesh {
    my $exe = $CTL_OPT->{fgenesh};
    my $org = $CTL_OPT->{fgenesh_par_file};
 
-   return [] if(not $exe);
+   return [] if(! grep {/fgenesh/} @{$CTL_OPT->{_run}});
 
    my %params;
    my $out_file    = "$the_void/$seq_id\.all\.fgenesh";
@@ -831,7 +831,7 @@ sub twinscan {
    my $exe = $CTL_OPT->{twinscan};
    my $org = $CTL_OPT->{twinscan_species};
 
-   return [] if(not $exe);
+   return [] if(! grep {/twinscan/} @{$CTL_OPT->{_run}});
 
    my %params;
    my $out_file    = "$the_void/$seq_id\.all\.twinscan";
@@ -2016,7 +2016,7 @@ sub set_defaults {
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'predictor'} = 'est2genome';
-      $CTL_OPT{'predictor'} = 'gff' if($main::eva);
+      $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = 'fly';
       $CTL_OPT{'augustus_species'} = 'fly';
       $CTL_OPT{'fgenesh_par_file'} = 'Dicots';
@@ -2037,8 +2037,8 @@ sub set_defaults {
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
-      $CTL_OPT{'eval_pred'} = '';
-      $CTL_OPT{'eval_pred'} = 'snap' if($main::eva);
+      $CTL_OPT{'run'} = '';
+      $CTL_OPT{'unmask'} = 1;
       $CTL_OPT{'clean_up'} = 0;
    }
 
@@ -2183,33 +2183,41 @@ sub load_control_files {
    }
 
    #required for evaluator to work
-   $CTL_OPT{predictor} = 'gff' if($main::eva);
+   $CTL_OPT{predictor} = 'model_gff' if($main::eva);
    $CTL_OPT{model_pass} = 1 if($main::eva);
 
    #parse predictor and error check
    $CTL_OPT{predictor} =~ s/\s+//g;
    my @predictors = split(',', $CTL_OPT{predictor});
-   $CTL_OPT{_predictor} = \@predictors;
 
+   my %uniq;
    foreach my $p (@predictors) {
-      if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
-	  $p !~ /^twinscan$|^jigsaw$|^gff$|^abinit$/
-	 ) {
-	 $error .= "ERROR: Invalid predictor defined: $p\n".
-	 "Valid entries are: est2genome, abinit, gff, snap, augustus,\n".
-	 "or fgenesh\n\n";
-      }
+       if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
+	   $p !~ /^twinscan$|^jigsaw$|^model_gff$|^abinit$/
+	   ) {
+	   $error .= "ERROR: Invalid predictor defined: $p\n".
+	       "Valid entries are: est2genome, model_gff,\n".
+	       "snap, augustus, fgenesh, and abinit\n\n";
+       }
+       else {
+	   push(@{$CTL_OPT{_predictor}}, $p) unless($uniq{$p});
+	   push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
+	   $uniq{$p}++;
+       }
    }
+   
+   #parse run and error check
+   $CTL_OPT{run} =~ s/\s+//g;
+   my @run_preds = split(',', $CTL_OPT{run});
 
-   #parse eval_pred and error check
-   $CTL_OPT{eval_pred} =~ s/\s+//g;
-   my @eval_preds = split(',', $CTL_OPT{eval_pred});
-   $CTL_OPT{_eval_pred} = \@eval_preds;
-
-   foreach my $p (@eval_preds) {
-      if ($p !~ /^snap$|^augustus$|^fgenesh$|^twinscan$|^jigsaw$|^gff$/) {
-	 $error .= "ERROR: Invalid eval_pred defined: $p\n".
-	 "Valid entries are: gff, snap, augustus, or fgenesh\n\n";
+   foreach my $p (@run_preds) {
+      if ($p !~ /^snap$|^augustus$|^fgenesh$|^twinscan$|^jigsaw$/) {
+	 $error .= "ERROR: Invalid value defined for run: $p\n".
+	 "Valid entries are: snap, augustus, or fgenesh\n\n";
+      }
+      else {
+	 push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
+	 $uniq{$p}++;
       }
    }
 
@@ -2282,16 +2290,11 @@ sub load_control_files {
    push (@infiles, 'RepeatMasker') if($CTL_OPT{rmlib});
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
-   push (@infiles, 'snap') if (grep (/snap/, $CTL_OPT{predictor}));
-   push (@infiles, 'augustus') if (grep (/augustus/, $CTL_OPT{predictor})); 
-   push (@infiles, 'fgenesh') if (grep (/fgenesh/, $CTL_OPT{predictor}));
-   push (@infiles, 'twinscan') if (grep (/twinscan/, $CTL_OPT{predictor}));
-   push (@infiles, 'jigsaw') if (grep (/jigsaw/, $CTL_OPT{predictor}));
-   push (@infiles, 'snap') if (grep (/snap/, $CTL_OPT{eval_red}));
-   push (@infiles, 'augustus') if (grep (/augustus/, $CTL_OPT{eval_pred})); 
-   push (@infiles, 'fgenesh') if (grep (/fgenesh/, $CTL_OPT{eval_pred}));
-   push (@infiles, 'twinscan') if (grep (/twinscan/, $CTL_OPT{eval_pred}));
-   push (@infiles, 'jigsaw') if (grep (/jigsaw/, $CTL_OPT{eval_pred}));
+   push (@infiles, 'snap') if (grep (/snap/, @{$CTL_OPT{_run}}));
+   push (@infiles, 'augustus') if (grep (/augustus/, @{$CTL_OPT{_run}})); 
+   push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
+   push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
+   push (@infiles, 'jigsaw') if (grep (/jigsaw/, @{$CTL_OPT{_run}}));
    push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom});
    push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
@@ -2305,7 +2308,7 @@ sub load_control_files {
 				   );
 
    #uniq the array
-   my %uniq;
+   %uniq = ();
    foreach my $in (@infiles) {
       $uniq{$in}++;
    }
@@ -2492,8 +2495,9 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----Gene Prediction Options\n" if(!$ev);
    print OUT "#-----Evaluator Ab-Initio Comparison Options\n" if($ev);
-   print OUT "predictor:$O{predictor} #prediction method for annotations (seperate multiple values by ',')\n" if(!$ev);
-   print OUT "eval_pred:$O{eval_pred} #prediction method for comparisons (seperate multiple values by ',')\n" if($ev);
+   print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n";
+   print OUT "predictor:$O{predictor} #prediction methods for annotations (seperate multiple values by ',')\n" if(!$ev);
+   print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
    print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
    print OUT "augustus_species:$O{augustus_species} #Augustus gene prediction model\n";
    print OUT "fgenesh_par_file:$O{fgenesh_par_file} #Fgenesh parameter file\n";
@@ -2508,7 +2512,7 @@ sub generate_control_files {
    print OUT "cpus:$O{cpus} #max number of cpus to use in BLAST and RepeatMasker\n";
    print OUT "\n";
    print OUT "#-----Maker Specific Options\n";
-   print OUT "evaluate:$O{evaluate} #run Evaluator on all annotations\n" if(!$ev);
+   print OUT "evaluate:$O{evaluate} #run Evaluator on all annotations, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
    print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";

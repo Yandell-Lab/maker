@@ -4,6 +4,18 @@
 package shadow_AED;
 use strict;
 
+sub get_abAED{
+    my $hits = shift;
+    my $tran = shift;
+
+    my $sum;
+    foreach my $h (@$hits){
+	$sum += get_AED([$h], $tran);
+    }
+    return 1 if(! defined $sum);
+    return $sum/@$hits;
+}
+
 sub get_AED {
    my $hits = shift;
    my $tran = shift;
