@@ -581,7 +581,7 @@ sub annotate {
         my %annotations;
 
 	#---model passthrough here
-	if(grep {/^gff$/} @{$CTL_OPTIONS->{_predictor}}){
+	if(grep {/^model_gff$/} @{$CTL_OPTIONS->{_predictor}}){
 	   print STDERR "Processing GFF3 passthrough annotations\n" unless($main::quiet);
 	   my $model_trans = run_it($gf_data,
 				    $the_void,
