@@ -18,6 +18,7 @@ use maker::join;
 use maker::quality_index;
 use Widget::snap;
 use Widget::augustus;
+use GFFDB;
 #use evaluator::so_classifier;
 #use evaluator::evaluate;
 #use evaluator::funs;
@@ -29,8 +30,9 @@ $Storable::forgive_me = 1;
 @ISA = qw(
        );
 
-my $OPT_PREDS; #GLOBAL VARIABLE
 my $LOG; #GLOBAL VARIABLE
+my $SEEN;
+
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
@@ -556,11 +558,17 @@ sub annotate {
 	my $CTL_OPTIONS      = shift;
 	$LOG                 = shift;
 
+	#process fasta files
         my $def   = Fasta::getDef($masked_fasta);
         my $seq_id  = Fasta::def2SeqID($def);
         my $seq_ref   = Fasta::getSeqRef($masked_fasta);
         my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
 
+	#reset gene names
+	my $GFF_DB = new GFFDB($CTL_OPTIONS);
+	$SEEN = $GFF_DB->get_existing_gene_names($seq_id);
+
+	#group evidence and predictions
 	my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
 						      $est_evidence,
 						      $alt_est_evidence,
@@ -728,33 +736,35 @@ sub best_annotations {
 	    }
 	}
 
-	foreach my $g ($p_list){
+	foreach my $g (@$p_list){
 	    my $hits = get_hits_overlapping_gene($g, \@p_bag);
 	    my $abAED = 1;
-	    foreach my $t ($g->{t_structs}){
+	    foreach my $t (@{$g->{t_structs}}){
 		my $f = $t->{hit};
 		my $ab = shadow_AED::get_abAED($hits, $f);
+		$t->{abAED} = $ab;
 		$abAED = $ab if($ab < $abAED);
 	    }
 	    $g->{abAED} = $abAED;
 	}
 
-	foreach my $g ($m_list){
+	foreach my $g (@$m_list){
             my $hits = get_hits_overlapping_gene($g, \@m_bag);
             my $abAED = 1;
-            foreach my $t ($g->{t_structs}){
+            foreach my $t (@{$g->{t_structs}}){
                 my $f = $t->{hit};
-                my $AED = shadow_AED::get_abAED($hits, $f);
-                $abAED = $AED if($AED < $abAED);
+                my $ab = shadow_AED::get_abAED($hits, $f);
+		$t->{abAED} = $ab;
+                $abAED = $ab if($ab < $abAED);
             }
             $g->{abAED} = $abAED;
         }
 
 	#remove low scoring overlaping genes
-	#@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
-	#@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
-	@$p_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
-	@$m_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
+	@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
+	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
+	#@$p_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
+	#@$m_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
 	$p_list = _best($p_list);
 	$m_list = _best($m_list);
 	
@@ -803,7 +813,7 @@ sub _best{
 sub crit1 {
    my $g = shift;
    
-   return $g->{X_AED};
+   return ($g->{AED} + $g->{abAED})/2;
 }
 #------------------------------------------------------------------------
 #sort by evidence AED score
@@ -817,7 +827,7 @@ sub crit2 {
 sub crit3 {
     my $g = shift;
 
-    return $g->{ab_AED};
+    return $g->{abAED};
 }
 #------------------------------------------------------------------------
 #sort by gene length (note replace this with fathom score some day)
@@ -846,19 +856,11 @@ sub run_it {
 	my $ests     = $set->{ests};
 	my $model    = $set->{model};
 
-	#------gff passthrough and ab-init passthrough
-	if ($predictor eq 'model_gff' || $predictor eq 'abinit') {
+	#------gff passthrough
+	if ($predictor eq 'model_gff') {
 	    next if(! defined $model);
 	    my $transcript = $model;
-	    
-	    #add UTR to ab-inits
-	    if($predictor eq 'abinit' && defined($ests)){
-		my $utr_trans = pneu($ests, $transcript, $seq);
-		if (! clean::is_identical_form($utr_trans, $transcript)){
-		    push(@transcripts, [$utr_trans, $set, $transcript]);
-		}
-	    }
-	    
+	    	    
 	    push(@transcripts, [$transcript, $set, undef]);
 	    
 	    $i++;
@@ -866,19 +868,15 @@ sub run_it {
 	}
 
 	#------ab-init passthrough
-	if ($predictor eq 'model_gff' || $predictor eq 'abinit') {
+	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
 	    my $transcript = $model;
 	    
 	    #add UTR to ab-inits
-	    if($predictor eq 'abinit' && defined($ests)){
-		my $utr_trans = pneu($ests, $transcript, $seq);
-		if (! clean::is_identical_form($utr_trans, $transcript)){
-		    push(@transcripts, [$utr_trans, $set, $transcript]);
-		}
+	    my $utr_trans = pneu($ests, $transcript, $seq);
+	    if (! clean::is_identical_form($utr_trans, $transcript)){
+		push(@transcripts, [$utr_trans, $set, $transcript]);
 	    }
-	    
-	    push(@transcripts, [$transcript, $set, undef]);
 	    
 	    $i++;
 	    next;
@@ -1018,6 +1016,7 @@ sub load_transcript_struct {
 	my $i            = shift;
 	my $seq          = shift;
 	my $evi          = shift;
+	my $p_base       = shift;
 	my $the_void     = shift;
 	my $CTL_OPTIONS  = shift;
 
@@ -1044,13 +1043,13 @@ sub load_transcript_struct {
 	
 	#evidence AED
         my $AED = shadow_AED::get_AED(\@bag, $f);
-
         my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 
-	$t_name .= " AED:";
-	$t_name .= sprintf '%.2f', $AED; # two decimal places
-	$t_name .= " $qi";
-	$f->name($t_name); #give name to hit
+	if($p_base){
+	    my $pAED = shadow_AED::get_AED(\@bag, $p_base);
+	    $p_base->name($t_name);
+	    $p_base->{_AED} = $pAED;
+	}
 
         my $t_struct = {'hit'      => $f,
                         't_seq'    => $transcript_seq,
@@ -1106,8 +1105,6 @@ sub get_non_overlapping {
    return \@keepers;
 }
 #------------------------------------------------------------------------
-{
-my %SEEN; #holds names that have already been seen from gff passthrough
 sub group_transcripts {
    my $data         = shift;
    my $seq          = shift;
@@ -1117,24 +1114,28 @@ sub group_transcripts {
    my $predictor    = shift;
    my $the_void     = shift;
    my $CTL_OPTIONS  = shift;
-   
+
+   #place evidence and p_bases in index for easy retrieval
    my @transcripts;
    my %lookup;
+   my %p_bases;
    my %snap_lookup;
    my $temp_id = 0;
    foreach my $datum (@{$data}) {
       my $tra       = $datum->[0];
       my $set       = $datum->[1];
-      my $o_snap    = $datum->[2]; # added 12-15-2006
+      my $p_base    = $datum->[2]; # added 12-15-2006
       
       $tra->{set_id} = $temp_id;
       
       push(@transcripts, $tra);
       
       $lookup{$temp_id} = $set;
+      $p_bases{$temp_id} = $p_base;
       $temp_id++;
    }
    
+   #cluster the transcripts to get genes
    my $careful_clusters = [];
    if ($predictor eq 'model_gff' ) {
       my %index;
@@ -1161,18 +1162,21 @@ sub group_transcripts {
       $careful_clusters = cluster::careful_cluster_phat_hits(\@transcripts, $seq);
    }
    
+   #remove redundant tanscripts in gene
    my @keepers;
    foreach my $c (@{$careful_clusters}) {
       my $best_alt_forms = 
       clean::remove_redundant_alt_splices($c, $seq, 10);
       push(@keepers, $best_alt_forms);
    }	
-   my $c_id = 0;
-   
+
+   #process clusters into genes
+   my $c_id = 0;   
    my @annotations;
    foreach my $c (@keepers) {
       my @t_structs;
       
+      #build gene name here
       my %pred_sources;
       foreach my $f (@{$c}) {
 	 my $source = $f->algorithm;
@@ -1184,42 +1188,47 @@ sub group_transcripts {
       my $g_name;
       if ($predictor eq 'model_gff') {
 	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
-	 if ($g_name =~ /^maker-$seq_id|$seq_id-abinit/) {
-	    $SEEN{$g_name}++;
-	 }
       }
       elsif ($predictor eq 'abinit') {
 	  if ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
-	      $SEEN{$g_name}++;
 	  }
 	  else{
 	      $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm	   
-	      $c_id++ while(exists $SEEN{"$g_name.$c_id"});
+	      $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
 	  }
       }
       else {
 	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm	   
-	 $c_id++ while(exists $SEEN{"$g_name.$c_id"});
+	 $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
 	 $g_name = "$g_name.$c_id";
       }
       
+      #combine evidence for all transcripts
+      my $evidence;
+      if(@{$c} >  1){
+	  foreach my $f (@{$c}) {
+	      my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : {};
+	      merge_evidence($evidence, $evi, $c_id);
+	  }
+      }
+      else{
+	  my $f = $c->[0];
+	  $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
+      }
+
+      #load transcript structs
       my $AED = 1;
-      my $ab_AED = 1;
-      my $X_AED = 1;
       my $i = 1;
       foreach my $f (@{$c}) {
-	 my $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
-	 
-	 my $t_struct = 
-	 load_transcript_struct($f, $g_name, $i, $seq, $evidence, $the_void, $CTL_OPTIONS);
+	 my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
+
+	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTIONS);
 
 	 push(@t_structs, $t_struct);
 	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
-	 $ab_AED = $t_struct->{ab_AED} if($t_struct->{ab_AED} < $ab_AED);
-	 $X_AED = $t_struct->{X_AED} if($t_struct->{X_AED} < $X_AED);
 	 $i++;
       }
       
@@ -1231,8 +1240,6 @@ sub group_transcripts {
 			 'g_end'     => $g_end,
 			 'g_strand'  => $g_strand,
 			 'AED'       => $AED,
-			 'ab_AED'    => $ab_AED,
-			 'X_AED'     => $X_AED,
 			 'predictor' => $predictor
 		       };
       
@@ -1242,6 +1249,18 @@ sub group_transcripts {
    
    return \@annotations;
 }
+#------------------------------------------------------------------------
+sub merge_evidence {
+    my $evi1 = shift;
+    my $evi2 = shift;
+    my $uniq = shift;
+
+    while(my $key = each %$evi2){
+	foreach my $p (@{$evi2->{$key}}){
+	    push(@{$evi1->{$key}}, $p) unless($p->{uniq_set} == $uniq);
+	    $p->{uniq_set} = $uniq;
+	}
+    }
 }
 #------------------------------------------------------------------------
 sub get_non_overlaping_abinits {

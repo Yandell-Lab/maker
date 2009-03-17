@@ -526,6 +526,75 @@ sub phathits_on_contig {
     return \@phat_hits;
 }
 #-------------------------------------------------------------------------------
+sub get_existing_gene_names {
+    my $self = shift;
+    my $seqid = shift;
+ 
+    return {} unless($self->{go_gffdb});
+
+    my $dbfile = $self->{dbfile};
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+
+    #---get names for genes
+    my $h_type = 'model';
+
+    #get gff annotations
+    my $ref1 = [];
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+    }
+
+    #get maker annotations
+    my $ref2 = [];
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    }
+
+    my %names;
+    my $features = _ary_to_features($ref1, $ref2);
+    foreach my $f (@$features){
+	my $tag = $f->primary_tag();
+	
+	if ($tag eq 'gene') {    
+	    my $name =_get_annotation($f,'Name');
+	    ($name) = $name =~ /^([^\s\t\n]+)/;
+	    $names{$name}++;
+	}
+    }
+
+
+    #---get names for preds
+    $h_type = 'pred';
+
+    #get gff annotations
+    $ref1 = [];
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+    }
+
+    #get maker annotations
+    $ref2 = [];
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    }
+
+    $features = _ary_to_features($ref1, $ref2);
+    foreach my $f (@$features){
+	my $tag = $f->primary_tag();
+	
+	if ($tag eq 'match' || $tag eq 'gene') {    
+	    my $name =_get_annotation($f,'Name');
+	    ($name) = $name =~ /^([^\s\t\n]+)/;
+	    $name =~ s/\-mRNA\-\d+$//;
+	    $names{$name}++;
+	}
+    }
+
+    return \%names;
+}
+#-------------------------------------------------------------------------------
 sub last_build {
     my $self = shift;
 

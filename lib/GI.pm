@@ -2208,9 +2208,9 @@ sub load_control_files {
    
    #parse run and error check
    $CTL_OPT{run} =~ s/\s+//g;
-   my @run_preds = split(',', $CTL_OPT{run});
+   my @run = split(',', $CTL_OPT{run});
 
-   foreach my $p (@run_preds) {
+   foreach my $p (@run) {
       if ($p !~ /^snap$|^augustus$|^fgenesh$|^twinscan$|^jigsaw$/) {
 	 $error .= "ERROR: Invalid value defined for run: $p\n".
 	 "Valid entries are: snap, augustus, or fgenesh\n\n";

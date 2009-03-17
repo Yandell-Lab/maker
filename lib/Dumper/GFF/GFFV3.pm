@@ -348,6 +348,7 @@ sub hit_data {
    my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
        ? $h->hsp('best')->name() : $h->name();
    
+   $h_n .= " AED:".$h->{_AED} if($h->{_AED});
    $h_n   =~ s/\s/-/g;
    
    my $h_id = get_id_hit();
@@ -693,9 +694,13 @@ sub get_transcript_data {
 	my $t_off   = $t->{t_offset};
 	my $t_end   = $t->{end};
 	my $t_name  = $t->{t_name};
-	my $t_qi    = $t->{qi};
+	my $t_qi    = $t->{t_qi};
 	my $AED     = $t->{AED};
 	my $score   = $t->{score};
+
+	#format informative name for GFF3
+	$AED = sprintf '%.2f', $AED; # two decimal places
+	$t_name = "$t_name AED:$AED QI:$t_qi";
 
 	my $t_s = $t_hit->strand('query') == 1 ? '+' : '-';
 

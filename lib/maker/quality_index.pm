@@ -242,7 +242,7 @@ sub get_transcript_qi {
 	push(@good_splicers, @{$pol_est_hits});
 	push(@good_splicers, @{$pol_pro_hits});	
 
-	my $qi = 'QI:';
+	my $qi = '';
 	# length 5-prime utr
 	$qi .= $length_5;
 

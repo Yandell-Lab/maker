@@ -183,8 +183,9 @@ sub _clean_files{
 		}
 		elsif($key eq 'run'){
 		   #don't care about order
-		   my @set = sort @{$logged_vals{CTL_OPTIONS}{_run}};
-		   $log_val = join(",", @set);
+		   my @set = split(',', $logged_vals{CTL_OPTIONS}{run});
+		   my @set = sort @set;
+		   $log_val = join(',', @set);
 		}
 	    }
 	    
@@ -199,7 +200,7 @@ sub _clean_files{
 	       elsif($key eq 'run'){
 		  #don't care about order
 		  my @set = sort @{$CTL_OPTIONS{_run}};
-		  $ctl_val = join(",", @set);
+		  $ctl_val = join(',', @set);
 	       }
 	    }
 
@@ -500,6 +501,11 @@ sub _write_new_log {
 	 if($key eq 'repeat_protein'){
 	    #don't care about absolute location
 	    $ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
+	 }
+	 elsif($key eq 'run'){
+	     #don't care about order
+	     my @set = sort @{$CTL_OPTIONS{_run}};
+	     $ctl_val = join(',', @set);
 	 }
       }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";

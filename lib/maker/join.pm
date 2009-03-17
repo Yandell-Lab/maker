@@ -383,61 +383,61 @@ sub clone_hsp{
     my @args;
 
     push(@args, '-query_start');
-    push(@args, $hsp->{QUERY_START});
+    push(@args, $hsp->start('query'));
 
     push(@args, '-query_seq');
-    push(@args, $hsp->{QUERY_SEQ});
+    push(@args, $hsp->query_string);
 
     push(@args, '-score');
-    push(@args, $hsp->{SCORE});
+    push(@args, $hsp->score);
 
     push(@args, '-homology_seq');
-    push(@args, $hsp->{HOMOLOGY_SEQ});
+    push(@args, $hsp->homology_string);
 
     push(@args, '-hit_start');
-    push(@args, $hsp->{HIT_START});
+    push(@args, $hsp->start('hit'));
 
     push(@args, '-hit_seq');
-    push(@args, $hsp->{HIT_SEQ});
+    push(@args, $hsp->hit_string);
 
     push(@args, '-hsp_length');
-    push(@args, $hsp->{HSP_LENGTH});
+    push(@args, $hsp->length('total'));
 
     push(@args, '-identical');
     push(@args, $hsp->{IDENTICAL});
 
     push(@args, '-hit_length');
-    push(@args, $hsp->{HIT_LENGTH});
+    push(@args, $hsp->length('hit'));
 
     push(@args, '-query_name');
     push(@args, $hsp->{QUERY_NAME});
 
     push(@args, '-algorithm');
-    push(@args, $hsp->{ALGORITHM});
+    push(@args, $hsp->algorithm);
 
     push(@args, '-bits');
-    push(@args, $hsp->{BITS});
+    push(@args, $hsp->bits);
 
     push(@args, '-evalue');
-    push(@args, $hsp->{EVALUE});
+    push(@args, $hsp->evalue);
 
     push(@args, '-pvalue');
-    push(@args, $hsp->{PVALUE});
+    push(@args, $hsp->pvalue);
 
     push(@args, '-query_length');
-    push(@args, $hsp->{QUERY_LENGTH});
+    push(@args, $hsp->length('query'));
 
     push(@args, '-query_end');
-    push(@args, $hsp->{QUERY_END});
+    push(@args, $hsp->end('query'));
 
     push(@args, '-conserved');
     push(@args, $hsp->{CONSERVED});
 
     push(@args, '-hit_name');
-    push(@args, $hsp->{HIT_NAME});
+    push(@args, $hsp->name);
 
     push(@args, '-hit_end');
-    push(@args, $hsp->{HIT_END});
+    push(@args, $hsp->end('hit'));
 
     push(@args, '-query_gaps');
     push(@args, $hsp->{QUERY_GAPS});
