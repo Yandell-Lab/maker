@@ -654,9 +654,11 @@ sub grow_cds_data_lookup {
 
 		if     ($b > $e && $hsp->strand('query') == 1){
 			$warn = 1;
+			($b, $e) = ($e, $b);
 		}
 		elsif ($b < $e && $hsp->strand('query') == -1){
 			$warn = 1;
+			($b, $e) = ($e, $b);
 		}
 		else {
 			$warn = 0;
@@ -670,7 +672,7 @@ sub grow_cds_data_lookup {
 			#$hsp->show();
 			push(@{$cdss->{cds}},  [$b, 
 			                        $e, 
-			                        $hsp->strand('query'), 
+			                        $phat_hit->strand('query'), 
 			                        $hsp->name()
 			                        ]); 
 

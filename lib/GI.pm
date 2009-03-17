@@ -1216,11 +1216,11 @@ sub collect_blastn{
    $params{percid}        = $pid_blastn;
    $params{split_hit}     = $split_hit;
 
+   $LOG->add_entry("FINISHED", $blast_finished, "");
+
    my $chunk_keepers = Widget::blastn::parse($blast_finished,
 					     \%params,
 					    );
-
-   $LOG->add_entry("FINISHED", $blast_finished, "");
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
@@ -1467,12 +1467,12 @@ sub collect_blastx{
    $params{percov}        = $pcov_blastx;
    $params{percid}        = $pid_blastx;
    $params{split_hit}     = $split_hit;
+
+   $LOG->add_entry("FINISHED", $blast_finished, "");
    
    my $chunk_keepers = Widget::blastx::parse($blast_finished,
 					     \%params,
 					    );
-
-   $LOG->add_entry("FINISHED", $blast_finished, "");
 
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset()
@@ -1732,11 +1732,11 @@ sub collect_tblastx{
    $params{percid}        = $pid_tblastx;
    $params{split_hit}     = $split_hit;
 
+   $LOG->add_entry("FINISHED", $blast_finished, "");
+
    my $chunk_keepers = Widget::tblastx::parse($blast_finished,
 					      \%params,
 					     );
-
-   $LOG->add_entry("FINISHED", $blast_finished, "");
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),

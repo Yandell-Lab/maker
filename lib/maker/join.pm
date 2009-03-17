@@ -269,98 +269,107 @@ sub join_f {
 	#$g->show();
 	#print "PPPPPPPPPPPPP\n";
 
-	#return $g unless (defined($b_5) || defined($b_3));
-
-	my $sorted_g = PhatHit_utils::sort_hits($g, 'query');
-
-	my $sorted_5 = defined($b_5) ? PhatHit_utils::sort_hits($b_5->{f}, 'query')
-	                             :[];
-
-	my $sorted_3 = defined($b_3) ? PhatHit_utils::sort_hits($b_3->{f}, 'query')
-	                             :[];
-
-	my $join_offset_5 = $b_5->{five_j};
-	my $join_offset_3 = $b_3->{five_j};
-
 	my @anno_hsps;
+	my $new_total_score = 0;
+	my $length = 0;
 
-	#-- push on b_5's upsteam hsps
-	my $i = 0;
-	foreach my $hsp (@{$sorted_5}){
+	if(defined($b_5) || defined($b_3)){
+	    my $sorted_g = PhatHit_utils::sort_hits($g, 'query');
+	    
+	    my $sorted_5 = defined($b_5) ? PhatHit_utils::sort_hits($b_5->{f}, 'query')
+		:[];
+	    
+	    my $sorted_3 = defined($b_3) ? PhatHit_utils::sort_hits($b_3->{f}, 'query')
+		:[];
+	    
+	    my $join_offset_5 = $b_5->{five_j};
+	    my $join_offset_3 = $b_3->{five_j};
+	    
+	    #-- push on b_5's upsteam hsps
+	    my $i = 0;
+	    foreach my $hsp (@{$sorted_5}){
 		last if $i ==  $b_5->{five_j};
 		push(@anno_hsps, clone_hsp($hsp));	
 		$i++;
-	}
-	#-- merge the 5-prime overlaping features
-	if ( !defined($join_offset_5) || $join_offset_5 == -1){
+	    }
+	    #-- merge the 5-prime overlaping features
+	    if ( !defined($join_offset_5) || $join_offset_5 == -1){
 		push(@anno_hsps, clone_hsp($sorted_g->[0]));
-	}
-	else {
+	    }
+	    else {
 		my $merged_hsp = merge_hsp($b_5,
 		                           $sorted_g->[0],
 			                   $q_seq,
 		                           5,
-		                          );
-
+					   );
+		
 		push(@anno_hsps, $merged_hsp);
-	}
-
-	#-- push on the gene pred's interior hsps
-	for (my $i = 1; $i < @{$sorted_g} -1; $i++){
+	    }
+	    
+	    #-- push on the gene pred's interior hsps
+	    for (my $i = 1; $i < @{$sorted_g} -1; $i++){
 		push(@anno_hsps, clone_hsp($sorted_g->[$i]));
-	}
-
-        #-- merge the 3-prime overlaping features
-	my $omega = $#{$sorted_g};
-        if (!defined($join_offset_3) || $join_offset_3 == -1){
-                push(@anno_hsps, clone_hsp($sorted_g->[$omega]));
-        }
-        else {
+	    }
+	    
+	    #-- merge the 3-prime overlaping features
+	    my $omega = $#{$sorted_g};
+	    if (!defined($join_offset_3) || $join_offset_3 == -1){
+		push(@anno_hsps, clone_hsp($sorted_g->[$omega]));
+	    }
+	    else {
 		# sepcial case for single exon genes
 		my $omega_exon;
 		if ($g->num_hsps == 1 && defined($anno_hsps[0])){
-			$omega_exon = pop(@anno_hsps);
+		    $omega_exon = pop(@anno_hsps);
 		}
 		else {
-			$omega_exon = $sorted_g->[$omega];	
+		    $omega_exon = $sorted_g->[$omega];	
 		}
 		my $merged_hsp = merge_hsp($b_3,
                                            $omega_exon,
                                            $q_seq,
                                            3,
                                            );
-
+		
                 push(@anno_hsps, $merged_hsp);
-        }
-
-        #-- push on b_3's downsteam hsps added 52006
-	if (defined($b_3->{three_j})){
+	    }
+	    
+	    #-- push on b_3's downsteam hsps added 52006
+	    if (defined($b_3->{three_j})){
 		for (my $i = $b_3->{three_j} + 1; $i < @{$sorted_3}; $i++){
-			push(@anno_hsps, clone_hsp($sorted_3->[$i]));
+		    push(@anno_hsps, clone_hsp($sorted_3->[$i]));
 		} 
+	    }
+	    
+	    #my $n = @anno_hsps;
+	    #print "LLLLLLLLLLLLLL:$n\n";
+	    #die;
+	    
+	    foreach my $hsp (@anno_hsps){
+		my $score = $hsp->score();
+		$score = 0 if( ! $score || $score eq '.' || $score eq 'NA');
+		$new_total_score += $score;
+		$length += $hsp->length();
+	    }
+	}
+	else{
+	    my @hsps = $g->hsps;
+	    foreach my $h (@hsps){
+		push(@anno_hsps, clone_hsp($h))
+	    }
+	    
+	    $length = $g->length();
+	    $new_total_score = $g->score();
 	}
 
-        #my $n = @anno_hsps;
-        #print "LLLLLLLLLLLLLL:$n\n";
-        #die;
-
-	my $new_total_score = 0;
-	my $length = 0;
-	foreach my $hsp (@anno_hsps){
-	    my $score = $hsp->score();
-	    $score = 0 if( ! $score || $score eq '.' || $score eq 'NA');
-	    $new_total_score += $score;
-	    $length += $hsp->length();
-        }
-
 	my $hit_class = ref($g);
-
+	
 	my $new_f = new $hit_class('-name'         => $g->name,
-                                   '-description'  => $g->description,
-                                   '-algorithm'    => $g->algorithm,
-                                   '-length'       => $length,
-			           '-score'        => $new_total_score, 
-                                 );
+				   '-description'  => $g->description,
+				   '-algorithm'    => $g->algorithm,
+				   '-length'       => $length,
+				   '-score'        => $new_total_score, 
+				   );
 
 	my @evidence;
 	push(@evidence, $g->name);
@@ -371,7 +380,7 @@ sub join_f {
 	$new_f->queryLength(length($$q_seq));
 
 	foreach my $hsp (@anno_hsps){
-		$new_f->add_hsp($hsp);
+	    $new_f->add_hsp($hsp);
 	}
 
 	return $new_f;

@@ -1045,7 +1045,7 @@ sub load_transcript_struct {
         my $AED = shadow_AED::get_AED(\@bag, $f);
         my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 
-	if($p_base){
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff/){
 	    my $pAED = shadow_AED::get_AED(\@bag, $p_base);
 	    $p_base->name($t_name);
 	    $p_base->{_AED} = $pAED;

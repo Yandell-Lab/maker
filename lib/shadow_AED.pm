@@ -12,7 +12,7 @@ sub get_abAED{
     foreach my $h (@$hits){
 	$sum += get_AED([$h], $tran);
     }
-    return 1 if(! defined $sum);
+    return 1 if(! @$hits);
     return $sum/@$hits;
 }
 
