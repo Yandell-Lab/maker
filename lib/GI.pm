@@ -2451,7 +2451,6 @@ sub load_control_files {
 sub generate_control_files {
    my $dir = shift || Cwd::cwd();
    my %O = (@_) ? @_ : set_defaults();
-   $main::eva = 1;
    my $ev = $main::eva;
 
    #--build opts.ctl file
@@ -2522,7 +2521,7 @@ sub generate_control_files {
    print OUT "keep_preds:$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "retry:$O{retry} #number of times to retry a contig if annotation fails for some reason\n";
    print OUT "clean_try:$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
-   print OUT "TMP:$O{TMP} #secify a directory other than the system default temporary directory for temporary files\n";
+   print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
    print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
    close (OUT);
     

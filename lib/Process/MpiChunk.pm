@@ -10,6 +10,7 @@ use Storable;
 use runlog;
 use GI;
 use maker::auto_annotator;
+use evaluator::evaluate;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
@@ -656,7 +657,7 @@ sub _go {
 				   );
 	    
 	    #add tag that says these are masked
-	    foreach my $p (@$masked_preds){
+	    foreach my $p (@$preds){
 	       my $alg = $p->algorithm();
 	       $p->algorithm("$alg\_masked");
 	    }
@@ -1462,6 +1463,7 @@ sub _go {
 	    @args = (qw{chunk
 			the_void
 			out_dir
+			q_seq_ref
 			build
 			fasta
 			masked_fasta
@@ -1486,6 +1488,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
 	    my $out_dir = $VARS->{out_dir};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $build = $VARS->{build};
 	    my $fasta = $VARS->{fasta};
 	    my $masked_fasta = $VARS->{masked_fasta};
@@ -1540,7 +1543,16 @@ sub _go {
 
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
 									     $annotations->{abinit}
-									     );	    
+									     );
+	    if($CTL_OPT{evaluate}){
+		evaluator::evaluate::evaluate_maker_annotations($maker_anno,
+								$q_seq_ref,
+								$out_dir,
+								$the_void,
+								\%CTL_OPT
+								);
+	    }
+	    
 	    #-------------------------CODE
 
 	    #------------------------RESULTS

@@ -20,56 +20,6 @@ use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG $CTL/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
-sub evaluate_in_maker {
-
-	my  ($f, $c_id, $i, $seq,
-             $seq_id, $evi, $abinits, $so_code, $OPT_PREDICTOR, 
-             $transcript_seq, $translation_seq, $offset, $end,
-             $len_3_utr, $l_trans, $alt_spli_sup)  = @_;
-
-	my $box = evaluator::funs::prepare_box_in_maker($f, $evi, 
-		$len_3_utr, $abinits, $l_trans, $seq, \$transcript_seq,
-		\$translation_seq, $offset, $end);
-
-	## Get QI; 
-        my $qi = defined($evi)
-        ? evaluator::funs::get_transcript_qi($box)
-        : 'non-overlapping-'.$OPT_PREDICTOR;
-
-	## Get quality sequence.
-	my $quality_seq = evaluator::funs::get_quality_seq($box);
-
-	## Get splice site location.
-	my $splice_sites = evaluator::funs::get_splice_j_locations($f);
-
-	## Get transcript type (currently always 'mRNA' for maker).
-	my $transcript_type = $box->{transcript_type};
-
-	## Get the completion info for the transcript.
-	my $completion = evaluator::funs::completion($box);
-
-	## Get the alternative splicing support.
-	my $alt = $alt_spli_sup->{$f->{_splice_form}};
-
-	## Get the score for this struct.
-	my $score = scoring($qi, $quality_seq, $so_code, $transcript_type, 
-		$completion, $alt);
-
-
-	my $eva = { 'qi'		=> $qi,
-		    'score'		=> $score,
-		    'quality_seq'	=> $quality_seq,
-		    'completion'	=> $completion,
-		    'alt'		=> $alt,
-		    'transcript_type'	=> $transcript_type,
-		    
-		  };
-
-        return $eva;
-}
-
-
-#-------------------------------------------------------------------------------
 sub evaluate_for_gff {
         my $virgin_fasta     = shift;
         my $masked_fasta     = shift;
@@ -134,11 +84,11 @@ sub evaluate_maker_annotations {
 	    my $hit = $t_struct->{hit};
 	    my $evi = $t_struct->{evi};
 
-	    $pol_p   = maker::auto_annotator::get_selected_types($evi->{gomiph}, 'protein2genome');
-	    $pol_e   = maker::auto_annotator::get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
-	    $blastx  = maker::auto_annotator::get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
-	    $tblastx = maker::auto_annotator::get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
-	    $ab      = $evi->{all_preds};
+	    my $pol_p   = maker::auto_annotator::get_selected_types($evi->{gomiph}, 'protein2genome');
+	    my $pol_e   = maker::auto_annotator::get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	    my $blastx  = maker::auto_annotator::get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
+	    my $tblastx = maker::auto_annotator::get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
+	    my $ab      = $evi->{all_preds};
 
 	    push(@t_cluster, $hit);
 	    push(@pol_p_hits, @$pol_p);
@@ -161,7 +111,7 @@ sub evaluate_maker_annotations {
 	#get gene level statistics
 	my $so_code = evaluator::so_classifier::so_code(\@t_cluster);
 	my $alt_spli_sup = evaluator::funs::alt_spli(\@t_cluster, \@pol_e_hits, $seq);
-	my $geneAED = evaluator::AED::gene_AED($c, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
+	my $geneAED = evaluator::AED::gene_AED(\@t_cluster, \@pol_e_hits, \@pol_p_hits, \@blastx_hits, \@ab_inits, $seq);
 
 	$ann->{geneAED} = $geneAED;
 	$ann->{so_code} = $so_code;
@@ -169,6 +119,7 @@ sub evaluate_maker_annotations {
 	#get transcript level statistics;
 	foreach my $t_struct (@{$ann->{t_structs}}){
 	    my $t_name = $t_struct->{t_name};
+	    my $f = $t_struct->{hit};
 
 	    #run evaluator
 	    my $eva = power_evaluate($f,
@@ -176,7 +127,7 @@ sub evaluate_maker_annotations {
 				     \@pol_p_hits,
 				     \@pol_e_hits,
 				     \@blastx_hits,
-				     \@abinits,
+				     \@ab_inits,
 				     $so_code,
 				     $geneAED,
 				     $alt_spli_sup,
@@ -190,11 +141,11 @@ sub evaluate_maker_annotations {
 	    #print report
 	    my $dir = "$out_base/evaluator";
 	    mkdir($dir) if(! -e $dir);	    
-	    my $file = "$dir/".Fasta::seqID2SafeID($t->{hit}->name);
+	    my $file = "$dir/".Fasta::seqID2SafeID($t_name);
 	    ($file) = $file =~ /^([^\s\t\n]+)/;
-	    $file . = ".eva";
+	    $file .= ".eva";
 	    open(my $FH, "> $file");
-	    print $FH $t->{report};
+	    print $FH $eva->{report};
 	    close($FH);
 	}
     }

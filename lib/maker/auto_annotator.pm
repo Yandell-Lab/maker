@@ -1353,7 +1353,6 @@ sub get_non_overlaping_abinits {
    push(@keepers, @p_keepers);
    push(@keepers, @m_keepers);
 
-
    return (\@keepers);
 }
 #------------------------------------------------------------------------
@@ -1450,6 +1449,19 @@ sub get_longest_m_seq {
 	my $best = shift(@sorted);
 
 	return ($best->[1], $best->[0]) if($best);
+}
+#------------------------------------------------------------------------
+sub get_overlapping_hits {
+    my $eat  = shift;
+    my $hits = shift;
+
+    my @keepers;
+    foreach my $hit (@{$hits}){
+	next unless $hit->strand eq $eat->strand;
+      push(@keepers, $hit)
+	  if compare::overlap($hit, $eat, 'query', 3);
+    }
+    return \@keepers;
 }
 #------------------------------------------------------------------------
 sub get_off_and_str {

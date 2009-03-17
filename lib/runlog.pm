@@ -184,7 +184,7 @@ sub _clean_files{
 		elsif($key eq 'run'){
 		   #don't care about order
 		   my @set = split(',', $logged_vals{CTL_OPTIONS}{run});
-		   my @set = sort @set;
+		   @set = sort @set;
 		   $log_val = join(',', @set);
 		}
 	    }
