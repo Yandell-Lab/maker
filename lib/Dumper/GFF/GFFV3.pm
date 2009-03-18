@@ -663,7 +663,7 @@ sub grow_cds_data_lookup {
 		warn  "WARNING:B > E in GFFV3.pm strand:$q_strand\n" if $warn; 
 		sleep 5 if $warn;
 
-		unless ($hsp_end <= $offset || $hsp_start > $transl_end || $warn){
+		unless ($hsp_end <= $offset || $hsp_start >= $transl_end || $warn){
 			#print "B:$b E:$e nB:$nB nE:$nE\n";
 			#$hsp->show();
 			push(@{$cdss->{cds}},  [$b, 

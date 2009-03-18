@@ -1258,7 +1258,9 @@ sub merge_evidence {
     while(my $key = each %$evi2){
 	next if(ref($evi2->{$key}) ne 'ARRAY');
 	foreach my $p (@{$evi2->{$key}}){
-	    push(@{$evi1->{$key}}, $p) unless($p->{uniq_set} == $uniq);
+	    if(! defined($p->{uniq_set}) || $p->{uniq_set} != $uniq){
+		push(@{$evi1->{$key}}, $p);
+	    }
 	    $p->{uniq_set} = $uniq;
 	}
     }
