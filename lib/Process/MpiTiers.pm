@@ -147,12 +147,16 @@ sub run {
    $self->_next_level if ($self->_level_finished);
    $self->_load_chunks if (!$self->_level_started);
 
-   if($self->num_chunks == 1){
+   while ($self->num_chunks == 1){
        my $chunk = $self->next_chunk;
        $chunk->run($self->id);
        $self->update_chunk($chunk);
 
-       return $self->run;
+       return if ($self->terminated && ! $self->failed);
+       return if ($self->_level_started && ! $self->_level_finished);
+
+       $self->_next_level if ($self->_level_finished);
+       $self->_load_chunks if (!$self->_level_started);
    }
 }
 #--------------------------------------------------------------

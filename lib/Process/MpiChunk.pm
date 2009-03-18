@@ -4,7 +4,7 @@ package Process::MpiChunk;
 
 use strict;
 
-use Error qw(:try :warndie);
+use Error qw(:try);
 use Error::Simple;
 use Storable;
 use runlog;

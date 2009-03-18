@@ -624,7 +624,7 @@ sub grow_cds_data_lookup {
                 my $nB = $hsp->nB('query');
                 my $nE = $hsp->nE('query');
 
-		my $q_strand = $hsp->strand('query');
+		my $q_strand = $phat_hit->strand('query');
 
 		my $hsp_end = abs($nE -$nB) + $hsp_start;
 
@@ -632,47 +632,43 @@ sub grow_cds_data_lookup {
 		#print "offset:$offset transl_end:$transl_end\n";
 
 		my ($b, $e);
-		if ($hsp_start <= $offset && $hsp_end >= $offset){
-			my $d = $offset  - $hsp_start;
+		if ($hsp_start <= $offset && $hsp_end > $offset){
+			my $d = $offset - $hsp_start;
 			$b = $q_strand == 1 ? $nB + ($d + 1) : $nB - ($d + 1);	
 		}
 		else {
-			$b = $nB;	
+			$b = $nB;
 		} 
 
-		if ($hsp_start <= $transl_end && $hsp_end >= $transl_end){
+		if ($hsp_start < $transl_end && $hsp_end >= $transl_end){
 			my $d = $hsp_end - $transl_end;
-			
 			$e = $q_strand == 1 ? $nE - ($d + 1) : $nE + ($d + 1); 
 		}
 		else {
 			$e = $nE;
 		}
 
-
 		my $warn;
 
 		if     ($b > $e && $hsp->strand('query') == 1){
 			$warn = 1;
-			($b, $e) = ($e, $b);
 		}
 		elsif ($b < $e && $hsp->strand('query') == -1){
 			$warn = 1;
-			($b, $e) = ($e, $b);
 		}
 		else {
 			$warn = 0;
 		}
 
-		warn  "WARNING:B > E in GFFV3.pm strand:".$hsp->strand('query')."\n" if $warn; 
+		warn  "WARNING:B > E in GFFV3.pm strand:$q_strand\n" if $warn; 
 		sleep 5 if $warn;
 
-		unless ($hsp_end < $offset || $hsp_start > $transl_end || $warn){
+		unless ($hsp_end <= $offset || $hsp_start > $transl_end || $warn){
 			#print "B:$b E:$e nB:$nB nE:$nE\n";
 			#$hsp->show();
 			push(@{$cdss->{cds}},  [$b, 
 			                        $e, 
-			                        $phat_hit->strand('query'), 
+			                        $q_strand, 
 			                        $hsp->name()
 			                        ]); 
 
