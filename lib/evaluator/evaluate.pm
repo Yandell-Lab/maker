@@ -185,7 +185,7 @@ sub power_evaluate {
 							'exon'=>1,
 						     }  );
 						
-	my $gene_length = abs($eat->nB('query') - $eat->nE('query'));
+	my $gene_length = abs($eat->nB('query') - $eat->nE('query')) + 1;
 
 	my $snap_backwards = {overall_score => 'NA'};
 	$snap_backwards = evaluator::fathom_utils::snap_backwards($box, $CTL
