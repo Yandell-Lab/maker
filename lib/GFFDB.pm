@@ -863,6 +863,51 @@ sub _load_hsps {
     ($hit_name) = $hit_name =~ /(^[^\s]+)/;
     $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
 
+    #added 3/19/2009
+    #check for single and double base pair overhangs
+    if($t->{exons}->[0]->{f}->source_tag =~ /^snap|^augustus|^fgenesh/){
+	my $features = $t->{exons};
+	@{$features} = sort {$a->{f}->start <=> $b->{f}->start} @{$features};
+	my $length = 0;
+	foreach my $e (@{$features}){
+	    $length += abs($e->{f}->end - $e->{f}->start) + 1;
+	}
+	
+	my $overhang = $length % 3;
+	if($overhang != 0){
+	    if($features->[0]->{f}->strand == 1){
+		my $last = $features->[-1];
+		my $l_length = abs($last->{f}->end - $last->{f}->start) + 1;
+		
+		while($l_length <= $overhang){
+		    pop(@{$features});
+		    $overhang -= $l_length;
+		    $last = $features->[-1];
+		    $l_length = abs($last->{f}->end - $last->{f}->start) + 1;
+		}
+		
+		$last->{f}->end($last->{f}->end - $overhang);
+	    }
+	    elsif($features->[0]->{f}->strand == -1){
+		my $last = $features->[0];
+		my $l_length = abs($last->{f}->end - $last->{f}->start) + 1;
+		
+		while($l_length <= $overhang){
+		    shift(@{$features});
+		    $overhang -= $l_length;
+		    $last = $features->[0];
+		    $l_length = abs($last->{f}->end - $last->{f}->start) + 1;
+		}
+		
+		$last->{f}->start($last->{f}->start + $overhang);
+	    }
+	    else{
+		die "FATAL: No exon strand in Widget::snap\n";
+	    }
+	}
+    }
+
+    #build hsps
     foreach my $e (@{$t->{exons}}){
 	my @args;
 	my $hit_end = $e->{f}->end - $e->{f}->start + $hit_start;

@@ -553,9 +553,52 @@ sub load_phat_hits {
 		
                 $f->queryLength($q_len);
 
-		my $hit_start = 1;
 		my $features = $g->{CDS};
-		$features = $g->{exons} if (defined $g->{exons});
+		#$features = $g->{exons} if (defined $g->{exons}); #removed 3/19/2009
+
+		#added 3/19/2009
+		#check for single and double base pair overhangs
+                @{$features} = sort {$a->{b} <=> $b->{b}} @{$features};
+                my $length = 0;
+                foreach my $exon (@{$features}){
+                    $length += abs($exon->{e} - $exon->{b}) + 1;
+                }
+
+                my $overhang = $length % 3;
+                if($overhang != 0){
+                    if($features->[0]->{strand} == 1){
+                        my $last = $features->[-1];
+                        my $l_length = abs($last->{e} - $last->{b}) + 1;
+
+                        while($l_length <= $overhang){
+                            pop(@{$features});
+                            $overhang -= $l_length;
+                            $last = $features->[-1];
+                            $l_length = abs($last->{e} - $last->{b}) + 1;
+                        }
+
+                        $last->{e} -= $overhang;
+                    }
+                    elsif($features->[0]->{strand} == -1){
+                        my $last = $features->[0];
+                        my $l_length = abs($last->{e} - $last->{b}) + 1;
+
+                        while($l_length <= $overhang){
+                            shift(@{$features});
+                            $overhang -= $l_length;
+                            $last = $features->[0];
+                            $l_length = abs($last->{e} - $last->{b}) + 1;
+                        }
+
+                        $last->{b} += $overhang;
+                    }
+                    else{
+                        die "FATAL: No exon strand in Widget::snap\n";
+                    }
+                }
+
+		#build hsps
+		my $hit_start = 1;
 		foreach my $exon (@{$features}){
 			my @args;
 			my $exon_seq = get_exon_seq($exon, $q_seq); # revcomped!

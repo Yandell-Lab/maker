@@ -367,7 +367,49 @@ sub load_phat_hits {
 							       );
 
                 $f->queryLength($q_len);
-       
+
+		#added 3/19/2009
+		#check for single and double base pair overhangs
+                @{$g->{$gene}} = sort {$a->{b} <=> $b->{b}} @{$g->{$gene}};
+                my $length = 0;
+                foreach my $exon (@{$g->{$gene}}){
+                    $length += abs($exon->{e} - $exon->{b}) + 1;
+                }
+
+                my $overhang = $length % 3;
+                if($overhang != 0){
+                    if($g->{$gene}->[0]->{strand} == 1){
+                        my $last = $g->{$gene}->[-1];
+                        my $l_length = abs($last->{e} - $last->{b}) + 1;
+
+                        while($l_length <= $overhang){
+                            pop(@{$g->{$gene}});
+                            $overhang -= $l_length;
+                            $last = $g->{$gene}->[-1];
+                            $l_length = abs($last->{e} - $last->{b}) + 1;
+                        }
+
+                        $last->{e} -= $overhang;
+                    }
+                    elsif($g->{$gene}->[0]->{strand} == -1){
+                        my $last = $g->{$gene}->[0];
+                        my $l_length = abs($last->{e} - $last->{b}) + 1;
+
+                        while($l_length <= $overhang){
+                            shift(@{$g->{$gene}});
+                            $overhang -= $l_length;
+                            $last = $g->{$gene}->[0];
+                            $l_length = abs($last->{e} - $last->{b}) + 1;
+                        }
+
+                        $last->{b} += $overhang;
+                    }
+                    else{
+                        die "FATAL: No exon strand in Widget::snap\n";
+                    }
+                }
+
+		#build hsps
                 my $hit_start = 1;
                 foreach my $exon (@{$g->{$gene}}){
 

@@ -345,11 +345,11 @@ sub hit_data {
    
    my ($class, $type) = get_class_and_type($h, 'hit');
    
-   my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
-       ? $h->hsp('best')->name() : $h->name();
+   my $h_n = $h->name();
    
-   $h_n .= " AED:".$h->{_AED} if($h->{_AED});
-   $h_n   =~ s/\s/-/g;
+   my $name = $h_n;
+   $name .= sprintf ' AED:%.2f', $h->{_AED} if($h->{_AED});
+   $name =~ s/\s/_/g;
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id);
@@ -358,7 +358,7 @@ sub hit_data {
    
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
-   my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand;
+   my $attributes = 'ID='.$h_id.';Name='.$name.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand;
    $attributes .= $h->{-attrib} if($h->{-attrib});
    my $h_l = join("\t", @h_data, $attributes)."\n";
    
@@ -367,7 +367,7 @@ sub hit_data {
    foreach my $hsp (@{$sorted}){
       my $hsp_id = get_id_hsp();
       $hsp_id = join(":", $seq_id, $hsp_id);
-      $hsp_id =~ s/\s/-/g;
+      $hsp_id =~ s/\s/_/g;
       my $hsp_l =
       get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
       
@@ -400,10 +400,8 @@ sub repeat_data {
 
    $class = "blastx:repeatmask" if ($class eq 'blastx');
    
-   my $h_n = $class eq 'repeatmasker' && $type eq 'match' 
-       ? $h->hsp('best')->name() : $h->name();
-   
-   $h_n   =~ s/\s/-/g;
+   my $h_n = $h->name();
+   $h_n   =~ s/\s/_/g;
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id);
@@ -421,7 +419,7 @@ sub repeat_data {
    foreach my $hsp (@{$sorted}){
       my $hsp_id = get_id_hsp();
       $hsp_id = join(":", $seq_id, $hsp_id);
-      $hsp_id =~ s/\s/-/g;
+      $hsp_id =~ s/\s/_/g;
       my $hsp_l =
       get_repeat_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
       
@@ -669,7 +667,7 @@ sub grow_cds_data_lookup {
 			push(@{$cdss->{cds}},  [$b, 
 			                        $e, 
 			                        $q_strand, 
-			                        $hsp->name()
+			                        $phat_hit->name()
 			                        ]); 
 
 			push(@{$cdss->{t_ids}->{$b}->{$e}},  $id);
@@ -743,8 +741,8 @@ sub get_hsp_data {
 
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 
-	  my $hsp_name = $hsp->name();
-             $hsp_name =~ s/\s/-/g;
+	  my $hsp_name = $hit_n;
+             $hsp_name =~ s/\s/_/g;
 
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
@@ -785,8 +783,8 @@ sub get_repeat_hsp_data {
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 	$class = "blastx:repeatmask" if ($class eq 'blastx');
 	
-	my $hsp_name = $hsp->name();
-	   $hsp_name =~ s/\s/-/g;
+	my $hsp_name = $hit_n;
+	   $hsp_name =~ s/\s/_/g;
 
  
         my @data;

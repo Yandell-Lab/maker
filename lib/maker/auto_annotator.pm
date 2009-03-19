@@ -285,27 +285,6 @@ sub join_clusters_on_pred {
    return \@p_clusters;
 }
 #------------------------------------------------------------------------
-# sub purge_single_preds {
-#    my $careful_clusters = shift;
-
-#    my @c_keepers;
-#    foreach my $c (@{$careful_clusters}){
-#       my $ests_in_cluster  = get_selected_types($c, 'est2genome');
-#       my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-#       my $bx_in_cluster    = get_selected_types($c,'blastx');
-#       my $snaps_in_cluster = get_selected_types($c,'snap');
-#       my $augs_in_cluster = get_selected_types($c,'augustus');
-#       if (defined($ests_in_cluster->[0]) ||
-# 	  defined($ps_in_cluster->[0]) ||
-# 	  defined($bx_in_cluster->[0])
-# 	 ){
-# 	    push (@c_keepers, $c);
-#       }
-#    }
-   
-#    return (\@c_keepers);
-# }
-#------------------------------------------------------------------------
 sub purge_short_ESTs_in_clusters{
     my $clusters = shift;
     my $min = shift;
@@ -545,117 +524,119 @@ sub prep_polest_data {
 #------------------------------------------------------------------------
 #this subrutine returns finished annoations for all predictors
 sub annotate {
-        my $virgin_fasta     = shift;
-        my $masked_fasta     = shift;
-	my $chunk_number     = shift; #required to name genes for each chunk
-        my $prot_evidence    = shift;
-        my $est_evidence     = shift;
-	my $alt_est_evidence = shift;
-	my $predictions      = shift;
-	my $models           = shift;
-        my $the_void         = shift;
-	my $build            = shift;
-	my $CTL_OPTIONS      = shift;
-	$LOG                 = shift;
-
-	#process fasta files
-        my $def   = Fasta::getDef($masked_fasta);
-        my $seq_id  = Fasta::def2SeqID($def);
-        my $seq_ref   = Fasta::getSeqRef($masked_fasta);
-        my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
-
-	#reset gene names
-	my $GFF_DB = new GFFDB($CTL_OPTIONS);
-	$SEEN = $GFF_DB->get_existing_gene_names($seq_id);
-
-	#group evidence and predictions
-	my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
-						      $est_evidence,
-						      $alt_est_evidence,
-						      $predictions,
-						      $models,
-						      $v_seq_ref,
-						      $CTL_OPTIONS->{single_exon}
-						     );
-
-        my %annotations;
-
-	#---model passthrough here
-	if(grep {/^model_gff$/} @{$CTL_OPTIONS->{_predictor}}){
-	   print STDERR "Processing GFF3 passthrough annotations\n" unless($main::quiet);
-	   my $model_trans = run_it($gf_data,
-				    $the_void,
-				    $seq_ref,
-				    $v_seq_ref,
-				    $def,
-				    'model_gff',
-				    $the_void,
-				    $CTL_OPTIONS
-				   );
-	   
-	   $annotations{'model_gff'} = group_transcripts($model_trans,
-							 $v_seq_ref,
-							 $seq_id,
-							 $chunk_number,
-							 $build,
-							 'model_gff',
-							 $the_void,
-							 $CTL_OPTIONS
-							 );
-	}
-
-	#---hint based gene prediction here
-	foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
-	   next if($prdr eq 'model_gff' || $prdr eq 'abinit');
-	   print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
-
-	   my $transcripts = run_it($bx_data,
-				    $the_void,
-				    $seq_ref,
-				    $v_seq_ref,
-				    $def,
-				    $prdr,
-				    $CTL_OPTIONS
-				   );
-
-	   my $annot = group_transcripts($transcripts,
-					 $v_seq_ref,
-					 $seq_id,
-					 $chunk_number,
-					 $build,
-					 $prdr,
-					 $the_void,
-					 $CTL_OPTIONS
-					);
-
-	   $annotations{$prdr} =  $annot;
-	}
-
-	#---abinit scoring here
-	print STDERR "Processing ab-initio predictions\n" if(@$pr_data && ! $main::quiet);
-
-	my $pred_trans = run_it($pr_data,
-				$the_void,
-				$seq_ref,
-				$v_seq_ref,
-				$def,
-				'abinit',
-				$CTL_OPTIONS
-			       );
-
-	my $all_ab = group_transcripts($pred_trans,
-				       $v_seq_ref,
-				       $seq_id,
-				       $chunk_number,
-				       $build,
-				       'abinit',
-				       $the_void,
-				       $CTL_OPTIONS
-				      );
-
-	$annotations{'abinit'} = $all_ab;
+    my $virgin_fasta     = shift;
+    my $masked_fasta     = shift;
+    my $chunk_number     = shift; #required to name genes for each chunk
+    my $prot_evidence    = shift;
+    my $est_evidence     = shift;
+    my $alt_est_evidence = shift;
+    my $predictions      = shift;
+    my $models           = shift;
+    my $the_void         = shift;
+    my $build            = shift;
+    my $CTL_OPTIONS      = shift;
+    $LOG                 = shift;
+    
+    #process fasta files
+    my $def   = Fasta::getDef($masked_fasta);
+    my $seq_id  = Fasta::def2SeqID($def);
+    my $seq_ref   = Fasta::getSeqRef($masked_fasta);
+    my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
+    
+    #reset gene names
+    my $GFF_DB = new GFFDB($CTL_OPTIONS);
+    $SEEN = $GFF_DB->get_existing_gene_names($seq_id);
+    
+    #group evidence and predictions
+    my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
+						  $est_evidence,
+						  $alt_est_evidence,
+						  $predictions,
+						  $models,
+						  $v_seq_ref,
+						  $CTL_OPTIONS->{single_exon}
+						  );
+    
+    my %annotations;
+    
+    #---model passthrough here
+    if(grep {/^model_gff$/} @{$CTL_OPTIONS->{_predictor}}){
+	print STDERR "Processing GFF3 passthrough annotations\n" unless($main::quiet);
+	my $model_trans = run_it($gf_data,
+				 $the_void,
+				 $seq_ref,
+				 $v_seq_ref,
+				 $def,
+				 'model_gff',
+				 $the_void,
+				 $CTL_OPTIONS
+				 );
 	
-        return \%annotations;
+	$annotations{'model_gff'} = group_transcripts($model_trans,
+						      $v_seq_ref,
+						      $seq_id,
+						      $chunk_number,
+						      $build,
+						      'model_gff',
+						      $the_void,
+						      $CTL_OPTIONS
+						      );
+    }
+    
+    #---hint based gene prediction here
+    foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
+	next if($prdr eq 'model_gff' || $prdr eq 'abinit');
+	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
+	
+	my $transcripts = run_it($bx_data,
+				 $the_void,
+				 $seq_ref,
+				 $v_seq_ref,
+				 $def,
+				 $prdr,
+				 $CTL_OPTIONS
+				 );
+	
+	my $annot = group_transcripts($transcripts,
+				      $v_seq_ref,
+				      $seq_id,
+				      $chunk_number,
+				      $build,
+				      $prdr,
+				      $the_void,
+				      $CTL_OPTIONS
+				      );
+	
+	   $annotations{$prdr} =  $annot;
+    }
+    
+    #---abinit scoring here
+    print STDERR "Processing ab-initio predictions\n" if(@$pr_data && ! $main::quiet);
+    
+    my $pred_trans = run_it($pr_data,
+			    $the_void,
+			    $seq_ref,
+			    $v_seq_ref,
+			    $def,
+			    'abinit',
+			    $CTL_OPTIONS
+			    );
+    
+    my $all_ab = group_transcripts($pred_trans,
+				   $v_seq_ref,
+				   $seq_id,
+				   $chunk_number,
+				   $build,
+				   'abinit',
+				   $the_void,
+				   $CTL_OPTIONS
+				   );
+    
+    $annotations{'abinit'} = $all_ab;
+    
+    add_abAED(\%annotations);
+    
+    return \%annotations;
 }
 #------------------------------------------------------------------------
 sub get_n_count{
@@ -701,6 +682,77 @@ sub gene2all_phathits {
     return \@hits;
 }
 #------------------------------------------------------------------------
+sub gene2allPbases {
+    my $g = shift;
+    
+    my @hits;
+    foreach my $t (@{$g->{t_structs}}){
+	my $f = $t->{p_base};
+	$f = $t->{hit} if(! $f);
+	push (@hits, $f);
+    }
+    
+    return \@hits;
+}
+#------------------------------------------------------------------------
+sub add_abAED{
+    my $annotations = shift;
+
+    my @p_bag;
+    my @m_bag;
+    my @p_genes;
+    my @m_genes;
+    
+    #collect all no UTR base models to get abAED
+    foreach my $p (keys %$annotations){
+	foreach my $g (@{$annotations->{$p}}){
+	    if($g->{g_strand} == 1){
+		push(@p_genes, $g);
+		next if($p eq 'est2genome');
+		my $hits = gene2allPbases($g);
+		push(@p_bag, @$hits);
+	    }
+	    elsif($g->{g_strand} == -1) {
+		push(@m_genes, $g);
+		next if($p eq 'est2genome');
+		my $hits = gene2allPbases($g);
+		push(@m_bag, @$hits);
+	    }
+	    else{
+		die "ERROR: Logic error in auto_annotator::best_annotations\n";
+	    }
+	}
+    }
+    
+    #calculate abAED plus strand
+    foreach my $g (@p_genes){
+	my $hits = get_hits_overlapping_gene($g, \@p_bag);
+	my $abAED = 1;
+	foreach my $t (@{$g->{t_structs}}){
+	    my $f = $t->{p_base};
+	    $f = $t->{hit} if(! $f);
+	    my $ab = shadow_AED::get_abAED($hits, $f);
+	    $t->{abAED} = $ab;
+	    $abAED = $ab if($ab < $abAED);
+	}
+	$g->{abAED} = $abAED;
+    }
+    
+    #calculate abAED minus strand
+    foreach my $g (@m_genes){
+	my $hits = get_hits_overlapping_gene($g, \@m_bag);
+	my $abAED = 1;
+	foreach my $t (@{$g->{t_structs}}){
+	    my $f = $t->{p_base};
+	    $f = $t->{hit} if(! $f);
+	    my $ab = shadow_AED::get_abAED($hits, $f);
+	    $t->{abAED} = $ab;
+	    $abAED = $ab if($ab < $abAED);
+	}
+	$g->{abAED} = $abAED;
+    }
+}
+#------------------------------------------------------------------------
 #this subrutine returns finished MAKER annotations
 sub best_annotations {
     my $annotations = shift;
@@ -708,27 +760,28 @@ sub best_annotations {
     my $CTL_OPTIONS = shift;
 
     print STDERR "Choosing best annotations\n" unless($main::quiet);
-
+    
     my @keepers;
     if(@{$CTL_OPTIONS->{_predictor}} > 1 || grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}}){
-	my $p_list = [];
-	my $m_list = [];
-	
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
-	my @p_bag;
-	my @m_bag;
+	my $p_list = [];
+	my $m_list = [];
+	my @p_est2g;
+	my @m_est2g;
 	foreach my $p (@{$CTL_OPTIONS->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
-		if($g->{g_strand} == 1){
+		if($p ne 'est2genome' && $g->{g_strand} == 1){
 		    push(@$p_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
-		    my $hits = gene2all_phathits($g);
-		    push(@p_bag, @$hits);
 		}
-		elsif($g->{g_strand} == -1) {
+		elsif($p ne 'est2genome' && $g->{g_strand} == -1) {
 		    push(@$m_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
-		    my $hits = gene2all_phathits($g);
-		    push(@m_bag, @$hits);
+		}
+		elsif($g->{g_strand} == 1){
+		    push(@p_est2g, $g); #seperate est2genome genes
+		}
+		elsif($g->{g_strand} == -1){
+		    push(@m_est2g, $g); #seperate est2genome genes
 		}
 		else{
 		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -736,35 +789,11 @@ sub best_annotations {
 	    }
 	}
 
-	foreach my $g (@$p_list){
-	    my $hits = get_hits_overlapping_gene($g, \@p_bag);
-	    my $abAED = 1;
-	    foreach my $t (@{$g->{t_structs}}){
-		my $f = $t->{hit};
-		my $ab = shadow_AED::get_abAED($hits, $f);
-		$t->{abAED} = $ab;
-		$abAED = $ab if($ab < $abAED);
-	    }
-	    $g->{abAED} = $abAED;
-	}
-
-	foreach my $g (@$m_list){
-            my $hits = get_hits_overlapping_gene($g, \@m_bag);
-            my $abAED = 1;
-            foreach my $t (@{$g->{t_structs}}){
-                my $f = $t->{hit};
-                my $ab = shadow_AED::get_abAED($hits, $f);
-		$t->{abAED} = $ab;
-                $abAED = $ab if($ab < $abAED);
-            }
-            $g->{abAED} = $abAED;
-        }
-
 	#remove low scoring overlaping genes
 	@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
 	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
-	#@$p_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
-	#@$m_list  = sort {crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
+	push(@$p_list, @p_est2g); #est2genome added to end, will only appear if nothing else overlaps
+	push(@$m_list, @m_est2g); #est2genome added to end, will only appear if nothing else overlaps 
 	$p_list = _best($p_list);
 	$m_list = _best($m_list);
 	
@@ -834,7 +863,7 @@ sub crit3 {
 sub crit4 {
     my $g = shift;
 
-    my $length = abs($g->{g_end} = $g->{g_start}) + 1;
+    my $length = length($g->{t_structs}->[0]->{p_seq});
 
     return $length;
 }
@@ -874,9 +903,7 @@ sub run_it {
 	    
 	    #add UTR to ab-inits
 	    my $utr_trans = pneu($ests, $transcript, $seq);
-	    if (! clean::is_identical_form($utr_trans, $transcript)){
-		push(@transcripts, [$utr_trans, $set, $transcript]);
-	    }
+	    push(@transcripts, [$utr_trans, $set, $transcript]);
 	    
 	    $i++;
 	    next;
@@ -1044,11 +1071,11 @@ sub load_transcript_struct {
 	#evidence AED
         my $AED = shadow_AED::get_AED(\@bag, $f);
         my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
+	$f->name($t_name);
 
 	if($p_base && $p_base->algorithm !~ /est2genome|est_gff/){
-	    my $pAED = shadow_AED::get_AED(\@bag, $p_base);
 	    $p_base->name($t_name);
-	    $p_base->{_AED} = $pAED;
+	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
 	}
 
         my $t_struct = {'hit'      => $f,
@@ -1059,7 +1086,8 @@ sub load_transcript_struct {
 		        't_name'   => $t_name,
 			't_qi'     => $qi,
 			'AED'      => $AED,
-			'evi'      => $evi
+			'evi'      => $evi,
+			'p_base'   => $p_base
                     };
 
 	return $t_struct;
@@ -1207,16 +1235,10 @@ sub group_transcripts {
       }
       
       #combine evidence for all transcripts
-      my $evidence;
-      if(@{$c} >  1){
-	  foreach my $f (@{$c}) {
-	      my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : {};
-	      merge_evidence($evidence, $evi, $c_id);
-	  }
-      }
-      else{
-	  my $f = $c->[0];
-	  $evidence = defined($f->{set_id}) ? $lookup{$f->{set_id}} : undef;
+      my $evidence = {};
+      foreach my $f (@{$c}) {
+	  my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : {};
+	  merge_evidence($evidence, $evi);
       }
 
       #load transcript structs
@@ -1253,15 +1275,28 @@ sub group_transcripts {
 sub merge_evidence {
     my $evi1 = shift;
     my $evi2 = shift;
-    my $uniq = shift;
 
+    #reset uniq for set to be added
     while(my $key = each %$evi2){
 	next if(ref($evi2->{$key}) ne 'ARRAY');
-	foreach my $p (@{$evi2->{$key}}){
-	    if(! defined($p->{uniq_set}) || $p->{uniq_set} != $uniq){
-		push(@{$evi1->{$key}}, $p);
-	    }
-	    $p->{uniq_set} = $uniq;
+	foreach my $f (@{$evi2->{$key}}){
+	    $f->{_uniq_set} = 0;
+	}
+    }
+    #set uniq for existing set
+    while(my $key = each %$evi1){
+	next if(ref($evi1->{$key}) ne 'ARRAY');
+	foreach my $f (@{$evi1->{$key}}){
+	    $f->{_uniq_set} = 1;
+	}
+    }
+
+    #now only add hits where uniq is not set
+    while(my $key = each %$evi2){
+	next if(ref($evi2->{$key}) ne 'ARRAY');
+	foreach my $f (@{$evi2->{$key}}){
+	    push(@{$evi1->{$key}}, $f) if(! $f->{_uniq_set});
+	    $f->{_uniq_set} = 1;
 	}
     }
 }
@@ -1346,15 +1381,11 @@ sub get_non_overlaping_abinits {
    }
    
    #get best non-overlapping set
+   my @keepers;
    @p_keepers  = sort {crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @p_keepers;
    @m_keepers  = sort {crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @m_keepers;
-   @p_keepers = @{_best(\@p_keepers)};
-   @m_keepers = @{_best(\@m_keepers)};
-
-   #final set
-   my @keepers;
-   push(@keepers, @p_keepers);
-   push(@keepers, @m_keepers);
+   push(@keepers, @{_best(\@p_keepers)});
+   push(@keepers, @{_best(\@m_keepers)});
 
    return (\@keepers);
 }
@@ -1392,17 +1423,20 @@ sub get_selected_types {
 
 	my @keepers;
 	foreach my $f (@{$c}){
-		foreach my $type (@_){
-		   if ($f->algorithm =~ /^$type$/i){
-		      push(@keepers, $f);
-		   }
-		   elsif ($f->algorithm =~ /^$type\:/i){
-		      push(@keepers, $f);
-		   }
-		   elsif ($f->algorithm =~ /exonerate\:\:$type$/i){
-		      push(@keepers, $f);
-		   }
+	    foreach my $type (@_){
+		if ($f->algorithm =~ /^$type$/i){
+		    push(@keepers, $f);
+		    last;
 		}
+		elsif ($f->algorithm =~ /^$type\:/i){
+		    push(@keepers, $f);
+		    last;
+		}
+		elsif ($f->algorithm =~ /exonerate\:\:$type$/i){
+		    push(@keepers, $f);
+		    last;
+		}
+	    }
 	}
 
 	return \@keepers;
@@ -1613,5 +1647,4 @@ sub combine {
 }
 #------------------------------------------------------------------------
 1;
-
 

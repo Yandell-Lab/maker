@@ -747,7 +747,8 @@ sub augustus {
    $LOG->add_entry("STARTED", $out_file, ""); 
 
    my $command  = $exe;
-   $command .= ' --species='."$org";
+   $command .= " --species=$org";
+   $command .= " --UTR=off"; #added 3/19/2009
    $command .= " $in_file";
    $command .= " > $out_file";
 
