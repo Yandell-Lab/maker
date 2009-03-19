@@ -1294,6 +1294,7 @@ sub merge_evidence {
     #now only add hits where uniq is not set
     while(my $key = each %$evi2){
 	next if(ref($evi2->{$key}) ne 'ARRAY');
+	$evi1->{$key} = [] if(! $evi1->{$key});
 	foreach my $f (@{$evi2->{$key}}){
 	    push(@{$evi1->{$key}}, $f) if(! $f->{_uniq_set});
 	    $f->{_uniq_set} = 1;
