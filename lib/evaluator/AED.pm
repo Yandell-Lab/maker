@@ -53,9 +53,8 @@ sub gene_AED {
 	my $c = shift; # The gene object;
 	my $pol_e_hits = shift;
 	my $pol_p_hits = shift;
-	my $ab_inits  = shift;
 	my $blastx_hits = shift;
-
+	my $ab_inits  = shift;
 	my $seq = shift;
 
 	my @transcripts_in_gene;
