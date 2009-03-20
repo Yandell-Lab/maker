@@ -26,6 +26,7 @@ use Widget::blastx;
 use Widget::tblastx;
 use Widget::blastn;
 use Widget::snap; 
+use Widget::genemark; 
 use Widget::fgenesh;
 use Widget::xdformat;
 use Widget::formatdb;
@@ -678,6 +679,7 @@ sub abinits {
    push(@preds, @{snap(@_)});
    push(@preds, @{augustus(@_)});
    push(@preds, @{fgenesh(@_)});
+   push(@preds, @{genemark(@_)});
    push(@preds, @{twinscan(@_)});
 
    return \@preds;
@@ -720,6 +722,53 @@ sub snap {
    $params{min_gene_score}  = -100000; #0;
 		
    my $keepers = Widget::snap::parse($out_file,
+				     \%params,
+				     $in_file,
+				    );
+
+   $LOG->add_entry("FINISHED", $out_file, "");
+
+   return $keepers;
+}
+#-----------------------------------------------------------------------------
+sub genemark {
+   my $in_file     = shift;
+   my $the_void    = shift;
+   my $seq_id      = shift;
+   my $CTL_OPT     = shift;
+   my $LOG         = shift;
+   
+   my $exe    = $CTL_OPT->{gmhmme3};
+   my $hmm = $CTL_OPT->{gmhmm};
+   
+   return [] if(! grep {/genemark/} @{$CTL_OPT->{_run}});
+   
+   my %params;
+   my $out_file = "$the_void/$seq_id\.all\.genemark";
+   
+   $LOG->add_entry("STARTED", $out_file, "");   
+
+   my $command  = $exe;
+   $command .= " -m $hmm";
+   $command .= " -o $out_file";
+   $command .= " -f gtf";
+   $command .= " $in_file";
+
+   my $w = new Widget::genemark();
+	
+   if (-e $out_file && ! $CTL_OPT->{force}) {
+      print STDERR "re reading genemark report.\n" unless $main::quiet;
+      print STDERR "$out_file\n" unless $main::quiet;
+   }
+   else {
+      print STDERR "running  genemark.\n" unless $main::quiet;
+      $w->run($command);
+   }
+	
+   $params{min_exon_score}  = -100000; #-10000;
+   $params{min_gene_score}  = -100000; #0;
+		
+   my $keepers = Widget::genemark::parse($out_file,
 				     \%params,
 				     $in_file,
 				    );
@@ -2019,6 +2068,7 @@ sub set_defaults {
       $CTL_OPT{'predictor'} = 'est2genome';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = 'fly';
+      $CTL_OPT{'gmhmm'} = '';
       $CTL_OPT{'augustus_species'} = 'fly';
       $CTL_OPT{'fgenesh_par_file'} = 'Dicots';
       $CTL_OPT{'model_gff'} = '';
@@ -2077,6 +2127,7 @@ sub set_defaults {
 		  'RepeatMasker',
 		  'exonerate',
 		  'snap',
+		  'gmhmme3',
 		  'augustus',
 		  'fgenesh',
 		  'twinscan',
@@ -2194,11 +2245,11 @@ sub load_control_files {
    my %uniq;
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
-	   $p !~ /^twinscan$|^jigsaw$|^model_gff$|^abinit$/
+	   $p !~ /^genemark$|^jigsaw$|^model_gff$|^abinit$/
 	   ) {
 	   $error .= "ERROR: Invalid predictor defined: $p\n".
-	       "Valid entries are: est2genome, model_gff,\n".
-	       "snap, augustus, fgenesh, and abinit\n\n";
+	       "Valid entries are: est2genome, model_gff, snap,\n".
+	       "genemark, augustus, fgenesh, and abinit\n\n";
        }
        else {
 	   push(@{$CTL_OPT{_predictor}}, $p) unless($uniq{$p});
@@ -2212,9 +2263,9 @@ sub load_control_files {
    my @run = split(',', $CTL_OPT{run});
 
    foreach my $p (@run) {
-      if ($p !~ /^snap$|^augustus$|^fgenesh$|^twinscan$|^jigsaw$/) {
+      if ($p !~ /^snap$|^augustus$|^fgenesh$|^genemark$|^jigsaw$/) {
 	 $error .= "ERROR: Invalid value defined for run: $p\n".
-	 "Valid entries are: snap, augustus, or fgenesh\n\n";
+	 "Valid entries are: snap, augustus, genemark, or fgenesh\n\n";
       }
       else {
 	 push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
@@ -2292,6 +2343,7 @@ sub load_control_files {
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'snap') if (grep (/snap/, @{$CTL_OPT{_run}}));
+   push (@infiles, 'gmhmme3') if (grep (/genemark/, @{$CTL_OPT{_run}}));
    push (@infiles, 'augustus') if (grep (/augustus/, @{$CTL_OPT{_run}})); 
    push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
    push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
@@ -2354,6 +2406,12 @@ sub load_control_files {
        (! exists $ENV{ZOE} || ! -e $ENV{ZOE}."/HMM/".$CTL_OPT{snaphmm})
       ) {
       $error .= "ERROR: The snaphmm specified for Snap/Fathom in maker_opts.ctl does not exist.\n\n";
+   }
+   if (grep (/^gmhmme3$/, @infiles) && not $CTL_OPT{gmhmm}) {
+      $ error .=  "ERROR: There is no model specified for for GeneMark in maker_opts.ctl gmhmm.\n\n";
+   }
+   elsif (grep (/^gmhmme3$/, @infiles) && ! -e $CTL_OPT{gmhmm}) {
+      $error .= "ERROR: The gmhmm specified for GeneMark in maker_opts.ctl does not exist.\n\n";
    }
    if (grep (/^fgenesh$/, @infiles)) {
       if (! $CTL_OPT{fgenesh_par_file}) {
@@ -2499,6 +2557,7 @@ sub generate_control_files {
    print OUT "predictor:$O{predictor} #prediction methods for annotations (seperate multiple values by ',')\n" if(!$ev);
    print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
    print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
+   print OUT "gmhmm:$O{gmhmm} #GeneMark HMM model\n";
    print OUT "augustus_species:$O{augustus_species} #Augustus gene prediction model\n";
    print OUT "fgenesh_par_file:$O{fgenesh_par_file} #Fgenesh parameter file\n";
    print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
@@ -2571,6 +2630,7 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----Ab-initio Gene Prediction Algorithms\n";
    print OUT "snap:$O{snap} #location of snap executable\n";
+   print OUT "gmhmme3:$O{gmhmme3} #location of eukaryotic genemark executable\n";
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
    print OUT "twinscan:$O{twinscan} #location of twinscan executable (not yet implemented)\n";

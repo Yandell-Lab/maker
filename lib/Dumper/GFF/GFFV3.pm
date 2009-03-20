@@ -465,6 +465,9 @@ sub get_class_and_type {
         elsif ($class =~ /^snap$/i){
 	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
         }
+        elsif ($class =~ /^genemark$/i){
+	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
+        }
         elsif ($class =~ /^augustus$/i){
 	    $type = $k eq 'hit' ? 'match' : 'match_part' ;
         }
