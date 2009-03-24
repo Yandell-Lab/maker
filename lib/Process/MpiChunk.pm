@@ -97,8 +97,8 @@ sub prepare {
 				  out_dir    => $VARS->{out_dir},
 				  the_void   => $VARS->{the_void},
 				  fasta_ref  => \$VARS->{fasta}},
-				 $VARS->{the_void}."/run.log"
-				);
+				  $VARS->{the_void}."/run.log"
+				 );
       
       ($VARS->{c_flag}, my $message) = $VARS->{LOG}->get_continue_flag();
       $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, $VARS->{out_dir}, $message);
@@ -389,7 +389,6 @@ sub _go {
 					       $CTL_OPT{RepeatMasker},
 					       '',
 					       $CTL_OPT{cpus},
-					       $CTL_OPT{force},
 					       $LOG
 					      );
 	 
@@ -405,7 +404,6 @@ sub _go {
 					       $CTL_OPT{RepeatMasker},
 					       $CTL_OPT{rmlib},
 					       $CTL_OPT{cpus},
-					       $CTL_OPT{force},
 					       $LOG
 					      );
 	 
@@ -461,6 +459,7 @@ sub _go {
 
 	    my $res_dir;
 	    if ($CTL_OPT{_repeat_protein}) {
+	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastx_as_chunks($chunk,
 					       $db,
 					       $the_void,
@@ -472,7 +471,6 @@ sub _go {
 					       $CTL_OPT{repeat_protein},
 					       $CTL_OPT{_formater},
 					       $self->{RANK},
-					       $CTL_OPT{force},
 					       $LOG,
 					       $LOG_FLAG
 					      );
@@ -521,7 +519,6 @@ sub _go {
 						       $CTL_OPT{pcov_rm_blastx},
 						       $CTL_OPT{pid_rm_blastx},
 						       $CTL_OPT{split_hit},
-						       $CTL_OPT{force},
 						       $LOG
 						      );
 	 
@@ -660,6 +657,9 @@ sub _go {
 	    foreach my $p (@$preds){
 	       my $alg = $p->algorithm();
 	       $p->algorithm("$alg\_masked");
+	       foreach my $h($p->hsps){
+		   $h->algorithm("$alg\_masked");
+	       }
 	    }
 
 	    #now do unmasked predictions
@@ -771,6 +771,7 @@ sub _go {
 	    #-blastn search the file against ESTs
 	    my $res_dir;
 	    if ($CTL_OPT{_est}) {
+	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastn_as_chunks($chunk,
 					       $db,
 					       $the_void,
@@ -782,7 +783,6 @@ sub _go {
 					       $CTL_OPT{est},
 					       $CTL_OPT{_formater},
 					       $self->{RANK},
-					       $CTL_OPT{force},
 					       $LOG,
 					       $LOG_FLAG
 					      );
@@ -835,7 +835,6 @@ sub _go {
 						    $CTL_OPT{pcov_blastn},
 						    $CTL_OPT{pid_blastn},
 						    $CTL_OPT{split_hit},
-						    $CTL_OPT{force},
 						    $LOG
 						   );
 	    }
@@ -885,10 +884,10 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = ($self->id =~ /^\d+\:\d+\:0$/) ? 1 : 0;
 
-
 	    #-blastx search the file against ESTs
 	    my $res_dir;
 	    if ($CTL_OPT{_protein}) {
+	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastx_as_chunks($chunk,
 					       $db,
 					       $the_void,
@@ -900,7 +899,6 @@ sub _go {
 					       $CTL_OPT{protein},
 					       $CTL_OPT{_formater},
 					       $self->{RANK},
-					       $CTL_OPT{force},
 					       $LOG,
 					       $LOG_FLAG
 					      );
@@ -951,7 +949,6 @@ sub _go {
 						    $CTL_OPT{pcov_blastx},
 						    $CTL_OPT{pid_blastx},
 						    $CTL_OPT{split_hit},
-						    $CTL_OPT{force},
 						    $LOG
 						   );
 	    }
@@ -1004,6 +1001,7 @@ sub _go {
 
 	    my $res_dir;
 	    if ($CTL_OPT{_altest}) {
+	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::tblastx_as_chunks($chunk,
 						$db,
 						$the_void,
@@ -1015,7 +1013,6 @@ sub _go {
 						$CTL_OPT{altest},
 						$CTL_OPT{_formater},
 						$self->{RANK},
-						$CTL_OPT{force},
 						$LOG,
 						$LOG_FLAG
 					       );
@@ -1065,7 +1062,6 @@ sub _go {
 						      $CTL_OPT{pcov_tblastx},
 						      $CTL_OPT{pid_tblastx},
 						      $CTL_OPT{split_hit},
-						      $CTL_OPT{force},
 						      $LOG
 						     );
 	    }
@@ -1342,7 +1338,6 @@ sub _go {
 						      $CTL_OPT{pid_blastx},
 						      $CTL_OPT{ep_score_limit},
 						      $CTL_OPT{ep_matrix},
-						      $CTL_OPT{force},
 						      $LOG
 						     );
       
@@ -1427,7 +1422,6 @@ sub _go {
 						      $CTL_OPT{pid_blastn},
 						      $CTL_OPT{en_score_limit},
 						      $CTL_OPT{en_matrix},
-						      $CTL_OPT{force},
 						      $LOG
 						     ); 
 	    
@@ -1544,6 +1538,14 @@ sub _go {
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
 									     $annotations->{abinit}
 									     );
+
+	    #add non-overlapping to final set if specified
+	    if($CTL_OPT{keep_preds}){
+		push(@$maker_anno, @$non_over);
+		$non_over = [];
+	    }
+
+	    #run evaluator if specified
 	    if($CTL_OPT{evaluate}){
 		evaluator::evaluate::evaluate_maker_annotations($maker_anno,
 								$q_seq_ref,

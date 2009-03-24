@@ -248,7 +248,6 @@ sub reblast_merged_hits {
 			      $CTL_OPT{pid_blastx},
 			      $CTL_OPT{split_hit},
 			      $CTL_OPT{cpus},
-			      $CTL_OPT{force},
 			      $LOG
 			     );
 	  
@@ -269,7 +268,6 @@ sub reblast_merged_hits {
 			      $CTL_OPT{pid_blastn},
 			      $CTL_OPT{split_hit},
 			      $CTL_OPT{cpus},
-			      $CTL_OPT{force},
 			      $LOG
 			     );
 	  
@@ -290,7 +288,6 @@ sub reblast_merged_hits {
 			       $CTL_OPT{pid_tblastx},
 			       $CTL_OPT{split_hit},
 			       $CTL_OPT{cpus},
-			       $CTL_OPT{force},
 			       $LOG
 			      );
 
@@ -463,9 +460,11 @@ sub get_p_and_t_fastas {
    my $p_seq  = $t_struct->{p_seq};
    my $t_off  = $t_struct->{t_offset};
    my $t_name = $t_struct->{t_name};
+   my $AED    = $t_struct->{AED};
+   my $QI     = $t_struct->{t_qi};
 	
-   my $p_def = '>'.$t_name.' protein'; 
-   my $t_def = '>'.$t_name.' transcript offset:'.$t_off;
+   my $p_def = '>'.$t_name.' protein AED:'.$AED.' QI:'.$QI; 
+   my $t_def = '>'.$t_name.' transcript offset:'.$t_off.' AED:'.$AED.' QI:'.$QI;
 	
    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
@@ -504,39 +503,45 @@ sub create_blastdb {
    my $CTL_OPT = shift @_;
    my $mpi_size = shift@_ || 1;
 
-   ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT->{protein}, $mpi_size, $CTL_OPT->{alt_peptide});
-   ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT->{est}, $mpi_size);
-   ($CTL_OPT->{_est_reads},  $CTL_OPT->{d_db}) = split_db($CTL_OPT->{est_reads}, $mpi_size);
-   ($CTL_OPT->{_altest},  $CTL_OPT->{a_db}) = split_db($CTL_OPT->{altest}, $mpi_size);
-   ($CTL_OPT->{_repeat_protein}, $CTL_OPT->{r_db}) = split_db($CTL_OPT->{repeat_protein}, $mpi_size, $CTL_OPT->{alt_peptide});
+   ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
+   ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
+   ($CTL_OPT->{_est_reads},  $CTL_OPT->{d_db}) = split_db($CTL_OPT, 'est_reads', $mpi_size);
+   ($CTL_OPT->{_altest},  $CTL_OPT->{a_db}) = split_db($CTL_OPT, 'altest', $mpi_size);
+   ($CTL_OPT->{_repeat_protein}, $CTL_OPT->{r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
 }
 #----------------------------------------------------------------------------
 sub split_db {
-   my $file = shift @_;
+   my $CTL_OPT  = shift @_;
+   my $key      = shift @_;
    my $mpi_size = shift @_ || 1;
-   my $alt = shift @_;
 
+   my $file = $CTL_OPT->{$key};
+   my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
+   
    return ('', []) if (not $file);
-
+   
    my $fasta_iterator = new Iterator::Fasta($file);
    my $db_size = $fasta_iterator->number_of_entries();
    my $bins = $mpi_size;
    $bins = $db_size if ($db_size < $bins);
-
+   
    my @fhs;
    my @db_files;
-
-   my ($f_name) = $file =~ /([^\/]+$)/;
+   
+   my ($f_name) = $file =~ /([^\/]+)$/;
    $f_name =~ s/\.fasta$//;
     
    my $d_name = "$f_name\.mpi\.$mpi_size";
-   my $b_dir = cwd(). "/mpi_blastdb";
+   my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
    my $f_dir = "$b_dir/$d_name";
    my $t_dir = $TMP."/$d_name";
    my $t_full = $t_dir.".fasta";
    my $f_full = $f_dir.".fasta";
+			  
+   #rebuild fastas on force
+   File::Path::rmtree($b_dir) if ($CTL_OPT->{force});
 
-   if (-e "$f_dir") {
+   if(-e "$f_dir"){
       my @t_db = <$f_dir/*$d_name\.*>;
 
       foreach my $f (@t_db) {
@@ -709,7 +714,7 @@ sub snap {
 	
    my $w = new Widget::snap();
 	
-   if (-e $out_file && ! $CTL_OPT->{force}) {
+   if (-e $out_file) {
       print STDERR "re reading snap report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -751,12 +756,11 @@ sub genemark {
    my $command  = $exe;
    $command .= " -m $hmm";
    $command .= " -o $out_file";
-   $command .= " -f gtf";
    $command .= " $in_file";
 
    my $w = new Widget::genemark();
 	
-   if (-e $out_file && ! $CTL_OPT->{force}) {
+   if (-e $out_file) {
       print STDERR "re reading genemark report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -803,7 +807,7 @@ sub augustus {
 
    my $w = new Widget::augustus();
 
-   if (-e $out_file && ! $CTL_OPT->{force}) {
+   if (-e $out_file) {
       print STDERR "re reading augustus report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -849,7 +853,7 @@ sub fgenesh {
 
    my $w = new Widget::fgenesh();
 
-   if (-e $out_file && ! $CTL_OPT->{force}) {
+   if (-e $out_file) {
       print STDERR "re reading fgenesh report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -895,7 +899,7 @@ sub twinscan {
 
    my $w = new Widget::twinscan();
 
-   if (-e $out_file && ! $CTL_OPT->{force}) {
+   if (-e $out_file) {
       print STDERR "re reading twinscan report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -930,7 +934,6 @@ sub polish_exonerate {
    my $pid               = shift;
    my $score_limit       = shift;
    my $matrix            = shift;
-   my $opt_f             = shift;
    my $LOG               = shift;
 
    my $def = Fasta::getDef($g_fasta);
@@ -996,7 +999,6 @@ sub polish_exonerate {
 					  $exe,
 					  $score_limit,
 					  $matrix,
-					  $opt_f,
 					  $LOG
 					 );
 
@@ -1055,7 +1057,6 @@ sub to_polisher {
    my $exe      = shift;
    my $score_limit = shift;
    my $matrix = shift;
-   my $opt_f = shift;
    my $LOG   = shift;
 
    if ($type eq 'p') {
@@ -1066,7 +1067,6 @@ sub to_polisher {
 						  $exe,
 						  $score_limit,
 						  $matrix,
-						  $opt_f,
 						  $LOG
 						 );
    }
@@ -1078,7 +1078,6 @@ sub to_polisher {
 					      $exe,
 					      $score_limit,
 					      $matrix,
-					      $opt_f,
 					      $LOG
 					     );
    }
@@ -1122,6 +1121,7 @@ sub build_all_indexes {
 
    foreach my $db (@dbs){
        next if(! $db);
+       unlink("$db.index") if($CTL_OPT->{force} && -e "$db.index");
        new Bio::DB::Fasta($db);
    }
 }
@@ -1181,7 +1181,6 @@ sub blastn_as_chunks {
    my $old_db = shift;
    my $formater = shift;
    my $rank = shift;
-   my $opt_f = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
 
@@ -1208,14 +1207,14 @@ sub blastn_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f)) {
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished)) {
        if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
 	   copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastn');
 	   $lock->unlock;
        }
    }
-   elsif (-e $blast_finished && ! $opt_f) {
+   elsif (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$blast_finished\n" unless $main::quiet;
       return $blast_dir;
@@ -1231,7 +1230,6 @@ sub blastn_as_chunks {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
-	     $opt_f
 	    );
 
    $chunk->erase_fasta_file();
@@ -1247,14 +1245,13 @@ sub collect_blastn{
    my $pcov_blastn = shift;
    my $pid_blastn = shift;
    my $split_hit = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
 
    #merge blast reports
-   if (! -e $blast_finished || $opt_f) {
+   if (! -e $blast_finished) {
       system ("cat $blast_dir/*blast* > $blast_finished");
       File::Path::rmtree ("$blast_dir");
    }
@@ -1307,7 +1304,6 @@ sub blastn {
    my $pid_blastn = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1328,7 +1324,6 @@ sub blastn {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
-	     $opt_f
 	    );
 
    my %params;
@@ -1361,7 +1356,6 @@ sub runBlastn {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
 
    my $command  = $blast;
    if ($command =~ /blastn$/) {
@@ -1408,7 +1402,7 @@ sub runBlastn {
    }
 
    my $w = new Widget::blastn();
-   if (-e $out_file && ! $opt_f) {
+   if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -1433,7 +1427,6 @@ sub blastx_as_chunks {
    my $old_db        = shift;
    my $formater      = shift;
    my $rank          = shift;
-   my $opt_f         = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
 
@@ -1460,14 +1453,14 @@ sub blastx_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
    #copy db to local tmp dir and run xdformat or format db 
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f) ) {
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
        if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
            copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastx');
            $lock->unlock;
        }
    }
-   elsif (-e $blast_finished && ! $opt_f) {
+   elsif (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$blast_finished\n" unless $main::quiet;
       return $blast_dir;
@@ -1483,7 +1476,6 @@ sub blastx_as_chunks {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
-	     $opt_f
 	    );
 
    $chunk->erase_fasta_file();
@@ -1499,14 +1491,13 @@ sub collect_blastx{
    my $pcov_blastx = shift;
    my $pid_blastx = shift;
    my $split_hit = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
 
    #merge blast reports
-   if (! -e $blast_finished || $opt_f) {
+   if (! -e $blast_finished) {
       system ("cat $blast_dir/*blast* > $blast_finished");
       rmtree ("$blast_dir");
    }
@@ -1559,7 +1550,6 @@ sub blastx {
    my $pid_blastx = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1581,7 +1571,6 @@ sub blastx {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
-	     $opt_f
 	    );
 
    my %params;
@@ -1631,7 +1620,6 @@ sub runBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
 
    my $command  = $blast;
    if ($command =~ /blastx$/) {
@@ -1672,7 +1660,7 @@ sub runBlastx {
 
    my $w = new Widget::blastx();
 
-   if (-e $out_file  && !  $opt_f) {
+   if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -1697,7 +1685,6 @@ sub tblastx_as_chunks {
    my $old_db = shift;
    my $formater = shift;
    my $rank = shift;
-   my $opt_f = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
 
@@ -1724,14 +1711,14 @@ sub tblastx_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished || $opt_f) ) {
+   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
        if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
            copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'tblastx');
            $lock->unlock;
        }
    }
-   elsif (-e $blast_finished && ! $opt_f) {
+   elsif (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$blast_finished\n" unless $main::quiet;
       return $blast_dir;
@@ -1747,7 +1734,6 @@ sub tblastx_as_chunks {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
-	      $opt_f
 	     );
 
    $chunk->erase_fasta_file();
@@ -1763,14 +1749,13 @@ sub collect_tblastx{
    my $pcov_tblastx = shift;
    my $pid_tblastx = shift;
    my $split_hit = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
 
    #merge blast reports
-   if (! -e $blast_finished || $opt_f) {
+   if (! -e $blast_finished) {
       system ("cat $blast_dir/*blast* > $blast_finished");
       File::Path::rmtree ("$blast_dir");
    }
@@ -1823,7 +1808,6 @@ sub tblastx {
    my $pid_tblastx = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
    my $LOG = shift;
 
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1844,7 +1828,6 @@ sub tblastx {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
-	      $opt_f
 	     );
 
    my %params;
@@ -1877,7 +1860,6 @@ sub runtBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $opt_f = shift;
 
    my $command  = $blast;
    if ($command =~ /tblastx$/) {
@@ -1916,7 +1898,7 @@ sub runtBlastx {
    }
 
    my $w = new Widget::tblastx();
-   if (-e $out_file && ! $opt_f) {
+   if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
    }
@@ -1938,7 +1920,6 @@ sub repeatmask {
    my $RepeatMasker = shift;
    my $rmlib        = shift;
    my $cpus         = shift;
-   my $opt_f        = shift;
    my $LOG = shift;
 
    my $chunk_number = $chunk->number();
@@ -1960,7 +1941,6 @@ sub repeatmask {
 		   $RepeatMasker,
 		   $rmlib,
 		   $cpus,
-		   $opt_f
 		  );		# -no_low
    
    my $rm_chunk_keepers = Widget::RepeatMasker::parse($o_file, 
@@ -1991,7 +1971,6 @@ sub runRepeatMasker {
    my $RepeatMasker = shift;
    my $rmlib = shift;
    my $cpus = shift;
-   my $opt_f = shift;
    my $no_low   = shift;
 	
    my $command  = $RepeatMasker;
@@ -2005,7 +1984,7 @@ sub runRepeatMasker {
    $command .= " -nolow" if defined($no_low);
 	
    my $w = new Widget::RepeatMasker();
-   if (-e $o_file && ! $opt_f) {
+   if (-e $o_file) {
       print STDERR "re reading repeat masker report.\n" unless $main::quiet;
       print STDERR "$o_file\n" unless $main::quiet;
    }
@@ -2479,15 +2458,6 @@ sub load_control_files {
       $CTL_OPT{alt_peptide} = 'C';
    }
 
-   #---set up blast databases and indexes for analyisis
-   create_blastdb(\%CTL_OPT, $mpi_size);
-   build_all_indexes(\%CTL_OPT);
-
-   #--set up optional global TMP
-   if($CTL_OPT{TMP}){
-       $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => 1);
-   }
-
    #--set values for datastructure
    my $genome = $CTL_OPT{genome};
    $genome = $CTL_OPT{genome_gff} if (not $genome);
@@ -2499,6 +2469,15 @@ sub load_control_files {
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
+
+   #--set up optional global TMP
+   if($CTL_OPT{TMP}){
+       $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
+   }
+
+   #---set up blast databases and indexes for analyisis
+   create_blastdb(\%CTL_OPT, $mpi_size);
+   build_all_indexes(\%CTL_OPT);
 
    #--log the control files
    generate_control_files($CTL_OPT{out_base}, %CTL_OPT);

@@ -44,6 +44,7 @@ sub prep_hits {
 	my $models           = shift;
 	my $seq              = shift;
 	my $single_exon      = shift;
+	my $single_length    = shift;
 
 	#only ESTs from splice concious algorithms i.e. no blastn
 	my $clean_est = get_selected_types($est_hits,'est2genome', 'est_gff');
@@ -51,7 +52,7 @@ sub prep_hits {
 	if ($single_exon == 1) {
 	    #do nothing
 	}else {
-	    # don't use unpliced single exon ESTs-- usually genomic contamination
+	    # don't use unpliced single exon ESTs-- may be genomic contamination
 	    $clean_est = clean::purge_single_exon_hits($clean_est);
 	    $clean_altest = clean::purge_single_exon_hits($clean_altest);
 	}
@@ -76,8 +77,8 @@ sub prep_hits {
         my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
 
 	#purge after clustering so as to still have the effect of evidence joining ESTs
-	$p_clusters = purge_short_ESTs_in_clusters($p_clusters, 250);
-	$m_clusters = purge_short_ESTs_in_clusters($m_clusters, 250);
+	$p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
+	$m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
 
 	my $careful_clusters = [];
 	push(@{$careful_clusters}, @{$p_clusters});
@@ -296,7 +297,8 @@ sub purge_short_ESTs_in_clusters{
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
         my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
-        my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+        my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
+						  'twinscan', 'genemark', 'pred_gff');
 
 	$ests_in_cluster = clean::purge_short_single_exons($ests_in_cluster, $min);
 	$alt_ests_in_cluster = clean::purge_short_single_exons($alt_ests_in_cluster, $min);
@@ -332,7 +334,8 @@ sub prep_blastx_data {
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
         my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
-	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
+						  'twinscan', 'genemark', 'pred_gff');
 
 	my @single = grep {! $_->{_hit_multi}} @{$preds_in_cluster};
 
@@ -393,7 +396,8 @@ sub prep_gff_data {
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
-	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
+						  'twinscan', 'genemark',  'pred_gff');
 
 	my @single = grep {! $_->{_hit_multi}} @{$preds_in_cluster};
 
@@ -434,7 +438,8 @@ sub prep_pred_data {
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
-	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh', 'twinscan', 'pred_gff');
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
+						  'twinscan', 'genemark', 'pred_gff');
 
         # groups of most informative protein hits
         my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
@@ -554,7 +559,8 @@ sub annotate {
 						  $predictions,
 						  $models,
 						  $v_seq_ref,
-						  $CTL_OPTIONS->{single_exon}
+						  $CTL_OPTIONS->{single_exon},
+						  $CTL_OPTIONS->{single_length}
 						  );
     
     my %annotations;
@@ -585,7 +591,7 @@ sub annotate {
     
     #---hint based gene prediction here
     foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
-	next if($prdr eq 'model_gff' || $prdr eq 'abinit');
+	next if($prdr eq 'model_gff' || $prdr eq 'abinit' || $prdr eq 'genemark');
 	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
 	
 	my $transcripts = run_it($bx_data,
@@ -607,7 +613,7 @@ sub annotate {
 				      $CTL_OPTIONS
 				      );
 	
-	   $annotations{$prdr} =  $annot;
+	$annotations{$prdr} =  $annot;
     }
     
     #---abinit scoring here
@@ -635,7 +641,19 @@ sub annotate {
     $annotations{'abinit'} = $all_ab;
     
     add_abAED(\%annotations);
-    
+
+    #fill genemark hint based with abinits since hints do not work
+    if((grep {/^genemark$/} @{$CTL_OPTIONS->{_predictor}}) &&
+       (! grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}})
+      ){
+	foreach my $g (@$all_ab){
+	    if($g->{t_structs}->[0]->{hit}->algorithm =~ /^genemark_masked$/i){
+		push(@{$annotations{'genemark'}}, $g);
+	    }
+	}
+
+    }
+
     return \%annotations;
 }
 #------------------------------------------------------------------------
@@ -908,6 +926,9 @@ sub run_it {
 	    $i++;
 	    next;
 	}
+
+        #------genemark does not have hints enabled 
+        return [] if ($predictor eq 'genemark');
 	
 	#------est2genome
 	if ($predictor eq 'est2genome') {
@@ -1430,6 +1451,10 @@ sub get_selected_types {
 		    last;
 		}
 		elsif ($f->algorithm =~ /^$type\:/i){
+		    push(@keepers, $f);
+		    last;
+		}
+		elsif ($f->algorithm =~ /^$type\_masked$/i){
 		    push(@keepers, $f);
 		    last;
 		}

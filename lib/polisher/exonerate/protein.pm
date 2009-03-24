@@ -21,7 +21,6 @@ use URI::Escape;
 	polisher
        );
 
-my $OPT_F; #GLOBAL VALUE
 my $LOG;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
@@ -34,7 +33,6 @@ sub polish {
 	my $exe        = shift;
 	my $percent    = shift;
 	my $matrix     = shift;
-	$OPT_F         = shift;
 	$LOG           = shift;
 
 	my ($p_len, $g_len) = polisher::prep($g_file, $p_file);
@@ -102,7 +100,7 @@ sub runExonerate {
 	
         my $w = new Widget::exonerate::protein2genome();
 	
-        if (-e $o_file && ! $OPT_F){
+        if (-e $o_file){
 	    print STDERR "re reading exonerate report.\n" unless($main::quiet);
 	    print STDERR "$o_file\n" unless($main::quiet);
         }

@@ -11,7 +11,9 @@ use Fasta;
 $VERSION = 0.1;
 
 #===make list of internal variables to log
-my @ctl_to_log = ('est',
+my @ctl_to_log = ('genome_gff',
+		  'other_gff',
+		  'est',
 		  'est_reads',
 		  'altest',
 		  'est_gff',
@@ -58,7 +60,14 @@ my @ctl_to_log = ('est',
 		  'ep_score_limit',
 		  'en_score_limit',
 		  'enable_fathom',
-		  'unmask'
+		  'unmask',
+		  'model_pass',
+		  'est_pass',
+		  'altest_pass',
+		  'protein_pass',
+		  'rm_pass',
+		  'other_pass',
+		  'pred_pass'
 		 );
 
 my %SEEN;
@@ -174,6 +183,18 @@ sub _clean_files{
 	 #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	 my $cwd = Cwd::cwd();
 	 while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
+	    #these are only sometimes important
+	    if($key =~ /^est_pass$|^altest_pass$|^protein_pass$/ ||
+	       $key =~ /^rm_pass$|^pred_pass$|^model_pass$|^other_pass$/
+	      ){
+		next unless($CTL_OPTIONS{genome_gff});
+		my $old = $logged_vals{CTL_OPTIONS}{genome_gff};
+		   $old =~ s/^$cwd\/*//;
+		my $new = $CTL_OPTIONS{genome_gff};
+		   $new =~ s/^$cwd\/*//;
+		next unless($old eq $new);
+	    }
+
 	    my $log_val = '';
 	    if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
 		$log_val = $logged_vals{CTL_OPTIONS}{$key};
@@ -206,6 +227,7 @@ sub _clean_files{
 
 	    #if previous log options are not the same as current control file options
 	    if ($log_val ne $ctl_val) {
+
 	       print STDERR "MAKER WARNING: Control file option \'$key\' has changed\n".
 	       "Old:$log_val\tNew:$ctl_val\n\n";
 	    
@@ -320,7 +342,14 @@ sub _clean_files{
 	 #delete everything in the void
 	 File::Path::rmtree($the_void);
 	 File::Path::mkpath($the_void);
+
+	 #remove evaluator output
+	 File::Path::rmtree("$out_base/evaluator");
+
+	 #remove all other files
 	 unlink($gff_file) if(-e $gff_file);
+	 my @f = <$out_base/*.fasta>;
+	 push (@files, @f);
       }
       elsif (exists $rm_key{retry}) {
 	 print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n";

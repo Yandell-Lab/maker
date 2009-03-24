@@ -32,6 +32,10 @@ sub new {
 	if(ref $in eq 'HASH'){
 	    %CTL_OPTIONS = %{$in};
 	    $dbfile = "$CTL_OPTIONS{out_base}/$CTL_OPTIONS{out_name}.db";
+
+	    #rebuild database from scratch on force
+	    unlink($dbfile) if($CTL_OPTIONS{force});
+
 	    $self->{dbfile} = $dbfile;
 	    $self->{last_build} = undef;
 	    $self->{next_build} = $CTL_OPTIONS{out_name}."::1.00";
@@ -200,7 +204,7 @@ sub add_maker {
 	     next if ($skip{protein_maker});
 	     $table = 'protein_maker';
 	  }
-	  elsif($l->{source} =~ /^snap$|^augustus$|^twinscan$|^fgenesh$|^pred_gff\:/i){
+	  elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
 	     next if (! $codes{pred_pass});
 	     next if ($skip{pred_maker});
 	     $table = 'pred_maker';
@@ -659,7 +663,7 @@ sub _load_hits {
 
     #strip off unrecognized gene attributes for storage
     my @anns = $g->{f}->annotation->get_all_annotation_keys();
-    @anns = grep {!/^ID$|^Name$|^Target$/} @anns;
+    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
     foreach my $ann (@anns){
 	my @list = $g->{f}->annotation->get_Annotations();
 	@list = map {$_->value()} @list;
@@ -693,7 +697,7 @@ sub _load_hits {
 
 	#strip off unrecognized hit attributes for storage
 	my @anns = $t->{f}->annotation->get_all_annotation_keys();
-	@anns = grep {!/^ID$|^Name$|^Target$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
 	foreach my $ann (@anns){
 	    my @list = $t->{f}->annotation->get_Annotations();
 	    @list = map {$_->value()} @list;
@@ -865,7 +869,7 @@ sub _load_hsps {
 
     #added 3/19/2009
     #check for single and double base pair overhangs
-    if($t->{exons}->[0]->{f}->source_tag =~ /^snap|^augustus|^fgenesh/){
+    if($t->{exons}->[0]->{f}->source_tag =~ /^snap|^augustus|^fgenesh|^genemark/){
 	my $features = $t->{exons};
 	@{$features} = sort {$a->{f}->start <=> $b->{f}->start} @{$features};
 	my $length = 0;
@@ -986,7 +990,7 @@ sub _load_hsps {
 
 	#strip off unrecognized hit attributes for storage
 	my @anns = $e->{f}->annotation->get_all_annotation_keys();
-	@anns = grep {!/^ID$|^Name$|^Target$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
 	foreach my $ann (@anns){
 	    my @list = $e->{f}->annotation->get_Annotations();
 	    @list = map {$_->value()} @list;
