@@ -179,7 +179,9 @@ sub _clean_files{
       }
       else {
 	 $continue_flag = 0 if (-e $gff_file); #don't re-run finished
+      }
       
+      if($continue_flag == 0 || $continue_flag == -1 || $continue_flag == 3){
 	 #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	 my $cwd = Cwd::cwd();
 	 while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {

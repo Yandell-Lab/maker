@@ -503,6 +503,9 @@ sub create_blastdb {
    my $CTL_OPT = shift @_;
    my $mpi_size = shift@_ || 1;
 
+   #rebuild all fastas when specified
+   File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if($CTL_OPT->{force});
+
    ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
    ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
    ($CTL_OPT->{_est_reads},  $CTL_OPT->{d_db}) = split_db($CTL_OPT, 'est_reads', $mpi_size);
@@ -538,9 +541,6 @@ sub split_db {
    my $t_full = $t_dir.".fasta";
    my $f_full = $f_dir.".fasta";
 			  
-   #rebuild fastas on force
-   File::Path::rmtree($b_dir) if ($CTL_OPT->{force});
-
    if(-e "$f_dir"){
       my @t_db = <$f_dir/*$d_name\.*>;
 
@@ -2232,7 +2232,9 @@ sub load_control_files {
        }
        else {
 	   push(@{$CTL_OPT{_predictor}}, $p) unless($uniq{$p});
-	   push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
+	   if($p =~ /^snap$|^augustus$|^fgenesh$|^genemark$|^jigsaw$/){
+	       push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
+	   }
 	   $uniq{$p}++;
        }
    }
@@ -2515,7 +2517,7 @@ sub generate_control_files {
    print OUT "\n"if($ev);
    print OUT "#-----EST Evidence (you should provide a value for at least one)\n";
    print OUT "est:$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
-   print OUT "est_reads:$O{est_reads} #un-assembled EST reads in fasta format (for deep nextgen mRNASeq)\n";
+   print OUT "est_reads:$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
    print OUT "altest:$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
    print OUT "est_gff:$O{est_gff} #EST evidence from an external gff3 file\n";
    print OUT "altest_gff:$O{altest_gff} #Alternate organism EST evidence from a seperate gff3 file\n";

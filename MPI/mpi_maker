@@ -113,13 +113,13 @@ Usage:
 
      mpi_maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
 
-     Maker is a program that produces gene annotations in gff3 file format using
+     Maker is a program that produces gene annotations in GFF3 file format using
      evidence such as EST alignments and protein homology.  Maker can be used to
      produce gene annotations for new genomes as well as update annoations from
      existing genome databases.
 
      The four input arguments are user control files that specify how maker
-     should behave. The evaluator_opts file contains control options specific
+     should behave. The evaluator options file contains control options specific
      for the evaluation of gene annotations. All options for maker should be set
      in the control files, but a few can also be set on the command line.
      Command line options provide a convenient machanism to override commonly
@@ -149,9 +149,10 @@ Options:
                           types: snap
                                  augustus
                                  fgenesh
+                                 genemark
                                  est2genome (Uses EST's directly)
                                  abinit (ab-initio predictions)
-                                 gff (Passes through gff3 file annotations)
+                                 model_gff (Passes through GFF3 annotations)
 
      -RM_off|R           Turns all repeat masking off.
 
@@ -161,6 +162,8 @@ Options:
 
      -force|f            Forces maker to delete old files before running again.
                          This will require all blast analyses to be rerun.
+
+     -evaluate|e         Run Evaluator on final annotations (under development).
 
      -quiet|q            Silences most of maker's status messages.
 
@@ -249,7 +252,6 @@ try{
 	       "cpus|c=i" => \$OPT{cpus},
 	       "predictor=s" =>\$OPT{predictor},
 	       "retry=i" =>\$OPT{retry},
-	       "clean_try" =>\$OPT{clean_try},
 	       "evaluate" =>\$OPT{evaluate},
 	       "quiet" =>\$main::quiet,
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},

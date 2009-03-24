@@ -442,7 +442,7 @@ sub get_class_and_type {
     my $k = shift;
     
     my ($class) = lc($h->algorithm);
-    $class =~ /^exonerate\:*\_*/;
+    $class =~ s/^exonerate\:*\_*//;
 
     my $type;
     if    ($class =~ /^blastx$/i){

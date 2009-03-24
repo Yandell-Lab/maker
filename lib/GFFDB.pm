@@ -148,7 +148,6 @@ sub add_maker {
 	  if($source ne $o_source){
 	     my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
 	     $dbh->do(qq{DROP TABLE $table});
-	     $dbh->do(qq{DROP INDEX $index}) if $index;
 	     $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
 	     $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
 	  }
@@ -319,7 +318,6 @@ sub _add_type {
        if($source ne $o_source){
 	  my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
 	  $dbh->do(qq{DROP TABLE $table});
-	  $dbh->do(qq{DROP INDEX $index}) if $index;
 	  $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
 	  $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
        }

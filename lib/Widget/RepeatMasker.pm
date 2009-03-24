@@ -188,7 +188,7 @@ sub parse {
                 push(@args, $q_name);
 
                 push(@args, '-algorithm');
-                push(@args, 'repeat masker');
+                push(@args, 'repeatmasker');
 
                 push(@args, '-bits');
                 push(@args, 'NA');
@@ -251,7 +251,7 @@ sub parse {
 		 my $f =
 		     Bio::Search::Hit::PhatHit::repeatmasker->new('-name' => $key,
 								  '-description'  => 'NA',
-								  '-algorithm'    => 'repeat_masker',
+								  '-algorithm'    => 'repeatmasker',
 								  '-length'       => $q_length,
 								  );
 

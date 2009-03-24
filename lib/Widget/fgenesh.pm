@@ -370,6 +370,7 @@ sub load_phat_hits {
 
 		#added 3/19/2009
 		#check for single and double base pair overhangs
+                @{$g->{$gene}} = grep {$_->{type} !~ /TSS|PolA/} @{$g->{$gene}};
                 @{$g->{$gene}} = sort {$a->{b} <=> $b->{b}} @{$g->{$gene}};
                 my $length = 0;
                 foreach my $exon (@{$g->{$gene}}){
