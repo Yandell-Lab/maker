@@ -160,12 +160,14 @@ WriteMakefile(
     dbd_edit_mm_attribs(\%opts, {
 	create_pp_tests => 1,
     }),
-    'DESTDIR' => "$FindBin::Bin/../../",
+    'DESTDIR' => "$FindBin::Bin/../",
     'INSTALLDIRS' => "perl",
     'INSTALLMAN1DIR' => "none",
     'INSTALLMAN3DIR' => "none",
     'INSTALLARCHLIB' => "lib/",
     'INSTALLPRIVLIB' => "lib/",
+    'INSTALLBIN'     => "bin/",
+    'INSTALLSCRIPT'  => "bin/",
 );
 # WriteMakefile call is last thing executed
 # so return value is propagated

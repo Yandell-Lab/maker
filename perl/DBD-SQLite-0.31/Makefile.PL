@@ -16,12 +16,14 @@ WriteMakefile(
     'INC'           => '-I$(DBI_INSTARCH_DIR)',
     'OPTIMIZE'      => "-O6 -DNDEBUG=1 -DSQLITE_PTR_SZ=$Config{ptrsize}",
     'clean'         => { FILES => 'SQLite.xsi config.h' },
-    'DESTDIR' => "$FindBin::Bin/../../",
+    'DESTDIR' => "$FindBin::Bin/../",
     'INSTALLDIRS' => "perl",
     'INSTALLMAN1DIR' => "none",
     'INSTALLMAN3DIR' => "none",
     'INSTALLARCHLIB' => "lib/",
     'INSTALLPRIVLIB' => "lib/",
+    'INSTALLBIN'     => "bin/",
+    'INSTALLSCRIPT'  => "bin/",
 );
 
 package MY;
