@@ -112,12 +112,14 @@ password to log in as root once root is enabled.
 
   a.  Unpack the Maker tar file into the directory of your choice (i.e.
       /usr/local).
-  b.  Now add the following to your .bash_profile if you haven't already:
+  b.  Change to the directory maker/perl and run Install.PL by typing:
+      perl Install.PL
+  c.  Now add the following to your .bash_profile if you haven't already:
 	export WUBLASTFILTER="where_wublast_is/filter"
 	export WUBLASTMAT="where_wublast_is/matrix"
 	export ZOE="where_snap_is/Zoe"
 	export AUGUSTUS_CONFIG_PATH="where_augustus_is/config"
-  c.  You can now run a test of Maker by following the instructions in the Maker
+  d.  You can now run a test of Maker by following the instructions in the Maker
       readme file.
 
 

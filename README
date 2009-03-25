@@ -53,7 +53,12 @@ This will create a directory called maker with 5 sub directories:
 	lib - contains all the necessary perl libaries for MAKER.
         MPI - contains MPI specific data to configure MAKER for a cluster that supports MPI.
         Apollo - contains gff3.tiers file (See section titled APOLLO below)
-	data  - contains some sample data used to make sure everything works
+	data - contains some sample data used to make sure everything works.
+	perl - contains perl modules that need to be compiled
+
+Finally change to the maker/perl directory and type: 'perl Install.PL' to compile required perl modules.
+
+Now you can run MAKER!!
 
 Maker uses control files to guide each run.  Generic control files can be built using the -CTL flag in maker.  These control files can then be edited by the user to identify the location of all required input data and statistics.  Control files are run specific and seperate control will need to be built for each genome given to maker.  Maker will look for control files in the current working directory, so it is recomended that maker should be ran in a seperate directory containing unique control files for each genome.
 
