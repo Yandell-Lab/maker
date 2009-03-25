@@ -531,7 +531,9 @@ sub phathits_on_contig {
 sub get_existing_gene_names {
     my $self = shift;
     my $seqid = shift;
- 
+
+    return {};
+
     return {} unless($self->{go_gffdb});
 
     my $dbfile = $self->{dbfile};
@@ -565,7 +567,6 @@ sub get_existing_gene_names {
 	    $names{$name}++;
 	}
     }
-
 
     #---get names for preds
     $h_type = 'pred';
