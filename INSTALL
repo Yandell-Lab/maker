@@ -37,16 +37,14 @@ password to log in as root once root is enabled.
       steps a-d.
 
 
-3.  Install WuBlast 2.0 or higher.  Download from http://blast.wustl.edu
+3.  Install WuBlast 2.0 or higher. (For NCBI BLAST see NCBI BLAST documentation)
 
-  a.  You must register at the site before you can download wublast.  Registration
-      is found under liscencing.
-  b.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
-  c.  Add the following in your .bash_profile (value depend on where you chose to
+  a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
+  b.  Add the following in your .bash_profile (value depend on where you chose to
       install wublast):
 		export WUBLASTFILTER="/usr/local/wublast/filter"
 		export WUBLASTMAT="/usr/local/wublast/matrix"
-  d.  Add the location where you installed WuBlast to your PATH variable in 
+  c.  Add the location where you installed WuBlast to your PATH variable in 
       .bash_profile (i.e. PATH="/usr/local/wublast:$PATH").
 
 

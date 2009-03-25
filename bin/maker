@@ -1,54 +1,57 @@
-#! /usr/bin/perl -w
+#!/usr/bin/perl -w
+
+eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 
 use strict "vars";
 use strict "refs";
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use vars qw($LOG $RANK);
+use vars qw($RANK $LOG $CMD_ARGS);
 
 BEGIN{
-   $RANK = 'non_mpi';		#default value of rank
-
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
    }
    if (not ($ENV{CGL_GO_SOURCE})) {
       $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
    }
-
+   
+   $CMD_ARGS = join(' ', @ARGV);
+   
    #what to do on ^C
    $SIG{'INT'} = sub {
       print STDERR "\n\nMaker aborted by user!!\n\n";
       exit (1);
-   };
-
+   };    
+   
    #supress warnings from storable module
    $SIG{'__WARN__'} = sub {
-       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-		       $_[0] !~ /Can\'t store item CODE/
-		       );
+      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+		      $_[0] !~ /Can\'t store item CODE/
+		    );
    };
-   
+
    #output to log file of seq that caused rank to die
-   $SIG{'__DIE__'} = sub {
-      if (defined ($LOG) && $_[0]) {
+   $SIG{'__DIE__'} =
+   sub {
+      if (defined ($LOG) && defined $_[0]) {
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
 	 
 	 $LOG->add_entry("DIED","RANK",$RANK);
 	 $LOG->add_entry("DIED","COUNT",$die_count);
       }
+
       die "#----------------------\n",
           "FATAL: failed!!\n",
-          "#----------------------\n",
-          $_[0] . "\n";
-      
+	  "#----------------------\n",
+	  $_[0] . "\n";
    };
 }
 
 use Cwd;
-use Storable;
 use FileHandle;
 use File::Path;
 use Getopt::Long;
@@ -67,21 +70,25 @@ use repeat_mask_seq;
 use runlog;
 use ds_utility;
 use GFFDB;
+use Error qw(:try);
+use Error::Simple;
+use Process::MpiChunk;
+use Process::MpiTiers;
 
-$|  = 1;
+$| = 1;
 
 my $usage = "
 Usage:
 
      maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
 
-     Maker is a program that produces gene annotations in gff3 file format using
+     Maker is a program that produces gene annotations in GFF3 file format using
      evidence such as EST alignments and protein homology.  Maker can be used to
      produce gene annotations for new genomes as well as update annoations from
      existing genome databases.
 
      The four input arguments are user control files that specify how maker
-     should behave. The evaluator_opts file contains control options specific
+     should behave. The evaluator options file contains control options specific
      for the evaluation of gene annotations. All options for maker should be set
      in the control files, but a few can also be set on the command line.
      Command line options provide a convenient machanism to override commonly
@@ -111,9 +118,10 @@ Options:
                           types: snap
                                  augustus
                                  fgenesh
+                                 genemark
                                  est2genome (Uses EST's directly)
                                  abinit (ab-initio predictions)
-                                 gff (Passes through gff3 file annotations)
+                                 model_gff (Passes through GFF3 annotations)
 
      -RM_off|R           Turns all repeat masking off.
 
@@ -124,6 +132,8 @@ Options:
      -force|f            Forces maker to delete old files before running again.
                          This will require all blast analyses to be rerun.
 
+     -evaluate|e         Run Evaluator on final annotations (under development).
+
      -quiet|q            Silences most of maker's status messages.
 
      -CTL                Generate empty control files in the current directory.
@@ -133,647 +143,114 @@ Options:
 
 ";
 
+#-------------------------------------------------------------------------------
+#------------------------------------ MAIN -------------------------------------
+#-------------------------------------------------------------------------------
+
+#---global variables
 my %OPT;
+my $rank = 0;
+my $size = 1;
+$RANK = $rank;
 
-#--Process arguments and the command line 
-GetOptions("RM_off|R" => \$OPT{R},
-	   "force|f" => \$OPT{force},
-	   "genome|g=s" => \$OPT{genome},
-	   "cpus|c=i" => \$OPT{cpus},
-	   "predictor=s" =>\$OPT{predictor},
-	   "retry=i" =>\$OPT{retry},
-	   "clean_try" =>\$OPT{clean_try},
-	   "evaluate" =>\$OPT{evaluate},
-	   "quiet" => \$main::quiet,
-	   "CTL" => sub {GI::generate_control_files(); exit(0);},
-	   "help|?" => sub {print $usage; exit(0)}
-	  );
+#---Process options on the command line 
+try{
+    GetOptions("RM_off|R" => \$OPT{R},
+	       "force|f" => \$OPT{force},
+	       "genome|g=s" => \$OPT{genome},
+	       "cpus|c=i" => \$OPT{cpus},
+	       "predictor=s" =>\$OPT{predictor},
+	       "retry=i" =>\$OPT{retry},
+	       "evaluate" =>\$OPT{evaluate},
+	       "quiet" =>\$main::quiet,
+	       "CTL" => sub {GI::generate_control_files(); exit(0);},
+	       "help|?" => sub {print $usage; exit(0)}
+	       );
+}
+catch Error::Simple with{
+    my $E = shift;
+    
+    print STDERR $E->{-text};
+    die "\n\nMaker failed parsing command line options!!\n\n";
+};
 
-#------------------------------------------------------------------------------#
-#------------------------------------ MAIN ------------------------------------#
-#------------------------------------------------------------------------------#
+#varibles that are persistent outside of try
+my %CTL_OPT;
+my $iterator;
+my $DS_CTL;
+my $GFF_DB;
+my $build;
+my @failed;
 
-#---get arguments off the command line
-my @ctlfiles = @ARGV;
+try{
+    #get arguments off the command line
+    my @ctlfiles = @ARGV;
+    
+    if (not @ctlfiles) {
+	if (-e "maker_opts.ctl" &&
+	    -e "maker_bopts.ctl" &&
+	    -e "maker_exe.ctl" &&
+	    -e "evaluator.ctl"
+	    ) {
+	    
+	    @ctlfiles = ("maker_opts.ctl",
+			 "maker_bopts.ctl",
+			 "maker_exe.ctl",
+			 "evaluator.ctl"
+			 );
+	}
+	else {
+	    print STDERR  "ERROR: Control files not found\n";
+	    print $usage;
+	    exit(0);
+	}
+    }
+    
+    #--Control file processing
+    
+    #set up control options from control files
+    %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
+    
+    #--open datastructure controller
+    $DS_CTL = ds_utility->new(\%CTL_OPT);
+    
+    #--set up gff database
+    $GFF_DB = new GFFDB(\%CTL_OPT);
+    $build = $GFF_DB->next_build;
+    
+    #---load genome multifasta/GFF3 file
+    $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
+				   -gff => $CTL_OPT{'genome_gff'},
+				   );
+}
+catch Error::Simple with{
+    my $E = shift;
+    print STDERR $E->{-text};
+    print STDERR "\n\nMaker failed while examining startup data\n",
+    "(control files and input fasta files)!!\n\n";
+    my $code = 2;
+    $code = $E->{-value} if (defined($E->{-value}));
+    
+    exit($code);
+};
 
-if (not @ctlfiles) {
-   if (-e "maker_opts.ctl" &&
-       -e "maker_bopts.ctl" &&
-       -e "maker_exe.ctl" &&
-       -e "evaluator.ctl"
-      ) {
-
-      @ctlfiles = ("maker_opts.ctl",
-		   "maker_bopts.ctl",
-		   "maker_exe.ctl",
-		   "evaluator.ctl"
-		  );
-   }
-   else {
-      print STDERR  "ERROR: Control files not found\n";
-      print $usage;
-      exit(0);
-   }
+my $tier;
+while (my $fasta = $iterator->nextFasta() || shift @failed){
+    $tier = Process::MpiTiers->new({fasta =>$fasta,
+				    CTL_OPT => \%CTL_OPT,
+				    DS_CTL  => $DS_CTL,
+				    GFF_DB  => $GFF_DB,
+				    build   => $build},
+				   '0'
+				   );
+    
+    $tier->run while(! $tier->terminated || $tier->failed);
+    $DS_CTL->add_entry($tier->DS);
+    push(@failed, $tier->fasta) if ($tier->failed);
 }
 
-#---set up control options from control files
-my %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT);
-
-#--open datastructure controller
-my $DS_CTL = ds_utility->new(\%CTL_OPT);
-
-#--set up gff database
-my $GFF_DB = new GFFDB(\%CTL_OPT);
-my $build = $GFF_DB->next_build;
-
-#---load genome multifasta/GFF3 file
-my $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
-				  -gff => $CTL_OPT{'genome_gff'},
-				);
-
-#---iterate over each sequence in the fasta
-while (my $fasta = $iterator->nextFasta()) {
-   $LOG = undef;	   #reset global variable LOG with each contig
-  
-   my $fasta = Fasta::ucFasta(\$fasta);
-   
-   #get fasta parts
-   my $q_def       = Fasta::getDef(\$fasta); #Get fasta header
-   my $q_seq_ref   = Fasta::getSeqRef(\$fasta);	#Get reference to fasta sequence
-   my $seq_id      = Fasta::def2SeqID($q_def); #Get sequence identifier
-   my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
-   
-   #set up base and void directories for output
-   my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
-
-   #-build and proccess the run log
-   $LOG = runlog->new( \%CTL_OPT,
-		       { 'seq_id'     => $seq_id,
-			 'seq_length' => length($$q_seq_ref),
-			 'out_dir'    => $out_dir,
-			 'the_void'   => $the_void,
-			 'fasta_ref'  => \$fasta
-		       },
-		       "$the_void/run.log"
-		     );
-
-   my ($c_flag, $message) = $LOG->get_continue_flag();
-   $DS_CTL->add_entry($seq_id, $out_dir, $message);
-
-   next if(! $c_flag || $c_flag <= 0);
-   
-   #==from here on fastas are proccessed as chunks
-   
-   #-set up variables that are heldover from last chunk
-   my $holdover_blastn;
-   my $holdover_blastx;
-   my $holdover_tblastx;
-   my $holdover_pred;
-   my $holdover_est_gff;
-   my $holdover_altest_gff;
-   my $holdover_prot_gff;
-   my $holdover_pred_gff;
-   my $holdover_model_gff;
-   
-   #-set up variables that are the result of chunk accumulation
-   my $masked_total_seq;
-   my %p_fastas;
-   my %t_fastas;
-
-   my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
-				      $build,
-				      $the_void
-				     );
-   $GFF3->set_current_contig($seq_id, $q_seq_ref);
-
-   #==REPEAT MASKING HERE
-   my $fasta_chunker = new FastaChunker();
-   $fasta_chunker->parent_fasta($fasta);
-   $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
-   $fasta_chunker->min_size($CTL_OPT{split_hit});
-   $fasta_chunker->load_chunks();
-   my $chunk_count = 0;
-   
-   while (my $chunk = $fasta_chunker->get_chunk($chunk_count++)) {	 
-      #-- repeatmask with gff3 input
-      my $rm_gff_keepers = [];
-      if ($CTL_OPT{go_gffdb}) {
-	 $rm_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-						      $q_seq_ref,
-						      'repeat'
-						     );
-	 #mask the chunk
-	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers);
-      }
-      
-      #-- repeatmask with RepeatMasker	 
-      my $rm_rb_keepers = [];	 #repeat masker RepBase
-      if ($CTL_OPT{model_org}) { #model organism repeats
-	 $rm_rb_keepers = GI::repeatmask($chunk,
-					 $the_void,
-					 $safe_seq_id,
-					 $CTL_OPT{model_org},
-					 $CTL_OPT{RepeatMasker},
-					 '',
-					 $CTL_OPT{cpus},
-					 $CTL_OPT{force},
-					 $LOG
-					);
-	 
-	 #mask the chunk
-	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers);
-      }
-      my $rm_sp_keepers = [];	#repeat masker species
-      if ($CTL_OPT{rmlib}) {	#species specific repeats;
-	 $rm_sp_keepers = GI::repeatmask($chunk,
-					 $the_void,
-					 $safe_seq_id,
-					 $CTL_OPT{model_org},
-					 $CTL_OPT{RepeatMasker},
-					 $CTL_OPT{rmlib},
-					 $CTL_OPT{cpus},
-					 $CTL_OPT{force},
-					 $LOG
-					);
-	 
-	 #mask the chunk
-	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers);
-      }	   
-      
-      #-- blastx against a repeat library (for better masking)
-      my $rm_blastx_keepers = [];
-      if ($CTL_OPT{_repeat_protein}) {
-	 my $res_dir;
-	 foreach my $db (@{$CTL_OPT{r_db}}) {
-	    $res_dir =
-	    GI::blastx_as_chunks($chunk,
-				 $db,
-				 $the_void,
-				 $safe_seq_id,
-				 $CTL_OPT{_blastx},
-				 $CTL_OPT{eval_rm_blastx},
-				 $CTL_OPT{split_hit},
-				 $CTL_OPT{cpus},
-				 $CTL_OPT{repeat_protein},
-				 $CTL_OPT{_formater},
-				 0,
-				 $CTL_OPT{force},
-				 $LOG,
-				 1
-				);
-	 }
-	 $rm_blastx_keepers = GI::collect_blastx($chunk,
-						 $res_dir,
-						 $CTL_OPT{eval_rm_blastx},
-						 $CTL_OPT{bit_rm_blastx},
-						 $CTL_OPT{pcov_rm_blastx},
-						 $CTL_OPT{pid_rm_blastx},
-						 $CTL_OPT{split_hit},
-						 $CTL_OPT{force},
-						 $LOG
-						);
-	
-	 #mask the chunk
-	 $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers);
-      }
-      
-      #-combine and cluster repeat hits for consensus
-      my $rm_keepers = repeat_mask_seq::process($rm_gff_keepers, 
-						$rm_rb_keepers, 
-						$rm_sp_keepers, 
-						$rm_blastx_keepers,
-						$q_seq_ref
-					       );
-      
-      #-add repeats to GFF3
-      $GFF3->add_repeat_hits($rm_keepers);
-      
-      #-build big masked sequence
-      $masked_total_seq .= $chunk->seq();
-   }
-   
-   my $masked_fasta = Fasta::toFasta($q_def.' masked', \$masked_total_seq);
-   my $masked_file = $the_void."/query.masked.fasta";
-   FastaFile::writeFile(\$masked_fasta ,$masked_file);
-   
-   #==ab initio predictions here
-   my $preds = GI::abinits($masked_file,
-			   $the_void,
-			   $safe_seq_id,
-			   \%CTL_OPT,
-			   $LOG
-			  );
-   
-   #==QRNA noncoding RNA prediction here
-   my $qra_preds = [];
-   
-   #--build an index of the databases
-   my $proteins = $CTL_OPT{_protein};
-   my $trans    = $CTL_OPT{_est};
-   my $altests = $CTL_OPT{_altest};
-   my $fasta_t_index = GI::build_fasta_index($trans) if($trans); 
-   my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
-   my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
-   
-   #--reset fastachunker for masked chunks
-   $fasta_chunker = new FastaChunker();
-   $fasta_chunker = new FastaChunker();
-   $fasta_chunker->parent_fasta($masked_fasta);
-   $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
-   $fasta_chunker->min_size($CTL_OPT{split_hit});
-   $fasta_chunker->load_chunks();
-   
-   $chunk_count = 0;
-   
-   while (my $chunk = $fasta_chunker->get_chunk($chunk_count++)) {
-      #==BLAST ANALYSIS HERE
-      #-blastn search the file against ESTs
-      my $blastn_keepers = [];
-      if ($CTL_OPT{_est}) {
-	 my $res_dir;
-	 foreach my $db (@{$CTL_OPT{e_db}}) {
-	    $res_dir = GI::blastn_as_chunks($chunk,
-					    $db,
-					    $the_void,
-					    $safe_seq_id,
-					    $CTL_OPT{_blastn},
-					    $CTL_OPT{eval_blastn},
-					    $CTL_OPT{split_hit},
-					    $CTL_OPT{cpus},
-					    $CTL_OPT{est},
-					    $CTL_OPT{_formater},
-					    0,
-					    $CTL_OPT{force},
-					    $LOG,
-					    1
-					   );
-	 }
-	 $blastn_keepers = GI::collect_blastn($chunk,
-					      $res_dir,
-					      $CTL_OPT{eval_blastn},
-					      $CTL_OPT{bit_blastn},
-					      $CTL_OPT{pcov_blastn},
-					      $CTL_OPT{pid_blastn},
-					      $CTL_OPT{split_hit},
-					      $CTL_OPT{force},
-					      $LOG
-					     );
-      }
-      
-      #-blastx search the masked input file
-      my $blastx_keepers = [];
-      if ($CTL_OPT{_protein}) {
-	 my $res_dir;
-	 foreach my $db (@{$CTL_OPT{p_db}}) {
-	    $res_dir = GI::blastx_as_chunks($chunk,
-					    $db,
-					    $the_void,
-					    $safe_seq_id,
-					    $CTL_OPT{_blastx},
-					    $CTL_OPT{eval_blastx},
-					    $CTL_OPT{split_hit},
-					    $CTL_OPT{cpus},
-					    $CTL_OPT{protein},
-					    $CTL_OPT{_formater},
-					    0,
-					    $CTL_OPT{force},
-					    $LOG,
-					    1
-					   );
-	 }
-	 $blastx_keepers = GI::collect_blastx($chunk,
-					      $res_dir,
-					      $CTL_OPT{eval_blastx},
-					      $CTL_OPT{bit_blastx},
-					      $CTL_OPT{pcov_blastx},
-					      $CTL_OPT{pid_blastx},
-					      $CTL_OPT{split_hit},
-					      $CTL_OPT{force},
-					      $LOG
-					     );
-      }      
-      
-      #-tblastx search the masked input file
-      my $tblastx_keepers = [];
-      if ($CTL_OPT{_altest}) {
-	 my $res_dir;
-	 foreach my $db (@{$CTL_OPT{a_db}}) {
-	    $res_dir = GI::tblastx_as_chunks($chunk,
-					     $db,
-					     $the_void,
-					     $safe_seq_id,
-					     $CTL_OPT{_tblastx},
-					     $CTL_OPT{eval_tblastx},
-					     $CTL_OPT{split_hit},
-					     $CTL_OPT{cpus},
-					     $CTL_OPT{altest},
-					     $CTL_OPT{_formater},
-					     0,
-					     $CTL_OPT{force},
-					     $LOG,
-					     1
-					    );
-	 }
-	 $tblastx_keepers = GI::collect_tblastx($chunk,
-						$res_dir,
-						$CTL_OPT{eval_tblastx},
-						$CTL_OPT{bit_tblastx},
-						$CTL_OPT{pcov_tblastx},
-						$CTL_OPT{pid_tblastx},
-						$CTL_OPT{split_hit},
-						$CTL_OPT{force},
-						$LOG
-					       );
-      }
-
-      #-get only those predictions on the chunk
-      my $preds_on_chunk = GI::get_preds_on_chunk($preds,
-						  $chunk
-						 );
-
-      #==GFF3 passthrough of evidence
-      my $prot_gff_keepers = [];
-      my $est_gff_keepers = [];
-      my $altest_gff_keepers = [];
-      my $model_gff_keepers = [];
-      my $pred_gff_keepers = [];
-      if ($CTL_OPT{go_gffdb}) {
-	 #-protein evidence passthraough
-	 $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							$q_seq_ref,
-							'protein'
-						       );
-	 #-est evidence passthrough
-	 $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-						       $q_seq_ref,
-						       'est'
-						      );
-	 #-altest evidence passthrough
-	 $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							  $q_seq_ref,
-							  'altest'
-							 );
-	 #-gff gene annotation passthrough here
-	 $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							  $q_seq_ref,
-							  'model'
-							 );
-	 #-pred passthrough
-	 $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							$q_seq_ref,
-							'pred'
-						       );
-      }
-      
-      #==merge heldover Phathits from last round
-      if ($chunk->number != 0) { #if not first chunk
-	 #reviews heldover blast hits,
-	 #then merges and reblasts them if they cross the divide
-	 ($blastn_keepers,
-	  $blastx_keepers,
-	  $tblastx_keepers) = GI::merge_resolve_hits(\$masked_fasta,
-						     $fasta_t_index,
-						     $fasta_p_index,
-						     $fasta_a_index,
-						     $blastn_keepers,
-						     $blastx_keepers,
-						     $tblastx_keepers,
-						     $holdover_blastn,
-						     $holdover_blastx,
-						     $holdover_tblastx,
-						     $the_void,
-						     \%CTL_OPT,
-						     $LOG
-						    );
-	 #combine remaining holdover types
-	 push(@{$preds_on_chunk}, @{$holdover_pred});
-	 push(@{$pred_gff_keepers}, @{$holdover_pred_gff});
-	 push(@{$est_gff_keepers}, @{$holdover_est_gff});
-	 push(@{$altest_gff_keepers}, @{$holdover_altest_gff});
-	 push(@{$prot_gff_keepers}, @{$holdover_prot_gff});
-	 push(@{$model_gff_keepers}, @{$holdover_model_gff});
-
-	 #clear holdovers
-	 @{$holdover_pred} = ();
-	 @{$holdover_est_gff} = ();
-	 @{$holdover_altest_gff} = ();
-	 @{$holdover_prot_gff} = ();
-	 @{$holdover_pred_gff} = ();
-	 @{$holdover_model_gff} = ();
-      }
-	 
-      #==PROCESS HITS CLOSE TO CHUNK DIVISIONS
-      #holdover hits that are too close to the divide for review with next chunk
-      if (not $chunk->is_last) { #if not last chunk
-	 ($holdover_blastn,
-	  $holdover_blastx,
-	  $holdover_tblastx,
-	  $holdover_pred,
-	  $holdover_est_gff,
-	  $holdover_altest_gff,
-	  $holdover_prot_gff,
-	  $holdover_pred_gff,
-	  $holdover_model_gff,
-	  $blastn_keepers,
-	  $blastx_keepers,
-	  $tblastx_keepers,
-	  $preds_on_chunk,
-	  $est_gff_keepers,
-	  $altest_gff_keepers,
-	  $prot_gff_keepers,
-	  $pred_gff_keepers,
-	  $model_gff_keepers
-	 ) = GI::process_the_chunk_divide($chunk,
-					  $CTL_OPT{'split_hit'},
-					  $blastn_keepers,
-					  $blastx_keepers,
-					  $tblastx_keepers,
-					  $preds_on_chunk,
-					  $est_gff_keepers,
-					  $altest_gff_keepers,
-					  $prot_gff_keepers,
-					  $pred_gff_keepers,
-					  $model_gff_keepers
-					 );
-      }
-
-      #==EXONERATE HERE
-      
-      #variables that are persistent outside of try block
-      my $blastx_data;
-      my $exonerate_p_data;
-      
-      #-cluster the blastx hits
-      print STDERR "cleaning blastx...\n" unless $main::quiet;
-      
-      my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
-						       $q_seq_ref,
-						       10
-						      );
-      undef $blastx_keepers;	#free up memory
-      
-      #-make a multi-fasta of the seqs in the blastx_clusters 
-      #-polish the blastx hits with exonerate
-      
-      my $exoner_p_clust = GI::polish_exonerate($fasta,
-						$blastx_clusters,
-						$fasta_p_index,
-						$the_void,
-						5,
-						'p',
-						$CTL_OPT{exonerate},
-						$CTL_OPT{pcov_blastx},
-						$CTL_OPT{pid_blastx},
-						$CTL_OPT{ep_score_limit},
-						$CTL_OPT{ep_matrix},
-						$CTL_OPT{force},
-						$LOG
-					       );
-      
-      #flatten clusters
-      $blastx_data      = GI::flatten($blastx_clusters);
-      $exonerate_p_data = GI::flatten($exoner_p_clust, 'exonerate:p');
-      
-      #-cluster the tblastx hits
-      print STDERR "cleaning tblastx...\n" unless $main::quiet;
-      my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
-							$q_seq_ref,
-							10
-						       );
-      undef $tblastx_keepers;	#free up memory
-
-      #flatten the clusters
-      my $tblastx_data = GI::flatten($tblastx_clusters);
-      
-      
-      #-cluster the blastn hits
-      print STDERR "cleaning blastn...\n" unless $main::quiet;
-      my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
-						       $q_seq_ref,
-						       10
-						      );
-      undef $blastn_keepers;	#free up memory
-
-      #-polish blastn hits with exonerate
-      my $exoner_e_clust = GI::polish_exonerate($fasta,
-						$blastn_clusters,
-						$fasta_t_index,
-						$the_void,
-						5,
-						'e',
-						$CTL_OPT{exonerate},
-						$CTL_OPT{pcov_blastn},
-						$CTL_OPT{pid_blastn},
-						$CTL_OPT{en_score_limit},
-						$CTL_OPT{en_matrix},
-						$CTL_OPT{force},
-						$LOG
-					       ); 
-
-      #flatten clusters
-      my $blastn_data      = GI::flatten($blastn_clusters);
-      my $exonerate_e_data = GI::flatten($exoner_e_clust,
-					 'exonerate:e'
-					);
-
-      #combine final data sets
-      my $final_est = GI::combine($exonerate_e_data,
-				  $est_gff_keepers
-				 );
-      my $final_altest = GI::combine($tblastx_data,
-				     $altest_gff_keepers
-				    );
-      my $final_prot = GI::combine($blastx_data,
-				   $exonerate_p_data,
-				   $prot_gff_keepers
-				  );
-      my $final_pred = GI::combine($preds_on_chunk,
-				   $pred_gff_keepers
-				  );
-
-      #####working here###########
-      #==MAKER annotations built here
-
-      #variables that are persistent outside of try block
-      my $annotations = [];
-
-      #-auto-annotate the input file
-      GI::combine($blastx_data, );
-      $annotations = maker::auto_annotator::annotate($fasta,
- 						     $masked_fasta,
- 						     $chunk->number(),
-						     $final_prot,
-						     $final_est,
- 						     $final_altest,
- 						     $final_pred,
- 						     $model_gff_keepers,
- 						     $the_void,
-						     $build,
- 						     \%CTL_OPT,
- 						     $LOG
- 						    );
-
-      my $maker_anno = maker::auto_annotator::best_annotations($annotations,
-							       $out_dir,
-							       \%CTL_OPT
-							      );
-
-      my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
-								       $annotations->{abinit}
-								       );
-
-
-
-      
-      #==OUTPUT DATA HERE
-      
-      #--- GFF3
-      $GFF3->add_genes($maker_anno);
-      $GFF3->add_phathits($blastx_data);
-      $GFF3->add_phathits($blastn_data);
-      $GFF3->add_phathits($tblastx_data);
-      $GFF3->add_phathits($exonerate_p_data);
-      $GFF3->add_phathits($exonerate_e_data);
-      $GFF3->add_phathits($est_gff_keepers);
-      $GFF3->add_phathits($altest_gff_keepers);
-      $GFF3->add_phathits($prot_gff_keepers);
-      $GFF3->add_phathits($preds_on_chunk);
-      $GFF3->add_phathits($pred_gff_keepers);
-      $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
-            
-      #--- building fastas for annotations (grows with iteration)
-      GI::maker_p_and_t_fastas($maker_anno,
-			       $non_over,
-			       $annotations->{abinit},
-			       \%p_fastas,
-			       \%t_fastas,
-			       );
-   }
-   #END CONTIG
-   
-   #--- write fastas for ab-initio predictions
-   
-   #--Write annotation fasta files now that all chunks are finished
-   GI::write_p_and_t_fastas(\%p_fastas, \%t_fastas, $safe_seq_id, $out_dir);
-   
-   #--- write GFF3 file
-   $GFF3->finalize();
-   
-   #--cleanup maker files created with each fasta sequence
-   File::Path::rmtree ($the_void) if $CTL_OPT{clean_up}; #rm temp directory
-
-   #-- write to DS log the finished files
-   $DS_CTL->add_entry($seq_id, $out_dir, 'FINISHED');
-   
-   #--- clear the log variable
-   $LOG = undef;
-}
-
-#lets me know when maker is finished
 print STDERR "\n\nMaker is now finished!!!\n\n";
 
-exit(0);
-
-#------------------------------------------------------------------------------#
-#------------------------------------ SUBS ------------------------------------#
-#------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------

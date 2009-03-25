@@ -110,7 +110,67 @@ Please see the documentation of the MPI environment you use for instructions on 
 #----------------------------------------------------
 MAKER USAGE STATEMENT
 
+Usage:
 
+     maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
+
+     Maker is a program that produces gene annotations in GFF3 file format using
+     evidence such as EST alignments and protein homology.  Maker can be used to
+     produce gene annotations for new genomes as well as update annoations from
+     existing genome databases.
+
+     The four input arguments are user control files that specify how maker
+     should behave. The evaluator options file contains control options specific
+     for the evaluation of gene annotations. All options for maker should be set
+     in the control files, but a few can also be set on the command line.
+     Command line options provide a convenient machanism to override commonly
+     altered control file values.
+
+     Input files listed in the control options files must be in fasta format.
+     Please see maker documentation to learn more about control file
+     configuration.  Maker will automatically try and locate the user control
+     files in the current working directory if these arguments are not supplied
+     when initializing maker.
+
+     It is important to note that maker does not try and recalculated data that
+     it has already calculated.  For example, if you run an analysis twice on
+     the same dataset file you will notice that maker does not rerun any of the
+     blast analyses, but instead uses the blast analyses stored from the
+     previous run.  To force maker to rerun all analyses, use the -f flag.
+
+
+Options:
+
+     -genome|g <filename> Specify the genome file.
+
+     -predictor|p <type>  Selects the predictor(s) to use when building
+                          annotations.  Use a ',' to seperate types (no spaces).
+                          i.e. -predictor=snap,augustus,fgenesh
+
+                          types: snap
+                                 augustus
+                                 fgenesh
+                                 genemark
+                                 est2genome (Uses EST's directly)
+                                 abinit (ab-initio predictions)
+                                 model_gff (Passes through GFF3 annotations)
+
+     -RM_off|R           Turns all repeat masking off.
+
+     -retry   <integer>  Rerun failed contigs up to the specified count.
+
+     -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
+
+     -force|f            Forces maker to delete old files before running again.
+                         This will require all blast analyses to be rerun.
+
+     -evaluate|e         Run Evaluator on final annotations (under development).
+
+     -quiet|q            Silences most of maker's status messages.
+
+     -CTL                Generate empty control files in the current directory.
+
+     -help|?             Prints this usage statement.
 
 
 #----------------------------------------------------
