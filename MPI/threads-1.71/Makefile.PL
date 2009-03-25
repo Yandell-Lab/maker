@@ -85,7 +85,7 @@ WriteMakefile(
     'PM' => {
         'threads.pm'    => '$(INST_LIBDIR)/threads.pm',
     },
-    'DESTDIR' => "$FindBin::Bin/../../",
+    'DESTDIR' => "$FindBin::Bin/../../perl/",
     'INSTALLDIRS' => "perl",
     'INSTALLMAN1DIR' => "none",
     'INSTALLMAN3DIR' => "none",

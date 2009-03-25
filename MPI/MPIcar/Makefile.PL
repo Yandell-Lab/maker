@@ -18,7 +18,7 @@ WriteMakefile(
     'DEFINE'	=> '-DFLOAT_HACK',
     'INC'	=> "-I$MPIDIR",
 #    'EXE_FILES' => [''],
-    'DESTDIR' => "$FindBin::Bin/../../",
+    'DESTDIR' => "$FindBin::Bin/../../perl/",
     'INSTALLDIRS' => "perl",
     'INSTALLMAN1DIR' => "none",
     'INSTALLMAN3DIR' => "none",
