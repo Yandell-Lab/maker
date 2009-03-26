@@ -2063,6 +2063,7 @@ sub set_defaults {
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
+      $CTL_OPT{'min_protein'} = 30;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
@@ -2413,6 +2414,11 @@ sub load_control_files {
       "min_contig will be reset to 1\n\n";
       $CTL_OPT{min_contig} = 1;
    }
+   if ($CTL_OPT{min_contig} <= 0) {
+      warn "WARNING: \'min_protein\' must be set to 1 or higher.\n".
+      "min_protein will be reset to 1\n\n";
+      $CTL_OPT{min_protein} = 1;
+   }
    if ($CTL_OPT{retry} < 0) {
       warn "WARNING: \'retry\' must be set to 0 or greater.\n".
 	   "It will now be set to 0\n\n";
@@ -2555,6 +2561,7 @@ sub generate_control_files {
    print OUT "evaluate:$O{evaluate} #run Evaluator on all annotations, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
+   print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n";
    print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
    print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
    print OUT "single_exon:$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";

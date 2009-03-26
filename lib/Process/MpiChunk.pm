@@ -1535,6 +1535,10 @@ sub _go {
 								     \%CTL_OPT
 								    );
 
+	    $maker_anno = maker::auto_annotator::verify_old_form($maker_anno,
+								 $annotations->{model_gff}
+								 );
+
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
 									     $annotations->{abinit}
 									     );

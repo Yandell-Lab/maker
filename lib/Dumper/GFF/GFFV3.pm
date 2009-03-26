@@ -68,7 +68,7 @@ sub fasta {
 sub resolved_flag {
     my $self   = shift;
 
-    open(my $ANN, ">>", $self->{ann_file});
+    open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n");
     close($ANN);
 }
@@ -81,13 +81,13 @@ sub set_current_contig {
     $self->{seq_id} = shift;
     $self->{seq} = shift;
 
-    open(my $ANN, ">>", $self->{ann_file});
+    open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
     print_txt($ANN, $self->contig_comment."\n");
     print_txt($ANN, $self->contig_line."\n"); 
     close($ANN);
 
-    open(my $SEQ, ">>", $self->{seq_file});
+    open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
     print_txt($SEQ, ${$self->fasta});
     close($SEQ);
 }
@@ -112,7 +112,25 @@ sub finalize {
     my $ann_f = $self->{ann_file};
     my $seq_f = $self->{seq_file};
 
-    system("cat $seq_f >> $ann_f");
+    open(my $SEQ, "< $seq_f")|| die "ERROR: Can't open seq file\n\n";
+    open(my $ANN, ">> $ann_f")|| die "ERROR: Can't open annotation file\n\n";
+    my $line = <$SEQ>;
+    if($line !~ /^\#\#FASTA/){
+	die "ERROR: There was a problem in the writing the fasta entry\n".
+	    "Either no sequence was given, or there was an error in writing\n\n";
+    }
+    $line = <$SEQ>;
+    if($line !~ /^>/){
+	die "ERROR: There was a problem in the writing the fasta entry\n".
+	    "Either no sequence was given, or there was an error in writing\n\n";
+    }
+    print $ANN $line;
+    while(defined($line = <$SEQ>)){
+	print $ANN $line;
+    }
+    close($ANN);
+    close($SEQ);
+
     unlink($seq_f);
     move($ann_f, $gff_f);
 
@@ -188,7 +206,7 @@ sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
     
-    open(my $ANN, '>>', $self->{ann_file});
+    open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
     foreach my $p (@{$hits}){
        print_txt($ANN, hit_data($p, $self->seq_id));
     }
@@ -199,7 +217,7 @@ sub add_phathits {
    my $self  = shift;
    my $hits  = shift;
    
-   open(my $ANN, '>>', $self->{ann_file});
+   open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
     foreach my $h (@{$hits}){
        print_txt($ANN, hit_data($h, $self->seq_id));
     }
@@ -210,7 +228,7 @@ sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
    
-   open(my $ANN, '>>', $self->{ann_file});
+   open(my $ANN, '>>', $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     foreach my $r (@{$hits}){
        print_txt($ANN, repeat_data($r, $self->seq_id));
     }
@@ -221,7 +239,7 @@ sub add_genes {
     my $self  = shift;
     my $genes = shift;
     
-    open(my $ANN, '>>', $self->{ann_file});
+    open(my $ANN, '>>', $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     foreach my $g (@{$genes}){
        print_txt($ANN, gene_data($g, $self->seq_id));
     }

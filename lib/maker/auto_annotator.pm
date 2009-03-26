@@ -549,8 +549,8 @@ sub annotate {
     my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
     
     #reset gene names
-    my $GFF_DB = new GFFDB($CTL_OPTIONS);
-    $SEEN = $GFF_DB->get_existing_gene_names($seq_id);
+    #my $GFF_DB = new GFFDB($CTL_OPTIONS);
+    $SEEN = {};#$GFF_DB->get_existing_gene_names($seq_id);
     
     #group evidence and predictions
     my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
@@ -1108,7 +1108,8 @@ sub load_transcript_struct {
 			't_qi'     => $qi,
 			'AED'      => $AED,
 			'evi'      => $evi,
-			'p_base'   => $p_base
+			'p_base'   => $p_base,
+			'p_length' => length($translation_seq)
                     };
 
 	return $t_struct;
@@ -1237,22 +1238,26 @@ sub group_transcripts {
       my $g_name;
       if ($predictor eq 'model_gff') {
 	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
+	 $SEEN->{$g_name}++; 
       }
       elsif ($predictor eq 'abinit') {
 	  if ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
+	      $SEEN->{$g_name}++; 
 	  }
 	  else{
 	      $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm	   
 	      $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
+	      $SEEN->{$g_name}++; 
 	  }
       }
       else {
 	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm	   
 	 $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
 	 $g_name = "$g_name.$c_id";
+	 $SEEN->{$g_name}++; 
       }
       
       #combine evidence for all transcripts
@@ -1264,17 +1269,24 @@ sub group_transcripts {
 
       #load transcript structs
       my $AED = 1;
+      my $p_length = 0;
       my $i = 1;
       foreach my $f (@{$c}) {
 	 my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
 
 	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTIONS);
 
-	 push(@t_structs, $t_struct);
+	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTIONS->{min_protein});
+
 	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
 	 $i++;
       }
       
+      if(! @t_structs){
+	  $c_id++;
+	  next;
+      }
+
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
       
       my $annotation = { 't_structs' => \@t_structs,
@@ -1321,6 +1333,77 @@ sub merge_evidence {
 	    $f->{_uniq_set} = 1;
 	}
     }
+}
+#------------------------------------------------------------------------
+sub verify_old_form {
+    my $ann_set = shift;
+    my $gff_set = shift;
+
+    return $ann_set if(! $gff_set || ! @$gff_set);
+
+    #seperate annotations by strand
+    my @p_ann;
+    my @m_ann;
+    foreach my $g (@$ann_set){
+	if($g->{g_strand} == 1){
+	    push(@p_ann, $g);
+	}
+	elsif($g->{g_strand} == -1){
+	    push(@m_ann, $g);
+	}
+	else{
+	    die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
+	}
+    }
+    
+    #separate abinits by strand
+    my @p_gff;
+    my @m_gff;
+    foreach my $g (@$gff_set){
+       if($g->{g_strand} == 1){
+	   push(@p_gff, $g);
+       }
+       elsif($g->{g_strand} == -1){
+	   push(@m_gff, $g);
+       }
+       else{
+	   die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
+       }
+   }
+    
+    #identify same forms in plus strand
+    foreach my $ann (@p_ann){
+	foreach my $gff (@p_gff){
+	    next if(@{$ann->{t_structs}} != @{$gff->{t_structs}});   
+
+	    my $ah = $ann->{t_structs}->[0]->{hit};
+	    my $gh = $gff->{t_structs}->[0]->{hit};
+		
+	    if(clean::is_identical_form($ah, $gh)){
+		$ann = $gff;
+		last;
+	    }
+	}  
+    }
+
+    #identify same forms in minus strand
+    foreach my $ann (@m_ann){
+	foreach my $gff (@m_gff){
+            next if(@{$ann->{t_structs}} != @{$gff->{t_structs}});
+
+            my $ah = $ann->{t_structs}->[0]->{hit};
+            my $gh = $gff->{t_structs}->[0]->{hit};
+
+            if(clean::is_identical_form($ah, $gh)){
+                $ann = $gff;
+                last;
+            }
+	}  
+    }
+
+    my @keepers = (@p_ann, @m_ann);
+    
+    return \@keepers;
 }
 #------------------------------------------------------------------------
 sub get_non_overlaping_abinits {
