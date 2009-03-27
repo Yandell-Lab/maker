@@ -336,8 +336,6 @@ sub write_xdef_file {
 sub parse_gene {
 	my $stuff = shift;
 
-
-
 	shift(@{$stuff});
 
 	my %this_gene;
@@ -461,13 +459,13 @@ sub parse {
 		    my $count;
 		    foreach my $l (@stuff){
 			if($l =~ /^\#/){ #maybe important someday
-			    foreach my $s (@multi_stuff){
-				push(@$s, $l);
+			    for (my $i = 0; $i < $t_count; $i++){
+				push(@{$multi_stuff[$i]}, $l);
 			    }
 			}
 			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+gene\s+/){
-			    foreach my $s (@multi_stuff){
-				push(@$s, $l);
+			    for (my $i = 0; $i < $t_count; $i++){
+				push(@{$multi_stuff[$i]}, $l);
 			    }
 			}
 			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+transcript\s+/){
@@ -476,6 +474,11 @@ sub parse {
                         }
 			elsif($l =~ /^[^\s]+\s+AUGUSTUS\s+[^\s]+\s+/){
 			    push(@{$multi_stuff[$count-1]}, $l);
+			}
+			else{
+			    for (my $i = 0; $i < $t_count; $i++){
+                                push(@{$multi_stuff[$i]}, $l);
+                            }
 			}
 		    }
 

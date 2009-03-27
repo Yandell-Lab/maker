@@ -518,6 +518,9 @@ label : GENMARK
 tiername : Gene Prediction
 datatype : genemark:dummy
 datatype : GeneMark
+datatype : genemark
+datatype : genemark_masked
+datatype : genemark_masked:dummy
 datatype : pred_gff:GeneMark
 glyph : DrawableResultFeatureSet
 color : 103,155,104
@@ -533,6 +536,8 @@ label : SNAP
 tiername : Gene Prediction
 datatype : snap:dummy
 datatype : snap
+datatype : snap_masked
+datatype : snap_masked:dummy
 glyph : DrawableResultFeatureSet
 color : 153,255,204
 column : SCORE
@@ -545,6 +550,9 @@ sortbycolumn : GENOMIC_RANGE
 label : Fgenesh
 tiername : Gene Prediction
 datatype : fgenesh:dummy
+datatype : fgenesh_masked
+datatype : fgenesh_masked:dummy
+datatype : fgenesh
 glyph : DrawableResultFeatureSet
 color : 255,153,255
 usescore : true
@@ -560,6 +568,8 @@ sortbycolumn : GENOMIC_RANGE
 label : augustus
 tiername : Gene Prediction
 datatype : augustus
+datatype : augustus_masked
+datatype : augustus_masked:dummy
 datatype : augustus:dummy
 glyph : DrawableResultFeatureSet
 color : 255,204,255
