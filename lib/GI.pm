@@ -2268,12 +2268,12 @@ sub load_control_files {
    }
 
    #if no repeat masking options are set don't run masking dependent methods
-   if ($CTL_OPT{model_org} == '' &&
-       $CTL_OPT{repeat_protein} == '' &&
-       $CTL_OPT{rmlib} == '' &&
-       $CTL_OPT{rm_gff} == '' &&
+   if ($CTL_OPT{model_org} eq '' &&
+       $CTL_OPT{repeat_protein} eq '' &&
+       $CTL_OPT{rmlib} eq '' &&
+       $CTL_OPT{rm_gff} eq '' &&
        ($CTL_OPT{rm_pass} == 0 ||
-	$CTL_OPT{genome_gff} == '')
+	$CTL_OPT{genome_gff} eq '')
       ) {
        $CTL_OPT{_no_mask} = 1; #no masking options found
    }
