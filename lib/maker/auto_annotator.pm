@@ -861,7 +861,7 @@ sub best_annotations {
 	    if($g->{g_strand} == 1){
 		push(@p_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
 	    }
-	    elsif($g->{g_strand} == -s){
+	    elsif($g->{g_strand} == -1){
 		push(@m_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
 	    }
 	}
@@ -936,7 +936,7 @@ sub remove_CDS_competitors {
 	#test each gene for abinit, spliced EST, or exonerate protein support
 	foreach my $t (@{$g->{t_structs}}){
 	    #check EST splice sites and abinits first (fast)
-	    my @qi = split('|', $t->{t_qi}); #get spliced EST and abinit support
+	    my @qi = split(/\|/, $t->{t_qi}); #get spliced EST and abinit support
 	    if($qi[1] > 0 || $qi[5] > 0){
 		push(@m_final,$g);
 		$add_flag = 1;

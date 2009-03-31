@@ -648,12 +648,12 @@ sub _go {
 	    #do masked predictions first
 	    my $preds = [];
 	    if(! $CTL_OPT{_no_mask}){ 
-		GI::abinits($masked_file,
-			    $the_void,
-			    $safe_seq_id.".masked",
-			    \%CTL_OPT,
-			    $LOG
-			    );
+		$preds = GI::abinits($masked_file,
+				     $the_void,
+				     $safe_seq_id.".masked",
+				     \%CTL_OPT,
+				     $LOG
+				     );
 	    
 		#add tag that says these are masked
 		foreach my $p (@$preds){

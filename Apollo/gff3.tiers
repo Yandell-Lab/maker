@@ -516,11 +516,11 @@ sortbycolumn : GENOMIC_RANGE
 [Type]
 label : GENMARK
 tiername : Gene Prediction
-datatype : genemark:dummy
-datatype : GeneMark
 datatype : genemark
+datatype : genemark:dummy
 datatype : genemark_masked
 datatype : genemark_masked:dummy
+datatype : GeneMark
 datatype : pred_gff:GeneMark
 glyph : DrawableResultFeatureSet
 color : 103,155,104
@@ -534,8 +534,8 @@ sortbycolumn : GENOMIC_RANGE
 [Type]
 label : SNAP
 tiername : Gene Prediction
-datatype : snap:dummy
 datatype : snap
+datatype : snap:dummy
 datatype : snap_masked
 datatype : snap_masked:dummy
 glyph : DrawableResultFeatureSet
@@ -549,10 +549,10 @@ sortbycolumn : GENOMIC_RANGE
 [Type]
 label : Fgenesh
 tiername : Gene Prediction
+datatype : fgenesh
 datatype : fgenesh:dummy
 datatype : fgenesh_masked
 datatype : fgenesh_masked:dummy
-datatype : fgenesh
 glyph : DrawableResultFeatureSet
 color : 255,153,255
 usescore : true
@@ -568,9 +568,9 @@ sortbycolumn : GENOMIC_RANGE
 label : augustus
 tiername : Gene Prediction
 datatype : augustus
+datatype : augustus:dummy
 datatype : augustus_masked
 datatype : augustus_masked:dummy
-datatype : augustus:dummy
 glyph : DrawableResultFeatureSet
 color : 255,204,255
 column : SCORE
@@ -1589,6 +1589,52 @@ column : SCORE
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
+[Type]
+label : P_oligandrum
+tiername : Exonerate::EST2Genome
+datatype : est2genome:P_oligandrum
+datatype : est2genome:P_oligandrum;
+glyph : DrawableResultFeatureSet
+color : 250,250,210
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : P_ultimum_Sanger
+tiername : Exonerate::EST2Genome
+datatype : est2genome:P_ultimum_Sanger
+datatype : est2genome:P_ultimum_Sanger;
+glyph : DrawableResultFeatureSet
+color : 240,240,202
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+
+[Type]
+label : P_ultimum_454_Sanger
+tiername : Exonerate::EST2Genome
+datatype : est2genome:P_ultimum_454_Sanger
+datatype : est2genome:P_ultimum_454_Sanger;
+glyph : DrawableResultFeatureSet
+color : 230,230,194
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
 [Tier]
 tiername : Exonerate::Protein2Genome
 expanded : true
@@ -1599,7 +1645,37 @@ tiername : Exonerate::Protein2Genome
 datatype : exonerate::protein2genome
 datatype : protein2genome
 glyph : DrawableResultFeatureSet
-color : yellow
+color : 255,255,0
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : Protein2Genome::UniProt_SwissProt
+tiername : Exonerate::Protein2Genome
+datatype : protein2genome:UniProt_SwissProt
+datatype : protein2genome:UniProt_SwissProt;
+glyph : DrawableResultFeatureSet
+color : 255,255,0
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : Protein2Genome::Phytophthora
+tiername : Exonerate::Protein2Genome
+datatype : protein2genome:Phytophthora
+datatype : protein2genome:Phytophthora;
+glyph : DrawableResultFeatureSet
+color : 255,255,110
 column : GENOMIC_LENGTH
 column : MATCH_LENGTH
 column : GENOMIC_RANGE
@@ -1628,6 +1704,51 @@ column : SCORE
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
+[Type]
+label : BLASTN::P_ultimum_454_Sanger
+tiername : BLASTN
+datatype : blastn:P_ultimum_454_Sanger
+datatype : blastn:P_ultimum_454_Sanger;
+glyph : DrawableResultFeatureSet
+color : 102,204,0
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : BLASTN::P_ultimum_Sanger
+tiername : BLASTN
+datatype : blastn:P_ultimum_Sanger
+datatype : blastn:P_ultimum_Sanger;
+glyph : DrawableResultFeatureSet
+color : 102,204,102
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : BLASTN::P_oligandrum
+tiername : BLASTN
+datatype : blastn:P_oligandrum
+datatype : blastn:P_oligandrum;
+glyph : DrawableResultFeatureSet
+color : 102,153,102
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
 [Tier]
 tiername : BLASTX
 expanded : true
@@ -1646,5 +1767,95 @@ column : MATCH_LENGTH
 column : GENOMIC_RANGE
 column : MATCH_RANGE
 column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : BLASTX::UniProt_SwissProt
+tiername : BLASTX
+datatype : blastx:UniProt_SwissProt
+datatype : blastx:UniProt_SwissProt;
+glyph : DrawableResultFeatureSet
+color : pink
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : BLASTX::Phytophthora
+tiername : BLASTX
+datatype : blastx:Phytophthora
+datatype : blastx:Phytophthora;
+glyph : DrawableResultFeatureSet
+color : 255,51,204
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : SCORE
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Tier]
+tiername : TBLASTX
+expanded : true
+
+[Type]
+label : TBLASTX
+tiername : TBLASTX
+datatype : tblastx
+glyph : DrawableResultFeatureSet
+color : 102,51,102
+usescore : true
+column : SCORE
+column : identity
+column : expect
+column : query_frame
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : TBLASTX::Other_Oomycete
+tiername : TBLASTX
+datatype : tblastx:Other_Oomycete
+datatype : tblastx:Other_Oomycete;
+glyph : DrawableResultFeatureSet
+color : 103,51,102
+usescore : true
+column : SCORE
+column : identity
+column : expect
+column : query_frame
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
+[Type]
+label : TBLASTX::Phytophthora
+tiername : TBLASTX
+datatype : tblastx:Phytophthora
+datatype : tblastx:Phytophthora;
+glyph : DrawableResultFeatureSet
+color : 102,51,153
+usescore : true
+column : SCORE
+column : identity
+column : expect
+column : query_frame
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
