@@ -36,6 +36,8 @@ my $SEEN;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
+#prepares hits by combining evidence into appropriate clusters
+#returns clusters for abinits, gff_models, and standard evidence
 sub prep_hits {
 	my $prot_hits        = shift;
 	my $est_hits         = shift;
@@ -130,6 +132,8 @@ sub prep_hits {
 	return (\@bx_data, \@gf_data, \@pr_data);
 }
 #------------------------------------------------------------------------
+#called in prep_hits to classify abinits as overlaping one, many, or no
+#clusters of other evidence
 sub segment_preds {
         my $preds            = shift;
         my $careful_clusters = shift;
@@ -254,6 +258,8 @@ sub segment_preds {
         return (\%clusters_hit, \@hit_one, \@hit_none, \@hit_mult);
 }
 #------------------------------------------------------------------------
+#takes abinits identified by segment_preds and merges them back into
+#all the clusters they overlap
 sub merge_into_cluster {
    my $hits = shift;
    my $clusters = shift;
@@ -267,6 +273,8 @@ sub merge_into_cluster {
    }
 }
 #------------------------------------------------------------------------
+#takes individual clusters and merges them if an abinit identified by
+#segment_preds overlaps both clusters, this returns the set of new clusters
 sub join_clusters_on_pred {
    my $hits = shift;
    my $clusters = shift;
@@ -286,6 +294,8 @@ sub join_clusters_on_pred {
    return \@p_clusters;
 }
 #------------------------------------------------------------------------
+#used to identify hits related to ESTs in a cluster and then remove those
+#below a certain threshold, returns the revised cluster
 sub purge_short_ESTs_in_clusters{
     my $clusters = shift;
     my $min = shift;
@@ -320,6 +330,7 @@ sub purge_short_ESTs_in_clusters{
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for standard evidence clusters
 #ests => set of all ests
 #protein homology =>  set of combined protein exonerate and blastx data
 #alternative splice form => each est from best ests
@@ -381,6 +392,7 @@ sub prep_blastx_data {
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for model_gff based clusters
 #ests => set of all ests
 #protein homology =>  set of combined protein exonerate and blastx data
 #alternative splice form => none
@@ -424,6 +436,7 @@ sub prep_gff_data {
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for abinit based  clusters
 #ests => set of all ests
 #protein homology =>  set of combined protein exonerate and blastx data
 #alternative splice form => none
@@ -464,6 +477,7 @@ sub prep_pred_data {
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for standard evidence clusters
 #ests => set of best ests from all ests
 #protein homology => each protein exonerate structure
 #alternative splice forms => each protein exonerate structure
@@ -495,6 +509,7 @@ sub prep_polpro_data {
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for standard evidence clusters
 #ests => each best est from all ests
 #protein homology =>  best set from combined protein exonerate and blastx data
 #alternative splice forms => based on each best ests from all ests
@@ -527,7 +542,8 @@ sub prep_polest_data {
         return \@data;
 }
 #------------------------------------------------------------------------
-#this subrutine returns finished annoations for all predictors
+#this subrutine returns finished annotations for all predictors.
+#called outside of package by maker
 sub annotate {
     my $virgin_fasta     = shift;
     my $masked_fasta     = shift;
@@ -647,7 +663,10 @@ sub annotate {
        (! grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}})
       ){
 	foreach my $g (@$all_ab){
-	    if($g->{t_structs}->[0]->{hit}->algorithm =~ /^genemark_masked$/i){
+	    if($g->{algorithm} =~ /^genemark_masked$/i){
+		push(@{$annotations{'genemark'}}, $g);
+	    }
+	    elsif($CTL_OPTIONS->{_no_mask} && $g->{algorithm} =~ /^genemark$/i){
 		push(@{$annotations{'genemark'}}, $g);
 	    }
 	}
@@ -657,6 +676,7 @@ sub annotate {
     return \%annotations;
 }
 #------------------------------------------------------------------------
+#counts the number of nucleotides in a hit on the query sequence
 sub get_n_count{
     my $g = shift;
 
@@ -689,6 +709,7 @@ sub get_n_count{
     return $index[1];
 }
 #------------------------------------------------------------------------
+#returns all phathits inside a gene annotation
 sub gene2all_phathits {
     my $g = shift;
     
@@ -700,6 +721,8 @@ sub gene2all_phathits {
     return \@hits;
 }
 #------------------------------------------------------------------------
+#returns all p_bases (transcript phat_hits without UTRs added by pneu)
+#for a gene annotation, called for abAED calculation
 sub gene2allPbases {
     my $g = shift;
     
@@ -713,6 +736,14 @@ sub gene2allPbases {
     return \@hits;
 }
 #------------------------------------------------------------------------
+#adds the abAED to all transcripts within a gene annotation.
+#abAED is the average AED across alternate models.
+#It is  caculated by comaring each of the p_bases or CDSs
+#of alternate gene models back to the current gene model.
+#lower abAED means that this model is closer to the consensus of all the gene
+#models. est2genome is not considered as an alternate model when calculating
+#abAED; however, abinits, and model_gff annotations are.  This means abAED is
+#calculated for est2genome, but not against est2genome.
 sub add_abAED{
     my $annotations = shift;
 
@@ -725,14 +756,14 @@ sub add_abAED{
     foreach my $p (keys %$annotations){
 	foreach my $g (@{$annotations->{$p}}){
 	    if($g->{g_strand} == 1){
-		push(@p_genes, $g);
-		next if($p eq 'est2genome');
+		push(@p_genes, $g);#calculate for est2genome
+		next if($p eq 'est2genome');#but not against est2genome
 		my $hits = gene2allPbases($g);
 		push(@p_bag, @$hits);
 	    }
 	    elsif($g->{g_strand} == -1) {
-		push(@m_genes, $g);
-		next if($p eq 'est2genome');
+		push(@m_genes, $g);#calculate for est2genome
+		next if($p eq 'est2genome');#but not against est2genome
 		my $hits = gene2allPbases($g);
 		push(@m_bag, @$hits);
 	    }
@@ -772,6 +803,10 @@ sub add_abAED{
 }
 #------------------------------------------------------------------------
 #this subrutine returns finished MAKER annotations
+#it looks through all sets of annotations and returns the best subset based
+#on AED and abAED.  Only returns for predictors specified. Predictor order
+#is important if AED and abAED are the same for an overlapping annotation!
+
 sub best_annotations {
     my $annotations = shift;
     my $out_base = shift;
@@ -779,7 +814,8 @@ sub best_annotations {
 
     print STDERR "Choosing best annotations\n" unless($main::quiet);
     
-    my @keepers;
+    my @p_keepers;
+    my @m_keepers;
     if(@{$CTL_OPTIONS->{_predictor}} > 1 || grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}}){
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
@@ -815,20 +851,197 @@ sub best_annotations {
 	$p_list = _best($p_list);
 	$m_list = _best($m_list);
 	
-	#final set
-	push(@keepers, @$p_list);
-	push(@keepers, @$m_list);
+	#almost final  sets
+	push(@p_keepers, @$p_list);
+	push(@m_keepers, @$m_list);
     }
     elsif(@{$CTL_OPTIONS->{_predictor}}){
 	my $key = $CTL_OPTIONS->{_predictor}->[0];
 	foreach my $g (@{$annotations->{$key}}){
-	    push(@keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
+	    if($g->{g_strand} == 1){
+		push(@p_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
+	    }
+	    elsif($g->{g_strand} == -s){
+		push(@m_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
+	    }
 	}
     }
 
-    return \@keepers;
+    #remove CDS competition on opposite strand
+    my $final = remove_CDS_competitors(\@p_keepers, \@m_keepers);
+
+    return $final;
 }
 #------------------------------------------------------------------------
+#filter for CDS competition on opposite strands
+#thow out genes that compete on opposite strands and
+#don't have abinit, exonerate, or spliced EST confirmation
+sub remove_CDS_competitors {
+    my $plus = shift;
+    my $minus = shift;
+
+    my @p_final;
+    my @m_final;
+    my @p_maybe;
+    my @m_maybe;
+
+    #--find maybe suspects on plus strand
+    foreach my $g (@$plus){
+	my $add_flag = 0;
+
+	#always keep gff passthrough annotations
+	if($g->{predictor} eq 'model_gff'){
+	    push(@p_final, $g);
+	    $add_flag = 1;
+	    next;
+	}
+
+	#test each gene for abinit, spliced EST, or exonerate protein support
+	foreach my $t (@{$g->{t_structs}}){
+	    #check EST splice sites and abinits first (fast)
+	    my @qi = split('|', $t->{t_qi}); #get spliced EST and abinit support
+	    if($qi[1] > 0 || $qi[5] > 0){
+		push(@p_final,$g);
+		$add_flag = 1;
+		last;
+	    }
+
+	    #then check exonerate proteins (slower)
+	    my $gomiph = $g->{g_evidence}->{gomiph};
+	    my $p_ex = [];
+	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
+	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit}); #get exonerate protein support
+	    if($qi[1] > 0 || $qi[5] > 0 || $eAED < 1){
+		push(@p_final,$g);
+		$add_flag = 1;
+		last;
+	    }
+	}
+
+	#add suspects to maybe list
+	push(@p_maybe, $g) if(! $add_flag);
+    }
+
+    #--find maybe suspects on minus strand
+    foreach my $g (@$minus){
+	my $add_flag = 0;
+
+	#always keep gff passthrough annotations
+	if($g->{predictor} eq 'model_gff'){
+	    push(@m_final, $g);
+	    $add_flag = 1;
+	    next;
+	}
+
+	#test each gene for abinit, spliced EST, or exonerate protein support
+	foreach my $t (@{$g->{t_structs}}){
+	    #check EST splice sites and abinits first (fast)
+	    my @qi = split('|', $t->{t_qi}); #get spliced EST and abinit support
+	    if($qi[1] > 0 || $qi[5] > 0){
+		push(@m_final,$g);
+		$add_flag = 1;
+		last;
+	    }
+
+	    #then check exonerate proteins (slower)
+	    my $gomiph = $g->{g_evidence}->{gomiph};
+	    my $p_ex = [];
+	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
+	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit}); #get exonerate protein support
+	    if($qi[1] > 0 || $qi[5] > 0 || $eAED < 1){
+		push(@m_final,$g);
+		$add_flag = 1;
+		last;
+	    }
+	}
+
+	#add suspects to maybe list
+	push(@m_maybe, $g) if(! $add_flag);
+    }
+
+
+    #--check if plus strand maybes overlap final set minus
+    my @suspects;
+    if(@m_final){ #skip if nothing to compare to
+	foreach my $s (@p_maybe){
+	    my $sB = $s->{g_start};
+	    my $sE = $s->{g_end};
+	    ($sB, $sE) = ($sE, $sB) if($sE < $sB);
+
+	    my $bad;
+	    foreach my $g (@m_final){
+		my $gB = $g->{g_start};
+		my $gE = $g->{g_end};
+		($gB, $gE) = ($gE, $gB) if($gE < $gB);
+
+		my $comp = compare::compare ($sB,
+					     $sE,
+					     $gB,
+					     $gE
+					    );
+		if($comp ne '0'){
+		    $bad = 1;
+		    last;
+		}
+	    }
+	    
+	    #keep as suspect if not overlapping final set
+	    push(@suspects, $s) if(!$bad);
+	}
+    }
+    else{
+	push(@suspects, @p_maybe);#everyones a supsect
+    }
+
+    #--check if minus strand maybes overlap final set plus
+    if(@p_final){ #skip if nothing to compare to
+	foreach my $s (@m_maybe){
+	    my $sB = $s->{g_start};
+	    my $sE = $s->{g_end};
+	    ($sB, $sE) = ($sE, $sB) if($sE < $sB);
+
+	    my $bad;
+	    foreach my $g (@p_final){
+		my $gB = $g->{g_start};
+		my $gE = $g->{g_end};
+		($gB, $gE) = ($gE, $gB) if($gE < $gB);
+
+		my $comp = compare::compare ($sB,
+					     $sE,
+					     $gB,
+					     $gE
+					    );
+		if($comp ne '0'){
+		    $bad = 1;
+		    last;
+		}
+	    }
+	    
+	    #keep as suspect if not overlapping final set
+	    push(@suspects, $s) if(!$bad);
+	}
+    }
+    else{
+	    push(@suspects, @m_maybe);#everyones a supsect
+    }
+
+    #remove suspects that overlap other better suspects
+    @suspects = sort {crit4($b) <=> crit4($a)} @suspects;
+    @suspects = @{_best(\@suspects)};
+
+    #return final annotations
+    my $final;
+    push(@$final, @p_final);
+    push(@$final, @m_final);
+    push(@$final, @suspects);
+
+    return $final;
+}
+#------------------------------------------------------------------------
+#called by best_annotations, returns non_overlapping annotion set.
+#expects the input array to already be sorted so that the first annotations
+#are more likely to be returned than the last. Expects all annotations to
+#given to be from the same strand and will not double check this.
 sub _best{
     my $list = shift;
     
@@ -870,7 +1083,7 @@ sub crit2 {
     return $g->{AED};
 }
 #------------------------------------------------------------------------
-#sort by abinit AED score
+#sort by abAED score
 sub crit3 {
     my $g = shift;
 
@@ -886,6 +1099,14 @@ sub crit4 {
     return $length;
 }
 #------------------------------------------------------------------------
+#called by subroutine annotate.
+#takes evidence clusters prepared by prep_hits and runs gene predictons
+#using hints from that evidence.  For model_gff and abinit clusters it
+#just returns the abinits with UTR added or model_gffs as they are.
+#It also returns p_bases or the models before UTR was added.
+#est2genome predictions are also built here by adding UTR to the best
+#spliced ESTs
+
 sub run_it {
     my $data         = shift;
     my $the_void     = shift;
@@ -991,6 +1212,7 @@ sub run_it {
     return \@transcripts;
 }
 #------------------------------------------------------------------------
+#runs the gene prdictors with hints.  Called by run_it.
 sub get_pred_shot {
    my $seq         = shift; 
    my $def         = shift;
@@ -1058,6 +1280,10 @@ sub get_pred_shot {
    }
 }
 #------------------------------------------------------------------------
+#takes the gene predictions and evidence and builds transcript name,
+#QI, AED and gets protein and mRNA sequence then puts it al into a
+#HASH.  Called by group transcripts. Transcript name is set here, as
+#well as UTR boudaries
 sub load_transcript_struct {
 	my $f            = shift;
 	my $g_name       = shift;
@@ -1115,6 +1341,38 @@ sub load_transcript_struct {
 	return $t_struct;
 }
 #------------------------------------------------------------------------                                                           
+#takes an array of annotations and only returns those that overlap a maker
+#annotation (doesn't care if on opposite strand so be careful)
+sub get_geness_overlapping_gene {
+   my $gene  = shift;
+   my $genes = shift;
+
+   my $B = $gene->{g_start};
+   my $E = $gene->{g_end};
+
+   ($B, $E) = ($E, $B) if($E < $B);
+
+   my @keepers;
+   foreach my $g (@{$genes}){
+       my $gB = $g->{g_start};
+       my $gE = $g->{g_end};
+
+       ($gB, $gE) = ($gE, $gB) if($gE < $gB);
+       my $comp = compare::compare ($B,
+				    $E,
+				    $gB,
+				    $gE
+				  );
+       if($comp ne '0'){
+	   push(@keepers, $g);
+       }
+   }
+   
+   return \@keepers;
+}
+#------------------------------------------------------------------------                                                           
+#takes an array of phathits and only returns those that overlap a maker
+#annotation (will not return hits on opposite strand)
 sub get_hits_overlapping_gene {
    my $g  = shift;
    my $hits = shift;
@@ -1139,6 +1397,8 @@ sub get_hits_overlapping_gene {
    return \@keepers;
 }
 #------------------------------------------------------------------------
+#takes two arrays of phathits and returns all members of the second
+#array that do not overlap those of the first array
 sub get_non_overlapping {
    my $hits_a = shift;
    my $hits_b = shift;
@@ -1155,6 +1415,12 @@ sub get_non_overlapping {
    return \@keepers;
 }
 #------------------------------------------------------------------------
+#called by subroutine annotate.  Actual maker annotation structure built here.
+#groups overlapping transcripts from given predictor type as isoforms of the
+#same gene.  Gene name is set here. load_transcript_struct is called here
+#to set up individual transcript structure. model_gff transcripts are grouped
+#based on the gene_id given in the phat_hit structure and not by overlap.
+
 sub group_transcripts {
    my $data         = shift;
    my $seq          = shift;
@@ -1238,26 +1504,34 @@ sub group_transcripts {
       my $g_name;
       if ($predictor eq 'model_gff') {
 	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
-	 $SEEN->{$g_name}++; 
+	 $SEEN->{$g_name}++;
+	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	     $SEEN->{$1}++;
+	 }
       }
       elsif ($predictor eq 'abinit') {
 	  if ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
 	      $SEEN->{$g_name}++; 
+	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
 	  }
 	  else{
 	      $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm	   
-	      $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
+	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
 	      $SEEN->{$g_name}++; 
+	      $SEEN->{"$chunk_number\.$c_id"}++;
 	  }
       }
       else {
-	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm	   
-	 $c_id++ while(exists $SEEN->{$c_id} || exists $SEEN->{"$g_name.$c_id"});
+	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm
+	 $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	 $g_name = "$g_name.$c_id";
 	 $SEEN->{$g_name}++; 
+	 $SEEN->{"$chunk_number\.$c_id"}++; 
       }
       
       #combine evidence for all transcripts
@@ -1289,13 +1563,15 @@ sub group_transcripts {
 
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
       
-      my $annotation = { 't_structs' => \@t_structs,
-			 'g_name'    => $g_name,
-			 'g_start'   => $g_start,
-			 'g_end'     => $g_end,
-			 'g_strand'  => $g_strand,
-			 'AED'       => $AED,
-			 'predictor' => $predictor
+      my $annotation = { 't_structs'  => \@t_structs,
+			 'g_name'     => $g_name,
+			 'g_start'    => $g_start,
+			 'g_end'      => $g_end,
+			 'g_strand'   => $g_strand,
+			 'g_evidence' => $evidence,
+			 'AED'        => $AED,
+			 'predictor'  => $predictor,
+			 'algorithm'  => $sources,
 		       };
       
       push(@annotations, $annotation);
@@ -1305,6 +1581,10 @@ sub group_transcripts {
    return \@annotations;
 }
 #------------------------------------------------------------------------
+#merges evidence of data supporting annotaitons.  Merges them so that
+#all members are uniq and not repeated.  This is important for combining
+#evidence from mutliple transcripts as a single gene.
+
 sub merge_evidence {
     my $evi1 = shift;
     my $evi2 = shift;
@@ -1335,77 +1615,167 @@ sub merge_evidence {
     }
 }
 #------------------------------------------------------------------------
-sub verify_old_form {
+#attempts to map names from model_gff annotions forward onto new annotations.
+#this is done using AED to decide who best represents the previous model,
+#best decribed as reciprical best AED. called outside of package by maker.
+
+sub map_forward {
     my $ann_set = shift;
     my $gff_set = shift;
-
+    
     return $ann_set if(! $gff_set || ! @$gff_set);
+
+    #make temp IDs and indexes to keep track with
+    my $temp = 0;
+    my @index;
+    my @g_index;
 
     #seperate annotations by strand
     my @p_ann;
     my @m_ann;
     foreach my $g (@$ann_set){
+	my $hits = gene2all_phathits($g);
 	if($g->{g_strand} == 1){
-	    push(@p_ann, $g);
+	    push(@p_ann, @{$hits});
 	}
 	elsif($g->{g_strand} == -1){
-	    push(@m_ann, $g);
+	    push(@m_ann, @{$hits});
 	}
 	else{
 	    die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
 	}
+
+	#add temp ID
+	foreach my $hit (@$hits){
+	    $hit->{_temp_id} = $temp;	    
+	    $index[$temp] = $hit;
+	    $g_index[$temp] = $g;
+	    $temp++;
+	}
     }
     
-    #separate abinits by strand
+    #separate model_gffs hits by strand
     my @p_gff;
     my @m_gff;
     foreach my $g (@$gff_set){
-       if($g->{g_strand} == 1){
-	   push(@p_gff, $g);
-       }
-       elsif($g->{g_strand} == -1){
-	   push(@m_gff, $g);
-       }
-       else{
-	   die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
-       }
-   }
-    
-    #identify same forms in plus strand
-    foreach my $ann (@p_ann){
-	foreach my $gff (@p_gff){
-	    next if(@{$ann->{t_structs}} != @{$gff->{t_structs}});   
+	my $hits = gene2all_phathits($g);
+	if($g->{g_strand} == 1){
+	    push(@p_gff, @{$hits});
+	}
+	elsif($g->{g_strand} == -1){
+	    push(@m_gff, @{$hits});
+	}
+	else{
+	    die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
+	}
 
-	    my $ah = $ann->{t_structs}->[0]->{hit};
-	    my $gh = $gff->{t_structs}->[0]->{hit};
-		
-	    if(clean::is_identical_form($ah, $gh)){
-		$ann = $gff;
-		last;
+	#add temp ID
+	foreach my $hit (@$hits){
+	    $hit->{_temp_id} = $temp;	    
+	    $index[$temp] = $hit;
+	    $g_index[$temp] = $g;
+	    $temp++;
+	}
+   }
+
+    #identify closest forms on plus strand
+    my @closest;
+    my @AEDs;
+    foreach my $ann (@p_ann){
+	my $bag = get_overlapping_hits($ann, \@p_gff);
+	my $a_id = $ann->{_temp_id};
+	foreach my $gff (@$bag){
+	    my $g_id = $gff->{_temp_id};
+	    my $AED = shadow_AED::get_AED($ann, [$gff]);
+	    next if($AED > 0.5); #must be closer than 0.5 
+	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
+		$closest[$a_id] = $g_id;
+		$AEDs[$a_id] = $AED;
+	    }
+	    if (! defined($AEDs[$g_id]) || $AEDs[$g_id] > $AED){
+		$closest[$g_id] = $a_id;
+		$AEDs[$g_id] = $AED;
 	    }
 	}  
     }
 
-    #identify same forms in minus strand
+    #identify closest forms on minus strand
     foreach my $ann (@m_ann){
-	foreach my $gff (@m_gff){
-            next if(@{$ann->{t_structs}} != @{$gff->{t_structs}});
-
-            my $ah = $ann->{t_structs}->[0]->{hit};
-            my $gh = $gff->{t_structs}->[0]->{hit};
-
-            if(clean::is_identical_form($ah, $gh)){
-                $ann = $gff;
-                last;
-            }
+	my $bag = get_overlapping_hits($ann, \@m_gff);
+	my $a_id = $ann->{_temp_id};
+	foreach my $gff (@$bag){
+	    my $g_id = $gff->{_temp_id};
+	    my $AED = shadow_AED::get_AED($ann, [$gff]);
+	    next if($AED > 0.5); #must be closer than 0.5
+	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
+		$closest[$a_id] = $g_id;
+		$AEDs[$a_id] = $AED;
+	    }
+	    if (! defined($AEDs[$g_id]) || $AEDs[$g_id] > $AED){
+		$closest[$g_id] = $a_id;
+		$AEDs[$g_id] = $AED;
+	    }
 	}  
     }
 
-    my @keepers = (@p_ann, @m_ann);
-    
-    return \@keepers;
+    #map names forward
+    foreach my $g (@$ann_set){
+	my $new; #new gene name
+	my $AED = 1; #for comparing which isoform is closest
+	my $fg;
+	foreach my $t (@{$g->{t_structs}}){
+	    my $id = $t->{hit}->{_temp_id}; #get id to see who to map forward
+	    my $cl = $closest[$id]; #get closest model
+
+	    #nothing to change so skip
+	    next if(! defined($cl) || $closest[$cl] != $id || $cl == $id);
+
+	    my $f = $index[$cl]; #closet gff hit
+
+	    #decide which isoform to get gene name from
+	    if($AEDs[$id] < $AED){
+		$AED = $AEDs[$id];
+		$new = $f->{gene_name}; #get new gene name
+		$fg = $g_index[$cl]; #get annotation for that gene
+	    }
+
+	    $t->{is_changed} = ($AEDs[$id] == 0) ? 0 : 1; #not a true change if identical
+	    $g->{is_changed} = 1 if($t->{is_changed}); #gene changed only if trans changed
+	    $t->{t_name} = $f->{_tran_name}; #set transcript name
+
+	    #!!remember hit name has not been changed!! ;-)
+	}
+
+	next if(! $new); #no change so skip
+
+	$g->{g_name} = $new; #set new gene name
+
+	#see if gene changed by altered transcript content
+	if(@{$g->{t_structs}} == @{$fg->{t_structs}} && ! $g->{is_changed}){
+	    @{$g->{t_structs}} = sort {$a->{t_name} cmp $b->{t_name}} @{$g->{t_structs}};
+	    @{$fg->{t_structs}} = sort {$a->{t_name} cmp $b->{t_name}} @{$fg->{t_structs}};
+
+	    my $changed;
+	    for (my $i = 0; $i < @{$g->{t_structs}}; $i++){
+		my $ni = $g->{t_structs}->[$i]->{t_name};
+		my $nj = $fg->{t_structs}->[$i]->{t_name};
+		$changed = 1 if($ni ne $nj);
+	    }
+
+	    $g->{is_changed} = 1 if($changed);
+	}
+	else{
+	    $g->{is_changed} = 1; #gene changed if trans count changed
+	}
+    }
+
+    return $ann_set;
 }
 #------------------------------------------------------------------------
+#called outside of package by maker to identify abinit maker annotations
+#that don't overlap maker's final annotation set. The non-overlapping
+#set is filtered using abAED so that they don't overlap each other.
+
 sub get_non_overlaping_abinits {
    my $ann_set = shift;
    my $abin_set = shift;
@@ -1433,10 +1803,10 @@ sub get_non_overlaping_abinits {
    my @m_ab;
    foreach my $g (@$abin_set){
        if($g->{g_strand} == 1){
-	   push(@p_ab, $g);
+	   push(@p_ab, $g) if($g->{algorithm} =~ /masked/);
        }
        elsif($g->{g_strand} == -1){
-	   push(@m_ab, $g);
+	   push(@m_ab, $g) if($g->{algorithm} =~ /masked/);
        }
        else{
 	   die "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -1495,6 +1865,7 @@ sub get_non_overlaping_abinits {
    return (\@keepers);
 }
 #------------------------------------------------------------------------
+#called by group_transcripts to get gene start and gene end
 sub get_start_and_end_on_seq {
 	my $transcripts = shift;
 
@@ -1523,6 +1894,8 @@ sub get_start_and_end_on_seq {
 
 }
 #------------------------------------------------------------------------
+#takes an array of phathits and returns only those of a given algorithm
+#i.e. used to seperate est2genome or blastx hits from a mixed array
 sub get_selected_types {
 	my $c = shift;
 
@@ -1551,6 +1924,7 @@ sub get_selected_types {
 	return \@keepers;
 }
 #------------------------------------------------------------------------
+#gets the transcript sequence for a phathit using the query sequence
 sub get_transcript_seq {
         my $anno = shift;
         my $seq  = shift;
@@ -1578,6 +1952,8 @@ sub get_transcript_seq {
         return $transcript;
 }
 #------------------------------------------------------------------------
+#finds longest translatable sequence beginning with Methionine.
+#returns sequence and offset. Called by get_translation_seq
 sub get_longest_m_seq {
 	my $seq = shift;
 
@@ -1597,6 +1973,8 @@ sub get_longest_m_seq {
 	return ($best->[1], $best->[0]) if($best);
 }
 #------------------------------------------------------------------------
+#takes a hit and an array of phathits.  Returns all hits in the array
+#overlapping the first hit.
 sub get_overlapping_hits {
     my $eat  = shift;
     my $hits = shift;
@@ -1610,6 +1988,8 @@ sub get_overlapping_hits {
     return \@keepers;
 }
 #------------------------------------------------------------------------
+#returns longest translation starting with M and the offet for a
+#given reading frame. called by get_longest_m_seq
 sub get_off_and_str {
         my $seq  = shift;
         my $offset = shift;
@@ -1646,6 +2026,7 @@ sub get_off_and_str {
         return ($offset, $t_seq);
 }
 #------------------------------------------------------------------------
+#returns what maker believes to be the best translation seq and offset
 sub get_translation_seq {
 	my $seq    = shift;
 
@@ -1682,6 +2063,8 @@ sub get_translation_seq {
 	}
 }
 #------------------------------------------------------------------------
+#takes the gene predictions produce by get_pred_shot and finds the one
+#with the higest score.  Called by run_it
 sub get_best_pred_shot {
    my $wanted_strand = shift;
    my $gene_preds    = shift;
@@ -1701,6 +2084,8 @@ sub get_best_pred_shot {
    return $best;
 }
 #------------------------------------------------------------------------
+#returns all pred shots on the right strand, so best_pred_shots might be 
+#a misnomer.  Called by run_it
 sub get_best_pred_shots {
    my $wanted_strand = shift;
    my $gene_preds    = shift;
@@ -1716,6 +2101,8 @@ sub get_best_pred_shots {
    return \@gs;
 }
 #------------------------------------------------------------------------
+#takes a transcript phathit and a set of ESTs then tries and determine
+#UTRs from those.  The new transcript plus UTR transcript is returned.
 sub pneu {
 	my $ests       = shift;
 	my $g          = shift;
@@ -1741,10 +2128,10 @@ sub pneu {
 	my $anno_transcript = 
 	maker::join::join_f($b_5, $g, $b_3, $q_seq);
 
-	#return $g;
 	return $anno_transcript;
 }
 #------------------------------------------------------------------------
+#combines two phathit arrays into one
 sub combine {
 	my @bag;
 	while (my $hits = shift(@_)){

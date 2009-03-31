@@ -490,10 +490,10 @@ sub merge_hsp {
 
 	$g_hsp = clone_hsp($g_hsp);
 
-	if     ($class eq '1'){
+	if($class eq '1'){
 		return $g_hsp;
 	}
-	elsif ($type == 5 && $class eq 'A'){
+	elsif ($type == 5 && ($class eq 'A' || $class eq 'Z')){
 		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
 			$g_hsp->query->location->start($ext_hsp->start);
 		}
@@ -504,7 +504,7 @@ sub merge_hsp {
 			die "dead in auto_annotator::merge_hsp\n";
 		}
 	}
-        elsif ($type == 3 && $class eq 'a'){
+        elsif ($type == 3 && ($class eq 'a' || $class eq 'z')){
 		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
                         $g_hsp->query->location->end($ext_hsp->end);
                 }

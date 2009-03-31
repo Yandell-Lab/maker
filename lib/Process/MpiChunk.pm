@@ -639,41 +639,43 @@ sub _go {
 	 
 	    my $masked_fasta = Fasta::toFasta($q_def.' masked', \$masked_total_seq);
 	    my $masked_file = $the_void."/query.masked.fasta";
-	    FastaFile::writeFile(\$masked_fasta, $masked_file);
+	    FastaFile::writeFile(\$masked_fasta, $masked_file) unless($CTL_OPT{_no_mask});
 	 
 	    my $unmasked_file = $the_void."/query.fasta";
 	    FastaFile::writeFile(\$fasta, $unmasked_file);
 
 	    #==ab initio predictions here
 	    #do masked predictions first
-	    my $preds = GI::abinits($masked_file,
-				    $the_void,
-				    $safe_seq_id.".masked",
-				    \%CTL_OPT,
-				    $LOG
-				   );
+	    my $preds = [];
+	    if(! $CTL_OPT{_no_mask}){ 
+		GI::abinits($masked_file,
+			    $the_void,
+			    $safe_seq_id.".masked",
+			    \%CTL_OPT,
+			    $LOG
+			    );
 	    
-	    #add tag that says these are masked
-	    foreach my $p (@$preds){
-	       my $alg = $p->algorithm();
-	       $p->algorithm("$alg\_masked");
-	       foreach my $h($p->hsps){
-		   $h->algorithm("$alg\_masked");
-	       }
+		#add tag that says these are masked
+		foreach my $p (@$preds){
+		    my $alg = $p->algorithm();
+		    $p->algorithm("$alg\_masked");
+		    foreach my $h($p->hsps){
+			$h->algorithm("$alg\_masked");
+		    }
+		}
 	    }
 
 	    #now do unmasked predictions
-            my $unmasked_preds = [];
-	    if($CTL_OPT{unmask}){
-	       $unmasked_preds = GI::abinits($unmasked_file,
-					     $the_void,
-					     $safe_seq_id,
-					     \%CTL_OPT,
-					     $LOG
-					    );
-	    }
+	    if($CTL_OPT{unmask} || $CTL_OPT{_no_mask}){
+	       my $unmasked_preds = GI::abinits($unmasked_file,
+						$the_void,
+						$safe_seq_id,
+						\%CTL_OPT,
+						$LOG
+						);
 
-	    push(@$preds, @$unmasked_preds);
+	       push(@$preds, @$unmasked_preds);
+	    }
 
 	    #==QRNA noncoding RNA prediction here
 	    my $qra_preds = [];
@@ -1529,26 +1531,31 @@ sub _go {
 							      \%CTL_OPT,
 							      $LOG
 							     );
-	    
+
+	    #get best annotations
 	    my $maker_anno = maker::auto_annotator::best_annotations($annotations,
 								     $out_dir,
 								     \%CTL_OPT
 								    );
-
-	    $maker_anno = maker::auto_annotator::verify_old_form($maker_anno,
+	    
+	    #map old IDs forward if specified
+	    if($CTL_OPT{map_forward}){
+		$maker_anno = maker::auto_annotator::map_forward($maker_anno,
 								 $annotations->{model_gff}
 								 );
-
+	    }
+	    
+	    #get best non-overlapping ab-inits
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
 									     $annotations->{abinit}
 									     );
-
+	    
 	    #add non-overlapping to final set if specified
 	    if($CTL_OPT{keep_preds}){
 		push(@$maker_anno, @$non_over);
 		$non_over = [];
 	    }
-
+	    
 	    #run evaluator if specified
 	    if($CTL_OPT{evaluate}){
 		evaluator::evaluate::evaluate_maker_annotations($maker_anno,

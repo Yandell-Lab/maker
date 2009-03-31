@@ -11,10 +11,13 @@ my @files;
 my $outfile;
 
 GetOptions ("datastor|d=s" => \$datastore,
-	    "i=s" => \@files,
 	    "o=s" => \$outfile,
 	    "help|?" => sub{print $usage; exit();}
 	    );
+
+if(! $datastore){
+    @files = @ARGV;
+}
 
 if((! $datastore && ! @files) || ! $outfile){
     print $usage;
@@ -75,6 +78,9 @@ foreach my $file (@files){
 	if ($line =~ /^\#\#FASTA/){
 	    $FH = $FAS;
 	    next;
+	}
+	if ($line =~ /^>/){
+	    $FH = $FAS;
 	}
 	chomp $line;
 	print $FH $line . "\n" if($line);

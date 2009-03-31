@@ -513,6 +513,22 @@ sub create_blastdb {
    ($CTL_OPT->{_repeat_protein}, $CTL_OPT->{r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
 }
 #----------------------------------------------------------------------------
+sub concatenate_files {
+    my $infiles = shift;
+    my $outfile = shift;
+
+    my ($tFH, $t_file) = tempfile(DIR => $TMP);
+    foreach my $file (@$infiles){
+	open(my $IN, "< $file");
+	while(defined(my $line = <$IN>)){
+	    print $tFH $line;
+	}
+	close($IN);
+    }
+    close($tFH);
+    File::Copy::move($t_file, $outfile);
+}
+#----------------------------------------------------------------------------
 sub split_db {
    my $CTL_OPT  = shift @_;
    my $key      = shift @_;
@@ -523,13 +539,11 @@ sub split_db {
    
    return ('', []) if (not $file);
    
+   #set up names and variables
    my $fasta_iterator = new Iterator::Fasta($file);
    my $db_size = $fasta_iterator->number_of_entries();
    my $bins = $mpi_size;
    $bins = $db_size if ($db_size < $bins);
-   
-   my @fhs;
-   my @db_files;
    
    my ($f_name) = $file =~ /([^\/]+)$/;
    $f_name =~ s/\.fasta$//;
@@ -538,32 +552,57 @@ sub split_db {
    my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
    my $f_dir = "$b_dir/$d_name";
    my $t_dir = $TMP."/$d_name";
-   my $t_full = $t_dir.".fasta";
-   my $f_full = $f_dir.".fasta";
-			  
-   if(-e "$f_dir"){
+   my $t_full = "$t_dir\.fasta";
+   my $f_full = "$b_dir/$f_name\.fasta";
+
+   #delete old indexes if full file does not exist
+   if(! -e $f_full && -e "$f_full.index"){
+       unlink("$f_full.index");
+   }
+
+   #check if files exist
+   if($mpi_size == 1 && -e $f_full){ #on one processor check if finished
+       return $f_full, [$f_full];
+   }
+   elsif(-e "$f_dir"){ #on multi processors check if finished
       my @t_db = <$f_dir/*$d_name\.*>;
 
+      my @existing_db;
       foreach my $f (@t_db) {
-	 push (@db_files, $f) if (! -d $f);
+	  push (@existing_db, $f) if (! -d $f);
       }
-      
-      return $f_full, \@db_files;
+
+      if(@existing_db == $mpi_size){ #use existing if right count
+	  if(! -e $f_full){ #fix full file
+	      concatenate_files(\@existing_db, $f_full);
+	  }
+
+	  return $f_full, \@existing_db;
+      }
+      else{ #remove if there is an error
+	  File::Path::rmtree($f_dir);
+      }
    }
 
-   mkdir($t_dir);
+   #make needed output directories
+   mkdir($t_dir) unless ($mpi_size == 1);
    mkdir($b_dir) unless (-e $b_dir);
 
-   for (my $i = 0; $i < $bins; $i++) {
-      my $name = "$t_dir/$d_name\.$i\.fasta";
-      my $fh;
-      open ($fh, "> $name");
-
-      push (@fhs, $fh);
+   #open filehandles for  pieces on multi processors
+   my @fhs;
+   if($mpi_size != 1){
+       for (my $i = 0; $i < $bins; $i++) {
+	   my $name = "$t_dir/$d_name\.$i\.fasta";
+	   my $fh;
+	   open ($fh, "> $name");
+	   
+	   push (@fhs, $fh);
+       }
    }
    
+   #write fastas here
    my $FA;
-   open($FA, "> $t_full");
+   open($FA, "> $t_full"); #full file
    while (my $fasta = $fasta_iterator->nextEntry()) {
       my $def = Fasta::getDef(\$fasta);
       my $seq_ref = Fasta::getSeqRef(\$fasta);
@@ -580,31 +619,45 @@ sub split_db {
       #reformat fasta, just incase
       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
 
-      my $fh = shift @fhs;
-      print $fh $$fasta_ref;
+      #build full file
       print $FA $$fasta_ref;
-      push (@fhs, $fh);
-   }
-   close($FA);
 
+      #build part files only on multi processor
+      if($mpi_size != 1){
+	  my $fh = shift @fhs;
+	  print $fh $$fasta_ref;
+	  push (@fhs, $fh);
+      }
+   }
+   close($FA); #close full file
+
+   #close part file handles
    foreach my $fh (@fhs) {
       close ($fh);
    }
 
+   #move finished files into place
    system("mv $t_full $f_full");
-   system("mv $t_dir $f_dir");
+   system("mv $t_dir $f_dir") unless($mpi_size == 1);
 
-   if (-e "$f_dir") {
+   #check if everything is ok
+   if($mpi_size == 1 && -e $f_full){ #single processor
+       return $f_full, [$f_full];
+   }
+   elsif (-e $f_dir && -e $f_full) { #multi processor
       my @t_db = <$f_dir/*$d_name\.*>;
 
+      my @db_files;
       foreach my $f (@t_db) {
 	 push (@db_files, $f) if (! -d $f);
       }
 
+      die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $mpi_size); #not ok
+
       return $f_full, \@db_files;
    }
    else {
-      die "ERROR: Could not split db\n";
+      die "ERROR: Could not split db\n"; #not ok
    }
 }
 #----------------------------------------------------------------------------
@@ -2214,6 +2267,17 @@ sub load_control_files {
       $CTL_OPT{rm_pass} = 0;
    }
 
+   #if no repeat masking options are set don't run masking dependent methods
+   if ($CTL_OPT{model_org} == '' &&
+       $CTL_OPT{repeat_protein} == '' &&
+       $CTL_OPT{rmlib} == '' &&
+       $CTL_OPT{rm_gff} == '' &&
+       ($CTL_OPT{rm_pass} == 0 ||
+	$CTL_OPT{genome_gff} == '')
+      ) {
+       $CTL_OPT{_no_mask} = 1; #no masking options found
+   }
+
    #required for evaluator to work
    $CTL_OPT{predictor} = 'model_gff' if($main::eva);
    $CTL_OPT{model_pass} = 1 if($main::eva);
@@ -2568,7 +2632,7 @@ sub generate_control_files {
    print OUT "single_length:$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
    print OUT "keep_preds:$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "retry:$O{retry} #number of times to retry a contig if annotation fails for some reason\n";
-   print OUT "clean_try:$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
+   print OUT "clean_try:$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
    print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
    print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
    close (OUT);

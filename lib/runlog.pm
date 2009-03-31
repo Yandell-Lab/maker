@@ -278,6 +278,10 @@ sub _clean_files{
 	       if ($key eq 'fgenesh_species') {
 		  $rm_key{fgenesh}++;
 	       }
+
+	       if ($key eq 'gmhmm') {
+		   $rm_key{genemark}++;
+               }
 	    
 	       if ($key eq 'split_hit' ||
 		   $key eq'ep_score_limit' ||
@@ -362,6 +366,9 @@ sub _clean_files{
 	 File::Path::rmtree($the_void);
 	 File::Path::mkpath($the_void);
 	 unlink($gff_file) if(-e $gff_file);
+
+	 #remove evaluator output
+	 File::Path::rmtree("$out_base/evaluator");
       }
       elsif (exists $rm_key{all}) {
 	 print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
@@ -371,13 +378,16 @@ sub _clean_files{
 	 File::Path::rmtree($the_void);
 	 File::Path::mkpath($the_void);
 	 unlink($gff_file) if(-e $gff_file);
+
+	 #remove evaluator output
+	 File::Path::rmtree("$out_base/evaluator");
       }
       elsif (exists $rm_key{all_but}) {
 	 print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
 	 "All old non-RepeatMasker files will be erased before continuing\n";
       
 	 #delete everything in the void
-	 my @f = <$the_void/*auto_annotator*>;
+	 my @f = <$the_void/*>;
 	 @f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
 
 	 #delete files in the void
@@ -394,31 +404,34 @@ sub _clean_files{
 	    my @f = <$the_void/*auto_annotator*>;
 	    push (@files, @f);
 	 }
-	 else
-	 {
-	    if (exists $rm_key{snap}) {
-	       print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
-	       "Old Snap files will be erased before continuing\n";
-	       
-	       my @f = <$the_void/*snap*>;
-	       push (@files, @f);
-	    }
-	    if (exists $rm_key{augustus}) {
-	       print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
-	       "Old Augustus files will be erased before continuing\n";
-	       
-	       my @f = <$the_void/*augustus*>;
-	       push (@files, @f);
-	    }
-	    if (exists $rm_key{fgenesh}) {
-	       print STDERR "MAKER WARNING: Changes in control files make re-use of old FgenesH data impossible\n".
-	       "Old FgenesH files will be erased before continuing\n";
-	       
-	       my @f = <$the_void/*fgenesh*>;
-	       push (@files, @f);
-	    }
+	 if (exists $rm_key{snap}) {
+	     print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
+		 "Old Snap files will be erased before continuing\n";
+	     
+	     my @f = <$the_void/*snap*>;
+	     push (@files, @f);
 	 }
-
+	 if (exists $rm_key{augustus}) {
+	     print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
+		 "Old Augustus files will be erased before continuing\n";
+	     
+	     my @f = <$the_void/*augustus*>;
+	     push (@files, @f);
+	 }
+	 if (exists $rm_key{fgenesh}) {
+	     print STDERR "MAKER WARNING: Changes in control files make re-use of old FgenesH data impossible\n".
+		 "Old FgenesH files will be erased before continuing\n";
+	     
+	     my @f = <$the_void/*fgenesh*>;
+	     push (@files, @f);
+	 }
+	 if (exists $rm_key{genemark}) {
+	     print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
+		 "Old GeneMark files will be erased before continuing\n";
+	     
+	     my @f = <$the_void/*genemark*>;
+	     push (@files, @f);
+	 }
 	 if (exists $rm_key{blastn}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
 	    "Old EST Blastn files will be erased before continuing\n";

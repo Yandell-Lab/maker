@@ -119,6 +119,7 @@ sub finalize {
 	die "ERROR: There was a problem in the writing the fasta entry\n".
 	    "Either no sequence was given, or there was an error in writing\n\n";
     }
+    print $ANN $line;
     $line = <$SEQ>;
     if($line !~ /^>/){
 	die "ERROR: There was a problem in the writing the fasta entry\n".
