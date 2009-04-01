@@ -155,7 +155,7 @@ sub prep_hits {
 
 	#--prep abinit data
 	my @pr_data;
-	foreach my $c (@{$model_clusters}){
+	foreach my $c (@{$pred_clusters}){
 	    my $pr = prep_pred_data($c, $c_id, $seq);
 	    push(@pr_data, @{$pr}) if defined $pr;
 	    
@@ -1222,7 +1222,7 @@ sub run_it {
 	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
 	my $pol_p    = get_selected_types($gomiph,'protein2genome');
 	my $alt_ests = $set->{alt_ests};
-	my $abinits  = $set->{all_preds};
+	my $preds    = $set->{preds};
 	
 	my ($pred_shots, $strand) = get_pred_shot($seq, 
 						  $def, 
@@ -1237,13 +1237,19 @@ sub run_it {
 	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 	
 	#added 2/23/2009 to reduce spurious gene predictions with only blastx
-	if(! @$abinits && ! defined $mia && ! @$pol_p && @$on_right_strand > 1){
+	if(@$on_right_strand > 1 && ! defined $mia && ! @$pol_p && ! @$preds){
 	    my $clean  = clean::purge_single_exon_hits($alt_ests);
 	    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 	    my $pieces = Shadower::getPieces($seq, $coors, 0);
 	    
 	    if(! @$clean && @$pieces <= 1){
-		next; #skip these spurious predictions
+		my $keep;
+		foreach my $h (@$on_right_strand){
+		    my $set = get_overlapping_hits($h, $predictions);
+		    $keep = 1 if(@$set);
+		}
+
+		next if(! $keep); #skip these spurious predictions
 	    }
 	}
 	
