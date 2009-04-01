@@ -616,7 +616,6 @@ sub annotate {
 				 $def,
 				 'model_gff',
 				 $predictions,
-				 $the_void,
 				 $CTL_OPTIONS
 				 );
 	
@@ -1161,7 +1160,6 @@ sub run_it {
     my $def          = shift;
     my $predictor    = shift;
     my $predictions  = shift;
-    my $the_void     = shift;
     my $CTL_OPTIONS  = shift;
     
     my $q_id = Fasta::def2SeqID($def); 
