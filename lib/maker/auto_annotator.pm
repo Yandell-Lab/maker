@@ -19,10 +19,6 @@ use maker::quality_index;
 use Widget::snap;
 use Widget::augustus;
 use GFFDB;
-#use evaluator::so_classifier;
-#use evaluator::evaluate;
-#use evaluator::funs;
-#use evaluator::AED;
 use shadow_AED;
 
 $Storable::forgive_me = 1; 
@@ -62,18 +58,18 @@ sub prep_hits {
 	# throw out the exonerate est hits with weird splice sites
 	$clean_est = clean::throw_out_bad_splicers($clean_est, $seq);
 	
+
+	#---build clusters for basic evidence
+
 	# combine puts type in order they are given
 	# important for later culstering, as hits in
 	# first arg more likey to make in into to cluster
-	# than second arg, etc
-	
-	my $c_bag = combine($models,
-			    $prot_hits,
+	# than second arg, etc	
+	my $c_bag = combine($prot_hits,
 	                    $clean_est, 
 			    $clean_altest
 			   );
 
-	#--- c_bag processing for gene prediction and gff3 models
         my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
         my $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
         my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
@@ -86,43 +82,80 @@ sub prep_hits {
 	push(@{$careful_clusters}, @{$p_clusters});
 	push(@{$careful_clusters}, @{$m_clusters});
 
-	# identify the ab-inits that fall within and between clusters
-	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, 
-	                                                              $careful_clusters,
-	                                                              $seq,
-								     );
-	foreach my $h (@{$hit_mult}){
-	    $h->{_hit_multi} = 1;
-	}
+	#---now start preparing data for different types of input
 
-	#--new clusters built by merging clusters that overlap preds
-	#--used for ab-initio coring
-	#--must be ran before merge as merge alters cluster content
+	#--model_gff3 input
+        # identify the models that fall within and between basic clusters
+        my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models,
+                                                                      $careful_clusters,
+                                                                      $seq,
+								      );
+
+	#join the clusters on the models
+	my $model_clusters = join_clusters_on_pred($models, $careful_clusters, $c_index);
+
+
+
+	#--abinit input
+        ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
+								   $careful_clusters,
+								   $seq,
+								   );
+
+	#join clusters on the ab-inits
 	my $pred_clusters = join_clusters_on_pred($predictions, $careful_clusters, $c_index);
 
-	#--split preds across clusters that they overlap
-	merge_into_cluster($hit_one, $careful_clusters, $c_index);
-	merge_into_cluster($hit_mult, $careful_clusters, $c_index);
 
-	#--data prep
+	#--build clusters joined together by models (for hint based annotations)
+        my $m_bag = combine($models,
+			    $prot_hits,
+                            $clean_est,
+                            $clean_altest
+			    );
+
+        ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $m_bag);
+        $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
+        $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+
+        #purge after clustering so as to still have the effect of evidence joining ESTs
+        $p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
+        $m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
+
+        my $hint_clusters = [];
+        push(@{$hint_clusters}, @{$p_clusters});
+        push(@{$hint_clusters}, @{$m_clusters});
+
+	# identify the abinits that fall within and between clusters
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
+                                                                   $hint_clusters,
+                                                                   $seq,
+								   );
+
+	#only add as hints those that don't cross multiple clusters
+	merge_into_cluster($hit_one, $hint_clusters, $c_index);
+
+	#--prep hint data
 	my $c_id = 0;
 	my @bx_data;
-	my @gf_data;
-	foreach my $c (@{$careful_clusters}){
+	foreach my $c (@{$hint_clusters}){
 	   my $bx = prep_blastx_data($c, $c_id, $seq);
 	   push(@bx_data, @{$bx}) if defined $bx;
-	   
-	   if(@{$models}){
-	       my $gf = prep_gff_data($c, $c_id, $seq);
-	       push(@gf_data, @{$gf}) if defined $gf;
-	   }
 
 	   $c_id++;
 	}
 
-	#--- processing for scoring ab-initio predictions
+	#--prep model_gff data
+	my @gf_data;
+	foreach my $c (@{$model_clusters}){
+	    my $gf = prep_gff_data($c, $c_id, $seq);
+	    push(@gf_data, @{$gf}) if defined $gf;
+	    
+	    $c_id++;
+	}
+
+	#--prep abinit data
 	my @pr_data;
-	foreach my $c (@{$pred_clusters}){
+	foreach my $c (@{$model_clusters}){
 	    my $pr = prep_pred_data($c, $c_id, $seq);
 	    push(@pr_data, @{$pr}) if defined $pr;
 	    
@@ -348,8 +381,6 @@ sub prep_blastx_data {
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark', 'pred_gff');
 
-	my @single = grep {! $_->{_hit_multi}} @{$preds_in_cluster};
-
         # groups of most informative protein hits
 	# go ahead and inclde the proteion2genome data as well... why not?
         my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
@@ -362,8 +393,7 @@ sub prep_blastx_data {
         if (defined($gomias->[0])){
 	   foreach my $mia (@{$gomias}){
 	      push(@data, {'gomiph'    => $gomiph,
-			   'preds'     => \@single,
-			   'all_preds' => $preds_in_cluster,
+			   'preds'     => $preds_in_cluster,
 			   'ests'      => $ests_in_cluster,
 			   'alt_ests'  => $alt_ests_in_cluster,
 			   'mia'       => $mia,
@@ -376,8 +406,7 @@ sub prep_blastx_data {
         }
         else {
 	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => \@single,
-			'all_preds' => $preds_in_cluster,
+			'preds'     => $preds_in_cluster,
 			'ests'      => $ests_in_cluster,
 			'alt_ests'  => $alt_ests_in_cluster,
 			'mia'       => undef,
@@ -411,8 +440,6 @@ sub prep_gff_data {
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark',  'pred_gff');
 
-	my @single = grep {! $_->{_hit_multi}} @{$preds_in_cluster};
-
         # groups of most informative protein hits
         my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
@@ -420,8 +447,7 @@ sub prep_gff_data {
 
 	foreach my $model (@{$models_in_cluster}){
 	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => \@single,
-			'all_preds' => $preds_in_cluster,
+			'preds' => $preds_in_cluster,
 			'ests'      => $ests_in_cluster,
 			'alt_ests'  => $alt_ests_in_cluster,
 			'mia'       => undef,
@@ -462,7 +488,6 @@ sub prep_pred_data {
 	foreach my $pred (@{$preds_in_cluster}){
 	   push(@data, {'gomiph'    => $gomiph,
 			'preds'     => $preds_in_cluster,
-			'all_preds' => $preds_in_cluster,
 			'model'     => $pred,
 			'gomod'     => undef,
 			'ests'      => $ests_in_cluster,
@@ -590,6 +615,7 @@ sub annotate {
 				 $v_seq_ref,
 				 $def,
 				 'model_gff',
+				 $predictions,
 				 $the_void,
 				 $CTL_OPTIONS
 				 );
@@ -616,6 +642,7 @@ sub annotate {
 				 $v_seq_ref,
 				 $def,
 				 $prdr,
+				 $predictions,
 				 $CTL_OPTIONS
 				 );
 	
@@ -641,6 +668,7 @@ sub annotate {
 			    $v_seq_ref,
 			    $def,
 			    'abinit',
+			    $predictions,
 			    $CTL_OPTIONS
 			    );
     
@@ -898,20 +926,29 @@ sub remove_CDS_competitors {
 
 	#test each gene for abinit, spliced EST, or exonerate protein support
 	foreach my $t (@{$g->{t_structs}}){
-	    #check EST splice sites and abinits first (fast)
-	    my @qi = split('|', $t->{t_qi}); #get spliced EST and abinit support
-	    if($qi[1] > 0 || $qi[5] > 0){
+	    #check EST splice sites (fast)
+	    my @qi = split(/\|/, $t->{t_qi});
+	    if($qi[1] > 0){
 		push(@p_final,$g);
 		$add_flag = 1;
 		last;
 	    }
 
-	    #then check exonerate proteins (slower)
+            #then check abinits (slow)
+	    my $preds = $g->{g_evidence}->{all_preds};
+            my $pAED = shadow_AED::get_AED($preds, $t->{hit});
+            if($pAED < 1){
+                push(@p_final,$g);
+                $add_flag = 1;
+                last;
+            }
+
+	    #then check exonerate proteins (slow)
 	    my $gomiph = $g->{g_evidence}->{gomiph};
 	    my $p_ex = [];
 	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit}); #get exonerate protein support
-	    if($qi[1] > 0 || $qi[5] > 0 || $eAED < 1){
+	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit});
+	    if($eAED < 1){
 		push(@p_final,$g);
 		$add_flag = 1;
 		last;
@@ -935,20 +972,29 @@ sub remove_CDS_competitors {
 
 	#test each gene for abinit, spliced EST, or exonerate protein support
 	foreach my $t (@{$g->{t_structs}}){
-	    #check EST splice sites and abinits first (fast)
-	    my @qi = split(/\|/, $t->{t_qi}); #get spliced EST and abinit support
-	    if($qi[1] > 0 || $qi[5] > 0){
+	    #check EST splice sites (fast)
+	    my @qi = split(/\|/, $t->{t_qi});
+	    if($qi[1] > 0){
 		push(@m_final,$g);
 		$add_flag = 1;
 		last;
 	    }
 
-	    #then check exonerate proteins (slower)
+            #then check abinits (slow)
+	    my $preds = $g->{g_evidence}->{all_preds};
+            my $pAED = shadow_AED::get_AED($preds, $t->{hit});
+            if($pAED < 1){
+                push(@m_final,$g);
+                $add_flag = 1;
+                last;
+            }
+
+	    #then check exonerate proteins (slow)
 	    my $gomiph = $g->{g_evidence}->{gomiph};
 	    my $p_ex = [];
 	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit}); #get exonerate protein support
-	    if($qi[1] > 0 || $qi[5] > 0 || $eAED < 1){
+	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit});
+	    if($eAED < 1){
 		push(@m_final,$g);
 		$add_flag = 1;
 		last;
@@ -1114,6 +1160,8 @@ sub run_it {
     my $v_seq        = shift;
     my $def          = shift;
     my $predictor    = shift;
+    my $predictions  = shift;
+    my $the_void     = shift;
     my $CTL_OPTIONS  = shift;
     
     my $q_id = Fasta::def2SeqID($def); 
@@ -1128,7 +1176,9 @@ sub run_it {
 	if ($predictor eq 'model_gff') {
 	    next if(! defined $model);
 	    my $transcript = $model;
-	    	    
+	
+    	    my $all_preds = get_overlapping_hits($transcript, $predictions);
+	    $set->{all_preds} = $all_preds;
 	    push(@transcripts, [$transcript, $set, undef]);
 	    
 	    $i++;
@@ -1138,11 +1188,14 @@ sub run_it {
 	#------ab-init passthrough
 	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
-	    my $transcript = $model;
 	    
 	    #add UTR to ab-inits
-	    my $utr_trans = pneu($ests, $transcript, $seq);
-	    push(@transcripts, [$utr_trans, $set, $transcript]);
+	    my $transcript = pneu($ests, $model, $seq);
+
+	    my $all_preds = get_overlapping_hits($transcript, $predictions);
+            $set->{all_preds} = $all_preds;
+
+	    push(@transcripts, [$transcript, $set, $model]);
 	    
 	    $i++;
 	    next;
@@ -1155,7 +1208,13 @@ sub run_it {
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
 	    my $transcript = pneu($ests, $mia, $seq);
-	    push(@transcripts, [$transcript, $set, $mia]) if $transcript;
+	    
+	    next if(! $transcript);
+
+            my $all_preds = get_overlapping_hits($transcript, $predictions);
+            $set->{all_preds} = $all_preds;
+
+	    push(@transcripts, [$transcript, $set, $mia]);
 	    $i++;
 	    next;
 	}
@@ -1192,18 +1251,13 @@ sub run_it {
 	
 	#add transcripts
 	foreach my $pred_shot (@{$on_right_strand}) {
-	    my $copy = $pred_shot;
-	    if (defined($pred_shot) && defined($mia)) {
-		my $transcript = pneu($ests, $copy, $seq);
-		if (defined($transcript)) {
-		    push(@transcripts, [$transcript, $set, $pred_shot]);
-		}
-		else {
-		    push(@transcripts, [$copy, $set, $pred_shot]);
-		}
-	    }
-	    elsif (defined($pred_shot) && !defined($mia)) {
-		push(@transcripts, [$copy, $set, $pred_shot]);
+	    if (defined($pred_shot)){
+		my $transcript = (defined($mia)) ? pneu($ests, $pred_shot, $seq) : $pred_shot;
+		
+		my $all_preds = get_overlapping_hits($transcript, $predictions);
+		$set->{all_preds} = $all_preds;
+		
+		push(@transcripts, [$transcript, $set, $pred_shot]);
 	    }
 	}
 	$i++;
