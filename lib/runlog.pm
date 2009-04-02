@@ -340,7 +340,7 @@ sub _clean_files{
 		}
 	    }
 	}
-	
+
 	#===Remove files that can no longer be re-used
 	
 	#-print file type specific warnings and delete files
@@ -519,6 +519,13 @@ sub _clean_files{
 	    foreach my $dir (@dirs) {
 		File::Path::rmtree($dir);
 	    }
+
+	    #just in case, this will help remove temp_dirs
+	    my @d = <$the_void/*.temp_dir>;
+	    foreach my $d (@d){
+		File::Path::rmtree($dir) if (-d $d);
+	    }
+
 	}
     }
     
@@ -571,7 +578,9 @@ sub add_entry {
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security
-   $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
+   if(defined $key && defined $type){
+       $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
+   }
 
    open(LOG, ">> $log_file");
    print LOG "$type\t$key\t$value\n";
