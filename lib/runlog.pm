@@ -523,7 +523,7 @@ sub _clean_files{
 	    #just in case, this will help remove temp_dirs
 	    my @d = <$the_void/*.temp_dir>;
 	    foreach my $d (@d){
-		File::Path::rmtree($dir) if (-d $d);
+		File::Path::rmtree($d) if (-d $d);
 	    }
 
 	}
