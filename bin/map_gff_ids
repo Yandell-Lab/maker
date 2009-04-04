@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Getopt::Long;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+map_gff_ids genome.all.id.map genome.all.gff
+
+Description:
+
+This script takes a id map file and changes the name of the
+appropriate attributes in a gff file.  The map file is a two column
+tab delimited file with two columns: old_name and new_name.  If the
+feature has a Parent attribute, it uses this as old_name and modifies
+all other attributes that cantain this name even if it's the root of
+another name (i.e. an exon with a Parent=old_name and an
+ID=old_name:exon_1 would become Parent=new_name and
+ID=new_name:exon_1).  In features that have an ID and not a pareent,
+the old_name is moved to the Alias attribute.
+
+";
+
+
+my ($help);
+my $opt_success = GetOptions('help'    => \$help,
+			      );
+
+my ($map_file, $gff_file) = @ARGV;
+die $usage unless $map_file && $gff_file;
+
+open (my $MAP, '<', $map_file) or die "Can't open $map_file for reading\n$!\n";
+my %map;
+map {my ($old, $new) = split;$map{$old} = $new} (<$MAP>);
+close $MAP;
+
+open (my $IN, '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
+unlink($gff_file);
+open(my $OUT, '>', $gff_file) or die "Can't open $gff_file for writing\n$!\n";
+
+my $fasta_start;
+LINE:
+while (my $line = <$IN>) {
+	$fasta_start++ if $line =~ /^\#\#FASTA/;
+	my ($seq, $source, $type, $start, $end, $score,
+	    $strand, $phase, $attrb_text) = split /\t/, $line;
+	if (! $fasta_start    &&
+	    $line !~ /^\s*\#/    &&
+	    $start =~ /^\d+$/ &&
+	    $end =~ /^\d+$/   &&
+	    $attrb_text) {
+		chomp $attrb_text;
+		my @attrb_list = split /\s*;\s*/, $attrb_text;
+		my %attrb;
+		for my $attrb_pair (@attrb_list) {
+			my ($tag, $value_text) = split /\s*=\s*/, $attrb_pair;
+			my @values = split /\s*,\s*/, $value_text;
+			$attrb{$tag} = \@values;
+		}
+		my $alias;
+		my @ids;
+		if ($type eq 'mRNA' || $type eq 'gene') {
+			$alias = $attrb{ID}[0] if $type =~ /^(gene|mRNA)$/;
+		}
+		push @ids, @{$attrb{Parent}} if $attrb{Parent};
+		push @ids, @{$attrb{ID}}     if $attrb{ID};
+		my @map_ids;
+		map {push @map_ids, $_ if $map{$_}}  @ids;
+		if (! @map_ids) {
+			print $OUT $line;
+			next LINE;
+		};
+		for my $tag (keys %attrb) {
+			for my $value (@{$attrb{$tag}}) {
+				for my $id (@map_ids) {
+					next unless $map{$id};
+					next unless ($value eq $id || $value =~ /$id:/);
+					$value =~ s/$id/$map{$id}/;
+				}
+			}
+		}
+		$attrb{Alias} = [$alias] if $alias;
+		my %order = (ID     => 1,
+			     Parent => 2,
+			     Name   => 3,
+			     Alias  => 4,
+			    );
+		map {$order{$_} ||= 99} keys %attrb;
+		my $new_attrb_text;
+		for my $tag (sort {$order{$a} <=> $order{$b} || $a cmp $b} keys %attrb) {
+			my $value_text = join ',', @{$attrb{$tag}};
+			$new_attrb_text .= "$tag=$value_text;"
+		}
+		$new_attrb_text .= "\n";
+		$line = join "\t", ($seq,
+				 $source,
+				 $type,
+				 $start,
+				 $end,
+				 $score,
+				 $strand,
+				 $phase,
+				 $new_attrb_text,
+				 );
+	}
+	print $OUT $line;
+}

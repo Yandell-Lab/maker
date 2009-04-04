@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Getopt::Long;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+maker_map_ids genome.all.gff > genome.all.id.map
+
+Description:
+
+This script wil take the output from a maker GFF file and create a mapping
+file of maker gene and transcript IDs to new human friendly unique IDs.
+
+";
+
+
+my ($help);
+my $opt_success = GetOptions('help'    => \$help,
+			      );
+
+die $usage if $help || ! $opt_success;
+
+my $file = shift;
+die $usage unless $file;
+open (my $IN, '<', $file) or die "Can't open $file for reading\n$!\n";
+
+my %contig_length;
+my %counter;
+my %parents;
+while (<$IN>) {
+
+	if (/\#\#sequence-region\s+(\S+)\s+(\d+)\s+(\d+)/) {
+		my ($contig_id, $start, $end) = ($1, $2, $3);
+		$contig_length{$contig_id} = ($end - $start);
+		next;
+	}
+
+	last if /^\#\#FASTA/;
+	next if /^\s*\#/;
+
+	my ($seq, $source, $type, $start, $end, $score, $strand,
+	    $phase, $attrb_text) = split /\t/, $_;
+
+	if ($type =~ /^(gene|mRNA)$/) {
+		my ($id) = $attrb_text =~ /ID=(.*?);/;
+		$parents{$seq}{$start}{$id} = $type;
+	}
+}
+
+for my $contig_id (sort {$contig_length{$b} <=> $contig_length{$a}} keys %parents) {
+	my $contig = $parents{$contig_id};
+	for my $start (sort {$b <=> $a} keys %{$contig}) {
+		for my $id (keys %{$contig->{$start}}) {
+			my $type  = $contig->{$start}{$id};
+			my $abrv  = $type eq 'gene' ? 'G' : 'T';
+			my $count = sprintf '%06s', ++$counter{$type};
+			my $new_id    = 'PYU1_' . $abrv . $count;
+			print "$id\t$new_id\n";
+			print '';
+		}
+	}
+}
+
+__END__
+
+
+
+		    my @attrb_list = split /\s*;\s*/, $attrbs_text;
+		    my %attrbs;
+		    for my $attrb_pair (@attrb_list) {
+			    my ($tag, $value_text) = split /\s*=\s*/, $attrb_pair;
+			    my @values = split /\s*, \s*/, $value_text;
+			    push @{$attrbs{$tag}} = @values;
+		    }
+		    
+
+			    
+		    }
+	    }
+
+#-----------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES --------------------------------
+#-----------------------------------------------------------------------------
+
+sub {
+
+}
+
