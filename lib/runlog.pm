@@ -30,7 +30,7 @@ my @ctl_to_log = ('genome_gff',
 		  'snaphmm',
 		  'gmhmm',
 		  'augustus_species',
-		  'fgenesh_species',
+		  'fgenesh_par_file',
 		  'model_gff',
 		  'pred_gff',
 		  'max_dna_len',
@@ -275,7 +275,7 @@ sub _clean_files{
 			$rm_key{augustus}++;
 		    }
 		    
-		    if ($key eq 'fgenesh_species') {
+		    if ($key eq 'fgenesh_par_file') {
 			$rm_key{fgenesh}++;
 		    }
 		    

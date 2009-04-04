@@ -85,6 +85,7 @@ sub find_best_one {
                 #sleep 3;
 
 		next unless $g_to_e_str =~ /^[^0]$/;
+		next if($g_to_e_str =~ /^[zZ]$/ && $est->num_hsps == 1);
 
 		my ($pre) = $e_to_g_str =~ /(0*[^0]{1}).*/; 
 		my ($pos) = $e_to_g_str =~ /.*([^0]{1}.*)/;
@@ -125,7 +126,8 @@ sub find_best_five {
 
                 # can't be a 5 prime ext unless first exon of g is B, z or 1.
                 next unless $g_to_e_str =~ /^[Bz1].*$/;
-        
+		next if($g_to_e_str =~ /^z.*$/ && $est->num_hsps == 1);
+
                 # cant be same splice form if has an internal 0.
 		#next if     $e_to_g_str =~ /[AZ]1*[^1]+[^0]/;
 
@@ -170,6 +172,7 @@ sub find_best_three {
 
 		# can't be a 3 prime ext unless last exon of g is b or 1.
 		next unless $g_to_e_str =~ /^.*[b1]$/;
+		next if($g_to_e_str =~ /^.*Z$/ && $est->num_hsps == 1);
 	
 		#print "CCCCCC\n";
 
