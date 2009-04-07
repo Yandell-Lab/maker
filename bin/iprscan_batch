@@ -1,0 +1,166 @@
+#! /usr/bin/perl -w
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use Iterator::Fasta;
+use Fasta;
+use Datastore::MD5;
+use Cwd;
+use threads;
+use threads::shared;
+use Thread::Semaphore;
+
+my $file = shift;
+my $cpus = shift || 1;
+my $log = shift;
+
+my @files :shared;
+my @failed :shared;
+my @finished :shared;
+my $go :shared;
+$go = 1;
+
+my %log_f;
+if($log){
+    open(LOG, "< $log");
+    while(defined(my $line = <LOG>)){
+	chomp $line;
+	my @F = split(/[\s\t]/, $line);
+	if($F[0] eq 'FINISHED'){
+	    $log_f{$F[1]}++;
+	}
+    }
+}
+
+
+my $s = new Thread::Semaphore;
+my $cwd = Cwd::cwd;
+my $log_file = "$cwd/$file\_master_datastore.index";
+open(LOG, "> $log_file");
+close(LOG);
+
+my @threads;
+for(my $i = 0; $i < $cpus; $i++){
+    my $thr = threads->create(\&launch);
+    push(@threads, $thr);
+}
+
+my $iterator = new Iterator::Fasta($file);
+my $DS = new Datastore::MD5('root' => "$cwd/$file\_datastore",
+			    'depth' => 2
+			    );
+
+while (my $fasta = $iterator->nextEntry){
+    my $seq_id = Fasta::getSeqID(\$fasta);
+    my $safe_id = Fasta::seqID2SafeID($seq_id);
+    my $seq = Fasta::getSeq(\$fasta);
+
+    my $dir = $DS->id_to_dir($safe_id);
+    $DS->mkdir($safe_id) || die "ERROR: could not make datastore directory\n";
+
+    my $fasta_file = "$dir/$safe_id.fasta";
+
+    if($log && ! $log_f{"$dir/$safe_id.fasta"} && -e "$dir/$safe_id.fasta"){
+	system("rm $dir/*;");
+    }
+
+    if(-e $fasta_file){
+	my $it = new Iterator::Fasta($fasta_file);
+	my $fa = $it->nextEntry;
+	my $seq_old = Fasta::getSeq(\$fa);
+
+	if($seq ne $seq_old){
+	    system("rm $fasta_file*");
+	}
+    }
+
+    open(OUT, "> $fasta_file");
+    print OUT $fasta;
+    close(OUT);
+
+    push(@files, $fasta_file);
+}
+
+$go = 0;
+
+my $count = @files;
+my %seen;
+while(my $thr = shift @threads){
+    if($thr->is_running){
+	push(@threads, $thr);
+	sleep 1;
+    }
+    else{
+	$thr->join();
+    }
+
+    while(my $f = shift @finished){
+	open(LOG, ">> $log_file");
+	print LOG "FINISHED $f\n";
+	close(LOG);
+	$count--;
+    }
+
+    $s->down;
+    for(my $i = 0; $i < @failed; $i++){
+	if(defined $failed[$i]){
+	    if(exists $seen{$failed[$i]}){
+		$failed[$i] = undef;
+		$count--;
+	    }
+	    else{
+		$seen{$failed[$i]}++;
+	    }
+	}
+    }
+    $s->up;
+}
+
+#-------------SUBS--------
+
+sub launch{
+    while ($go || @files || @failed){
+	if (my $f = shift @files){
+	    if(-e "$f.error"){
+		my $check = `ls -al $f.error`;
+		my @data = split(/[\s\t]/, $check);
+		if($data[4] == 36){
+		    push(@finished, $f);
+		    next;
+		}
+	    }
+
+	    system("iprscan -cli -i $f -iprlookup -goterms -format raw -nocrc 1> $f.out 2> $f.error");
+	    my $check = `ls -al $f.error`;
+	    my @data = split(/[\s\t]/, $check);
+
+	    if($data[4] == 36){
+		push(@finished, $f);
+	    }
+	    else{
+		push(@failed, $f);
+	    }
+	}
+	elsif(@failed){
+	    $s->down;
+	    my $f = shift @failed;
+	    $s->up;
+
+	    next if(! defined $f);
+	
+            system("iprscan -cli -i $f -iprlookup -goterms -format raw -nocrc 1> $f.out 2> $f.error");
+            my $check = `ls -al $f.error`;
+            my @data = split(/[\s\t]/, $check);
+
+            if($data[4] == 36){
+                push(@finished, $f);
+            }
+            else{
+                push(@failed, $f);
+            }
+        }
+	else{
+	    sleep 1;
+	}
+    }
+}
