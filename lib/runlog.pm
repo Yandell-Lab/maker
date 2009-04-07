@@ -26,7 +26,6 @@ my @ctl_to_log = ('genome_gff',
 		  'rm_gff',
 		  'predictor',
 		  'run',
-		  'sort_base',
 		  'snaphmm',
 		  'gmhmm',
 		  'augustus_species',
@@ -173,14 +172,21 @@ sub _clean_files{
 		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
 		$rm_key{retry}++ if ($continue_flag == 2);
+		$SEEN{$log_file}++;
 	    }
 	}
-	elsif ($CTL_OPTIONS{force}) {
+	elsif ($CTL_OPTIONS{force} && ! $SEEN{$log_file}) {
 	    $rm_key{force}++;
 	    $continue_flag = 1;	#run/re-run
+	    $SEEN{$log_file}++;
+	}
+	elsif ($CTL_OPTIONS{again} && ! $SEEN{$log_file}){
+	    $continue_flag = 1; #run/re-run
+	    $SEEN{$log_file}++;
 	}
 	else {
 	    $continue_flag = 0 if (-e $gff_file); #don't re-run finished
+	    $SEEN{$log_file}++;
 	}
 	
 	if($continue_flag >= 0 || $continue_flag == -1){
@@ -238,7 +244,12 @@ sub _clean_files{
 		    $continue_flag = 1; #re-run because ctlopts changed
 		    
 		    if($key ne 'evaluate' &&
-		       $key ne 'enable_fathom'){
+		       $key ne 'enable_fathom' &&
+		       $key ne 'keep_preds' &&
+		       $key ne 'other_pass' &&
+		       $key ne 'other_gff' &&
+		       $key ne 'alt_peptide'
+		      ){
 			$rm_key{preds}++; #almost all changes affect final predictions
 		    }
 		    

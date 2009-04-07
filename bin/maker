@@ -131,7 +131,10 @@ Options:
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
      -force|f            Forces maker to delete old files before running again.
-                         This will require all blast analyses to be rerun.
+                         This will require all blast analyses to be re-run.
+
+     -again|a            Caculate all annotations and output files again even if
+                         no settings have changed.
 
      -evaluate|e         Run Evaluator on final annotations (under development).
 
@@ -163,6 +166,7 @@ try{
 	       "predictor=s" =>\$OPT{predictor},
 	       "retry=i" =>\$OPT{retry},
 	       "evaluate" =>\$OPT{evaluate},
+	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
 	       "help|?" => sub {print $usage; exit(0)}

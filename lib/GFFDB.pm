@@ -716,7 +716,7 @@ sub _load_hits {
     #strip off unrecognized gene attributes for storage
     my @anns;
     if(@anns = $g->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
 	foreach my $ann (@anns){
 	    my @list = $g->{f}->annotation->get_Annotations();
 	    @list = map {$_->value()} @list;
@@ -724,7 +724,7 @@ sub _load_hits {
 	}
     }
     elsif(@anns = $g->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
         foreach my $ann (@anns){
             my @list = $g->{f}->get_tag_values($ann);
             $ann = $ann.'='.join(',', @list);
@@ -759,7 +759,7 @@ sub _load_hits {
 	#strip off unrecognized hit attributes for storage
 	my @anns;
 	if(@anns = $t->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $t->{f}->annotation->get_Annotations();
 		@list = map {$_->value()} @list;
@@ -767,7 +767,7 @@ sub _load_hits {
 	    }
 	}
 	elsif(@anns = $t->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $t->{f}->get_tag_values($ann);
 		$ann = $ann.'='.join(',', @list);
@@ -1072,7 +1072,7 @@ sub _load_hsps {
 	#strip off unrecognized hit attributes for storage
 	my @anns;
 	if(@anns = $e->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){ 
 		my @list = $e->{f}->annotation->get_Annotations();
 		@list = map {$_->value()} @list;
@@ -1080,7 +1080,7 @@ sub _load_hsps {
 	    }
 	}
 	elsif(@anns = $e->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $e->{f}->get_tag_values($ann);
 		$ann = $ann.'='.join(',', @list);

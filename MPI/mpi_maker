@@ -164,6 +164,9 @@ Options:
      -force|f            Forces maker to delete old files before running again.
                          This will require all blast analyses to be rerun.
 
+     -again|a            Caculate all annotations and output files again even if
+                         no settings have changed.
+
      -evaluate|e         Run Evaluator on final annotations (under development).
 
      -quiet|q            Silences most of maker's status messages.
@@ -254,6 +257,7 @@ try{
 	       "predictor=s" =>\$OPT{predictor},
 	       "retry=i" =>\$OPT{retry},
 	       "evaluate" =>\$OPT{evaluate},
+	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}

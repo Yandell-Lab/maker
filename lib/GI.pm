@@ -2116,7 +2116,7 @@ sub set_defaults {
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
-      $CTL_OPT{'min_protein'} = 30;
+      $CTL_OPT{'min_protein'} = 0;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
@@ -2257,6 +2257,7 @@ sub load_control_files {
    $CTL_OPT{retry} = $OPT{retry} if (defined $OPT{retry});
    $CTL_OPT{cpus} = $OPT{cpus} if (defined $OPT{cpus});
    $CTL_OPT{clean_try} = $OPT{clean_try} if (defined $OPT{clean_try});
+   $CTL_OPT{again} = $OPT{again} if (defined $OPT{again});
 
    #skip repeat masking command line option
    if ($OPT{R}) {
@@ -2478,10 +2479,10 @@ sub load_control_files {
       "min_contig will be reset to 1\n\n";
       $CTL_OPT{min_contig} = 1;
    }
-   if ($CTL_OPT{min_contig} <= 0) {
-      warn "WARNING: \'min_protein\' must be set to 1 or higher.\n".
-      "min_protein will be reset to 1\n\n";
-      $CTL_OPT{min_protein} = 1;
+   if ($CTL_OPT{min_contig} < 0) {
+      warn "WARNING: \'min_protein\' must be set to 0 or higher.\n".
+      "min_protein will be reset to 0\n\n";
+      $CTL_OPT{min_protein} = 0;
    }
    if ($CTL_OPT{retry} < 0) {
       warn "WARNING: \'retry\' must be set to 0 or greater.\n".
