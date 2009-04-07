@@ -168,6 +168,7 @@ sub criteria {
 	my $ref = $hit->algorithm;
 
 	return  0 if $ref =~ /^repeat/i;
+	return  0 if $ref =~ /^blastx\:repeatmask$/i;
 	return  0 if $ref =~ /^repeat_gff\:/i;
 	return  1 if $ref =~ /^snap$/i;
 	return  1 if $ref =~ /^augustus$/i;

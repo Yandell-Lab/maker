@@ -1547,7 +1547,8 @@ sub _go {
 	    
 	    #get best non-overlapping ab-inits
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
-									     $annotations->{abinit}
+									     $annotations->{abinit},
+									     \%CTL_OPT
 									     );
 	    
 	    #add non-overlapping to final set if specified

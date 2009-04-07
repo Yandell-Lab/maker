@@ -246,7 +246,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				   );
 
     next if($tier->terminated);
-    $tier->run while(! $tier->terminated || $tier->failed);
+    $tier->run while(! $tier->terminated && ! $tier->failed);
     $DS_CTL->add_entry($tier->DS);
     push(@failed, $tier->fasta) if ($tier->failed);
 }

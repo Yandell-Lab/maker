@@ -1620,7 +1620,8 @@ sub group_transcripts {
       }
 
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
-      
+      my $g_attrib = (exists $t_structs[0]->{hit}->{gene_attrib}) ? $t_structs[0]->{hit}->{gene_attrib} : undef;
+
       my $annotation = { 't_structs'  => \@t_structs,
 			 'g_name'     => $g_name,
 			 'g_start'    => $g_start,
@@ -1630,6 +1631,7 @@ sub group_transcripts {
 			 'AED'        => $AED,
 			 'predictor'  => $predictor,
 			 'algorithm'  => $sources,
+			 'g_attrib'   => $g_attrib
 		       };
       
       push(@annotations, $annotation);
@@ -1837,6 +1839,7 @@ sub map_forward {
 sub get_non_overlaping_abinits {
    my $ann_set = shift;
    my $abin_set = shift;
+   my $CTL_OPT = shift;
 
    my @overlap;
    my @none;
@@ -1861,10 +1864,10 @@ sub get_non_overlaping_abinits {
    my @m_ab;
    foreach my $g (@$abin_set){
        if($g->{g_strand} == 1){
-	   push(@p_ab, $g) if($g->{algorithm} =~ /masked/);
+	   push(@p_ab, $g) if($g->{algorithm} =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask});
        }
        elsif($g->{g_strand} == -1){
-	   push(@m_ab, $g) if($g->{algorithm} =~ /masked/);
+	   push(@m_ab, $g) if($g->{algorithm} =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask});
        }
        else{
 	   die "ERROR: Logic error in auto_annotator::best_annotations\n";

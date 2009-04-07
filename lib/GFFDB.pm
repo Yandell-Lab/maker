@@ -12,6 +12,7 @@ use URI::Escape;
 use Bio::Search::Hit::PhatHit::gff3;
 use Bio::Search::HSP::PhatHSP::gff3;
 use Cwd;
+use File::NFSLock;
 
 @ISA = qw(
        );
@@ -74,17 +75,20 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-       my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-       $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-       $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
        
-       my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-       if (! grep( /^sources$/, @{$tables})){
-	  $dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
-       }
+	    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	    if (! grep( /^sources$/, @{$tables})){
+		$dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
+	    }
        
-       $dbh->commit;
-       $dbh->disconnect;
+	    $dbh->commit;
+	    $dbh->disconnect;
+	    $lock->unlock;
+	}
     }
     elsif($dbfile && -e $dbfile){
        unlink($dbfile);
@@ -95,24 +99,27 @@ sub do_indexing {
     my $self = shift;
 
     return unless($self->{go_gffdb});
-
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
 
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-    my $indices = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'index'});
-
-    foreach my $table (@{$tables}){
-       next if($table eq 'sources');
-	unless (grep(/^$table\_inx$/, @{$indices})){
-	    $dbh->do("CREATE INDEX $table\_inx ON $table(seqid)");
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
+	
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	my $indices = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'index'});
+	
+	foreach my $table (@{$tables}){
+	    next if($table eq 'sources');
+	    unless (grep(/^$table\_inx$/, @{$indices})){
+		$dbh->do("CREATE INDEX $table\_inx ON $table(seqid)");
+	    }
 	}
+	
+	$dbh->commit;
+	$dbh->disconnect;
+	$lock->unlock;
     }
-
-    $dbh->commit;
-    $dbh->disconnect;
 }
 #-------------------------------------------------------------------------------
 sub add_maker {
@@ -132,111 +139,121 @@ sub add_maker {
     push(@types, 'other_maker')   if($codes{other_pass});    
 
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
 
-    #check to see if tables need to be created, erased, or skipped
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-    my %skip;
-    foreach my $table (@types){
-       my $source = ($codes{$table}) ? $gff_file : 'empty';
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
 
-       if (grep(/^$table$/, @{$tables})){
-	  my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
+	#check to see if tables need to be created, erased, or skipped
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	@$tables = grep {/\_maker$/} @$tables; #filter out the source table
 
-	  if($source ne $o_source){
-	     my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
-	     $dbh->do(qq{DROP TABLE $table});
-	     $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-	     $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
-	  }
-	  else{
-	     $skip{$table}++;
-	  }
-       }
-       else{
-	  $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-	  $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
-       }
+	my %all;
+	foreach my $t (@types, @$tables){
+	    $all{$t}++;
+	}
+
+	my %skip;
+	foreach my $table (keys %all){
+	    my $source = (grep {/^$table$/} @types) ? $gff_file : 'empty';
+	    
+	    if (grep {/^$table$/} @{$tables}){
+		my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
+		
+		if($source ne $o_source){
+		    $dbh->do(qq{DROP TABLE $table});
+		    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+		    $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
+		}
+		else{
+		    $skip{$table}++;
+		}
+	    }
+	    else{
+		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+		$dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
+	    }
+	}
+	
+	#parse gff3
+	if(scalar(keys %skip) < @types && $gff_file){
+	    open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n";
+	    my $count = 0;
+	    my $line;
+	    while(defined($line = <$IN>)){
+		chomp($line);
+		if($line =~ /^\#\#genome-build maker ([^\s\n\t]+)/){
+		    my $build = $1;
+		    my ($id, $count) = split("::", $build);
+		    next unless($count =~ /^\d+\.\d\d$/);
+		    
+		    $self->{last_build} = $build;
+		    $self->{next_build} = sprintf $id.'::%.2f', $count;
+		}
+		last if ($line =~ /^\#\#FASTA/);
+		next if ($line =~ /^\s*$/);
+		next if ($line =~ /^\#/);
+		
+		my $l = $self->_parse_line(\$line);
+		
+		my $table;
+		if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
+		    next if (! $codes{rm_pass});
+		    next if ($skip{repeat_maker});
+		    $table = 'repeat_maker';
+		}
+		elsif($l->{source} =~ /^blastn$|^est2genome$|^est_gff\:/i){
+		    next if (! $codes{est_pass});
+		    next if ($skip{est_maker});
+		    $table = 'est_maker';
+		}
+		elsif($l->{source} =~ /^tblastx$|^altest_gff\:/i){
+		    next if (! $codes{altest_pass});
+		    next if ($skip{altest_maker});
+		    $table = 'altest_maker';
+		}
+		elsif($l->{source} =~ /^blastx$|^protein2genome$|^protein_gff\:/i){
+		    next if (! $codes{protein_pass});
+		    next if ($skip{protein_maker});
+		    $table = 'protein_maker';
+		}
+		elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
+		    next if (! $codes{pred_pass});
+		    next if ($skip{pred_maker});
+		    $table = 'pred_maker';
+		}
+		elsif($l->{source} =~ /^maker$|^model_gff\:/i){
+		    next if (! $codes{model_pass});
+		    next if ($skip{model_maker});
+		    $table = 'model_maker';
+		}
+		elsif($l->{source} =~/^\.$/){
+		    next;  #this is just the contig line
+		}
+		else{
+		    next if (! $codes{other_pass});
+		    next if ($skip{other_maker});
+		    $table = 'other_maker';
+		}
+		
+		$self->_add_to_db($dbh, $table, $l);
+		if($count == 10000){ #commit every 10000 entries
+		    $dbh->commit;
+		    $count = 0;
+		}
+		else{
+		    $count++;
+		}
+	    }
+	    close($IN);
+	}
+	
+	#commit changes
+	$dbh->commit;
+	$dbh->disconnect;
+	$lock->unlock;
     }
-
-    #parse gff3
-    if(scalar(keys %skip) < @types && $gff_file){
-       open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n";
-       my $count = 0;
-       my $line;
-       while(defined($line = <$IN>)){
-	  chomp($line);
-	  if($line =~ /^\#\#genome-build maker ([^\s\n\t]+)/){
-	     my $build = $1;
-	     my ($id, $count) = split("::", $build);
-	     next unless($count =~ /^\d+\.\d\d$/);
-	     
-	     $self->{last_build} = $build;
-	     $self->{next_build} = sprintf $id.'::%.2f', $count;
-	  }
-	  last if ($line =~ /^\#\#FASTA/);
-	  next if ($line =~ /^\s*$/);
-	  next if ($line =~ /^\#/);
-	  
-	  my $l = $self->_parse_line(\$line);
-	  
-	  my $table;
-	  if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
-	     next if (! $codes{rm_pass});
-	     next if ($skip{repeat_maker});
-	     $table = 'repeat_maker';
-	  }
-	  elsif($l->{source} =~ /^blastn$|^est2genome$|^est_gff\:/i){
-	     next if (! $codes{est_pass});
-	     next if ($skip{est_maker});
-	     $table = 'est_maker';
-	  }
-	  elsif($l->{source} =~ /^tblastx$|^altest_gff\:/i){
-	     next if (! $codes{altest_pass});
-	     next if ($skip{altest_maker});
-	     $table = 'altest_maker';
-	  }
-	  elsif($l->{source} =~ /^blastx$|^protein2genome$|^protein_gff\:/i){
-	     next if (! $codes{protein_pass});
-	     next if ($skip{protein_maker});
-	     $table = 'protein_maker';
-	  }
-	  elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
-	     next if (! $codes{pred_pass});
-	     next if ($skip{pred_maker});
-	     $table = 'pred_maker';
-	  }
-	  elsif($l->{source} =~ /^maker$|^model_gff\:/i){
-	     next if (! $codes{model_pass});
-	     next if ($skip{model_maker});
-	     $table = 'model_maker';
-	  }
-	  elsif($l->{source} =~/^\.$/){
-	     next;  #this is just the contig line
-	  }
-	  else{
-	     next if (! $codes{other_pass});
-	     next if ($skip{other_maker});
-	     $table = 'other_maker';
-	  }
-	  
-	  $self->_add_to_db($dbh, $table, $l);
-	  if($count == 10000){ #commit every 10000 entries
-	     $dbh->commit;
-	     $count = 0;
-	  }
-	  else{
-	     $count++;
-	  }
-       }
-       close($IN);
-    }
-
-    #commit changes
-    $dbh->commit;
-    $dbh->disconnect();
 }
 #-------------------------------------------------------------------------------
 sub add_repeat {
@@ -304,59 +321,63 @@ sub _add_type {
     return unless($self->{go_gffdb});
 
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
 
-    #see if table needs to be created, erased or skipped
-    my $source = ($gff_file) ? $gff_file : 'empty';
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-    my $skip = 0;
-    if (grep(/^$table$/, @{$tables})){
-       my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
-
-       if($source ne $o_source){
-	  my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
-	  $dbh->do(qq{DROP TABLE $table});
-	  $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-	  $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
-       }
-       else{
-	  $skip = 1;
-       }
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+	
+	#see if table needs to be created, erased or skipped
+	my $source = ($gff_file) ? $gff_file : 'empty';
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	my $skip = 0;
+	if (grep(/^$table$/, @{$tables})){
+	    my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
+	    
+	    if($source ne $o_source){
+		my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
+		$dbh->do(qq{DROP TABLE $table});
+		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+		$dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
+	    }
+	    else{
+		$skip = 1;
+	    }
+	}
+	else{
+	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	    $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
+	}
+	
+	#parse gff3
+	if(! $skip && $gff_file){
+	    open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n";
+	    my $count = 0;
+	    while(defined(my $line = <$IN>)){
+		chomp($line);
+		last if ($line =~ /^\#\#FASTA/);
+		next if ($line =~ /^\s*$/);
+		next if ($line =~ /^\#/);
+		
+		my $l = $self->_parse_line(\$line, $table);
+		$self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
+		
+		if($count == 10000){ #commit every 10000 entries
+		    $dbh->commit;
+		    $count = 0;
+		}
+		else{
+		    $count++;
+		}
+	    }
+	    close($IN);
+	}
+	
+	#commit changes
+	$dbh->commit();
+	$dbh->disconnect();
+	$lock->unlock;
     }
-    else{
-       $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-       $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
-    }
-    
-    #parse gff3
-    if(! $skip && $gff_file){
-       open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n";
-       my $count = 0;
-       while(defined(my $line = <$IN>)){
-	  chomp($line);
-	  last if ($line =~ /^\#\#FASTA/);
-	  next if ($line =~ /^\s*$/);
-	  next if ($line =~ /^\#/);
-	  
-	  my $l = $self->_parse_line(\$line, $table);
-	  $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
-	  
-	  if($count == 10000){ #commit every 10000 entries
-	     $dbh->commit;
-	     $count = 0;
-	  }
-	  else{
-	     $count++;
-	  }
-       }
-       close($IN);
-    }
-
-    #commit changes
-    $dbh->commit();
-    $dbh->disconnect();
 }
 #-------------------------------------------------------------------------------
 sub _parse_line{
@@ -404,56 +425,62 @@ sub phathits_on_chunk {
     my $h_type = shift;
 
     return [] unless($self->{go_gffdb});
-
+    
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 
     my $c_start = $chunk->offset + 1;
     my $c_end = $chunk->offset + $chunk->length;
     my $seqid = $chunk->seqid;
-    
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
 
-    #get gff annotations
     my $ref1 = [];
-    if (grep(/^$h_type\_gff$/, @{$tables})){
-       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-    }
-
-    #get maker annotations
     my $ref2 = [];
-    if (grep(/^$h_type\_maker$/, @{$tables})){
-       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+	
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	
+	#get gff annotations
+	if (grep(/^$h_type\_gff$/, @{$tables})){
+	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	}
+	
+	#get maker annotations
+	if (grep(/^$h_type\_maker$/, @{$tables})){
+	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	}
+
+	$dbh->disconnect;
+	$lock->unlock;
     }
-
+	
     my $features = _ary_to_features($ref1, $ref2);
-
+    
     my $structs;
     if($h_type eq 'model'){
-       $structs = _get_genes($features, $seq_ref);
+	$structs = _get_genes($features, $seq_ref);
     }
     elsif($h_type eq 'repeat'){
-       $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'est'){
-       $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'altest'){
-       $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'protein'){
-       $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'pred'){
-       $structs = _get_genes($features, $seq_ref);
-       my $structs2 = _get_structs($features, $seq_ref);
-       push(@$structs, @$structs2); 
+	$structs = _get_genes($features, $seq_ref);
+	my $structs2 = _get_structs($features, $seq_ref);
+	push(@$structs, @$structs2); 
     }
     elsif($h_type eq 'other'){
-       die "ERROR: Can not build phathits for type: \'other\'\n";
+	die "ERROR: Can not build phathits for type: \'other\'\n";
     }
     else{
-       die "ERROR: no recognized type in GFFDB::phathits_on_chunk\n";
+	die "ERROR: no recognized type in GFFDB::phathits_on_chunk\n";
     }
     
     my @phat_hits;    
@@ -473,43 +500,48 @@ sub phathits_on_contig {
 
     return [] unless($self->{go_gffdb});
 
-    my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
-
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-
-    #get gff annotations
     my $ref1 = [];
-    if (grep(/^$h_type\_gff$/, @{$tables})){
-       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-    }
-
-    #get maker annotations
     my $ref2 = [];
-    if (grep(/^$h_type\_maker$/, @{$tables})){
-       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-    }
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbfile = $self->{dbfile};
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+	
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	
+	#get gff annotations
+	if (grep(/^$h_type\_gff$/, @{$tables})){
+	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	}
+	
+	#get maker annotations
+	if (grep(/^$h_type\_maker$/, @{$tables})){
+	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	}
+	
+	$dbh->disconnect;
+	$lock->unlock;
+    }	
 
     my $features = _ary_to_features($ref1, $ref2);
-
+    
     my $structs;
     if($h_type eq 'model'){
-        $structs = _get_genes($features, $seq_ref);
+	$structs = _get_genes($features, $seq_ref);
     }
     elsif($h_type eq 'repeat'){
-        $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'est'){
-        $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'altest'){
-        $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'protein'){
-        $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
     }
     elsif($h_type eq 'pred'){
-        $structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq_ref);
 	my $structs2 = _get_genes($features, $seq_ref);
 	push(@{$structs}, @{$structs2});
     }
@@ -519,12 +551,12 @@ sub phathits_on_contig {
     else{
 	die "ERROR: no recognized type in GFFDB::phathits_on_chunk\n";
     }
-
+    
     my @phat_hits;    
     foreach my $s (@{$structs}){
 	push(@phat_hits, @{_load_hits($s, $seq_ref)});
     }
-
+    
     return \@phat_hits;
 }
 #-------------------------------------------------------------------------------
@@ -532,67 +564,88 @@ sub get_existing_gene_names {
     my $self = shift;
     my $seqid = shift;
 
-    return {};
-
     return {} unless($self->{go_gffdb});
 
-    my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
-
-    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-
-    #---get names for genes
-    my $h_type = 'model';
-
-    #get gff annotations
-    my $ref1 = [];
-    if (grep(/^$h_type\_gff$/, @{$tables})){
-       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-    }
-
-    #get maker annotations
-    my $ref2 = [];
-    if (grep(/^$h_type\_maker$/, @{$tables})){
-       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-    }
-
     my %names;
-    my $features = _ary_to_features($ref1, $ref2);
-    foreach my $f (@$features){
-	my $tag = $f->primary_tag();
+    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	my $dbfile = $self->{dbfile};
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+
+	#---get names for genes
+	my $h_type = 'model';
 	
-	if ($tag eq 'gene') {    
-	    my $name =_get_annotation($f,'Name');
-	    ($name) = $name =~ /^([^\s\t\n]+)/;
-	    $names{$name}++;
+	#get gff annotations
+	my $ref1 = [];
+	if (grep(/^$h_type\_gff$/, @{$tables})){
+	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
 	}
-    }
-
-    #---get names for preds
-    $h_type = 'pred';
-
-    #get gff annotations
-    $ref1 = [];
-    if (grep(/^$h_type\_gff$/, @{$tables})){
-       $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-    }
-
-    #get maker annotations
-    $ref2 = [];
-    if (grep(/^$h_type\_maker$/, @{$tables})){
-       $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-    }
-
-    $features = _ary_to_features($ref1, $ref2);
-    foreach my $f (@$features){
-	my $tag = $f->primary_tag();
 	
-	if ($tag eq 'match' || $tag eq 'gene') {    
-	    my $name =_get_annotation($f,'Name');
-	    ($name) = $name =~ /^([^\s\t\n]+)/;
-	    $name =~ s/\-mRNA\-\d+$//;
-	    $names{$name}++;
+	#get maker annotations
+	my $ref2 = [];
+	if (grep(/^$h_type\_maker$/, @{$tables})){
+	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
 	}
+	
+	my $features = _ary_to_features($ref1, $ref2);
+	foreach my $f (@$features){
+	    my $tag = $f->primary_tag();
+	    
+	    if ($tag eq 'gene') {    
+		my $id   = _get_annotation($f,'ID');
+		my $name = _get_annotation($f,'Name');
+		
+		$name = $id if($name eq '');
+		
+		#get old names
+		($name) = $name =~ /^([^\s\t\n]+)/;
+		$names{$name}++;
+		
+		#get old maker cluster ids
+		my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+		$names{$c_id}++ if(defined $c_id);
+	    }
+	}
+	
+	#---get names for preds
+	$h_type = 'pred';
+	
+	#get gff annotations
+	$ref1 = [];
+	if (grep(/^$h_type\_gff$/, @{$tables})){
+	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	}
+	
+	#get maker annotations
+	$ref2 = [];
+	if (grep(/^$h_type\_maker$/, @{$tables})){
+	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	}
+	
+	$features = _ary_to_features($ref1, $ref2);
+	foreach my $f (@$features){
+	    my $tag = $f->primary_tag();
+	    
+	    if ($tag eq 'match' || $tag eq 'gene') { 
+		my $id   = _get_annotation($f,'ID');   
+		my $name = _get_annotation($f,'Name');
+		
+		$name = $id if($name eq '');
+		
+		#get old names
+		($name) = $name =~ /^([^\s\t\n]+)/;
+		$name =~ s/\-mRNA\-\d+$//;
+		$names{$name}++;
+		
+		#get old maker cluster ids
+		my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+		$names{$c_id}++ if(defined $c_id);
+	    }
+	}
+
+	$dbh->disconnect;
+	$lock->unlock;
     }
 
     return \%names;
@@ -661,12 +714,21 @@ sub _load_hits {
     my $gene_name = $g->{name};
 
     #strip off unrecognized gene attributes for storage
-    my @anns = $g->{f}->annotation->get_all_annotation_keys();
-    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
-    foreach my $ann (@anns){
-	my @list = $g->{f}->annotation->get_Annotations();
-	@list = map {$_->value()} @list;
-	$ann = $ann.'='.join(',', @list);
+    my @anns;
+    if(@anns = $g->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
+	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	foreach my $ann (@anns){
+	    my @list = $g->{f}->annotation->get_Annotations();
+	    @list = map {$_->value()} @list;
+	    $ann = $ann.'='.join(',', @list);
+	}
+    }
+    elsif(@anns = $g->{f}->get_all_tags){ #sometimes bioperl does this, version?
+	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+        foreach my $ann (@anns){
+            my @list = $g->{f}->get_tag_values($ann);
+            $ann = $ann.'='.join(',', @list);
+        }
     }
     my $gene_attrib = join(';', @anns);
         
@@ -695,14 +757,24 @@ sub _load_hits {
 	$f->{gene_attrib} = $gene_attrib unless(! $gene_attrib);
 
 	#strip off unrecognized hit attributes for storage
-	my @anns = $t->{f}->annotation->get_all_annotation_keys();
-	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
-	foreach my $ann (@anns){
-	    my @list = $t->{f}->annotation->get_Annotations();
-	    @list = map {$_->value()} @list;
-	    $ann = $ann.'='.join(',', @list);
+	my @anns;
+	if(@anns = $t->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
+	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    foreach my $ann (@anns){
+		my @list = $t->{f}->annotation->get_Annotations();
+		@list = map {$_->value()} @list;
+		$ann = $ann.'='.join(',', @list);
+	    }
+	}
+	elsif(@anns = $t->{f}->get_all_tags){ #sometimes bioperl does this, version?
+	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    foreach my $ann (@anns){
+		my @list = $t->{f}->get_tag_values($ann);
+		$ann = $ann.'='.join(',', @list);
+	    }
 	}
 	$f->{-attrib} = join(';', @anns) if(@anns);
+
 
 	my $type = $t->{f}->primary_tag;
 	$f->{transcript_type}=$type;
@@ -711,10 +783,18 @@ sub _load_hits {
 
 	if(defined $t->{cdss} && @{$t->{cdss}}){
 	    my ($t_offset, $t_end) = _get_t_offset_and_end($t);
-	    $f->{translation_offset} = $t_offset;
-	    $f->{translation_end}    = $t_end;
-	    my $cdss = _load_cdss($t, $seq_ref);
-	    $f->{cdss} = $cdss;
+
+	    if($t_offset != -1){ #only happens on bad CDS entries
+		$f->{translation_offset} = $t_offset;
+		$f->{translation_end}    = $t_end;
+		my $cdss = _load_cdss($t, $seq_ref);
+		$f->{cdss} = $cdss;
+	    }
+	    else{
+		warn "WARNING: Problem cause by bad CDS entries in GFF3 file for ".
+		    $t->{name}."\n".
+		    "Maker will just figure out a new CDS entry internally\n\n";
+	    }
 	}
 
 	$f->{seq} = $t->{seq};
@@ -741,7 +821,7 @@ sub _get_t_offset_and_end {
                 
     my $t_end = $t_offset + length($c_seq) -1;
                 
-    die "ERROR: Problem in GFFDB::_get_t_offset_and_end\n" if $t_offset == -1;
+    warn "WARNING: Problem in GFFDB::_get_t_offset_and_end\n" if $t_offset == -1;
 
     return ($t_offset, $t_end);
 }
@@ -761,7 +841,8 @@ sub _load_cdss {
 	my @args;
 	my $hit_end = $e->{f}->end - $e->{f}->start + $hit_start;
 
-	if(my $value = _get_annotation($e->{f}, 'Target')){
+	my $value = _get_annotation($e->{f}, 'Target');
+	if($value ne ''){
 	    my @dats = split(/\s/, $value);
 
 	    $hit_name  = $dats[0];
@@ -915,7 +996,8 @@ sub _load_hsps {
 	my @args;
 	my $hit_end = $e->{f}->end - $e->{f}->start + $hit_start;
 
-        if(my $value = _get_annotation($e->{f}, 'Target')){
+	my $value = _get_annotation($e->{f}, 'Target');
+        if($value ne ''){
             my @dats = split(/\s/, $value);
 
             $hit_name  = $dats[0];
@@ -988,12 +1070,21 @@ sub _load_hsps {
 	push(@args, 0);
 
 	#strip off unrecognized hit attributes for storage
-	my @anns = $e->{f}->annotation->get_all_annotation_keys();
-	@anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
-	foreach my $ann (@anns){
-	    my @list = $e->{f}->annotation->get_Annotations();
-	    @list = map {$_->value()} @list;
-	    $ann = $ann.'='.join(',', @list);
+	my @anns;
+	if(@anns = $e->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
+	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    foreach my $ann (@anns){ 
+		my @list = $e->{f}->annotation->get_Annotations();
+		@list = map {$_->value()} @list;
+		$ann = $ann.'='.join(',', @list);
+	    }
+	}
+	elsif(@anns = $e->{f}->get_all_tags){ #sometimes bioperl does this, version?
+	    @anns = grep {!/^ID$|^Name$|^Target$|^_AED$|^_QI$/} @anns;
+	    foreach my $ann (@anns){
+		my @list = $e->{f}->get_tag_values($ann);
+		$ann = $ann.'='.join(',', @list);
+	    }
 	}
 	my $attrib = join(';', @anns) if(@anns);
 	push(@args, '-attrib');
@@ -1049,6 +1140,8 @@ sub _get_genes {
 	if ($tag eq 'gene') {	    
 	    my $id=_get_annotation($f,'ID');
 	    my $name=_get_annotation($f,'Name');
+
+	    $name = $id if ($name eq '');
 
 	    #take care of wormbases incorrect parentage
 	    if(exists $exons->{$id}){
@@ -1167,6 +1260,8 @@ sub _get_structs {
 	my $name = _get_annotation($f, 'Name');	
 	my $p_ids = _get_p_ids($f);
 
+	$name = $id if($name eq '');
+
 	my $struct = { f        => $f,
 		       id       => $id,
 		       name     => $name,
@@ -1229,8 +1324,10 @@ sub _grab {
 	    if ($tag_t eq $type) {
 		my $id = _get_annotation($f,'ID');
 		my $name = _get_annotation($f, 'Name');
-
 		my $p_ids = _get_p_ids($f);
+
+		$name = $id if($name eq '');
+
 		foreach my $p_id (@{$p_ids}){
 		    push(@{$booty{$p_id}}, {f        => $f,
 					    id       => $id,

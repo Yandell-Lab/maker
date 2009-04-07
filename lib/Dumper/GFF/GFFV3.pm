@@ -317,7 +317,7 @@ sub gene_data {
     my @g_data;
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
     my $attributes = 'ID='.$g_id.';Name='.$g_name.';';
-    $attributes .= $g->{-attrib} if($g->{attrib});
+    $attributes .= $g->{g_attrib} if($g->{g_attrib});
     $attributes .= ';' if($attributes !~ /\;$/);
     push(@g_data, $attributes); 
     
@@ -654,7 +654,9 @@ sub grow_cds_data_lookup {
 	my $transl_end  = shift;
 
 	my $hsp_start = 1;
-        foreach my $hsp ($phat_hit->hsps){
+	my $hsps = PhatHit_utils::sort_hits($phat_hit);
+
+        foreach my $hsp (@$hsps){
 
                 my $nB = $hsp->nB('query');
                 my $nE = $hsp->nE('query');
@@ -699,13 +701,22 @@ sub grow_cds_data_lookup {
 		sleep 5 if $warn;
 
 		unless ($hsp_end <= $offset || $hsp_start >= $transl_end || $warn){
-			#print "B:$b E:$e nB:$nB nE:$nE\n";
+		        #print "B:$b E:$e nB:$nB nE:$nE\n";
 			#$hsp->show();
-			push(@{$cdss->{cds}},  [$b, 
-			                        $e, 
-			                        $q_strand, 
-			                        $phat_hit->name()
-			                        ]); 
+		        if($q_strand == 1){ #helps keep output in sorted order
+			    push(@{$cdss->{cds}},  [$b, 
+						    $e, 
+						    $q_strand, 
+						    $phat_hit->name()
+						    ]);
+			} 
+			else{
+			    unshift(@{$cdss->{cds}},  [$b,
+						       $e,
+						       $q_strand,
+						       $phat_hit->name()
+						       ]);
+			}
 
 			push(@{$cdss->{t_ids}->{$b}->{$e}},  $id);
 		}
