@@ -2118,6 +2118,7 @@ sub set_defaults {
       $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'min_protein'} = 0;
       $CTL_OPT{'keep_preds'} = 0;
+      $CTL_OPT{'map_forward'} = 0;
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
@@ -2562,7 +2563,7 @@ sub load_control_files {
 sub generate_control_files {
    my $dir = shift || Cwd::cwd();
    my %O = (@_) ? @_ : set_defaults();
-   my $ev = $main::eva;
+   my $ev = 1 if($main::eva);
 
    #--build opts.ctl file
    open (OUT, "> $dir/eval_opts.ctl") if($ev);
@@ -2626,16 +2627,17 @@ sub generate_control_files {
    print OUT "evaluate:$O{evaluate} #run Evaluator on all annotations, 1 = yes, 0 = no\n" if(!$ev);
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
-   print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n";
+   print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
    print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
    print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
    print OUT "single_exon:$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
    print OUT "single_length:$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
    print OUT "keep_preds:$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
-   print OUT "retry:$O{retry} #number of times to retry a contig if annotation fails for some reason\n";
+   print OUT "map_forward:$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
+   print OUT "retry:$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
    print OUT "clean_try:$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
-   print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
    print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
+   print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
    close (OUT);
     
    #--build bopts.ctl file

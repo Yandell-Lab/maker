@@ -39,6 +39,7 @@ my @ctl_to_log = ('genome_gff',
 		  'single_exon',
 		  'single_length',
 		  'keep_preds',
+		  'map_forward',
 		  'alt_peptide',
 		  'evaluate',
 		  'blast_type',
@@ -182,6 +183,7 @@ sub _clean_files{
 	}
 	elsif ($CTL_OPTIONS{again} && ! $SEEN{$log_file}){
 	    $continue_flag = 1; #run/re-run
+	    $rm_key{gff}++;
 	    $SEEN{$log_file}++;
 	}
 	else {
@@ -194,16 +196,24 @@ sub _clean_files{
 	    my $cwd = Cwd::cwd();
 	    while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
 		#these are only sometimes important
-		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$/ ||
-		   $key =~ /^rm_pass$|^pred_pass$|^model_pass$|^other_pass$/
+		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$|^rm_pass$/ ||
+		   $key =~ /^pred_pass$|^model_pass$|^other_pass$/
 		   ){
 		    next unless($CTL_OPTIONS{genome_gff});
 		    my $old = $logged_vals{CTL_OPTIONS}{genome_gff};
 		    $old =~ s/^$cwd\/*//;
 		    my $new = $CTL_OPTIONS{genome_gff};
 		    $new =~ s/^$cwd\/*//;
+
+		    #only continue if change not already happening
+		    #because of a new gff3 file
 		    next unless($old eq $new);
 		}
+
+                #these are only sometimes important
+                if($key =~ /^map_forward$/){
+                    next unless($CTL_OPTIONS{genome_gff} || $CTL_OPTIONS{model_gff});
+                }
 		
 		my $log_val = '';
 		if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
@@ -243,12 +253,13 @@ sub _clean_files{
 		    
 		    $continue_flag = 1; #re-run because ctlopts changed
 		    
+		    #certain keys that don't affect preds
 		    if($key ne 'evaluate' &&
 		       $key ne 'enable_fathom' &&
 		       $key ne 'keep_preds' &&
 		       $key ne 'other_pass' &&
 		       $key ne 'other_gff' &&
-		       $key ne 'alt_peptide'
+		       $key ne 'map_forward'
 		      ){
 			$rm_key{preds}++; #almost all changes affect final predictions
 		    }
@@ -492,6 +503,12 @@ sub _clean_files{
 		    "Old Blastx files will be erased before continuing\n";
 	 
 		my @f = <$the_void/*blastx*>;
+
+		my ($te) = $CTL_OPTIONS{repeat_protein} =~ /([^\/]+)$/;
+		$te =~ s/\.fasta$//;
+
+		@f = grep { ! /$te\.blastx$/} @f;
+
 		foreach my $f (@f){
 		    push (@files, $f) if (-f $f);
 		    push (@dirs, $f) if (-d $f);

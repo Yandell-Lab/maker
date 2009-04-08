@@ -1538,12 +1538,6 @@ sub _go {
 								     \%CTL_OPT
 								    );
 	    
-	    #map old IDs forward if specified
-	    if($CTL_OPT{map_forward}){
-		$maker_anno = maker::auto_annotator::map_forward($maker_anno,
-								 $annotations->{model_gff}
-								 );
-	    }
 	    
 	    #get best non-overlapping ab-inits
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
@@ -1556,7 +1550,14 @@ sub _go {
 		push(@$maker_anno, @$non_over);
 		$non_over = [];
 	    }
-	    
+
+	    #map old IDs forward if specified
+	    if($CTL_OPT{map_forward}){
+		$maker_anno = maker::auto_annotator::map_forward($maker_anno,
+								 $annotations->{model_gff}
+								 );
+	    }
+
 	    #run evaluator if specified
 	    if($CTL_OPT{evaluate}){
 		evaluator::evaluate::evaluate_maker_annotations($maker_anno,

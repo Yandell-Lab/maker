@@ -107,23 +107,29 @@ sub prep_hits {
 
 
 	#--build clusters joined together by models (for hint based annotations)
-        my $m_bag = combine($models,
-			    $prot_hits,
-                            $clean_est,
-                            $clean_altest
-			    );
-
-        ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $m_bag);
-        $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
-        $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
-
-        #purge after clustering so as to still have the effect of evidence joining ESTs
-        $p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
-        $m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
-
         my $hint_clusters = [];
-        push(@{$hint_clusters}, @{$p_clusters});
-        push(@{$hint_clusters}, @{$m_clusters});
+	if(@$models){
+	    my $m_bag = combine($models,
+				$prot_hits,
+				$clean_est,
+				$clean_altest
+				);
+	    
+	    ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $m_bag);
+	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
+	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+
+	    #purge after clustering so as to still have the effect of evidence joining ESTs
+	    $p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
+	    $m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
+	    
+	    
+	    push(@{$hint_clusters}, @{$p_clusters});
+	    push(@{$hint_clusters}, @{$m_clusters});
+	}
+	else{
+	    $hint_clusters = $careful_clusters;
+	}
 
 	# identify the abinits that fall within and between clusters
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
@@ -607,7 +613,7 @@ sub annotate {
     my %annotations;
     
     #---model passthrough here
-    if(grep {/^model_gff$/} @{$CTL_OPTIONS->{_predictor}}){
+    if(@$gf_data){
 	print STDERR "Processing GFF3 passthrough annotations\n" unless($main::quiet);
 	my $model_trans = run_it($gf_data,
 				 $the_void,
@@ -686,6 +692,7 @@ sub annotate {
     add_abAED(\%annotations);
 
     #fill genemark hint based with abinits since hints do not work
+    #but only if not using abinits already
     if((grep {/^genemark$/} @{$CTL_OPTIONS->{_predictor}}) &&
        (! grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}})
       ){
@@ -1746,7 +1753,7 @@ sub map_forward {
 	my $a_id = $ann->{_temp_id};
 	foreach my $gff (@$bag){
 	    my $g_id = $gff->{_temp_id};
-	    my $AED = shadow_AED::get_AED($ann, [$gff]);
+	    my $AED = shadow_AED::get_AED([$gff], $ann);
 	    next if($AED > 0.5); #must be closer than 0.5 
 	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
 		$closest[$a_id] = $g_id;
@@ -1765,7 +1772,7 @@ sub map_forward {
 	my $a_id = $ann->{_temp_id};
 	foreach my $gff (@$bag){
 	    my $g_id = $gff->{_temp_id};
-	    my $AED = shadow_AED::get_AED($ann, [$gff]);
+	    my $AED = shadow_AED::get_AED([$gff], $ann);
 	    next if($AED > 0.5); #must be closer than 0.5
 	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
 		$closest[$a_id] = $g_id;
@@ -1793,17 +1800,20 @@ sub map_forward {
 	    my $f = $index[$cl]; #closet gff hit
 
 	    #decide which isoform to get gene name from
+	    #this affects the gene not the transcript
 	    if($AEDs[$id] < $AED){
 		$AED = $AEDs[$id];
 		$new = $f->{gene_name}; #get new gene name
 		$fg = $g_index[$cl]; #get annotation for that gene
 	    }
-
 	    $t->{is_changed} = ($AEDs[$id] == 0) ? 0 : 1; #not a true change if identical
 	    $g->{is_changed} = 1 if($t->{is_changed}); #gene changed only if trans changed
 	    $t->{t_name} = $f->{_tran_name}; #set transcript name
 
-	    #!!remember hit name has not been changed!! ;-)
+	    #this helps with attribute passthrough
+	    $t->{hit} = $f if(! $t->{is_changed}); #use gff hit if they are identical
+
+	    #!!remember hit name has not been changed on non identical!! ;-)
 	}
 
 	next if(! $new); #no change so skip
@@ -1827,6 +1837,10 @@ sub map_forward {
 	else{
 	    $g->{is_changed} = 1; #gene changed if trans count changed
 	}
+
+	#if there was no chage in gene just use the old gff gene
+	#this helps with attribute passthrough
+	$g = $fg if(! $g->{is_changed});;
     }
 
     return $ann_set;
