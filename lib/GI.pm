@@ -2125,6 +2125,14 @@ sub set_defaults {
       $CTL_OPT{'run'} = '';
       $CTL_OPT{'unmask'} = 1;
       $CTL_OPT{'clean_up'} = 0;
+      #evaluator below here
+      $CTL_OPT{'side_thre'} = 5;
+      $CTL_OPT{'eva_window_size'} = 70;
+      $CTL_OPT{'eva_split_hit'} = 1;
+      $CTL_OPT{'eva_hspmax'} = 100;
+      $CTL_OPT{'eva_gspmax'} = 100;
+      $CTL_OPT{'enable_fathom'} = 0;
+      $CTL_OPT{'enable_fathom'} = 1 if($main::eva);
    }
 
    #maker_bopts
@@ -2148,6 +2156,11 @@ sub set_defaults {
       $CTL_OPT{'bit_tblastx'} = 40;
       $CTL_OPT{'en_score_limit'} = 20;
       $CTL_OPT{'ep_score_limit'} = 20;
+      #evaluator below here
+      $CTL_OPT{'eva_pcov_blastn'} = 0.80;
+      $CTL_OPT{'eva_pid_blastn'} = 0.85;
+      $CTL_OPT{'eva_eval_blastn'} = 1e-10;
+      $CTL_OPT{'eva_bit_blastn'} = 40;
    }
 
    #maker_exe
@@ -2184,17 +2197,8 @@ sub set_defaults {
 
    #evaluator
    if ($type eq 'all' || $type eq 'eva') {
-      $CTL_OPT{'eva_pcov_blastn'} = 0.80;
-      $CTL_OPT{'eva_pid_blastn'} = 0.85;
-      $CTL_OPT{'eva_eval_blastn'} = 1e-10;
-      $CTL_OPT{'eva_bit_blastn'} = 40;
-      $CTL_OPT{'side_thre'} = 5;
-      $CTL_OPT{'eva_window_size'} = 70;
-      $CTL_OPT{'eva_split_hit'} = 1;
-      $CTL_OPT{'eva_hspmax'} = 100;
-      $CTL_OPT{'eva_gspmax'} = 100;
-      $CTL_OPT{'enable_fathom'} = 0;
-      $CTL_OPT{'enable_fathom'} = 1 if($main::eva);
+
+
    }
    
    return %CTL_OPT;
@@ -2253,6 +2257,7 @@ sub load_control_files {
    #--load command line options
    $CTL_OPT{genome} = $OPT{genome} if (defined $OPT{genome});
    $CTL_OPT{genome_gff} = $OPT{genome_gff} if (defined $OPT{genome_gff});
+   $CTL_OPT{model_gff} = $OPT{model_gff} if (defined $OPT{model_gff});
    $CTL_OPT{force} = $OPT{force} if (defined $OPT{force});
    $CTL_OPT{predictor} = $OPT{predictor} if (defined $OPT{predictor});
    $CTL_OPT{retry} = $OPT{retry} if (defined $OPT{retry});
@@ -2379,7 +2384,7 @@ sub load_control_files {
    push (@infiles, '_blastx', '_formater') if($CTL_OPT{repeat_protein}); 
    push (@infiles, '_tblastx', '_formater') if($CTL_OPT{altest});
    push (@infiles, 'genome') if($CTL_OPT{genome});
-   push (@infiles, 'genome') if(!$CTL_OPT{genome_gff});
+   push (@infiles, 'genome') if(!$CTL_OPT{genome_gff} && !$main::eva);
    push (@infiles, 'exonerate') if($CTL_OPT{est}); 
    push (@infiles, 'exonerate') if($CTL_OPT{protein}); 
    push (@infiles, 'repeat_protein') if ($CTL_OPT{repeat_protein});
@@ -2396,13 +2401,15 @@ sub load_control_files {
    push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
    push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
    push (@infiles, 'jigsaw') if (grep (/jigsaw/, @{$CTL_OPT{_run}}));
-   push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom});
+   push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom} && $CTL_OPT{evaluate});
    push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
    push (@infiles, 'protein_gff') if($CTL_OPT{protein_gff});
    push (@infiles, 'genome_gff') if($CTL_OPT{genome_gff});
+   push (@infiles, 'genome_gff') if($main::eva && ! $CTL_OPT{model_gff});
    push (@infiles, 'pred_gff') if($CTL_OPT{pred_gff});
    push (@infiles, 'model_gff') if ($CTL_OPT{model_gff});
+   push (@infiles, 'model_gff') if ($main::eva && ! $CTL_OPT{genome_gff});
    push (@infiles, 'model_gff') if (grep (/gff/, $CTL_OPT{predictor}) &&
 				    (!$CTL_OPT{genome_gff} ||
 				     !$CTL_OPT{model_pass})
@@ -2493,16 +2500,20 @@ sub load_control_files {
    if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
        $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist\n";
    }
+   if($main::eva && $CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){ #only for evaluator
+       $error .= "You can only specify a GFF3 file for genome_gff or model_gff no both!!\n";
+   }
    
    die $error if ($error);   
 
    #--check genome fasta file
+   my $fasta_gff = ($CTL_OPT{genome_gff}) ? $CTL_OPT{genome_gff} : $CTL_OPT{model_gff};
    my $iterator = new Iterator::Any( -fasta => $CTL_OPT{genome},
-				     -gff => $CTL_OPT{genome_gff}
+				     -gff => $fasta_gff
 				   );
 
    if ($iterator->number_of_entries() == 0) {
-      my $genome = (! $CTL_OPT{genome}) ? $CTL_OPT{genome_gff} : $CTL_OPT{genome};
+      my $genome = (! $CTL_OPT{genome}) ? $fasta_gff : $CTL_OPT{genome};
       die "ERROR:  The file $genome contains no fasta entries\n";
    }
 
@@ -2569,8 +2580,9 @@ sub generate_control_files {
    open (OUT, "> $dir/eval_opts.ctl") if($ev);
    open (OUT, "> $dir/maker_opts.ctl") if(!$ev);
    print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
-   print OUT "genome:$O{genome} #genome sequence file in fasta format\n"if(!$ev);
-   print OUT "\n"if(!$ev);
+   print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
+   print OUT "genome:$O{genome} #genome sequence file in fasta format\n";
+   print OUT "\n";
    print OUT "#-----Re-annotation Options (Only Maker derived GFF3)\n" if(!$ev);
    print OUT "#-----Maker Derived GFF3 Annotations to Evaluate (genome fasta is internal to GFF3)\n" if($ev);
    print OUT "genome_gff:$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
@@ -2585,7 +2597,6 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
    print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file\n" if($ev);
-   print OUT "genome:$O{genome} #genome sequence file in fasta format for GFF3\n"if($ev);
    print OUT "\n"if($ev);
    print OUT "#-----EST Evidence (you should provide a value for at least one)\n";
    print OUT "est:$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
@@ -2638,6 +2649,14 @@ sub generate_control_files {
    print OUT "clean_try:$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
    print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
    print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
+   print OUT "\n";
+   print OUT "#-----EVALUATOR Control Options\n";
+   print OUT "side_thre:$O{side_thre}\n";
+   print OUT "eva_window_size:$O{eva_window_size}\n";
+   print OUT "eva_split_hit:$O{eva_split_hit}\n";
+   print OUT "eva_hspmax:$O{eva_hspmax}\n";
+   print OUT "eva_gspmax:$O{eva_gspmax}\n";
+   print OUT "enable_fathom:$O{enable_fathom}\n";
    close (OUT);
     
    #--build bopts.ctl file
@@ -2665,6 +2684,11 @@ sub generate_control_files {
    print OUT "pid_tblastx:$O{pid_tblastx} #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
    print OUT "eval_tblastx:$O{eval_tblastx} #tBlastx eval cutoff\n";
    print OUT "bit_tblastx:$O{bit_tblastx} #tBlastx bit cutoff\n";
+   print OUT "\n";
+   print OUT "eva_pcov_blastn:$O{eva_pcov_blastn} #Evaluator Blastn Percent Coverage Threshold EST-Genome Alignments\n";
+   print OUT "eva_pid_blastn:$O{eva_pid_blastn} #Evaluator Blastn Percent Identity Threshold EST-Genome Alignments\n";
+   print OUT "eva_eval_blastn:$O{eva_eval_blastn} #Evaluator Blastn eval cutoff\n";
+   print OUT "eva_bit_blastn:$O{eva_bit_blastn} #Evaluator Blastn bit cutoff\n";
    print OUT "\n";
    print OUT "ep_score_limit:$O{ep_score_limit} #exonerate protein percent of maximal score threshold\n";
    print OUT "en_score_limit:$O{en_score_limit} #exonerate nucleotide percent of maximal score threshold\n";
@@ -2694,22 +2718,7 @@ sub generate_control_files {
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
    print OUT "qrna:$O{qrna} #location of qrna executable (not yet implemented)\n";
    print OUT "fathom:$O{fathom} #location of fathom executable (not yet implemented)\n";
-   close(OUT);
-    
-   #--build evaluator.ctl file
-   open (OUT, "> $dir/evaluator.ctl");
-   print OUT "#-----EVALUATOR Control Options\n";
-   print OUT "eva_pcov_blastn:$O{eva_pcov_blastn} #Blastn Percent Coverage Threshold EST-Genome Alignments\n";
-   print OUT "eva_pid_blastn:$O{eva_pid_blastn} #Blastn Percent Identity Threshold EST-Genome Alignments\n";
-   print OUT "eva_eval_blastn:$O{eva_eval_blastn} #Blastn eval cutoff\n";
-   print OUT "eva_bit_blastn:$O{eva_bit_blastn} #Blastn bit cutoff\n";
-   print OUT "side_thre:$O{side_thre}\n";
-   print OUT "eva_window_size:$O{eva_window_size}\n";
-   print OUT "eva_split_hit:$O{eva_split_hit}\n";
-   print OUT "eva_hspmax:$O{eva_hspmax}\n";
-   print OUT "eva_gspmax:$O{eva_gspmax}\n";
-   print OUT "enable_fathom:$O{enable_fathom}\n";
-   close (OUT);
+   close(OUT);    
 }
 
 1;

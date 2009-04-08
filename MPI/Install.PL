@@ -18,3 +18,4 @@ chdir("$FindBin::Bin");
 unlink("MPIcar/Makefile.old") if(-e "MPIcar/Makefile.old");
 
 system("cp $FindBin::Bin/mpi_maker $FindBin::Bin/../bin/");
+system("cp $FindBin::Bin/mpi_evaluator $FindBin::Bin/../bin/");

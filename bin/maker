@@ -81,7 +81,7 @@ $| = 1;
 my $usage = "
 Usage:
 
-     maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
+     maker [options] <maker_opts> <maker_bopts> <maker_exe>
 
      Maker is a program that produces gene annotations in GFF3 file format using
      evidence such as EST alignments and protein homology.  Maker can be used to
@@ -194,14 +194,12 @@ try{
     if (not @ctlfiles) {
 	if (-e "maker_opts.ctl" &&
 	    -e "maker_bopts.ctl" &&
-	    -e "maker_exe.ctl" &&
-	    -e "evaluator.ctl"
+	    -e "maker_exe.ctl"
 	    ) {
 	    
 	    @ctlfiles = ("maker_opts.ctl",
 			 "maker_bopts.ctl",
-			 "maker_exe.ctl",
-			 "evaluator.ctl"
+			 "maker_exe.ctl"
 			 );
 	}
 	else {

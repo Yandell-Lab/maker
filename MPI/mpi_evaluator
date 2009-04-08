@@ -15,6 +15,8 @@ use threads;
 use threads::shared;
 
 BEGIN{
+   $main::eva = 1; #signals that this is evaluator
+
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
    }
@@ -26,7 +28,7 @@ BEGIN{
    
    #what to do on ^C
    $SIG{'INT'} = sub {
-      print STDERR "\n\nMaker aborted by user!!\n\n";
+      print STDERR "\n\nAborted by user!!\n\n";
       my @threads = threads->list;
       foreach my $thr (@threads){
 	 $thr->detach;
@@ -91,7 +93,7 @@ use Process::MpiTiers;
 use Parallel::MPIcar qw(:all);
 
 unless($threads::VERSION >= 1.67){
-   die "mpi_maker requires threads version 1.67 or greater\n",
+   die "Program requires threads version 1.67 or greater\n",
        "You have version ". $threads::VERSION ."\n";
 }
 
@@ -112,48 +114,17 @@ $| = 1;
 my $usage = "
 Usage:
 
-     mpi_maker [options] <maker_opts> <maker_bopts> <maker_exe>
-
-     Maker is a program that produces gene annotations in GFF3 file format using
-     evidence such as EST alignments and protein homology.  Maker can be used to
-     produce gene annotations for new genomes as well as update annoations from
-     existing genome databases.
-
-     The four input arguments are user control files that specify how maker
-     should behave. The evaluator options file contains control options specific
-     for the evaluation of gene annotations. All options for maker should be set
-     in the control files, but a few can also be set on the command line.
-     Command line options provide a convenient machanism to override commonly
-     altered control file values.
-
-     Input files listed in the control options files must be in fasta format.
-     Please see maker documentation to learn more about control file
-     configuration.  Maker will automatically try and locate the user control
-     files in the current working directory if these arguments are not supplied
-     when initializing maker.
-
-     It is important to note that maker does not try and recalculated data that
-     it has already calculated.  For example, if you run an analysis twice on
-     the same dataset file you will notice that maker does not rerun any of the
-     blast analyses, but instead uses the blast analyses stored from the
-     previous run.  To force maker to rerun all analyses, use the -f flag.
+     mpi_evaluator [options] <eval_opts> <eval_bopts> <eval_exe>
 
 
 Options:
 
-     -genome|g <filename> Specify the genome file.
+     -genome_gff <file>  Specify the maker gff file to evaluate.
 
-     -predictor|p <type>  Selects the predictor(s) to use when building
-                          annotations.  Use a ',' to seperate types (no spaces).
-                          i.e. -predictor=snap,augustus,fgenesh
+     -model_gff  <file>  Specify the external gff file to evaluate.
 
-                          types: snap
-                                 augustus
-                                 fgenesh
-                                 genemark
-                                 est2genome (Uses EST's directly)
-                                 abinit (ab-initio predictions)
-                                 model_gff (Passes through GFF3 annotations)
+     -genome     <file>  Specify the genome fasta file.  This if optional if the
+                         fasta entries are also found in the gff file.
 
      -RM_off|R           Turns all repeat masking off.
 
@@ -161,15 +132,13 @@ Options:
 
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
-     -force|f            Forces maker to delete old files before running again.
+     -force|f            Forces program to delete old files before running again.
                          This will require all blast analyses to be rerun.
 
-     -again|a            Caculate all annotations and output files again even if
-                         no settings have changed.
+     -again|a            Caculate all output files again even if no settings have
+                         changed.
 
-     -evaluate|e         Run Evaluator on final annotations (under development).
-
-     -quiet|q            Silences most of maker's status messages.
+     -quiet|q            Silences most of the status messages.
 
      -CTL                Generate empty control files in the current directory.
 
@@ -252,11 +221,11 @@ my $root = 0; #define root node (only changed for debugging)
 try{
     GetOptions("RM_off|R" => \$OPT{R},
 	       "force|f" => \$OPT{force},
-	       "genome|g=s" => \$OPT{genome},
+	       "genome_gff=s" => \$OPT{genome_gff},
+	       "genome=s" => \$OPT{genome},
+	       "model_gff=s" => \$OPT{model_gff},
 	       "cpus|c=i" => \$OPT{cpus},
-	       "predictor=s" =>\$OPT{predictor},
 	       "retry=i" =>\$OPT{retry},
-	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
@@ -267,7 +236,7 @@ catch Error::Simple with{
     my $E = shift;
     
     print STDERR $E->{-text};
-    die "\n\nMaker failed parsing command line options!!\n\n";
+    die "\n\nFailed parsing command line options!!\n\n";
 };
 
 #--------------------------------------
@@ -288,14 +257,14 @@ if ($rank == $root) {
       my @ctlfiles = @ARGV;
       
       if (not @ctlfiles) {
-	 if (-e "maker_opts.ctl" &&
-	     -e "maker_bopts.ctl" &&
-	     -e "maker_exe.ctl"
+	 if (-e "eval_opts.ctl" &&
+	     -e "eval_bopts.ctl" &&
+	     -e "eval_exe.ctl"
 	    ) {
 	    
-	    @ctlfiles = ("maker_opts.ctl",
-			 "maker_bopts.ctl",
-			 "maker_exe.ctl"
+	    @ctlfiles = ("eval_opts.ctl",
+			 "eval_bopts.ctl",
+			 "eval_exe.ctl"
 			);
 	 }
 	 else {
@@ -325,7 +294,7 @@ if ($rank == $root) {
    catch Error::Simple with{
       my $E = shift;
       print STDERR $E->{-text};
-      print STDERR "\n\nMaker failed while examining startup data\n",
+      print STDERR "\n\nFailed while examining startup data\n",
                    "(control files and input fasta files)!!\n\n";
       my $code = 2;
       $code = $E->{-value} if (defined($E->{-value}));
@@ -627,7 +596,7 @@ if ($rank == $root) {
    $t_terminate = 1; #signals to thread to clean up
    $thr->detach() unless($thr->is_detached);
 
-   print STDERR "\n\nMaker is now finished!!!\n\n";
+   print STDERR "\n\nProgram is now finished!!!\n\n";
 }
 #------SECONDARY MPI PROCESSES------
 else {
