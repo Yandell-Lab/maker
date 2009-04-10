@@ -31,15 +31,19 @@ die $usage if $help || ! $opt_success;
 my ($map_file, $fasta_file) = @ARGV;
 die $usage unless $map_file && $fasta_file;
 
+# Read the map file and build a map hash;
 open (my $MAP, '<', $map_file) or die "Can't open $map_file for reading\n$!\n";
 my %map;
 map {my ($old, $new) = split;$map{$old} = $new} (<$MAP>);
 close $MAP;
 
+# Open the fasta file for input unlink it to avoid clobbering it and open the 
+# same file for output.
 open (my $IN, '<', $fasta_file) or die "Can't open $fasta_file for reading\n$!\n";
 unlink($fasta_file);
 open(my $OUT, '>', $fasta_file) or die "Can't open $fasta_file for writing\n$!\n";
 
+# Just do it!
 while (<$IN>) {
 	if  (/^>/) {
 		my ($old_id) = $_ =~ /^>(\S+)/;

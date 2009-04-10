@@ -10,36 +10,58 @@ my $usage = "
 
 Synopsis:
 
-maker_map_ids genome.all.gff > genome.all.id.map
+maker_map_ids --prefix PYU1_ --justify 6 genome.all.gff > genome.all.id.map
 
 Description:
 
-This script wil take the output from a maker GFF file and create a mapping
-file of maker gene and transcript IDs to new human friendly unique IDs.
+This script wil take a GFF3 file and create a mapping file of gene and
+transcript IDs to more numerically incremented human friendly unique
+IDs.
+
+Options:
+
+  --prefix      The prefix to use for all IDs
+  --justify     The unique integer portion of the ID will be right justified
+                with '0's to this length.
+  --sort_order  A tab delimited file containing two columns: contig_id
+                and sort_order.  Genes and transcripts will be named
+                in consecutive order along the contigs, and the
+                contigs will be sorted in the order specified by the
+                file.  If sort_order is not given and there are
+                ##sequence-region directives at the top of the gff
+                file then naming will be ordered by decreasing contig
+                length.
+
+Assumptions:
+
+  The script limits ID mapping to gene and mRNA features, and in
+  includes 'G' and 'T' abbreviations within the IDs for genes and
+  mRNAs respectively.  These behaviors are hard coded.
 
 ";
 
 
-my ($help);
-my $opt_success = GetOptions('help'    => \$help,
+my ($help, $prefix, $justify, $sort_order);
+my $opt_success = GetOptions('help'         => \$help,
+			     'prefix'       => \$prefix,
+			     'justify=s'    => \$justify,
+			     'sort_order=s' => \$sort_order,
 			      );
 
-die $usage if $help || ! $opt_success;
+die $usage if $help || ! $opt_success  || ! $prefix;
+$justify ||= 6;
 
-my $file = shift;
-die $usage unless $file;
-open (my $IN, '<', $file) or die "Can't open $file for reading\n$!\n";
+my $gff_file = shift;
+die $usage unless $gff_file;
 
-my %contig_length;
+my $sort_map = parse_sort_order($sort_order, $gff_file);
+
+open (my $IN, '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
+
 my %counter;
-my %parents;
+my %ids;
+# Build a hash of ids that need to be mapped;
 while (<$IN>) {
-
-	if (/\#\#sequence-region\s+(\S+)\s+(\d+)\s+(\d+)/) {
-		my ($contig_id, $start, $end) = ($1, $2, $3);
-		$contig_length{$contig_id} = ($end - $start);
-		next;
-	}
 
 	last if /^\#\#FASTA/;
 	next if /^\s*\#/;
@@ -47,17 +69,20 @@ while (<$IN>) {
 	my ($seq, $source, $type, $start, $end, $score, $strand,
 	    $phase, $attrb_text) = split /\t/, $_;
 
+	# Here we explicity limit the mapping to genes and mRNAs
 	if ($type =~ /^(gene|mRNA)$/) {
 		my ($id) = $attrb_text =~ /ID=(.*?);/;
-		$parents{$seq}{$start}{$id} = $type;
+		$ids{$seq}{$start}{$id} = $type;
 	}
 }
-
-for my $contig_id (sort {$contig_length{$b} <=> $contig_length{$a}} keys %parents) {
-	my $contig = $parents{$contig_id};
+# Create the new ID map.  Sort contigs by $sort_map in outer loop and 
+# features by $start in second loop.
+for my $contig_id (sort {sort_contigs($a, $b, $sort_map)} keys %ids) {
+	my $contig = $ids{$contig_id};
 	for my $start (sort {$b <=> $a} keys %{$contig}) {
 		for my $id (keys %{$contig->{$start}}) {
 			my $type  = $contig->{$start}{$id};
+			#Here we create gene and mRNA abbreviation.
 			my $abrv  = $type eq 'gene' ? 'G' : 'T';
 			my $count = sprintf '%06s', ++$counter{$type};
 			my $new_id    = 'PYU1_' . $abrv . $count;
@@ -66,29 +91,48 @@ for my $contig_id (sort {$contig_length{$b} <=> $contig_length{$a}} keys %parent
 		}
 	}
 }
-
-__END__
-
-
-
-		    my @attrb_list = split /\s*;\s*/, $attrbs_text;
-		    my %attrbs;
-		    for my $attrb_pair (@attrb_list) {
-			    my ($tag, $value_text) = split /\s*=\s*/, $attrb_pair;
-			    my @values = split /\s*, \s*/, $value_text;
-			    push @{$attrbs{$tag}} = @values;
-		    }
-		    
-
-			    
-		    }
-	    }
-
 #-----------------------------------------------------------------------------
 #-------------------------------- SUBROUTINES --------------------------------
 #-----------------------------------------------------------------------------
+sub parse_sort_order {
 
-sub {
+	my ($sort_order_file, $gff_file) = @_;
 
+	my %sort_order;
+
+	if ($sort_order_file) {
+		open(my $IN, '<', $sort_order_file) or die "Can't open $sort_order_file\n$!\n";
+		my %sort_order = (<$IN>);
+		close $IN;
+	}
+	elsif (`grep -P '\#\#sequence-region' $gff_file`) {
+		open(my $IN, '<', $gff_file) or die "Can't open $gff_file\n$!\n";
+		my $flag;
+		while (my $line = <$IN>) {
+			if ($line =~ /\#\#sequence-region\s+(\S+)\s+(\d+)\s+(\d+)/) {
+				$flag++;
+				my ($contig_id, $start, $end) = ($1, $2, $3);
+				$sort_order{$contig_id} = ($end - $start);
+			}
+			last if $flag;
+		}
+		close $IN;
+	}
+	else {
+		open(my $IN, '<', $gff_file) or die "Can't open $gff_file\n$!\n";
+
+		while (<$IN>) {
+			my @fields = split /\t/, $_;
+			next unless @fields == 9;
+			my $seq = $fields[0];
+			$sort_order{$seq}++;
+		}
+	}
+	return \%sort_order;
 }
-
+#-----------------------------------------------------------------------------
+sub sort_contigs {
+	my ($a, $b, $sort_map) = @_;
+	return ($sort_order->{$a} <=> $sort_map->{$b}) if $sort_order;
+	return ($sort_order->{$b} <=> $sort_map->{$a});
+}
