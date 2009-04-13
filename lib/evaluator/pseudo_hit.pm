@@ -127,6 +127,7 @@ sub is_redundant_alt_form {
 
 	# note that b will always have fewer exons or be shorter...
 
+	return 0 if $a->{strand} != $b->{strand};
         my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $seq, $flank);
 
         my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);
