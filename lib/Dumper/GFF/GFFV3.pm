@@ -10,6 +10,7 @@ use FileHandle;
 use PostData;
 use PhatHit_utils;
 use File::Copy;
+use URI::Escape;
 
 @ISA = qw(
        );
@@ -80,6 +81,8 @@ sub set_current_contig {
     $flag = 1 if (defined $self->{seq_id});
     $self->{seq_id} = shift;
     $self->{seq} = shift;
+
+    $self->{seq_id} = uri_escape($self->{seq_id}, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
@@ -305,7 +308,6 @@ sub gene_data {
     my $seq_id = shift;
     
     my $g_name     = $g->{g_name};
-    #my $g_name     = join("-", "maker", $seq_id, (split("-", $g->{g_name}))[1..2]);
     my $g_s        = $g->{g_start};
     my $g_e        = $g->{g_end};
     my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
@@ -349,7 +351,7 @@ sub gene_data {
 sub hit_data {
    my $h      = shift;
    my $seq_id = shift;
-   
+
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    
    my ($h_s, $h_e) = PhatHit_utils::get_span_of_hit($h, 'query');
@@ -406,7 +408,7 @@ sub hit_data {
 sub repeat_data {
    my $h      = shift;
    my $seq_id = shift;
-   
+
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    #my $h_str = '+';
    

@@ -389,7 +389,7 @@ sub _parse_line{
     my @data = split(/\t/, $$line);
 
     foreach my $d (@data){
-	$d = uri_escape($d,'\'\"');
+	$d = uri_escape($d,'\'\"\%');
     }
 
     $data[1] = "$tag:$data[1]" if($tag && $data[1] !~ /^$tag\:/);

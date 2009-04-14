@@ -2049,7 +2049,7 @@ sub get_longest_m_seq {
 }
 #------------------------------------------------------------------------
 #takes a hit and an array of phathits.  Returns all hits in the array
-#overlapping the first hit.
+#overlapping the first hit. Strand is tested before returning.
 sub get_overlapping_hits {
     my $eat  = shift;
     my $hits = shift;

@@ -8,6 +8,7 @@ my $gff3 = shift;
 
 my %index;
 my %list;
+my %GO;
 
 open(IN, "< $file");
 while(defined(my $line = <IN>)){
@@ -35,9 +36,12 @@ while(defined(my $line = <IN>)){
 	push(@{$index{$F[0]}{$F[11]}}, [[$F[6], $F[7]]]);
     }
 
+    my @go = $line =~ /(GO\:\d+)/;
+
     $F[12] =~ s/\t/ /g;
     $F[12] = uri_escape($F[12], '\,\;\=\%\&');
     $list{$F[11]} = $F[12];
+    $GO{$F[11]} = join(",", @go);
 }
 close(IN);
 
@@ -166,7 +170,8 @@ while(my $t = each %index){
 	    my $strand = $details{$t}{strand};
 	    my $phase = '.';
 	    my $p_id = "match:".$id++;
-	    my $attributes = "Name=$d $list{$d}\;ID=$p_id\;Target=$d $tB $tE +";
+	    my $attributes = "Name=$d $list{$d}\;ID=$p_id\;Target=$d $tB $tE +\;";
+	    $attributes .= "Ontology_term=$GO{$d}\;" if($GO{$d});
 
 	    print "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\t$attributes\n";
 
@@ -180,7 +185,7 @@ while(my $t = each %index){
 		$start = $pB;
 		$end = $pE;
 		$attributes = "Name=$d:match_part:$id\;ID=match_part:".$id++."\;";
-		$attributes .= "Parent=$p_id\;Target=$d ".($pB - $off)." ".($pE - $off)." +";
+		$attributes .= "Parent=$p_id\;Target=$d ".($pB - $off)." ".($pE - $off)." +\;";
 
 		print "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\t$attributes\n";
 	    }
