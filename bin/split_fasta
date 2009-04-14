@@ -1,0 +1,58 @@
+#! /usr/bin/perl -w
+
+use strict "vars";
+use strict "refs";
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use vars qw($LOG $CMD_ARGS);
+
+use Iterator::Fasta;
+
+my $usage = "
+Usage:
+
+        split_fasta [count] <fasta_input>
+
+        This script splits a multi-fasta file into the number of files specified by count.
+
+";
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+if (@ARGV != 2){
+    print $usage;
+    exit;
+}
+
+#variables that are persistent outside of try block
+my $count = shift @ARGV;
+die "ERROR: the count nust be set to a value greater than 1.\n"if ($count <= 1);
+my $infile = shift @ARGV;
+die "ERROR: The file \'$infile\' does not exist.\n" if(! -e $infile);
+
+my $fasta_iterator;
+$fasta_iterator = new Iterator::Fasta($infile);
+
+my @files;
+my $i = 0;
+while (my $fasta = $fasta_iterator->nextEntry()) {
+    if(! defined($files[$i])){
+	my $outfile = $infile;
+	$outfile =~ s/\.fasta$//;
+	$outfile .= "_part_$i.fasta";
+	open(my $fh, "> $outfile");
+	push(@files, $fh);
+    }
+
+    my $fh = $files[$i];
+
+    print $fh $fasta ."\n";
+
+    $i++;
+    $i = 0 if ($i >= $count);
+}
+
+foreach my $fh (@files){
+    close($fh);
+}
