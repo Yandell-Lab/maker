@@ -130,8 +130,8 @@ sub is_redundant_alt_form {
 	return 0 if $a->{strand} != $b->{strand};
         my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $seq, $flank);
 
-        my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);
-	my $b_to_a_str = compare_phat_hits($b, $a, 'query', $flank);
+        my $a_to_b_str = compare_phat_hits($a, $b, $flank);
+	my $b_to_a_str = compare_phat_hits($b, $a, $flank);
         if     ($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0*$/){
                 return 1;
         }
