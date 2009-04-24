@@ -34,6 +34,7 @@ if ($datastore){
 	next unless ($e =~ /FINISHED/);
 	chomp $e;
 	my ($id, $dir, $status) = split("\t", $e);
+	$dir =~ s/\/$//;
 	push(@dirs, $dir);
     }
 
@@ -85,7 +86,8 @@ sub dump_it {
     my $files = shift;
     my $name = shift;
 
-    system("touch $name");
+    open(OUT, "> $name");
+    close(OUT);
 
     foreach my $file (@{$files}){
 	die "ERROR: The file \'$file\' does not exist\n" if (! -e $file);

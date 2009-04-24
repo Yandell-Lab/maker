@@ -29,13 +29,14 @@ if ($datastore){
     open(IN, "< $datastore");
 
     #uniq the entries
-    my %entries;
-    @entries{@{[<IN>]}} = ();
-    
-    foreach my $e (keys %entries){
+    my %seen;
+    while(my $e = <IN>){
 	next unless ($e =~ /FINISHED/);
+	next if $seen{$e};
+	$seen{$e}++;
 	chomp $e;
 	my ($id, $dir, $status) = split("\t", $e);
+	$dir =~ s/\/$//;
 	push(@files, $dir);
     }
 
