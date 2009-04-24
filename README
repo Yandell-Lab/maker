@@ -503,7 +503,7 @@ based on exon and CDS locations.  However GMOD and GBROWSE do not
 infer the UTR, so to visualize the UTR, you will have to run:
 add_utr_gff.pl with the following command:
 
-maker2zff.pl <directory>
+add_utr_gff.pl <directory>
 
     * <directory> is the directory where all of your GFF files are
                   located.
@@ -537,7 +537,7 @@ A) First you will need to determine the genes used to model future
 
        maker2zff.pl <directory> genome
 
-       * <directory> is the directory where all of your GFF3 files are
+       * <directory> a the directory where all of your GFF3 files are
          located
        * geneome is the name for the outfile
 

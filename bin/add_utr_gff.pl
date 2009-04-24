@@ -37,15 +37,15 @@ foreach my $file (@files) {
 	if ($feature->source_tag eq "maker") {
 	    if ($tag eq "mRNA") {
 		my @id = $feature->get_tag_values('ID');
-		my $id = (split(/\s+/, $id[0]->as_text))[1];
+		my $id = $id[0];
 		my @name = $feature->get_tag_values('Name');
-		my $name = (split(/\s+/, $name[0]->as_text))[1];
+		my $name = $name[0];
 		$id2name{$id} = $name;
 		$strand{$name} = $feature->strand;
 	    }elsif ($tag eq "CDS") {
 		my @parents = $feature->get_tag_values('Parent');
 		foreach my $p (@parents) {
-		    my $pid = (split(/\s+/, $p->as_text))[1];
+		    my $pid = $p;
 		    my $pname = $id2name{$pid};
 		    $strand{$pname} = $feature->strand;
 		    push @{$cds{$pname}}, ($start, $end);
@@ -53,7 +53,7 @@ foreach my $file (@files) {
 	    }elsif ($tag eq "exon") {
 		my @parents = $feature->get_tag_values('Parent');
 		foreach my $p (@parents) {
-		    my $pid = (split(/\s+/, $p->as_text))[1];
+		    my $pid = $p;
 		    my $pname = $id2name{$pid};
 		    push @{$exons{$pname}}, ($start, $end);
 		}
