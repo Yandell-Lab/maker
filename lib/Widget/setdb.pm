@@ -40,6 +40,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
+		die "ERROR: setdb failed\n" if $? != 0;
 	}
 	else {
 		die "you must give Widget::setdb a command to run!\n";

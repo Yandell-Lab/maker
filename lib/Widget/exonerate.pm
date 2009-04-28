@@ -39,7 +39,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: Exonerate failed\n" if $? > 0;
+		die "ERROR: Exonerate failed\n" if $? != 0;
 	}
 	else {
 		die " Widget::exonerate::run needs a command!\n";

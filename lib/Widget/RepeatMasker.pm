@@ -47,7 +47,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: RepeatMasker failed\n" if $? > 0;
+		die "ERROR: RepeatMasker failed\n" if $? != 0;
 	}
 	else {
 		$self->print_command();

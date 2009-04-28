@@ -43,7 +43,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		if ($? > 0){
+		if ($? != 0){
 		   if($all_err !~ /There are no valid contexts/){
 		      die "ERROR: Blastx failed\n";
 		   }

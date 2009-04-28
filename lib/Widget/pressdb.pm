@@ -40,6 +40,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
+		die "ERROR: pressdb failed\n" if $? != 0;
 	}
 	else {
 		die "you must give Widget::pressdb a command to run!\n";
