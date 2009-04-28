@@ -123,7 +123,15 @@ sub seq_dirs {
 #------------------------------------------------------------------------
 sub add_entry {
    my $self = shift;
-   my $entry = join("\t", @_);
+   my @F = @_;
+
+   #remove deep directory data so log is relative
+   my $cwd = Cwd::cwd();
+   my $entry = join("\t", @F);
+
+   if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY/){
+       $entry =~ s/$cwd\/.*\.maker\.output\/*//;
+   }
 
    open(my $IN, ">>", $self->{log});
    print $IN $entry . "\n";

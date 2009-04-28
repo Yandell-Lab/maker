@@ -505,14 +505,17 @@ sub _clean_files{
 		my @f = <$the_void/*blastx*>;
 
 		my ($te) = $CTL_OPTIONS{repeat_protein} =~ /([^\/]+)$/;
-		$te =~ s/\.fasta$//;
 
-		@f = grep { ! /$te\.blastx$/} @f;
-
+		if($te){
+		    $te =~ s/\.fasta$//;    
+		    @f = grep { ! /$te\.blastx$/} @f;
+		}
+		    
 		foreach my $f (@f){
 		    push (@files, $f) if (-f $f);
 		    push (@dirs, $f) if (-d $f);
 		}
+
 	    }
 	    
 	    if (exists $rm_key{e_exonerate}) {

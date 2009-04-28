@@ -4,7 +4,8 @@
 package GI;
 
 use strict;
-use vars qw(@ISA @EXPORT $VERSION $TMP);
+use vars qw(@ISA @EXPORT $VERSION $TMP $LOCK);
+use FindBin;
 use Exporter;
 use FileHandle;
 use File::Temp qw(tempfile tempdir);
@@ -40,6 +41,7 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 use File::NFSLock;
+use threads;
 
 @ISA = qw(
 	);
@@ -795,8 +797,11 @@ sub genemark {
    my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
-   
-   my $exe    = $CTL_OPT->{gmhmme3};
+
+   #genemark sometimes fails if called directly so I built a wrapper
+   my $exe = "$FindBin::Bin/../lib/Widget/genemark/gmhmme3_wrap";
+   my $gm  = $CTL_OPT->{gmhmme3}; #genemark
+   my $pro = $CTL_OPT->{probuild}; #helper exe
    my $hmm = $CTL_OPT->{gmhmm};
    
    return [] if(! grep {/genemark/} @{$CTL_OPT->{_run}});
@@ -806,8 +811,11 @@ sub genemark {
    
    $LOG->add_entry("STARTED", $out_file, "");   
 
+
    my $command  = $exe;
    $command .= " -m $hmm";
+   $command .= " -g $gm";
+   $command .= " -p $pro";
    $command .= " -o $out_file";
    $command .= " $in_file";
 
@@ -1261,7 +1269,7 @@ sub blastn_as_chunks {
 
    #copy db to local tmp dir and run xdformat or formatdb
    if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished)) {
-       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', undef, 300)){
 	   copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastn');
 	   $lock->unlock;
@@ -1507,7 +1515,7 @@ sub blastx_as_chunks {
 
    #copy db to local tmp dir and run xdformat or format db 
    if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
-       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', undef, 300)){
            copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastx');
            $lock->unlock;
@@ -1765,7 +1773,7 @@ sub tblastx_as_chunks {
 
    #copy db to local tmp dir and run xdformat or formatdb
    if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
-       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', , 300)){
+       if(my $lock = new File::NFSLock("$tmp_db.lock", 'EX', undef, 300)){
            copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'tblastx');
            $lock->unlock;
@@ -2062,6 +2070,16 @@ sub build_the_void {
    return $the_void;
 }
 #-----------------------------------------------------------------------------
+#refreshes the maker directory lock every 30 seconds
+sub maintain_lock {
+   my $lock  = shift;
+
+   while(1){
+       sleep 30;
+       $lock->refresh;
+   }
+}
+#-----------------------------------------------------------------------------
 #this function sets the defualt values for control options
 #the function also determines what control options are valid, so
 #to add control options edit this function
@@ -2181,6 +2199,7 @@ sub set_defaults {
 		  'jigsaw',
 		  'qrna',
 		  'fathom',
+		  'probuild'
 		 );
 
       foreach my $exe (@exes) {
@@ -2397,6 +2416,7 @@ sub load_control_files {
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'snap') if (grep (/snap/, @{$CTL_OPT{_run}}));
    push (@infiles, 'gmhmme3') if (grep (/genemark/, @{$CTL_OPT{_run}}));
+   push (@infiles, 'probuild') if (grep (/genemark/, @{$CTL_OPT{_run}}));
    push (@infiles, 'augustus') if (grep (/augustus/, @{$CTL_OPT{_run}})); 
    push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
    push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
@@ -2555,6 +2575,26 @@ sub load_control_files {
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
 
+   #--check if another instance of maker is running, if not lock the directory
+   my $check;
+   if(-e $CTL_OPT{out_base}."/.maker_lock.NFSLock"){
+       warn "WARNING: Lock found, maker may already be running.\n".
+	   "Checking for other instance.\n\n";
+       $check = 1;
+   }
+
+   #lock must be global or it is detroyed outside of block
+   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.maker_lock", 'EX', 40, 40)){
+       warn "Everything seems ok!!\n\n" if($check);
+
+       my $thr = threads->create(\&maintain_lock, $LOCK); 
+       $thr->detach;
+   }
+   else{
+       die "ERROR: Another instance of maker is already running for this dataset\n";
+   }
+   
+
    #--set up optional global TMP
    if($CTL_OPT{TMP}){
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
@@ -2575,10 +2615,12 @@ sub generate_control_files {
    my $dir = shift || Cwd::cwd();
    my %O = (@_) ? @_ : set_defaults();
    my $ev = 1 if($main::eva);
+   my $log = 1 if(@_);
 
    #--build opts.ctl file
    open (OUT, "> $dir/eval_opts.ctl") if($ev);
-   open (OUT, "> $dir/maker_opts.ctl") if(!$ev);
+   open (OUT, "> $dir/maker_opts.log") if(!$ev && $log);
+   open (OUT, "> $dir/maker_opts.ctl") if(!$ev && !$log);
    print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
    print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
    print OUT "genome:$O{genome} #genome sequence file in fasta format\n";
@@ -2625,7 +2667,7 @@ sub generate_control_files {
    print OUT "augustus_species:$O{augustus_species} #Augustus gene prediction model\n";
    print OUT "fgenesh_par_file:$O{fgenesh_par_file} #Fgenesh parameter file\n";
    print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
-   print OUT "pred_gff:$O{model_gff} #ab-initio predictions from an external gff3 file\n";
+   print OUT "pred_gff:$O{pred_gff} #ab-initio predictions from an external gff3 file\n";
    print OUT "\n";
    print OUT "#-----Other Annotation Type Options (features maker doesn't recognize)\n" if(!$ev);
    print OUT "other_gff:$O{other_gff} #features to pass-through to final output from an extenal gff3 file\n" if(!$ev);
@@ -2661,7 +2703,8 @@ sub generate_control_files {
     
    #--build bopts.ctl file
    open (OUT, "> $dir/eval_bopts.ctl") if($ev);
-   open (OUT, "> $dir/maker_bopts.ctl") if(!$ev);
+   open (OUT, "> $dir/maker_bopts.log") if(!$ev && $log);
+   open (OUT, "> $dir/maker_bopts.ctl") if(!$ev && !$log);
    print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
    print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
    print OUT "\n";
@@ -2696,7 +2739,8 @@ sub generate_control_files {
     
    #--build maker_exe.ctl file
    open (OUT, "> $dir/eval_exe.ctl") if($ev);
-   open (OUT, "> $dir/maker_exe.ctl") if(!$ev);
+   open (OUT, "> $dir/maker_exe.log") if(!$ev && $log);
+   open (OUT, "> $dir/maker_exe.ctl") if(!$ev && !$log);
    print OUT "#-----Location of Executables Used by Maker/Evaluator\n";
    print OUT "formatdb:$O{formatdb} #location of NCBI formatdb executable\n";
    print OUT "blastall:$O{blastall} #location of NCBI blastall executable\n";
@@ -2718,6 +2762,7 @@ sub generate_control_files {
    print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
    print OUT "qrna:$O{qrna} #location of qrna executable (not yet implemented)\n";
    print OUT "fathom:$O{fathom} #location of fathom executable (not yet implemented)\n";
+   print OUT "probuild:$O{probuild} #location of probuild executable (required for genemark)\n";
    close(OUT);    
 }
 

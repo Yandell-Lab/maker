@@ -132,14 +132,14 @@ sub new {
     !($self->{lock_type} & LOCK_NB) ?
       time() + $self->{blocking_timeout} : 0;
 
-  ### remove an old lockfile if it is older than the stale_timeout
-  if( -e $self->{lock_file} &&
-      $self->{stale_lock_timeout} > 0 &&
-      time() - (stat _)[9] > $self->{stale_lock_timeout} ){
-    unlink $self->{lock_file};
-  }
-
   while (1) {
+    ### remove an old lockfile if it is older than the stale_timeout
+    if( -e $self->{lock_file} &&
+	$self->{stale_lock_timeout} > 0 &&
+	time() - (stat _)[9] > $self->{stale_lock_timeout} ){
+	unlink $self->{lock_file};
+    }
+
     ### open the temporary file
     $self->create_magic
       or return undef;
@@ -160,79 +160,77 @@ sub new {
 
     ### If lock exists and is readable, see who is mooching on the lock
 
-    if ( -e $self->{lock_file} &&
-         open (_FH,"+<$self->{lock_file}") ){
+    if ( -e $self->{lock_file} && open (_FH,"+<$self->{lock_file}") ){
+	my @mine = ();
+	my @them = ();
+	my @dead = ();
+	
+	my $has_lock_exclusive = !((stat _)[2] & $SHARE_BIT);
+	my $try_lock_exclusive = !($self->{lock_type} & LOCK_SH);
 
-      my @mine = ();
-      my @them = ();
-      my @dead = ();
-
-      my $has_lock_exclusive = !((stat _)[2] & $SHARE_BIT);
-      my $try_lock_exclusive = !($self->{lock_type} & LOCK_SH);
-
-      while(defined(my $line=<_FH>)){
-        if ($line =~ /^$HOSTNAME (\d+) /) {
-          my $pid = $1;
-          if ($pid == $$) {       # This is me.
-            push @mine, $line;
-          }elsif(kill 0, $pid) {  # Still running on this host.
-            push @them, $line;
-          }else{                  # Finished running on this host.
-            push @dead, $line;
-          }
-        } else {                  # Running on another host, so
-          push @them, $line;      #  assume it is still running.
-        }
-      }
-
-      ### If there was at least one stale lock discovered...
-      if (@dead) {
-        # Lock lock_file to avoid a race condition.
-        local $LOCK_EXTENSION = ".shared";
-        my $lock = new File::NFSLock {
-          file => $self->{lock_file},
-          lock_type => LOCK_EX,
-          blocking_timeout => 62,
-          stale_lock_timeout => 60,
-        };
-
-        ### Rescan in case lock contents were modified between time stale lock
-        ###  was discovered and lockfile lock was acquired.
-        seek (_FH, 0, 0);
-        my $content = '';
-        while(defined(my $line=<_FH>)){
-          if ($line =~ /^$HOSTNAME (\d+) /) {
-            my $pid = $1;
-            next if (!kill 0, $pid);  # Skip dead locks from this host
-          }
-          $content .= $line;          # Save valid locks
-        }
-
-        ### Save any valid locks or wipe file.
-        if( length($content) ){
-          seek     _FH, 0, 0;
-          print    _FH $content;
-          truncate _FH, length($content);
-          close    _FH;
-        }else{
-          close _FH;
-          unlink $self->{lock_file};
-        }
-
-      ### No "dead" or stale locks found.
-      } else {
-        close _FH;
-      }
-
-      ### If attempting to acquire the same type of lock
-      ###  that it is already locked with, and I've already
-      ###  locked it myself, then it is safe to lock again.
-      ### Just kick out successfully without really locking.
-      ### Assumes locks will be released in the reverse
-      ###  order from how they were established.
-      if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
-        return $self;
-      }
+	while(defined(my $line=<_FH>)){
+	    if ($line =~ /^$HOSTNAME (\d+) /) {
+		my $pid = $1;
+		if ($pid == $$) {       # This is me.
+		    push @mine, $line;
+		}elsif(kill 0, $pid) {  # Still running on this host.
+		    push @them, $line;
+		}else{                  # Finished running on this host.
+		    push @dead, $line;
+		}
+	    } else {                  # Running on another host, so
+		push @them, $line;      #  assume it is still running.
+	    }
+	}
+	
+	### If there was at least one stale lock discovered...
+	if (@dead) {
+	    # Lock lock_file to avoid a race condition.
+	    local $LOCK_EXTENSION = ".shared";
+	    my $lock = new File::NFSLock {
+		file => $self->{lock_file},
+		lock_type => LOCK_EX,
+		blocking_timeout => 62,
+		stale_lock_timeout => 60,
+	    };
+	    
+	    ### Rescan in case lock contents were modified between time stale lock
+	    ###  was discovered and lockfile lock was acquired.
+	    seek (_FH, 0, 0);
+	    my $content = '';
+	    while(defined(my $line=<_FH>)){
+		if ($line =~ /^$HOSTNAME (\d+) /) {
+		    my $pid = $1;
+		    next if (!kill 0, $pid);  # Skip dead locks from this host
+		}
+		$content .= $line;          # Save valid locks
+	    }
+	    
+	    ### Save any valid locks or wipe file.
+	    if( length($content) ){
+		seek     _FH, 0, 0;
+		print    _FH $content;
+		truncate _FH, length($content);
+		close    _FH;
+	    }else{
+		close _FH;
+		unlink $self->{lock_file};
+	    }
+	    
+	    ### No "dead" or stale locks found.
+	} else {
+	    close _FH;
+	}
+	
+	### If attempting to acquire the same type of lock
+	###  that it is already locked with, and I've already
+	###  locked it myself, then it is safe to lock again.
+	### Just kick out successfully without really locking.
+	### Assumes locks will be released in the reverse
+	###  order from how they were established.
+	if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
+	    return $self;
+	}
     }
 
     ### If non-blocking, then kick out now.
@@ -433,6 +431,26 @@ sub uncache ($;$) {
 
   ### hard link to the actual file which will bring it up to date
   return ( link( $file, $rand_file) && unlink($rand_file) );
+}
+
+sub refresh {
+  my $self = shift;
+
+  $errstr = undef;
+  my $rand_file = $self->{rand_file};
+  my $file = $self->{lock_file};
+  $self->{lock_line} = "$HOSTNAME $self->{lock_pid} ".time()." ".int(rand()*10000)."\n";
+  local *_FH;
+  open (_FH,">$rand_file") or do { $errstr = "Couldn't open \"$rand_file\" [$!]"; return undef; };
+  print _FH $self->{lock_line};
+  close _FH;
+
+  my $err;
+  system("mv $rand_file $file") && ($err = "ERROR: Could not refresh lock\n");
+  unlink($rand_file) if(-e $rand_file);
+  die $err if($err);
+
+  return 1;
 }
 
 sub newpid {

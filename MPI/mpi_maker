@@ -259,6 +259,7 @@ try{
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
+	       "no_thread" =>\$main::no_thread,
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
@@ -342,10 +343,10 @@ if ($rank == $root) {
    
    #---main code for distribution of mpi data starts here
 
-   #thread for root node to other things than just manage mpi
+   #thread for root node to do other things than just manage mpi
    my $thr = threads->create(\&node_thread);
    my $go_mpi_status = 1;
-   $t_need_flag = 1;
+   $t_need_flag = ($main::no_thread) ? 0 : 1; #set to true for threads false for no threads
 
    while($go_mpi_status){
       #====INTERNAL TIER THREAD
@@ -817,6 +818,12 @@ exit(0);
 sub node_thread {
    my $tier;
    my $chunk;
+
+   if($main::no_thread){ #pause and return if no thread is needed
+       $t_need_flag = 0;
+       return;
+   }
+
    $t_need_flag = 1;
 
    while(not $t_terminate){

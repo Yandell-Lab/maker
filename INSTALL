@@ -85,8 +85,8 @@ password to log in as root once root is enabled.
     http://www.ebi.ac.uk/~guy/exonerate
 
   a.  You will have to download the source code and complile it on your machine.
-      You will also have to install Glib.  If your using Mac OS-X you can do this
-      by typing fink install glib.
+      You will also have to install Glib or Glib 2.0.  If your using Mac OS-X you
+      can do this by typing fink install glib and fink install glib2-dev.
   b.  Change to the directory containing the Exonerate package to be compiled.
   c.  To install exonerate in the directory /usr/local/exonerate, type:
       ./configure -prefix=/usr/local/exonerate -> then type make -> then type make

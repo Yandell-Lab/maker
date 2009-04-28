@@ -34,7 +34,7 @@ You might want to also install these optional external programs:
 
     *Augustus 2.0 or higher (augustus.gobics.de)
     *GeneMark.hmm-E 3.9 or higher (exon.biology.gatech.edu)
-    *FgenesH (www.softberry.com/) - requires licence
+    *FgenesH 2.6 or higher (www.softberry.com/) - requires licence
 
 To install mpi_maker, you must have an mpi package installed, try the
 following:
