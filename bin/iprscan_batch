@@ -10,9 +10,30 @@ use threads;
 use threads::shared;
 use Thread::Semaphore;
 
+my $usage = "
+Usage:
+
+     iprscan_batch <file_name> <cpus> <log_file>
+
+     Runs iprscan on the given input file.  Output goes into a datastore.
+
+     The cpus option is optional for multi-threading.
+
+     The log file is optional.  The optional log file is not for creating that log
+     file but rather to parse an existing log file.  iprscan_batch will then only
+     re-run jubs that the log file says are not yet finished.
+
+
+";
+
 my $file = shift;
 my $cpus = shift || 1;
 my $log = shift;
+
+if(! $file){
+    print $usage;
+    exit;
+}
 
 my @files :shared;
 my @failed :shared;
