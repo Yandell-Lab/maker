@@ -21,9 +21,9 @@ BEGIN{
    if (not ($ENV{CGL_GO_SOURCE})) {
       $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
    }
-   
+
    $CMD_ARGS = join(' ', @ARGV);
-   
+
    #what to do on ^C
    $SIG{'INT'} = sub {
       print STDERR "\n\nMaker aborted by user!!\n\n";
@@ -32,8 +32,8 @@ BEGIN{
 	 $thr->detach;
       }
       exit (1);
-   };    
-   
+   };
+
    #supress warnings from storable module
    $SIG{'__WARN__'} = sub {
       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
@@ -47,7 +47,7 @@ BEGIN{
       if (defined ($LOG) && defined $_[0]) {
 	 my $die_count = $LOG->get_die_count();
 	 $die_count++;
-	 
+
 	 $LOG->add_entry("DIED","RANK",$RANK);
 	 $LOG->add_entry("DIED","COUNT",$die_count);
       }
@@ -58,7 +58,7 @@ BEGIN{
       }
 
       die "#----------------------\n",
-          "FATAL: failed!!\n",
+	  "FATAL: failed!!\n",
 	  "#----------------------\n",
 	  $_[0] . "\n";
    };
@@ -144,16 +144,16 @@ Options:
      -genome|g <filename> Specify the genome file.
 
      -predictor|p <type>  Selects the predictor(s) to use when building
-                          annotations.  Use a ',' to seperate types (no spaces).
-                          i.e. -predictor=snap,augustus,fgenesh
+			  annotations.  Use a ',' to seperate types (no spaces).
+			  i.e. -predictor=snap,augustus,fgenesh
 
-                          types: snap
-                                 augustus
-                                 fgenesh
-                                 genemark
-                                 est2genome (Uses EST's directly)
-                                 abinit (ab-initio predictions)
-                                 model_gff (Passes through GFF3 annotations)
+			  types: snap
+				 augustus
+				 fgenesh
+				 genemark
+				 est2genome (Uses EST's directly)
+				 abinit (ab-initio predictions)
+				 model_gff (Passes through GFF3 annotations)
 
      -RM_off|R           Turns all repeat masking off.
 
@@ -162,10 +162,10 @@ Options:
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
      -force|f            Forces maker to delete old files before running again.
-                         This will require all blast analyses to be rerun.
+			 This will require all blast analyses to be rerun.
 
      -again|a            Caculate all annotations and output files again even if
-                         no settings have changed.
+			 no settings have changed.
 
      -evaluate|e         Run Evaluator on final annotations (under development).
 
@@ -248,7 +248,7 @@ my $t_terminate :shared;
 my %OPT;
 my $root = 0; #define root node (only changed for debugging)
 
-#---Process options on the command line 
+#---Process options on the command line
 try{
     GetOptions("RM_off|R" => \$OPT{R},
 	       "force|f" => \$OPT{force},
@@ -266,7 +266,7 @@ try{
 }
 catch Error::Simple with{
     my $E = shift;
-    
+
     print STDERR $E->{-text};
     die "\n\nMaker failed parsing command line options!!\n\n";
 };
@@ -287,13 +287,13 @@ if ($rank == $root) {
    try{
       #get arguments off the command line
       my @ctlfiles = @ARGV;
-      
+
       if (not @ctlfiles) {
 	 if (-e "maker_opts.ctl" &&
 	     -e "maker_bopts.ctl" &&
 	     -e "maker_exe.ctl"
 	    ) {
-	    
+
 	    @ctlfiles = ("maker_opts.ctl",
 			 "maker_bopts.ctl",
 			 "maker_exe.ctl"
@@ -305,19 +305,19 @@ if ($rank == $root) {
 	    exit(0);
 	 }
       }
-      
+
       #--Control file processing
-      
+
       #set up control options from control files
       %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-      
+
       #--open datastructure controller
       $DS_CTL = ds_utility->new(\%CTL_OPT);
-      
+
       #--set up gff database
       $GFF_DB = new GFFDB(\%CTL_OPT);
       $build = $GFF_DB->next_build;
-      
+
       #---load genome multifasta/GFF3 file
       $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
 				     -gff => $CTL_OPT{'genome_gff'},
@@ -327,10 +327,10 @@ if ($rank == $root) {
       my $E = shift;
       print STDERR $E->{-text};
       print STDERR "\n\nMaker failed while examining startup data\n",
-                   "(control files and input fasta files)!!\n\n";
+		   "(control files and input fasta files)!!\n\n";
       my $code = 2;
       $code = $E->{-value} if (defined($E->{-value}));
-      
+
       exit($code);
    };
 
@@ -340,7 +340,7 @@ if ($rank == $root) {
    #				      );
 
    #====ACTUAL MPI COMMUNICATION
-   
+
    #---main code for distribution of mpi data starts here
 
    #thread for root node to do other things than just manage mpi
@@ -375,13 +375,13 @@ if ($rank == $root) {
       while((@helper_stack > 0) && (@chunks > 0) && (my $chunk = shift @chunks)){
 	 my $helper = shift @helper_stack;
 	 $chunk = ${thaw($chunk)};
-	 
+
 	 #tell helper node I need help
 	 MPI_Send(\$rank, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD);
-	 
+
 	 #tell helper node a chunk is coming
 	 MPI_Send(\$go_chunk, 1, MPI_INT, $helper, $request_status, MPI_COMM_WORLD );
-	 
+
 	 #send the chunk
 	 MPI_SendII(\$chunk, $helper, $mpi_data, MPI_COMM_WORLD);
       }
@@ -418,7 +418,7 @@ if ($rank == $root) {
 
 	 #tell helper node who I am
 	 MPI_Send(\$rank, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD);
-	 
+
 	 #tell helper node that no chunk is coming (resets to ask for tier)
 	 MPI_Send(\$reset, 1, MPI_INT, $helper, $request_status, MPI_COMM_WORLD );
       }
@@ -429,18 +429,18 @@ if ($rank == $root) {
 	 my $who;
 	 my $what;
 	 my $rs_type;
-	 
+
 	 #see who asks for a file
 	 MPI_Recv(\$who, 1,  MPI_INT, -2, $who_I_am, MPI_COMM_WORLD);
-	 
+
 	 #see what the mpi node wants
 	 MPI_Recv(\$what, 1, MPI_INT, $who, $what_I_want, MPI_COMM_WORLD);
-	 
+
 	 #if the node wants a tier to process, do this
 	 if($what == $need_tier){
 	    #receive result status
-	    MPI_Recv(\$rs_type, 1,  MPI_INT, $who, $result_status, MPI_COMM_WORLD); 
-	    
+	    MPI_Recv(\$rs_type, 1,  MPI_INT, $who, $result_status, MPI_COMM_WORLD);
+
 	    #get result if available
 	    if($rs_type == $yes_result){
 	       my $result;
@@ -451,7 +451,7 @@ if ($rank == $root) {
 		  push(@failed, $result->{-fasta});
 	       }
 	    }
-	    
+
 	    #if a contig is available send tier
 	    my $tier;
 
@@ -485,10 +485,10 @@ if ($rank == $root) {
 	    if(defined ($res_loc[$who])){
 	       MPI_Send(\$yes_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
 	       MPI_SendII(\$res_loc[$who], $who, $mpi_data, MPI_COMM_WORLD);
-	       
+
 	       my @locs = @{$res_loc[$who]};
 	       $res_loc[$who] = undef;
-	       
+
 	       #if primary node has chunk result to send then send them
 	       while (defined(my $loc = shift @locs)){
 		  if ($loc == $root){
@@ -501,19 +501,19 @@ if ($rank == $root) {
 	    else{
 	       MPI_Send(\$no_c_res, 1, MPI_INT, $who, $c_res_status, MPI_COMM_WORLD);
 	    }
-	    
+
 	    #continue the rest if the node needs a helper
 	    if($what == $need_helper){
 	       #find the number of helpers required
 	       my $num_helpers_req;
 	       MPI_Recv(\$num_helpers_req, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
-	       
+
 	       #number of secondary node helpers available
 	       my $sec_node_avail = @helper_stack;
-	       
+
 	       #number of primary node threads available
 	       my $thr_avail = ($t_need_flag == 2 && ! defined $t_chunk) ? 1 : 0;
-	       
+
 	       #signal that no helpers are available
 	       if($sec_node_avail == 0 && $thr_avail == 0){
 		  MPI_Send(\$no_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
@@ -521,7 +521,7 @@ if ($rank == $root) {
 	       else{#if node helpers are available
 		  #helpers to send
 		  my $helpers = [];
-		  
+
 		  #secondary node helpers
 		  if($sec_node_avail > 0){
 		     #seperate the helpers
@@ -529,10 +529,10 @@ if ($rank == $root) {
 			my $helper = shift @helper_stack;
 			push(@{$helpers}, $helper);
 		     }
-		     
+
 		     $num_helpers_req -= @{$helpers};
 		  }
-		  
+
 		  #primary node thread helper
 		  my $root_helper_flag = 0;
 		  if ($thr_avail && $num_helpers_req > 0){
@@ -541,17 +541,17 @@ if ($rank == $root) {
 		     unshift(@{$helpers}, $helper);
 		     $root_helper_flag = 1;
 		  }
-		  
+
 		  #say helper is available and send ids of the helpers
 		  MPI_Send(\$yes_helper, 1, MPI_INT, $who, $request_status, MPI_COMM_WORLD);
 		  MPI_SendII(\$helpers, $who, $mpi_data, MPI_COMM_WORLD);
-	       
+
 		  #take chunk as a helper
 		  if($root_helper_flag){
 		     #see who's one who needs help
 		     my $who2;
 		     MPI_Recv(\$who2, 1,  MPI_INT, $who, $who_I_am, MPI_COMM_WORLD);
-		     
+
 		     #get go_chunk request_status
 		     my $req_stat;
 		     MPI_Recv(\$req_stat, 1, MPI_INT, $who2, $request_status, MPI_COMM_WORLD );
@@ -559,7 +559,7 @@ if ($rank == $root) {
 			#get the chunk
 			my $chnk;
 			MPI_RecvII(\$chnk, $who2, $mpi_data, MPI_COMM_WORLD);
-			
+
 			$t_need_flag = 0;
 			$t_chunk = freeze(\$chnk);
 		     }
@@ -578,7 +578,7 @@ if ($rank == $root) {
 	    #get the owner of the result
 	    my $owner;
 	    MPI_Recv(\$owner, 1, MPI_INT, $who, $work_order, MPI_COMM_WORLD);
-	    
+
 	    if($owner == $root){#if root is owner get result
 	       my $chunk_res;
 	       MPI_RecvII(\$chunk_res, $who, $mpi_data, MPI_COMM_WORLD);
@@ -623,7 +623,7 @@ if ($rank == $root) {
       #send termination signal
       MPI_Send(\$terminate, 1, MPI_INT, $i, $request_status, MPI_COMM_WORLD);
    }
-   
+
    #---release thread
    $t_terminate = 1; #signals to thread to clean up
    $thr->detach() unless($thr->is_detached);
@@ -751,23 +751,23 @@ else {
 	    #send the number of helpers required
 	    my $num_helpers_req = $tier->num_chunks;
 	    MPI_Send(\$num_helpers_req, 1, MPI_INT, $root, $work_order, MPI_COMM_WORLD);
-	    
+
 	    #see if helper is available
 	    my $help_stat;
 	    MPI_Recv(\$help_stat, 1, MPI_INT, $root, $request_status, MPI_COMM_WORLD);
-	    
+
 	    if($help_stat == $yes_helper){
 	       my $helpers;
 	       MPI_RecvII(\$helpers, $root, $mpi_data, MPI_COMM_WORLD);
-	       
+
 	       #send chunk to helper
 	       foreach my $helper (@{$helpers}){
 		  #say I'm the one who needs help
 		  MPI_Send(\$rank, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD);
-		  
+
 		  #send go_chunk request_status
 		  MPI_Send(\$go_chunk, 1, MPI_INT, $helper, $request_status, MPI_COMM_WORLD);
-		  
+
 		  #send chunk
 		  my $chnk = $tier->next_chunk;
 		  MPI_SendII(\$chnk, $helper, $mpi_data, MPI_COMM_WORLD);
