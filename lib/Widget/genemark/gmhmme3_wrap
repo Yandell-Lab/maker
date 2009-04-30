@@ -1,0 +1,238 @@
+#! /usr/bin/perl -w
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../../../perl/lib/";
+use lib "$FindBin::Bin/../../";
+use File::Spec;
+use File::Temp qw(tempdir);
+use Iterator::Fasta;
+use Fasta;
+use Cwd;
+use Getopt::Long;
+
+my $usage = "
+Usage:
+ 
+     gmhmme3_wrap [options] <infile>
+
+     This script wraps around the GeneMark-ES executable gmhmme3 to resolve
+     errors associated with long stretches of N's in a fasta entry.
+
+Options:
+
+     -m  <filename>    Model file (required).
+     -o  <filename>    Output file (default is to standard out).
+     -g  <executable>  gmhmme3 executable (part of GeneMark-ES).
+     -p  <executable>  probuild executable (part of GeneMark-ES).
+
+     -help|?           prints this usage statement.
+
+
+";
+
+#global variables
+my $mod;
+my $gmhmme3;
+my $probuild;
+my $outfile;
+
+#find gmhmme3
+$gmhmme3 = `which gmhmme3 2> /dev/null`;
+chomp $gmhmme3;
+$gmhmme3 = '' if ($gmhmme3 =~ /^no gmhmme3/);
+
+#find probuild
+$probuild = `which probuild 2> /dev/null`;
+chomp $probuild;
+$probuild = '' if ($gmhmme3 =~ /^no probuild/);
+
+#get options
+GetOptions("m=s" => \$mod,
+	   "g=s" => \$gmhmme3,
+	   "p=s" => \$probuild,
+	   "o=s" => \$outfile,
+	   "help|?" => sub {print $usage; exit(0)}
+	   );
+
+#get arguments off the command line
+my $infile   = shift;
+
+#set absolute paths
+$mod      = Cwd::abs_path($mod) if($mod && Cwd::abs_path($mod));
+$infile   = Cwd::abs_path($infile) if($infile && Cwd::abs_path($infile));
+$gmhmme3  = Cwd::abs_path($gmhmme3) if($gmhmme3 && Cwd::abs_path($gmhmme3));
+$probuild = Cwd::abs_path($probuild) if($probuild && Cwd::abs_path($probuild));
+$outfile  = Cwd::abs_path($outfile) if($outfile && Cwd::abs_path($outfile));
+
+#check for input errors
+my $error;
+
+if(! $infile){
+    $error .= "ERROR: You must specify an input fasta file\n";
+}
+elsif(! -e $infile){
+    $error .= "ERROR: The input file $infile does not exist\n";
+}
+
+if(! $mod){
+    $error .= "ERROR: You must specify a model file\n";
+}
+elsif(! -e $mod){
+    $error .= "ERROR: The model file $mod does not exist\n";
+}
+
+if(! $gmhmme3){
+    $error .= "ERROR: You must specify the location of the gmhmme3 executable\n";
+}
+elsif(! -e $gmhmme3){
+    $error .= "ERROR: The specified gmhmme3 executable $gmhmme3 does not exist\n";
+}
+elsif($gmhmme3 !~ /gmhmme3\s*$/){
+    $error .= "ERROR: $gmhmme3 does not seem to be the wanted gmhmme3 executable\n";
+}
+
+if(! $probuild){
+    $error .= "ERROR: You must specify the location of the probuild executable\n";
+}
+elsif(! -e $probuild){
+    $error .= "ERROR: The specified probuild executable $probuild does not exist\n";
+}
+elsif($probuild !~ /probuild\s*$/){
+    $error .= "ERROR: $probuild does not seem to be the wanted probuild executable\n";
+}
+
+if($outfile && ! Cwd::abs_path($outfile)){
+    $error .= "ERROR: The outfile $outfile is inappropriate or can't be created\n";
+}
+
+if($error){
+    print $usage;
+    die $error;
+}
+
+#make temp dir to work in
+my $tempdir = tempdir(CLEANUP => 1);
+
+#split fastas on runs of NNN because Genemark can't handle it
+my $command  = "cd $tempdir \n";
+   $command .= " $probuild --split gm_dna.fa --seq $infile --MIN_SPLIT_SIZE 100".
+               " --letters_per_line 100 --max_nnn_substring 49 --nnn_margin 3";
+
+system($command) && die "ERROR: Could not parse fasta for GeneMark\n";
+
+#collect split fasta file
+my @files = <$tempdir/gm_dna.fa_*>;
+
+#run GeneMark on each split fasta
+my @lst_files;
+my %offsets;
+foreach my $file (@files){
+    my $out = "$tempdir/".File::Spec->splitpath( $file ) . ".lst";
+    $command = "$gmhmme3 -m $mod -o $out -b /dev/null $file";
+    system($command) && die "ERROR: GeneMark Failed\n";
+
+    my $it = new Iterator::Fasta($file);
+    my $fasta = $it->nextFasta;
+    my $def = Fasta::getDef(\$fasta);
+
+    my $offset;
+    if($def =~ /^.*\; (\d+)$/){
+	$offsets{Cwd::abs_path($file)} = $1;
+    }
+    else{
+	die "ERROR: Logic error in getting offset\n";
+    }
+
+    push(@lst_files, $out);
+    unlink($file); #clean up as I go
+}
+
+#sort files so as to combine in correct order
+@lst_files = sort {crit($a) <=> crit($b)} @lst_files;
+
+#get data for header
+my $it = new Iterator::Fasta($infile);
+my $fasta = $it->nextFasta;
+my $seq = Fasta::getSeqRef(\$fasta);
+my $length = length($$seq);
+
+#parse the output and combine into one big list file
+my $OUT;
+if($outfile){
+    open($OUT, "> $outfile") || die "ERROR: Can't open outfile\n";
+}
+else{
+    open($OUT, ">&STDOUT") || die "Can't open STDOUT\n";
+}
+select((select($OUT), $|=1)[0]); #reduce buffering
+
+my $count = 0;
+my $header_flag = 1; #only add first files header
+foreach my $file ( @lst_files ){
+    open(my $IN, "< $file");
+
+    my $last = 0;
+    my $offset;
+    while(defined(my $line = <$IN>)){
+	#set correct Sequence in header
+	if($line =~ /^Sequence name:\s*([^\n]+)/){
+	    $offset = $offsets{Cwd::abs_path($1)};
+	    die "ERROR: Logic error getting offset from hash\n" if(! defined $offset);
+
+	    if($header_flag){
+		$line =~ s/^(Sequence name:\s*)[^\s]+(\s*\n)$/$1$infile$2/;
+		print $OUT $line;
+	    }
+
+	    next;
+	}
+	
+	#set correct length in header
+	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/){
+	    if($header_flag){
+		$line =~ s/(Sequence length:\s*)\d+/$1$length/;
+		$line =~ s/(G\+C content:\s*)[^\n]+/$1/;
+		print $OUT $line;
+	    }
+
+	    next;
+	}
+	
+	#test if feature line
+	$line =~ /^\s*(\d+)\s+\d+\s+[\+\-]\s+\S+\s+(\d+)\s+(\d+)/;
+
+	#fix offset from splitting fastas
+	my $new   = $1 + $count;		
+	my $start = $2 + $offset;
+	my $end   = $3 + $offset;
+
+	#find optimal spacing shift
+	my $s1 = abs(length($new) - length($1));
+	my $s2 = abs(length($start) - length($2));
+	my $s3 = abs(length($end) - length($3));
+
+	if($1 > $last){ #last gene_id in file
+	    $last = $1;
+	    print $OUT "\n" unless($header_flag); #seperate genes with blank line
+	}
+
+	#fix each feature line with a regular expression substitution
+	$line =~ s/^\s{0,$s1}(\s*)(\d+)(\s+\d+\s+[\+\-]\s+\S+)\s{0,$s2}(\s*)(\d+)\s{0,$s3}(\s*)(\d+)/$1$new$3$4$start$6$end/;
+	
+	print $OUT $line;
+	$header_flag = 0; #stop adding header once features are reached
+    }
+    $header_flag = 0; #stop adding header once new file is reached
+    $count += $last; #adjust gene_id for multiple files
+    unlink($file); #clean up as I go
+}
+close($OUT);
+
+#-------------subs-----------------
+sub crit {
+    my $name = shift;
+
+    ($count) = $name =~ /(\d+)\.lst$/;
+
+    return $count;
+}
