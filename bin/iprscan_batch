@@ -28,7 +28,7 @@ Usage:
 
 my $file = shift;
 my $cpus = shift || 1;
-my $log = shift;
+my $log  = shift;
 
 if(! $file){
     print $usage;

@@ -4,7 +4,27 @@ use strict;
 use Getopt::Long;
 use File::Temp qw(tempfile);
 
-my $usage = "";
+my $usage = "
+
+Synopsis:
+
+fasta_merge --datastore /maker/datastore -o genome.all
+
+Descriptions:
+
+This script will take a MAKER datastore, extract all the relevant
+fasta files and create fasta files with -o base name for all the
+relevant categories of sequence (i.e. transcript, protein, GeneMark
+protien, etc.).
+
+Options:
+
+  -d The location of the MAKER datastore
+  -o The base name for the output files.
+  -i A optional list of files to process along with or instead of the
+     datastore.
+
+";
 
 my $datastore;
 my @files;
