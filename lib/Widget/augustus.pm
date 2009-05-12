@@ -344,12 +344,14 @@ sub parse_gene {
 	my $score;
 	foreach my $datum (@{$stuff}){
 
-		next if $datum =~ /### end gene/;
+		next if $datum =~ /\# end gene/;
 
 		my @fields = split(/\s+/, $datum);
 
 
-		if ($fields[1] eq 'AUGUSTUS' && $fields[2] eq 'gene'){
+		if ($fields[0] eq '#'){
+                }
+		elsif ($fields[1] eq 'AUGUSTUS' && $fields[2] eq 'gene'){
 			$gene_name = $fields[0].'-'.$fields[8];
 			$score     = $fields[5];
 
@@ -413,8 +415,6 @@ sub parse_gene {
                 }
                 elsif ($fields[1] eq 'protein' && $fields[2]  eq 'sequence'){
                 }
-                elsif ($fields[0] eq '#'){
-                }
 		else {
 			PostData(\@fields);	
 			die "dead in Widget::augustus::parse_gene unknown feature type:".$fields[2]."\n";
@@ -438,7 +438,10 @@ sub parse {
 
         my ($q_name)  = $def =~ /^>(.+)/;
 
-	local $/ = "### gene";
+	local $/ = '### gene';
+	my $is_new = `grep -c \"\# start gene\" $report`;
+	$is_new =~ s/\n+//g;
+	local $/ = '# start gene' if($is_new);
 
 	my $fh = new FileHandle();
 	   $fh->open($report);

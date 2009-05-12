@@ -75,7 +75,7 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-	if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+	if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
@@ -101,7 +101,7 @@ sub do_indexing {
     return unless($self->{go_gffdb});
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
@@ -140,7 +140,7 @@ sub add_maker {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
@@ -322,7 +322,7 @@ sub _add_type {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
@@ -434,7 +434,7 @@ sub phathits_on_chunk {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 	
 	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -502,7 +502,7 @@ sub phathits_on_contig {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbfile = $self->{dbfile};
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 	
@@ -567,7 +567,7 @@ sub get_existing_gene_names {
     return {} unless($self->{go_gffdb});
 
     my %names;
-    if(my $lock = new File::NFSLock($self->{go_gffdb}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
 	my $dbfile = $self->{dbfile};
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 
