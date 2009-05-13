@@ -350,7 +350,7 @@ sub parse_gene {
 
 		if (! @fields){
 		}
-		elsif ($fields[0] eq '#'){
+		elsif ($fields[0] =~ /^\#/){
                 }
 		elsif ($fields[1] eq 'AUGUSTUS' && $fields[2] eq 'gene'){
 			$gene_name = $fields[0].'-'.$fields[8];
