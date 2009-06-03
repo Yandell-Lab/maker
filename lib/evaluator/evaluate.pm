@@ -20,6 +20,7 @@ use vars qw/$OPT_F $OPT_PREDS $OPT_PREDICTOR $LOG $CTL/;
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
 #------------------------------------------------------------------------------
+=pod
 sub evaluate_for_gff {
         my $virgin_fasta     = shift;
         my $masked_fasta     = shift;
@@ -62,6 +63,7 @@ sub evaluate_for_gff {
 		}
 	}
 }
+=cut
 #-------------------------------------------------------------------------------
 sub evaluate_maker_annotations {
     my $annotations = shift;
@@ -132,6 +134,7 @@ sub evaluate_maker_annotations {
 				     $geneAED,
 				     $alt_spli_sup,
 				     $t_name,
+				     $ann->{g_name},
 				     $CTL_OPTIONS,
 				     $the_void,
 				     );
@@ -149,6 +152,7 @@ sub evaluate_maker_annotations {
 	    close($FH);
 	}
     }
+
 }
 #-------------------------------------------------------------------------------
 sub power_evaluate {
@@ -162,6 +166,7 @@ sub power_evaluate {
 	my $geneAED = shift;
 	my $alt_spli_sup = shift;
 	my $t_name = shift;
+	my $g_name = shift;
 	$CTL = shift;
 	my $the_void = shift;
 
@@ -169,7 +174,6 @@ sub power_evaluate {
 
 	my $gff3_identity = get_identity($eat);
 
-	my ($g_name) = $t_name =~ /^(.*)-mRNA-\d+$/;
 	$eat->{g_name} = $g_name;
 	$eat->{t_name} = $t_name;
 
@@ -177,13 +181,9 @@ sub power_evaluate {
 						       $exonerate_p_hits, $exonerate_e_hits, 
 						       $blastx_hits, $abinits_hits, $t_name);
 
-	my $txnAED = evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
-	my $overallAED =evaluator::AED::txnAED($box, {	'start'=>100,
-							'stop'=>100,
-							'donor'=>100,
-							'acceptor'=>100,
-							'exon'=>1,
-						     }  );
+	my $exactAED = evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
+	my $txnAED1 = evaluator::AED::txnAED($box, {'exon'=>1 });
+	my $txnAED2 = evaluator::AED::txnAED($box, {'exon'=>1, 'intron'=>1,});
 						
 	my $gene_length = abs($eat->nB('query') - $eat->nE('query')) + 1;
 
@@ -213,7 +213,8 @@ sub power_evaluate {
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 				     $transcript_type, $completion, $alt, $score, 
-					$so_code, $geneAED, $txnAED, $overallAED,
+					$so_code, $geneAED, $txnAED1, $txnAED2, 
+					$exactAED, 
 					$solexa_for_splices, $gff3_identity,
 					$snap_backwards, $gene_length);
 
@@ -227,8 +228,9 @@ sub power_evaluate {
                     'transcript_type'   => $transcript_type,
 		    'report'		=> $report,
 		    'so_code'		=> $so_code,
-		    'txnAED'		=> $txnAED,
-		    'overallAED'	=> $overallAED,
+		    'exon_AED'		=> $txnAED1,
+		    'exon_intron_AED'	=> $txnAED2,
+		    'exact_AED'		=> $exactAED,
 		    'gene_AED'          => $geneAED,
 		    'snap_backwards'    => $snap_backwards->{overall_score},
 		    'gff3_identity'	=> $gff3_identity,
@@ -252,8 +254,9 @@ sub generate_report {
 	my $score		= shift;
 	my $so_code		= shift;
 	my $geneAED             = shift;
-	my $txnAED		= shift;
-	my $overallAED		= shift;
+	my $exonAED		= shift;
+	my $exon_intronAED	= shift;
+	my $exactAED		= shift;
 	my $solexa		= shift;
 	my $gff3_identity	= shift;
 	my $snap_backwards	= shift;
@@ -311,11 +314,14 @@ sub generate_report {
 	$report .= $prefix."\t"."geneAED"."\t";
 	$report .= $geneAED."\n";
 
-        $report .= $prefix."\t"."txnAED"."\t";
-        $report .= $txnAED."\n";
+        $report .= $prefix."\t"."exon_AED"."\t";
+        $report .= $exonAED."\n";
 
-        $report .= $prefix."\t"."overallAED"."\t";
-        $report .= $overallAED."\n";
+        $report .= $prefix."\t"."exon_intron_AED"."\t";
+        $report .= $exon_intronAED."\n";
+
+        $report .= $prefix."\t"."exact_AED"."\t";
+        $report .= $exactAED."\n";
 	
 	$report .= $prefix."\t"."support_for_altsplicing"."\t";
 	$report .= $alt."\n";

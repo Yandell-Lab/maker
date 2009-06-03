@@ -6,6 +6,7 @@ use strict;
 use FileHandle;
 use evaluator::pseudo_hit;
 use Fasta;
+use FastaFile;
 
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
@@ -101,6 +102,8 @@ sub parse_fathom_output {
 	$fh->open($file);
 	
 	my @items;
+	my $status = 1;
+
 	while (my $line = <$fh>) {
 		chomp $line;
 
@@ -118,10 +121,18 @@ sub parse_fathom_output {
 	foreach my $item (@sorted_items) {
 		push @scores, $item->[1];
 
-		$score += $item->[1] if $item->[1] ne '.';
+		if ($item->[1] =~ /^[-\.\d]+$/ 
+			&& $item->[1] ne '.') {
+			$score += $item->[1];
+		}
+
+		else { 
+			$status = -1;
+		}
+
 	}
 
-	return ($score, \@scores);
+	return ($score, \@scores, $status);
 }
 		
 #-------------------------------------------------------------------------------
@@ -140,14 +151,11 @@ sub run_fathom {
 	$command .= " $anno_file $fasta_file";
 	$command .= " -score-genes ";
 	$command .= $CTL->{snaphmm};
-	$command .= " -errors-ok";
+	#$command .= " -errors-ok";
 	$command .= " >$file_name";
 
 	print STDERR "Running fathom over $name ...\n";
 
-	if ($name eq 'maker-scf1117875582006-snap-gene-0.16-mRNA-1') {
-		print "COMMAND:  $command\n";
-	}
 	`$command`;
 
 	return $file_name;
