@@ -181,9 +181,7 @@ sub power_evaluate {
 						       $exonerate_p_hits, $exonerate_e_hits, 
 						       $blastx_hits, $abinits_hits, $t_name);
 
-	my $exactAED = evaluator::AED::txnAED($box,{'start'=>1,'stop'=>1,'donor'=>1,'acceptor'=>1});
-	my $txnAED1 = evaluator::AED::txnAED($box, {'exon'=>1 });
-	my $txnAED2 = evaluator::AED::txnAED($box, {'exon'=>1, 'intron'=>1,});
+	my ($txnAED, $closestAED) = evaluator::AED::txnAED($box, {'exon'=>1 });
 						
 	my $gene_length = abs($eat->nB('query') - $eat->nE('query')) + 1;
 
@@ -213,8 +211,7 @@ sub power_evaluate {
 
 	my $report = generate_report($eat, $box, $qi, $quality_seq, $splice_sites,
 				     $transcript_type, $completion, $alt, $score, 
-					$so_code, $geneAED, $txnAED1, $txnAED2, 
-					$exactAED, 
+					$so_code, $geneAED, $txnAED, $closestAED, 
 					$solexa_for_splices, $gff3_identity,
 					$snap_backwards, $gene_length);
 
@@ -228,9 +225,8 @@ sub power_evaluate {
                     'transcript_type'   => $transcript_type,
 		    'report'		=> $report,
 		    'so_code'		=> $so_code,
-		    'exon_AED'		=> $txnAED1,
-		    'exon_intron_AED'	=> $txnAED2,
-		    'exact_AED'		=> $exactAED,
+		    'txnAED'		=> $txnAED,
+		    'closestAED'	=> $closestAED,
 		    'gene_AED'          => $geneAED,
 		    'snap_backwards'    => $snap_backwards->{overall_score},
 		    'gff3_identity'	=> $gff3_identity,
@@ -254,9 +250,8 @@ sub generate_report {
 	my $score		= shift;
 	my $so_code		= shift;
 	my $geneAED             = shift;
-	my $exonAED		= shift;
-	my $exon_intronAED	= shift;
-	my $exactAED		= shift;
+	my $txnAED		= shift;
+	my $closestAED		= shift;
 	my $solexa		= shift;
 	my $gff3_identity	= shift;
 	my $snap_backwards	= shift;
@@ -314,14 +309,11 @@ sub generate_report {
 	$report .= $prefix."\t"."geneAED"."\t";
 	$report .= $geneAED."\n";
 
-        $report .= $prefix."\t"."exon_AED"."\t";
-        $report .= $exonAED."\n";
+        $report .= $prefix."\t"."txnAED"."\t";
+        $report .= $txnAED."\n";
 
-        $report .= $prefix."\t"."exon_intron_AED"."\t";
-        $report .= $exon_intronAED."\n";
-
-        $report .= $prefix."\t"."exact_AED"."\t";
-        $report .= $exactAED."\n";
+        $report .= $prefix."\t"."closestAED"."\t";
+        $report .= $closestAED."\n";
 	
 	$report .= $prefix."\t"."support_for_altsplicing"."\t";
 	$report .= $alt."\n";

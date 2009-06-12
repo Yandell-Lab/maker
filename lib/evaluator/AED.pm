@@ -25,7 +25,7 @@ sub txnAED {
 
 	my $hit_bag = combine($pol_e, $pol_p);
 
-	return 1 if scalar @$hit_bag == 0;
+	return (1,1) if scalar @$hit_bag == 0;
 
 	my @ph_bag;
 	foreach my $hit (@$hit_bag) {
@@ -41,19 +41,19 @@ sub txnAED {
 
 	my $non_redundant_hits = remove_redundancy($extended_hits);
 
-	my $combined_phs = combine_same_alt_forms($non_redundant_hits);
-
-	my $polished_phs = remove_redundancy($combined_phs);
-
 
 	my $min_AED = 1;
-	foreach my $ph (@$polished_phs) {
+	foreach my $ph (@$non_redundant_hits) {
 		my $AED = ph_AED($pseudo_transcript, $ph, $parameter);
 		$min_AED = $AED if $AED < $min_AED;
 	}
 
-	return $min_AED;
+
+	my $closestAED = cal_closest($pseudo_transcript, \@ph_bag, $parameter);
+
+	return ($min_AED, $closestAED);
 }
+
 #------------------------------------------------------------------------------
 sub gene_AED {
 	my $c = shift; # The gene object;
@@ -73,9 +73,6 @@ sub gene_AED {
 	my $gene_hit = evaluator::pseudo_hit::combine_pseudo_hit (
 				\@transcripts_in_gene);
 
-
-	my $gene_strand = $gene_hit->{strand};
-	my $gene_boundary = [$gene_hit->{b}, $gene_hit->{e}];
 
 	my @bag;
 	foreach my $hit (@$pol_e_hits) {
@@ -207,6 +204,105 @@ sub ph_AED {
 }
 
 #-------------------------------------------------------------------------------
+sub cal_closest {
+	my $transcript = shift;
+	my $bag = shift;
+	my $para = shift;
+
+        if (!defined $para->{exon}) { $para->{exon} = 0;}
+        if (!defined $para->{intron}) { $para->{intron} = 0;}
+        if (!defined $para->{donor}) { $para->{donor} = 0;}
+        if (!defined $para->{acceptor}) { $para->{acceptor} = 0;}
+        if (!defined $para->{start}) { $para->{start} = 0;}
+        if (!defined $para->{stop}) { $para->{stop} = 0;}
+
+	my (@hsp_bag, @intron_bag);
+	foreach my $ph (@$bag) {
+		push @hsp_bag, @{$ph->{hsps}};
+		push @intron_bag, @{$ph->{introns}};
+	}
+
+	my $overlap = 0;
+	my ($score1, $score2) = (0,0);
+	foreach my $hsp (@{$transcript->{hsps}}) {
+		for (my $i = $hsp->[0]; $i<= $hsp->[1]; $i++) {
+			$score1 += $para->{exon};
+
+			if (within($i, \@hsp_bag)) {
+				$overlap += $para->{exon};
+				$score2 += $para->{exon};
+			}
+			elsif (within($i, \@intron_bag)) {
+				$score2 += $para->{intron};
+			}
+		}
+	}
+	foreach my $intron (@{$transcript->{introns}}) {
+                for (my $i = $intron->[0]; $i<= $intron->[1]; $i++) {
+                        $score1 += $para->{intron};
+
+                        if (within($i, \@intron_bag)) {
+                                $overlap += $para->{intron};
+                                $score2 += $para->{intron};
+                        }
+                        elsif (within($i, \@hsp_bag)) {
+                                $score2 += $para->{exon};
+                        }
+                }
+        }
+	
+	$score1 += $para->{start};
+	$score1 += $para->{stop};
+
+	foreach my $ph (@$bag) {
+		if ($ph->{b} eq $transcript->{b}) {
+			$overlap += $para->{start};
+			$score2 += $para->{start};
+
+			last;
+		}
+	}
+        foreach my $ph (@$bag) {
+                if ($ph->{e} eq $transcript->{e}) {
+                        $overlap += $para->{stop};
+			$score2 += $para->{stop};
+                        last;
+                }
+        }
+		
+
+	foreach my $intron (@{$transcript->{introns}}) {
+		my ($donor, $acceptor) = @$intron;
+		$score1 += $para->{donor};	
+		$score1 += $para->{acceptor};
+
+		my ($find_donor, $find_acceptor) = (0,0);
+		foreach my $coor (@intron_bag) {
+			if ($coor->[0] == $intron->[0]) {
+				$find_donor = 1;
+			}
+			if ($coor->[1] == $intron->[1]) {
+				$find_acceptor = 1;
+			}
+		}
+
+		if ($find_donor) {
+			$overlap += $para->{donor};
+			$score2 += $para->{donor};
+		}
+		if ($find_acceptor) {
+			$overlap += $para->{acceptor};
+			$score2 += $para->{acceptor};
+		}
+	}
+	my $congruence = 0.5 * ($overlap/$score1 + $overlap/$score2);
+
+	return 1-$congruence;
+}
+			
+				
+
+#-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
 sub within {
@@ -248,44 +344,6 @@ sub combine {
         return \@bag;
 }
 
-#------------------------------------------------------------------------
-sub combine_same_alt_forms {
-	my $bag = shift;
-
-	my @combined_hits;
-
-	$bag = remove_redundancy($bag);
-
-	foreach my $hit (@$bag) {
-		my @hits_to_be_added;
-
-		next if already_exist($hit, \@combined_hits);
-
-		foreach my $combined_hit (@combined_hits) {
-
-			if (evaluator::pseudo_hit::agree(
-					$hit, $combined_hit)) {
-				my $ph = evaluator::pseudo_hit::combine_pseudo_hit
-						([$hit, $combined_hit]);
-				push @hits_to_be_added, $ph unless 
-					evaluator::pseudo_hit::is_redundant_alt_form
-					($combined_hit, $ph);
-			}
-		}
-		push @combined_hits, @hits_to_be_added;
-		push @combined_hits, $hit;
-
-		my $combined_hits = remove_redundancy(\@combined_hits);
-		@combined_hits = @$combined_hits;
-	}
-
-
-	## Maybe I need to get rid of the redundant clusters and 
-	## short clusters here as well!	
-
-	return \@combined_hits;
-}
-	
 #------------------------------------------------------------------------
 sub ensure_unique {
 	my @hits = @_;
