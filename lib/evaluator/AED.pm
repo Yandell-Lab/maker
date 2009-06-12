@@ -33,9 +33,15 @@ sub txnAED {
 		push @ph_bag, $ph;
 	}
 
-	my $extended_hits = extend_hit(\@ph_bag);
+	foreach my $hit (@ph_bag) {
+		evaluator::pseudo_hit::add_splice($hit);
+	}
 
-	my $combined_phs = combine_same_alt_forms($extended_hits);
+	my $extended_hits = extend_hits(\@ph_bag);
+
+	my $non_redundant_hits = remove_redundancy($extended_hits);
+
+	my $combined_phs = combine_same_alt_forms($non_redundant_hits);
 
 	my $polished_phs = remove_redundancy($combined_phs);
 
@@ -99,192 +105,11 @@ sub gene_AED {
 
 	my $para = {'exon'=>1};
 
-	my $AED = cal($gene_hit->{hsps}, $evi_ph->{hsps}, $para);
+	my $AED = ph_AED($gene_hit, $evi_ph, $para);
 	return $AED;
 }
 	
 #------------------------------------------------------------------------------
-sub cal {
-	my $coor1 = shift; # Annotation coordinations
-	my $coor2 = shift; # Evidence coordinations
-	my $para  = shift;
-
-	if (!defined $para->{exon}) { $para->{exon} = 0;}
-	if (!defined $para->{intron}) { $para->{intron} = 0;}
-	if (!defined $para->{donor}) { $para->{donor} = 0;}
-	if (!defined $para->{acceptor}) { $para->{acceptor} = 0;}
-	if (!defined $para->{start}) { $para->{start} = 0;}
-	if (!defined $para->{stop}) { $para->{stop} = 0;}
-	
-
-	die "Annotation set cannot be empty!\n" 
-		if @$coor1 == 0 ;
-
-	return 1 if @$coor2 == 0;
-
-	my (@array1, @array2);
-
-	# Creating two arrays containing the two annotations, in which 
-	# -1 means UTR, 0 means introns and 1 means exons.
-	foreach my $coor (@$coor1) {
-		my $start = $coor->[0] - 1;
-		my $end   = $coor->[1] - 1;
-
-		for(my $i = $start; $i <= $end; $i++) {
-			$array1[$i] = 1;
-		}
-	}
-
-        foreach my $coor (@$coor2) {
-                my $start = $coor->[0] - 1;
-                my $end   = $coor->[1] - 1;
-
-                for(my $i = $start; $i <= $end; $i++) {
-                        $array2[$i] = 1;
-                }
-        }
-
-        my $start_point = 0; 
-        for (my $i= 0; ; $i++) {
-                last if defined $array1[$i] || defined $array2[$i];
-                $start_point++; 
-		$array1[$i] = -1;
-		$array2[$i] = -1;
-        }
-
-	for (my $i= $start_point; $i<=$#array1; $i++) { 
-		$array1[$i] = 0 unless defined $array1[$i]; }
-	for (my $i= $start_point; $i<=$#array2; $i++) { 
-		$array2[$i] = 0 unless defined $array2[$i]; }
-	
-
-	# Make UTRs
-	for(my $i = $start_point; ; $i++) {
-		last if $array1[$i] == 1;
-		$array1[$i] = -1;
-	}
-	for(my $i = $#array1; ; $i--) {
-		last if $array1[$i] == 1;
-		$array1[$i] = -1;
-	}
-        for(my $i = $start_point; ; $i++) {
-                last if $array2[$i] == 1;
-                $array2[$i] = -1;
-        }
-        for(my $i = $#array2; ; $i--) {
-                last if $array2[$i] == 1;
-                $array2[$i] = -1;
-        }
-
-
-	# Get the coordination of start codon, stop codon, donor site,
-	# and acceptor sites into two hashes: %special1 and %special2.
-	my (%special1, %special2);
-	my ($score1, $score2) = (0,0);
-	for (my $i = $start_point; $i <= $#array1; $i++) {
-		if ($array1[$i] == 1) { $score1 += $para->{exon}; }
-		elsif ($array1[$i] == 0) {
-			$score1 += $para->{intron};
-		}
-		
-		if 	($i == 0 && $array1[$i] == 1) {	
-			$special1{$i} = 'start'; }
-		elsif ($i == $#array1 && $array1[$i] == 1) { 
-			$special1{$i} = 'stop'; 
-		}
-		elsif ($array1[$i] == 1) {
-			if ($array1[$i-1] == -1) { $special1{$i} = 'start';}
-			elsif ($array1[$i-1] == 0) { $special1{$i} = 'acceptor';}
-			elsif ($array1[$i+1] == -1) { $special1{$i} = 'stop';}
-			elsif ($array1[$i+1] == 0) { $special1{$i} = 'donor';}
-		}
-	}
-        for (my $i = $start_point; $i <= $#array2; $i++) {
-                if ($array2[$i] == 1) { $score2 += $para->{exon}; }
-                elsif ($array2[$i] == 0) {
-                        $score2 += $para->{intron};
-                }
-
-                if      ($i == 0 && $array2[$i] == 1) {        
-                        $special2{$i} = 'start'; }
-                elsif ($i == $#array2 && $array2[$i] == 1) { 
-                        $special2{$i} = 'stop'; 
-                }       
-                elsif ($array2[$i] == 1) {
-                        if ($array2[$i-1] == -1) { $special2{$i} = 'start';}
-                        elsif ($array2[$i-1] == 0) { $special2{$i} = 'acceptor';}
-                        elsif ($array2[$i+1] == -1) { $special2{$i} = 'stop';}
-                        elsif ($array2[$i+1] == 0) { $special2{$i} = 'donor';}
-                }
-        }
-
-	while (my ($position, $type) = each %special1) {
-		if ($type eq 'start') { $score1 += $para->{start};}
-		elsif ($type eq 'stop') {
-			$score1 += $para->{stop};
-		}
-		elsif ($type eq 'donor') {
-			$score1 += $para->{donor};
-		}
-		elsif ($type eq 'acceptor') {
-			$score1 += $para->{acceptor};
-		}
-	}
-
-        while (my ($position, $type) = each %special2) {
-                if ($type eq 'start') { $score2 += $para->{start};}
-                elsif ($type eq 'stop') {
-                        $score2 += $para->{stop};
-                }
-                elsif ($type eq 'donor') {
-                        $score2 += $para->{donor};
-                }
-                elsif ($type eq 'acceptor') {
-                        $score2 += $para->{acceptor};
-                }
-        }
-
-	my ($o_exon, $o_intron, $o_start, $o_stop, $o_donor, $o_acceptor)=(0,0,
-		0,0,0,0);
-
-	for (my $i = $start_point; $i <= $#array1 && $i <= $#array2; $i++) {
-		if ($array1[$i] == 0 && $array2[$i] == 0) {
-			$o_intron ++;
-		}
-		elsif ($array1[$i] ==1 && $array2[$i] ==1) {
-			$o_exon ++;
-		}
-	}
-	
-	while (my ($position, $type1) = each %special1) {
-		if (defined $special2{$position}) {
-			my $type2 = $special2{$position};
-			if ($type1 eq 'start' && $type2 eq 'start') {
-				$o_start ++;
-			}
-			elsif ($type1 eq 'stop' && $type2 eq 'stop') {
-				$o_stop ++;
-			}
-			elsif ($type1 eq 'donor' && $type2 eq 'donor') {
-				$o_donor ++;
-			}
-			elsif ($type1 eq 'acceptor' && $type2 eq 'acceptor') {
-		 		$o_acceptor ++;
-			}
-		}
-	}
-
-	my $overlap_score = $o_exon * $para->{exon} + $o_intron * $para->{intron}
-			+ $o_start * $para->{start} + $o_stop   * $para->{stop}
-			+ $o_donor * $para->{donor} + $o_acceptor * $para->{acceptor};
-
-	my $congruence = 0.5 * ($overlap_score/$score1 + $overlap_score/$score2);
-
-	return 1- $congruence;
-}
-		
-
-#-------------------------------------------------------------------------------
 sub ph_AED {
 	my $a = shift;
 	my $b = shift;
@@ -292,15 +117,109 @@ sub ph_AED {
 
 	return 1 if $a->{strand} != $b->{strand};
 
-	my $coorA = $a->{hsps};
-	my $coorB = $b->{hsps};
+        if (!defined $para->{exon}) { $para->{exon} = 0;}
+        if (!defined $para->{intron}) { $para->{intron} = 0;}
+        if (!defined $para->{donor}) { $para->{donor} = 0;}
+        if (!defined $para->{acceptor}) { $para->{acceptor} = 0;}
+        if (!defined $para->{start}) { $para->{start} = 0;}
+        if (!defined $para->{stop}) { $para->{stop} = 0;}
 
-	my $AED = cal($coorA, $coorB, $para);
-	return $AED;
+	my ($score1, $score2) = (0, 0);
+	my $overlap_score;
+
+	foreach my $a_hsp (@{$a->{hsps}}) {
+		$score1 += ($a_hsp->[1]-$a_hsp->[0] + 1) * $para->{exon};
+		
+		for (my $i = $a_hsp->[0]; $i <= $a_hsp->[1]; $i++) {
+			if (within($i, $b->{hsps})) {
+				$overlap_score += $para->{exon};
+			}
+		}
+	}
+	foreach my $b_hsp (@{$b->{hsps}}) {
+		$score2 += ($b_hsp->[1]-$b_hsp->[0] + 1) * $para->{exon};
+	}
+
+	if ($para->{intron} != 0 ) {
+		foreach my $a_intron (@{$a->{introns}}) {
+			$score1 += ($a_intron->[1] - $a_intron->[0] + 1)
+					* $para->{intron};
+		
+			for (my $i=$a_intron->[0]; $i<=$a_intron->[1];$i++) {
+				if (within($i, $b->{introns})) {
+					$overlap_score += $para->{intron};
+				}
+			}
+		}
+		foreach my $b_intron (@{$b->{introns}}) {
+			$score2 += ($b_intron->[1] - $b_intron->[0] + 1)
+					* $para->{intron};
+		}
+	}
+
+	my %special2;
+	$special2{$b->{b}} = 'start';
+	$special2{$b->{e}} = 'stop';
+
+	$score1 += $para->{start};
+	$score1 += $para->{stop};
+	$score2 += $para->{start};
+	$score2 += $para->{stop};
+
+
+	$score1 += (scalar @{$a->{introns}}) * $para->{donor};
+	$score1 += (scalar @{$a->{introns}}) * $para->{acceptor};
+
+	foreach my $b_intron (@{$b->{introns}}) {
+		$special2{$b_intron->[0]} = 'donor';
+		$special2{$b_intron->[1]} = 'acceptor';
+
+		$score2 += $para->{donor};
+		$score2 += $para->{acceptor};
+	}
+
+        foreach my $a_intron (@{$a->{introns}}) {
+		my $donor = $a_intron->[0];
+		my $acceptor = $a_intron->[1];
+
+		if (defined $special2{$donor} &&
+			$special2{$donor} eq 'donor') {
+			$overlap_score += $para->{donor};
+		}
+		if (defined $special2{$acceptor} &&
+			$special2{$acceptor} eq 'acceptor') {
+			$overlap_score += $para->{acceptor};
+		}
+	}
+		
+	if (defined $special2{$a->{b}} &&
+		$special2{$a->{b}} eq 'start') {
+			$overlap_score += $para->{start};
+	}
+        if (defined $special2{$a->{e}} &&
+                $special2{$a->{e}} eq 'stop') {
+                        $overlap_score += $para->{stop};
+        }
+
+	my $congruence = 0.5 * ($overlap_score/$score1 + $overlap_score/$score2);
+
+	return 1-$congruence;
 }
 
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
+#-------------------------------------------------------------------------------
+sub within {
+	my $i      = shift;
+	my $coors  = shift;
+
+	foreach my $coor (@$coors) {
+		return 1 if $i>= $coor->[0] && $i <= $coor->[1];
+	}
+	
+	return 0;
+}
+
 #-------------------------------------------------------------------------------
 sub overlap {
 	my $gene_boundary = shift;
@@ -335,33 +254,29 @@ sub combine_same_alt_forms {
 
 	my @combined_hits;
 
-	@$bag = ensure_unique(@$bag);
-	my $count = -1;
-	while ($count != scalar @combined_hits) {
+	$bag = remove_redundancy($bag);
 
-		$count = @combined_hits;
-		foreach my $hit (@$bag) {
-			my @hits_to_be_added;
+	foreach my $hit (@$bag) {
+		my @hits_to_be_added;
 
-			next if already_exist($hit, \@combined_hits);
+		next if already_exist($hit, \@combined_hits);
 
-			foreach my $combined_hit (@combined_hits) {
+		foreach my $combined_hit (@combined_hits) {
 
-				if (evaluator::pseudo_hit::is_same_alt_form(
-						$hit, $combined_hit)) {
-					my $ph = evaluator::pseudo_hit::combine_pseudo_hit
+			if (evaluator::pseudo_hit::agree(
+					$hit, $combined_hit)) {
+				my $ph = evaluator::pseudo_hit::combine_pseudo_hit
 						([$hit, $combined_hit]);
-					push @hits_to_be_added, $ph unless 
-						evaluator::pseudo_hit::are_same_pseudo_hits
-						($combined_hit, $ph);
-				}
+				push @hits_to_be_added, $ph unless 
+					evaluator::pseudo_hit::is_redundant_alt_form
+					($combined_hit, $ph);
 			}
-			push @combined_hits, @hits_to_be_added;
-			push @combined_hits, $hit;
-
-			@combined_hits = ensure_unique(@combined_hits);
 		}
+		push @combined_hits, @hits_to_be_added;
+		push @combined_hits, $hit;
 
+		my $combined_hits = remove_redundancy(\@combined_hits);
+		@combined_hits = @$combined_hits;
 	}
 
 
@@ -398,7 +313,7 @@ sub already_exist {
 	my $bag = shift;
 
 	foreach my $one (@$bag) {
-		return 1 if evaluator::pseudo_hit::are_same_pseudo_hits
+		return 1 if evaluator::pseudo_hit::is_redundant_alt_form
 				($one, $hit);
 	}
 
@@ -408,157 +323,185 @@ sub already_exist {
 sub remove_redundancy {
 	my $hits = shift;
 
-	return $hits if (scalar @$hits == 0);
-	my $hits_num = -1;
+	my @non_redundant;
 
-	while (scalar @$hits != $hits_num) {
-		$hits_num = scalar @$hits;
-
-		my @new_bag;
-		foreach my $hit (@$hits) {
-			my $status = 'not_redunt';
-
-			foreach my $polished (@new_bag) {
-				if (evaluator::pseudo_hit::is_same_alt_form
-					($polished, $hit)) {
-					my $combined = evaluator::pseudo_hit::combine_pseudo_hit
-						([$polished, $hit]);
-					$polished = $combined;
-				
-					$status = 'redunt';
-					last;
-				}
-			}
-
-			if ($status eq 'not_redunt') {
-				push @new_bag, $hit;
+	foreach my $hit (@$hits) {
+		my $status = 'non_redund';
+		
+		foreach my $good_hit (@non_redundant) {
+			if (evaluator::pseudo_hit::is_redundant_alt_form($hit,
+				$good_hit)) {
+				$status = 'redund';
+				last;
 			}
 		}
-		$hits = \@new_bag;
+
+		push @non_redundant, $hit if $status eq 'non_redund';
 	}
-	return $hits;
+
+	return \@non_redundant;
 }
-	
 #------------------------------------------------------------------------
-sub extend_hit {
-	my $hits = shift;
+sub extend_hits {
+	my $bag = shift;
 
-	my ($start, $end);
-	foreach my $hit (@$hits) {
-		$start = $hit->{b} 
-			if (!defined $start) || $start > $hit->{b};
-		$end = $hit->{e}
-			if (!defined $end) || $end < $hit->{e};
+	my ($b, $e) = ($bag->[0]->{hsps}->[0]->[0], $bag->[0]->{hsps}->[0]->[1]);
+	foreach my $hit (@$bag) {
+		evaluator::pseudo_hit::add_splice($hit);
+
+		if ($hit->{b} < $b) { $b = $hit->{b};}
+		if ($hit->{e} > $e) { $e = $hit->{e};}
 	}
+	
+	my $size = $e-$b+1;
+	my @array;
 
-	## 0 stands for nothing; 1 for coding; 2 for nocoding	
-	my @seq; 
-
-	for (my $i= 0; $i <= $end-$start; $i++) {
-		$seq[$i] = 0;
+	for (my $i = 0; $i<= $size-1; $i++) {
+		$array[$i] = 0;
 	}
+	# 0 stands for unknonw region; 1 for coding; 2 for intron;
+	# -1 for contradicting region;	
 
-	foreach my $hit (@$hits) {
-		my @cors;
+	foreach my $hit (@$bag) {
 		foreach my $hsp (@{$hit->{hsps}}) {
-			push @cors, 
-				$hsp->[0]-$start+1, $hsp->[1]-$start+1;
+			my $left = $hsp->[0] - $b;
+			my $right = $hsp->[1] - $b;
+
+			for (my $i = $left; $i <= $right; $i++) {
+				if ($array[$i] == 0) { $array[$i] = 1;}
+				elsif ($array[$i] == 2) {
+					$array[$i] = -1;
+				}
+			}
 		}
 
-		for (my $i = 0; $i<=$#cors; $i++) {
-			next if $i == 0;
+		foreach my $intron (@{$hit->{introns}}) {
+			my $left = $intron->[0] - $b;
+			my $right = $intron->[1] - $b;
 			
-			my $b = $cors[$i-1] - 1;
-			my $e = $cors[$i] - 1;
-
-			if ( (int($i/2))*2 == $i ) {
-				for (my $j = $b+1; $j <= $e-1; $j++) {
-					$seq[$j] = 2;
-				}
-			}
-			else {
-				for (my $j = $b; $j <= $e; $j++) {
-					$seq[$j] = 1
-						if $seq[$j] == 0;
-				}
-			}
-		}
+			for (my $i = $left; $i <= $right; $i++) {
+                                if ($array[$i] == 0) { $array[$i] = 2;}
+                                elsif ($array[$i] == 1) {
+                                        $array[$i] = -1;
+                                }
+                        }
+                }
 	}
 
-	my @coding_region;
-	my ($left, $right);
-	for (my $i = 0; $i <= $#seq; $i++) {
-		next unless $seq[$i] == 1;
-
-		if ($i == 0 ||$seq[$i-1]!= 1) {
-			$left = $i;
-		}
-		if ($i == $#seq || $seq[$i+1] != 1) {
-			$right = $i;
-			push @coding_region, 
-				[$left+$start, $right+$start];
+	my @conserved;
+	my $left = -1;
+	for (my $i = 0; $i <= $size-1; $i ++) {
+		next if $array[$i] == -1 || $array[$i] == 0;
+		if ($left == -1) { $left = $i; }
+		if (!defined $array[$i+1] || $array[$i+1] != $array[$i]) {
+			push @conserved, { 'b'=> $left + $b, 'e'=>$i + $b, 
+					   'type' => $array[$i],
+					 };
+			$left = -1;
 		}
 	}
 
 	my @extended_hits;
-	foreach my $hit (@$hits) {
-		
-		my $new_b = $hit->{b};	
-		my $new_e = $hit->{e};
-
+	foreach my $hit (@$bag) {
+		my @left_additional_hsps;
+		my @right_additional_hsps;
 		my @new_hsps;
-		foreach my $hsp (@{$hit->{hsps}}) {
 
-			my ($new_left, $new_right) = @$hsp;
-			if ($hsp->[0] == $hit->{b}) {
-				
-				$new_left = extend($hsp->[0], 
-					\@coding_region,'left');
-				$new_b = $new_left;
-			}
-			if ($hsp->[1] == $hit->{e}) {
-				$new_right = extend($hsp->[1],
-					\@coding_region, 'right');
-				$new_e = $new_right;
-			}
+		my $first_hsp = $hit->{hsps}->[0];
+		my $last_hsp  = $hit->{hsps}->[scalar @{$hit->{hsps}}-1];
 
-			push @new_hsps, [$new_left, $new_right];
+		my $new_left = $first_hsp->[0];
+		my $new_right = $last_hsp->[1];
+
+		if ($array[$first_hsp->[0] - $b] == 1) {	
+			my $first_tag = 1;
+			my $left_coor = $first_hsp->[0];
+
+			for (my $k = scalar @conserved -1; $k>=0; $k--) {
+				my $region = $conserved[$k];
+
+				next unless $region->{b} <= $first_hsp->[0];
+				if ($first_tag == 1) {
+
+					$new_left = $region->{b};
+					$left_coor = $region->{b} - 1;
+					$first_tag = 0;
+				}
+
+				else {
+					last if $left_coor < $b || $array[$left_coor-$b] == -1
+						|| $array[$left_coor-$b] == 0;
+
+					if ($array[$left_coor-$b] == 1) {
+						unshift @left_additional_hsps, [$region->{b}, $region->{e}];
+					}
+
+					$left_coor = $region->{b} - 1;
+				}
+			}
 		}
 
-		my $new_hit = {'b'=> $new_b, 'e'=> $new_e,
-				'hsps'=>\@new_hsps, 
-				'strand' => $hit->{strand},
+		if ($array[$last_hsp->[1] - $b] == 1) {
+                        my $first_tag = 1;
+                        my $right_coor = $last_hsp->[1];
+
+                        for (my $k = 0; $k <= scalar @conserved -1; $k++) {
+                                my $region = $conserved[$k];
+
+                                next unless $region->{e} >= $last_hsp->[1];
+                                if ($first_tag == 1) {
+
+                                        $new_right = $region->{e};
+                                        $right_coor = $region->{e} + 1;
+                                        $first_tag = 0;
+                                }       
+
+                                else {
+                                        last if  $right_coor > $e|| $array[$right_coor-$b] == -1
+                                                || $array[$right_coor-$b] == 0;
+
+                                        if ($array[$right_coor-$b] == 1) {
+                                                push @right_additional_hsps, [$region->{b}, $region->{e}];
+                                        }
+
+                                        $right_coor = $region->{e} + 1;
+                                }
+                        }
+                }
+
+		if (scalar @{$hit->{hsps}} == 1) {
+			push @new_hsps, @left_additional_hsps;
+			push @new_hsps, [$new_left, $new_right];
+			push @new_hsps, @right_additional_hsps;
+		}
+	
+		else {	
+			push @new_hsps, @left_additional_hsps;
+			push @new_hsps, [$new_left, $first_hsp->[1]];
+
+			if (scalar @{$hit->{hsps}} > 2) {
+				for (my $l = 1; $l <= scalar @{$hit->{hsps}} - 2; $l ++) {
+					push @new_hsps, $hit->{hsps}->[$l];
+				}
+			}
+
+			push @new_hsps, [$last_hsp->[0], $new_right];
+			push @new_hsps, @right_additional_hsps;
+		}
+			
+		my $new_hit =  {  'b' => $new_hsps[0]->[0],
+       				  'e' => $new_hsps[scalar @new_hsps -1]->[1],
+			          'hsps' => \@new_hsps,
+			       	  'strand' => $hit->{strand},
 				};
+		evaluator::pseudo_hit::add_splice($new_hit);
+	
 		push @extended_hits, $new_hit;
+
 	}
 
 	return \@extended_hits;
-}		
-#------------------------------------------------------------------------
-sub extend {
-	my $cor = shift;
-	my $coding_regions = shift;
-	my $tag = shift;
-
-	if ($tag eq 'left') {
-		foreach my $region (@$coding_regions) {
-			if ($cor >$region->[0] && $cor <= $region->[1]) {
-				return $region->[0];
-			}
-		}
-		return $cor;
-	}
-
-	else {
-		foreach my $region (@$coding_regions) {
-                        if ($cor <$region->[1] && $cor >= $region->[0]) {
-                                return $region->[1];
-                        }
-                }
-                return $cor;
-        }
-}
+}	
+				
 #------------------------------------------------------------------------
 1;
-
-

@@ -43,6 +43,7 @@ sub convert_to_pseudo_hit {
 		    'strand'	=> $strand,
 		    'hsps'	=> \@sorted_hsps,
 		  };
+	add_splice($combined_hit);
 
 	return $combined_hit;
 }
@@ -53,22 +54,31 @@ sub combine_pseudo_hit {
 	my $strand = $pseu_hits->[0]->{strand};
 
 	my @hsps;
+	my @introns;
 	my ($b, $e) = ($pseu_hits->[0]->{b}, $pseu_hits->[0]->{e});;
 		
 	foreach my $ph (@$pseu_hits) {
 		die "Cannot combine hits in different strands!" if
 			$ph->{strand} != $strand;
 		push @hsps, @{$ph->{hsps}};
+
+		add_splice($ph);
+		push @introns, @{$ph->{introns}};
+
 		$b = $ph->{b} if $b > $ph->{b};
 		$e = $ph->{e} if $e < $ph->{e};
+
 	}
 
 	my $combined_hsps = combine_pieces(\@hsps);
+	
+	my $combined_introns = combine_introns(\@introns);
 
 	my $combined_ph = {'b'	=> $b,
 			   'e'  => $e,
 			   'strand' => $strand,
 			   'hsps' => $combined_hsps,
+			   'introns' => $combined_introns,
 			  };
 
 	return $combined_ph;
@@ -76,113 +86,100 @@ sub combine_pseudo_hit {
 
 
 #------------------------------------------------------------------------
-sub is_same_alt_form {
+sub agree {
         my $a     = shift;
         my $b     = shift;
-	my $flank = shift;
 
-	die "only one feature in is_same_alt_form!\n"
-	unless defined($a) && defined($b);
+	return 0 if $a->{strand} ne $b->{strand};
 
-	if ($a->{strand} != $b->{strand}) {return 0;}
-	if ($a->{b} >$b->{e} || $a->{e} < $b->{b}) {return 0;}
+	my $agree = 1;
+	foreach my $a_intron (@{$a->{introns}}) {
+	# Find every hit_a's intron in hit_b;
 
+	# However, if the intron in hit_a is outside hit_b's region,
+	# there is no need to find it (agreed intron).
+		next unless overlap($a_intron, [@{$b->{introns}}, @{$b->{hsps}}]);
 
-	my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $flank);
-
-	my $a_to_b_str = compare_phat_hits($a, $b, $flank);
-
-	if     ($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0+$/){
-		return 1;
+		my $found = 0;
+		foreach my $b_intron (@{$b->{introns}}) {
+			if ($a_intron->[0] == $b_intron->[0] &&
+			    $a_intron->[1] == $b_intron->[1] ) {
+				$found = 1;
+				last;
+			}
+		}
+		return 0 if $found == 0;
 	}
 
-        elsif ($s_to_a_str =~ /[^0]0+[^0]/){
-		#print STDERR "QAAAA s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
-		#print STDERR $a->name." ".$b->name."\n";
-		#sleep 3;
-                return 0;
-        }
-        elsif ($s_to_b_str =~ /[^0]0+[^0]/){
-                #print STDERR "QBBBB s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
-		#print STDERR $a->name." ".$b->name."\n";
-                #sleep 3;
+        foreach my $b_intron (@{$b->{introns}}) {
+	# Find every hit_b's intron in hit_a;
+		next unless overlap($b_intron, [@{$a->{introns}}, @{$a->{hsps}}]);
 
-                return 0;
+                my $found = 0;
+                foreach my $a_intron (@{$a->{introns}}) {
+                        if ($a_intron->[0] == $b_intron->[0] &&
+                            $a_intron->[1] == $b_intron->[1] ) {
+                                $found = 1;
+                                last;
+                        }
+                }
+                return 0 if $found == 0;
         }
-	else {
-		#print STDERR "not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str".$a->name." ".$b->name."\n";
-		#sleep 3;
-		return 1;
-	}
+
+	return 1;
 }
 #------------------------------------------------------------------------
 sub is_redundant_alt_form {
-        my $a     = shift;
-        my $b     = shift;
-        my $seq   = shift;
-        my $flank = shift;
+	my $a = shift;
+	my $b = shift;
 
-       die "only one feature in is_redundant_form!\n"
-        unless defined($a) && defined($b);
+	return 0 if $a->{strand} ne $b->{strand};
+	return 0 if $a->{b}	!= $b->{b};
+	return 0 if $a->{e}	!= $b->{e};
+	return 0 if (scalar @{$a->{hsps}}) != (scalar @{$b->{hsps}});
 
-	# note that b will always have fewer exons or be shorter...
+	for (my $i = 0; $i <=  scalar @{$a->{hsps}} - 1 ; $i ++) {
+		my $a_hsp = $a->{hsps}->[$i];
+		my $b_hsp = $b->{hsps}->[$i];
 
-	return 0 if $a->{strand} != $b->{strand};
-        my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $seq, $flank);
+		return 0 if $a_hsp->[0] != $b_hsp->[0];
+		return 0 if $a_hsp->[1] != $b_hsp->[1];
+	}
 
-        my $a_to_b_str = compare_phat_hits($a, $b, $flank);
-	my $b_to_a_str = compare_phat_hits($b, $a, $flank);
-        if     ($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0*$/){
-                return 1;
-        }
-        elsif ($b_to_a_str =~ /^B?1+b?$/ && $a_to_b_str =~ /^0*A?1+a?$/){
-                #print STDERR "RAAAA s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
-                #sleep 3;
-                return 1;
-        }
-        elsif ($s_to_a_str =~ /^1+$/ && $s_to_b_str =~ /^0*A?1+a?$/){
-                #print STDERR "RBBBB s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
-                sleep 3;
-                #return 1;
-        }
+	if (defined $a->{introns} || defined $b->{introns}) {
+		add_splice($a);
+		add_splice($b);
 
-        else {
-                #print STDERR "redun not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str a_to_b_str:$a_to_b_str b_to_a_str:$b_to_a_str".$a->name." ".$b->name."\n";
-                #sleep 3;
-                return 0;
-        }
+		return 0 if (scalar @{$a->{introns}}) != (scalar @{$b->{introns}});
+
+		for (my $i = 0; $i <=  (scalar @{$a->{introns}})-1 ; $i ++) {
+			my $a_intron = $a->{introns}->[$i];
+			my $b_intron = $b->{introns}->[$i];
+			
+			return 0 if $a_intron->[0] != $b_intron->[0];
+			return 0 if $a_intron->[1] != $b_intron->[1];
+
+		}
+	}
+
+	return 1;
+	
 }
 #------------------------------------------------------------------------
 sub overlap {
-       my $hit_a = shift;
-       my $hit_b = shift;
-       my $what  = shift;
-       my $r     = shift || 0;
+	my $coor_a = shift;
+	my $coors  = shift;
 
-
-        my $sorted_a = PhatHit_utils::sort_hits($hit_a, $what);
-        my $sorted_b = PhatHit_utils::sort_hits($hit_b, $what);
-
-        foreach my $hsp_a (@{$sorted_a}){
-
-                my $aB = $hsp_a->nB($what);
-                my $aE = $hsp_a->nE($what);
-
-		($aB, $aE) = ($aE, $aB) if $aB > $aE;
-
-                foreach my $hsp_b (@{$sorted_b}){
-                        my $bB = $hsp_b->nB($what);
-                        my $bE = $hsp_b->nE($what);
-
-			($bB, $bE) = ($bE, $bB) if $bB > $bE;
-                        my $class = compare($aB, $aE, $bB, $bE, $r);
-
-			return 1 if $class ne '0'
-			
+	foreach my $coor_b (@$coors) {
+		unless ($coor_a->[0] > $coor_b->[1] ||
+			$coor_a->[1] < $coor_b->[0]) {
+			return 1;
 		}
 	}
+
 	return 0;
 }
+		
 #------------------------------------------------------------------------
 sub compare_by_shadow {
         my $a     = shift;
@@ -401,6 +398,26 @@ sub sort_hits {
 	return \@sorted;
 }
 #------------------------------------------------------------------------
+sub combine_introns {
+	my $introns = shift;
+
+	my %introns;
+	foreach my $intron (@$introns) {
+		# Filter out same introns;
+		$introns{$intron->[0]} = $intron;
+	}
+
+	my @unique_introns;
+	while (my ($key, $intron) = each %introns) {
+		push @unique_introns, $intron;
+	}
+
+	@unique_introns = sort {$a->[0] <=> $b->[0]} @unique_introns;
+
+	return \@unique_introns;
+}
+
+#------------------------------------------------------------------------
 sub combine_pieces {
 	my $coors = shift;
 
@@ -471,6 +488,35 @@ sub are_same_pseudo_hits {
 
 	return 1;
 }
+#------------------------------------------------------------------------
+sub add_splice {
+	my $hit = shift;
+
+	return if defined $hit->{introns};
+
+	my @introns = ();
+	
+	if (scalar @{$hit->{hsps}} == 1) {
+		$hit->{introns} = \@introns;
+		return;
+	}
+
+	my ($b, $e);
+	for (my $i = 0; $i <= scalar (@{$hit->{hsps}} -1 ); $i ++) {
+		my $hsp = $hit->{hsps}->[$i];
+
+		if ($i == 0) {  $b = $hsp->[1]+1; }
+		else {
+			$e = $hsp->[0]-1;
+			push @introns, [$b, $e];
+			
+			$b = $hsp->[1]+1;
+		}
+	}
+
+	$hit->{introns} = \@introns;
+}
+	
 #------------------------------------------------------------------------
 1;
 
