@@ -1,0 +1,41 @@
+#! /usr/bin/perl
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+use Fasta;
+use Iterator::Fasta;
+use File::Temp qw(tempfile);
+
+my $file = shift;
+
+if(! $file){
+    exit;
+}
+
+#set up names and variables
+my $fasta_iterator = new Iterator::Fasta($file);
+
+#write fastas here
+my ($FA, $t_full) = tempfile;
+while (my $fasta = $fasta_iterator->nextEntry()) {
+    my $def = Fasta::getDef(\$fasta);
+    my $seq_ref = Fasta::getSeqRef(\$fasta);
+
+    #fix non standard peptides
+    $$seq_ref =~ s/\*//g;
+    $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxABCDEFGHIKLMNPQRSTVWYZX\-\n]/C/g;
+
+    #Skip empty fasta entries
+    next if($$seq_ref eq '');
+    
+    #reformat fasta, just incase
+    my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+    
+    #build full file
+    print $FA $$fasta_ref;
+}
+close($FA); #close full file
+
+#move finished files into place
+system("mv $t_full $file");
