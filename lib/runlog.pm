@@ -264,9 +264,7 @@ sub _clean_files{
 			$rm_key{preds}++; #almost all changes affect final predictions
 		    }
 		    
-		    if (-e $gff_file) {
-			$rm_key{gff}++; #always rebuild gff when some option has changed
-		    }
+		    $rm_key{gff}++; #always rebuild gff when some option has changed
 		    
 		    if ($key eq 'max_dna_len') {
 			$rm_key{all}++;
@@ -535,10 +533,10 @@ sub _clean_files{
 	    }
 	    
 	    if (exists $rm_key{gff}) {
-		print STDERR "MAKER WARNING: The gff file $gff_file must now be removed.\n";
+		print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n";
 		push (@files, $gff_file);
-		push (@files, <$out_base/evaluator/*.eva>);
-		push (@files, <$out_base/*.maker.*.fasta>);
+		push (@files, @{[<$out_base/evaluator/*.eva>]});
+		push (@files, @{[<$out_base/*maker*.fasta>]});
 	    }
 	    
 	    #delete files in the void

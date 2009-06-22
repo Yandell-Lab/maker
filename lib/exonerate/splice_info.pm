@@ -24,16 +24,16 @@ sub splice_code {
 	my $a = shift;
 
 	my $str = '';
-        if    ($d eq 'gt' && $a eq 'ag') {
+        if    ($d =~ /^gt$/i && $a =~ /^ag$/i) {
        		$str = '+';
         }
-        elsif ($d eq 'ct' && $a eq 'ac') {
+        elsif ($d =~ /^ct$/i && $a =~ /^ac$/i) {
                 $str = '-';
         }
-        elsif ($d eq 'at' && $a eq 'ac'){
+        elsif ($d =~ /^at$/i && $a =~ /^ac$/i){
                $str = '+';
         }
-        elsif ($d eq 'gt' && $a eq 'at'){
+        elsif ($d =~ /^gt$/i && $a =~ /^at$/i){
                $str = '-';
         }
 
@@ -108,9 +108,9 @@ sub get_splice_str {
     my $sorted = PhatHit_utils::sort_hits($hit);
     
     my $splice_str = '';
-    for (my $i = 1; $i < @{$sorted}; $i++){
-	my $pre_hsp = $sorted->[$i-1];
-	my $pos_hsp = $sorted->[$i];
+    for (my $i = 0; $i < @{$sorted} - 1; $i++){
+	my $pre_hsp = $sorted->[$i];
+	my $pos_hsp = $sorted->[$i+1];
 		
 	my $code = splice_code($pre_hsp->donor(),
 			       $pos_hsp->acceptor(),
@@ -148,7 +148,7 @@ sub set_donors_acceptors {
 	    my $p = ($strand == 1) ? $B - $length : $B + 1; #substr start position
 	    my $acceptor = substr($$seq, $p, $length);
 	    $acceptor = Fasta::revComp($acceptor) if($strand == -1);
-	    $pre_hsp->{acceptor} = $acceptor;
+	    $pos_hsp->{acceptor} = $acceptor;
 	}
     }
 } 

@@ -43,11 +43,11 @@ foreach my $f (@mRNAs){
 }
 
 foreach my $g (@genes){
-    my $gene_id = $g->{Name};
+    my $gene_id = $g->{ID};
     my $g_mRNAs = $mRNAinx{$g->{ID}};
 
     foreach my $t (@$g_mRNAs){
-	my $transcript_id = $t->{Name};
+	my $transcript_id = $t->{ID};
 	my $t_stuff = $stuffinx{$t->{ID}};
 
 	my @UTRs   = grep {$_->{type} =~ /UTR$/} @$t_stuff;

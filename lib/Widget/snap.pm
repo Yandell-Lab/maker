@@ -65,7 +65,7 @@ sub prep_for_genefinder {
         my @coors;
         my $plus  = 0;
         my $minus = 0;
-       my $least;
+	my $least;
         my $most;
         foreach my $hit (@t_data){
                 foreach my $hsp ($hit->hsps()){
@@ -288,6 +288,8 @@ sub get_xdef {
 	my $offset  = shift;
 	my $i_flank = shift;	
 
+	my @index;
+
         my $p_pieces = Shadower::getPieces($seq, $p_coors, 0);
 
         my @xdef;
@@ -325,9 +327,8 @@ sub get_xdef {
 		my $c = "Coding\t".$i_b."\t".$i_e;
 		$c .= "\t$s\t-100\t\.\t\.\t\.\tADJ";
 		push(@xdef, $c);
-
-
         }
+
 	return \@xdef;
 }
 #-------------------------------------------------------------------------------

@@ -4,7 +4,8 @@ use Getopt::Std;
 
 ##### Initialize Threshhold  ####
 my @thresh = ();
-use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l);
+my $thrAED = 0.5;
+use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x);
 
 push @thresh, 0.5;
 push @thresh, 0.5;
@@ -13,7 +14,8 @@ push @thresh, 0;
 push @thresh, 0;
 push @thresh, 75;
 
-getopts("hc:e:o:a:t:");
+
+getopts("hc:e:o:a:t:x");
 my $usage = "maker2zff.pl directory name [options]
 
 directory  - the location of the gff files to use for the hmm
@@ -27,6 +29,7 @@ For determining which genes are High Confidence for Retraining, there are 6 crit
 -a fraction  The fraction of splice sites confirmed by an ab-initio SNAP prediction, default 0
 -t fraction  The fraction of exons the overlap an ab-initio SNAP prediction, default 0
 -l number    The min length of the protein sequence produced by the mRNA
+-x number    Max AED to allow 0.5 is default
 ";
 
 if ($opt_c) {$thresh[0] = $opt_c}
@@ -35,6 +38,7 @@ if ($opt_o) {$thresh[2] = $opt_o}
 if ($opt_a) {$thresh[3] = $opt_a}
 if ($opt_t) {$thresh[4] = $opt_t}
 if ($opt_l) {$thresh[5] = $opt_l}
+if ($opt_x) {$thrAED = $opt_x}
 
 my %id2name = ();
 my %status = ();
@@ -62,17 +66,22 @@ foreach my $file (@files) {
     open GFF, "<$dir/$file" or die $!;
     while (my $line = <GFF>) {
 	chomp($line);
-	if ($line =~ m/^\s*#/) {
-	    next;
-        } elsif ($line =~ m/^\s*$/) {
-	    next;
-        } elsif ($line =~ m/^>(\S+)/) {
-	    my $header = $1;
-	    $seq{$header} = "";
-	    while (<GFF>) {
-		$seq{$header} = join("", $seq{$header}, $_)
+        if ($line =~ m/\#\#FASTA/) {
+	    my $header;
+	    while (my $d = <GFF>) {
+		if($d =~ /^>(\S+)/){
+		    $header = $1;
+		    $seq{$header} = "";
+		}
+		else{
+		    $seq{$header} .= $d;
+		}
 	    }
-        } else {
+        }
+	elsif($line =~ /^\s*\#|^\n$|^\s*$/){
+	    next;
+	}
+	else {
 	    my ($seqid, $source, $tag, $start, $end, $score, $strand, $phase, $annot) = split(/\t/, $line);
 	    my %annotation = split(/[;=]/, $annot);
 	    if ($tag eq "mRNA" && $source eq "maker") {
@@ -80,7 +89,11 @@ foreach my $file (@files) {
 		my $lname = $annotation{'Name'};
 		my $parent = $annotation{'Parent'};
 		my ($name, $qi) = split(/\s+/, $lname);
-		my $ishc = is_hc($qi);
+		if(! $qi){
+		    ($qi) = $line =~ /_QI\=([^\;\n]+)/;
+		}
+		my ($AED) = $line =~ /_AED\=([^\;\n]+)/;
+		my $ishc = is_hc($qi, $AED);
 		if ($ishc == 1 ) {
 		    $hc{$id} = 1;
 		}
@@ -118,6 +131,8 @@ foreach my $seqid (sort {$a cmp $b} keys %exons) {
 
 sub is_hc {
     my $qi = shift @_;
+    my $AED = shift @_;
+
     my @q = split(/\|/, $qi);
     my @qual = (@q[1..5],$q[8]);
     my $hc = 1;
@@ -126,5 +141,8 @@ sub is_hc {
 	    $hc = 0;
 	}
     }
+
+    $hc = 0 if($AED > $thrAED);
+
     return $hc;
 }

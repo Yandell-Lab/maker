@@ -1435,7 +1435,6 @@ sub runBlastn {
       $command .= " gspmax=100";
       $command .= " hspsepqmax=$split_hit";
       $command .= " lcmask";
-      $command .= " wordmask=seg";
       $command .= " gi";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
@@ -1697,7 +1696,6 @@ sub runBlastx {
       #$command .= " hspsepqmax=10000";
       $command .= " lcmask";
       $command .= " kap";
-      $command .= " wordmask=seg";
       $command .= " gi";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
@@ -1935,7 +1933,6 @@ sub runtBlastx {
       $command .= " gspmax=100";
       $command .= " hspsepqmax=$split_hit";
       $command .= " lcmask";
-      $command .= " wordmask=seg";
       $command .= " gi";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
