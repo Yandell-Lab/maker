@@ -1,6 +1,16 @@
 #! /usr/bin/perl -w
 use strict;
 
+my $usage = "
+Usage:
+       add_utr_start_stop_gff <maker_gff3_file>
+
+       Use this script to add UTR and start and stop codon entries
+       to a maker produced gff3 file.
+
+
+";
+
 my $COUNT = 1;
 my $NUM = 1;
 my %INDEX;
@@ -8,6 +18,17 @@ my %INDEX;
 my $file = shift;
 my $header;
 my $footer;
+
+if(! $file){
+    print $usage;
+    exit(1);
+}
+
+if(! -e $file){
+    warn "ERROR: File does not exist\n";
+    print $usage;
+    exit(1);
+}
 
 my @regions = ({chr => 'I',  b => '1000001',  e => '2000000'},
 	       {chr => 'I',  b => '14000001', e => '15000000'},

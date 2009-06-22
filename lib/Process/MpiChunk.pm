@@ -7,10 +7,6 @@ use strict;
 use Error qw(:try);
 use Error::Simple;
 use Storable;
-use runlog;
-use GI;
-use maker::auto_annotator;
-use evaluator::evaluate;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
