@@ -81,11 +81,10 @@ sub prepare {
 
       $VARS->{seq_id} = Fasta::getSeqID(\$VARS->{fasta});
       $VARS->{safe_id} = Fasta::seqID2SafeID($VARS->{seq_id});
-
-      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, 'STARTED');
       $VARS->{c_flag} = $VARS->{DS_CTL}->continue_flag($VARS->{seq_id});
 
       my $failed .= "$outname.failed/".$VARS->{safe_id}.".fasta";
+
       if(! $VARS->{c_flag}){
 	  warn "WARNING: ".$VARS->{seq_id} ."failed 2 time and will not be tried again\n",
 	       "The fasta sequence will be saved for debugging in $failed\n";
@@ -95,10 +94,13 @@ sub prepare {
 	  open(my $OUT, ">$failed");
 	  print $OUT $VARS->{fasta};
 	  close($OUT);
+	  $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, 'DIED_PERMANENT');
       }
       else{
 	  unlink($failed) if(-e $failed); #remove old failed
       }
+
+      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, 'STARTED');
    }
    catch Error::Simple with {
       my $E = shift;
@@ -304,7 +306,7 @@ sub _go {
 	    $command .= " -appl $app -i $ifile -o $ofile";
 
 	    my $w = new Widget::iprscan();
-	    print STDERR "running iprscan $app...\n";
+	    print STDERR "running iprscan $app...\n" unless($main::quiet);
 	    $w->run($command);
 
 	    unlink($ifile);

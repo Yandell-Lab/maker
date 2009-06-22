@@ -35,10 +35,19 @@ sub run {
 	   $self->print_command($command);
 	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 	   local $/ = \1;
+	   my $err;
 	   while (my $line = <CHLD_ERR>){
 	      print STDERR $line unless($main::quiet);
+	      $err .= $line;
 	   }
 	   waitpid $pid, 0;
+	   
+	   my $fail;
+	   if($err !~ /^SUBMITTED iprscan-\d+-\d+\n*$/){
+	       $fail = 1;
+	   }
+
+	   die "ERROR: Iprscan failed\n" if ($? != 0 || $fail);
 	}
 	else {
 	   die "you must give Widget::iprscan a command to run!\n";

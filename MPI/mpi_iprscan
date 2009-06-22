@@ -173,6 +173,8 @@ GetOptions("i=s" => \$infile,
 	   "cli" => \$cli, #just used to strip off the option
 	   );
 
+$main::quiet = 1; #suppress status messages
+
 if(! @appl){
     my $conf = Cwd::abs_path($EXE);
     $conf =~ s/[^\/]+$//;
@@ -740,21 +742,6 @@ sub node_thread {
 		$tier->update_chunk($res);
 	    }
 	    
-	    #run the tier as far as possible
-	    $tier->run;
-	    
-	    #get all chunks available
-	    my $chnk = $tier->next_chunk;
-	    while(my $o_chnk = $tier->next_chunk){
-		$o_chnk = freeze(\$o_chnk);
-		push (@chunks, $o_chnk);
-	    }
-	    #get chunk results from other nodes
-	    while(my $res = shift @returned_chunks){
-		$res = ${thaw($res)};
-		$tier->update_chunk($res);
-	    }
-
 	    #run the tier as far as possible
 	    $tier->run;
 	    
