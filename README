@@ -13,7 +13,7 @@ reason, you must first install a number of programs that MAKER depends
 on.
 
 
-To install maker, you will first need to install the following
+To install MAKER, you will first need to install the following
 external programs:
 
     *PERL 5.8.0 or higher
@@ -24,8 +24,8 @@ external programs:
 
 You must also install one of the following:
 
-    *Wu-BLAST 2.0 or higher (Wu-BLAST is becoming AB-BLAST which can
-     not yet be downloaded)
+    *Wu-BLAST 2.0 or higher
+     (Wu-BLAST is becoming AB-BLAST which can not yet be downloaded)
 	or
     *NCBI BLAST 2.2.X or higher
      (http://www.ncbi.nlm.nih.gov/BLAST/download.shtml)
@@ -33,8 +33,8 @@ You must also install one of the following:
 You might want to also install these optional external programs:
 
     *Augustus 2.0 or higher (augustus.gobics.de)
-    *GeneMark.hmm-E 3.9 or higher (exon.biology.gatech.edu)
-    *FgenesH 2.6 or higher (www.softberry.com/) - requires licence
+    *GeneMark-ES (exon.biology.gatech.edu)
+    *FGENESH 2.6 or higher (www.softberry.com) - requires licence
 
 To install mpi_maker, you must have an mpi package installed, try the
 following:
@@ -42,8 +42,10 @@ following:
     *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
 
 Note: Remember to install MPICH2 with the --enable-sharedlibs flag set
-to the appropriate value (See MPICH2 Installer's Guide at
-http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs).
+to the appropriate value.  See MPICH2 Installer's Guide at:
+http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
+
+Also see the mpi_maker installation instructions found further bellow.
 
 
 Notes:
@@ -66,17 +68,17 @@ Notes:
    website.
 5) Please note the location of all of the programs that you have
    installed, and add them to you $PATH variable in your .profile
-   file.  You will need this information in the maker.exe file, one
+   file.  You will need this information in the maker_exe file, one
    of MAKER's 3 control files.
 
 Now that you have all the necessary programs installed, MAKER can be
 unpacked using:
 
- tar xvfz maker.tar.gz
+ tar -zxvf maker.tar.gz
 
-This will create a directory called maker with 5 sub directories:
+This will create a directory called MAKER with 5 sub directories:
 
-    bin    - contains the maker executables.
+    bin    - contains the MAKER executables.
     lib    - contains all the necessary perl libaries for MAKER.
     MPI    - contains MPI specific data to configure MAKER for a
              cluster that supports MPI.
@@ -91,30 +93,7 @@ to compile required perl modules.
 
 Now you can run MAKER!!
 
-Maker uses control files to guide each run.  Generic control files can
-be built using the -CTL flag in maker.  These control files can then
-be edited by the user to identify the location of all required input
-data and statistics.  Control files are run specific and seperate
-control will need to be built for each genome given to maker.  Maker
-will look for control files in the current working directory, so it is
-recomended that maker should be ran in a seperate directory containing
-unique control files for each genome.
-
-Control files:
-
-    1. maker_exe.ctl - contains the path information for needed
-       executables.
-
-    2. maker_bopts - contains filtering statistics for BLAST and
-       Exonerate.
-
-    3. maker_opts.ctl - contains all other information for MAKER,
-       including the location of the input genome file.
-
-Always remember to examine the control files before each run of MAKER
-on your specific data.
-
-Programs required by maker rely on certain environmental variables
+Programs required by MAKER rely on certain environmental variables
 being set.  If you have not set these variables per the installation
 instructions of the external programs, a reminder list is provided
 below:
@@ -137,103 +116,29 @@ export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
 
 MPI MAKER INSTALL
 
-If you are running maker on an MPI capable cluster, you can install an
-MPI version of maker by doing the following:
+If you are running MAKER on an MPI capable cluster, you can install an
+MPI version of MAKER by doing the following:
 
-    1. Install standard maker and verify that it runs.
+    1. Install standard MAKER and verify that it runs.
     2. Install MPICH2 with the --enable-sharedlibs flag set to the
        appropriate value (See MPICH2 documentation)
-    3. Use cd to change to the MPI subdirectory in the maker
+    3. Use cd to change to the MPI subdirectory in the MAKER
        instalation folder (i.e. maker/MPI/)
     4. Run Install.PL by typing: perl Install.PL
 
-A new version of maker called mpi_maker should now be installed under
+A new version of MAKER called mpi_maker should now be installed under
 maker/bin.
 
 To run mpi_maker, first verify that your mpi environment is initiated,
 (i.e. using the mpdboot or mpd command). Now start mpi_maker via
 mpiexec.
 
-Example: (This will run MAKER on 3 nodes or processors)
+Example: (This will run MAKER on 4 nodes or processors)
 
-mpiexec -n 3 perl maker_directory/maker/bin/mpi_maker maker_opts.ctl \
-maker_bopts.ctl maker_exe.ctl
+mpiexec -n 4 mpi_maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
 
 Please see the documentation of the MPI environment you use for
 instructions on how to initiate an MPI process.
-
-#---------------------------------------------------------------------
-
-MAKER USAGE STATEMENT
-
-Usage:
-
-maker [options] <maker_opts> <maker_bopts> <maker_exe> <evaluator>
-
-Maker is a program that produces gene annotations in GFF3 file format
-using evidence such as EST alignments and protein homology.  Maker can
-be used to produce gene annotations for new genomes as well as update
-annoations from existing genome databases.
-
-The four input arguments are user control files that specify how maker
-should behave. The evaluator options file contains control options
-specific for the evaluation of gene annotations. All options for maker
-should be set in the control files, but a few can also be set on the
-command line.  Command line options provide a convenient machanism to
-override commonly altered control file values.
-
-Input files listed in the control options files must be in fasta
-format.  Please see maker documentation to learn more about control
-file configuration.  Maker will automatically try and locate the user
-control files in the current working directory if these arguments are
-not supplied when initializing maker.
-
-It is important to note that maker does not try and recalculated data
-that it has already calculated.  For example, if you run an analysis
-twice on the same dataset file you will notice that maker does not
-rerun any of the blast analyses, but instead uses the blast analyses
-stored from the previous run.  To force maker to rerun all analyses,
-use the -f flag.
-
-
-Options:
-
-  -genome|g <filename> Specify the genome file.
-
-  -predictor|p <type>  Selects the predictor(s) to use when
-                       building annotations.  Use a ',' to
-                       seperate types (no spaces).
-                       i.e. -predictor=snap,augustus,fgenesh
-
-                       types: snap
-                              augustus
-                              fgenesh
-                              genemark
-                              est2genome (Uses EST's directly)
-                              abinit (ab-initio predictions)
-                              model_gff (Passes through GFF3
-                                         annotations)
-
-  -RM_off|R           Turns all repeat masking off.
-
-  -retry   <integer>  Rerun failed contigs up to the specified count.
-
-  -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
-
-  -force|f            Forces maker to delete old files before running
-                      again.  This will require all blast analyses to
-                      be rerun.
-
-  -evaluate|e         Run Evaluator on final annotations (under
-	              development).
-
-  -quiet|q            Silences most of maker's status messages.
-
-  -CTL                Generate empty control files in the current
-                      directory.
-
-  -help|?             Prints this usage statement.
-
 
 #---------------------------------------------------------------------
 
@@ -241,120 +146,49 @@ RUNNING MAKER WITH EXAMPLE DATA
 
 1) Copy the files in the data directories to a temporary directory
    where you will run an example file.
-2) Type maker -CTL to generate generic maker control files
+2) Type maker -CTL to generate generic MAKER control files
 3) Next you will need to edit the control files to include the path of
    the genome file, EST file, and protein file, as well as the paths
    to all required executables.  See CONFIG FILE EDITING for more
    information.
 4) Then try the following command from your temporary directory:
 
-perl maker_directory/bin/maker maker_exe.ctl maker_opts.ctl \
-maker_bopts.ctl
+       maker maker_exe.ctl maker_opts.ctl maker_bopts.ctl
 
-MAKER will create at least the following files/directories:
-
-1) XXX.maker.output/ - contains all output for a given run of make
-2) XXX.maker.output/XXX_master_datastore_index.log - log of MAKER run
-   progress as well as an index for traversing
-   XXX.maker.output/XXX_datastore/
-3) XXX.maker.output/XXX_datastore/ - contains folders containing the
-   output for each individual contig of the input fasta file
-
-Within these folders:
-    * seq_name.gff - a gff file that can be loaded into GMOD, GBROWSE,
-      or Apollo
-    * seq_name.maker.transcripts.fasta - a file of the maker
-      transcript sequences
-    * seq_name.maker.proteins.fasta - a file of the maker protein
-      sequences
-    * seq_name.maker.XXX.transcript.fasta - a file of ab-inito
-      transcript sequences from program XXX
-    * seq_name.maker.XXX.proteins.fasta - a file of ab-inito protein
-      sequences from program XXX
-    * seq_name.maker.non_overlapping_ab_initio.transcripts.fasta - a
-      file of filtered ab-inito transcript sequences that don't
-      overlap annotations
-    * seq_name.maker.non_overlapping_ab_initio.proteins.fasta - a
-      file of filtered ab-inito protein sequences that don't overlap
-      annotations
-    * theVoid.seq_name/ - a directory containing all of the raw
-      output files produced by maker, including BLAST reports, SNAP
-      output, exonnerate output and the masked sequence.
-
-WARNING:
-
-* The names of output files are based on sequence ids.  If giving
-  maker a multi-fasta file, it is important to verify that all
-  sequence id are unique, so files are not overwritten.
-
-* If there are more than 1,000 sequences in a multi-fasta file a deep
-  datastore structure will be used. see DATASTORE in this document.
-
-* If sequence ids contain characters that are illegal in file names,
-  those characters will be replaced automatically before building
-  output file names.
+5) Examine the output files.  See MAKER OUTPUT and APOLLO sections.
 
 #---------------------------------------------------------------------
 
-DATASTORE
+CONTROL FILE EDITING
 
-"Many filesystems have performance problems with large numbers of
-subdirectories and files within a single directory and even when the
-underlying filesystems handle things gracefully, access via network
-filesystems can be an issue.  The Datastore modules create a hiearchy
-of subdirectory layers, starting from a 'base', and mapping end-user's
-identifiers to the corresponding subdirectory." - quote from
-http://www.yandell-lab.org/ (See site for more information on the
-Datastore module)
+MAKER uses control files to guide each run.  Generic control files can
+be built using the -CTL flag in maker.  These control files can then
+be edited by the user to identify the location of all required input
+data and statistics.  Control files are run specific and seperate
+control files will need to be built for each genome given to MAKER.
+MAKER will look for control files in the current working directory, so
+it is recomended that MAKER should be ran in a seperate directory
+containing unique control files for each genome.
 
-A deep datastore will be used by maker if there are more than 1,000
-sequences in a multi-fasta file.
+Control files:
 
-When a datastore is implemented, the output files described above will
-not appear where you would normally expect them to be.  Instead they
-will be located in a series of sub-directory under a new
-base-directory whose name is determined from the input genome file
-name:
+    1. maker_exe.ctl - contains the path information for needed
+       executables.
 
-i.e. current_directory/genome_datastore/EE/Af/Contig1/Contig1.gff.
+    2. maker_bopts - contains filtering statistics for BLAST and
+       Exonerate.
 
-A master_datastore_index file will be made in the current working
-directory to help you find the output files from each sequence.
+    3. maker_opts.ctl - contains all other information for MAKER,
+       including the location of the input genome file.
 
-The master_datastore_index file is a file created to allow the user to
-easily find the exact output directory corresponding to contigs from
-the input genome file.  The The master_datastore_index file contains
-three columns of text; the first column shows the sequence identifier
-from each fasta header, and the second column shows the location of
-the output files for that sequence. The third column is for logging
-the status of data related to an individual contig. The values of the
-third column are as follows:
-    * STARTED - Indicates that maker has started proccessing this
-      contig.
-    * FINISHED - Indicates that maker has finished processing this
-      contig and all data is currently available in that subdirectory.
-    * DIED - Indicates that maker failed.
-    * DIED_SKIPPED_PERMANENT - Indicates that maker failed up to the
-      specified number of retries and will not try again.
-    * RETRY - Indicates that maker is retrying the contig after a
-      failure.
-    * SKIPPED_SMALL - Indicates that this contig was skipped because
-      it is too short (based on control file values set by the user).
 
-#---------------------------------------------------------------------
+Remember to examine the control files before each run of MAKER on your
+specific data.
 
-CONFIG FILE EDITING
-
-Lines in the maker control files have the format key:value whith no
+Lines in the MAKER control files have the format key:value whith no
 spaces before or after the colon(:).  If the value is a file name, you
 can use relative paths and environmental variables,
 i.e. genome:$HOME/my_genome.fasta
-
-
-MAKER has 3 control files for configuration options. A fourth file
-evaluator.ctl is used to supply a MAKER related program EVALUATOR with
-options specific to that program (only important if 'evaluate' is set
-to 1 in maker_opts.ctl).
 
 Note that for all control files the comments written to help users
 begin with a pound sign(#).  In addition, options before the colon(:)
@@ -363,123 +197,139 @@ colon.
 
 A. maker_exe.ctl - includes information about programs executed by
 MAKER.
-Here an example of a section of the maker_exe.ctl file:
 
-#-----Location of Executables Used by Maker/Evaluator
+Here is an example of sections of the maker_opts.ctl file:
 
-#location of NCBI formatdb executable	
-formatdb:/usr/local/bin/formatdb                              
-#location of NCBI blastall executable	
-blastall:/usr/local/bin/blastall                              
-#location of WUBLAST xdformat executable	
-xdformat:/usr/local/bin/xdformat                              
-#location of WUBLAST blastn executable	
-blastn:/usr/local/bin/blastn                                  
-#location of WUBLAST blastx executable	
-blastx:/usr/local/bin/blastx                                  
-#location of WUBLAST tblastx executable	
-tblastx:/usr/local/bin/tblastx                                
-#location of RepeatMasker executable	
-RepeatMasker:/home/cholt/usr/local/RepeatMasker/RepeatMasker  
-#location of exonerate executable         
-exonerate:/home/cholt/usr/local/exonerate/bin/exonerate       
+#-----Genome
+genome:/fastas/genome.fasta
 
-#-----Ab-initio Gene Prediction Algorithms
+#-----EST Evidence
+est:/fastas/est.fasta
+altest:/fastas/alt_est.fasta
 
-#location of snap executable		  
-snap:/home/cholt/usr/local/snap/snap                  
-#location of eukaryotic genemark executable 
-gmhmme3:/home/cholt/usr/local/gmes/gmhmme3            
-#location of augustus executable		  
-augustus:/home/cholt/usr/local/augustus/bin/augustus  
-#location of fgenesh executable             
-fgenesh:/home/cholt/usr/local/fgenesh/fgenesh         
+#-----Protein Homology Evidence
+protein:protein.fasta
 
-B. maker_bopts.ctl - contains statistics for fltering blast and
-exonerate data.
-Here an example of a section of the maker_bopts.ctl file:
+#-----MAKER Specific Options
+evaluate:0
+max_dna_len:100000
+min_contig:1
+min_protein:0
+split_hit:10000
+pred_flank:200
+single_exon:0
+single_length:250
+keep_preds:0
+map_forward:0
+retry:1
+clean_try:0
+clean_up:0
 
-#-----BLAST and Exonerate statistics thresholds
-#set to 'wublast' or 'ncbi'
-blast_type:wublast    
-#Blastn Percent Coverage Threhold EST-Genome Alignments 
-pcov_blastn:0.8       
-#Blastn Percent Identity Threshold EST-Genome Aligments 
-pid_blastn:0.85       
-#Blastn eval cutoff				      
-eval_blastn:1e-10     
-#Blastn bit cutoff                                      
-bit_blastn:40         
-
-#Blastx Percent Coverage Threhold Protein-Genome Alignments
-pcov_blastx:0.5       
-#Blastx Percent Identity Threshold Protein-Genome Aligments
-pid_blastx:0.4        
-#Blastx eval cutoff					 
-eval_blastx:1e-06     
-#Blastx bit cutoff					 
-bit_blastx:30         
-
-#Blastx Percent Coverage Threhold For Transposable Element Masking 
-pcov_rm_blastx:0.5    
-#Blastx Percent Identity Threshold For Transposbale Element Masking
-pid_rm_blastx:0.4     
-#Blastx eval cutoff for transposable element masking		 
-eval_rm_blastx:1e-06  
-#Blastx bit cutoff for transposable element masking		 
-bit_rm_blastx:30      
-
-C. maker_opts.ctl - contains options for maker and external programs
-used by maker.
-Here an example of a section of the maker_opts.ctl file:
-
-#-----Genome (Required for De-Novo Annotations)
-#genome sequence file in fasta format
-genome:input/genome.fasta
-
-#-----Re-annotation Options
-
-#re-annotate genome based on this gff3 file		    
-genome_gff:     
-#use ests in genome_gff: 1 = yes, 0 = no		    
-est_pass:0      
-#use alternate organism ests in genome_gff: 1 = yes, 0 = no 
-altest_pass:0   
-#use proteins in genome_gff: 1 = yes, 0 = no		    
-protein_pass:0  
-#use repeats in genome_gff: 1 = yes, 0 = no		    
-rm_pass:0       
-#use gene models in genome_gff: 1 = yes, 0 = no		    
-model_pass:0    
-#use ab-initio predictions in genome_gff: 1 = yes, 0 = no   
-pred_pass:0     
-#passthrough everything else in genome_gff: 1 = yes, 0 = no 
-other_pass:0    
-
-#-----EST Evidence (you must provide a value for at least one)
-
-#non-redundant set of assembled ESTs in fasta format (classic EST
-#analysis)
-est:input/est.fasta        
-#un-assembled EST reads in fasta format (for deep nextgen mRNASeq)
-est_reads:                 
-#EST/cDNA sequence file in fasta format from an alternate organism
-altest:input/altest.fasta  
-#EST evidence from a seperate gff3 file				      
-est_gff:                   
-#Alternate organism EST evidence from a seperate gff3 file
-altest_gff:                
-
-#-----Protein Homology Evidence (you must provide a value for at least
-#     one)
-#protein sequence file in fasta format
-protein:input/protein.fasta
-#protein homology evidence from a gff3 file
-protein_gff:
 
 #---------------------------------------------------------------------
 
-GFF3 Passthrough
+MAKER OUTPUT
+
+MAKER will create at least the following files/directories:
+
+1) XXX.maker.output/ - contains all output for a given run of MAKER.
+2) XXX.maker.output/XXX_datastore/ - contains subdirectories that hold
+   the output for each individual contig of the input fasta file.  See
+   DATASTORE DIRECTORY STRUCTURE section.
+3) XXX.maker.output/XXX_master_datastore_index.log - log of MAKER run
+   progress as well as an index for traversing through the output
+   datastructure.
+4) XXX.maker.output/mpi_blastdb/ - Contains fasta indexes and error
+   corrected fasta files built from the EST and protein databases
+   provided by the user. 
+5) maker_opt.log,maker_exe.log,maker_bopts.log - These are logs of the
+   control files used for this run of MAKER.
+5) XXX.maker.output/XXX.db - Database of GFF3 files provided by the
+   user.  See GFF3 PASSTHROUGH section.
+
+Within the XXX_datastore/ subdirectories:
+    * seq_name.gff - a gff file that can be loaded into GMOD, GBROWSE,
+      or Apollo
+    * seq_name.maker.transcripts.fasta - a fasta file of the MAKER
+      annotated transcript sequences
+    * seq_name.maker.proteins.fasta - a fasta file of the MAKER
+      annotated protein sequences
+    * seq_name.maker.XXX.transcript.fasta - a fasta file of ab-initio
+      predicted transcript sequences from program XXX
+    * seq_name.maker.XXX.proteins.fasta - a fasta file of ab-inito
+      predicted protein sequences from program XXX
+    * seq_name.maker.non_overlapping_ab_initio.transcripts.fasta - a
+      fasta file of filtered ab-inito transcript sequences that don't
+      overlap maker annotations
+    * seq_name.maker.non_overlapping_ab_initio.proteins.fasta - a
+      fasta file of filtered ab-inito protein sequences that don't
+      overlap maker annotations
+    * theVoid.seq_name/ - a directory containing all of the raw
+      output files produced by MAKER, including BLAST reports, SNAP
+      output, exonnerate output and the masked genomeic sequence.
+
+WARNING:
+
+* The names of output files are based on sequence ids.  If giving
+  MAKER a multi-fasta file, it is important to verify that all
+  sequence id are unique, so files are not overwritten.
+
+* If there are more than 1,000 sequences in a multi-fasta file a deep
+  datastore structure will be used. See THE DATASTORE DIRECTORY
+  STRUCTURE in this document.
+
+* If sequence ids contain characters that are illegal in file names,
+  those characters will be replaced automatically before building
+  output file names.
+
+
+#---------------------------------------------------------------------
+
+DATASTORE DIRECTORY STRUCTURE
+
+Many filesystems have performance problems with large numbers of
+subdirectories and files within a single directory, and even when the
+underlying filesystems handle things gracefully, access via network
+filesystems can be an issue.  You can imagine that the amount of
+output produced while annotating an entire genome can be quite
+overwhelming to the file system.  To deal with all the output files
+MAKER uses a Datastore module to create a hiearchy of subdirectory
+layers, starting from a 'base', and mapping identifiers to
+corresponding subdirectory.
+
+A deep datastore will be used by MAKER if there are more than 1,000
+sequences in a multi-fasta file.  When a deep datastore is
+implemented, MAKER output files will not appear where you would
+normally expect them to be.  Instead they will be located in a series
+of sub-directory under a new base-directory whose name is determined
+based on the input genome file name:
+
+EXAMPLE: current_directory/fly_datastore/EE/Af/Contig1/Contig1.gff
+
+To help you locate output files, a master_datastore_index file is
+created which lists the exact output directory corresponding to each
+contig from the input genome file.  The The master_datastore_index
+file contains three columns of text; the first column shows the
+sequence identifier from each fasta header, and the second column
+shows the location of the output files for that sequence. The third
+column is for logging the status of data related to an individual
+contig. The values of the third column are as follows:
+    * STARTED - Indicates that MAKER has started proccessing this
+      contig.
+    * FINISHED - Indicates that MAKER has finished processing this
+      contig and all data is currently available in that subdirectory.
+    * DIED - Indicates that MAKER failed on this contig.
+    * DIED_SKIPPED_PERMANENT - Indicates that MAKER failed up to the
+      specified number of retries and will not try again.
+    * RETRY - Indicates that MAKER is retrying the contig after a
+      failure.
+    * SKIPPED_SMALL - Indicates that this contig was skipped because
+      it is too short (based on control file values set by the user).
+
+
+#---------------------------------------------------------------------
+
+GFF3 PASSTHROUGH
 
 If you have data from a source that MAKER does not support, and you
 wish to use the data in annotating a genome, then you can pass the
@@ -494,28 +344,37 @@ must be split by type and identified by the appropriate control file
 option (i.e. rm_gff for repeat data, pred_gff for ab-initio prediction
 data, est_gff for EST data, etc.).
 
+You should use the online GFF3 validator to see if your GFF3 files
+comply with all GFF3 specifications before running MAKER:
+
+     http://dev.wormbase.org/db/validate_gff3/validate_gff3_online
+
 #---------------------------------------------------------------------
 
-ADDING UTRs for GBROWSE
+ADDING UTRs FOR GBROWSE
 
 When using APOLLO to visualize gene annotations, UTRs are inferred
 based on exon and CDS locations.  However GMOD and GBROWSE do not
 infer the UTR, so to visualize the UTR, you will have to run:
 add_utr_gff.pl with the following command:
 
-add_utr_gff.pl <directory>
+     add_utr_gff.pl <directory>
 
-    * <directory> is the directory where all of your GFF files are
-                  located.
+     <directory> is the directory containing all of your GFF3 files.
 
-Each GFF file will have a sister file called sequence.wutr.gff3.
+Each GFF3 file will have a sister file called sequence.wutr.gff3.
+
+There is also another script called add_utr_start_stop that adds start
+and stop codon entries as well as UTR entries.
+
+     add_utr_start_stop <GFF3 file>
 
 #---------------------------------------------------------------------
 
 APOLLO
 
-Maker is bundled with a configuration file that improves the color and
-display of maker annotations and evidence in the Apollo genome
+MAKER is bundled with a configuration file that improves the color and
+display of MAKER annotations and evidence in the Apollo genome
 browser.  The configuration file is called "gff3.tiers" and is located
 in the maker/Apollo/ directory.  The file should be copied to the
 conf/ sub_directory which is located under the Apollo instalation
@@ -547,12 +406,12 @@ A) First you will need to determine the genes used to model future
 
    Note: A convenient way to identify and initial high quality gene
    set for the HMM is to use the -predictor est2genome option in
-   maker.  This will produce gene annotations based solely on EST
+   MAKER.  This will produce gene annotations based solely on EST
    evidence.  These annoations can then seed the first HMM.  After
-   running maker again using this new HMM and the -predictor snap
+   running MAKER again using this new HMM and the -predictor snap
    option, you can use the second round of annotations as the seed
    for an even better HMM model. In this way the HMM model
-   progressively improves with each run of maker.
+   progressively improves with each run of MAKER.
 
    Another strategy for identifying an initial gene set to model the
    HMM is to use the program CEGMA (http://korflab.ucdavis.edu/
@@ -561,7 +420,7 @@ A) First you will need to determine the genes used to model future
    regions with homology to a set of 458 proteins that are highly
    conserved among taxa.
 
-   Combining both CEGMA and maker datasets to build the first HMM is
+   Combining both CEGMA and MAKER datasets to build the first HMM is
    also a good strategy.
 
 B) Next you will use the dna and zff file (genome.dna and genome.ann)
