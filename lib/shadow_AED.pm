@@ -73,6 +73,7 @@ sub get_AED {
 		2 => 0,
 		3 => 0,
 	       );
+
    foreach my $i (@b_seq){
       $index{$i}++;
    }

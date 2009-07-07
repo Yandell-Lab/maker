@@ -166,7 +166,7 @@ sub run_all {
    my $self = shift;
 
    return if ($self->terminated || $self->failed);
-   return if ($self->_level_started && ! $self->_level_finished);
+   #return if ($self->_level_started && ! $self->_level_finished);
 
    $self->_next_level if ($self->_level_finished);
    $self->_load_chunks if (!$self->_level_started);

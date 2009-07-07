@@ -9,7 +9,7 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG $EXE);
+use vars qw($RANK $LOG $EXE $TMP);
 use Storable qw(freeze thaw);
 use threads;
 use threads::shared;
@@ -22,6 +22,14 @@ BEGIN{
     if (! $EXE || $EXE =~ /^no iprscan/) {
 	die "ERROR: You must have iprscan installed and in you path to use mpi_iprscan\n";
     }
+
+    #build temp directory
+    my $n = umask();
+    umask(0000);
+    $TMP = "/tmp/iprscanTMP";
+    mkdir($TMP, 07777) if(! -d $TMP);
+    mkdir("$TMP/tmp", 07777) if(! -d "$TMP/tmp");
+    umask($n);
 
    #what to do on ^C
     $SIG{'INT'} = sub {
@@ -60,6 +68,7 @@ BEGIN{
 use Cwd;
 use Storable;
 use FileHandle;
+use File::Copy;
 use File::Path;
 use Getopt::Long qw(:config pass_through);
 use File::Temp qw(tempfile tempdir);
@@ -165,11 +174,13 @@ my $root = 0; #define root node (only changed for debugging)
 my $infile;
 my $outfile;
 my @appl;
+my $chpc;
 my $cli; #always enabled, just here for implementation
 
 GetOptions("i=s" => \$infile,
 	   "o=s" => \$outfile,
 	   "appl=s" => \@appl,
+	   "chpc" => \$chpc, #hidden option used on the CHPC's computer farm
 	   "cli" => \$cli, #just used to strip off the option
 	   );
 
@@ -190,6 +201,71 @@ if(! @appl){
     chomp($apps);
     @appl = split(',', $apps);
     die "ERROR: Cannot determine default applications\n" if(! @appl);
+}
+
+#build localized database for each node
+if($chpc && ! -e "$TMP/iprscan/data/ok"){
+    my $lock = new File::NFSLock("$TMP/.iprscan_lock", 'EX', 1200, 1205);
+    
+    #build local db in /tmp
+    if(! -e "$TMP/iprscan/data/ok" && $lock){
+	#remove old failed directories
+	if(-d "$TMP/iprscan"){
+	    move("$TMP/iprscan", "$TMP/old");
+	    File::Path::rmtree("$TMP/old");
+	}
+	if(-d "$TMP/test"){
+	    move("$TMP/test", "$TMP/old");
+	    File::Path::rmtree("$TMP/old");
+	}
+
+	my $free = `df /tmp | grep -v \"Filesystem\" | awk \'{print \$4}\'`;
+	if($free > 16000000){
+	    my @tar_db = split (":", $ENV{'TAR_DB'});
+	    @tar_db = grep {-d $_} @tar_db;
+	    
+	    if (@tar_db){
+		my $db = $tar_db[int(rand(@tar_db))];
+		
+		my @files = ('latest_match.tar.gz',
+			     'latest_pthr.tar.gz',
+			     'latest_nopthr.tar.gz');
+		
+		if(-e "$db/$files[0]" &&
+		   -e "$db/$files[1]" &&
+		   -e "$db/$files[1]"
+		   ){
+		    
+		    my $fail;
+		    foreach my $file (@files){
+			last if($fail);
+			mkdir("$TMP/test") unless(-d "$TMP/test");
+			copy("$db/$file", "$TMP/test");
+			system("cd $TMP/test\n".
+			       "tar -zxvmf $file"
+			       );
+			
+			$fail = $?;
+			
+			unlink("$TMP/test/$file");
+		    }
+		    
+		    if($fail){
+			File::Path::rmtree("$TMP/test");
+			  
+		    }
+		    else{
+			move("$TMP/test/iprscan", "$TMP/iprscan");
+			File::Path::rmtree("$TMP/test");
+			system("index_data.pl -p $TMP/iprscan/data -inx -bin");
+			system("touch $TMP/iprscan/data/ok");
+		    }
+		}
+	    }
+	}
+    }
+    
+    $lock->unlock if($lock);
 }
 
 #--------------------------------------
