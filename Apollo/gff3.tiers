@@ -1335,6 +1335,21 @@ column : MATCH_LENGTH
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
+label : Repeat_GFF
+tiername : Repeat
+datatype : repeat_gff:censor
+datatype : repeat_gff:dummy
+glyph : DrawableResultFeatureSet
+color : red
+column : NAME
+column : SCORE
+column : GENOMIC_RANGE
+column : MATCH_RANGE
+column : GENOMIC_LENGTH
+column : MATCH_LENGTH
+sortbycolumn : GENOMIC_RANGE
+
+[Type]
 label : Repeatrunner
 tiername : Repeat
 datatype : repeat_runner_seg:dummy
