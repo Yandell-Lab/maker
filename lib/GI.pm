@@ -1489,6 +1489,7 @@ sub blastx_as_chunks {
    my $rank          = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
+   my $softmask = shift;
 
    #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1536,6 +1537,7 @@ sub blastx_as_chunks {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
+	     $softmask
 	    );
 
    $chunk->erase_fasta_file();
@@ -1611,6 +1613,7 @@ sub blastx {
    my $split_hit = shift;
    my $cpus = shift;
    my $LOG = shift;
+   my $softmask = shift;
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1680,11 +1683,12 @@ sub runBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
+   my $softmask = shift;
 
    my $command  = $blast;
    if ($command =~ /blastx$/) {
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
-      $command .= " wordmask=seg";
+      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       #$command .= " T=20";
       #$command .= " W=5";
       #$command .= " wink=5";
@@ -1746,6 +1750,7 @@ sub tblastx_as_chunks {
    my $rank = shift;
    my $LOG = shift;
    my $LOG_FLAG = shift;
+   my $softmask = shift;
 
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1793,6 +1798,7 @@ sub tblastx_as_chunks {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
+	      $softmask
 	     );
 
    $chunk->erase_fasta_file();
@@ -1868,6 +1874,7 @@ sub tblastx {
    my $split_hit = shift;
    my $cpus = shift;
    my $LOG = shift;
+   my $softmask = shift;
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1919,11 +1926,12 @@ sub runtBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
+   my $softmask = shift;
 
    my $command  = $blast;
    if ($command =~ /tblastx$/) {
       $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
-      $command .= " wordmask=seg";
+      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       #$command .= " W=15";
       $command .= " Z=1000";
       $command .= " Y=500000000";
@@ -2114,10 +2122,10 @@ sub set_defaults {
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'predictor'} = 'est2genome';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
-      $CTL_OPT{'snaphmm'} = 'fly';
+      $CTL_OPT{'snaphmm'} = '';
       $CTL_OPT{'gmhmm'} = '';
-      $CTL_OPT{'augustus_species'} = 'fly';
-      $CTL_OPT{'fgenesh_par_file'} = 'Dicots';
+      $CTL_OPT{'augustus_species'} = '';
+      $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'other_gff'} = '';
@@ -2138,7 +2146,7 @@ sub set_defaults {
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
       $CTL_OPT{'run'} = '';
-      $CTL_OPT{'unmask'} = 1;
+      $CTL_OPT{'unmask'} = 0;
       $CTL_OPT{'clean_up'} = 0;
       #evaluator below here
       $CTL_OPT{'side_thre'} = 5;
@@ -2153,6 +2161,7 @@ sub set_defaults {
    #maker_bopts
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'wublast';
+      $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -2211,12 +2220,6 @@ sub set_defaults {
       }
    }
 
-   #evaluator
-   if ($type eq 'all' || $type eq 'eva') {
-
-
-   }
-   
    return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2656,7 +2659,7 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----Gene Prediction Options\n" if(!$ev);
    print OUT "#-----Evaluator Ab-Initio Comparison Options\n" if($ev);
-   print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n";
+   #print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n";
    print OUT "predictor:$O{predictor} #prediction methods for annotations (seperate multiple values by ',')\n" if(!$ev);
    print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
    print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
@@ -2704,6 +2707,7 @@ sub generate_control_files {
    open (OUT, "> $dir/maker_bopts.ctl") if(!$ev && !$log);
    print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
    print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
+   print OUT "softmask:$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
    print OUT "\n";
    print OUT "pcov_blastn:$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
    print OUT "pid_blastn:$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";

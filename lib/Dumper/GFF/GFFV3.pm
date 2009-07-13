@@ -201,7 +201,8 @@ sub header {
 
 	my $build = $self->{build};
 	my $h = "##gff-version 3";
-	$h .= "\n##genome-build maker $build" if(defined $build);
+	#removed for gmod
+	#$h .= "\n##genome-build maker $build" if(defined $build);
 
 	return $h;
     }

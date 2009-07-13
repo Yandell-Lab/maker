@@ -468,7 +468,8 @@ sub _go {
 					       $CTL_OPT{_formater},
 					       $self->{RANK},
 					       $LOG,
-					       $LOG_FLAG
+					       $LOG_FLAG,
+					       1
 					      );
 	    }
 	    #-------------------------CODE
@@ -898,7 +899,8 @@ sub _go {
 					       $CTL_OPT{_formater},
 					       $self->{RANK},
 					       $LOG,
-					       $LOG_FLAG
+					       $LOG_FLAG,
+					       $CTL_OPT{softmask}
 					      );
 
 	    }
@@ -1012,7 +1014,8 @@ sub _go {
 						$CTL_OPT{_formater},
 						$self->{RANK},
 						$LOG,
-						$LOG_FLAG
+						$LOG_FLAG,
+						$CTL_OPT{softmask}
 					       );
 	    }
 	    #-------------------------CODE

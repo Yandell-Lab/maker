@@ -43,6 +43,7 @@ my @ctl_to_log = ('genome_gff',
 		  'alt_peptide',
 		  'evaluate',
 		  'blast_type',
+		  'softmask',
 		  'pcov_blastn',
 		  'pid_blastn',
 		  'eval_blastn',
@@ -313,7 +314,8 @@ sub _clean_files{
 		    
 		    if ($key eq 'protein' ||
 			$key eq 'alt_peptide' ||
-			$key eq 'eval_blastx'
+			$key eq 'eval_blastx' ||
+			$key eq 'softmask'
 			) {
 			$rm_key{blastx}++;
 			$rm_key{p_exonerate}++;
@@ -337,7 +339,8 @@ sub _clean_files{
 		    
 		    if ($key eq 'altest' ||
 			$key eq 'eval_tblastx' ||
-			$key eq 'split_hit'
+			$key eq 'split_hit' ||
+			$key eq 'softmask'
 			) {
 			$rm_key{tblastx}++;
 		    }
