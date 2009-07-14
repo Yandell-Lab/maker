@@ -136,8 +136,8 @@ sub is_hc {
     my @q = split(/\|/, $qi);
     my @qual = (@q[1..5],$q[8]);
     my $hc = 1;
-    foreach my $i (0..5) {
-	if ($qual[$i] <= $thresh[$i]) {
+    foreach my $i (0..4) {
+	if ($qual[$i] < $thresh[$i]) {
 	    $hc = 0;
 	}
     }
