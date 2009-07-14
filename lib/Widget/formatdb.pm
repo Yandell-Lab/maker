@@ -41,6 +41,8 @@ sub run {
 		}
 		waitpid $pid, 0;
 		die "ERROR: formatdb failed\n" if $? != 0;
+		unlink("formatdb.log") if(-e "formatdb.log");
+		unlink("setdb.log") if(-e "setdb.log");
 	}
 	else {
 		die "you must give Widget::formatdb a command to run!\n";
