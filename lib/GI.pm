@@ -2315,11 +2315,11 @@ sub load_control_files {
    my %uniq;
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^jigsaw$|^model_gff$|^abinit$/
+	   $p !~ /^genemark$|^jigsaw$|^model_gff$|^pred_gff$/
 	   ) {
 	   $error .= "ERROR: Invalid predictor defined: $p\n".
-	       "Valid entries are: est2genome, model_gff, snap,\n".
-	       "genemark, augustus, fgenesh, and abinit\n\n";
+	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
+	       "snap, genemark, augustus, and fgenesh\n\n";
        }
        else {
 	   push(@{$CTL_OPT{_predictor}}, $p) unless($uniq{$p});

@@ -45,6 +45,7 @@ my %status = ();
 my %parent = ();
 my %exons = ();
 my %hc = ();
+my %bad = ();
 my %seq = ();
 
 my $dir = shift @ARGV;
@@ -61,6 +62,11 @@ my @files = grep /^.+\.gff$/, readdir DIR;
 close DIR;
 
 #### Go through the GFF file and determine which genes are HC  ####
+#### This step must finish before any output is produced since ####
+#### featues can be out of order ####
+
+my %index; #used to replace long maker names that mess up snap
+my $count = 0;
 
 foreach my $file (@files) {
     open GFF, "<$dir/$file" or die $!;
@@ -95,37 +101,72 @@ foreach my $file (@files) {
 		my ($AED) = $line =~ /_AED\=([^\;\n]+)/;
 		my $ishc = is_hc($qi, $AED);
 		if ($ishc == 1 ) {
-		    $hc{$id} = 1;
+		    push(@{$hc{$seqid}}, $id);
 		}
 	    }elsif ($tag eq "CDS" && $source eq "maker") {
 		my $parent = $annotation{'Parent'};
-		if ($strand eq "-") {
-		    my $temp = $start;
-		    $start = $end;
-		    $end = $temp;
+
+		#set alias
+		if(! $index{$parent}){
+		    $index{$parent} = "MODEL$count";
+		    $count++;
 		}
-		push @{$exons{$seqid}}, [$start, $end, $parent]
+
+		if($strand eq '-'){
+		    ($start, $end) = ($end, $start);
+		}
+
+		push @{$exons{$seqid}{$parent}}, [$start, $end];
 	    }
 	}
     }
 }
+
+#### Now filter out anything thats not high quality ####
 
 #### Print out the exon locations of the HC genes ####
 
 open(ZFF, ">$outfile\.ann") or die;
 open DNA, ">$outfile\.dna" or die $!;
 
-foreach my $seqid (sort {$a cmp $b} keys %exons) {
-    my @exons = @{$exons{$seqid}};
+foreach my $seqid (sort {$a cmp $b} keys %hc) {
     print ZFF ">",$seqid,"\n";
     print DNA ">",$seqid,"\n",$seq{$seqid},"\n";
-    foreach my $e (@exons) {
-        my ($start, $end, $pname) = @{$e};
-	if ($hc{$pname}) {
-	    print ZFF join(" ", "Exon ",$start, $end, $pname),"\n";
+
+    foreach my $mRNA (@{$hc{$seqid}}){
+	my @exons = @{$exons{$seqid}{$mRNA}};
+	my $pname = $index{$mRNA};
+
+	next if (! @exons);
+
+	my $f = shift @exons;
+	if(! @exons){
+	    print ZFF join(" ", "Esngl ", $f->[0], $f->[1], $pname),"\n";
+	    next;
+	}
+	elsif($f->[0] < $f->[1]){
+	    print ZFF join(" ", "Einit ", $f->[0], $f->[1], $pname),"\n";
+	}
+	else{
+	    print ZFF join(" ", "Eterm ", $f->[0], $f->[1], $pname),"\n";
+	}
+
+	my $l = pop @exons;
+	if($l->[0] < $l->[1]){
+	    print ZFF join(" ", "Eterm ", $l->[0], $l->[1], $pname),"\n";
+	}
+	else{
+	    print ZFF join(" ", "Einit ", $l->[0], $l->[1], $pname),"\n";
+	}
+
+	foreach my $e (@exons) {
+	    print ZFF join(" ", "Exon ", $e->[0], $e->[1], $pname),"\n";
 	}
     }
 }
+
+close(ZFF);
+close(DNA);
 
 ################## Subroutines ###################
 

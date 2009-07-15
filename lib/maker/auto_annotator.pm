@@ -636,9 +636,9 @@ sub annotate {
 						      );
     }
     
-    #---hint based gene prediction here
+    #---hint based gene prediction here (includes est2genome)
     foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
-	next if($prdr eq 'model_gff' || $prdr eq 'abinit' || $prdr eq 'genemark');
+	next if($prdr eq 'model_gff' || $prdr eq 'pred_gff');
 	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
 	
 	my $transcripts = run_it($bx_data,
@@ -672,7 +672,7 @@ sub annotate {
 			    $seq_ref,
 			    $v_seq_ref,
 			    $def,
-			    'abinit',
+			    'abinit', #all abinits not just pref_gff
 			    $predictions,
 			    $CTL_OPTIONS
 			    );
@@ -682,30 +682,38 @@ sub annotate {
 				   $seq_id,
 				   $chunk_number,
 				   $build,
-				   'abinit',
+				   'abinit', #all abinits not_just pred_gff
 				   $the_void,
 				   $CTL_OPTIONS
 				   );
-    
-    $annotations{'abinit'} = $all_ab;
+
+    $annotations{'abinit'} = $all_ab; #all abinit
+
+    #add abinits to their predictor type after they have been proccessed
+    #remeber they get treated differently so you want to add them as a
+    #seperate step.
+    foreach my $g (@$all_ab){
+	if($g->{algorithm} =~ /^snap/i){
+            push(@{$annotations{'snap'}}, $g);
+	}
+	elsif($g->{algorithm} =~ /^genemark/i){
+	    push(@{$annotations{'genemark'}}, $g);
+	}
+	elsif($g->{algorithm} =~ /^augustus/i){
+            push(@{$annotations{'augustus'}}, $g);
+	}
+	elsif($g->{algorithm} =~ /^fgenesh/i){
+            push(@{$annotations{'fgenesh'}}, $g);
+	}
+	elsif($g->{algorithm} =~ /^pred_gff/i){
+            push(@{$annotations{'pred_gff'}}, $g);
+	}
+	else{
+	    die "ERROR: Not a supported algorithm: ".$g->{algorithm}."\n";
+	}
+    }
     
     add_abAED(\%annotations);
-
-    #fill genemark hint based with abinits since hints do not work
-    #but only if not using abinits already
-    if((grep {/^genemark$/} @{$CTL_OPTIONS->{_predictor}}) &&
-       (! grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}})
-      ){
-	foreach my $g (@$all_ab){
-	    if($g->{algorithm} =~ /^genemark_masked$/i){
-		push(@{$annotations{'genemark'}}, $g);
-	    }
-	    elsif($CTL_OPTIONS->{_no_mask} && $g->{algorithm} =~ /^genemark$/i){
-		push(@{$annotations{'genemark'}}, $g);
-	    }
-	}
-
-    }
 
     return \%annotations;
 }
@@ -788,6 +796,7 @@ sub add_abAED{
     
     #collect all no UTR base models to get abAED
     foreach my $p (keys %$annotations){
+	next if ($p eq 'abinit'); #these are redundant inside predictor type
 	foreach my $g (@{$annotations->{$p}}){
 	    if($g->{g_strand} == 1){
 		push(@p_genes, $g);#calculate for est2genome
@@ -850,7 +859,19 @@ sub best_annotations {
     
     my @p_keepers;
     my @m_keepers;
-    if(@{$CTL_OPTIONS->{_predictor}} > 1 || grep {/^abinit$/} @{$CTL_OPTIONS->{_predictor}}){
+
+    #keep all gff3 passthrough if there's nothing else
+    if(@{$CTL_OPTIONS->{_predictor}} == 1 && $CTL_OPTIONS->{_predictor}->[0] eq 'model_gff'){
+	foreach my $g (@{$annotations->{'model_gff'}}){
+	    if($g->{g_strand} == 1){
+		push(@p_keepers, $g);
+	    }
+	    elsif($g->{g_strand} == -1){
+		push(@m_keepers, $g);
+	    }
+	}
+    }
+    elsif(@{$CTL_OPTIONS->{_predictor}}){
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
 	my $p_list = [];
@@ -888,17 +909,6 @@ sub best_annotations {
 	#almost final  sets
 	push(@p_keepers, @$p_list);
 	push(@m_keepers, @$m_list);
-    }
-    elsif(@{$CTL_OPTIONS->{_predictor}}){
-	my $key = $CTL_OPTIONS->{_predictor}->[0];
-	foreach my $g (@{$annotations->{$key}}){
-	    if($g->{g_strand} == 1){
-		push(@p_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
-	    }
-	    elsif($g->{g_strand} == -1){
-		push(@m_keepers, $g) if($g->{AED} < 1  || $key eq 'model_gff');
-	    }
-	}
     }
 
     #remove CDS competition on opposite strand
@@ -1205,9 +1215,6 @@ sub run_it {
 	    $i++;
 	    next;
 	}
-
-        #------genemark does not have hints enabled 
-        return [] if ($predictor eq 'genemark');
 	
 	#------est2genome
 	if ($predictor eq 'est2genome') {
@@ -1223,6 +1230,9 @@ sub run_it {
 	    $i++;
 	    next;
 	}
+
+        #------genemark does not have hints enabled 
+        return [] if ($predictor eq 'genemark');
 	
 	#------default hint based behavior
 	my $gomiph   = $set->{gomiph};
@@ -1543,7 +1553,7 @@ sub group_transcripts {
       $careful_clusters = cluster::careful_cluster_phat_hits(\@transcripts, $seq);
    }
    
-   #remove redundant tanscripts in gene
+   #remove redundant transcripts in gene
    my @keepers;
    foreach my $c (@{$careful_clusters}) {
       my $best_alt_forms = 
@@ -1849,6 +1859,9 @@ sub map_forward {
 #called outside of package by maker to identify abinit maker annotations
 #that don't overlap maker's final annotation set. The non-overlapping
 #set is filtered using abAED so that they don't overlap each other.
+#Only masked ab inits are considered (otherwise I get a lot of revere
+#transcriptase genes).  Unmasked are allowed when there is no masking
+#performed.
 
 sub get_non_overlaping_abinits {
    my $ann_set = shift;
@@ -1873,7 +1886,7 @@ sub get_non_overlaping_abinits {
        }
    }
 
-   #separate abinits by strand
+   #separate abinits by strand (only masked unless I'm not masking)
    my @p_ab;
    my @m_ab;
    foreach my $g (@$abin_set){
