@@ -113,16 +113,20 @@ Options:
      -genome|g <filename> Specify the genome file.
 
      -predictor|p <type>  Selects the predictor(s) to use when building
-                          annotations.  Use a ',' to seperate types (no spaces).
-                          i.e. -predictor=snap,augustus,fgenesh
+                          annotations.  Defines a pool of gene models for
+                          annotation selection.
 
                           types: snap
                                  augustus
                                  fgenesh
                                  genemark
                                  est2genome (Uses EST's directly)
-                                 abinit (ab-initio predictions)
-                                 model_gff (Passes through GFF3 annotations)
+                                 model_gff (Pass through GFF3 annotations)
+                                 pred_gff (Uses passed through GFF3 predictions)
+
+                          Use a ',' to seperate types (nospaces)
+                          i.e. -predictor=snap,augustus,fgenesh
+
 
      -RM_off|R           Turns all repeat masking off.
 
