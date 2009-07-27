@@ -2428,9 +2428,10 @@ sub load_control_files {
    push (@infiles, 'genome_gff') if($CTL_OPT{genome_gff});
    push (@infiles, 'genome_gff') if($main::eva && ! $CTL_OPT{model_gff});
    push (@infiles, 'pred_gff') if($CTL_OPT{pred_gff});
+   push (@infiles, 'pred_gff') if (grep (/pred_gff/, $CTL_OPT{predictor}));
    push (@infiles, 'model_gff') if ($CTL_OPT{model_gff});
    push (@infiles, 'model_gff') if ($main::eva && ! $CTL_OPT{genome_gff});
-   push (@infiles, 'model_gff') if (grep (/gff/, $CTL_OPT{predictor}) &&
+   push (@infiles, 'model_gff') if (grep (/model_gff/, $CTL_OPT{predictor}) &&
 				    (!$CTL_OPT{genome_gff} ||
 				     !$CTL_OPT{model_pass})
 				   );
