@@ -2045,7 +2045,7 @@ sub runRepeatMasker {
       $command .= " $q_file -lib $rmlib -dir $dir -pa $cpus";    
    }
    else {
-      $command .= " $q_file -species $species -dir $dir -pa $cpus -qq";
+      $command .= " $q_file -species $species -dir $dir -pa $cpus";
    }
    $command .= " -nolow" if defined($no_low);
 	
