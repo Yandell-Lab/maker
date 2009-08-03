@@ -30,6 +30,7 @@ use vars qw(@ISA @EXPORT_OK $VERSION $TYPES
             $LOCK_EXTENSION $SHARE_BIT $HOSTNAME $errstr
             $graceful_sig @CATCH_SIGS);
 use Carp qw(croak confess);
+use File::Copy;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -446,7 +447,7 @@ sub refresh {
   close _FH;
 
   my $err;
-  system("mv $rand_file $file") && ($err = "ERROR: Could not refresh lock\n");
+  move($rand_file, $file) || ($err = "ERROR: Could not refresh lock\n");
   unlink($rand_file) if(-e $rand_file);
   die $err if($err);
 
