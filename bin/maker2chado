@@ -1,0 +1,357 @@
+#! /usr/bin/perl -w
+
+use strict;
+use DBI;
+use DBD::Pg;
+use Getopt::Long;
+use IO::Prompt;
+use File::Temp;
+use vars qw($DBH $GMOD);
+
+BEGIN{
+    #what to do on ^C
+    $SIG{'INT'} = sub {
+	$DBH->disconnect;
+	exit (1);
+    };
+
+    my $loc = `which gmod_bulk_load_gff3.pl 2> /dev/null`;
+    chomp $loc;
+    if ($loc =~ /^no gmod_bulk_load_gff3\.pl/ || ! $loc) {
+	die "FATAL: Can not find gmod_bulk_load_gff3.pl\n".
+	    "Make sure CHADO is installed and the executables are in your PATH.\n";
+
+    }
+    else {
+	$GMOD = [split("\n", $loc)]->[-1];
+    }
+}
+
+my $usage = '
+USAGE:
+     maker2chado [OPTION] <database_name> <gff3file1> <gff3file2> ...
+     maker2chado [OPTION] -d <datastore_index> <database_name>
+
+     This script takes MAKER produced GFF3 files and dumps them into a
+     CHADO database.  You must set the database up first according to
+     CHADO installation instructions.  CHADO provides its own methods
+     for loading GFF3, but this script makes it easier for MAKER
+     specific data.  You can either provide the datastore index file
+     produced by MAKER to the script or add the GFF3 files as command
+     line arguments.
+
+
+OPTIONS:
+     ds_index|d  <file>  Provide MAKER produced datastore index
+
+     host|h      <host>  Database host address
+
+     port|p      <port>  Database port
+
+     username|U  <user>  Username to access database
+
+     password|W          Promp for password to access database
+
+     organism|o  <name>  Organism in CHADO database to add to
+
+     jobid|j     <id>    JobID (only for MAKER web server use)
+
+     help|?              Displays this usage statement
+
+
+';
+
+my $host = '';
+my $user = '';
+my $pass = '';
+my $organism;
+my $port;
+my $dstore;
+my $jid;
+
+GetOptions("host|h=s" => \$host,
+	   "port|p=i" => \$port,
+	   "username|U=s" => \$user,
+	   "password|W" => sub{$pass = prompt("Please enter your password: ", -echo => '*')},
+	   "organism|o=s" => \$organism,
+	   "jobid|j=i" => \$jid,
+	   "ds_index|d=s" => \$dstore,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+my $dbname = shift;
+my @files;
+
+die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+if($dstore){
+    open(IN, "< $dstore");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        next if $seen{$e};
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+        $file = "$file/$1.gff";
+    }
+}
+else{
+    @files = @ARGV;
+    undef @ARGV;
+}
+
+if(!$dbname || ! @files){
+    print $usage;
+    exit();
+}
+
+my $error;
+my $base = $dstore;
+$base =~ s/[^\/]+$// if($base);
+
+foreach my $file (@files){
+    if (! -f $file){
+	if($base && -f "$base/$file"){
+	    $file = "$base/$file";
+	    next;
+	}
+
+	$error .= "ERROR: The GFF3 file \'$file\' does not exist\n";
+    }
+}
+die $error if $error;
+
+$dbname .= "\@$host" if($host);
+$dbname .= "\:$port" if($port);
+
+
+$DBH = DBI->connect("dbi:Pg:dbname=$dbname",$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+warn "WARNING: This does not seem to be a chado database\n\n" if(! @$o_list || ! @$c_list);
+
+#check user defined organism
+unless(! $organism || grep {$_ eq $organism} (@$o_list, @$c_list)){
+    warn "WARNING: The organism you specified \'$organism\' does not exist in the database\n\n";
+    undef $organism;
+}
+
+#add maker jobids automatically to the database
+if($jid){
+    $organism = $jid;
+    if(! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+	$DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$jid', 'JOB', '$jid', '$jid') });
+	$DBH->commit;
+    }
+}
+
+#promt user to select organism
+if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+    die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
+
+    for(my $i = 0; $i <= abs(@$o_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $o_list->[$j]) if(exists $o_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$o_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Add a new organism to the database>");
+	push(@menu, "<Remove an organism from the database>");
+	push(@menu, "<Quit>");
+
+	system("clear");
+	$organism = prompt ("Please select an existing organism from the database or add a new one: ",
+			    -menu => \@menu
+			   );
+	
+	if($organism eq 'Show more organisms -->'){
+	    undef $organism;
+	}
+	elsif($organism eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $organism;
+	}
+	elsif($organism eq '<Add a new organism to the database>'){
+	    my $ab = '';
+	    my $gn = '';
+	    my $sp = '';
+	    my $cn = '';
+
+	    while(1){
+		system("clear");
+		do{
+		    $ab = prompt ("Enter abbreviation, (i.e. H.sapiens) [$ab]: ", -default => $ab);
+		    $ab = $ab->{value};
+		}while(!$ab);
+		do{
+		    $gn = prompt ("Enter genus, (i.e. Homo) [$gn]: ", -default => $gn);
+		    $gn = $gn->{value};
+		}while(!$gn);
+		do{
+		    $sp = prompt ("Enter species, (i.e. sapiens) [$sp]: ", -default => $sp);
+		    $sp = $sp->{value};
+		}while(!$sp);
+		do{
+		    $cn = prompt ("Enter common name, (i.e. human) [$cn]: ", -default => $cn);
+		    $cn = $cn->{value};
+		}while(!$cn);
+		
+		system("clear");
+		last if(prompt ("Abbreviation: $ab\n".
+				"Genus: $gn\n".
+				"Species: $sp\n".
+				"Common Name: $cn\n\n".
+				"Is this correct?",
+				-yes_no
+				)
+			);
+	    }
+
+	    $DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$ab', '$gn', '$sp', '$cn') });
+	    $DBH->commit;
+	    $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+	    $i = -1;
+	    next;
+	}
+	elsif($organism eq '<Remove an organism from the database>'){
+	    remove_db_menu();
+	    $i = -1;
+	}
+	elsif($organism eq '<Quit>'){
+	    warn "\n\nWARNING: The user exited the program without doing anything\n\n";
+	    $DBH->disconnect;
+	    exit;
+	}
+	else{
+	    last;
+	}
+    }
+}
+
+$DBH->disconnect;
+
+
+#build command line
+$GMOD .= " --dbhost $host" if($host);
+$GMOD .= " --dbport $port" if($port);
+$GMOD .= " --dbuser $user" if($user);
+$GMOD .= " --dbpass $pass" if($pass);
+$GMOD .= " --dbname $dbname";
+$GMOD .= " --organism $organism";
+$GMOD .= " --skip_vacuum";
+$GMOD .= " --recreate_cache";
+
+foreach my $file (@files){
+    my $annotations;
+    my $analysis;
+    my $fasta;
+
+    open(IN, "< $file");
+    my $ff; #fasta flag
+    while(defined(my $line = <IN>)){
+	if($ff){
+	    $fasta .= $line;
+	    next;
+	}
+	elsif($line =~ /^\#\#FASTA/){
+	    $ff = 1;
+	    $fasta .= $line;
+	    next;
+	}
+	elsif($line =~ /^\#/){
+	    next;
+	}
+	elsif($line =~ /\tmaker\t|\tcontig\t/){
+	    $annotations .= $line;
+	    next;
+	}
+	else{
+	    $analysis .= $line;
+	    next;
+	}
+    }
+    close(IN);
+
+    if($annotations){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh "\#\#gff-version 3\n";
+	print $fh $annotations;
+	print $fh $fasta;
+	close($fh);
+
+	my $command = $GMOD;
+	$command .= " --gfffile $fname";
+	$command .= " --noexon";
+
+	system ($command);
+	unlink($fname);
+    }
+
+    if($analysis){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh "\#\#gff-version 3\n";
+	print $fh $analysis;
+	print $fh $fasta;
+	close($fh);
+
+	my $command = $GMOD;
+	$command .= " --gfffile $fname";
+	$command .= " --analysis";
+
+	system ($command);
+	unlink($fname);
+    }
+}
+
+
+#-------subs--------
+sub remove_db_menu{
+    for(my $i = 0; $i < abs(@$o_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $o_list->[$j]) if(exists $o_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$o_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Go back to main menu>");
+
+	my $selection = prompt ("Please select an organism to remove from the database: ",
+				-menu => \@menu
+				);
+	
+	if($selection eq 'Show more organisms -->'){
+	    undef $selection;
+	}
+	elsif($selection eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $selection;
+	}
+	elsif($selection eq '<Go back to main menu>'){
+	    return;
+	}
+	else{
+	    if(prompt ("Are you sure you want to delete \'$selection\' from the database?", -yes_no)){
+		$DBH->do(qq{ DELETE FROM organism WHERE (abbreviation = '$selection') });
+		$DBH->commit;
+		$o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+		
+		return;
+	    }
+	    else{
+		$i--;
+	    }
+	}
+    }
+}
