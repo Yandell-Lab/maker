@@ -241,15 +241,10 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
 			      $t_file,
+			      undef,
 			      $the_void,
 			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
-			      $CTL_OPT{_blastx},
-			      $CTL_OPT{eval_blastx},
-			      $CTL_OPT{bit_blastx},
-			      $CTL_OPT{pcov_blastx},
-			      $CTL_OPT{pid_blastx},
-			      $CTL_OPT{split_hit},
-			      $CTL_OPT{cpus},
+			      \%CTL_OPT,
 			      $LOG
 			     );
 	  
@@ -261,15 +256,10 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastn($chunk, 
 			      $t_file,
+			      undef,
 			      $the_void,
 			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
-			      $CTL_OPT{_blastn},
-			      $CTL_OPT{eval_blastn},
-			      $CTL_OPT{bit_blastn},
-			      $CTL_OPT{pcov_blastn},
-			      $CTL_OPT{pid_blastn},
-			      $CTL_OPT{split_hit},
-			      $CTL_OPT{cpus},
+			      \%CTL_OPT,
 			      $LOG
 			     );
 	  
@@ -281,15 +271,10 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = tblastx($chunk,
 			       $t_file,
+			       undef,
 			       $the_void,
 			       $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
-			       $CTL_OPT{_tblastx},
-			       $CTL_OPT{eval_tblastx},
-			       $CTL_OPT{bit_tblastx},
-			       $CTL_OPT{pcov_tblastx},
-			       $CTL_OPT{pid_tblastx},
-			       $CTL_OPT{split_hit},
-			       $CTL_OPT{cpus},
+			       \%CTL_OPT,
 			       $LOG
 			      );
 
@@ -799,8 +784,8 @@ sub genemark {
    my $LOG         = shift;
 
    #genemark sometimes fails if called directly so I built a wrapper
-   my $exe = "$FindBin::Bin/../lib/Widget/genemark/gmhmme3_wrap";
-   my $gm  = $CTL_OPT->{gmhmme3}; #genemark
+   my $exe = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
+   my $gm  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
    my $pro = $CTL_OPT->{probuild}; #helper exe
    my $hmm = $CTL_OPT->{gmhmm};
    
@@ -1233,17 +1218,22 @@ sub dbformat {
 sub blastn_as_chunks {
    my $chunk      = shift;
    my $db         = shift;
-   my $the_void    = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
    my $seq_id     = shift;
-   my $blastn = shift;
-   my $eval_blastn = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $old_db = shift;
-   my $formater = shift;
-   my $rank = shift;
-   my $LOG = shift;
-   my $LOG_FLAG = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+   my $LOG_FLAG   = shift;
+
+   my $blastn      = $CTL_OPT->{_blastn};
+   my $bit_blastn  = $CTL_OPT->{bit_blastn};
+   my $eval_blastn = $CTL_OPT->{eval_blastn};
+   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
+   my $pid_blastn  = $CTL_OPT->{pid_blastn};
+   my $split_hit   = $CTL_OPT->{split_hit};
+   my $cpus        = $CTL_OPT->{cpus};
+   my $formater    = $CTL_OPT->{_formater};
 
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1291,6 +1281,7 @@ sub blastn_as_chunks {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
+	     $CTL_OPT->{organism_type}
 	    );
 
    $chunk->erase_fasta_file();
@@ -1299,14 +1290,16 @@ sub blastn_as_chunks {
 }
 #-----------------------------------------------------------------------------
 sub collect_blastn{
-   my $chunk      = shift;
-   my $blast_dir    = shift;
-   my $eval_blastn = shift;
-   my $bit_blastn = shift,
-   my $pcov_blastn = shift;
-   my $pid_blastn = shift;
-   my $split_hit = shift;
-   my $LOG = shift;
+   my $chunk     = shift;
+   my $blast_dir = shift;
+   my $CTL_OPT   = shift;
+   my $LOG       = shift;
+
+   my $eval_blastn = $CTL_OPT->{eval_blastn};
+   my $bit_blastn  = $CTL_OPT->{bit_blastn},
+   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
+   my $pid_blastn  = $CTL_OPT->{pid_blastn};
+   my $split_hit   = $CTL_OPT->{split_hit};
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
@@ -1356,16 +1349,21 @@ sub collect_blastn{
 sub blastn {
    my $chunk      = shift;
    my $db         = shift;
-   my $the_void    = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
    my $seq_id     = shift;
-   my $blastn = shift;
-   my $eval_blastn = shift;
-   my $bit_blastn = shift,
-   my $pcov_blastn = shift;
-   my $pid_blastn = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $LOG = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+
+   my $blastn      = $CTL_OPT->{_blastn};
+   my $bit_blastn  = $CTL_OPT->{bit_blastn};
+   my $eval_blastn = $CTL_OPT->{eval_blastn};
+   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
+   my $pid_blastn  = $CTL_OPT->{pid_blastn};
+   my $split_hit   = $CTL_OPT->{split_hit};
+   my $cpus        = $CTL_OPT->{cpus};
+   my $formater    = $CTL_OPT->{_formater};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1385,7 +1383,8 @@ sub blastn {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
-	    );
+	     $CTL_OPT->{organism_type}
+	     );
 
    my %params;
    $params{significance}  = $eval_blastn;
@@ -1417,6 +1416,7 @@ sub runBlastn {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
+   my $org_type = shift;
 
    my $command  = $blast;
    if ($command =~ /blastn$/) {
@@ -1428,14 +1428,15 @@ sub runBlastn {
       $command .= " N=-3";
       $command .= " Q=3";
       $command .= " Z=1000";
-      $command .= " Y=500000000";
+      $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
       $command .= " cpus=$cpus";	
-      $command .= " topcomboN=1";
-      $command .= " hspmax=100";
-      $command .= " gspmax=100";
-      $command .= " hspsepqmax=$split_hit";
+      $command .= ($org_type eq 'eukaryotic') ? " topcomboN=1" : "";
+      $command .= ($org_type eq 'eukaryotic') ? " hspmax=100" : " hspmax=5";
+      $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
+      $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
       $command .= " gi";
+      $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
    }
@@ -1448,9 +1449,9 @@ sub runBlastn {
       $command .= " -q -3";
       $command .= " -G 3";
       $command .= " -z 1000";
-      $command .= " -Y 500000000";
+      $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= " -K 100";
+      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
       $command .= " -I";
@@ -1476,20 +1477,27 @@ sub runBlastn {
 }
 #-----------------------------------------------------------------------------
 sub blastx_as_chunks {
-   my $chunk         = shift;
-   my $db            = shift;
-   my $the_void      = shift;
-   my $seq_id        = shift;
-   my $blastx        = shift;
-   my $eval_blastx   = shift;
-   my $split_hit     = shift;
-   my $cpus          = shift;
-   my $old_db        = shift;
-   my $formater      = shift;
-   my $rank          = shift;
-   my $LOG = shift;
-   my $LOG_FLAG = shift;
-   my $softmask = shift;
+   my $chunk      = shift;
+   my $db         = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
+   my $seq_id     = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+   my $LOG_FLAG   = shift;
+
+   my $rflag = 1 if($old_db && $CTL_OPT->{repeat_protein} eq $old_db); #am I running repeat data?
+
+   my $blastx      = $CTL_OPT->{_blastx};
+   my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
+   my $eval_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
+   my $cpus        = $CTL_OPT->{cpus};
+   my $formater    = $CTL_OPT->{_formater};
+   my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
 
    #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1537,7 +1545,8 @@ sub blastx_as_chunks {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
-	     $softmask
+	     $softmask,
+	     $CTL_OPT->{organism_type}
 	    );
 
    $chunk->erase_fasta_file();
@@ -1546,14 +1555,16 @@ sub blastx_as_chunks {
 }
 #-----------------------------------------------------------------------------
 sub collect_blastx{
-   my $chunk      = shift;
-   my $blast_dir    = shift;
-   my $eval_blastx = shift;
-   my $bit_blastx = shift,
-   my $pcov_blastx = shift;
-   my $pid_blastx = shift;
-   my $split_hit = shift;
-   my $LOG = shift;
+   my $chunk     = shift;
+   my $blast_dir = shift;
+   my $CTL_OPT   = shift;
+   my $LOG       = shift;
+
+   my $eval_blastx = $CTL_OPT->{eval_blastx};
+   my $bit_blastx  = $CTL_OPT->{bit_blastx},
+   my $pcov_blastx = $CTL_OPT->{pcov_blastx};
+   my $pid_blastx  = $CTL_OPT->{pid_blastx};
+   my $split_hit   = $CTL_OPT->{split_hit};
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
@@ -1603,17 +1614,24 @@ sub collect_blastx{
 sub blastx {
    my $chunk      = shift;
    my $db         = shift;
-   my $the_void    = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
    my $seq_id     = shift;
-   my $blastx = shift;
-   my $eval_blastx = shift;
-   my $bit_blastx = shift;
-   my $pcov_blastx = shift;
-   my $pid_blastx = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $LOG = shift;
-   my $softmask = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+
+   my $rflag = 1 if($old_db && $CTL_OPT->{repeat_protein} eq $old_db); #am I running repeat data?
+
+   my $blastx      = $CTL_OPT->{_blastx};
+   my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
+   my $eval_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
+   my $cpus        = $CTL_OPT->{cpus};
+   my $formater    = $CTL_OPT->{_formater};
+   my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1634,6 +1652,8 @@ sub blastx {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
+	     $softmask,
+	     $CTL_OPT->{organism_type}
 	    );
 
    my %params;
@@ -1684,6 +1704,7 @@ sub runBlastx {
    my $split_hit = shift;
    my $cpus = shift;
    my $softmask = shift;
+   my $org_type = shift;
 
    my $command  = $blast;
    if ($command =~ /blastx$/) {
@@ -1693,10 +1714,10 @@ sub runBlastx {
       #$command .= " W=5";
       #$command .= " wink=5";
       $command .= " Z=300";
-      $command .= " Y=500000000";
-      $command .= " hspmax=100";
+      $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
+      $command .= ($org_type eq 'eukaryotic') ? " hspmax=100" : " hspmax=5";
       $command .= " cpus=$cpus";
-      $command .= " gspmax=100";
+      $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
       #$command .= " hspsepqmax=10000";
       $command .= " lcmask";
       $command .= " kap";
@@ -1708,9 +1729,9 @@ sub runBlastx {
       $command .= " -p blastx";
       $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
       $command .= " -z 300";
-      $command .= " -Y 500000000";
+      $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= " -K 100";
+      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
       $command .= " -I";
@@ -1739,18 +1760,23 @@ sub runBlastx {
 sub tblastx_as_chunks {
    my $chunk      = shift;
    my $db         = shift;
-   my $the_void    = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
    my $seq_id     = shift;
-   my $tblastx = shift;
-   my $eval_tblastx = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $old_db = shift;
-   my $formater = shift;
-   my $rank = shift;
-   my $LOG = shift;
-   my $LOG_FLAG = shift;
-   my $softmask = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+   my $LOG_FLAG   = shift;
+
+   my $tblastx      = $CTL_OPT->{_tblastx};
+   my $bit_tblastx  = $CTL_OPT->{bit_tblastx};
+   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
+   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
+   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
+   my $split_hit    = $CTL_OPT->{split_hit};
+   my $cpus         = $CTL_OPT->{cpus};
+   my $formater     = $CTL_OPT->{_formater};
+   my $softmask     = $CTL_OPT->{softmask};
 
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1798,7 +1824,8 @@ sub tblastx_as_chunks {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
-	      $softmask
+	      $softmask,
+	      $CTL_OPT->{organism_type}
 	     );
 
    $chunk->erase_fasta_file();
@@ -1807,14 +1834,16 @@ sub tblastx_as_chunks {
 }
 #-----------------------------------------------------------------------------
 sub collect_tblastx{
-   my $chunk      = shift;
-   my $blast_dir    = shift;
-   my $eval_tblastx = shift;
-   my $bit_tblastx = shift,
-   my $pcov_tblastx = shift;
-   my $pid_tblastx = shift;
-   my $split_hit = shift;
-   my $LOG = shift;
+   my $chunk     = shift;
+   my $blast_dir = shift;
+   my $CTL_OPT   = shift;
+   my $LOG       = shift;
+
+   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
+   my $bit_tblastx  = $CTL_OPT->{bit_tblastx},
+   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
+   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
+   my $split_hit   = $CTL_OPT->{split_hit};
 
    my $blast_finished = $blast_dir;
    $blast_finished =~ s/\.temp_dir$//;
@@ -1864,17 +1893,22 @@ sub collect_tblastx{
 sub tblastx {
    my $chunk      = shift;
    my $db         = shift;
-   my $the_void    = shift;
+   my $old_db     = shift;
+   my $the_void   = shift;
    my $seq_id     = shift;
-   my $tblastx = shift;
-   my $eval_tblastx = shift;
-   my $bit_tblastx = shift,
-   my $pcov_tblastx = shift;
-   my $pid_tblastx = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $LOG = shift;
-   my $softmask = shift;
+   my $CTL_OPT    = shift;
+   my $rank       = shift;
+   my $LOG        = shift;
+
+   my $tblastx      = $CTL_OPT->{_tblastx};
+   my $bit_tblastx  = $CTL_OPT->{bit_tblastx};
+   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
+   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
+   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
+   my $split_hit    = $CTL_OPT->{split_hit};
+   my $cpus         = $CTL_OPT->{cpus};
+   my $formater     = $CTL_OPT->{_formater};
+   my $softmask     = $CTL_OPT->{softmask};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1894,6 +1928,8 @@ sub tblastx {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
+	      $softmask,
+	      $CTL_OPT->{organism_type}
 	     );
 
    my %params;
@@ -1927,6 +1963,7 @@ sub runtBlastx {
    my $split_hit = shift;
    my $cpus = shift;
    my $softmask = shift;
+   my $org_type = shift;
 
    my $command  = $blast;
    if ($command =~ /tblastx$/) {
@@ -1934,14 +1971,15 @@ sub runtBlastx {
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       #$command .= " W=15";
       $command .= " Z=1000";
-      $command .= " Y=500000000";
+      $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
       $command .= " cpus=$cpus";	
-      $command .= " topcomboN=1";
-      $command .= " hspmax=100";
-      $command .= " gspmax=100";
-      $command .= " hspsepqmax=$split_hit";
+      $command .= ($org_type eq 'eukaryotic') ? " topcomboN=1" : "";
+      $command .= ($org_type eq 'eukaryotic') ? " hspmax=100" : " hspmax=5";
+      $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
+      $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
       $command .= " gi";
+      $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
    }
@@ -1950,9 +1988,9 @@ sub runtBlastx {
       $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
       #$command .= " -W 15";
       $command .= " -z 1000";
-      $command .= " -Y 500000000";
+      $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= " -K 100";
+      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
       $command .= " -I";
@@ -2120,6 +2158,7 @@ sub set_defaults {
       $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta");
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
+      $CTL_OPT{'organism_type'} = 'eukaryotic';
       $CTL_OPT{'predictor'} = 'est2genome';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = '';
@@ -2136,6 +2175,7 @@ sub set_defaults {
       $CTL_OPT{'max_dna_len'} = 100000;
       $CTL_OPT{'min_contig'} = 1;
       $CTL_OPT{'split_hit'} = 10000;
+      $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
@@ -2161,7 +2201,6 @@ sub set_defaults {
    #maker_bopts
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'wublast';
-      $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -2199,6 +2238,7 @@ sub set_defaults {
 		  'exonerate',
 		  'snap',
 		  'gmhmme3',
+		  'gmhmmp',
 		  'augustus',
 		  'fgenesh',
 		  'twinscan',
@@ -2285,15 +2325,21 @@ sub load_control_files {
    $CTL_OPT{again} = $OPT{again} if (defined $OPT{again});
 
    #skip repeat masking command line option
-   if ($OPT{R}) {
+   if ($OPT{R} || $CTL_OPT{organism_type} eq 'prokaryotic') {
       $CTL_OPT{model_org} = '';
       $CTL_OPT{repeat_protein} = '';
       $CTL_OPT{rmlib} = '';
       $CTL_OPT{rm_gff} = '';
       $CTL_OPT{rm_pass} = 0;
+
+      print STDERR "INFO: ";
+      print STDERR "No repeats expected in prokaryotic organisms.\n"
+	  if($CTL_OPT{organism_type} eq 'prokaryotic');
+      print STDERR "Now removing all repeat masking options.\n\n";
    }
 
    #if no repeat masking options are set don't run masking dependent methods
+   #i.e. unmasked predictions
    if ($CTL_OPT{model_org} eq '' &&
        $CTL_OPT{repeat_protein} eq '' &&
        $CTL_OPT{rmlib} eq '' &&
@@ -2301,6 +2347,11 @@ sub load_control_files {
        ($CTL_OPT{rm_pass} == 0 ||
 	$CTL_OPT{genome_gff} eq '')
       ) {
+       warn "WARNING: There are no masking options set, yet unmask is set to 1.\n".
+	   "This is not valid. The value for unmask will be set to 0.\n\n"
+	   if($CTL_OPT{unmask} == 1);
+
+       $CTL_OPT{unmask} = 0;
        $CTL_OPT{_no_mask} = 1; #no masking options found
    }
 
@@ -2313,23 +2364,41 @@ sub load_control_files {
    my @predictors = split(',', $CTL_OPT{predictor});
 
    my %uniq;
+   $CTL_OPT{_predictor} = [];
    foreach my $p (@predictors) {
-       if ($p !~ /^snap$|^augustus$|^est2genome$|^fgenesh$/ &&
+       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
 	   $p !~ /^genemark$|^jigsaw$|^model_gff$|^pred_gff$/
 	   ) {
 	   $error .= "ERROR: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
 	       "snap, genemark, augustus, and fgenesh\n\n";
        }
-       else {
-	   push(@{$CTL_OPT{_predictor}}, $p) unless($uniq{$p});
+       elsif($CTL_OPT{organism_type} eq 'prokaryotic'){
+	   if($p =~ /^snap$|^augustus$|^fgenesh$|^jigsaw$/){
+               warn "WARNING: the predictor $p does not support prokaryotic organisms\n".
+		   "and will be ignored.\n\n";
+           }
+	   else{
+	       push(@{$CTL_OPT{_run}}, $p) unless(exists $uniq{$p} || $p !~ /genemark/);
+	       push(@{$CTL_OPT{_predictor}}, $p) unless(exists $uniq{$p});
+	       $uniq{$p}++;
+	   }
+       }
+       elsif($CTL_OPT{organism_type} eq 'eukaryotic'){
+	   push(@{$CTL_OPT{_predictor}}, $p) unless(exists $uniq{$p});
 	   if($p =~ /^snap$|^augustus$|^fgenesh$|^genemark$|^jigsaw$/){
-	       push(@{$CTL_OPT{_run}}, $p) unless($uniq{$p});
+	       push(@{$CTL_OPT{_run}}, $p) unless(exists $uniq{$p});
 	   }
 	   $uniq{$p}++;
        }
+       else{
+	   die "FATAL: Logic error in GI::load_contol_files\n";
+       }
    }
-   
+
+   #reset predictor value based on previous filtering step (for log)
+   $CTL_OPT{predictor} = join(",", @{$CTL_OPT{_predictor}});
+
    #parse run and error check
    $CTL_OPT{run} =~ s/\s+//g;
    my @run = split(',', $CTL_OPT{run});
@@ -2349,7 +2418,7 @@ sub load_control_files {
    if ($CTL_OPT{blast_type} !~ /^wublast$|^ncbi$/) {
       warn "WARNING: blast_type must be set to \'wublast\' or \'ncbi\'.\n",
       "The value $CTL_OPT{blast_type} is invalid.\n",
-      "This will now be reset to the default 'wublast'";
+      "This will now be reset to the default 'wublast'.\n\n";
       
       $CTL_OPT{blast_type} = 'wublast';
    }
@@ -2361,7 +2430,7 @@ sub load_control_files {
        -e $CTL_OPT{blastall}
       ) {
       warn "WARNING: blast_type is set to \'wublast\' but wublast executables\n",
-      "can not be located.  NCBI blast will be used instead.\n";
+      "can not be located.  NCBI blast will be used instead.\n\n";
 
       $CTL_OPT{blast_type} = 'ncbi';
    }
@@ -2373,11 +2442,12 @@ sub load_control_files {
        -e $CTL_OPT{tblastx}
       ) {
       warn "WARNING: blast_type is set to \'ncbi\' but ncbi executables\n",
-      "can not be located.  WUBLAST blast will be used instead.\n";
+      "can not be located.  WUBLAST blast will be used instead.\n\n";
 
       $CTL_OPT{blast_type} = 'wublast';
    }
    
+   #use standard value to refer to both NCBI and WUBLAST
    if ($CTL_OPT{blast_type} =~ /^wublast$/) {
       $CTL_OPT{_formater} = $CTL_OPT{xdformat};
       $CTL_OPT{_blastn} = $CTL_OPT{blastn};
@@ -2389,6 +2459,15 @@ sub load_control_files {
       $CTL_OPT{_blastn} = $CTL_OPT{blastall};
       $CTL_OPT{_blastx} = $CTL_OPT{blastall};
       $CTL_OPT{_tblastx} = $CTL_OPT{blastall};
+   }
+
+   #check organism type values
+   if ($CTL_OPT{organism_type} !~ /^eukaryotic$|^prokaryotic$/) {
+      $error .=  "ERROR: organism_type must be set to \'eukaryotic\' or \'prokaryotic\'.\n".
+      "The value $CTL_OPT{organism_type} is invalid.\n\n";
+
+      #set the default just to assist in populating remaining errors
+      $CTL_OPT{organism_type} = 'eukaryotic';
    }
    
    #--validate existence of required values from control files
@@ -2404,25 +2483,12 @@ sub load_control_files {
    push (@infiles, '_tblastx', '_formater') if($CTL_OPT{altest});
    push (@infiles, 'genome') if($CTL_OPT{genome});
    push (@infiles, 'genome') if(!$CTL_OPT{genome_gff} && !$main::eva);
-   push (@infiles, 'exonerate') if($CTL_OPT{est}); 
-   push (@infiles, 'exonerate') if($CTL_OPT{protein}); 
-   push (@infiles, 'repeat_protein') if ($CTL_OPT{repeat_protein});
    push (@infiles, 'est') if($CTL_OPT{est}); 
    push (@infiles, 'protein') if($CTL_OPT{protein}); 
    push (@infiles, 'altest') if($CTL_OPT{altest}); 
    push (@infiles, 'est_reads') if($CTL_OPT{est_reads}); 
-   push (@infiles, 'RepeatMasker') if($CTL_OPT{rmlib});
-   push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
-   push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
-   push (@infiles, 'snap') if (grep (/snap/, @{$CTL_OPT{_run}}));
-   push (@infiles, 'gmhmme3') if (grep (/genemark/, @{$CTL_OPT{_run}}));
    push (@infiles, 'probuild') if (grep (/genemark/, @{$CTL_OPT{_run}}));
-   push (@infiles, 'augustus') if (grep (/augustus/, @{$CTL_OPT{_run}})); 
-   push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
-   push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
-   push (@infiles, 'jigsaw') if (grep (/jigsaw/, @{$CTL_OPT{_run}}));
    push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom} && $CTL_OPT{evaluate});
-   push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
    push (@infiles, 'protein_gff') if($CTL_OPT{protein_gff});
    push (@infiles, 'genome_gff') if($CTL_OPT{genome_gff});
@@ -2435,6 +2501,24 @@ sub load_control_files {
 				    (!$CTL_OPT{genome_gff} ||
 				     !$CTL_OPT{model_pass})
 				   );
+   if($CTL_OPT{organism_type} eq 'eukaryotic'){
+       push (@infiles, 'exonerate') if($CTL_OPT{est}); 
+       push (@infiles, 'exonerate') if($CTL_OPT{protein});
+       push (@infiles, 'repeat_protein') if ($CTL_OPT{repeat_protein});
+       push (@infiles, 'RepeatMasker') if($CTL_OPT{rmlib});
+       push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
+       push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
+       push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
+       push (@infiles, 'snap') if (grep (/snap/, @{$CTL_OPT{_run}}));
+       push (@infiles, 'gmhmme3') if (grep (/genemark/, @{$CTL_OPT{_run}}));
+       push (@infiles, 'augustus') if (grep (/augustus/, @{$CTL_OPT{_run}})); 
+       push (@infiles, 'fgenesh') if (grep (/fgenesh/, @{$CTL_OPT{_run}}));
+       push (@infiles, 'twinscan') if (grep (/twinscan/, @{$CTL_OPT{_run}}));
+       push (@infiles, 'jigsaw') if (grep (/jigsaw/, @{$CTL_OPT{_run}}));
+   }
+   elsif($CTL_OPT{organism_type} eq 'prokaryotic'){
+       push (@infiles, 'gmhmmp') if (grep (/genemark/, @{$CTL_OPT{_run}}));
+   }
 
    #uniq the array
    %uniq = ();
@@ -2446,12 +2530,12 @@ sub load_control_files {
    #verify existence of required values
    foreach my $in (@infiles) {
       if (not $CTL_OPT{$in}) {
-	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files\n\n";
+	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files.\n\n";
 	 next;
       }
       elsif (not -e $CTL_OPT{$in}) {
 	 $error .= "ERROR: The \'$in\' file $CTL_OPT{$in} does not exist.\n".
-	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl\n\n";
+	 "Please check your control files: maker_opts.ctl, maker_bopts, or maker_exe.ctl.\n\n";
 	 next;
       }
       
@@ -2492,16 +2576,24 @@ sub load_control_files {
    if (grep (/^fgenesh$/, @infiles)) {
       if (! $CTL_OPT{fgenesh_par_file}) {
 	 $error .= "ERROR: There is no parameter file secified for for FgenesH in\n".
-	 "maker_opts.ctl fgenesh_par_file\n\n";
+	 "maker_opts.ctl fgenesh_par_file.\n\n";
       }
       elsif (! -e $CTL_OPT{fgenesh_par_file}) {
 	 $error .= "ERROR: The parameter file specified for fgenesh in maker_opts.ctl does not exist.\n\n";
       }
    }
    if ($CTL_OPT{max_dna_len} < 50000) {
-      warn "WARNING: \'max_dna_len\' is set too low.  The minimum value permited is 50,000\n".
+      warn "WARNING: \'max_dna_len\' is set too low.  The minimum value permited is 50,000.\n".
       "max_dna_len will be reset to 50,000\n\n";
       $CTL_OPT{max_dna_len} = 50000;
+   }
+   if ($CTL_OPT{split_hit} > 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
+      warn "WARNING: \'split_hit\' is meaningless for prokaryotic genomes and will be set to 0.\n\n";
+      $CTL_OPT{split_hit} = 0;
+   }
+   if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
+      warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n";
+      $CTL_OPT{single_exon} = 1;
    }
    if ($CTL_OPT{min_contig} <= 0) {
       warn "WARNING: \'min_contig\' must be set to 1 or higher.\n".
@@ -2519,10 +2611,10 @@ sub load_control_files {
       $CTL_OPT{retry} = 0;
    } 
    if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
-       $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist\n";
+       $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist.\n\n";
    }
    if($main::eva && $CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){ #only for evaluator
-       $error .= "You can only specify a GFF3 file for genome_gff or model_gff no both!!\n";
+       $error .= "You can only specify a GFF3 file for genome_gff or model_gff no both!!\n\n";
    }
    
    die $error if ($error);   
@@ -2535,7 +2627,7 @@ sub load_control_files {
 
    if ($iterator->number_of_entries() == 0) {
       my $genome = (! $CTL_OPT{genome}) ? $fasta_gff : $CTL_OPT{genome};
-      die "ERROR:  The file $genome contains no fasta entries\n";
+      die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
    #--decide whether to force datastore 
@@ -2559,8 +2651,8 @@ sub load_control_files {
    #--check validity of the alternate peptide
    $CTL_OPT{alt_peptide} = uc($CTL_OPT{alt_peptide});
    if ($CTL_OPT{alt_peptide} !~ /^[ABCDEFGHIKLMNPQRSTVWXYZ]$/) {
-      warn "WARNING: Invalid alternate peptide \'$CTL_OPT{alt_peptide}\'\n",
-      "This will be set to the default 'C'\n";
+      warn "WARNING: Invalid alternate peptide \'$CTL_OPT{alt_peptide}\'.\n",
+      "This will be set to the default 'C'.\n\n";
       $CTL_OPT{alt_peptide} = 'C';
    }
 
@@ -2592,10 +2684,9 @@ sub load_control_files {
        $thr->detach;
    }
    else{
-       die "ERROR: Another instance of maker is already running for this dataset\n";
+       die "ERROR: Another instance of maker is already running for this dataset.\n\n";
    }
    
-
    #--set up optional global TMP
    if($CTL_OPT{TMP}){
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
@@ -2660,7 +2751,8 @@ sub generate_control_files {
    print OUT "\n";
    print OUT "#-----Gene Prediction Options\n" if(!$ev);
    print OUT "#-----Evaluator Ab-Initio Comparison Options\n" if($ev);
-   #print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n";
+   print OUT "organism_type:$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
+   print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n" if($ev);
    print OUT "predictor:$O{predictor} #prediction methods for annotations (seperate multiple values by ',')\n" if(!$ev);
    print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
    print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
@@ -2682,6 +2774,7 @@ sub generate_control_files {
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
    print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
+   print OUT "softmask:$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
    print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
    print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
    print OUT "single_exon:$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
@@ -2708,7 +2801,6 @@ sub generate_control_files {
    open (OUT, "> $dir/maker_bopts.ctl") if(!$ev && !$log);
    print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
    print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
-   print OUT "softmask:$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
    print OUT "\n";
    print OUT "pcov_blastn:$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
    print OUT "pid_blastn:$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
@@ -2756,6 +2848,7 @@ sub generate_control_files {
    print OUT "#-----Ab-initio Gene Prediction Algorithms\n";
    print OUT "snap:$O{snap} #location of snap executable\n";
    print OUT "gmhmme3:$O{gmhmme3} #location of eukaryotic genemark executable\n";
+   print OUT "gmhmmp:$O{gmhmmp} #location of prokaryotic genemark executable\n";
    print OUT "augustus:$O{augustus} #location of augustus executable\n";
    print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
    print OUT "twinscan:$O{twinscan} #location of twinscan executable (not yet implemented)\n";

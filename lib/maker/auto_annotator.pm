@@ -43,20 +43,30 @@ sub prep_hits {
 	my $seq              = shift;
 	my $single_exon      = shift;
 	my $single_length    = shift;
+	my $organism_type    = shift;
 
-	#only ESTs from splice concious algorithms i.e. no blastn
-	my $clean_est = get_selected_types($est_hits,'est2genome', 'est_gff');
-	my $clean_altest = $alt_est_hits;
-	if ($single_exon == 1) {
-	    #do nothing
-	}else {
-	    # don't use unpliced single exon ESTs-- may be genomic contamination
-	    $clean_est = clean::purge_single_exon_hits($clean_est);
-	    $clean_altest = clean::purge_single_exon_hits($clean_altest);
+	my $clean_est = [];
+	my $clean_altest = [];
+	#only ESTs from splice concious algorithms for euaryotes i.e. no blastn
+	if($organism_type eq 'eukaryotic'){
+	    $clean_est = get_selected_types($est_hits,'est2genome', 'est_gff');
+	    $clean_altest = $alt_est_hits;
+	    if ($single_exon == 1) {
+		#do nothing
+	    }else {
+		# don't use unpliced single exon ESTs-- may be genomic contamination
+		$clean_est = clean::purge_single_exon_hits($clean_est);
+		$clean_altest = clean::purge_single_exon_hits($clean_altest);
+	    }
+	    
+	    # throw out the exonerate est hits with weird splice sites
+	    $clean_est = clean::throw_out_bad_splicers($clean_est, $seq);
 	}
-
-	# throw out the exonerate est hits with weird splice sites
-	$clean_est = clean::throw_out_bad_splicers($clean_est, $seq);
+	#include blastn and don't filter for splicing
+	else{
+	    $clean_est = get_selected_types($est_hits,'blastn', 'est_gff', 'blastn');
+	    $clean_altest = $alt_est_hits;
+	}
 	
 
 	#---build clusters for basic evidence
@@ -144,7 +154,7 @@ sub prep_hits {
 	my $c_id = 0;
 	my @bx_data;
 	foreach my $c (@{$hint_clusters}){
-	   my $bx = prep_blastx_data($c, $c_id, $seq);
+	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
 	   push(@bx_data, @{$bx}) if defined $bx;
 
 	   $c_id++;
@@ -341,7 +351,7 @@ sub purge_short_ESTs_in_clusters{
     
     my @c_keepers;
     foreach my $c (@$clusters){
-        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
@@ -378,8 +388,9 @@ sub prep_blastx_data {
         my $c    = shift;
 	my $c_id = shift;
 	my $seq  = shift;
+	my $org_type = shift || 'eukaryotic';
 
-        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
@@ -392,8 +403,15 @@ sub prep_blastx_data {
         my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
         # group of most informative alt splices
-        my $gomias = clean::purge_single_exon_hits($ests_in_cluster);
-	$gomias = clean::get_best_alt_splices($gomias, $seq, 10);
+	my $gomias = [];
+	
+	if($org_type eq 'eukaryotic'){
+	    $gomias = clean::purge_single_exon_hits($ests_in_cluster);
+	    $gomias = clean::get_best_alt_splices($gomias, $seq, 10);
+	}
+	else{
+	    $gomias = PhatHit_utils::make_flat_hits($ests_in_cluster, $seq);
+	}
 
 	my @data;
         if (defined($gomias->[0])){
@@ -439,7 +457,7 @@ sub prep_gff_data {
 	my $seq  = shift;
 
         my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
-        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
@@ -479,7 +497,7 @@ sub prep_pred_data {
 	my $c_id = shift;
 	my $seq  = shift;
 
-        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff');
+        my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster    = get_selected_types($c,'protein2genome');
         my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
         my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
@@ -518,7 +536,7 @@ sub prep_polpro_data {
         my $c_id = shift;
         my $seq  = shift;
 
-        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff');
+        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster   = get_selected_types($c,'protein2genome');
 
 	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
@@ -551,7 +569,7 @@ sub prep_polest_data {
         my $seq  = shift;
 
 
-        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff');
+        my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
         my $ps_in_cluster   = get_selected_types($c,'protein2genome');
         my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
 
@@ -607,7 +625,8 @@ sub annotate {
 						  $models,
 						  $v_seq_ref,
 						  $CTL_OPTIONS->{single_exon},
-						  $CTL_OPTIONS->{single_length}
+						  $CTL_OPTIONS->{single_length},
+						  $CTL_OPTIONS->{organism_type}
 						  );
     
     my %annotations;
@@ -880,17 +899,17 @@ sub best_annotations {
 	my @m_est2g;
 	foreach my $p (@{$CTL_OPTIONS->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
-		if($p ne 'est2genome' && $g->{g_strand} == 1){
+		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
 		    push(@$p_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
 		}
-		elsif($p ne 'est2genome' && $g->{g_strand} == -1) {
+		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
 		    push(@$m_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
 		}
 		elsif($g->{g_strand} == 1){
-		    push(@p_est2g, $g); #seperate est2genome genes
+		    push(@p_est2g, $g); #seperate est2genome and protein2genome genes
 		}
 		elsif($g->{g_strand} == -1){
-		    push(@m_est2g, $g); #seperate est2genome genes
+		    push(@m_est2g, $g); #seperate est2genome and protein2genome genes
 		}
 		else{
 		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -1177,7 +1196,7 @@ sub run_it {
     my $def          = shift;
     my $predictor    = shift;
     my $predictions  = shift;
-    my $CTL_OPTIONS  = shift;
+    my $CTL_OPT      = shift;
     
     my $q_id = Fasta::def2SeqID($def); 
     my @transcripts;
@@ -1186,6 +1205,7 @@ sub run_it {
 	my $mia      = $set->{mia};
 	my $ests     = $set->{ests};
 	my $model    = $set->{model};
+	my $gomiph   = $set->{gomiph};
 
 	#------gff passthrough
 	if ($predictor eq 'model_gff') {
@@ -1220,14 +1240,39 @@ sub run_it {
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
 	    my $transcript = pneu($ests, $mia, $seq);
+
+	    next if !$transcript;
+
+	    my $all_preds = get_overlapping_hits($transcript, $predictions);
+	    $set->{all_preds} = $all_preds;
 	    
-	    next if(! $transcript);
-
-            my $all_preds = get_overlapping_hits($transcript, $predictions);
-            $set->{all_preds} = $all_preds;
-
 	    push(@transcripts, [$transcript, $set, $mia]);
 	    $i++;
+
+	    next;
+	}
+
+	#------protein2genome
+	if ($predictor eq 'protein2genome') {
+	    next if($CTL_OPT->{organism_type} eq 'eukaryotic');
+	    next if(! @$gomiph);
+
+	    my $utr = [];
+	    push(@$utr, $mia) if($mia);
+	    my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
+
+	    foreach my $miph (@$miphs){
+		my $transcript = pneu($utr, $miph, $seq);
+		
+		next if(! $transcript);
+		
+		my $all_preds = get_overlapping_hits($transcript, $predictions);
+		$set->{all_preds} = $all_preds;
+		
+		push(@transcripts, [$transcript, $set, $miph]);
+		$i++;
+	    }
+
 	    next;
 	}
 
@@ -1235,7 +1280,6 @@ sub run_it {
         return [] if ($predictor eq 'genemark');
 	
 	#------default hint based behavior
-	my $gomiph   = $set->{gomiph};
 	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
 	my $pol_p    = get_selected_types($gomiph,'protein2genome');
 	my $alt_ests = $set->{alt_ests};
@@ -1247,7 +1291,7 @@ sub run_it {
 						  $the_void, 
 						  $set,
 						  $predictor,
-						  $CTL_OPTIONS,
+						  $CTL_OPT,
 						  $LOG
 						  );
 	
@@ -1379,7 +1423,7 @@ sub load_transcript_struct {
         my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
 
 	my $pol_p_hits  = get_selected_types($evi->{gomiph}, 'protein2genome');
-	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
 	my $blastx_hits = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
 	my $tblastx_hits = get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
 	my $abinits = $evi->{all_preds};
@@ -1506,6 +1550,9 @@ sub group_transcripts {
    my $the_void     = shift;
    my $CTL_OPTIONS  = shift;
 
+   #fix weird sequence names
+   $seq_id = Fasta::seqID2SafeID($seq_id);
+
    #place evidence and p_bases in index for easy retrieval
    my @transcripts;
    my %lookup;
@@ -1585,6 +1632,7 @@ sub group_transcripts {
 	 }
       }
       elsif ($predictor eq 'abinit') {
+	  #now check for preexisting name
 	  if ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;

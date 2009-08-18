@@ -120,6 +120,16 @@ sub get_hsp_coors {
         return \@coors;
 }
 #------------------------------------------------------------------------
+sub get_hit_coors {
+        my $hits = shift;
+        my $what = shift;
+        my @coors;
+        foreach my $hit (@{$hits}){
+	    push(@coors, [$hit->nB($what), $hit->nE($what)]);
+        }
+        return \@coors;
+}
+#------------------------------------------------------------------------
 sub split_hit_on_intron {
    my $hits        = shift;
    my $max_intron = shift;
@@ -244,10 +254,9 @@ sub split_hit_by_strand {
 sub shatter_hit {
 	my $hit = shift;
 
-	my $ref = ref($hit);
+	my $ref = ref($hit->[0]);
 
 	my @new_hits;
-	my $i = 0;
 	foreach my $hsp ($hit->hsps){
 		
             my $new_hit = new $ref('-name'         => $hit->name,
@@ -265,7 +274,159 @@ sub shatter_hit {
 		$new_hit->add_hsp($hsp);
 
 		push(@new_hits, $new_hit);
-		$i++;
+	}
+
+	return \@new_hits;
+}
+#------------------------------------------------------------------------
+sub shatter_all_hits {
+	my $hits = shift;
+
+	my $ref = ref($hits->[0]);
+
+	my @new_hits;
+	foreach my $hit (@$hits){
+	    foreach my $hsp ($hit->hsps){
+		
+		my $new_hit = new $ref('-name'         => $hit->name,
+				       '-description'  => $hit->description,
+				       '-algorithm'    => $hit->algorithm,
+				       '-length'       => $hit->length,
+				       '-score'        => $hsp->score,
+				       '-bits'         => $hsp->bits,
+				       '-significance' => $hsp->significance
+				       );
+		
+		$new_hit->queryLength($hit->queryLength);
+		$new_hit->{is_shattered} = 1;
+		
+		$new_hit->add_hsp($hsp);
+		
+		push(@new_hits, $new_hit);
+	    }
+	}
+
+	return \@new_hits;
+}
+#------------------------------------------------------------------------
+#this method assumes that the features are all on the same strand
+sub make_flat_hits {
+	my $hits = shift;
+	my $seq = shift;
+
+	return [] if(! @$hits);
+
+	my $ref = ref($hits->[0]);
+	my $hsp_ref = ref($hits->[0]->{_hsps}->[0]);
+	my $strand = $hits->[0]->strand;
+
+	my $coors  = get_hit_coors($hits, 'query');
+	my $pieces = Shadower::getPieces($seq, $coors, 0);
+
+	my @new_hits;
+
+	foreach my $p (@$pieces){
+	    my $nB = $p->{b};
+	    my $nE = $p->{e};
+	    my $length = abs($nE -$nB) + 1;
+	    
+	    #natural end and beginning are non-normalized values
+	    ($nB, $nE) = ($nE, $nB) if($nB < $nE && $strand == -1);
+
+	    my $pSeq = $p->{piece};
+	    $pSeq = Fasta::revComp(\$pSeq) if($strand == -1);
+
+	    my $new_hit = new $ref('-name'         => "flat_hit_$nB\_$nE",
+				   '-description'  => '',
+				   '-algorithm'    => $hits->[0]->algorithm,
+				   '-length'       => $length,
+				   '-score'        => $length,
+				   '-bits'         => $length*2,
+				   '-significance' => 0
+				   );
+		
+	    $new_hit->queryLength($length);
+	    
+	    my @args;
+	    
+	    push(@args, '-query_start');
+	    push(@args, $nB);
+
+	    push(@args, '-query_seq');
+	    push(@args, $pSeq);
+	    
+	    push(@args, '-score');
+	    push(@args, $length);
+	    push(@args, '-homology_seq');
+	    push(@args, $pSeq);
+	    
+	    push(@args, '-hit_start');
+	    push(@args, 1);
+	    
+	    push(@args, '-hit_seq');
+	    push(@args, $pSeq);
+	    
+	    push(@args, '-hsp_length');
+	    push(@args, $length);
+	    
+	    push(@args, '-identical');
+	    push(@args, $length);
+	    
+	    push(@args, '-hit_length');
+	    push(@args, $length);
+		 
+	    push(@args, '-query_name');
+	    push(@args, $hits->[0]->{_hsps}->[0]->query_name);
+
+	    push(@args, '-algorithm');
+	    push(@args, $hits->[0]->algorithm);
+	    
+	    push(@args, '-bits');
+	    push(@args, $length*2);
+	    
+	    push(@args, '-evalue');
+	    push(@args, 0);
+
+	    push(@args, '-pvalue');
+	    push(@args, 0);
+	    
+	    push(@args, '-query_length');
+	    push(@args, $length);
+	    
+	    push(@args, '-query_end');
+	    push(@args, $nE);
+	    
+	    push(@args, '-conserved');
+	    push(@args, $length);
+	    
+	    push(@args, '-hit_name');
+	    push(@args, "flat_hit_$nB\_$nE");
+
+	    push(@args, '-hit_end');
+	    push(@args, $length);
+
+	    push(@args, '-query_gaps');
+	    push(@args, 0);
+	    
+	    push(@args, '-hit_gaps');
+	    push(@args, 0);
+	    
+	    my $hsp = new $hsp_ref(@args);
+	    $hsp->queryName($hits->[0]->{_hsps}->[0]->query_name);
+	    #-------------------------------------------------
+	    # setting strand because bioperl is all messed up!
+	    #------------------------------------------------
+	    if ($strand == 1 ){
+		$hsp->{_strand_hack}->{query} = 1;
+		$hsp->{_strand_hack}->{hit}   = 1;
+	    }
+	    else {
+		$hsp->{_strand_hack}->{query} = -1;
+		$hsp->{_strand_hack}->{hit}   =  1;
+	    }
+	    $new_hit->add_hsp($hsp);
+	    
+	    push(@new_hits, $new_hit);
 	}
 
 	return \@new_hits;

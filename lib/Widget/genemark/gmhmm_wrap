@@ -13,17 +13,18 @@ use Getopt::Long;
 my $usage = "
 Usage:
  
-     gmhmme3_wrap [options] <infile>
+     gmhmm_wrap [options] <infile>
 
      This script wraps around the GeneMark-ES executable gmhmme3 to resolve
-     errors associated with long stretches of N's in a fasta entry.
+     errors associated with long stretches of N's in a fasta entry.  This
+     also works for the  GeneMark-S execuable gmhmmp.
 
 Options:
 
      -m  <filename>    Model file (required).
      -o  <filename>    Output file (default is to standard out).
-     -g  <executable>  gmhmme3 executable (part of GeneMark-ES).
-     -p  <executable>  probuild executable (part of GeneMark-ES).
+     -g  <executable>  gmhmme3/gmhmmp executable (part of GeneMark).
+     -p  <executable>  probuild executable (part of GeneMark).
 
      -help|?           prints this usage statement.
 
@@ -32,23 +33,30 @@ Options:
 
 #global variables
 my $mod;
-my $gmhmme3;
+my $gmhmm;
 my $probuild;
 my $outfile;
 
 #find gmhmme3
-$gmhmme3 = `which gmhmme3 2> /dev/null`;
-chomp $gmhmme3;
-$gmhmme3 = '' if ($gmhmme3 =~ /^no gmhmme3/);
+$gmhmm = `which gmhmme3 2> /dev/null`;
+chomp $gmhmm;
+$gmhmm = '' if ($gmhmm =~ /^no gmhmme3/);
+
+if(! $gmhmm){
+    #find gmhmme3
+    $gmhmm = `which gmhmmp 2> /dev/null`;
+    chomp $gmhmm;
+    $gmhmm = '' if ($gmhmm =~ /^no gmhmmp/);
+}
 
 #find probuild
 $probuild = `which probuild 2> /dev/null`;
 chomp $probuild;
-$probuild = '' if ($gmhmme3 =~ /^no probuild/);
+$probuild = '' if ($probuild =~ /^no probuild/);
 
 #get options
 GetOptions("m=s" => \$mod,
-	   "g=s" => \$gmhmme3,
+	   "g=s" => \$gmhmm,
 	   "p=s" => \$probuild,
 	   "o=s" => \$outfile,
 	   "help|?" => sub {print $usage; exit(0)}
@@ -60,12 +68,13 @@ my $infile   = shift;
 #set absolute paths
 $mod      = Cwd::abs_path($mod) if($mod && Cwd::abs_path($mod));
 $infile   = Cwd::abs_path($infile) if($infile && Cwd::abs_path($infile));
-$gmhmme3  = Cwd::abs_path($gmhmme3) if($gmhmme3 && Cwd::abs_path($gmhmme3));
+$gmhmm  = Cwd::abs_path($gmhmm) if($gmhmm && Cwd::abs_path($gmhmm));
 $probuild = Cwd::abs_path($probuild) if($probuild && Cwd::abs_path($probuild));
 $outfile  = Cwd::abs_path($outfile) if($outfile && Cwd::abs_path($outfile));
 
 #check for input errors
 my $error;
+my $euk; #flag if a eukaryotic file
 
 if(! $infile){
     $error .= "ERROR: You must specify an input fasta file\n";
@@ -81,14 +90,17 @@ elsif(! -e $mod){
     $error .= "ERROR: The model file $mod does not exist\n";
 }
 
-if(! $gmhmme3){
-    $error .= "ERROR: You must specify the location of the gmhmme3 executable\n";
+if(! $gmhmm){
+    $error .= "ERROR: You must specify the location of the gmhmme3/gmhmmp executable\n";
 }
-elsif(! -e $gmhmme3){
-    $error .= "ERROR: The specified gmhmme3 executable $gmhmme3 does not exist\n";
+elsif(! -e $gmhmm){
+    $error .= "ERROR: The specified gmhmme3/gmhmmp executable $gmhmm does not exist\n";
 }
-elsif($gmhmme3 !~ /gmhmme3\s*$/){
-    $error .= "ERROR: $gmhmme3 does not seem to be the wanted gmhmme3 executable\n";
+elsif($gmhmm !~ /gmhmme3\s*$|gmhmmp\s*$/){
+    $error .= "ERROR: $gmhmm does not seem to be the wanted gmhmme3/gmhmmp executable\n";
+}
+else{
+    $euk = 1 if($gmhmm =~ /gmhmme3\s*$/);
 }
 
 if(! $probuild){
@@ -128,7 +140,9 @@ my @lst_files;
 my %offsets;
 foreach my $file (@files){
     my $out = "$tempdir/".File::Spec->splitpath( $file ) . ".lst";
-    $command = "$gmhmme3 -m $mod -o $out -b /dev/null $file";
+    $command = "$gmhmm -m $mod -o $out";
+    $command .= " -b /dev/null" if($euk);
+    $command .= " $file";
     system($command) && die "ERROR: GeneMark Failed\n";
 
     my $it = new Iterator::Fasta($file);
@@ -174,6 +188,12 @@ foreach my $file ( @lst_files ){
     my $last = 0;
     my $offset;
     while(defined(my $line = <$IN>)){
+	#standardize header for the two genemark types
+	if($line =~ /^Sequence file name:/){
+	    $line =~ s/^Sequence file name:/Sequence name:/;
+	    $line =~ s/\,\s+RBS\:[^\n]+//;
+	}
+
 	#set correct Sequence in header
 	if($line =~ /^Sequence name:\s*([^\n]+)/){
 	    $offset = $offsets{Cwd::abs_path($1)};
@@ -187,8 +207,8 @@ foreach my $file ( @lst_files ){
 	    next;
 	}
 	
-	#set correct length in header
-	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/){
+	#set correct length in header (not needed in prokaryotic)
+	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/ || $line !~ /^\s*\d+\s+[\+\-]\s+\d+\s+\d+/){
 	    if($header_flag){
 		$line =~ s/(Sequence length:\s*)\d+/$1$length/;
 		$line =~ s/(G\+C content:\s*)[^\n]+/$1/;
@@ -200,6 +220,7 @@ foreach my $file ( @lst_files ){
 	
 	#test if feature line
 	$line =~ /^\s*(\d+)\s+\d+\s+[\+\-]\s+\S+\s+(\d+)\s+(\d+)/;
+	$line =~ /^\s*(\d+)\s+[\+\-]\s+(\d+)\s+(\d+)/ if(! $euk);
 
 	#fix offset from splitting fastas
 	my $new   = $1 + $count;		
@@ -217,8 +238,13 @@ foreach my $file ( @lst_files ){
 	}
 
 	#fix each feature line with a regular expression substitution
-	$line =~ s/^\s{0,$s1}(\s*)(\d+)(\s+\d+\s+[\+\-]\s+\S+)\s{0,$s2}(\s*)(\d+)\s{0,$s3}(\s*)(\d+)/$1$new$3$4$start$6$end/;
-	
+	if($euk){
+	    $line =~ s/^\s{0,$s1}(\s*)(\d+)(\s+\d+\s+[\+\-]\s+\S+)\s{0,$s2}(\s*)(\d+)\s{0,$s3}(\s*)(\d+)/$1$new$3$4$start$6$end/;
+	}
+	else{
+	    $line =~ s/^\s{0,$s1}(\s*)(\d+)(\s+[\+\-])\s{0,$s2}(\s*)(\d+)\s{0,$s3}(\s*)(\d+)/$1$new$3$4$start$6$end/;
+	}
+
 	print $OUT $line;
 	$header_flag = 0; #stop adding header once features are reached
     }

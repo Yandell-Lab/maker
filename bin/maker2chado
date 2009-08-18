@@ -151,6 +151,8 @@ if($jid){
     if(! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
 	$DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$jid', 'JOB', '$jid', '$jid') });
 	$DBH->commit;
+	$o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+	$c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
     }
 }
 
@@ -158,13 +160,13 @@ if($jid){
 if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
     die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
 
-    for(my $i = 0; $i <= abs(@$o_list/10); $i ++){
+    for(my $i = 0; $i <= abs(@$c_list/10); $i ++){
 	my @menu;
 	for(my $j = $i*10; $j < $i*10+10; $j++){
-	    push(@menu, $o_list->[$j]) if(exists $o_list->[$j]);
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
 	}
 	
-	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$o_list/10));
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
 	push(@menu, "<-- Previous list") if($i > 0);
 	push(@menu, "<Add a new organism to the database>");
 	push(@menu, "<Remove an organism from the database>");
@@ -221,6 +223,7 @@ if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
 	    $DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$ab', '$gn', '$sp', '$cn') });
 	    $DBH->commit;
 	    $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+	    $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
 	    $i = -1;
 	    next;
 	}
@@ -317,13 +320,13 @@ foreach my $file (@files){
 
 #-------subs--------
 sub remove_db_menu{
-    for(my $i = 0; $i < abs(@$o_list/10); $i ++){
+    for(my $i = 0; $i < abs(@$c_list/10); $i ++){
 	my @menu;
 	for(my $j = $i*10; $j < $i*10+10; $j++){
-	    push(@menu, $o_list->[$j]) if(exists $o_list->[$j]);
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
 	}
 	
-	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$o_list/10));
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
 	push(@menu, "<-- Previous list") if($i > 0);
 	push(@menu, "<Go back to main menu>");
 
@@ -346,7 +349,8 @@ sub remove_db_menu{
 		$DBH->do(qq{ DELETE FROM organism WHERE (abbreviation = '$selection') });
 		$DBH->commit;
 		$o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
-		
+		$c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
 		return;
 	    }
 	    else{

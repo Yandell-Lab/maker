@@ -57,6 +57,26 @@ sub run {
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
 sub parse {
+    my $report = shift;
+    my $params = shift;
+    my $q_file = shift;
+
+    open(my $IN, "< $report");
+    my $line = <$IN>;
+    close($IN);
+
+    if($line =~ /eukariotyc|eukaryotic/i){ #spelled wrong in version 3.9
+	return parse_eukaryotic($report, $params, $q_file);
+    }
+    elsif($line =~ /prokaryotic/i){
+	return parse_prokaryotic($report, $params, $q_file);
+    }
+    else{
+	die "FATAL: Can not identify the version of GeneMark used for the report\n\n";
+    }
+}
+
+sub parse_eukaryotic{
         my $report = shift;
         my $params = shift;
 	my $q_file = shift;
@@ -88,6 +108,43 @@ sub parse {
 		$g{$id}[$i]{e}        = $stuff[5];
 		$g{$id}[$i]{score}    = '';
 		$i++;
+	}
+	$fh->close();
+	my $phat_hits = load_phat_hits($q_name, $q_seq, \%g, $params);
+	return $phat_hits;
+}
+
+sub parse_prokaryotic{
+        my $report = shift;
+        my $params = shift;
+	my $q_file = shift;
+
+	my $iterator = new Iterator::Fasta($q_file);
+        my $fasta = $iterator->nextEntry();
+
+        my $def     = Fasta::getDef(\$fasta);
+        my $q_seq   = Fasta::getSeqRef(\$fasta);
+        my $q_name  = Fasta::def2SeqID($def);
+
+	my $fh = new FileHandle();
+	   $fh->open($report);
+
+	my %g;
+	while (my $line = <$fh>){	    
+		chomp($line);
+		next if(! $line || $line !~ /^\s*\d+\s+[-+]\s+\d+/);
+		$line =~ s/^\s+//;
+		my @stuff = split(/\s+/, $line);
+
+		my ($id) = $stuff[0];
+		die "FATAL: Logic error in Widget::genemark::parse_prokaryotic"
+		    if(defined($g{$id}));
+
+		$g{$id}[0]{strand}   = $stuff[1] eq '+' ? 1 : -1;
+		$g{$id}[0]{b}        = $stuff[2];
+		$g{$id}[0]{e}        = $stuff[3];
+		$g{$id}[0]{type}     = 'Single';
+		$g{$id}[0]{score}    = '';
 	}
 	$fh->close();
 	my $phat_hits = load_phat_hits($q_name, $q_seq, \%g, $params);

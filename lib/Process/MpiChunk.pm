@@ -458,18 +458,13 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastx_as_chunks($chunk,
 					       $db,
+					       $CTL_OPT{repeat_protein},
 					       $the_void,
 					       $safe_seq_id,
-					       $CTL_OPT{_blastx},
-					       $CTL_OPT{eval_rm_blastx},
-					       $CTL_OPT{split_hit},
-					       $CTL_OPT{cpus},
-					       $CTL_OPT{repeat_protein},
-					       $CTL_OPT{_formater},
+					       \%CTL_OPT,
 					       $self->{RANK},
 					       $LOG,
-					       $LOG_FLAG,
-					       1
+					       $LOG_FLAG
 					      );
 	    }
 	    #-------------------------CODE
@@ -511,11 +506,7 @@ sub _go {
 	    if ($res_dir) {
 	       $rm_blastx_keepers = GI::collect_blastx($chunk,
 						       $res_dir,
-						       $CTL_OPT{eval_rm_blastx},
-						       $CTL_OPT{bit_rm_blastx},
-						       $CTL_OPT{pcov_rm_blastx},
-						       $CTL_OPT{pid_rm_blastx},
-						       $CTL_OPT{split_hit},
+						       \%CTL_OPT,
 						       $LOG
 						      );
 	 
@@ -773,14 +764,10 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastn_as_chunks($chunk,
 					       $db,
+					       $CTL_OPT{est},					       
 					       $the_void,
 					       $safe_seq_id,
-					       $CTL_OPT{_blastn},
-					       $CTL_OPT{eval_blastn},
-					       $CTL_OPT{split_hit},
-					       $CTL_OPT{cpus},
-					       $CTL_OPT{est},
-					       $CTL_OPT{_formater},
+					       \%CTL_OPT,
 					       $self->{RANK},
 					       $LOG,
 					       $LOG_FLAG
@@ -829,11 +816,7 @@ sub _go {
 	    if ($res_dir) {
 	       $blastn_keepers = GI::collect_blastn($chunk,
 						    $res_dir,
-						    $CTL_OPT{eval_blastn},
-						    $CTL_OPT{bit_blastn},
-						    $CTL_OPT{pcov_blastn},
-						    $CTL_OPT{pid_blastn},
-						    $CTL_OPT{split_hit},
+						    \%CTL_OPT,
 						    $LOG
 						   );
 	    }
@@ -889,18 +872,13 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::blastx_as_chunks($chunk,
 					       $db,
+					       $CTL_OPT{protein},
 					       $the_void,
 					       $safe_seq_id,
-					       $CTL_OPT{_blastx},
-					       $CTL_OPT{eval_blastx},
-					       $CTL_OPT{split_hit},
-					       $CTL_OPT{cpus},
-					       $CTL_OPT{protein},
-					       $CTL_OPT{_formater},
+					       \%CTL_OPT,
 					       $self->{RANK},
 					       $LOG,
-					       $LOG_FLAG,
-					       $CTL_OPT{softmask}
+					       $LOG_FLAG
 					      );
 
 	    }
@@ -944,11 +922,7 @@ sub _go {
 	    if ($res_dir) {
 	       $blastx_keepers = GI::collect_blastx($chunk,
 						    $res_dir,
-						    $CTL_OPT{eval_blastx},
-						    $CTL_OPT{bit_blastx},
-						    $CTL_OPT{pcov_blastx},
-						    $CTL_OPT{pid_blastx},
-						    $CTL_OPT{split_hit},
+						    \%CTL_OPT,
 						    $LOG
 						   );
 	    }
@@ -1004,18 +978,13 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       $res_dir = GI::tblastx_as_chunks($chunk,
 						$db,
+						$CTL_OPT{altest},
 						$the_void,
 						$safe_seq_id,
-						$CTL_OPT{_tblastx},
-						$CTL_OPT{eval_tblastx},
-						$CTL_OPT{split_hit},
-						$CTL_OPT{cpus},
-						$CTL_OPT{altest},
-						$CTL_OPT{_formater},
+						\%CTL_OPT,
 						$self->{RANK},
 						$LOG,
-						$LOG_FLAG,
-						$CTL_OPT{softmask}
+						$LOG_FLAG
 					       );
 	    }
 	    #-------------------------CODE
@@ -1058,11 +1027,7 @@ sub _go {
 	    if ($res_dir) {
 	       $tblastx_keepers = GI::collect_tblastx($chunk,
 						      $res_dir,
-						      $CTL_OPT{eval_tblastx},
-						      $CTL_OPT{bit_tblastx},
-						      $CTL_OPT{pcov_tblastx},
-						      $CTL_OPT{pid_tblastx},
-						      $CTL_OPT{split_hit},
+						      \%CTL_OPT,
 						      $LOG
 						     );
 	    }
@@ -1253,6 +1218,21 @@ sub _go {
 						$model_gff_keepers
 					       );
 	    }
+
+	    #shatter hits and flip strand of blastn where appropriate.
+	    #I shatter after processing the chunk divide to avoid weird
+	    #complications from flipping on only one side of a split HSP
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$blastn_keepers  = PhatHit_utils::shatter_all_hits($blastn_keepers);
+		$blastx_keepers  = PhatHit_utils::shatter_all_hits($blastx_keepers);
+		$tblastx_keepers = PhatHit_utils::shatter_all_hits($tblastx_keepers);
+		#this checks the open reading frame and can flip the hit
+		foreach my $phat_hit (@$blastn_keepers){
+		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
+			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
+		}
+	    }
+
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -1327,20 +1307,22 @@ sub _go {
       
 	    #-make a multi-fasta of the seqs in the blastx_clusters 
 	    #-polish the blastx hits with exonerate
-      
-	    my $exoner_p_clust = GI::polish_exonerate($fasta,
-						      $blastx_clusters,
-						      $fasta_p_index,
-						      $the_void,
-						      5,
-						      'p',
-						      $CTL_OPT{exonerate},
-						      $CTL_OPT{pcov_blastx},
-						      $CTL_OPT{pid_blastx},
-						      $CTL_OPT{ep_score_limit},
-						      $CTL_OPT{ep_matrix},
-						      $LOG
-						     );
+	    my $exoner_p_clust =[];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		$exoner_p_clust = GI::polish_exonerate($fasta,
+						       $blastx_clusters,
+						       $fasta_p_index,
+						       $the_void,
+						       5,
+						       'p',
+						       $CTL_OPT{exonerate},
+						       $CTL_OPT{pcov_blastx},
+						       $CTL_OPT{pid_blastx},
+						       $CTL_OPT{ep_score_limit},
+						       $CTL_OPT{ep_matrix},
+						       $LOG
+						       );
+	    }
       
 	    #flatten clusters
 	    $blastx_data      = GI::flatten($blastx_clusters);
@@ -1402,7 +1384,6 @@ sub _go {
 	    #flatten the clusters
 	    my $tblastx_data = GI::flatten($tblastx_clusters);
 	    
-	    
 	    #-cluster the blastn hits
 	    print STDERR "cleaning blastn...\n" unless $main::quiet;
 	    my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
@@ -1412,19 +1393,22 @@ sub _go {
 	    undef $blastn_keepers; #free up memory
 	    
 	    #-polish blastn hits with exonerate
-	    my $exoner_e_clust = GI::polish_exonerate($fasta,
-						      $blastn_clusters,
-						      $fasta_t_index,
-						      $the_void,
-						      5,
-						      'e',
-						      $CTL_OPT{exonerate},
-						      $CTL_OPT{pcov_blastn},
-						      $CTL_OPT{pid_blastn},
-						      $CTL_OPT{en_score_limit},
-						      $CTL_OPT{en_matrix},
-						      $LOG
-						     ); 
+	    my $exoner_e_clust = [];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		$exoner_e_clust = GI::polish_exonerate($fasta,
+						       $blastn_clusters,
+						       $fasta_t_index,
+						       $the_void,
+						       5,
+						       'e',
+						       $CTL_OPT{exonerate},
+						       $CTL_OPT{pcov_blastn},
+						       $CTL_OPT{pid_blastn},
+						       $CTL_OPT{en_score_limit},
+						       $CTL_OPT{en_matrix},
+						       $LOG
+						       ); 
+	    }
 	    
 	    #flatten clusters
 	    my $blastn_data      = GI::flatten($blastn_clusters);
@@ -1464,6 +1448,7 @@ sub _go {
 			masked_fasta
 			tblastx_data
 			blastx_data
+			blastn_data
 			exonerate_e_data
 			exonerate_p_data
 			preds_on_chunk
@@ -1489,6 +1474,7 @@ sub _go {
 	    my $masked_fasta = $VARS->{masked_fasta};
 	    my $tblastx_data = $VARS->{tblastx_data};
 	    my $blastx_data = $VARS->{blastx_data};
+	    my $blastn_data = $VARS->{blastn_data};
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
 	    my $preds_on_chunk = $VARS->{preds_on_chunk};
@@ -1502,7 +1488,14 @@ sub _go {
 	    #combine final data sets
 	    my $final_est = GI::combine($exonerate_e_data,
 					$est_gff_keepers
-				       );
+					);
+
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$final_est = GI::combine($blastn_data,
+					 $final_est
+					 );
+	    }
+
 	    my $final_altest = GI::combine($tblastx_data,
 					   $altest_gff_keepers
 					  );
