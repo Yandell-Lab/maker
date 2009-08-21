@@ -1241,6 +1241,13 @@ sub run_it {
 	    next if (! defined $mia);
 	    my $transcript = pneu($ests, $mia, $seq);
 
+	    if($CTL_OPT->{organism_type} eq 'prokaryotic'){
+		my $transcript_seq  = get_transcript_seq($transcript, $seq);
+		my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
+		#at least 60% of EST must be CDS to make a gene prediction
+		next if((length($translation_seq)+1) * 3 / length($transcript_seq) < 60 || ! $has_stop);
+	    }
+
 	    next if !$transcript;
 
 	    my $all_preds = get_overlapping_hits($transcript, $predictions);
@@ -1262,6 +1269,14 @@ sub run_it {
 	    my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
 
 	    foreach my $miph (@$miphs){
+		if($CTL_OPT->{organism_type} eq 'prokaryotic'){
+		    my $transcript_seq  = get_transcript_seq($miph, $seq);
+		    my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
+		    #at least 80% of protein must be CDS to make a gene prediction
+		    next if(length($translation_seq) * 3 / length($transcript_seq) < 80);
+		}
+
+		$miph = PhatHit_utils::trim_to_CDS($miph, $seq);
 		my $transcript = pneu($utr, $miph, $seq);
 		
 		next if(! $transcript);
@@ -1415,7 +1430,7 @@ sub load_transcript_struct {
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 
-        my ($translation_seq, $offset, $end) = get_translation_seq($transcript_seq);
+        my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
 	
 	my $len_3_utr = length($transcript_seq) - $end + 1;
 	my $l_trans =  length($translation_seq);
@@ -1452,6 +1467,7 @@ sub load_transcript_struct {
 		        't_name'   => $t_name,
 			't_qi'     => $qi,
 			'AED'      => $AED,
+			'has_stop' => $has_stop,
 			'evi'      => $evi,
 			'p_base'   => $p_base,
 			'p_length' => length($translation_seq)
@@ -2166,36 +2182,39 @@ sub get_off_and_str {
 sub get_translation_seq {
 	my $seq    = shift;
 
+	my $has_stop = 0;
+
 	my $tM = new CGL::TranslationMachine();
-
 	my ($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
-
 	my $end = length($p_seq)*3 + $offset + 1;
 
-	$p_seq =~ s/\*$//; # added 11/21/06
+	#see if there is a stop and simultaneoulsy remove it
+	$has_stop = 1 if($p_seq =~ s/\*$//);
 
 	if ($p_seq =~ /^M/){
-		# easy  it begins with an M....
-		return ($p_seq , $offset, $end );
+	    # easy  it begins with an M....
+	    return ($p_seq , $offset, $end, $has_stop);
 	}
 	else{
-		# get the longest internal prot that begins with an M....
-		my ($off_new, $p_seq_new) = get_longest_m_seq($seq);
+	    my $has_stop_new = 0;
 
-		my $n_end = length($p_seq_new)*3 + $off_new + 1
-		            if defined($p_seq_new);
-
-		$p_seq_new =~ s/\*$// if($p_seq_new); # added 11/21/06
-
-		if (!defined($p_seq_new)){
-			return ($p_seq , $offset, $end);
-		}
-		elsif ($offset < 3 && length($p_seq) - length($p_seq_new) > 30){
-			return ($p_seq , $offset, $end);
-		}
-		else {
-			return ($p_seq_new, $off_new, $n_end);
-		}
+	    # get the longest internal prot that begins with an M....
+	    my ($off_new, $p_seq_new) = get_longest_m_seq($seq);	    
+	    my $n_end;
+	    if(defined $p_seq_new){
+		$n_end = length($p_seq_new)*3 + $off_new + 1;
+		$has_stop_new = 1 if($p_seq_new =~ s/\*$//);
+	    }
+	    
+	    if (!defined($p_seq_new)){
+		return ($p_seq , $offset, $end, $has_stop);
+	    }
+	    elsif ($offset < 3 && length($p_seq) - length($p_seq_new) > 30){
+		return ($p_seq , $offset, $end, $has_stop);
+	    }
+	    else {
+		return ($p_seq_new, $off_new, $n_end, $has_stop_new);
+	    }
 	}
 }
 #------------------------------------------------------------------------

@@ -310,6 +310,7 @@ sub shatter_all_hits {
 }
 #------------------------------------------------------------------------
 #this method assumes that the features are all on the same strand
+#they must also be shattered hits
 sub make_flat_hits {
 	my $hits = shift;
 	my $seq = shift;
@@ -430,6 +431,201 @@ sub make_flat_hits {
 	}
 
 	return \@new_hits;
+}
+#------------------------------------------------------------------------
+#this will also walk out 3 base pairs looking for the stop codon 
+sub trim_to_CDS{
+    my $hit = shift;
+    my $seq = shift;
+
+    my $ref = ref($hit);
+    my $hsp_ref = ref($hit->{_hsps}->[0]);
+
+    my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
+    my ($translation_seq, $offset, $end, $has_stop)
+	= maker::auto_annotator::get_translation_seq($transcript_seq);
+
+    my $new_hit = new $ref('-name'         => $hit->name,
+			   '-description'  => $hit->description,
+			   '-algorithm'    => $hit->algorithm,
+			   '-length'       => $hit->length,
+			   '-score'        => $hit->score,
+			   '-bits'         => $hit->bits,
+			   '-significance' => $hit->significance
+			   );
+
+
+
+    my $tB;
+    my $tE;
+
+    my $strand = $hit->strand('query');
+    if($strand == 1){
+	$tB = $hit->start('query') + $offset;
+	#translation end is always one base pair after stop -- why??
+	$tE = $hit->start('query') + ($end - 1) - 1;
+    }
+    else{
+	$tE = $hit->end('query') - $offset;
+	$tB = $hit->end('query') - ($end - 1) + 1;
+    }
+
+    #walk out a little and look for the stop codon
+    my $new_stop;
+    if(!$has_stop){
+	my $codon;
+	if($strand == 1){
+	    $codon = substr($$seq, $tE, 3);
+	    if($codon =~ /TAA|TAG|TGA/){
+		$new_stop = 1;
+		$has_stop = 1;
+		$tE = $tE + 3;
+	    }
+	}
+	elsif($tB - 4 >= 0){
+	    $codon = Fasta::revComp(substr($$seq, $tB - 4, 3));
+	    if($codon =~ /TAA|TAG|TGA/){
+		$new_stop = 1;
+		$has_stop = 1;
+		$tB = $tB - 3;
+	    }
+	}
+    }
+
+    my $hit_start = 1;
+    foreach my $hsp ($hit->hsps){
+	#this is not the natural end and beginning!!
+	my $B = $hsp->start('query');
+	my $E = $hsp->end('query');
+
+	#see if hsp even overlaps the current CDS
+	my $class = compare::compare($B, $E, $tB, $tE);
+
+	next if($class eq '0');
+
+	#extend hsp for new stop found
+	if($new_stop){
+	    if($strand == 1){
+		$E = $tE if($tE - $E == 3); 
+	    }
+	    elsif($strand == -1){
+		$B = $tB if(abs$B - $tB == 3); 
+	    }
+	}
+
+	#figure out change to trim off seq sring
+	my $change = 0;
+	if($B < $tB){
+	    $change = abs($tB - $B) if($strand == 1);
+	    $B = $tB;
+	}
+	
+	if($E > $tE){
+	    $E = $tE;
+	    $change = abs($tE - $E) if($strand == -1);
+	}
+
+	my $length = abs($E-$B)+1;
+
+	#set natural begining (important for correct strandedness)
+	my ($nB, $nE) = ($strand == 1) ? ($B, $E) : ($E, $B) ;
+
+	my $qrSeq = substr($hsp->query_string(),
+			  $change,
+			  $length);
+
+	my $htSeq = substr($hsp->hit_string(),
+			  $change,
+			  $length);
+
+	my $hoSeq = substr($hsp->homology_string(),
+			  $change,
+			  $length);
+
+	my @args;
+	
+	push(@args, '-query_start');
+	push(@args, $nB);
+	
+	push(@args, '-query_seq');
+	push(@args, $qrSeq);
+	
+	push(@args, '-score');
+	push(@args, $hsp->score);
+	push(@args, '-homology_seq');
+	push(@args, $hoSeq);
+	
+	push(@args, '-hit_start');
+	push(@args, $hit_start);
+	
+	push(@args, '-hit_seq');
+	push(@args, $htSeq);
+	
+	push(@args, '-hsp_length');
+	push(@args, $length);
+	
+	push(@args, '-identical');
+	push(@args, $hsp->identical);
+	    
+	push(@args, '-hit_length');
+	push(@args, $length);
+	
+	push(@args, '-query_name');
+	push(@args, $hsp->query_name);
+	
+	push(@args, '-algorithm');
+	push(@args, $hsp->algorithm);
+	
+	push(@args, '-bits');
+	push(@args, $hsp->bits);
+	
+	push(@args, '-evalue');
+	push(@args, $hsp->evalue);
+	
+	push(@args, '-pvalue');
+	push(@args, $hsp->pvalue);
+	
+	push(@args, '-query_length');
+	push(@args, $length);
+	
+	push(@args, '-query_end');
+	push(@args, $nE);
+	
+	push(@args, '-conserved');
+	push(@args, $length);
+	
+	push(@args, '-hit_name');
+	push(@args, $hsp->name);
+	
+	push(@args, '-hit_end');
+	push(@args, $hit_start + $length - 1);
+	
+	push(@args, '-query_gaps');
+	push(@args, 0);
+	
+	push(@args, '-hit_gaps');
+	push(@args, 0);
+	
+	my $hsp = new $hsp_ref(@args);
+	$hsp->queryName($hsp->query_name);
+	#-------------------------------------------------
+	# setting strand because bioperl is all messed up!
+	#------------------------------------------------
+	if ($strand == 1 ){
+	    $hsp->{_strand_hack}->{query} = 1;
+	    $hsp->{_strand_hack}->{hit}   = 1;
+	}
+	else {
+	    $hsp->{_strand_hack}->{query} = -1;
+	    $hsp->{_strand_hack}->{hit}   =  1;
+	}
+
+	$new_hit->add_hsp($hsp);
+	
+	$hit_start = $hit_start + $length;
+    }    
+
+    return $new_hit;
 }
 #------------------------------------------------------------------------
 sub add_splice_data {

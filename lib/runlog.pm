@@ -24,6 +24,7 @@ my @ctl_to_log = ('genome_gff',
 		  'repeat_protein',
 		  'rmlib',
 		  'rm_gff',
+		  'organism_type',
 		  'predictor',
 		  'run',
 		  'snaphmm',
@@ -245,6 +246,11 @@ sub _clean_files{
 			$ctl_val = join(',', @set);
 		    }
 		}
+
+		#organism_type was always eukaryotic before and not logged
+		if($key eq 'organism_type' && ! $log_val){
+		    $log_val = 'eukaryotic';
+		}
 		
 		#if previous log options are not the same as current control file options
 		if ($log_val ne $ctl_val) {
@@ -253,6 +259,8 @@ sub _clean_files{
 			"Old:$log_val\tNew:$ctl_val\n\n";
 		    
 		    $continue_flag = 1; #re-run because ctlopts changed
+		    
+		    $rm_key{gff}++; #always rebuild gff when some option has changed
 		    
 		    #certain keys that don't affect preds
 		    if($key ne 'evaluate' &&
@@ -265,7 +273,9 @@ sub _clean_files{
 			$rm_key{preds}++; #almost all changes affect final predictions
 		    }
 		    
-		    $rm_key{gff}++; #always rebuild gff when some option has changed
+		    if ($key eq 'organism_type') {
+			$rm_key{all}++;
+		    }
 		    
 		    if ($key eq 'max_dna_len') {
 			$rm_key{all}++;
@@ -421,15 +431,15 @@ sub _clean_files{
 	}
 	else {
 	    if (exists $rm_key{preds}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old prediction data impossible\n".
-		    "Old prediction files will be erased before continuing\n";
+		print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
+		    "Old hint based prediction files will be erased before continuing\n";
 		
 		my @f = <$the_void/*auto_annotator*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{snap}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old Snap data impossible\n".
-		    "Old Snap files will be erased before continuing\n";
+		print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
+		    "Old SNAP files will be erased before continuing\n";
 		
 		my @f = <$the_void/*snap*>;
 		push (@files, @f);
@@ -442,8 +452,8 @@ sub _clean_files{
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{fgenesh}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old FgenesH data impossible\n".
-		    "Old FgenesH files will be erased before continuing\n";
+		print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
+		    "Old FGENESH files will be erased before continuing\n";
 		
 		my @f = <$the_void/*fgenesh*>;
 		push (@files, @f);
@@ -477,7 +487,7 @@ sub _clean_files{
 		    }
 		}
 		elsif (exists $rm_key{read_blastn}) {
-		    print STDERR "MAKER WARNING: Changes in control files make re-use of unassembled EST read Blastn data impossible\n".
+		    print STDERR "MAKER WARNING: Changes in control files make re-use of unassembled EST Blastn data impossible\n".
 			"Old EST reads Blastn files will be erased before continuing\n";
 		    
 		    my @f = <$the_void/*read_blastn*>;
