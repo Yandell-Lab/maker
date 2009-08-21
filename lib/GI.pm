@@ -784,8 +784,8 @@ sub genemark {
    my $LOG         = shift;
 
    #genemark sometimes fails if called directly so I built a wrapper
-   my $exe = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
-   my $gm  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
+   my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
+   my $exe  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
    my $pro = $CTL_OPT->{probuild}; #helper exe
    my $hmm = $CTL_OPT->{gmhmm};
    
@@ -797,11 +797,12 @@ sub genemark {
    $LOG->add_entry("STARTED", $out_file, "");   
 
 
-   my $command  = $exe;
+   my $command  = $wrap;
    $command .= " -m $hmm";
-   $command .= " -g $gm";
+   $command .= " -g $exe";
    $command .= " -p $pro";
    $command .= " -o $out_file";
+   $command .= " -t $TMP";
    $command .= " $in_file";
 
    my $w = new Widget::genemark();
@@ -882,6 +883,7 @@ sub fgenesh {
    my $CTL_OPT = shift;
    my $LOG         = shift;
 
+   my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
    my $exe = $CTL_OPT->{fgenesh};
    my $org = $CTL_OPT->{fgenesh_par_file};
 
@@ -892,7 +894,8 @@ sub fgenesh {
 
    $LOG->add_entry("STARTED", $out_file, ""); 
 
-   my $command  = $exe;
+   my $command  = "$wrap $exe";
+   $command .= " -tmp $TMP";
    $command .= " $org";
    $command .= " $in_file";
    $command .= " > $out_file";

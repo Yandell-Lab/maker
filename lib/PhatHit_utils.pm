@@ -254,7 +254,7 @@ sub split_hit_by_strand {
 sub shatter_hit {
 	my $hit = shift;
 
-	my $ref = ref($hit->[0]);
+	my $ref = ref($hit);
 
 	my @new_hits;
 	foreach my $hsp ($hit->hsps){

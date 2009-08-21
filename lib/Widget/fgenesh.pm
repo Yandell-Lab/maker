@@ -6,7 +6,7 @@ use strict;
 use lib '~/maker/lib';
 use lib '/data1/hao/projects/MAKER-fgenesh/lib';
 
-use vars qw/@ISA/;
+use vars qw(@ISA $TMP);
 use PostData;
 use FileHandle;
 use Widget;
@@ -279,6 +279,9 @@ sub fgenesh {
         my $xdef       = shift;
         my $command    = shift;
 
+	
+	my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
+
 	my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.fgenesh.fasta";
         my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.fgenesh";
 
@@ -287,9 +290,9 @@ sub fgenesh {
         write_xdef_file($xdef, $xdef_file) if defined $xdef;
                             
         FastaFile::writeFile(\$fasta, $file_name);
-        
+        $command = $wrap . " $command"; #prepend wrapper
 	$command .= " $file_name";
-                            
+	$command .= " -tmp $TMP";                        
         $command .= ' -exon_table:'.$xdef_file if -e $xdef_file;
                            
         $command .= " > $o_file";

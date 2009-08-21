@@ -10,7 +10,7 @@ file.
 MAKER is an annotation pipeline.  In other words it links together
 many steps and programs to produce final annotations.  For this
 reason, you must first install a number of programs that MAKER depends
-on.
+on.  MAKER works on both eukaryotic and prokaryotic genomes.
 
 
 To install MAKER, you will first need to install the following
@@ -35,6 +35,7 @@ You might want to also install these optional external programs:
     *Augustus 2.0 or higher (augustus.gobics.de)
     *GeneMark-ES (exon.biology.gatech.edu)
     *FGENESH 2.6 or higher (www.softberry.com) - requires licence
+    *GeneMarkS for prokaryotic genomes (exon.biology.gatech.edu)
 
 To install mpi_maker, you must have an mpi package installed, try the
 following:
@@ -121,7 +122,7 @@ MPI version of MAKER by doing the following:
 
     1. Install standard MAKER and verify that it runs.
     2. Install MPICH2 with the --enable-sharedlibs flag set to the
-       appropriate value (See MPICH2 documentation)
+       appropriate value for your OS (See MPICH2 documentation)
     3. Use cd to change to the MPI subdirectory in the MAKER
        instalation folder (i.e. maker/MPI/)
     4. Run Install.PL by typing: perl Install.PL

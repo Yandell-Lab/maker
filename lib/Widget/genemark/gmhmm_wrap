@@ -4,7 +4,7 @@ use FindBin;
 use lib "$FindBin::Bin/../../../perl/lib/";
 use lib "$FindBin::Bin/../../";
 use File::Spec;
-use File::Temp qw(tempdir);
+use File::Temp qw(tempdir tempfile);
 use Iterator::Fasta;
 use Fasta;
 use Cwd;
@@ -25,6 +25,7 @@ Options:
      -o  <filename>    Output file (default is to standard out).
      -g  <executable>  gmhmme3/gmhmmp executable (part of GeneMark).
      -p  <executable>  probuild executable (part of GeneMark).
+     -t  <directory>   Temporary directory to use. /tmp is default.
 
      -help|?           prints this usage statement.
 
@@ -36,6 +37,7 @@ my $mod;
 my $gmhmm;
 my $probuild;
 my $outfile;
+my $tmp;
 
 #find gmhmme3
 $gmhmm = `which gmhmme3 2> /dev/null`;
@@ -59,8 +61,11 @@ GetOptions("m=s" => \$mod,
 	   "g=s" => \$gmhmm,
 	   "p=s" => \$probuild,
 	   "o=s" => \$outfile,
+	   "t=s" => \$tmp,
 	   "help|?" => sub {print $usage; exit(0)}
 	   );
+
+die "ERROR: The temporary directroy \'$tmp\' does not exist\n" if($tmp && ! -d $tmp);
 
 #get arguments off the command line
 my $infile   = shift;
@@ -68,7 +73,7 @@ my $infile   = shift;
 #set absolute paths
 $mod      = Cwd::abs_path($mod) if($mod && Cwd::abs_path($mod));
 $infile   = Cwd::abs_path($infile) if($infile && Cwd::abs_path($infile));
-$gmhmm  = Cwd::abs_path($gmhmm) if($gmhmm && Cwd::abs_path($gmhmm));
+$gmhmm    = Cwd::abs_path($gmhmm) if($gmhmm && Cwd::abs_path($gmhmm));
 $probuild = Cwd::abs_path($probuild) if($probuild && Cwd::abs_path($probuild));
 $outfile  = Cwd::abs_path($outfile) if($outfile && Cwd::abs_path($outfile));
 
@@ -123,11 +128,18 @@ if($error){
 }
 
 #make temp dir to work in
-my $tempdir = tempdir(CLEANUP => 1);
+my $tempdir = ($tmp) ? tempdir(CLEANUP => 1, DIR=>$tmp) : tempdir(CLEANUP => 1);
+my (undef, $tname) = tempfile(DIR => $tempdir);
+
+#make symbolic links (for some reason long file names mess up on some systems)
+my $s_mod = "$tname\_mod";
+my $s_in = "$tname\_in";
+symlink($mod, $s_mod);
+symlink($infile, $s_in);
 
 #split fastas on runs of NNN because Genemark can't handle it
 my $command  = "cd $tempdir \n";
-   $command .= " $probuild --split gm_dna.fa --seq $infile --MIN_SPLIT_SIZE 100".
+   $command .= " $probuild --split gm_dna.fa --seq $s_in --MIN_SPLIT_SIZE 100".
                " --letters_per_line 100 --max_nnn_substring 49 --nnn_margin 3";
 
 system($command) && die "ERROR: Could not parse fasta for GeneMark\n";
@@ -140,7 +152,7 @@ my @lst_files;
 my %offsets;
 foreach my $file (@files){
     my $out = "$tempdir/".File::Spec->splitpath( $file ) . ".lst";
-    $command = "$gmhmm -m $mod -o $out";
+    $command = "$gmhmm -m $s_mod -o $out";
     $command .= " -b /dev/null" if($euk);
     $command .= " $file";
     system($command) && die "ERROR: GeneMark Failed\n";
