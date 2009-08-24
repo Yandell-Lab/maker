@@ -1,0 +1,93 @@
+#! /usr/bin/perl -w
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../../../perl/lib/";
+use lib "$FindBin::Bin/../../";
+use File::Spec;
+use File::Temp qw(tempdir tempfile);
+use Iterator::Fasta;
+use Fasta;
+use Cwd;
+use Getopt::Long qw(:config pass_through);
+
+my $usage = "
+Usage:
+ 
+     fgenesh_wrap <fgenesh_exe> <par_file> <infile> [fgenesh_options]
+
+     This script wraps around the FGENESH executable to resolve errors
+     associated with long file path names on some systems.
+
+     Always put options last.
+
+Options:
+     For FGENESH options see the FGENESH documenation.
+
+     -tmp <directory>  Choose tmp directory. /tmp is default.
+
+     -help|?           prints this usage statement.
+
+
+";
+
+#global variables
+my $tmp;
+
+#get options
+GetOptions("tmp=s" => \$tmp,
+	   "help|?" => sub {print $usage; exit(0)}
+	   );
+
+#get arguments off the command line
+my $exe = shift || print_usage();
+my $par = shift || print_usage();
+my $seq = shift || print_usage();
+
+my $error;
+$error .= "ERROR: The executable \'$exe\' does not exist\n" if(! -f $exe);
+$error .= "ERROR: The parameter file \'$par\' does not exist\n" if(! -f $par);
+$error .= "ERROR: The sequence file \'$seq\' does not exist\n" if(! -f $seq);
+$error .= "ERROR: The temporary directroy \'$tmp\' does not exist\n" if($tmp && ! -d $tmp);
+die $error if($error);
+
+#set absolute paths
+$par   = Cwd::abs_path($par) if($par && Cwd::abs_path($par));
+$seq   = Cwd::abs_path($seq) if($seq && Cwd::abs_path($seq));
+
+#temporary directory and filename
+my $tempdir = ($tmp) ? tempdir(CLEANUP => 1, DIR=>$tmp) : tempdir(CLEANUP => 1);
+my (undef, $tname) = tempfile(DIR => $tempdir);
+
+#make symbolic links (for some reason long file names mess up on some systems)
+my $s_par = "$tname\_par";
+my $s_seq = "$tname\_in";
+symlink($par, $s_par);
+symlink($seq, $s_seq);
+
+#get fgenesh command line args and make symbolic links
+my @args;
+while(my $val = shift @ARGV){
+    if($val =~ /\-exon_table\:(.*)/){
+	my $s_val = "$tname\_exon";
+	symlink($1, $s_val);
+	push(@args, "-exon_table:$s_val");
+    }
+    elsif($val =~ /\-splice_mat\:(.*)/){
+	my $s_val = "$tname\_mat";
+	symlink($1, $s_val);
+	push(@args, "-splice_mat:$s_val");
+    }
+    else{
+	push(@args, $val);
+    }
+}
+
+my $command = "$exe $s_par $s_seq " . join(" ", @args);
+
+system($command) && die "ERROR: FGENESH Failed\n";
+
+#----------------SUBS-------------------
+sub print_usage{
+    print $usage;
+    exit();
+}
