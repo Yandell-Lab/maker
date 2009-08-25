@@ -147,6 +147,10 @@ system($command) && die "ERROR: Could not parse fasta for GeneMark\n";
 #collect split fasta file
 my @files = <$tempdir/gm_dna.fa_*>;
 
+if(! @files){
+    push(@files, $s_in);
+}
+
 #run GeneMark on each split fasta
 my @lst_files;
 my %offsets;
@@ -164,6 +168,9 @@ foreach my $file (@files){
     my $offset;
     if($def =~ /^.*\; (\d+)$/){
 	$offsets{Cwd::abs_path($file)} = $1;
+    }
+    elsif(@files == 1){
+	$offsets{Cwd::abs_path($file)} = 0;
     }
     else{
 	die "ERROR: Logic error in getting offset\n";
@@ -209,8 +216,13 @@ foreach my $file ( @lst_files ){
 	#set correct Sequence in header
 	if($line =~ /^Sequence name:\s*([^\n]+)/){
 	    $offset = $offsets{Cwd::abs_path($1)};
-	    die "ERROR: Logic error getting offset from hash\n" if(! defined $offset);
-
+	    if(! defined $offset && @files == 1){
+		$offset = 0;
+	    }
+	    elsif(! defined $offset){
+		die "ERROR: Logic error getting offset from hash\n";
+	    }
+	    
 	    if($header_flag){
 		$line =~ s/^(Sequence name:\s*)[^\s]+(\s*\n)$/$1$infile$2/;
 		print $OUT $line;

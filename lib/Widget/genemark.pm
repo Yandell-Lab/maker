@@ -65,10 +65,10 @@ sub parse {
     my $line = <$IN>;
     close($IN);
 
-    if($line =~ /eukariotyc|eukaryotic/i){ #spelled wrong in version 3.9
+    if($line && $line =~ /eukariotyc|eukaryotic/i){ #spelled wrong in version 3.9
 	return parse_eukaryotic($report, $params, $q_file);
     }
-    elsif($line =~ /prokaryotic/i){
+    elsif($line && $line =~ /prokaryotic/i){
 	return parse_prokaryotic($report, $params, $q_file);
     }
     else{
