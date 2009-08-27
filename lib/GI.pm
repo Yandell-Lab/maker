@@ -241,7 +241,6 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
 			      $t_file,
-			      undef,
 			      $the_void,
 			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
 			      \%CTL_OPT,
@@ -271,7 +270,6 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = tblastx($chunk,
 			       $t_file,
-			       undef,
 			       $the_void,
 			       $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
 			       \%CTL_OPT,
@@ -1237,6 +1235,8 @@ sub blastn_as_chunks {
    my $split_hit   = $CTL_OPT->{split_hit};
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
+   my $softmask    = $CTL_OPT->{softmask};
+   my $org_type    = $CTL_OPT->{organism_type};
 
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1284,7 +1284,8 @@ sub blastn_as_chunks {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
-	     $CTL_OPT->{organism_type}
+	     $org_type,
+	     $softmask
 	    );
 
    $chunk->erase_fasta_file();
@@ -1352,11 +1353,9 @@ sub collect_blastn{
 sub blastn {
    my $chunk      = shift;
    my $db         = shift;
-   my $old_db     = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
 
    my $blastn      = $CTL_OPT->{_blastn};
@@ -1367,6 +1366,8 @@ sub blastn {
    my $split_hit   = $CTL_OPT->{split_hit};
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
+   my $softmask    = $CTL_OPT->{softmask};
+   my $org_type    = $CTL_OPT->{organism_type};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1386,7 +1387,8 @@ sub blastn {
 	     $eval_blastn,
 	     $split_hit,
 	     $cpus,
-	     $CTL_OPT->{organism_type}
+	     $org_type,
+	     $softmask
 	     );
 
    my %params;
@@ -1412,19 +1414,20 @@ sub blastn {
 }
 #-----------------------------------------------------------------------------
 sub runBlastn {
-   my $q_file   = shift;
-   my $db       = shift;
-   my $out_file = shift;
-   my $blast = shift;
+   my $q_file     = shift;
+   my $db         = shift;
+   my $out_file   = shift;
+   my $blast      = shift;
    my $eval_blast = shift;
-   my $split_hit = shift;
-   my $cpus = shift;
-   my $org_type = shift;
+   my $split_hit  = shift;
+   my $cpus       = shift;
+   my $org_type   = shift;
+   my $softmask   = shift;
 
    my $command  = $blast;
    if ($command =~ /blastn$/) {
       $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
-      $command .= " wordmask=seg";
+      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";;
       $command .= " R=3";
       $command .= " W=15";
       $command .= " M=1";
@@ -1501,6 +1504,7 @@ sub blastx_as_chunks {
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
+   my $org_type    = $CTL_OPT->{organism_type};
 
    #build names for files to use and copy	
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1548,8 +1552,8 @@ sub blastx_as_chunks {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
-	     $softmask,
-	     $CTL_OPT->{organism_type}
+	     $org_type,
+	     $softmask
 	    );
 
    $chunk->erase_fasta_file();
@@ -1617,14 +1621,12 @@ sub collect_blastx{
 sub blastx {
    my $chunk      = shift;
    my $db         = shift;
-   my $old_db     = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
 
-   my $rflag = 1 if($old_db && $CTL_OPT->{repeat_protein} eq $old_db); #am I running repeat data?
+   my $rflag = 1 if($db && $CTL_OPT->{repeat_protein} eq $db); #am I running repeat data?
 
    my $blastx      = $CTL_OPT->{_blastx};
    my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
@@ -1635,6 +1637,7 @@ sub blastx {
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
+   my $org_type    = $CTL_OPT->{organism_type};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1655,8 +1658,8 @@ sub blastx {
 	     $eval_blastx,
 	     $split_hit,
 	     $cpus,
-	     $softmask,
-	     $CTL_OPT->{organism_type}
+	     $org_type,
+	     $softmask
 	    );
 
    my %params;
@@ -1706,8 +1709,9 @@ sub runBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $softmask = shift;
    my $org_type = shift;
+   my $softmask = shift;
+
 
    my $command  = $blast;
    if ($command =~ /blastx$/) {
@@ -1780,6 +1784,7 @@ sub tblastx_as_chunks {
    my $cpus         = $CTL_OPT->{cpus};
    my $formater     = $CTL_OPT->{_formater};
    my $softmask     = $CTL_OPT->{softmask};
+   my $org_type    = $CTL_OPT->{organism_type};
 
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
@@ -1827,8 +1832,8 @@ sub tblastx_as_chunks {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
-	      $softmask,
-	      $CTL_OPT->{organism_type}
+	      $org_type,
+	      $softmask
 	     );
 
    $chunk->erase_fasta_file();
@@ -1896,11 +1901,9 @@ sub collect_tblastx{
 sub tblastx {
    my $chunk      = shift;
    my $db         = shift;
-   my $old_db     = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
 
    my $tblastx      = $CTL_OPT->{_tblastx};
@@ -1912,6 +1915,7 @@ sub tblastx {
    my $cpus         = $CTL_OPT->{cpus};
    my $formater     = $CTL_OPT->{_formater};
    my $softmask     = $CTL_OPT->{softmask};
+   my $org_type    = $CTL_OPT->{organism_type};
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
@@ -1931,8 +1935,8 @@ sub tblastx {
 	      $eval_tblastx,
 	      $split_hit,
 	      $cpus,
-	      $softmask,
-	      $CTL_OPT->{organism_type}
+	      $org_type,
+	      $softmask
 	     );
 
    my %params;
@@ -1965,8 +1969,9 @@ sub runtBlastx {
    my $eval_blast = shift;
    my $split_hit = shift;
    my $cpus = shift;
-   my $softmask = shift;
    my $org_type = shift;
+   my $softmask = shift;
+
 
    my $command  = $blast;
    if ($command =~ /tblastx$/) {
