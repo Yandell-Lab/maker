@@ -33,7 +33,7 @@ use Widget::xdformat;
 use Widget::formatdb;
 use PhatHit_utils;
 use Shadower;
-use Bio::DB::Fasta;
+#use Bio::DB::Fasta;
 use polisher::exonerate::protein;
 use polisher::exonerate::est;
 use maker::auto_annotator;
@@ -41,6 +41,8 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 use File::NFSLock;
+use FastaDB;
+use Digest::MD5;
 use threads;
 
 @ISA = qw(
@@ -212,22 +214,25 @@ sub reblast_merged_hits {
 				);
       #search db index
       my $fastaObj = $db_index->get_Seq_by_id($hit->name);
+      $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+      
+      #still no sequence? try rebuilding the index and try again
       if (not $fastaObj) {
-	 #rebuild index and try again
-	 my $db_file = $db_index->{dirname}."/".$db_index->fileno2path(0);
-	 print STDERR "WARNING: Cannot find ".$hit->name.", trying to re-index $db_file\n";
-	 $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
-	 $fastaObj = $db_index->get_Seq_by_id($hit->name);
-	 if (not $fastaObj) {
-	    print STDERR "stop here:".$hit->name."\n";
-	    die "ERROR: Fasta index error\n";
-	 }
+	  print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
+	  $db_index->reindex();
+	  $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	  $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	  if (not $fastaObj) {
+	      print STDERR "stop here:".$hit->name."\n";
+	      die "ERROR: Fasta index error\n";
+	  }
       }
       
       #get fasta def and seq
       my $t_seq      = $fastaObj->seq();
       my $t_def      = $db_index->header($hit->name);
-
+         $t_def      = $db_index->header_by_alias($hit->description) if(! defined $t_def);
+      
       #write fasta file
       my $fasta = Fasta::toFasta('>'.$t_def, \$t_seq);
       my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
@@ -519,6 +524,9 @@ sub split_db {
    my $key      = shift @_;
    my $mpi_size = shift @_ || 1;
 
+   #always set to at least 10 for faster fasta indexing
+   $mpi_size = 10 if($mpi_size < 10);
+
    my $file = $CTL_OPT->{$key};
    my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
    
@@ -529,7 +537,7 @@ sub split_db {
    my $db_size = $fasta_iterator->number_of_entries();
    my $bins = $mpi_size;
    $bins = $db_size if ($db_size < $bins);
-   
+
    my ($f_name) = $file =~ /([^\/]+)$/;
    $f_name =~ s/\.fasta$//;
     
@@ -537,32 +545,34 @@ sub split_db {
    my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
    my $f_dir = "$b_dir/$d_name";
    my $t_dir = $TMP."/$d_name";
-   my $t_full = "$t_dir\.fasta";
-   my $f_full = "$b_dir/$f_name\.fasta";
+   #my $t_full = "$t_dir\.fasta";
+   #my $f_full = "$b_dir/$f_name\.fasta";
 
    #delete old indexes if full file does not exist
-   if(! -e $f_full && -e "$f_full.index"){
-       unlink("$f_full.index");
-   }
+   #if(! -e $f_full && -e "$f_full.index"){
+   #    unlink("$f_full.index");
+   #}
 
    #check if files exist
-   if($mpi_size == 1 && -e $f_full){ #on one processor check if finished
-       return $f_full, [$f_full];
-   }
-   elsif(-e "$f_dir"){ #on multi processors check if finished
-      my @t_db = <$f_dir/*$d_name\.*>;
+   #if($mpi_size == 1 && -e $f_full){ #on one processor check if finished
+   #    return $f_full, [$f_full];
+   #}
+   #elsif(-e "$f_dir"){ #on multi processors check if finished
+   if(-e "$f_dir"){ #on multi processors check if finished
+      my @t_db = <$f_dir/*$d_name*\.fasta>;
 
       my @existing_db;
       foreach my $f (@t_db) {
 	  push (@existing_db, $f) if (! -d $f);
       }
 
-      if(@existing_db == $mpi_size){ #use existing if right count
-	  if(! -e $f_full){ #fix full file
-	      concatenate_files(\@existing_db, $f_full);
-	  }
+      if(@existing_db == $bins){ #use existing if right count
+	  #if(! -e $f_full){ #fix full file
+	  #    concatenate_files(\@existing_db, $f_full);
+	  #}
 
-	  return $f_full, \@existing_db;
+	  #return $f_full, \@existing_db;
+	  return $f_dir, \@existing_db;
       }
       else{ #remove if there is an error
 	  File::Path::rmtree($f_dir);
@@ -570,12 +580,13 @@ sub split_db {
    }
 
    #make needed output directories
-   mkdir($t_dir) unless ($mpi_size == 1);
+   #mkdir($t_dir) unless ($mpi_size == 1);
+   mkdir($t_dir);
    mkdir($b_dir) unless (-e $b_dir);
 
    #open filehandles for  pieces on multi processors
    my @fhs;
-   if($mpi_size != 1){
+   #if($mpi_size != 1){
        for (my $i = 0; $i < $bins; $i++) {
 	   my $name = "$t_dir/$d_name\.$i\.fasta";
 	   my $fh;
@@ -583,12 +594,12 @@ sub split_db {
 	   
 	   push (@fhs, $fh);
        }
-   }
+   #}
    
    #write fastas here
    my %alias;
-   my $FA;
-   open($FA, "> $t_full"); #full file
+   #my $FA;
+   #open($FA, "> $t_full"); #full file
    while (my $fasta = $fasta_iterator->nextEntry()) {
       my $def = Fasta::getDef(\$fasta);
       my $seq_id = Fasta::def2SeqID($def);
@@ -605,27 +616,27 @@ sub split_db {
 
       #fix weird blast trimming error for long seq IDs by replacing them
       if(length($seq_id) > 78){
-	  my $new_id = substr($seq_id, 0, 78);
+	  my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
 	  die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
 	      if($alias{$new_id});
 	  $alias{$new_id}++;
-	  $def =~ s/^>/>$seq_id maker_alias=/;
+	  $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
       }
 
       #reformat fasta, just incase
       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
 
       #build full file
-      print $FA $$fasta_ref;
+      #print $FA $$fasta_ref;
 
       #build part files only on multi processor
-      if($mpi_size != 1){
+      #if($mpi_size != 1){
 	  my $fh = shift @fhs;
 	  print $fh $$fasta_ref;
 	  push (@fhs, $fh);
-      }
+      #}
    }
-   close($FA); #close full file
+   #close($FA); #close full file
 
    #close part file handles
    foreach my $fh (@fhs) {
@@ -633,24 +644,27 @@ sub split_db {
    }
 
    #move finished files into place
-   system("mv $t_full $f_full");
-   system("mv $t_dir $f_dir") unless($mpi_size == 1);
+   #system("mv $t_full $f_full");
+   #system("mv $t_dir $f_dir") unless($mpi_size == 1);
+   system("mv $t_dir $f_dir");
 
    #check if everything is ok
-   if($mpi_size == 1 && -e $f_full){ #single processor
-       return $f_full, [$f_full];
-   }
-   elsif (-e $f_dir && -e $f_full) { #multi processor
-      my @t_db = <$f_dir/*$d_name\.*>;
+   #if($mpi_size == 1 && -e $f_full){ #single processor
+   #    return $f_full, [$f_full];
+   #}
+   #elsif (-e $f_dir && -e $f_full) { #multi processor
+   if (-e $f_dir) { #multi processor
+      my @t_db = <$f_dir/*$d_name*\.fasta>;
 
       my @db_files;
       foreach my $f (@t_db) {
 	 push (@db_files, $f) if (! -d $f);
       }
 
-      die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $mpi_size); #not ok
+      die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $bins); #not ok
 
-      return $f_full, \@db_files;
+      #return $f_full, \@db_files;
+      return $f_dir, \@db_files;
    }
    else {
       die "ERROR: Could not split db\n"; #not ok
@@ -1028,19 +1042,23 @@ sub polish_exonerate {
 	 my $id  = $hit->name();
 
 	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	 $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+
+	 #still no sequence? try rebuilding the index and try again
 	 if (not $fastaObj) {
-	    #rebuild index and try again
-	    my $db_file = $db_index->{dirname}."/".$db_index->fileno2path(0);
-	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index $db_file\n";
-	    $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
+	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
+	    $db_index->reindex();
 	    $fastaObj = $db_index->get_Seq_by_id($hit->name);
+	    $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
 	    if (not $fastaObj) {
 	       print STDERR "stop here:".$hit->name."\n";
 	       die "ERROR: Fasta index error\n";
 	    }
 	 }
+
 	 my $seq      = $fastaObj->seq();
 	 my $def      = $db_index->header($hit->name);
+	    $def      = $db_index->header_by_alias($hit->description) if(! defined $def);
 
 	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 
@@ -1151,10 +1169,24 @@ sub make_multi_fasta {
    my $fastas = '';
    foreach my $c (@{$clusters}) {
       foreach my $hit (@{$c}) {
-	 my $id = $hit->name();
-	 my $fastaObj = $index->get_Seq_by_id($id);
+	 my $fastaObj = $index->get_Seq_by_id($hit->name);
+	 $fastaObj = $index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	 
+	 #still no sequence? try rebuilding the index and try again
+	 if (not $fastaObj) {
+	     print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
+	     $index->reindex();
+	     $fastaObj = $index->get_Seq_by_id($hit->name);
+	     $fastaObj = $index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	     if (not $fastaObj) {
+		 print STDERR "stop here:".$hit->name."\n";
+		 die "ERROR: Fasta index error\n";
+	     }
+	 }
+
 	 my $seq      = $fastaObj->seq(); 
-	 my $def      = $index->header($id);
+	 my $def      = $index->header($hit->name);
+	    $def      = $index->header_by_alias($hit->description) if(! defined $def);
 	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 	 $fastas     .= $$fasta; 
       }
@@ -1164,7 +1196,7 @@ sub make_multi_fasta {
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
    my $db = shift;
-   my $index = new Bio::DB::Fasta($db);
+   my $index = new FastaDB($db);
    return $index;
 }
 #-----------------------------------------------------------------------------
@@ -1180,8 +1212,12 @@ sub build_all_indexes {
 
    foreach my $db (@dbs){
        next if(! $db);
-       unlink("$db.index") if($CTL_OPT->{force} && -e "$db.index");
-       new Bio::DB::Fasta($db);
+       if($CTL_OPT->{force}){
+	   foreach my $f (@{[<$db/*.index>]}){
+	       unlink("$f") if(-f $f);
+	   }
+       }
+       new FastaDB($db);
    }
 }
 #-----------------------------------------------------------------------------

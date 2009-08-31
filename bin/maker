@@ -57,7 +57,7 @@ use FileHandle;
 use File::Path;
 use Getopt::Long qw(:config no_ignore_case);
 use File::Temp qw(tempfile tempdir);
-use Bio::DB::Fasta;
+#use Bio::DB::Fasta;
 use GI;
 use Dumper::GFF::GFFV3;
 use Iterator::Any;
@@ -252,7 +252,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				   );
 
     next if($tier->terminated);
-    $tier->run while(! $tier->terminated && ! $tier->failed);
+    $tier->run_all;
     $DS_CTL->add_entry($tier->DS);
     push(@failed, $tier->fasta) if ($tier->failed);
 }

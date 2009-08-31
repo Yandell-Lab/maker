@@ -98,9 +98,6 @@ sub keepers {
       foreach my $hit (@{$hits}){
 	 $hit->queryLength($result->query_length);
 	 $hit->queryName($result->query_name);
-	 if($hit->description() =~ /maker_alias=(\S+)/){
-             $hit->name($1);
-         }
  
 	 my @hsps;
 	 while(my $hsp = $hit->next_hsp) {

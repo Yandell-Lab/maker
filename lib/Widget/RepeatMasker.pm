@@ -8,7 +8,7 @@ use Exporter;
 use PostData;
 use FileHandle;
 use Widget;
-use Bio::DB::Fasta;
+#use Bio::DB::Fasta;
 use Bio::Search::Hit::PhatHit::repeatmasker;
 use Bio::Search::HSP::PhatHSP::repeatmasker;
 use IPC::Open3;
