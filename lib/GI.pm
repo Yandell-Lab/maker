@@ -214,7 +214,8 @@ sub reblast_merged_hits {
       my $fastaObj = $db_index->get_Seq_by_id($hit->name);
       if (not $fastaObj) {
 	 #rebuild index and try again
-	 my $db_file = $db_index->{dirname} ."/". $db_index->{offsets}->{__file_0};
+	 my $db_file = $db_index->{dirname}."/".$db_index->fileno2path(0);
+	 print STDERR "WARNING: Cannot find ".$hit->name.", trying to re-index $db_file\n";
 	 $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
 	 $fastaObj = $db_index->get_Seq_by_id($hit->name);
 	 if (not $fastaObj) {
@@ -255,7 +256,6 @@ sub reblast_merged_hits {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastn($chunk, 
 			      $t_file,
-			      undef,
 			      $the_void,
 			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
 			      \%CTL_OPT,
@@ -586,10 +586,12 @@ sub split_db {
    }
    
    #write fastas here
+   my %alias;
    my $FA;
    open($FA, "> $t_full"); #full file
    while (my $fasta = $fasta_iterator->nextEntry()) {
       my $def = Fasta::getDef(\$fasta);
+      my $seq_id = Fasta::def2SeqID($def);
       my $seq_ref = Fasta::getSeqRef(\$fasta);
 
       #fix non standard peptides
@@ -600,6 +602,15 @@ sub split_db {
 
       #Skip empty fasta entries
       next if($$seq_ref eq '');
+
+      #fix weird blast trimming error for long seq IDs by replacing them
+      if(length($seq_id) > 78){
+	  my $new_id = substr($seq_id, 0, 78);
+	  die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+	      if($alias{$new_id});
+	  $alias{$new_id}++;
+	  $def =~ s/^>/>$seq_id maker_alias=/;
+      }
 
       #reformat fasta, just incase
       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
@@ -1019,7 +1030,8 @@ sub polish_exonerate {
 	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
 	 if (not $fastaObj) {
 	    #rebuild index and try again
-	    my $db_file = $db_index->{dirname} ."/".$db_index->{offsets}->{__file_0};
+	    my $db_file = $db_index->{dirname}."/".$db_index->fileno2path(0);
+	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index $db_file\n";
 	    $db_index = Bio::DB::Fasta->new($db_file, '-reindex' => 1);
 	    $fastaObj = $db_index->get_Seq_by_id($hit->name);
 	    if (not $fastaObj) {
