@@ -120,12 +120,20 @@ sub _go_to_level {
 
 sub next_chunk {
    my $self = shift;
-   my $level = $self->{LEVEL}{CURRENT};
 
    return undef if ($self->terminated || $self->failed);
 
-   $self->_next_level if($self->_level_finished);
+   #handle levels that have no chunks to run
+   while($self->_level_finished){
+       $self->_next_level;
+       $self->_load_chunks;
+   }
+
+   #handle case where level needs to be initialized
    $self->_load_chunks if(! $self->_level_started);
+
+   #get level after doing any necessary moves to next level
+   my $level = $self->{LEVEL}{CURRENT};
 
    if (my $chunk = shift @{$self->{LEVEL}{$level}{CHUNKS}}) {
       return $chunk;
