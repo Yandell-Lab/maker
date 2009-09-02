@@ -1,6 +1,10 @@
 #! /usr/bin/perl -w
 
 use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
 use DBI;
 use DBD::Pg;
 use Getopt::Long;
