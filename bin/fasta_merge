@@ -8,19 +8,19 @@ my $usage = "
 
 Synopsis:
 
-fasta_merge --datastore /maker/datastore -o genome.all
+fasta_merge -d maker_datastore_index
+fasta_merge -o genome.all -i <fasta1> <fasta2> ...
 
 Descriptions:
 
 This script will take a MAKER datastore, extract all the relevant
-fasta files and create fasta files with -o base name for all the
-relevant categories of sequence (i.e. transcript, protein, GeneMark
-protien, etc.).
+fasta files and create fasta files with relevant categories of
+sequence (i.e. transcript, protein, GeneMark protien, etc.).
 
 Options:
 
-  -d The location of the MAKER datastore
-  -o The base name for the output files.
+  -d The location of the MAKER datastore.
+  -o Alternate base name for the output files.
   -i A optional list of files to process along with or instead of the
      datastore.
 
@@ -36,9 +36,15 @@ GetOptions ("datastor|d=s" => \$datastore,
 	    "help|?" => sub{print $usage; exit();}
 	    );
 
-if((! $datastore && ! @files) || ! $outfile){
+if(! $datastore){
     print $usage;
     exit();
+}
+   
+if (! $outfile){
+    ($outfile) = $datastore =~ /([^\/]+)$/;
+    $outfile =~ s/_master_datastore_index.log//;
+    $outfile = "genome" if(! defined $outfile);
 }
 
 die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);

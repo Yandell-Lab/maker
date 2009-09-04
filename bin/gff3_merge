@@ -4,7 +4,25 @@ use strict;
 use Getopt::Long;
 use File::Temp qw(tempfile);
 
-my $usage = "";
+my $usage = "
+
+Synopsis:
+
+gff3_merge -d maker_datastore_index
+gff3_merge -o genome.all.gff <gff3_file1> <gff3_file2> ...
+
+Descriptions:
+
+This script will take a MAKER datastore, extract all the relevant
+GFF3 files and combined GFF3 file.  The script can also combine 
+other correctly formated GFF3 files.
+
+Options:
+
+  -d The location of the MAKER datastore.
+  -o Alternate base name for the output files.
+
+";
 
 my $datastore;
 my @files;
@@ -22,6 +40,13 @@ if(! $datastore){
 if((! $datastore && ! @files) || ! $outfile){
     print $usage;
     exit();
+}
+
+if (! $outfile){
+    ($outfile) = $datastore =~ /([^\/]+)$/;
+    $outfile =~ s/_master_datastore_index.log//
+	$outfile .= ".gff";
+    $outfile = "genome.all.gff" if(! defined $outfile);
 }
 
 die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
