@@ -44,8 +44,8 @@ if((! $datastore && ! @files) || ! $outfile){
 
 if (! $outfile){
     ($outfile) = $datastore =~ /([^\/]+)$/;
-    $outfile =~ s/_master_datastore_index.log//
-	$outfile .= ".gff";
+    $outfile =~ s/_master_datastore_index.log//;
+    $outfile .= ".gff";
     $outfile = "genome.all.gff" if(! defined $outfile);
 }
 
