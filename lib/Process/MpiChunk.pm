@@ -15,7 +15,7 @@ $Storable::forgive_me = 1; #allows serializaion of objects with code refs
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
 #-----------------------------------------------------------------------------
-sub new {
+sub new { #do not change or edit this
    my ($class, @args) = @_;
 
    my $self = {};
@@ -37,12 +37,52 @@ sub new {
 	 $self->{VARS} = {};
 	 $self->{RESULTS} = {};
 
-	 $self->_initialize($VARS);
+	 $self->_initialize();
+	 $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
       }
    }
 
    return $self;
 }
+
+#--------------------------------------------------------------
+#Perform any user specified initialization steps here.
+#This method always runs when a new chunk is created.
+#This method does not take any arguements.
+#$self->{VARS} has not been set yet, so if you need access
+#to values in $self->{VARS}, add your code to the
+#_initialize_vars method.
+
+sub _initialize{
+   my $self = shift;
+}
+
+#--------------------------------------------------------------
+#Set up chunk specific variables. Only runs when $VARS exist
+#This method also reaches inside MpiTiers->{VARS} and pulls out
+#all need variables.
+#By Reaching into the MpiTiers object we keep control of the
+#VARS datastructure within the MpiChunk (see method results).
+#Another benefit is that variable order is no longer important,
+#as it would be if variables were directly passed
+
+sub _initialize_vars{
+   my $self       = shift;
+   my $level      = $self->{LEVEL};
+   my $VARS       = shift;	#this should be a hash reference
+
+   my @args = @{$self->_go('init', $level, $VARS)};
+
+   foreach my $key (@args) {
+      if (! exists $VARS->{$key}) {
+	 die "FATAL: argument \`$key\` does not exist in MpiTier object\n";
+      }
+      else {
+	 $self->{VARS}{$key} = $VARS->{$key};
+      }
+   }
+}
+
 #--------------------------------------------------------------
 #this function/method is called by MpiTiers as part of MpiTiers
 #initialization to prepare incoming data before building chunks.
@@ -173,31 +213,6 @@ sub loader {
    }
 
    return $chunks;
-}
-#--------------------------------------------------------------
-#Set up chunk specific variables.
-#This method also reaches inside MpiTiers->{VARS} and pulls out
-#all need variables.
-#By Reaching into the MpiTiers object we keep control of the
-#VARS datastructure within the MpiChunk (see method results).
-#Another benefit is that variable order is no longer important,
-#as it would be if variables were directly passed
-
-sub _initialize{
-   my $self       = shift;
-   my $level      = $self->{LEVEL};
-   my $VARS       = shift;	#this should be a hash reference
-
-   my @args = @{$self->_go('init', $level, $VARS)};
-
-   foreach my $key (@args) {
-      if (! exists $VARS->{$key}) {
-	 die "FATAL: argument \`$key\` does not exist in MpiTier object\n";
-      }
-      else {
-	 $self->{VARS}{$key} = $VARS->{$key};
-      }
-   }
 }
 #--------------------------------------------------------------
 #cals _go('run') to run code

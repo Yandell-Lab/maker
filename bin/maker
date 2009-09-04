@@ -248,7 +248,8 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				    DS_CTL  => $DS_CTL,
 				    GFF_DB  => $GFF_DB,
 				    build   => $build},
-				   '0'
+				   '0',
+				   'Process::MpiChunk'
 				   );
 
     next if($tier->terminated);

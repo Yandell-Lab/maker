@@ -398,7 +398,8 @@ if ($rank == $root) {
 					    DS_CTL  => $DS_CTL,
 					    GFF_DB  => $GFF_DB,
 					    build   => $build},
-					   $root
+					   $root,
+					   'Process::MpiChunk'
 					  );
 
 	    last if(! $tier->terminated);
@@ -464,7 +465,8 @@ if ($rank == $root) {
 					       DS_CTL  => $DS_CTL,
 					       GFF_DB  => $GFF_DB,
 					       build   => $build},
-					      $who
+					      $who,
+					      'Process::MpiChunk'
 					     );
 
 	       last if(! $tier->terminated);

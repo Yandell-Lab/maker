@@ -42,6 +42,7 @@ sub new {
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
+	  $self->{CHUNK_REF} = new $self->{CHUNK_REF}; #turn into object
 
 	  #setup the tier
 	  $self->_initialize_level(0);
@@ -70,6 +71,14 @@ sub _prepare {
    };
 
    return if($self->failed);
+
+   if(! defined $VARS->{c_flag}){
+       die "ERROR: VARS->{c_flag} is not set in MpiTier.\n".
+	   "This value should be set by ".ref($self->{CHUNK_REF})."::prepare\n".
+	   "durring initialization of the MpiTier. Please\n".
+	   "edit the ".ref($self->{CHUNK_REF})."::prepare code to set this\n".
+	   "value appropriately\n\n";
+   }
 
    if($VARS->{c_flag} <= 0){
       $self->{TERMINATE} = 1;

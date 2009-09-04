@@ -78,7 +78,7 @@ use basiclog;
 use Error qw(:try);
 use Error::Simple;
 use Process::IPRchunk;
-use Process::IPRtiers;
+use Process::MpiTiers;
 use Parallel::MPIcar qw(:all);
 
 unless($threads::VERSION >= 1.67){
@@ -366,14 +366,15 @@ if ($rank == $root){
 	if($t_need_flag > 0){
 	    my $tier;
 	    while (my $fasta = $iterator->nextFasta() || shift @failed){
-		$tier = Process::IPRtiers->new({fasta => $fasta,
+		$tier = Process::MpiTiers->new({fasta => $fasta,
 						appl => \@appl,
 						params => \@ARGV,
 						iprscan => "$EXE -cli",
 						infile => $infile,
 						outfile => $outfile,
 						DS_CTL  => $DS_CTL},
-					       $root
+					       $root,
+					       'Process::IPRchunk'
 					      );
 		
 		last if(! $tier->terminated);
@@ -433,14 +434,15 @@ if ($rank == $root){
 		my $tier;
 		
 		while (my $fasta = $iterator->nextFasta() || shift @failed){
-		    $tier = Process::IPRtiers->new({fasta => $fasta,
+		    $tier = Process::MpiTiers->new({fasta => $fasta,
 						    appl => \@appl,
 						    params => \@ARGV,
 						    iprscan => "$EXE -cli",
 						    infile => $infile,
 						    outfile => $outfile,
 						    DS_CTL  => $DS_CTL},
-						   $who
+						   $who,
+						   'Process::IPRchunk'
 						   );
 		    
 		    last if(! $tier->terminated);

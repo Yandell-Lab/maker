@@ -43,12 +43,51 @@ sub new {
 	 $self->{VARS} = {};
 	 $self->{RESULTS} = {};
 
-	 $self->_initialize($VARS);
+	 $self->_initialize();
+	 $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
       }
    }
 
    return $self;
 }
+#--------------------------------------------------------------
+#Perform any user specified initialization steps here.
+#This method always runs when a new chunk is created.
+#This method does not take any arguements.
+#$self->{VARS} has not been set yet, so if you need access
+#to values in $self->{VARS}, add your code to the
+#_initialize_vars method.
+
+sub _initialize{
+    my $self = shift;
+}
+
+#--------------------------------------------------------------
+#Set up chunk specific variables.
+#This method also reaches inside IPRtiers->{VARS} and pulls out
+#all need variables.
+#By Reaching into the IPRtiers object we keep control of the
+#VARS datastructure within the IPRchunk (see method results).
+#Another benefit is that variable order is no longer important,
+#as it would be if variables were directly passed
+
+sub _initialize_vars{
+   my $self       = shift;
+   my $level      = $self->{LEVEL};
+   my $VARS       = shift;	#this should be a hash reference
+
+   my @args = @{$self->_go('init', $level, $VARS)};
+
+   foreach my $key (@args) {
+      if (! exists $VARS->{$key}) {
+	 die "FATAL: argument \`$key\` does not exist in IPRtier object\n";
+      }
+      else {
+	 $self->{VARS}{$key} = $VARS->{$key};
+      }
+   }
+}
+
 #--------------------------------------------------------------
 #this function/method is called by IPRtiers as part of IPRtiers
 #initialization to prepare incoming data before building chunks.
@@ -135,31 +174,6 @@ sub loader {
    }
 
    return $chunks;
-}
-#--------------------------------------------------------------
-#Set up chunk specific variables.
-#This method also reaches inside IPRtiers->{VARS} and pulls out
-#all need variables.
-#By Reaching into the IPRtiers object we keep control of the
-#VARS datastructure within the IPRchunk (see method results).
-#Another benefit is that variable order is no longer important,
-#as it would be if variables were directly passed
-
-sub _initialize{
-   my $self       = shift;
-   my $level      = $self->{LEVEL};
-   my $VARS       = shift;	#this should be a hash reference
-
-   my @args = @{$self->_go('init', $level, $VARS)};
-
-   foreach my $key (@args) {
-      if (! exists $VARS->{$key}) {
-	 die "FATAL: argument \`$key\` does not exist in IPRtier object\n";
-      }
-      else {
-	 $self->{VARS}{$key} = $VARS->{$key};
-      }
-   }
 }
 #--------------------------------------------------------------
 #cals _go('run') to run code
