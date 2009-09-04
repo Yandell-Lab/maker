@@ -56,7 +56,7 @@ sub prepare {
    my $VARS = shift;
 
    #handle case of calling as function rather than method
-   if (ref($self) ne "Process::MpiChunk") {
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
       $VARS = $self;
       $self = new Process::MpiChunk();
    }
@@ -160,7 +160,7 @@ sub loader {
    my $tID  = shift;
 
    #handle case of calling as function rather than method
-   if (ref($self) ne "Process::MpiChunk") {
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
       $tID = $VARS;
       $VARS = $level;
       $level = $self;
@@ -236,7 +236,7 @@ sub flow {
    my $VARS = shift;
 
    #handle case of calling as function rather than method
-   if (ref($self) ne "Process::MpiChunk") {
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
       $VARS = $level;
       $level = $self;
       $self = new Process::MpiChunk();

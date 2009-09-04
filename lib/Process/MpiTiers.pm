@@ -39,6 +39,11 @@ sub new {
 	  $self->{TIER_ID}   = shift @args;
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
+
+	  #optionaly override chunk type
+	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
+
+	  #setup the tier
 	  $self->_initialize_level(0);
 	  $self->_prepare($VARS);
       }
@@ -56,7 +61,7 @@ sub _prepare {
    my $VARS = shift;
 
    try{
-      Process::MpiChunk::prepare($VARS);
+      $self->{CHUNK_REF}->prepare($VARS);
    }
    catch Error::Simple with {
       my $E = shift;
@@ -204,7 +209,7 @@ sub _next_level {
    my $next_level;
 
    try {
-      $next_level = Process::MpiChunk::flow($level, $self->{VARS});
+      $next_level = $self->{CHUNK_REF}->flow($level, $self->{VARS});
    }
    catch Error::Simple with {
       my $E = shift;
@@ -230,7 +235,7 @@ sub _load_chunks {
    my $chunks;
 
    try {
-      $chunks = Process::MpiChunk::loader($level, $self->{VARS}, $self->id);
+      $chunks = $self->{CHUNK_REF}->loader($level, $self->{VARS}, $self->id);
    }
    catch Error::Simple with {
       my $E = shift;
