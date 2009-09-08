@@ -45,8 +45,8 @@ sub new {
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
-	  require $self->{CHUNK_REF};
-	  $self->{CHUNK_REF} = new $self->{CHUNK_REF}; #turn into object
+	  eval "require ". $self->{CHUNK_REF};
+	  $self->{CHUNK_REF} = $self->{CHUNK_REF}->new(); #turn into object
 
 	  #setup the tier
 	  $self->_initialize_level(0);

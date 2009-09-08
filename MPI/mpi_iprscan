@@ -13,7 +13,6 @@ use vars qw($RANK $LOG $EXE $TMP);
 use Storable qw(freeze thaw);
 use threads;
 use threads::shared;
-use Cwd;
 
 BEGIN{
     #find iprscan
@@ -33,7 +32,7 @@ BEGIN{
 
    #what to do on ^C
     $SIG{'INT'} = sub {
-	print STDERR "\n\nMaker aborted by user!!\n\n";
+	print STDERR "\n\nmpi_iprscan aborted by user!!\n\n";
 	my @threads = threads->list;
 	foreach my $thr (@threads){
 	    $thr->detach;
@@ -74,12 +73,14 @@ use Getopt::Long qw(:config pass_through);
 use File::Temp qw(tempfile tempdir);
 use Iterator::Fasta;
 use Fasta;
-use basiclog;
+use ds_utility;
 use Error qw(:try);
 use Error::Simple;
 use Process::IPRchunk;
 use Process::MpiTiers;
+use Process::IPRchunk;
 use Parallel::MPIcar qw(:all);
+use iprscan::runlog;
 
 unless($threads::VERSION >= 1.67){
    die "mpi_iprscan requires threads version 1.67 or greater\n",
@@ -172,18 +173,22 @@ my @appl;
 
 my $root = 0; #define root node (only changed for debugging)
 
+$CTL_OPT{retry} = 2;
+$CTL_OPT{seqtype} = 'p'; #default
+
 #---Process options on the command line
 GetOptions("i=s"       => \$CTL_OPT{infile},
 	   "o=s"       => \$CTL_OPT{outfile},
 	   "appl=s"    => \@appl,
-	   "nocrc"     => $CTL_OPT{nocrc},
-	   "seqtype=s" => $CTL_OPT{seqtype},
-	   "trtable=i" => $CTL_OPT{trtable},
-	   "goterms"   => $CTL_OPT{goterms},
-	   "iprlookup" => $CTL_OPT{iprlookup},
-	   "format=s"  => $CTL_OPT{format},
-	   "verbose"   => $CTL_OPT{verbose},
-	   "chpc"      => \$CTL_OPT{chpc}, #hidden option used on the CHPC's computer farm
+	   "nocrc"     => \$CTL_OPT{nocrc},
+	   "seqtype=s" => \$CTL_OPT{seqtype},
+	   "trtable=i" => \$CTL_OPT{trtable},
+	   "goterms"   => \$CTL_OPT{goterms},
+	   "iprlookup" => \$CTL_OPT{iprlookup},
+	   "format=s"  => \$CTL_OPT{format},
+	   "verbose"   => \$CTL_OPT{verbose},
+	   "retry"     => \$CTL_OPT{retry},
+	   "chpc"      => \$CTL_OPT{chpc}, #hidden option for retrying
 	   "cli"       => \$CTL_OPT{cli}, #just used to strip off the option
 	   );
 
@@ -207,6 +212,13 @@ if(! @appl){
 }
 
 $CTL_OPT{appl} = \@appl; #apply apps to CTL_OPT
+
+#build out_base and out_name for datastore
+$CTL_OPT{out_name} = ($CTL_OPT{outfile}) ? $CTL_OPT{outfile} : $CTL_OPT{infile};
+$CTL_OPT{out_name} =~ /([^\/]+)$/;
+$CTL_OPT{out_name} = $1;
+$CTL_OPT{out_name} =~ s/(.+)\.[^\.]+$/$1/;
+$CTL_OPT{out_base} = Cwd::cwd()."/$CTL_OPT{out_name}.iprscan.output";
 
 #build localized iprscan database for each node
 if($CTL_OPT{chpc} && ! -e "$TMP/iprscan/data/ok"){
@@ -296,6 +308,7 @@ if ($rank == $root){
 	$command .= " -goterms" if($CTL_OPT{goterms});
 	$command .= " -iprlookup" if($CTL_OPT{iprlookup});
 	$command .= " -format $CTL_OPT{format}" if(defined $CTL_OPT{format});
+	$command .= " -verbose" if($CTL_OPT{verbose});
 	$command .= " -appl " . join(" -appl ", @{$CTL_OPT{appl}}) if(@{$CTL_OPT{appl}});
 	$command .= " -i $tfile" if($CTL_OPT{infile}); #test options on dummy file
 	open(my $PAR, "$command 2>&1 |");
@@ -327,7 +340,7 @@ if ($rank == $root){
     my ($name) = $CTL_OPT{infile} =~ /([^\/]+)$/;
     $name = $CTL_OPT{outfile} if($CTL_OPT{outfile});
 
-    my $DS_CTL = new basiclog("$name.log");
+    my $DS_CTL = new ds_utility(\%CTL_OPT);
     my $iterator = new Iterator::Fasta($CTL_OPT{infile});
 
     #thread for root node to do other things than just manage mpi
@@ -378,7 +391,7 @@ if ($rank == $root){
 	    my $tier;
 	    while (my $fasta = $iterator->nextFasta() || shift @failed){
 		$tier = Process::MpiTiers->new({fasta     => $fasta,
-						CTL_OPT   => \%CTL_OPT
+						CTL_OPT   => \%CTL_OPT,
 						params    => \@ARGV,
 						iprscan   => "$EXE -cli",
 						DS_CTL    => $DS_CTL},
@@ -444,7 +457,7 @@ if ($rank == $root){
 		
 		while (my $fasta = $iterator->nextFasta() || shift @failed){
 		$tier = Process::MpiTiers->new({fasta     => $fasta,
-						CTL_OPT   => \%CTL_OPT
+						CTL_OPT   => \%CTL_OPT,
 						params    => \@ARGV,
 						iprscan   => "$EXE -cli",
 						DS_CTL    => $DS_CTL},
@@ -614,7 +627,7 @@ if ($rank == $root){
     $t_terminate = 1; #signals to thread to clean up
     $thr->detach() unless($thr->is_detached);
     
-    print STDERR "\n\nMaker is now finished!!!\n\n";
+    print STDERR "\n\nmpi_iprscan is now finished!!!\n\n" unless($main::quiet);
 }
 #------SECONDARY MPI PROCESSES------
 else {

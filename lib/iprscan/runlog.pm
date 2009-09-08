@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
-#------                           runlog                               ---------
+#------                       iprscan::runlog                          ---------
 #-------------------------------------------------------------------------------
-package runlog;
+package iprscan::runlog;
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
@@ -54,14 +54,14 @@ sub _initialize {
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
-   my $min_contig = $self->{CTL_OPTIONS}->{min_contig} || 0;
-   my $length = $self->{params}->{seq_length};
+   #my $min_contig = $self->{CTL_OPTIONS}->{min_contig} || 0;
+   #my $length = $self->{params}->{seq_length};
 
-   if($length < $min_contig){#skip if this is a short contig
-      $self->{continue_flag} = -2; #skipped signal is -2
-
-      return 0;
-   }
+   #if($length < $min_contig){#skip if this is a short contig
+   #   $self->{continue_flag} = -2; #skipped signal is -2
+   #
+   #   return 0;
+   #}
    
    return 1;
 }
@@ -185,7 +185,7 @@ sub _clean_files{
 			$key eq 'trtable' ||
 			$key eq 'goterms' ||
 			$key eq 'iprlookup' ||
-			$key eq 'format' ||
+			$key eq 'format'
 			) {
 			$rm_key{all}++;
 		    }
@@ -333,21 +333,21 @@ sub report_status {
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
    my $fasta_ref = $self->{params}->{fasta_ref};
-   my $length = $self->{params}->{seq_length};
+   #my $length = $self->{params}->{seq_length};
 
    if($flag == 0){
       print STDERR "#---------------------------------------------------------------------\n",
                    "The contig has already been processed!!\n",
 		   "mpi_iprscan will now skip to the next contig.\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",		   
+                   #"Length: $length\n",		   
 		   "#---------------------------------------------------------------------\n\n\n";
    }
    elsif($flag == 1){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now starting the contig!!\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",
+                   #"Length: $length\n",
                    "#---------------------------------------------------------------------\n\n\n";
    }
    elsif($flag == 2){
@@ -355,7 +355,7 @@ sub report_status {
                    "Now retrying the contig!!\n",
                    "All contig related data will be erased before continuing!!\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",
+                   #"Length: $length\n",
 		   "Retry: $die_count!!\n",
                    "#---------------------------------------------------------------------\n\n\n";
    }
@@ -363,7 +363,7 @@ sub report_status {
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now retrying the contig!!\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",
+                   #"Length: $length\n",
 		   "Retry: $die_count!!\n",
                    "#---------------------------------------------------------------------\n\n\n";
    }
@@ -373,7 +373,7 @@ sub report_status {
 		   "mpi_iprscan will not try again!!\n",
 		   "The contig will be stored in a fasta file that you can use for debugging.\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",
+                   #"Length: $length\n",
 		   "FASTA: $out_dir/$seq_out_name.died.fasta\n",
 		   "#---------------------------------------------------------------------\n\n\n";
 
@@ -385,7 +385,7 @@ sub report_status {
       print STDERR "#---------------------------------------------------------------------\n",
                    "Skipping the contig because it is too short!!\n",
 		   "SeqID: $seq_id\n",
-                   "Length: $length\n",
+                   #"Length: $length\n",
 		   "#---------------------------------------------------------------------\n\n\n";
    }
    else{
