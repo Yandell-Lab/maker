@@ -167,24 +167,27 @@ my $t_chunk_result :shared;
 my $t_terminate :shared;
 
 #---global variables
-my %OPT;
+my %CTL_OPT;
+my @appl;
+
 my $root = 0; #define root node (only changed for debugging)
 
 #---Process options on the command line
-my $infile;
-my $outfile;
-my @appl;
-my $chpc;
-my $cli; #always enabled, just here for implementation
-
-GetOptions("i=s" => \$infile,
-	   "o=s" => \$outfile,
-	   "appl=s" => \@appl,
-	   "chpc" => \$chpc, #hidden option used on the CHPC's computer farm
-	   "cli" => \$cli, #just used to strip off the option
+GetOptions("i=s"       => \$CTL_OPT{infile},
+	   "o=s"       => \$CTL_OPT{outfile},
+	   "appl=s"    => \@appl,
+	   "nocrc"     => $CTL_OPT{nocrc},
+	   "seqtype=s" => $CTL_OPT{seqtype},
+	   "trtable=i" => $CTL_OPT{trtable},
+	   "goterms"   => $CTL_OPT{goterms},
+	   "iprlookup" => $CTL_OPT{iprlookup},
+	   "format=s"  => $CTL_OPT{format},
+	   "verbose"   => $CTL_OPT{verbose},
+	   "chpc"      => \$CTL_OPT{chpc}, #hidden option used on the CHPC's computer farm
+	   "cli"       => \$CTL_OPT{cli}, #just used to strip off the option
 	   );
 
-$main::quiet = 1; #suppress status messages
+$main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages
 
 if(! @appl){
     my $conf = Cwd::abs_path($EXE);
@@ -203,8 +206,10 @@ if(! @appl){
     die "ERROR: Cannot determine default applications\n" if(! @appl);
 }
 
-#build localized database for each node
-if($chpc && ! -e "$TMP/iprscan/data/ok"){
+$CTL_OPT{appl} = \@appl; #apply apps to CTL_OPT
+
+#build localized iprscan database for each node
+if($CTL_OPT{chpc} && ! -e "$TMP/iprscan/data/ok"){
     my $lock = new File::NFSLock("$TMP/.iprscan_lock", 'EX', 1200, 1205);
     
     #build local db in /tmp
@@ -277,16 +282,22 @@ if ($rank == $root){
     try{
 	#---test command line  options here
 	#test input files existance
-	if($infile && ! -e $infile){
-	    die "ERROR: The input file \'$infile\' does not exist.\n";
+	if($CTL_OPT{infile} && ! -e $CTL_OPT{infile}){
+	    die "ERROR: The input file \'$CTL_OPT{infile}\' does not exist.\n";
 	}
 	
 	#let iprscan test all other options
 	my (undef, $tfile) = tempfile(); #empty dummy test file
 	my $exe = "$EXE -cli";
 	my $command = "$exe " . join(' ', @ARGV);
-	$command .= " -appl " . join(" -appl ", @appl) if(@appl);
-	$command .= " -i $tfile" if($infile); #test options on dummy file
+	$command .= " -nocrc" if($CTL_OPT{nocrc});
+	$command .= " -seqtype $CTL_OPT{seqtype}" if(defined $CTL_OPT{seqtype});
+	$command .= " -trtable $CTL_OPT{trtable}" if(defined $CTL_OPT{trtable});
+	$command .= " -goterms" if($CTL_OPT{goterms});
+	$command .= " -iprlookup" if($CTL_OPT{iprlookup});
+	$command .= " -format $CTL_OPT{format}" if(defined $CTL_OPT{format});
+	$command .= " -appl " . join(" -appl ", @{$CTL_OPT{appl}}) if(@{$CTL_OPT{appl}});
+	$command .= " -i $tfile" if($CTL_OPT{infile}); #test options on dummy file
 	open(my $PAR, "$command 2>&1 |");
 	my @err = <$PAR>;
 	close($PAR);
@@ -313,11 +324,11 @@ if ($rank == $root){
     #====ACTUAL MPI COMMUNICATION
     #---main code for distribution of mpi data starts here
 
-    my ($name) = $infile =~ /([^\/]+)$/;
-    $name = $outfile if($outfile);
+    my ($name) = $CTL_OPT{infile} =~ /([^\/]+)$/;
+    $name = $CTL_OPT{outfile} if($CTL_OPT{outfile});
 
     my $DS_CTL = new basiclog("$name.log");
-    my $iterator = new Iterator::Fasta($infile);
+    my $iterator = new Iterator::Fasta($CTL_OPT{infile});
 
     #thread for root node to do other things than just manage mpi
     my $thr = threads->create(\&node_thread);
@@ -366,13 +377,11 @@ if ($rank == $root){
 	if($t_need_flag > 0){
 	    my $tier;
 	    while (my $fasta = $iterator->nextFasta() || shift @failed){
-		$tier = Process::MpiTiers->new({fasta => $fasta,
-						appl => \@appl,
-						params => \@ARGV,
-						iprscan => "$EXE -cli",
-						infile => $infile,
-						outfile => $outfile,
-						DS_CTL  => $DS_CTL},
+		$tier = Process::MpiTiers->new({fasta     => $fasta,
+						CTL_OPT   => \%CTL_OPT
+						params    => \@ARGV,
+						iprscan   => "$EXE -cli",
+						DS_CTL    => $DS_CTL},
 					       $root,
 					       'Process::IPRchunk'
 					      );
@@ -434,16 +443,14 @@ if ($rank == $root){
 		my $tier;
 		
 		while (my $fasta = $iterator->nextFasta() || shift @failed){
-		    $tier = Process::MpiTiers->new({fasta => $fasta,
-						    appl => \@appl,
-						    params => \@ARGV,
-						    iprscan => "$EXE -cli",
-						    infile => $infile,
-						    outfile => $outfile,
-						    DS_CTL  => $DS_CTL},
-						   $who,
-						   'Process::IPRchunk'
-						   );
+		$tier = Process::MpiTiers->new({fasta     => $fasta,
+						CTL_OPT   => \%CTL_OPT
+						params    => \@ARGV,
+						iprscan   => "$EXE -cli",
+						DS_CTL    => $DS_CTL},
+					       $who,
+					       'Process::IPRchunk'
+					      );
 		    
 		    last if(! $tier->terminated);
 		}

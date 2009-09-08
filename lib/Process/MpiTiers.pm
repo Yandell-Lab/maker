@@ -3,6 +3,9 @@
 package Process::MpiTiers;
 
 use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
 use Error qw(:try);
 use Error::Simple;
 use Process::MpiChunk;
@@ -42,6 +45,7 @@ sub new {
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
+	  require $self->{CHUNK_REF};
 	  $self->{CHUNK_REF} = new $self->{CHUNK_REF}; #turn into object
 
 	  #setup the tier

@@ -115,31 +115,63 @@ sub prepare {
       $status = 'preparing iprscan job';
       #===
       
-      my ($outname) = $VARS->{infile} =~ /([^\/]+)$/;
-      $outname = $VARS->{outfile} if($VARS->{outfile});
+      my ($outname) = $VARS->{CTL_OPT}{infile} =~ /([^\/]+)$/;
+      $outname = $VARS->{CTL_OPT}{outfile} if($VARS->{outfile});
 
       $VARS->{seq_id} = Fasta::getSeqID(\$VARS->{fasta});
       $VARS->{safe_id} = Fasta::seqID2SafeID($VARS->{seq_id});
-      $VARS->{c_flag} = $VARS->{DS_CTL}->continue_flag($VARS->{seq_id});
 
-      my $failed .= "$outname.failed/".$VARS->{safe_id}.".fasta";
+      #set up base and void directories for output
+      ($VARS->{out_dir}, $VARS->{the_void}) = $VARS->{DS_CTL}->seq_dirs($VARS->{seq_id});
 
-      if(! $VARS->{c_flag}){
-	  warn "WARNING: ".$VARS->{seq_id} ."failed 2 time and will not be tried again\n",
-	       "The fasta sequence will be saved for debugging in $failed\n";
+      #contig combined output file
+      $VARS->{cfile} = $VARS->{out_dir}."/".$VARS->{safe_id}.".ipr";
 
-	  mkdir("$outname.failed") if(! -d "$outname.failed");
+      #===
+      $status = 'trying to build/process the run.log file';
+      #===
 
-	  open(my $OUT, ">$failed");
-	  print $OUT $VARS->{fasta};
-	  close($OUT);
-	  $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, 'DIED_PERMANENT');
+      $VARS->{LOG} = iprscan::runlog->new($VARS->{CTL_OPT},
+					  {seq_id     => $VARS->{seq_id},
+					   seq_length => length(${$VARS->{q_seq_ref}}),
+					   out_dir    => $VARS->{out_dir},
+					   the_void   => $VARS->{the_void},
+					   fasta_ref  => \$VARS->{fasta}},
+					  $VARS->{the_void}."/run.log"
+					  );
+
+      ($VARS->{c_flag}, my $message) = $VARS->{LOG}->get_continue_flag();
+      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, $VARS->{out_dir}, $message);
+      if($VARS->{c_flag} == 0){
+	  my $cfile = $VARS->{c_flag};
+	  die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
+	      if(! -e $cfile);
+	  
+	  my $lock = new File::NFSLock(".iprscan_lock", 'EX', 40, 40);
+	  my $outfile = $VARS->{CTL_OPT}{outfile};
+
+	  my $FH;
+	  if($outfile){
+	      open($FH, ">> $outfile");
+	  }
+	  else{
+	      open($FH, ">&STDOUT");
+	  }
+	  
+	  my $CFH;
+	  open($CFH, "> $cfile");
+	  
+	  while(my $key = each %{$VARS}){
+	      next if($key eq 'outfile');
+	      print $FH $VARS->{$key};
+	      print $CFH $cfile;
+	  }
+	  
+	  close($FH);
+	  close($CFH);
+	  
+	  $lock->unlock;
       }
-      else{
-	  unlink($failed) if(-e $failed); #remove old failed
-      }
-
-      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, 'STARTED');
    }
    catch Error::Simple with {
       my $E = shift;
@@ -286,7 +318,7 @@ sub _go {
 	 $level_status = 'running iprscan';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	     foreach my $app (@{$VARS->{appl}}) {
+	     foreach my $app (@{$VARS->{CTL_OPT}{appl}}) {
 		 $VARS->{app} = $app;
 		 my $chunk = new Process::IPRchunk($level, $VARS);
 		 push(@chunks, $chunk);
@@ -295,33 +327,49 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{safe_fasta
+	    @args = (qw{CTL_OPT
+			safe_fasta
 			app
 			params
 			iprscan
+			the_void
 			}
 		    );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
+	    my %CTL_OPT    = %{$VARS->{CTL_OPT}};
 	    my $safe_fasta = $VARS->{safe_fasta};
 	    my $app        = $VARS->{app};
 	    my $params     = $VARS->{params};
 	    my $iprscan    = $VARS->{iprscan};
+	    my $the_void   = $VARS->{the_void};
 
 	    #make files
 	    my (undef, $ifile) = tempfile();
-	    my (undef, $ofile) = tempfile();
+	    my $ofile = "$the_void/$CTL_OPT{safe_id}.$app";
 	    FastaFile::writeFile($safe_fasta, $ifile);
 
 	    #build command
-	    my $command = $iprscan . " " . join(' ', @$params);
+	    my $command = $iprscan;
+	    $command .= " -nocrc" if($CTL_OPT{nocrc});
+	    $command .= " -seqtype $CTL_OPT{seqtype}" if(defined $CTL_OPT{seqtype});
+	    $command .= " -trtable $CTL_OPT{trtable}" if(defined $CTL_OPT{trtable});
+	    $command .= " -goterms" if($CTL_OPT{goterms});
+	    $command .= " -iprlookup" if($CTL_OPT{iprlookup});
+	    $command .= " -format $CTL_OPT{format}" if(defined $CTL_OPT{format});
+	    $command .= " " . join(' ', @$params);
 	    $command .= " -appl $app -i $ifile -o $ofile";
 
 	    my $w = new Widget::iprscan();
-	    print STDERR "running iprscan $app...\n" unless($main::quiet);
-	    $w->run($command);
+	    if(-e $ofile){
+		print STDERR "rereading $ofile...\n" unless($main::quiet);
+	    }
+	    else{
+		print STDERR "running iprscan $app...\n" unless($main::quiet);
+		$w->run($command);
+	    }
 
 	    unlink($ifile);
 	    open(my $IN, "< $ofile");
@@ -330,7 +378,6 @@ sub _go {
 		$result .= uri_unescape($line);
 	    }
 	    close($IN);
-	    unlink($ofile);
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -353,14 +400,18 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{outfile},
-		     @{$VARS->{appl}}
+	    @args = (qw{CTL_OPT
+			cfile
+			outfile
+		       },		     
+		     @{$VARS->{CTL_OPT}{appl}}
 		     );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $outfile = $VARS->{outfile};
+	    my $cfile = $VARS->{cfile}; #combined contig output file
+	    my $outfile = $VARS->{outfile}; #combined every contig output file
 
 	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 40, 40);
 
@@ -372,11 +423,17 @@ sub _go {
 		open($FH, ">&STDOUT");
 	    }
 
+	    my $CFH;
+	    open($CFH, "> $cfile");
+
 	    while(my $key = each %{$VARS}){
 		next if($key eq 'outfile');
 		print $FH $VARS->{$key};
+		print $CFH $cfile;
 	    }
+
 	    close($FH);
+	    close($CFH);
 
 	    $lock->unlock;
 	    #-------------------------CODE
