@@ -213,15 +213,13 @@ sub reblast_merged_hits {
 				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
 				);
       #search db index
-      my $fastaObj = $db_index->get_Seq_by_id($hit->name);
-      $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+      my $fastaObj = $db_index->get_Seq_for_hit($hit);
       
       #still no sequence? try rebuilding the index and try again
       if (not $fastaObj) {
 	  print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
 	  $db_index->reindex();
-	  $fastaObj = $db_index->get_Seq_by_id($hit->name);
-	  $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	  $fastaObj = $db_index->get_Seq_for_hit($hit);
 	  if (not $fastaObj) {
 	      print STDERR "stop here:".$hit->name."\n";
 	      die "ERROR: Fasta index error\n";
@@ -230,8 +228,7 @@ sub reblast_merged_hits {
       
       #get fasta def and seq
       my $t_seq      = $fastaObj->seq();
-      my $t_def      = $db_index->header($hit->name);
-         $t_def      = $db_index->header_by_alias($hit->description) if(! defined $t_def);
+      my $t_def      = $db_index->header_for_hit($hit);
       
       #write fasta file
       my $fasta = Fasta::toFasta('>'.$t_def, \$t_seq);
@@ -600,6 +597,7 @@ sub split_db {
    my %alias;
    #my $FA;
    #open($FA, "> $t_full"); #full file
+   my $wflag = 1; #flag set so warnings gets printed only once 
    while (my $fasta = $fasta_iterator->nextEntry()) {
       my $def = Fasta::getDef(\$fasta);
       my $seq_id = Fasta::def2SeqID($def);
@@ -616,6 +614,12 @@ sub split_db {
 
       #fix weird blast trimming error for long seq IDs by replacing them
       if(length($seq_id) > 78){
+	  warn "WARNING: The fasta file contains sequences with names longer\n".
+	       "than 78 characters.  Long names get trimmed by BLAST, making\n".
+	       "it harder to identify the source of an alignmnet. You might\n".
+	       "want to reformat the fasta file with shorter IDs.\n".
+	       "File_name:$file\n\n" if($wflag-- > 0);
+
 	  my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
 	  die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
 	      if($alias{$new_id});
@@ -1041,15 +1045,14 @@ sub polish_exonerate {
 	 my $offset = $p->[0]->{b} - 1;
 	 my $id  = $hit->name();
 
-	 my $fastaObj = $db_index->get_Seq_by_id($hit->name);
-	 $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	 my $fastaObj = $db_index->get_Seq_for_hit($hit);
 
 	 #still no sequence? try rebuilding the index and try again
 	 if (not $fastaObj) {
 	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
 	    $db_index->reindex();
-	    $fastaObj = $db_index->get_Seq_by_id($hit->name);
-	    $fastaObj = $db_index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	    $fastaObj = $db_index->get_Seq_for_hit($hit);
+
 	    if (not $fastaObj) {
 	       print STDERR "stop here:".$hit->name."\n";
 	       die "ERROR: Fasta index error\n";
@@ -1057,8 +1060,7 @@ sub polish_exonerate {
 	 }
 
 	 my $seq      = $fastaObj->seq();
-	 my $def      = $db_index->header($hit->name);
-	    $def      = $db_index->header_by_alias($hit->description) if(! defined $def);
+	 my $def      = $db_index->header_for_hit($hit);
 
 	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 
@@ -1169,15 +1171,14 @@ sub make_multi_fasta {
    my $fastas = '';
    foreach my $c (@{$clusters}) {
       foreach my $hit (@{$c}) {
-	 my $fastaObj = $index->get_Seq_by_id($hit->name);
-	 $fastaObj = $index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	 my $fastaObj = $index->get_Seq_for_hit($hit);
 	 
 	 #still no sequence? try rebuilding the index and try again
 	 if (not $fastaObj) {
 	     print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
 	     $index->reindex();
-	     $fastaObj = $index->get_Seq_by_id($hit->name);
-	     $fastaObj = $index->get_Seq_by_alias($hit->description) if(not $fastaObj);
+	     $fastaObj = $index->get_Seq_for_hit($hit);
+
 	     if (not $fastaObj) {
 		 print STDERR "stop here:".$hit->name."\n";
 		 die "ERROR: Fasta index error\n";
@@ -1185,8 +1186,7 @@ sub make_multi_fasta {
 	 }
 
 	 my $seq      = $fastaObj->seq(); 
-	 my $def      = $index->header($hit->name);
-	    $def      = $index->header_by_alias($hit->description) if(! defined $def);
+	 my $def      = $index->header_for_hit($hit);
 	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
 	 $fastas     .= $$fasta; 
       }

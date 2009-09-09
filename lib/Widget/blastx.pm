@@ -98,6 +98,7 @@ sub keepers {
       foreach my $hit (@{$hits}){
 	 $hit->queryLength($result->query_length);
 	 $hit->queryName($result->query_name);
+	 $hit->database_name($result->database_name);
 
 	 my @hsps;
 	 while(my $hsp = $hit->next_hsp) {

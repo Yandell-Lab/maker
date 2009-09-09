@@ -180,6 +180,7 @@ sub split_hit_on_intron {
 		 );
 	 
 	 $new_hit->queryLength($hit->queryLength);
+	 $new_hit->database_name($hit->database_name);
 	 $new_hit->{is_split} = 1 if $num > 1;
 	 
 	 foreach my  $hsp (@{$splits{$key}}){
@@ -238,6 +239,7 @@ sub split_hit_by_strand {
 			       );
 	 
 	 $new_hit->queryLength($hit->queryLength);
+	 $new_hit->database_name($hit->database_name);
 	 $new_hit->{is_split} = 1;
 	 
 	 foreach my  $hsp (@{$pm_splits{$k}}){
@@ -269,6 +271,7 @@ sub shatter_hit {
                                    );
 
 		$new_hit->queryLength($hit->queryLength);
+	        $new_hit->database_name($hit->database_name);
 		$new_hit->{is_shattered} = 1;
 
 		$new_hit->add_hsp($hsp);
@@ -298,6 +301,7 @@ sub shatter_all_hits {
 				       );
 		
 		$new_hit->queryLength($hit->queryLength);
+		$new_hit->database_name($hit->database_name);
 		$new_hit->{is_shattered} = 1;
 		
 		$new_hit->add_hsp($hsp);
@@ -769,7 +773,7 @@ sub copy {
                               );
 
         $new_hit->queryLength($hit->queryLength);
-
+	$new_hit->database_name($hit->database_name);
 
 	my @new_hsps;
 	foreach my $hsp ($hit->hsps){
@@ -878,14 +882,15 @@ sub normalize {
                                '-length'       => $hit->length,
                               );
 
-                $new_hit->queryLength($hit->queryLength);
-                $new_hit->{is_normalized} = 1;
-
-		my %crap;
-		foreach my $hsp (@keepers){
-			$crap{$hsp->nB('hit')}{$hsp->nE('hit')}++;
-                	$new_hit->add_hsp($hsp);
-		}
+	$new_hit->queryLength($hit->queryLength);
+	$new_hit->database_name($hit->database_name);
+	$new_hit->{is_normalized} = 1;
+	
+	my %crap;
+	foreach my $hsp (@keepers){
+	    $crap{$hsp->nB('hit')}{$hsp->nE('hit')}++;
+	    $new_hit->add_hsp($hsp);
+	}
 
 	my $s_size = @{$sorted};
 	my $k_size = @keepers;

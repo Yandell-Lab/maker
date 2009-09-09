@@ -42,6 +42,10 @@ sub new {
     #build indexes
     foreach my $file (@keep){
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+
+	#build reverse index to get the correct index based on file name
+	my ($title) = $file =~ /([^\/]+)$/;
+	$self->{file2index}{$title} = $self->{index}->[-1];
     }
 
     return $self;
@@ -73,9 +77,91 @@ sub reindex {
     #build indexes
     foreach my $file (@keep){
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+
+	#build reverse index to get the correct index based on file name
+	my ($title) = $file =~ /([^\/]+)$/;
+	$self->{file2index}{$title} = $self->{index}->[-1];
     }
 
     return $self;
+}
+#-------------------------------------------------------------------------------
+#uses hit info to search all indexes faster
+sub get_Seq_for_hit {
+    my $self = shift;
+    my $hit = shift;
+
+    my $r_ind = $self->{file2index}; #reverse index
+    my $id = $hit->name;
+
+    if($hit->description =~ /MD5_alias=(\S+)/){
+	$id = $1;
+    }
+
+    my $dbf = $hit->database_name;
+
+    return $self->get_Seq_by_id($id) if(! defined $dbf);    
+
+    ($dbf) = $dbf =~ /([^\/]+)$/;
+
+    my $fastaObj;
+    if(exists $r_ind->{$dbf}){
+	my $db = $r_ind->{$dbf};
+	$fastaObj = $db->get_Seq_by_id($id);
+    }
+    
+    if(! $fastaObj){
+	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
+	foreach my $dbf (@files){
+	    my $db = $r_ind->{$dbf};
+	    $fastaObj = $db->get_Seq_by_id($id);
+	    last if($fastaObj);
+	}
+    }
+
+    return $fastaObj;
+}
+#-------------------------------------------------------------------------------
+#uses hit info to search all indexes faster
+sub header_for_hit {
+    my $self = shift;
+    my $hit = shift;
+
+    my $r_ind = $self->{file2index}; #reverse index
+    my $id = $hit->name;
+
+    if($hit->description =~ /MD5_alias=(\S+)/){
+	$id = $1;
+    }
+
+    my $dbf = $hit->database_name;
+
+    return $self->header($id) if(! defined $dbf);
+
+    ($dbf) = $dbf =~ /([^\/]+)$/;
+
+    my $fastaObj;
+    my $header;
+    if(exists $r_ind->{$dbf}){
+	my $db = $r_ind->{$dbf};
+	$fastaObj = $db->get_Seq_by_id($id);
+	$header = $db->header($id) if($fastaObj);
+    }
+    
+    if(! $fastaObj){
+	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
+	foreach my $dbf (@files){
+	    my $db = $r_ind->{$dbf};
+	    $fastaObj = $db->get_Seq_by_id($id);
+
+	    if($fastaObj){
+		$header = $db->header($id);
+		last
+	    }
+	}
+    }
+
+    return $header;
 }
 #-------------------------------------------------------------------------------
 sub get_Seq_by_id {
