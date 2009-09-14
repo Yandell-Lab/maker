@@ -1,0 +1,181 @@
+#! /usr/bin/perl -w
+
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use Getopt::Long;
+use File::Temp;
+use vars qw($JB $RS);
+
+BEGIN{
+    my $loc = `which flatfile-to-json.pl 2> /dev/null`;
+    chomp $loc;
+    if ($loc =~ /^no flatfile-to-json.pl/ || ! $loc) {
+	die "FATAL: Can not find flatfile-to-json.pl\n".
+	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
+
+    }
+    else {
+	$JB = [split("\n", $loc)]->[-1];
+    }
+
+    $loc = `which prepare-refseqs.pl 2> /dev/null`;
+    chomp $loc;
+    if ($loc =~ /^no prepare-refseqs.pl/ || ! $loc) {
+	die "FATAL: Can not find prepare-refseqs.pl\n".
+	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
+
+    }
+    else {
+	$RS = [split("\n", $loc)]->[-1];
+    }
+}
+
+my $usage = '
+USAGE:
+     maker2jbrowse [OPTION] <gff3file1> <gff3file2> ...
+     maker2jbrowse [OPTION] -d <datastore_index>
+
+     This script takes MAKER produced GFF3 files and dumps them into a
+     JBrowse for you using a pre-configured JSON tracks.
+
+OPTIONS:
+     ds_index|d  <file>  Provide MAKER produced datastore index
+
+     help|?              Displays this usage statement
+
+';
+
+my $dstore;
+
+GetOptions("ds_index|d=s" => \$dstore,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+my $dbname = shift;
+my @files;
+
+die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+if($dstore){
+    open(IN, "< $dstore");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        next if $seen{$e};
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+        $file = "$file/$1.gff";
+    }
+}
+else{
+    @files = @ARGV;
+    undef @ARGV;
+}
+
+if(@files){
+    print $usage;
+    exit();
+}
+
+my $error;
+my $base = $dstore;
+$base =~ s/[^\/]+$// if($base);
+
+foreach my $file (@files){
+    if (! -f $file){
+	if($base && -f "$base/$file"){
+	    $file = "$base/$file";
+	    next;
+	}
+
+	$error .= "ERROR: The GFF3 file \'$file\' does not exist\n";
+    }
+}
+die $error if $error;
+
+#--build command lines
+my %commands;
+
+#MAKER anotations
+$commans{gene}           = ' --tracklabel "Genes" --key "Genes" --getType --getLabel --autocomplete label --cssclass feature5 --type gene';
+$commans{mRNA}           = ' --tracklabel "Transcripts" --key "Transcripts" --getType --getSubs --getLabel --autocomplete label --cssclass transcript --subfeatureClasses \'{"exon": "transcript-exon", "CDS": "transcript-CDS", "UTR": "transcript-UTR"}\' --arrowheadClass transcript-arrowhead --type mRNA';
+
+#ab initio gene predictions
+$commans{snap}           = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:snap';
+$commans{augustus}       = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:augustus';
+$commans{genemark}       = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:genemark';
+$commans{fgenesh}        = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh';
+
+#evidence alignments
+$commans{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx';
+$commans{blastn}         = ' --tracklabel "BLASTN" --key "BLASTN" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastn';
+$commans{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:tblastx';
+$commans{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:est2genome';
+$commans{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:protein2genome';
+
+#repeats
+$commans{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:repeatmasker';
+$commans{repeaqtrunner}  = ' --tracklabel "RepeatRunner" --key "RepeatRunner" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx:repeatmask';
+
+
+foreach my $file (@files){
+    my $gff;
+    my $fasta;
+
+    open(IN, "< $file");
+    my $ff; #fasta flag
+    while(defined(my $line = <IN>)){
+	if($ff){
+	    $fasta .= $line;
+	    next;
+	}
+	elsif($line =~ /^\#\#FASTA/){
+	    $ff = 1;
+	    next;
+	}
+	else{
+	    $gff .= $line;
+	    next;
+	}
+    }
+    close(IN);
+
+    if($fasta){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh $fasta;
+	close($fh);
+
+	my $command = $RS;
+	$command .= " --fasta $fname";
+
+	system ($command);
+	unlink($fname);
+    }
+
+    if($gff){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh $gff;
+	close($fh);
+
+	while(my $track = each %commands){
+	    my $command = $JB;
+	    $command .= $commands{$track};
+	    $command .= " --gff $fname";
+
+	    system ($command);
+	}
+
+	unlink($fname);
+    }
+}
