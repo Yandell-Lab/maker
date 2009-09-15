@@ -83,7 +83,7 @@ else{
     undef @ARGV;
 }
 
-if(@files){
+if(!@files){
     print $usage;
     exit();
 }
@@ -108,30 +108,35 @@ die $error if $error;
 my %commands;
 
 #MAKER anotations
-$commans{gene}           = ' --tracklabel "Genes" --key "Genes" --getType --getLabel --autocomplete label --cssclass feature5 --type gene';
-$commans{mRNA}           = ' --tracklabel "Transcripts" --key "Transcripts" --getType --getSubs --getLabel --autocomplete label --cssclass transcript --subfeatureClasses \'{"exon": "transcript-exon", "CDS": "transcript-CDS", "UTR": "transcript-UTR"}\' --arrowheadClass transcript-arrowhead --type mRNA';
+$commands{gene}           = ' --tracklabel "Genes" --key "Genes" --getType --getLabel --autocomplete label --cssclass feature5 --type gene';
+$commands{maker}          = ' --tracklabel "Transcripts" --key "Transcripts" --getType --getSubs --getLabel --autocomplete label --cssclass transcript --subfeatureClasses \'{"exon": "transcript-exon", "CDS": "transcript-CDS", "UTR": "transcript-UTR"}\' --arrowheadClass transcript-arrowhead --type mRNA';
 
 #ab initio gene predictions
-$commans{snap}           = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:snap';
-$commans{augustus}       = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:augustus';
-$commans{genemark}       = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:genemark';
-$commans{fgenesh}        = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh';
+$commands{snap}           = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:snap';
+$commands{snap_masked}    = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:snap_masked';
+$commands{augustus}       = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:augustus';
+$commands{augustus_masked} = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:augustus_masked';
+$commands{genemark}       = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:genemark';
+$commands{genemark_masked} = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:genemark_masked';
+$commands{fgenesh}        = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh';
+$commands{fgenesh_masked} = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-CDS"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh_masked';
 
 #evidence alignments
-$commans{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx';
-$commans{blastn}         = ' --tracklabel "BLASTN" --key "BLASTN" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastn';
-$commans{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:tblastx';
-$commans{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:est2genome';
-$commans{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:protein2genome';
+$commands{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx';
+$commands{blastn}         = ' --tracklabel "BLASTN" --key "BLASTN" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type expressed_sequence_match:blastn';
+$commands{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type expressed_sequence_match:tblastx';
+$commands{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type expressed_sequence_match:est2genome';
+$commands{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:protein2genome';
 
 #repeats
-$commans{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:repeatmasker';
-$commans{repeaqtrunner}  = ' --tracklabel "RepeatRunner" --key "RepeatRunner" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx:repeatmask';
+$commands{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type match:repeatmasker';
+$commands{blastx:repeatmask}  = ' --tracklabel "RepeatRunner" --key "RepeatRunner" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part"}\' --type protein_match:blastx:repeatmask';
 
 
 foreach my $file (@files){
     my $gff;
     my $fasta;
+    my %tracks;
 
     open(IN, "< $file");
     my $ff; #fasta flag
@@ -145,6 +150,12 @@ foreach my $file (@files){
 	    next;
 	}
 	else{
+	    if($line !~ /^\#/ && $line =~ /[^\t]*\t([^\t]*)\t/){
+		$val = $1;
+		$tracks{$1}++;
+		$tracks{gene}++ if($1 eq 'maker'); #add gene locus track
+	    }
+
 	    $gff .= $line;
 	    next;
 	}
@@ -168,8 +179,11 @@ foreach my $file (@files){
 	print $fh $gff;
 	close($fh);
 
-	while(my $track = each %commands){
+	while(my $track = each %tracks){
 	    my $command = $JB;
+
+	    die "ERROR: No track information for source \'$track\'\n\n";
+
 	    $command .= $commands{$track};
 	    $command .= " --gff $fname";
 
