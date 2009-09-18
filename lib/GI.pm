@@ -1764,8 +1764,7 @@ sub runBlastx {
    my $command  = $blast;
    if ($command =~ /blastx$/) {
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
-      $command .= " filter=seg";
-      #$command .= ($softmask) ? " wordmask=seg" : " filter=seg";
+      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       #$command .= " T=20";
       #$command .= " W=5";
       #$command .= " wink=5";
