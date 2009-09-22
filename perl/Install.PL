@@ -23,5 +23,3 @@ system("make install");
 system("make clean");
 chdir("$FindBin::Bin");
 unlink("DBD-SQLite-0.31/Makefile.old") if (-e "DBD-SQLite-0.31/Makefile.old");
-
-

@@ -6,9 +6,7 @@ use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 
 use DBI;
-use DBD::Pg;
 use Getopt::Long;
-use IO::Prompt;
 use File::Temp;
 use vars qw($DBH $GMOD);
 
@@ -30,6 +28,9 @@ BEGIN{
 	$GMOD = [split("\n", $loc)]->[-1];
     }
 }
+
+use IO::Prompt;
+use DBD::Pg;
 
 my $usage = '
 USAGE:
