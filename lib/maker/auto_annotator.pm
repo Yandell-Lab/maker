@@ -1689,7 +1689,9 @@ sub group_transcripts {
 
 	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTIONS);
 
-	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTIONS->{min_protein});
+	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTIONS->{min_protein} ||
+					     $t_struct->{AED} > $CTL_OPTIONS->{AED_threshold}
+					     );
 
 	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
 	 $i++;

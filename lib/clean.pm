@@ -167,6 +167,60 @@ sub get_best_alt_splices {
         return \@transcripts;
 }
 #------------------------------------------------------------------------
+#this function throws out hits that result from multiple overlapping HSPs
+#from the same region (caused by low complexity repeats) 
+sub complexity_filter {
+    my $candidates = shift;
+    my $seq        = shift;
+    
+    my @keepers;
+    
+    foreach my $f (@$candidates){
+	my $qOff = $f->start('query');
+	my $hOff = $f->start('hit');
+	
+	my @q_cov;
+	my @h_cov;
+	foreach my $hsp ($f->hsps){
+	    my $qS = $hsp->start('query') - $qOff;
+	    my $qE = $hsp->end('query') - $qOff;
+	    
+	    my $hS = $hsp->start('hit') - $hOff;
+	    my $hE = $hsp->end('hit') - $hOff;
+	    
+	    @q_cov[$qS..$qE] = map {(defined $_) ? $_ + 1 : 1} (@q_cov[$qS..$qE]);
+		@h_cov[$hS..$hE] = map {(defined $_) ? $_ + 1 : 1} (@h_cov[$hS..$hE]);
+	}
+	
+	#average coverage for qeury
+	my $count = 0;
+	my $total = 0;
+	foreach my $c (@q_cov){
+	    next if(! defined $c);
+	    $count++;
+	    $total += $c;		
+	}
+	
+	my $q_ave = ($count) ? $total/$count : 0;
+	
+	#average coverage for hit
+	$count = 0;
+	$total = 0;
+	foreach my $c (@h_cov){
+	    next if(! defined $c);
+	    $count++;
+	    $total += $c;		
+	}
+
+	my $h_ave = ($count) ? $total/$count : 0;
+
+	#if average basepair hits twice on both query and subject, skip
+	push(@keepers, $f) unless(($q_ave + $h_ave)/2 > 2);
+    }
+    
+    return \@keepers;
+}
+#------------------------------------------------------------------------
 1;
 
 

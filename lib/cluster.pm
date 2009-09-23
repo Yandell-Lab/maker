@@ -45,7 +45,8 @@ sub clean_and_cluster {
 	foreach my $c (@clusters){
 		print STDERR "total clusters:$num_c now processing $counter\n"
 			unless $main::quiet;
-		my $alts = clean::get_best_alt_splices($c, $seq, 10);
+		my $clean = clean::complexity_filter($c, $seq);
+		my $alts = clean::get_best_alt_splices($clean, $seq, 10);
 		my $i = 0;
 		my @new_cluster;
 		foreach my $a (@{$alts}){
@@ -53,13 +54,12 @@ sub clean_and_cluster {
 			last if ($i > $depth && $depth > 0);
 			$i++;
 		}
+		next if(! @new_cluster);
 		push(@{$clean_clusters[$counter]}, @new_cluster);
 		$counter++;
-	}
-		
+	}		
 
 	return \@clean_clusters;
-
 }
 #------------------------------------------------------------------------
 sub special_cluster_phat_hits {

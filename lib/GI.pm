@@ -2236,6 +2236,7 @@ sub set_defaults {
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'min_protein'} = 0;
+      $CTL_OPT{'AED_threshod'} = 1;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'map_forward'} = 0;
       $CTL_OPT{'retry'} = 1;
@@ -2661,6 +2662,11 @@ sub load_control_files {
       "min_protein will be reset to 0\n\n";
       $CTL_OPT{min_protein} = 0;
    }
+   if ($CTL_OPT{AED_threshold} < 0 || $CTL_OPT{AED_threshold} > 1) {
+      warn "WARNING: \'AED_threshold\' must be set to a value betweeb 0 and 1.\n".
+      "AED_threshold will be reset to 1\n\n";
+      $CTL_OPT{AED_threshold} = 1;
+   }
    if ($CTL_OPT{retry} < 0) {
       warn "WARNING: \'retry\' must be set to 0 or greater.\n".
 	   "It will now be set to 0\n\n";
@@ -2830,6 +2836,7 @@ sub generate_control_files {
    print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
    print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n";
    print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
+   print OUT "AED_threshold:$O{AED_threshold} #Maximum Annotation Edit Distance allowed for annotations (bound by 0 and 1)\n" if(!$ev);
    print OUT "softmask:$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
    print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
    print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
