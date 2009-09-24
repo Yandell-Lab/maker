@@ -196,17 +196,34 @@ sub _clean_files{
 	
 	if($continue_flag >= 0 || $continue_flag == -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	    my $cwd = Cwd::cwd();
-	    while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
+	    my $cwd = Cwd::getcwd(); 
+
+            #while loop is used to solve weird incorrect cwd
+	    #that happens randomly on the cluster
+	    while($cwd ne Cwd::getcwd()){
+		$cwd = Cwd::getcwd();
+	    }
+
+	    foreach my $key (@ctl_to_log) {
 		#these are only sometimes important
 		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$|^rm_pass$/ ||
 		   $key =~ /^pred_pass$|^model_pass$|^other_pass$/
 		   ){
 		    next unless($CTL_OPTIONS{genome_gff});
-		    my $old = $logged_vals{CTL_OPTIONS}{genome_gff};
+		    my $old = (exists $logged_vals{CTL_OPTIONS}{genome_gff}) ? 
+			$logged_vals{CTL_OPTIONS}{genome_gff} : '';
 		    $old =~ s/^$cwd\/*//;
 		    my $new = $CTL_OPTIONS{genome_gff};
 		    $new =~ s/^$cwd\/*//;
+
+		    #temp lamprey
+		    my $chpc = "scratch/serial-pio/u0045039/lamprey2/";
+		    $old =~ s/^$chpc\/*//;
+		    $new =~ s/^$chpc\/*//;
+		    $chpc = "scratch/serial/u0045039/lamprey2/";
+		    $old =~ s/^$chpc\/*//;
+		    $new =~ s/^$chpc\/*//;
+
 
 		    #only continue if change not already happening
 		    #because of a new gff3 file
@@ -364,8 +381,16 @@ sub _clean_files{
 		    print STDERR "MAKER WARNING: The file $key\n".
 			"did not finish on the last run and must be erased\n";
 		    push(@files, $key);
+
+		    #this next step will get both temp directories and files that
+		    #have the incorrect location in the log but are in theVoid
 		    $key =~ /([^\/]+)$/;
 		    my $rm_f_name = $1;
+
+		    if(! -e $key && -e "$the_void/$rm_f_name"){
+			push(@files, $rm_f_name);
+		    }
+
 		    $rm_f_name =~ s/\.fasta$//;
 		    my @d = <$the_void/*$rm_f_name*>;
 		    foreach my $d (@d){
@@ -588,7 +613,14 @@ sub _write_new_log {
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = Cwd::cwd();
+   my $cwd = Cwd::getcwd();
+
+   #while loop is used to solve weird incorrect cwd
+   #that happens randomly on the cluster
+   while($cwd ne Cwd::getcwd()){
+       $cwd = Cwd::getcwd();
+   }
+ 
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
       if(defined $CTL_OPTIONS{$key}){
@@ -617,10 +649,17 @@ sub add_entry {
    my $value = shift;
 
    my $log_file = $self->{file_name};
-   my $cwd = Cwd::cwd();
+   my $cwd = Cwd::getcwd();
+
+   #while loop is used to solve weird incorrect cwd
+   #that happens randomly on the cluster
+   while($cwd ne Cwd::getcwd()){
+       $cwd = Cwd::getcwd();
+   }
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security
+   #also important when moving work directory around
    if(defined $key && defined $type){
        $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
    }

@@ -126,8 +126,14 @@ sub add_entry {
    my @F = @_;
 
    #remove deep directory data so log is relative
-   my $cwd = Cwd::cwd();
+   my $cwd = Cwd::getcwd();
    my $entry = join("\t", @F);
+
+   #while loop is used to solve weird incorrect cwd
+   #that happens randomly on the cluster
+   while($cwd ne Cwd::getcwd()){
+       $cwd = Cwd::getcwd();
+   }
 
    if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY/){
        $entry =~ s/$cwd\/.*\.maker\.output\/*//;

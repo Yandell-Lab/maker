@@ -605,8 +605,20 @@ sub split_db {
 
       #fix non standard peptides
       if (defined $alt) {
-	 $$seq_ref =~ s/\*//g;
+	 $$seq_ref =~ s/[\*\-]//g;
 	 $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxABCDEFGHIKLMNPQRSTVWYZX\-\n]/$alt/g;
+      }
+      #fix nucleotide sequences
+      elsif($key !~ /protein/){
+	  #most programs use N for masking but for some reason the NCBI decided to
+	  #use X to mask their sequence, which causes many many programs to fail
+	  $$seq_ref =~ s/\-//g;
+	  $$seq_ref =~ s/X/N/g;
+	  die "ERROR: The nucleotide sequence file \'$file\'\n".
+	      "appears to contain protein sequence or unrecognized characters.\n".
+	      "Please check/fix the file before continuing.\n".
+	      "Invalid Character: $1\n\n"
+	      if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
       }
 
       #Skip empty fasta entries
@@ -2236,7 +2248,7 @@ sub set_defaults {
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'min_protein'} = 0;
-      $CTL_OPT{'AED_threshod'} = 1;
+      $CTL_OPT{'AED_threshold'} = 1;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'map_forward'} = 0;
       $CTL_OPT{'retry'} = 1;
