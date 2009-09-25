@@ -47,8 +47,13 @@ open(my $OUT, '>', $fasta_file) or die "Can't open $fasta_file for writing\n$!\n
 while (<$IN>) {
 	if  (/^>/) {
 		my ($old_id) = $_ =~ /^>(\S+)/;
-		my $new_id = $map{$old_id};
-		s/^>$old_id/>$new_id/g if $new_id;
+		if (exists $map{$old_id}) {
+			my $new_id = $map{$old_id};
+			s/^>$old_id/>$new_id/g;
+		}
+		else {
+			print STDERR "WARNING:  No mapping available for $old_id\n";
+		}
 	}
 	print $OUT $_;
 }

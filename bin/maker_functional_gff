@@ -11,17 +11,16 @@ my $usage = "
 
 Synopsis:
 
-maker_functional_fasta
+maker_functional_gff
 
 maker_functional_gff uniprot-sprot.fasta uniprot-sprot.blast.out maker.gff
 
 Description:
 
-This script will take a uniprot-sprot fasta_file, a wu-blast -mformat
+This script will take a uniprot-sprot file a GFF3 file, and a wu-blast -mformat
 2 blast output file from a blast of maker proteins against
 uniprot-sprot proteins and add functional annotations to the maker
-GFF3 Notes attribute.
-
+GFF3 Notes attribute. Like this:
 
 ";
 
@@ -33,8 +32,6 @@ my $gene_map = parse_genes($gff_file);
 my $blast = parse_blast($uniprot_file, $blast_file, $gene_map);
 
 open (my $IN,  '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
-unlink($gff_file);
-open (my $OUT, '>', $gff_file) or die "Can't open $gff_file for writing\n$!\n";
 
 LINE:
 while (my $line = <$IN>) {
@@ -47,21 +44,23 @@ while (my $line = <$IN>) {
 	    ! $attrb          ||
 	    ($type ne 'mRNA' && $type ne 'gene')
 	   ) {
-		print $OUT "$line\n";
+		print "$line\n";
 		next LINE;
 	}
 
 	my ($id) = $attrb =~ /ID\s*=\s*(.*?);/;
 
-	my $note = 'Note=';
-	if ($blast->{$id}) {
-		$note .= $blast->{$id}{note} if $blast->{$id}{note};
+	my $note;
+	if ($blast->{$id}{note}) {
+		$note .= $blast->{$id}{note};
 	}
 	else {
 		$note .= 'Protein of unknown function';
 	}
 
 	$note = uri_escape($note, ';=%&,');
+
+	$note = "Note=" . $note;
 
 	$line =~ s/;$//;
 	$line .= ';';
@@ -72,7 +71,7 @@ while (my $line = <$IN>) {
 #		$line =~ s/Name=.*?;/Name=Similar to $name;/;
 #	}
 
-	print $OUT "$line\n";
+	print "$line\n";
 }
 #-----------------------------------------------------------------------------
 #-------------------------------- SUBROUTINES --------------------------------
@@ -158,7 +157,7 @@ sub parse_blast{
 		}
 
 		my $gene_id = $gene_map->{$qid};
-		if (! $seen{$gene_id}) {
+		if ($gene_id && ! $seen{$gene_id}) {
 			$blast{$gene_id} = $fasta{$sid} || '';
 			$seen{$gene_id}++;
 		}

@@ -47,14 +47,12 @@ my $blast = parse_blast($uniprot_file, $blast_file);
 for my $file (@fasta_files) {
 
 open (my $IN,  '<', $file) or die "Can't open $file for reading\n$!\n";
-unlink($file);
-open (my $OUT, '>', $file) or die "Can't open $file for writing\n$!\n";
 
 LINE:
 while (<$IN>) {
 
     if ($_ !~ /^>/) {
-	print $OUT $_;
+	print $_;
 	next LINE;
     }
 
@@ -67,7 +65,7 @@ while (<$IN>) {
     $header .= "$func " if $func;
     $header .= join " ", @attrbs if @attrbs;
 
-    print $OUT "$header\n";
+    print "$header\n";
 
     }
 }
@@ -101,7 +99,12 @@ sub parse_blast{
 
 		my $func = '';
 		$func .= "Similar to $name: " if $name;
-		$func .= "$desc "  if $desc;
+		if ($func =~ /Similar to/) {
+			$func .= "$desc "  if $desc;
+		}
+		else {
+			$func .= "Similar to $desc "  if $desc;
+		}
 		$func .= "($org)"  if $org;
 		$func  = ('Name:"' . $func . '"') if $func;
 

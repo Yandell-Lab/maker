@@ -19,7 +19,7 @@ other correctly formated GFF3 files.
 
 Options:
 
-  -d The location of the MAKER datastore.
+  -d The location of the MAKER datastore index.
   -o Alternate base name for the output files.
 
 ";

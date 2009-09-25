@@ -14,8 +14,8 @@ ipr_update_gff file.gff3 iprscan.out
 
 Description:
 
-This script will take a GFF33 file and an iprscan output file and add
-fucntional annotations to the GFF3 attributes field.
+This script will take a GFF3 file and an iprscan output file and add
+Dbxrefs and Ontology_term fields to the GFF3 attributes field.
 
 ";
 

@@ -43,7 +43,7 @@ Assumptions:
 
 my ($help, $prefix, $justify, $sort_order);
 my $opt_success = GetOptions('help'         => \$help,
-			     'prefix'       => \$prefix,
+			     'prefix=s'     => \$prefix,
 			     'justify=s'    => \$justify,
 			     'sort_order=s' => \$sort_order,
 			      );
@@ -133,6 +133,6 @@ sub parse_sort_order {
 #-----------------------------------------------------------------------------
 sub sort_contigs {
 	my ($a, $b, $sort_map) = @_;
-	return ($sort_order->{$a} <=> $sort_map->{$b}) if $sort_order;
+	return ($sort_order->{$a} <=> $sort_map->{$b}) if defined $sort_order;
 	return ($sort_order->{$b} <=> $sort_map->{$a});
 }
