@@ -604,7 +604,7 @@ sub annotate {
     my $models           = shift;
     my $the_void         = shift;
     my $build            = shift;
-    my $CTL_OPTIONS      = shift;
+    my $CTL_OPTS      = shift;
     $LOG                 = shift;
     
     #process fasta files
@@ -614,7 +614,7 @@ sub annotate {
     my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
     
     #reset gene names
-    #my $GFF_DB = new GFFDB($CTL_OPTIONS);
+    #my $GFF_DB = new GFFDB($CTL_OPTS);
     $SEEN = {};#$GFF_DB->get_existing_gene_names($seq_id);
     
     #group evidence and predictions
@@ -624,9 +624,9 @@ sub annotate {
 						  $predictions,
 						  $models,
 						  $v_seq_ref,
-						  $CTL_OPTIONS->{single_exon},
-						  $CTL_OPTIONS->{single_length},
-						  $CTL_OPTIONS->{organism_type}
+						  $CTL_OPTS->{single_exon},
+						  $CTL_OPTS->{single_length},
+						  $CTL_OPTS->{organism_type}
 						  );
     
     my %annotations;
@@ -641,7 +641,7 @@ sub annotate {
 				 $def,
 				 'model_gff',
 				 $predictions,
-				 $CTL_OPTIONS
+				 $CTL_OPTS
 				 );
 	
 	$annotations{'model_gff'} = group_transcripts($model_trans,
@@ -651,12 +651,12 @@ sub annotate {
 						      $build,
 						      'model_gff',
 						      $the_void,
-						      $CTL_OPTIONS
+						      $CTL_OPTS
 						      );
     }
     
     #---hint based gene prediction here (includes est2genome)
-    foreach my $prdr (@{$CTL_OPTIONS->{_predictor}}){
+    foreach my $prdr (@{$CTL_OPTS->{_predictor}}){
 	next if($prdr eq 'model_gff' || $prdr eq 'pred_gff');
 	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
 	
@@ -667,7 +667,7 @@ sub annotate {
 				 $def,
 				 $prdr,
 				 $predictions,
-				 $CTL_OPTIONS
+				 $CTL_OPTS
 				 );
 	
 	my $annot = group_transcripts($transcripts,
@@ -677,7 +677,7 @@ sub annotate {
 				      $build,
 				      $prdr,
 				      $the_void,
-				      $CTL_OPTIONS
+				      $CTL_OPTS
 				      );
 	
 	$annotations{$prdr} =  $annot;
@@ -693,7 +693,7 @@ sub annotate {
 			    $def,
 			    'abinit', #all abinits not just pref_gff
 			    $predictions,
-			    $CTL_OPTIONS
+			    $CTL_OPTS
 			    );
     
     my $all_ab = group_transcripts($pred_trans,
@@ -703,7 +703,7 @@ sub annotate {
 				   $build,
 				   'abinit', #all abinits not_just pred_gff
 				   $the_void,
-				   $CTL_OPTIONS
+				   $CTL_OPTS
 				   );
 
     $annotations{'abinit'} = $all_ab; #all abinit
@@ -872,7 +872,7 @@ sub add_abAED{
 sub best_annotations {
     my $annotations = shift;
     my $out_base = shift;
-    my $CTL_OPTIONS = shift;
+    my $CTL_OPTS = shift;
 
     print STDERR "Choosing best annotations\n" unless($main::quiet);
     
@@ -880,7 +880,7 @@ sub best_annotations {
     my @m_keepers;
 
     #keep all gff3 passthrough if there's nothing else
-    if(@{$CTL_OPTIONS->{_predictor}} == 1 && $CTL_OPTIONS->{_predictor}->[0] eq 'model_gff'){
+    if(@{$CTL_OPTS->{_predictor}} == 1 && $CTL_OPTS->{_predictor}->[0] eq 'model_gff'){
 	foreach my $g (@{$annotations->{'model_gff'}}){
 	    if($g->{g_strand} == 1){
 		push(@p_keepers, $g);
@@ -890,26 +890,32 @@ sub best_annotations {
 	    }
 	}
     }
-    elsif(@{$CTL_OPTIONS->{_predictor}}){
+    elsif(@{$CTL_OPTS->{_predictor}}){
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
 	my $p_list = [];
 	my $m_list = [];
 	my @p_est2g;
 	my @m_est2g;
-	foreach my $p (@{$CTL_OPTIONS->{_predictor}}){
+	foreach my $p (@{$CTL_OPTS->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
-		    push(@$p_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
+		    push(@$p_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold})
+					  || $p eq 'model_gff'
+					  );
 		}
 		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
-		    push(@$m_list, $g) if($g->{AED} < 1 || $p eq 'model_gff');
+		    push(@$m_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold})
+					  || $p eq 'model_gff'
+					  );
 		}
 		elsif($g->{g_strand} == 1){
-		    push(@p_est2g, $g); #seperate est2genome and protein2genome genes
+		    #seperate est2genome and protein2genome genes
+		    push(@p_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
 		}
 		elsif($g->{g_strand} == -1){
-		    push(@m_est2g, $g); #seperate est2genome and protein2genome genes
+		    #seperate est2genome and protein2genome genes
+		    push(@m_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
 		}
 		else{
 		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -1154,7 +1160,7 @@ sub _best{
 sub crit1 {
    my $g = shift;
    
-   return ($g->{AED} + $g->{abAED})/2;
+   return $g->{AED} + ($g->{abAED} * 1/3);
 }
 #------------------------------------------------------------------------
 #sort by evidence AED score
@@ -1206,6 +1212,10 @@ sub run_it {
 	my $ests     = $set->{ests};
 	my $model    = $set->{model};
 	my $gomiph   = $set->{gomiph};
+	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
+	my $pol_p    = get_selected_types($gomiph,'protein2genome');
+	my $alt_ests = $set->{alt_ests};
+	my $preds    = $set->{preds};
 
 	#------gff passthrough
 	if ($predictor eq 'model_gff') {
@@ -1223,7 +1233,31 @@ sub run_it {
 	#------ab-init passthrough
 	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
-	    
+
+	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
+	    if(! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
+		my $clean  = clean::purge_single_exon_hits($alt_ests);
+		next if(@$clean);
+		
+		my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
+		my $pieces = Shadower::getPieces($seq, $coors, 0);
+		
+		if(@$pieces <= 1){
+		    my $keep;
+		    
+		    my $set = get_overlapping_hits($model, $predictions);
+		    $keep = 1 if(@$set);
+		    
+		    my $abAED = shadow_AED::get_abAED($set, $model);
+		    $keep = 0 if($abAED > 0.3);
+			
+		    my $AED = shadow_AED::get_AED($blastx,$model);
+		    $keep = 0 if($AED > 0.3);
+		    
+		    next if(! $keep); #skip these spurious predictions
+		}
+	    }	    
+  
 	    #add UTR to ab-inits
 	    my $transcript = pneu($ests, $model, $seq);
 
@@ -1295,11 +1329,6 @@ sub run_it {
         return [] if ($predictor eq 'genemark');
 	
 	#------default hint based behavior
-	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
-	my $pol_p    = get_selected_types($gomiph,'protein2genome');
-	my $alt_ests = $set->{alt_ests};
-	my $preds    = $set->{preds};
-	
 	my ($pred_shots, $strand) = get_pred_shot($seq, 
 						  $def, 
 						  $i, 
@@ -1312,17 +1341,25 @@ sub run_it {
 	
 	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 	
-	#added 2/23/2009 to reduce spurious gene predictions with only blastx
-	if(@$on_right_strand > 1 && ! defined $mia && ! @$pol_p && ! @$preds){
+	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
+	if(@$on_right_strand && ! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
 	    my $clean  = clean::purge_single_exon_hits($alt_ests);
+	    next if(@$clean);
+
 	    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 	    my $pieces = Shadower::getPieces($seq, $coors, 0);
 	    
-	    if(! @$clean && @$pieces <= 1){
+	    if(@$pieces <= 1){
 		my $keep;
 		foreach my $h (@$on_right_strand){
 		    my $set = get_overlapping_hits($h, $predictions);
 		    $keep = 1 if(@$set);
+		    
+		    my $abAED = shadow_AED::get_abAED($set, $h);
+		    $keep = 0 if($abAED > 0.3);
+
+		    my $AED = shadow_AED::get_AED($blastx,$h);
+		    $keep = 0 if($AED > 0.3);
 		}
 
 		next if(! $keep); #skip these spurious predictions
@@ -1354,58 +1391,58 @@ sub get_pred_shot {
    my $the_void    = shift;
    my $set         = shift;
    my $predictor   = shift;
-   my $CTL_OPTIONS = shift;
+   my $CTL_OPTS = shift;
    my $LOG         = shift;
 
    if($predictor eq 'snap'){
-      my $pred_command = $CTL_OPTIONS->{snap}.' '.$CTL_OPTIONS->{snaphmm};
+      my $pred_command = $CTL_OPTS->{snap}.' '.$CTL_OPTS->{snaphmm};
       return Widget::snap::get_pred_shot($seq, 
 					 $def, 
 					 $set_id, 
 					 $the_void, 
 					 $set, 
-					 $CTL_OPTIONS->{pred_flank}, 
+					 $CTL_OPTS->{pred_flank}, 
 					 $pred_command,
-					 $CTL_OPTIONS->{force},
+					 $CTL_OPTS->{force},
 					 $LOG
 					);
    }
    elsif($predictor eq 'augustus'){
-      my $pred_command = $CTL_OPTIONS->{augustus}.' --species='.$CTL_OPTIONS->{augustus_species};
+      my $pred_command = $CTL_OPTS->{augustus}.' --species='.$CTL_OPTS->{augustus_species};
       return Widget::augustus::get_pred_shot($seq, 
 					     $def, 
 					     $set_id, 
 					     $the_void, 
 					     $set, 
-					     $CTL_OPTIONS->{pred_flank}, 
+					     $CTL_OPTS->{pred_flank}, 
 					     $pred_command,
-					     $CTL_OPTIONS->{force},
+					     $CTL_OPTS->{force},
 					     $LOG
 					    );
    }
    elsif($predictor eq 'fgenesh'){
-      my $pred_command = $CTL_OPTIONS->{fgenesh}.' '.$CTL_OPTIONS->{fgenesh_par_file};
+      my $pred_command = $CTL_OPTS->{fgenesh}.' '.$CTL_OPTS->{fgenesh_par_file};
       return Widget::fgenesh::get_pred_shot($seq, 
 					    $def, 
 					    $set_id, 
 					    $the_void, 
 					    $set, 
-					    $CTL_OPTIONS->{pred_flank}, 
+					    $CTL_OPTS->{pred_flank}, 
 					    $pred_command,
-					    $CTL_OPTIONS->{force},
+					    $CTL_OPTS->{force},
 					    $LOG
 					   );
    }
    elsif($predictor eq 'twinscan'){
-      my $pred_command = $CTL_OPTIONS->{twinscan};
+      my $pred_command = $CTL_OPTS->{twinscan};
       return Widget::twinscan::get_pred_shot($seq, 
 					     $def, 
 					     $set_id, 
 					     $the_void, 
 					     $set, 
-					     $CTL_OPTIONS->{pred_flank}, 
+					     $CTL_OPTS->{pred_flank}, 
 					     $pred_command,
-					     $CTL_OPTIONS->{force},
+					     $CTL_OPTS->{force},
 					     $LOG
 					    );
    }
@@ -1426,7 +1463,7 @@ sub load_transcript_struct {
 	my $evi          = shift;
 	my $p_base       = shift;
 	my $the_void     = shift;
-	my $CTL_OPTIONS  = shift;
+	my $CTL_OPTS  = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 
@@ -1564,7 +1601,7 @@ sub group_transcripts {
    my $build        = shift;
    my $predictor    = shift;
    my $the_void     = shift;
-   my $CTL_OPTIONS  = shift;
+   my $CTL_OPTS  = shift;
 
    #fix weird sequence names
    $seq_id = Fasta::seqID2SafeID($seq_id);
@@ -1687,10 +1724,10 @@ sub group_transcripts {
       foreach my $f (@{$c}) {
 	 my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
 
-	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTIONS);
+	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTS);
 
-	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTIONS->{min_protein} ||
-					     $t_struct->{AED} > $CTL_OPTIONS->{AED_threshold}
+	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTS->{min_protein} ||
+					     $t_struct->{AED} > $CTL_OPTS->{AED_threshold}
 					     );
 
 	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);

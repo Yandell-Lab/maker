@@ -1220,7 +1220,7 @@ sub _go {
 		$prot_gff_keepers,
 		$pred_gff_keepers,
 		$model_gff_keepers
-	       ) = GI::process_the_chunk_divide($chunk,
+	       ) = GI::process_the_chunk_divide_temp($chunk,
 						$CTL_OPT{'split_hit'},
 						$blastn_keepers,
 						$blastx_keepers,

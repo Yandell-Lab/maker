@@ -13,6 +13,9 @@ use URI::Escape;
 
 @ISA = qw(
        );
+
+my $CWD = Cwd::getcwd();
+
 #------------------------------------------------------------------------
 #--------------------------- METHODS   ----------------------------------
 #------------------------------------------------------------------------
@@ -31,6 +34,8 @@ sub new {
 sub _initialize {
    my $self = shift @_;
    my %CTL_OPTIONS = %{shift @_};
+
+   $CWD = $CTL_OPTIONS{CWD};
 
    my $out_base = $CTL_OPTIONS{out_base};
    my $out_name = $CTL_OPTIONS{out_name};
@@ -126,14 +131,8 @@ sub add_entry {
    my @F = @_;
 
    #remove deep directory data so log is relative
-   my $cwd = Cwd::getcwd();
+   my $cwd = ($CWD) ? $CWD : Cwd::getcwd();
    my $entry = join("\t", @F);
-
-   #while loop is used to solve weird incorrect cwd
-   #that happens randomly on the cluster
-   while($cwd ne Cwd::getcwd()){
-       $cwd = Cwd::getcwd();
-   }
 
    if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY/){
        $entry =~ s/$cwd\/.*\.maker\.output\/*//;

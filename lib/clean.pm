@@ -215,7 +215,7 @@ sub complexity_filter {
 	my $h_ave = ($count) ? $total/$count : 0;
 
 	#if average basepair hits twice on both query and subject, skip
-	push(@keepers, $f) unless(($q_ave + $h_ave)/2 > 2);
+	push(@keepers, $f) unless(($q_ave + $h_ave)/2 > 1.5);
     }
     
     return \@keepers;

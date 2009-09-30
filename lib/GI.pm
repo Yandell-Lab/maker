@@ -351,8 +351,13 @@ sub process_the_chunk_divide{
       }
    }
 
-   if ($p_cutoff <= 1 && $m_cutoff <= 1) { #too small, all are heldover for next round
-      push (@holdovers, @{$hit_groups});
+   #too small, all are heldover for next round
+   if ($p_cutoff <= 1 + $chunk->offset &&
+       $m_cutoff <= 1 + $chunk->offset) {
+     foreach my $g (@{$hit_groups}){
+	 push (@holdovers, $g);
+	 push (@keepers, []);
+     }
       return @holdovers, @keepers;
    }
 
@@ -367,9 +372,84 @@ sub process_the_chunk_divide{
 
          ($b, $e) = ($e, $b) if $b > $e;
 
-         if (($e < $p_cutoff && $strand eq '1') ||
-             ($e < $m_cutoff && $strand eq '-1')
+         if (($e < $p_cutoff && $strand eq '1' && $p_cutoff > $chunk->offset +1) ||
+             ($e < $m_cutoff && $strand eq '-1' && $m_cutoff > $chunk->offset +1)
             ) {
+            push(@{$group_keepers}, $hit);
+         }
+         else {
+            push(@{$group_holdovers}, $hit);
+         }
+      }
+
+      push(@keepers, $group_keepers);
+      push(@holdovers, $group_holdovers);
+   }
+
+   #hit holdovers and keepers are returned in same order given by user
+   return @holdovers, @keepers;
+}
+#-----------------------------------------------------------------------------
+sub process_the_chunk_divide_temp{
+   my $chunk = shift @_;
+   my $split_hit = shift @_;
+   my $hit_groups = \@_; #processed and returned in order given by user
+
+   my $p_hits;
+
+   foreach my $group (@{$hit_groups}) {
+      push(@{$p_hits}, @{$group});
+   }
+
+   my $coors  = PhatHit_utils::to_begin_and_end_coors($p_hits, 'query');
+
+   foreach my $coor (@{$coors}) {
+      $coor->[0] -= $chunk->offset();
+      $coor->[1] -= $chunk->offset();
+      #fix coordinates for hits outside of chunk end   
+      $coor->[0] = $chunk->length if($coor->[0] > $chunk->length);
+      $coor->[1] = $chunk->length if($coor->[1] > $chunk->length);
+      #fix coordinates for hits outside of chunk begin
+      $coor->[0] = 0 if($coor->[0] < 0);
+      $coor->[1] = 0 if($coor->[1] < 0);
+   }
+
+   my $pieces = Shadower::getPieces(\($chunk->seq), $coors, 10);
+   $pieces = [sort {$b->{e} <=> $a->{e}} @{$pieces}];
+
+   my @keepers;
+   my @holdovers;
+
+   my $cutoff = $chunk->length + $chunk->offset - $split_hit;
+   my $p_cutoff = $chunk->length + $chunk->offset + 1;
+
+   foreach my $piece (@{$pieces}) {
+      if ($piece->{e} + $chunk->offset >= $cutoff) {
+         $p_cutoff = $piece->{b} + $chunk->offset;
+      }
+   }
+
+   #too small, all are heldover for next round
+   if ($p_cutoff <= 1 + $chunk->offset) {
+     foreach my $g (@{$hit_groups}){
+	 push (@holdovers, $g);
+	 push (@keepers, []);
+     }
+      return @holdovers, @keepers;
+   }
+
+   foreach my $group (@{$hit_groups}) {
+      my $group_keepers = [];
+      my $group_holdovers = [];
+
+      foreach my $hit (@{$group}) {
+         my $b = $hit->nB('query');
+         my $e = $hit->nE('query');
+         my $strand = $hit->strand;
+
+         ($b, $e) = ($e, $b) if $b > $e;
+
+         if (($e < $p_cutoff && $p_cutoff > $chunk->offset +1)) {
             push(@{$group_keepers}, $hit);
          }
          else {
@@ -597,6 +677,7 @@ sub split_db {
    my %alias;
    #my $FA;
    #open($FA, "> $t_full"); #full file
+
    my $wflag = 1; #flag set so warnings gets printed only once 
    while (my $fasta = $fasta_iterator->nextEntry()) {
       my $def = Fasta::getDef(\$fasta);
@@ -841,7 +922,7 @@ sub genemark {
    $command .= " -g $exe";
    $command .= " -p $pro";
    $command .= " -o $out_file";
-   $command .= " -t $TMP";
+   #$command .= " -t $TMP";
    $command .= " $in_file";
 
    my $w = new Widget::genemark();
@@ -934,7 +1015,7 @@ sub fgenesh {
    $LOG->add_entry("STARTED", $out_file, ""); 
 
    my $command  = "$wrap $exe";
-   $command .= " -tmp $TMP";
+   #$command .= " -tmp $TMP";
    $command .= " $org";
    $command .= " $in_file";
    $command .= " > $out_file";
@@ -2735,8 +2816,9 @@ sub load_control_files {
    $genome = $CTL_OPT{genome_gff} if (not $genome);
    ($CTL_OPT{out_name}) = $genome =~ /([^\/]+)$/;
    $CTL_OPT{out_name} =~ s/\.[^\.]+$//;
+   $CTL_OPT{CWD} = Cwd::cwd();
    if(! $CTL_OPT{out_base}){
-      $CTL_OPT{out_base} = Cwd::cwd()."/$CTL_OPT{out_name}.maker.output";
+      $CTL_OPT{out_base} = $CTL_OPT{CWD}."/$CTL_OPT{out_name}.maker.output";
    }
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"

@@ -76,6 +76,7 @@ my @ctl_to_log = ('genome_gff',
 		 );
 
 my %SEEN;
+my $CWD = Cwd::getcwd();
 
 #-------------------------------------------------------------------------------
 #------------------------------- Methods ---------------------------------------
@@ -106,6 +107,7 @@ sub _initialize {
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
+   $CWD = $self->{CTL_OPTIONS}->{CWD};
    my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
    my $length = $self->{params}->{seq_length};
 
@@ -196,13 +198,7 @@ sub _clean_files{
 	
 	if($continue_flag >= 0 || $continue_flag == -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	    my $cwd = Cwd::getcwd(); 
-
-            #while loop is used to solve weird incorrect cwd
-	    #that happens randomly on the cluster
-	    while($cwd ne Cwd::getcwd()){
-		$cwd = Cwd::getcwd();
-	    }
+	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
 	    foreach my $key (@ctl_to_log) {
 		#these are only sometimes important
@@ -217,13 +213,8 @@ sub _clean_files{
 		    $new =~ s/^$cwd\/*//;
 
 		    #temp lamprey
-		    my $chpc = "scratch/serial-pio/u0045039/lamprey2/";
-		    $old =~ s/^$chpc\/*//;
-		    $new =~ s/^$chpc\/*//;
-		    $chpc = "scratch/serial/u0045039/lamprey2/";
-		    $old =~ s/^$chpc\/*//;
-		    $new =~ s/^$chpc\/*//;
-
+		    $old =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
+		    $new =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
 
 		    #only continue if change not already happening
 		    #because of a new gff3 file
@@ -268,6 +259,11 @@ sub _clean_files{
 		#organism_type was always eukaryotic before and not logged
 		if($key eq 'organism_type' && ! $log_val){
 		    $log_val = 'eukaryotic';
+		}
+
+		#softmask was always true before and not logged
+		if($key eq 'softmask' && $log_val eq ''){
+		    $log_val = 1;
 		}
 		
 		#if previous log options are not the same as current control file options
@@ -613,13 +609,7 @@ sub _write_new_log {
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = Cwd::getcwd();
-
-   #while loop is used to solve weird incorrect cwd
-   #that happens randomly on the cluster
-   while($cwd ne Cwd::getcwd()){
-       $cwd = Cwd::getcwd();
-   }
+   my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
  
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
@@ -649,13 +639,7 @@ sub add_entry {
    my $value = shift;
 
    my $log_file = $self->{file_name};
-   my $cwd = Cwd::getcwd();
-
-   #while loop is used to solve weird incorrect cwd
-   #that happens randomly on the cluster
-   while($cwd ne Cwd::getcwd()){
-       $cwd = Cwd::getcwd();
-   }
+   my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security

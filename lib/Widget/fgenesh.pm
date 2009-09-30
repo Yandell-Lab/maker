@@ -3,10 +3,10 @@
 #------------------------------------------------------------------------
 package Widget::fgenesh;
 use strict;
-use lib '~/maker/lib';
-use lib '/data1/hao/projects/MAKER-fgenesh/lib';
+#use lib '~/maker/lib';
+#use lib '/data1/hao/projects/MAKER-fgenesh/lib';
 
-use vars qw(@ISA $TMP);
+use vars qw(@ISA);
 use PostData;
 use FileHandle;
 use Widget;
@@ -143,7 +143,7 @@ sub run {
 	      print STDERR $line unless($main::quiet);
 	   }
 	   waitpid $pid, 0;
-	   #die "ERROR: FgenesH failed\n" if $? != 0;
+	   die "ERROR: FgenesH failed\n" if $? != 0;
 	}
 	else {
 	   die "you must give Widget::fgenesh a command to run!\n";
@@ -292,7 +292,7 @@ sub fgenesh {
         FastaFile::writeFile(\$fasta, $file_name);
         $command = $wrap . " $command"; #prepend wrapper
 	$command .= " $file_name";
-	$command .= " -tmp $TMP";                        
+#	$command .= " -tmp $TMP";                        
         $command .= ' -exon_table:'.$xdef_file if -e $xdef_file;
                            
         $command .= " > $o_file";
@@ -529,21 +529,16 @@ sub get_xdef {
 
         my @xdef;
 
-	my $num = (scalar @{$p_pieces} ) + (scalar @{$n_pieces});
-	push @xdef, "$num $s";
         for (my $i = 0; $i < @{$p_pieces}; $i++){
                 my $p = $p_pieces->[$i];
                 my $c_b = $p->{b} - $offset;
                 my $c_e = $p->{e} - $offset;
 
-		my $l = $c_b.' '.$c_e.' '.'1000';
+		my $l = "$c_b $c_e 100";
                 
                 push(@xdef, $l);
         }
-        
-        
-        return \@xdef if !defined($n_pieces->[1]);
-        
+                
         for (my $i = @{$n_pieces} - 1; $i > 0;  $i--){
                 my $p_r = $n_pieces->[$i]; 
                 my $p_l = $n_pieces->[$i - 1];
@@ -553,10 +548,13 @@ sub get_xdef {
                 next if abs($i_b - $i_e) < 2*$i_flank;
                 next if abs($i_b - $i_e) < 25;
 
-		my $l  = $i_b.' '.$i_e.' -1000';
+		my $l  = "$i_b $i_e -1000";
 
                 push(@xdef, $l);
         }
+
+        my $num = @xdef;
+        unshift(@xdef, "$num $s");
 
 	# The next part also put ESTs as arbitrary exons.
 =pod
