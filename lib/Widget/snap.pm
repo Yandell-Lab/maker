@@ -250,7 +250,15 @@ sub parse {
 	my $fh = new FileHandle();
 	   $fh->open($report);
 
-	<$fh>; # shift off the header
+	my $header = <$fh>; # shift off the header
+
+        #checks if snap really finished
+        unless($header){
+            unlink($report);
+            die "ERROR: The file $report appears to be incomplete\n".
+		"MAKER will need to delete the file, before trying again\n\n";
+        }
+
 	my %g;
 	my $i = -1;
 	while (my $line = <$fh>){

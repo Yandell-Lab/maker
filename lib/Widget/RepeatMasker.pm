@@ -115,7 +115,9 @@ sub parse {
 	   $fh->open("$file") || die "ERROR: Could not open \'$file\'\n";
 
 	my %hsps;
+	my $count; #used to see if file finished
 	while (my $line = <$fh>){
+	        $count++;
 		next if $line =~ /There were no repetitive sequences detected in/;
 		next unless $line =~ /^\s*\d/;
 
@@ -245,6 +247,13 @@ sub parse {
 
 	}
 	$fh->close();
+	
+	#checks if RepeatMasker really finished
+	unless($count){
+            unlink($file);
+            die "ERROR: The file $file appears to be incomplete\n".
+                "MAKER will need to delete the file, before trying again\n\n";
+        }
 
 	my @keepers;
 	foreach my $key (keys %hsps){

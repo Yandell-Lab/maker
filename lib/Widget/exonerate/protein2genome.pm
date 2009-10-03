@@ -35,7 +35,7 @@ sub get_blocks {
       my $fh = new FileHandle();
          $fh->open($file);
 
-	$/ = 'C4 Alignment:';
+	local $/ = 'C4 Alignment:';
 
 	my @chunks;
 	while (my $line = <$fh>){
@@ -43,7 +43,14 @@ sub get_blocks {
 	} 
 	$fh->close();
 
-	$/ = "\n";
+	local $/ = "\n";
+
+	#checks if exonerate realy finished
+	unless(grep {/completed exonerate analysis/} $chunks[-1]){
+            unlink($file);
+            die"ERROR: The file $file appears to be incomplete\n".
+                "MAKER will need to delete the file, before trying again\n\n";
+        }
 
 	return \@chunks;
 }
