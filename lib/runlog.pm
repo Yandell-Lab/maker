@@ -76,7 +76,6 @@ my @ctl_to_log = ('genome_gff',
 		 );
 
 my %SEEN;
-my $CWD = Cwd::getcwd();
 
 #-------------------------------------------------------------------------------
 #------------------------------- Methods ---------------------------------------
@@ -107,7 +106,7 @@ sub _initialize {
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
-   $CWD = $self->{CTL_OPTIONS}->{CWD};
+   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD};
    my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
    my $length = $self->{params}->{seq_length};
 
@@ -148,6 +147,7 @@ sub _load_old_log {
 sub _clean_files{
     my $self = shift;
 
+    my $CWD = $self->{CWD};
     my $the_void = $self->{params}->{the_void};
     my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
     
@@ -212,10 +212,6 @@ sub _clean_files{
 		    my $new = $CTL_OPTIONS{genome_gff};
 		    $new =~ s/^$cwd\/*//;
 
-		    #temp lamprey
-		    $old =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
-		    $new =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
-
 		    #only continue if change not already happening
 		    #because of a new gff3 file
 		    next unless($old eq $new);
@@ -265,6 +261,10 @@ sub _clean_files{
 		if($key eq 'softmask' && $log_val eq ''){
 		    $log_val = 1;
 		}
+
+		#temp lamprey
+		$log_val =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
+		$ctl_val =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
 		
 		#if previous log options are not the same as current control file options
 		if ($log_val ne $ctl_val) {
@@ -376,6 +376,9 @@ sub _clean_files{
 		if (! exists $logged_vals{FINISHED}{$key}) {
 		    print STDERR "MAKER WARNING: The file $key\n".
 			"did not finish on the last run and must be erased\n";
+		    #temp lamprey
+		    $key =~ s/^\/*scratch\/serial[^\/]*\/u0045039\/lamprey2\/*//;
+
 		    push(@files, $key);
 
 		    #this next step will get both temp directories and files that
@@ -600,6 +603,7 @@ sub _clean_files{
 sub _write_new_log {
    my $self = shift;
 
+   my $CWD = $self->{CWD};
    my $log_file = $self->{file_name};
    
    my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
@@ -609,7 +613,7 @@ sub _write_new_log {
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
+   my $cwd = ($CWD) ? $CWD : Cwd::getcwd();
  
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
@@ -638,6 +642,7 @@ sub add_entry {
    my $key   = shift;
    my $value = shift;
 
+   my $CWD = $self->{CWD};
    my $log_file = $self->{file_name};
    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
