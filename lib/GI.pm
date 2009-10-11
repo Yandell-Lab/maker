@@ -33,7 +33,6 @@ use Widget::xdformat;
 use Widget::formatdb;
 use PhatHit_utils;
 use Shadower;
-#use Bio::DB::Fasta;
 use polisher::exonerate::protein;
 use polisher::exonerate::est;
 use maker::auto_annotator;
@@ -1638,9 +1637,9 @@ sub blastx_as_chunks {
 
    my $blastx      = $CTL_OPT->{_blastx};
    my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
-   my $eval_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
-   my $pcov_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
-   my $pid_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $eval_blastx = ($rflag) ? $CTL_OPT->{eval_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blastx = ($rflag) ? $CTL_OPT->{pcov_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blastx  = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
@@ -2846,6 +2845,7 @@ sub load_control_files {
    #--set up optional global TMP
    if($CTL_OPT{TMP}){
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
+       set_global_temp($CTL_OPT{_TMP});
    }
 
    #---set up blast databases and indexes for analyisis
