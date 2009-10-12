@@ -8,7 +8,6 @@ use Exporter;
 use PostData;
 use FileHandle;
 use Widget;
-#use Bio::DB::Fasta;
 use Bio::Search::Hit::PhatHit::repeatmasker;
 use Bio::Search::HSP::PhatHSP::repeatmasker;
 use IPC::Open3;
@@ -250,9 +249,9 @@ sub parse {
 	
 	#checks if RepeatMasker really finished
 	unless($count){
-            unlink($file);
-            die "ERROR: The file $file appears to be incomplete\n".
-                "MAKER will need to delete the file, before trying again\n\n";
+            #unlink($file);
+            #die "ERROR: The file $file appears to be incomplete\n".
+            #    "MAKER will need to delete the file, before trying again\n\n";
         }
 
 	my @keepers;

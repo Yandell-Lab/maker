@@ -54,6 +54,13 @@ $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 sub set_global_temp {
     my $dir = shift;
 
+    return if(! -d $dir);
+
+    #remove old tempdir if user supplied a new one
+    if($TMP ne $dir){
+	File::Path::rmtree($TMP);
+    }
+
     $TMP = $dir;
 }
 #------------------------------------------------------------------------
@@ -2842,11 +2849,16 @@ sub load_control_files {
        die "ERROR: Another instance of maker is already running for this dataset.\n\n";
    }
    
-   #--set up optional global TMP
+   #--set up optional global TMP (If TMP is not accessible from other nodes
+   #)
    if($CTL_OPT{TMP}){
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
-       set_global_temp($CTL_OPT{_TMP});
    }
+   else{
+       $CTL_OPT{_TMP} = $TMP;
+   }
+
+   set_global_temp($CTL_OPT{_TMP});
 
    #---set up blast databases and indexes for analyisis
    create_blastdb(\%CTL_OPT, $mpi_size);
