@@ -315,6 +315,7 @@ sub _go {
 					       $build,
 					       $the_void
 					      );
+
 	    $GFF3->set_current_contig($seq_id, $q_seq_ref);     
 	    
 	    my $fasta_chunker = new FastaChunker();
@@ -637,8 +638,7 @@ sub _go {
 	    my $fasta = $VARS->{fasta};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $LOG = $VARS->{LOG};
-	 
+	    my $LOG = $VARS->{LOG};	 
 	 
 	    my $masked_fasta = Fasta::toFasta($q_def.' masked', \$masked_total_seq);
 	    my $masked_file = $the_void."/query.masked.fasta";
@@ -697,7 +697,7 @@ sub _go {
 	 }
       }
       elsif ($level == 6) {	#prep new fasta chunks
-	 $level_status = 'preparing new fasa chunks';
+	 $level_status = 'preparing new fasta chunks';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    my $chunk = new Process::MpiChunk($level, $VARS);
@@ -814,6 +814,11 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+			masked_fasta
+			fasta_t_index
+			holdover_blastn
+			the_void
+			q_seq_ref
 			LOG
 			CTL_OPT}
 		    );
@@ -823,6 +828,11 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $masked_fasta = $VARS->{masked_fasta};
+	    my $fasta_t_index = $VARS->{fasta_t_index};
+	    my $holdover_blastn = $VARS->{holdover_blastn};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 
@@ -836,10 +846,49 @@ sub _go {
 						   );
 	    }
 	    $res_dir = undef;
+
+	    #==merge in heldover Phathits from last round
+	    if ($chunk->number != 0) { #if not first chunk
+		#reviews heldover blast hits,
+		#then merges and reblasts them if they cross the divide
+		$blastn_keepers = GI::merge_resolve_hits(\$masked_fasta,
+							 $fasta_t_index,
+							 $blastn_keepers,
+							 $holdover_blastn,
+							 $the_void,
+							 \%CTL_OPT,
+							 'blastn',
+							 $LOG
+							 );
+	    }
+	    
+	    #seperate out hits too close to chunk divide to be run with exonerate
+	    my $holdovers = [];
+	    if (not $chunk->is_last) {
+		($blastn_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
+									     $CTL_OPT{'split_hit'},
+									     1, #treat strands independently
+									     [$blastn_keepers]
+									     );
+	    }
+
+	    #-cluster the blastn hits
+	    print STDERR "cleaning blastn...\n" unless $main::quiet;
+	    my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
+							     $q_seq_ref,
+							     10
+							    );
+
+	    #flatten clusters
+	    my $blastn_data = GI::flatten($blastn_clusters);
+
+	    #new filtered keepers for later chunk divide processing
+	    $blastn_keepers = GI::combine($blastn_data, $holdovers);
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
-	    %results = (blastn_keepers => $blastn_keepers,
+	    %results = (blastn_data => $blastn_data,
+			blastn_keepers => $blastn_keepers,
 			res_dir => $res_dir
 		       );
 	    #------------------------RESULTS
@@ -920,6 +969,11 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+			masked_fasta
+			fasta_p_index
+			holdover_blastx
+			the_void
+			q_seq_ref
 			LOG
 			CTL_OPT}
 		    );
@@ -929,9 +983,13 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $masked_fasta = $VARS->{masked_fasta};
+	    my $fasta_p_index = $VARS->{fasta_p_index};
+	    my $holdover_blastx = $VARS->{holdover_blastx};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
-
 
 	    my $blastx_keepers = [];
 	    if ($res_dir) {
@@ -942,10 +1000,49 @@ sub _go {
 						   );
 	    }
 	    $res_dir = undef;
+
+	    #==merge in heldover Phathits from last round
+	    if ($chunk->number != 0) { #if not first chunk
+		#reviews heldover blast hits,
+		#then merges and reblasts them if they cross the divide
+		$blastx_keepers = GI::merge_resolve_hits(\$masked_fasta,
+							 $fasta_p_index,
+							 $blastx_keepers,
+							 $holdover_blastx,
+							 $the_void,
+							 \%CTL_OPT,
+							 'blastx',
+							 $LOG
+							 );
+	    }
+	    
+	    #seperate out hits too close to chunk divide to be run with exonerate
+	    my $holdovers = [];
+	    if (not $chunk->is_last) {
+		($blastx_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
+									     $CTL_OPT{'split_hit'},
+									     1, #treat strands independently
+									     [$blastx_keepers]
+									     );
+	    }
+
+	    #-cluster the blastx hits
+	    print STDERR "cleaning blastx...\n" unless $main::quiet;
+	    my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
+							     $q_seq_ref,
+							     10
+							    );
+
+	    #flatten clusters
+	    my $blastx_data = GI::flatten($blastx_clusters);
+
+	    #new filtered keepers for later chunk divide processing
+	    $blastx_keepers = GI::combine($blastx_data, $holdovers);
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
-	    %results = (blastx_keepers => $blastx_keepers,
+	    %results = (blastx_data => $blastx_data,
+			blastx_keepers => $blastx_keepers,
 			res_dir => $res_dir
 		       );
 	    #------------------------RESULTS
@@ -1025,6 +1122,11 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+			masked_fasta
+			fasta_a_index
+			holdover_tblastx
+			the_void
+			q_seq_ref
 			LOG
 			CTL_OPT}
 		    );
@@ -1034,9 +1136,13 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $masked_fasta = $VARS->{masked_fasta};
+	    my $fasta_a_index = $VARS->{fasta_a_index};
+	    my $holdover_tblastx = $VARS->{holdover_tblastx};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
-
 
 	    my $tblastx_keepers = [];
 	    if ($res_dir) {
@@ -1047,10 +1153,52 @@ sub _go {
 						     );
 	    }
 	    $res_dir = undef;
+
+	    #==merge in heldover Phathits from last round
+	    if ($chunk->number != 0) { #if not first chunk
+		#reviews heldover blast hits,
+		#then merges and reblasts them if they cross the divide
+		$tblastx_keepers = GI::merge_resolve_hits(\$masked_fasta,
+							  $fasta_a_index,
+							  $tblastx_keepers,
+							  $holdover_tblastx,
+							  $the_void,
+							  \%CTL_OPT,
+							  'tblastx',
+							  $LOG
+							  );
+	    }
+	    
+	    #seperate out hits too close to chunk divide to be run with exonerate
+	    my $holdovers = [];
+	    if (not $chunk->is_last) {
+		($tblastx_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
+									      $CTL_OPT{'split_hit'},
+									      1, #treat strands independently
+									      [$tblastx_keepers]
+									     );
+	    }
+
+	    #-cluster the tblastx hits
+	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
+	    my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
+							     $q_seq_ref,
+							     10
+							    );
+
+	    #flatten clusters
+	    my $tblastx_data = GI::flatten($tblastx_clusters);
+
+	    #new filtered keepers for later chunk divide processing
+	    $tblastx_keepers = GI::combine($tblastx_data, $holdovers);
+
+	    #temp destroy this for now because we don't use tblastx data with exonerate
+	    $tblastx_data = [];
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
-	    %results = (tblastx_keepers => $tblastx_keepers,
+	    %results = (tblastx_data => $tblastx_data,
+			tblastx_keepers => $tblastx_keepers,
 			res_dir => $res_dir
 		       );
 	    #------------------------RESULTS
@@ -1060,7 +1208,128 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 13) {	#process chunk divide
+      elsif ($level == 13) {	#exonerate proteins
+	 $level_status = 'doing exonerate of proteins';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw{blastx_data
+			the_void
+			q_seq_ref
+			fasta
+			fasta_p_index
+			LOG
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};;
+	    my $blastx_data = $VARS->{blastx_data};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $fasta = $VARS->{fasta};
+	    my $fasta_p_index = $VARS->{fasta_p_index};
+	    my $LOG = $VARS->{LOG};
+      
+	    #-make a multi-fasta of the seqs in the blastx_clusters 
+	    #-polish the blastx hits with exonerate
+	    my $exonerate_p_data =[];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		$exonerate_p_data = GI::polish_exonerate($fasta,
+							 $blastx_data,
+							 $fasta_p_index,
+							 $the_void,
+							 'p',
+							 $CTL_OPT{exonerate},
+							 $CTL_OPT{pcov_blastx},
+							 $CTL_OPT{pid_blastx},
+							 $CTL_OPT{ep_score_limit},
+							 $CTL_OPT{ep_matrix},
+							 $LOG
+							);
+	    }
+
+	    #free memmory
+	    @{$blastx_data}  = ();
+	    #-------------------------CODE
+
+	    #------------------------RESULTS
+	    %results = (exonerate_p_data => $exonerate_p_data);
+	    #------------------------RESULTS
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 14) {	#exonerate ESTs
+	 $level_status = 'doing exonerate of ESTs';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw{blastn_data
+			the_void
+			q_seq_ref
+			fasta
+			fasta_t_index
+			LOG
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $blastn_data = $VARS->{blastn_data};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $fasta = $VARS->{fasta};
+	    my $fasta_t_index = $VARS->{fasta_t_index};
+	    my $LOG = $VARS->{LOG};
+
+	    #-polish blastn hits with exonerate
+	    my $exonerate_e_data = [];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		$exonerate_e_data = GI::polish_exonerate($fasta,
+							 $blastn_data,
+							 $fasta_t_index,
+							 $the_void,
+							  'e',
+							 $CTL_OPT{exonerate},
+							 $CTL_OPT{pcov_blastn},
+							 $CTL_OPT{pid_blastn},
+							  $CTL_OPT{en_score_limit},
+							 $CTL_OPT{en_matrix},
+							 $LOG
+							 );
+	    }
+	    
+	    #free memmory
+	    @{$blastn_data}  = ();
+	    #-------------------------CODE
+
+	    #------------------------RESULTS
+	    %results = (exonerate_e_data => $exonerate_e_data);
+	    #------------------------RESULTS
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 15) {	#process chunk divide
 	 $level_status = 'processing the chunk divide';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1078,6 +1347,8 @@ sub _go {
 			blastn_keepers
 			blastx_keepers
 			tblastx_keepers
+			exonerate_e_data
+			exonerate_p_data
 			holdover_blastn
 			holdover_blastx
 			holdover_tblastx
@@ -1107,6 +1378,8 @@ sub _go {
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
+	    my $exonerate_e_data = $VARS->{exonerate_e_data};
+	    my $exonerate_p_data = $VARS->{exonerate_p_data};
 	    my $holdover_blastn = $VARS->{holdover_blastn};
 	    my $holdover_blastx = $VARS->{holdover_blastx};
 	    my $holdover_tblastx = $VARS->{holdover_tblastx};
@@ -1122,7 +1395,6 @@ sub _go {
 	    my $GFF_DB = $VARS->{GFF_DB};
 	    my $LOG = $VARS->{LOG};
    
-
 	    #-get only those predictions on the chunk
 	    my $preds_on_chunk = GI::get_preds_on_chunk($preds,
 							$chunk
@@ -1139,102 +1411,88 @@ sub _go {
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
 							      'protein'
-							     );
+							      );
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							     $q_seq_ref,
 							     'est'
-							    );
+							     );
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 								$q_seq_ref,
 								'altest'
-							       );
+								);
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							       $q_seq_ref,
 							       'model'
-							      );
+							       );
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
 							      'pred'
-							     );
-	    }
-      
-	    #==merge heldover Phathits from last round
-	    if ($chunk->number != 0) { #if not first chunk
-	       #reviews heldover blast hits,
-	       #then merges and reblasts them if they cross the divide
-	       ($blastn_keepers,
-		$blastx_keepers,
-		$tblastx_keepers) = GI::merge_resolve_hits(\$masked_fasta,
-							   $fasta_t_index,
-							   $fasta_p_index,
-							   $fasta_a_index,
-							   $blastn_keepers,
-							   $blastx_keepers,
-							   $tblastx_keepers,
-							   $holdover_blastn,
-							   $holdover_blastx,
-							   $holdover_tblastx,
-							   $the_void,
-							   \%CTL_OPT,
-							   $LOG
-							  );
-	       #combine remaining holdover types
-	       push(@{$preds_on_chunk}, @{$holdover_pred});
-	       push(@{$pred_gff_keepers}, @{$holdover_pred_gff});
-	       push(@{$est_gff_keepers}, @{$holdover_est_gff});
-	       push(@{$altest_gff_keepers}, @{$holdover_altest_gff});
-	       push(@{$prot_gff_keepers}, @{$holdover_prot_gff});
-	       push(@{$model_gff_keepers}, @{$holdover_model_gff});
-
-	       #clear holdovers
-	       @{$holdover_pred} = ();
-	       @{$holdover_est_gff} = ();
-	       @{$holdover_altest_gff} = ();
-	       @{$holdover_prot_gff} = ();
-	       @{$holdover_pred_gff} = ();
-	       @{$holdover_model_gff} = ();
-	    }
+							      );
+	   }
+	    
+	    #combine remaining holdover types
+	    push(@{$preds_on_chunk}, @{$holdover_pred});
+	    push(@{$pred_gff_keepers}, @{$holdover_pred_gff});
+	    push(@{$est_gff_keepers}, @{$holdover_est_gff});
+	    push(@{$altest_gff_keepers}, @{$holdover_altest_gff});
+	    push(@{$prot_gff_keepers}, @{$holdover_prot_gff});
+	    push(@{$model_gff_keepers}, @{$holdover_model_gff});
+	    
+	    #clear holdovers
+	    @{$holdover_pred} = ();
+	    @{$holdover_est_gff} = ();
+	    @{$holdover_altest_gff} = ();
+	    @{$holdover_prot_gff} = ();
+	    @{$holdover_pred_gff} = ();
+	    @{$holdover_model_gff} = ();
 	 
 	    #==PROCESS HITS CLOSE TO CODE DIVISIONS
 	    #holdover hits that are too close to the divide for review with next chunk
 	    if (not $chunk->is_last) { #if not last chunk
-	       ($holdover_blastn,
-		$holdover_blastx,
-		$holdover_tblastx,
-		$holdover_pred,
-		$holdover_est_gff,
-		$holdover_altest_gff,
-		$holdover_prot_gff,
-		$holdover_pred_gff,
-		$holdover_model_gff,
-		$blastn_keepers,
-		$blastx_keepers,
-		$tblastx_keepers,
-		$preds_on_chunk,
-		$est_gff_keepers,
-		$altest_gff_keepers,
-		$prot_gff_keepers,
-		$pred_gff_keepers,
-		$model_gff_keepers
-	       ) = GI::process_the_chunk_divide_temp($chunk,
-						$CTL_OPT{'split_hit'},
-						$blastn_keepers,
-						$blastx_keepers,
-						$tblastx_keepers,
-						$preds_on_chunk,
-						$est_gff_keepers,
-						$altest_gff_keepers,
-						$prot_gff_keepers,
-						$pred_gff_keepers,
-						$model_gff_keepers
-					       );
+		($blastn_keepers,
+		 $blastx_keepers,
+		 $tblastx_keepers,
+		 $preds_on_chunk,
+		 $est_gff_keepers,
+		 $altest_gff_keepers,
+		 $prot_gff_keepers,
+		 $pred_gff_keepers,
+		 $model_gff_keepers,
+		 $exonerate_e_data,
+		 $exonerate_p_data,
+		 $holdover_blastn,
+		 $holdover_blastx,
+		 $holdover_tblastx,
+		 $holdover_pred,
+		 $holdover_est_gff,
+		 $holdover_altest_gff,
+		 $holdover_prot_gff,
+		 $holdover_pred_gff,
+		 $holdover_model_gff
+		 ) = GI::process_the_chunk_divide($chunk,
+						  $CTL_OPT{'split_hit'},
+						  1,
+						  [$blastn_keepers,
+						   $blastx_keepers,
+						   $tblastx_keepers,
+						   $preds_on_chunk,
+						   $est_gff_keepers,
+						   $altest_gff_keepers,
+						   $prot_gff_keepers,
+						   $pred_gff_keepers,
+						   $model_gff_keepers,
+						   $exonerate_e_data,
+						   $exonerate_p_data]
+						  );
 	    }
 
-	    #shatter hits and flip strand of blastn where appropriate.
+	    #Shatter hits. This is only for prokaryotic organisms.
+	    #Flip strand of blastn where appropriate.
+	    #This is done on blastn hits because exonerate is skipped.
 	    #I shatter after processing the chunk divide to avoid weird
 	    #complications from flipping on only one side of a split HSP
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
@@ -1247,7 +1505,6 @@ sub _go {
 			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
 		}
 	    }
-
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -1260,6 +1517,8 @@ sub _go {
 			blastn_keepers => $blastn_keepers,
 			blastx_keepers => $blastx_keepers,
 			tblastx_keepers => $tblastx_keepers,
+			exonerate_e_data => $exonerate_e_data,
+			exonerate_p_data => $exonerate_p_data,
 			holdover_est_gff => $holdover_est_gff,
 			holdover_altest_gff => $holdover_altest_gff,
 			holdover_prot_gff => $holdover_prot_gff,
@@ -1269,173 +1528,6 @@ sub _go {
 			holdover_blastn => $holdover_blastn,
 			holdover_blastx => $holdover_blastx,
 			holdover_tblastx => $holdover_tblastx
-		       );
-	    #------------------------RESULTS
-	 }
-	 elsif ($flag eq 'flow') {
-	    #-------------------------NEXT_LEVEL
-	    #-------------------------NEXT_LEVEL
-	 }
-      }
-      elsif ($level == 14) {	#exonerate proteins
-	 $level_status = 'doing exonerate of proteins';
-	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
-	    push(@chunks, $chunk);
-	    #-------------------------CHUNKER
-	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    @args = (qw{blastx_keepers
-			the_void
-			q_seq_ref
-			fasta
-			fasta_p_index
-			LOG
-			CTL_OPT}
-		    );
-	    #------------------------ARGS_IN
-	 }
-	 elsif ($flag eq 'run') {
-	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};;
-	    my $blastx_keepers = $VARS->{blastx_keepers};
-	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $fasta = $VARS->{fasta};
-	    my $fasta_p_index = $VARS->{fasta_p_index};
-	    my $LOG = $VARS->{LOG};
-
-	    #variables that are persistent outside of try block
-	    my $blastx_data;
-	    my $exonerate_p_data;
-      
-	    #-cluster the blastx hits
-	    print STDERR "cleaning blastx...\n" unless $main::quiet;
-      
-	    my $blastx_clusters = cluster::clean_and_cluster($blastx_keepers,
-							     $q_seq_ref,
-							     10
-							    );
-	    undef $blastx_keepers; #free up memory
-      
-	    #-make a multi-fasta of the seqs in the blastx_clusters 
-	    #-polish the blastx hits with exonerate
-	    my $exoner_p_clust =[];
-	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exoner_p_clust = GI::polish_exonerate($fasta,
-						       $blastx_clusters,
-						       $fasta_p_index,
-						       $the_void,
-						       5,
-						       'p',
-						       $CTL_OPT{exonerate},
-						       $CTL_OPT{pcov_blastx},
-						       $CTL_OPT{pid_blastx},
-						       $CTL_OPT{ep_score_limit},
-						       $CTL_OPT{ep_matrix},
-						       $LOG
-						       );
-	    }
-      
-	    #flatten clusters
-	    $blastx_data      = GI::flatten($blastx_clusters);
-	    $exonerate_p_data = GI::flatten($exoner_p_clust, 'exonerate:p');
-	    #-------------------------CODE
-
-	    #------------------------RESULTS
-	    %results = (blastx_data => $blastx_data,
-			exonerate_p_data => $exonerate_p_data
-		       );
-	    #------------------------RESULTS
-	 }
-	 elsif ($flag eq 'flow') {
-	    #-------------------------NEXT_LEVEL
-	    #-------------------------NEXT_LEVEL
-	 }
-      }
-      elsif ($level == 15) {	#exonerate ESTs
-	 $level_status = 'doing exonerate of ESTs';
-	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
-	    push(@chunks, $chunk);
-	    #-------------------------CHUNKER
-	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    @args = (qw{tblastx_keepers
-			blastn_keepers
-			the_void
-			q_seq_ref
-			fasta
-			fasta_t_index
-			LOG
-			CTL_OPT}
-		    );
-	    #------------------------ARGS_IN
-	 }
-	 elsif ($flag eq 'run') {
-	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $tblastx_keepers = $VARS->{tblastx_keepers};
-	    my $blastn_keepers = $VARS->{blastn_keepers};
-	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $fasta = $VARS->{fasta};
-	    my $fasta_t_index = $VARS->{fasta_t_index};
-	    my $LOG = $VARS->{LOG};
-
-
-	    #-cluster the tblastx hits
-	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
-	    my $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers,
-							      $q_seq_ref,
-							      10
-							     );
-	    undef $tblastx_keepers; #free up memory
-	    
-	    #flatten the clusters
-	    my $tblastx_data = GI::flatten($tblastx_clusters);
-	    
-	    #-cluster the blastn hits
-	    print STDERR "cleaning blastn...\n" unless $main::quiet;
-	    my $blastn_clusters = cluster::clean_and_cluster($blastn_keepers,
-							     $q_seq_ref,
-							     10
-							    );
-	    undef $blastn_keepers; #free up memory
-	    
-	    #-polish blastn hits with exonerate
-	    my $exoner_e_clust = [];
-	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exoner_e_clust = GI::polish_exonerate($fasta,
-						       $blastn_clusters,
-						       $fasta_t_index,
-						       $the_void,
-						       5,
-						       'e',
-						       $CTL_OPT{exonerate},
-						       $CTL_OPT{pcov_blastn},
-						       $CTL_OPT{pid_blastn},
-						       $CTL_OPT{en_score_limit},
-						       $CTL_OPT{en_matrix},
-						       $LOG
-						       ); 
-	    }
-	    
-	    #flatten clusters
-	    my $blastn_data      = GI::flatten($blastn_clusters);
-	    my $exonerate_e_data = GI::flatten($exoner_e_clust,
-					       'exonerate:e'
-					      );
-	    #-------------------------CODE
-
-	    #------------------------RESULTS
-	    %results = (blastn_data => $blastn_data,
-			exonerate_e_data => $exonerate_e_data,
-			tblastx_data => $tblastx_data
 		       );
 	    #------------------------RESULTS
 	 }
@@ -1461,9 +1553,9 @@ sub _go {
 			build
 			fasta
 			masked_fasta
-			tblastx_data
-			blastx_data
-			blastn_data
+			tblastx_keepers
+			blastx_keepers
+			blastn_keepers
 			exonerate_e_data
 			exonerate_p_data
 			preds_on_chunk
@@ -1487,9 +1579,9 @@ sub _go {
 	    my $build = $VARS->{build};
 	    my $fasta = $VARS->{fasta};
 	    my $masked_fasta = $VARS->{masked_fasta};
-	    my $tblastx_data = $VARS->{tblastx_data};
-	    my $blastx_data = $VARS->{blastx_data};
-	    my $blastn_data = $VARS->{blastn_data};
+	    my $tblastx_keepers = $VARS->{tblastx_keepers};
+	    my $blastx_keepers = $VARS->{blastx_keepers};
+	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
 	    my $preds_on_chunk = $VARS->{preds_on_chunk};
@@ -1506,15 +1598,15 @@ sub _go {
 					);
 
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-		$final_est = GI::combine($blastn_data,
+		$final_est = GI::combine($blastn_keepers,
 					 $final_est
 					 );
 	    }
 
-	    my $final_altest = GI::combine($tblastx_data,
+	    my $final_altest = GI::combine($tblastx_keepers,
 					   $altest_gff_keepers
 					  );
-	    my $final_prot = GI::combine($blastx_data,
+	    my $final_prot = GI::combine($blastx_keepers,
 					 $exonerate_p_data,
 					 $prot_gff_keepers
 					);
@@ -1600,9 +1692,9 @@ sub _go {
 			maker_anno
 			non_over
 			annotations
-			blastx_data
-			blastn_data
-			tblastx_data
+			blastx_keepers
+			blastn_keepers
+			tblastx_keepers
 			exonerate_p_data
 			exonerate_e_data
 			est_gff_keepers
@@ -1622,9 +1714,9 @@ sub _go {
 	    my $maker_anno  = $VARS->{maker_anno};
 	    my $non_over    = $VARS->{non_over};
 	    my $annotations = $VARS->{annotations};
-	    my $blastx_data = $VARS->{blastx_data};
-	    my $blastn_data = $VARS->{blastn_data};
-	    my $tblastx_data = $VARS->{tblastx_data};
+	    my $blastx_keepers = $VARS->{blastx_keepers};
+	    my $blastn_keepers = $VARS->{blastn_keepers};
+	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $est_gff_keepers = $VARS->{est_gff_keepers};
@@ -1640,9 +1732,9 @@ sub _go {
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
 	    $GFF3->add_genes($maker_anno);
-	    $GFF3->add_phathits($blastx_data);
-	    $GFF3->add_phathits($blastn_data);
-	    $GFF3->add_phathits($tblastx_data);
+	    $GFF3->add_phathits($blastx_keepers);
+	    $GFF3->add_phathits($blastn_keepers);
+	    $GFF3->add_phathits($tblastx_keepers);
 	    $GFF3->add_phathits($exonerate_p_data);
 	    $GFF3->add_phathits($exonerate_e_data);
 	    $GFF3->add_phathits($est_gff_keepers);

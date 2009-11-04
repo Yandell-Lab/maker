@@ -262,10 +262,6 @@ sub _clean_files{
 		    $log_val = 1;
 		}
 
-		#temp lamprey
-		$log_val =~ s/^\/*scratch\/serial[^\/]*\/u0045039\///;
-		$ctl_val =~ s/^\/*scratch\/serial[^\/]*\/u0045039\///;
-		
 		#if previous log options are not the same as current control file options
 		if ($log_val ne $ctl_val) {
 		    
@@ -376,8 +372,6 @@ sub _clean_files{
 		if (! exists $logged_vals{FINISHED}{$key}) {
 		    print STDERR "MAKER WARNING: The file $key\n".
 			"did not finish on the last run and must be erased\n";
-		    #temp lamprey
-		    $key =~ s/^\/*scratch\/serial[^\/]*\/.*\/([^\/]*.maker.output)/$1/;
 
 		    push(@files, $key);
 

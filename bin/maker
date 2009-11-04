@@ -130,7 +130,7 @@ Options:
 
      -RM_off|R           Turns all repeat masking off.
 
-     -retry   <integer>  Rerun failed contigs up to the specified count.
+     -retry|r <integer>  Rerun failed contigs up to the specified count.
 
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 

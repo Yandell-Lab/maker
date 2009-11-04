@@ -88,65 +88,30 @@ sub get_preds_on_chunk {
 #-----------------------------------------------------------------------------
 sub merge_resolve_hits{
    my $fasta = shift @_;
-   my $fasta_t_index = shift @_;
-   my $fasta_p_index = shift @_;
-   my $fasta_a_index = shift @_;
-   my $blastn_keepers = shift @_;
-   my $blastx_keepers = shift @_;
-   my $tblastx_keepers = shift @_;
-   my $blastn_holdovers = shift @_;
-   my $blastx_holdovers = shift @_;
-   my $tblastx_holdovers = shift @_;
+   my $fasta_index = shift @_;
+   my $blast_keepers = shift @_;
+   my $blast_holdovers = shift @_;
    my $the_void = shift @_;
    my %CTL_OPT = %{shift @_};
+   my $type = shift @_; #blastn, blastx, or tblastx
    my $LOG = shift @_;
 
-   PhatHit_utils::merge_hits($blastn_keepers,  
-			     $blastn_holdovers, 
+   PhatHit_utils::merge_hits($blast_keepers,
+			     $blast_holdovers, 
 			     $CTL_OPT{split_hit},
 			    );
-   @{$blastn_holdovers} = ();
+   @{$blast_holdovers} = ();
 
-   PhatHit_utils::merge_hits($blastx_keepers,  
-			     $blastx_holdovers, 
-			     $CTL_OPT{split_hit},
-			    );
-   @{$blastx_holdovers} = ();
-
-   PhatHit_utils::merge_hits($tblastx_keepers,
-                             $tblastx_holdovers,
-			     $CTL_OPT{split_hit},
-			    );
-   @{$tblastx_holdovers} = ();
-
-   $blastn_keepers = reblast_merged_hits($fasta,
-					 $blastn_keepers,
-					 $fasta_t_index,
-					 $the_void,
-					 'blastn',
-					 \%CTL_OPT,
-					 $LOG
+   $blast_keepers = reblast_merged_hits($fasta,
+					$blast_keepers,
+					$fasta_index,
+					$the_void,
+					$type,
+					\%CTL_OPT,
+					$LOG
 					);
 
-   $blastx_keepers = reblast_merged_hits($fasta,
-					 $blastx_keepers,
-					 $fasta_p_index,
-					 $the_void,
-					 'blastx',
-					 \%CTL_OPT,
-					 $LOG
-					);
-
-   $tblastx_keepers = reblast_merged_hits($fasta,
-					  $tblastx_keepers,
-					  $fasta_a_index,
-					  $the_void,
-					  'tblastx',
-					  \%CTL_OPT,
-					  $LOG
-					 );
-
-   return ($blastn_keepers, $blastx_keepers, $tblastx_keepers);
+   return $blast_keepers;
 }
 #-----------------------------------------------------------------------------
 sub reblast_merged_hits {
@@ -299,179 +264,128 @@ sub reblast_merged_hits {
 }
 #-----------------------------------------------------------------------------
 sub process_the_chunk_divide{
-   my $chunk = shift @_;
-   my $split_hit = shift @_;
-   my $hit_groups = \@_; #processed and returned in order given by user
+    my $chunk      = shift @_;
+    my $split_hit  = shift @_;
+    my $s_flag     = shift @_; #indicates whether to treat strands independantly 
+    my $groups_cfh = shift @_; #group to cluster and find holdovers
+    
+    my $phat_hits;
+    
+    foreach my $group (@{$groups_cfh}) {
+	push(@{$phat_hits}, @{$group});
+    }
+    
+    my $p_hits = [];
+    my $m_hits = [];
+    
+    #seperate by strand or not (this makes chunk cutoffs strand independant)
+    if($s_flag){
+	($p_hits, $m_hits) = PhatHit_utils::seperate_by_strand('query', $phat_hits, 1); #exonerate flag set
+    }
+    else{
+	$p_hits = $phat_hits;
+    }
+    
+    my $p_coors  = PhatHit_utils::to_begin_and_end_coors($p_hits, 'query');
+    my $m_coors  = PhatHit_utils::to_begin_and_end_coors($m_hits, 'query');
+    
+    foreach my $p_coor (@{$p_coors}) {
+	$p_coor->[0] -= $chunk->offset();
+	$p_coor->[1] -= $chunk->offset();
+	#fix coordinates for hits outside of chunk end   
+	$p_coor->[0] = $chunk->length if($p_coor->[0] > $chunk->length);
+	$p_coor->[1] = $chunk->length if($p_coor->[1] > $chunk->length);
+	#fix coordinates for hits outside of chunk begin
+	$p_coor->[0] = 0 if($p_coor->[0] < 0);
+	$p_coor->[1] = 0 if($p_coor->[1] < 0);
+    }
+    foreach my $m_coor (@{$m_coors}) {
+	$m_coor->[0] -= $chunk->offset();
+	$m_coor->[1] -= $chunk->offset();
+	#fix coordinates for hits outside of chunk end
+	$m_coor->[0] = $chunk->length if($m_coor->[0] > $chunk->length);
+	$m_coor->[1] = $chunk->length if($m_coor->[1] > $chunk->length);
+	#fix coordinates for hits outside of chunk begin
+	$m_coor->[0] = 0 if($m_coor->[0] < 0);
+	$m_coor->[1] = 0 if($m_coor->[1] < 0);
+    }
+    
+    my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, 10);
+    $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
+    my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, 10);
+    $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
+    
+    my $cutoff = $chunk->length + $chunk->offset - $split_hit;
+    my $p_cutoff = $chunk->length + $chunk->offset + 1;
+    my $m_cutoff = $chunk->length + $chunk->offset + 1;
 
-   my $phat_hits;
+    my @keepers;
+    my @holdovers;
 
-   foreach my $group (@{$hit_groups}) {
-      push(@{$phat_hits}, @{$group});
-   }
+    #no internal cutoff if this is the last contig
+    $cutoff = $chunk->length + $chunk->offset + 1 if($chunk->is_last);
+    
+    #adjust cutoff to overlapping hits
+    foreach my $p_piece (@{$p_pieces}) {
+	if ($p_piece->{e} + $chunk->offset >= $cutoff) {
+	    $p_cutoff = $p_piece->{b} + $chunk->offset;
+	}
+    }
+    foreach my $m_piece (@{$m_pieces}) {
+	if ($m_piece->{e} + $chunk->offset >= $cutoff) {
+	    $m_cutoff = $m_piece->{b} + $chunk->offset;
+	}
+    }
+    
+    #too small, all are heldover for next round
+    if ($p_cutoff <= 1 + $chunk->offset &&
+	$m_cutoff <= 1 + $chunk->offset) {
+	foreach my $g (@{$groups_cfh}){
+	    push (@holdovers, $g);
+	    push (@keepers, []);
+	}
+	return @keepers, @holdovers;
+    }
+    
+    #seperate holdovers and keepers
+    foreach my $group (@{$groups_cfh}) {
+	my $group_keepers = [];
+	my $group_holdovers = [];
+	
+	foreach my $hit (@{$group}) {
+	    my $b = $hit->nB('query');
+	    my $e = $hit->nE('query');
+	    my $strand = $hit->strand;
+	    
+	    #exonerate counterpart check (blastn with flipped exonerate)
+	    $strand *= -1 if ($hit->{_exonerate_flipped});
+	    
+	    #if stands are not being treated independantly, treat all as plus strand
+	    $strand = 1 if (!$s_flag);
+	    
+	    ($b, $e) = ($e, $b) if $b > $e;
+	    
+	    if (($strand eq '1' && $e < $p_cutoff && $p_cutoff > $chunk->offset +1) ||
+		($strand eq '-1' && $e < $m_cutoff && $m_cutoff > $chunk->offset +1)
+		) {
+		$hit->{_holdover} = 0;
+		push(@{$group_keepers}, $hit);
+	    }
+	    else {
+		$hit->{_holdover} = 1;
+		push(@{$group_holdovers}, $hit);
+	    }
+	}
+	
+	push(@keepers, $group_keepers);
+	push(@holdovers, $group_holdovers);
+    }
 
-   my ($p_hits, $m_hits) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
-   my $p_coors  = PhatHit_utils::to_begin_and_end_coors($p_hits, 'query');
-   my $m_coors  = PhatHit_utils::to_begin_and_end_coors($m_hits, 'query');
-
-   foreach my $p_coor (@{$p_coors}) {
-      $p_coor->[0] -= $chunk->offset();
-      $p_coor->[1] -= $chunk->offset();
-      #fix coordinates for hits outside of chunk end   
-      $p_coor->[0] = $chunk->length if($p_coor->[0] > $chunk->length);
-      $p_coor->[1] = $chunk->length if($p_coor->[1] > $chunk->length);
-      #fix coordinates for hits outside of chunk begin
-      $p_coor->[0] = 0 if($p_coor->[0] < 0);
-      $p_coor->[1] = 0 if($p_coor->[1] < 0);
-   }
-   foreach my $m_coor (@{$m_coors}) {
-      $m_coor->[0] -= $chunk->offset();
-      $m_coor->[1] -= $chunk->offset();
-      #fix coordinates for hits outside of chunk end
-      $m_coor->[0] = $chunk->length if($m_coor->[0] > $chunk->length);
-      $m_coor->[1] = $chunk->length if($m_coor->[1] > $chunk->length);
-      #fix coordinates for hits outside of chunk begin
-      $m_coor->[0] = 0 if($m_coor->[0] < 0);
-      $m_coor->[1] = 0 if($m_coor->[1] < 0);
-   }
-
-   my $p_pieces = Shadower::getPieces(\($chunk->seq), $p_coors, 10);
-   $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
-   my $m_pieces = Shadower::getPieces(\($chunk->seq), $m_coors, 10);
-   $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
-
-   my @keepers;
-   my @holdovers;
-
-   my $cutoff = $chunk->length + $chunk->offset - $split_hit;
-   my $p_cutoff = $chunk->length + $chunk->offset + 1;
-   my $m_cutoff = $chunk->length + $chunk->offset + 1;
-
-   foreach my $p_piece (@{$p_pieces}) {
-      if ($p_piece->{e} + $chunk->offset >= $cutoff) {
-         $p_cutoff = $p_piece->{b} + $chunk->offset;
-      }
-   }
-   foreach my $m_piece (@{$m_pieces}) {
-      if ($m_piece->{e} + $chunk->offset >= $cutoff) {
-         $m_cutoff = $m_piece->{b} + $chunk->offset;
-      }
-   }
-
-   #too small, all are heldover for next round
-   if ($p_cutoff <= 1 + $chunk->offset &&
-       $m_cutoff <= 1 + $chunk->offset) {
-     foreach my $g (@{$hit_groups}){
-	 push (@holdovers, $g);
-	 push (@keepers, []);
-     }
-      return @holdovers, @keepers;
-   }
-
-   foreach my $group (@{$hit_groups}) {
-      my $group_keepers = [];
-      my $group_holdovers = [];
-
-      foreach my $hit (@{$group}) {
-         my $b = $hit->nB('query');
-         my $e = $hit->nE('query');
-         my $strand = $hit->strand;
-
-         ($b, $e) = ($e, $b) if $b > $e;
-
-         if (($e < $p_cutoff && $strand eq '1' && $p_cutoff > $chunk->offset +1) ||
-             ($e < $m_cutoff && $strand eq '-1' && $m_cutoff > $chunk->offset +1)
-            ) {
-            push(@{$group_keepers}, $hit);
-         }
-         else {
-            push(@{$group_holdovers}, $hit);
-         }
-      }
-
-      push(@keepers, $group_keepers);
-      push(@holdovers, $group_holdovers);
-   }
-
-   #hit holdovers and keepers are returned in same order given by user
-   return @holdovers, @keepers;
+    #keepers and hit holdovers are returned in same order given by user
+    return @keepers, @holdovers;
 }
 #-----------------------------------------------------------------------------
-sub process_the_chunk_divide_temp{
-   my $chunk = shift @_;
-   my $split_hit = shift @_;
-   my $hit_groups = \@_; #processed and returned in order given by user
 
-   my $p_hits;
-
-   foreach my $group (@{$hit_groups}) {
-      push(@{$p_hits}, @{$group});
-   }
-
-   my $coors  = PhatHit_utils::to_begin_and_end_coors($p_hits, 'query');
-
-   foreach my $coor (@{$coors}) {
-      $coor->[0] -= $chunk->offset();
-      $coor->[1] -= $chunk->offset();
-      #fix coordinates for hits outside of chunk end   
-      $coor->[0] = $chunk->length if($coor->[0] > $chunk->length);
-      $coor->[1] = $chunk->length if($coor->[1] > $chunk->length);
-      #fix coordinates for hits outside of chunk begin
-      $coor->[0] = 0 if($coor->[0] < 0);
-      $coor->[1] = 0 if($coor->[1] < 0);
-   }
-
-   my $pieces = Shadower::getPieces(\($chunk->seq), $coors, 10);
-   $pieces = [sort {$b->{e} <=> $a->{e}} @{$pieces}];
-
-   my @keepers;
-   my @holdovers;
-
-   my $cutoff = $chunk->length + $chunk->offset - $split_hit;
-   my $p_cutoff = $chunk->length + $chunk->offset + 1;
-
-   foreach my $piece (@{$pieces}) {
-      if ($piece->{e} + $chunk->offset >= $cutoff) {
-         $p_cutoff = $piece->{b} + $chunk->offset;
-      }
-   }
-
-   #too small, all are heldover for next round
-   if ($p_cutoff <= 1 + $chunk->offset) {
-     foreach my $g (@{$hit_groups}){
-	 push (@holdovers, $g);
-	 push (@keepers, []);
-     }
-      return @holdovers, @keepers;
-   }
-
-   foreach my $group (@{$hit_groups}) {
-      my $group_keepers = [];
-      my $group_holdovers = [];
-
-      foreach my $hit (@{$group}) {
-         my $b = $hit->nB('query');
-         my $e = $hit->nE('query');
-         my $strand = $hit->strand;
-
-         ($b, $e) = ($e, $b) if $b > $e;
-
-         if (($e < $p_cutoff && $p_cutoff > $chunk->offset +1)) {
-            push(@{$group_keepers}, $hit);
-         }
-         else {
-            push(@{$group_holdovers}, $hit);
-         }
-      }
-
-      push(@keepers, $group_keepers);
-      push(@holdovers, $group_holdovers);
-   }
-
-   #hit holdovers and keepers are returned in same order given by user
-   return @holdovers, @keepers;
-}
-
-#-----------------------------------------------------------------------------
 # sub write_quality_data {
 #    my $quality_indices = shift;
 #    my $seq_id          = shift;
@@ -1098,133 +1012,129 @@ sub twinscan {
 
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
-   my $g_fasta           = shift;
-   my $phat_hit_clusters = shift;
-   my $db_index          = shift;
-   my $the_void          = shift;
-   my $depth             = shift;
-   my $type              = shift;
-   my $exonerate         = shift;
-   my $pcov              = shift;
-   my $pid               = shift;
-   my $score_limit       = shift;
-   my $matrix            = shift;
-   my $LOG               = shift;
-
-   my $def = Fasta::getDef($g_fasta);
-   my $seq = Fasta::getSeqRef($g_fasta);
+    my $g_fasta     = shift;
+    my $phat_hits   = shift;
+    my $db_index    = shift;
+    my $the_void    = shift;
+    my $type        = shift;
+    my $exonerate   = shift;
+    my $pcov        = shift;
+    my $pid         = shift;
+    my $score_limit = shift;
+    my $matrix      = shift;
+    my $LOG         = shift;
+    
+    my $def = Fasta::getDef($g_fasta);
+    my $seq = Fasta::getSeqRef($g_fasta);
+    
+    my $exe = $exonerate;
+    
+    my @exonerate_data;
+    
+    foreach my $hit (@{$phat_hits}) {
+	next if $hit->pAh < $pcov;
+	next if $hit->hsp('best')->frac_identical < $pid;
 	
-   my $exe = $exonerate;
+	my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
 	
-   my @exonerate_clusters;
-   my $i = 0;
-   foreach my $c (@{$phat_hit_clusters}) {
-      my $n = 0;
-      my $got_some = 0;
-
-      foreach my $hit (@{$c}) {
-	 last if $n == $depth;
-
-	 next if $hit->pAh < $pcov;
-	 next if $hit->hsp('best')->frac_identical < $pid;
-	 
-	 my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
-
-	 my @coors = [$nB, $nE];
-	 my $p = Shadower::getPieces($seq, \@coors, 50);
-	 my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
-	 my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
-	 my $name =  Fasta::def2SeqID($p_def);
-	 my $safe_name = Fasta::seqID2SafeID($name);
-
-	 my $d_file = $the_void."/".$safe_name.'.'.$p->[0]->{b}.'.'.$p->[0]->{e}.".fasta";
-
-	 FastaFile::writeFile($p_fasta, $d_file);
-
-	 my $offset = $p->[0]->{b} - 1;
-	 my $id  = $hit->name();
-
-	 my $fastaObj = $db_index->get_Seq_for_hit($hit);
-
-	 #still no sequence? try rebuilding the index and try again
-	 if (not $fastaObj) {
+	my @coors = [$nB, $nE];
+	my $p = Shadower::getPieces($seq, \@coors, 50);
+	my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
+	my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
+	my $name =  Fasta::def2SeqID($p_def);
+	my $safe_name = Fasta::seqID2SafeID($name);
+	
+	my $d_file = $the_void."/".$safe_name.'.'.$p->[0]->{b}.'.'.$p->[0]->{e}.".fasta";
+	
+	FastaFile::writeFile($p_fasta, $d_file);
+	
+	my $offset = $p->[0]->{b} - 1;
+	my $id  = $hit->name();
+	
+	my $fastaObj = $db_index->get_Seq_for_hit($hit);
+	
+	#still no sequence? try rebuilding the index and try again
+	if (not $fastaObj) {
 	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
 	    $db_index->reindex();
 	    $fastaObj = $db_index->get_Seq_for_hit($hit);
-
+	    
 	    if (not $fastaObj) {
-	       print STDERR "stop here:".$hit->name."\n";
-	       die "ERROR: Fasta index error\n";
+		print STDERR "stop here:".$hit->name."\n";
+		die "ERROR: Fasta index error\n";
 	    }
-	 }
-
-	 my $seq      = $fastaObj->seq();
-	 my $def      = $db_index->header_for_hit($hit);
-
-	 my $fasta    = Fasta::toFasta('>'.$def, \$seq);
-
-	 #build a safe name for file names from the sequence identifier
-	 my $safe_id = Fasta::seqID2SafeID($id);
-
-	 my $t_file    = $the_void."/".$safe_id.'.fasta';
-	 FastaFile::writeFile($fasta, $t_file);
-
-	 my $exonerate_hits = to_polisher($d_file,
-					  $t_file,
-					  $the_void,
-					  $offset,
-					  $type,
-					  $exe,
-					  $score_limit,
-					  $matrix,
-					  $LOG
+	}
+	
+	my $seq      = $fastaObj->seq();
+	my $def      = $db_index->header_for_hit($hit);
+	
+	my $fasta    = Fasta::toFasta('>'.$def, \$seq);
+	
+	#build a safe name for file names from the sequence identifier
+	my $safe_id = Fasta::seqID2SafeID($id);
+	
+	my $t_file    = $the_void."/".$safe_id.'.fasta';
+	FastaFile::writeFile($fasta, $t_file);
+	
+	my $exonerate_hits = to_polisher($d_file,
+					 $t_file,
+					 $the_void,
+					 $offset,
+					 $type,
+					 $exe,
+					 $score_limit,
+					 $matrix,
+					 $LOG
 					 );
-
-	 foreach my $exonerate_hit (@{$exonerate_hits}) {
+	
+	foreach my $exonerate_hit (@{$exonerate_hits}) {
 	    if (defined($exonerate_hit) && exonerate_okay($exonerate_hit)) {
-	       $n++;
-	       push(@{$exonerate_clusters[$i]}, $exonerate_hit);
-	       $got_some = 1;
+		#tag the source blastn hit to let you know the counterpart
+		#exonerate hit was flipped to the other strand
+		$hit->{_exonerate_flipped} = 1 if($exonerate_hit->{_was_flipped});
+		$hit->type("exonerate:$type"); #set hit type (exonerate only)
+		
+		push(@exonerate_data, $exonerate_hit);	       
 	    }
-	 }
-      }
-      $i++ if $got_some;
-   }
-   return \@exonerate_clusters;
+	}
+    }
+    
+    return \@exonerate_data;
 }
 #-----------------------------------------------------------------------------
 sub exonerate_okay {
-   my $hit  = shift;
-
-   my $i = 0;
-   foreach my $hsp ($hit->hsps()) {
-      return 0 unless defined($hsp->nB('query'));
-      return 0 unless defined($hsp->nE('query'));
-      return 0 unless defined($hsp->nB('hit'));
-      return 0 unless defined($hsp->nE('hit'));
-      return 0 unless defined($hsp->strand('query'));
-      return 0 unless defined($hsp->strand('query'));
-      return 0 unless defined($hsp->strand('hit'));
-      return 0 unless defined($hsp->strand('hit'));
-
-      my $q_str = $hsp->query_string();
-      my $h_str = $hsp->hit_string();
-		
-      if ($h_str =~ /Target Intron/) {
-	 print STDERR "BADDD EXONERATE!\n";
-	 sleep 4;
-	 return 0;
-      }
-      elsif ($q_str =~ /Target Intron/) {
-	 print STDERR "BADDD EXONERATE!\n";
-	 sleep 4;
-	 return 0;
-      }
-      $i++;
-   }
-
-   return 1 
+    my $hit  = shift;
+    
+    my $i = 0;
+    foreach my $hsp ($hit->hsps()) {
+	return 0 unless defined($hsp->nB('query'));
+	return 0 unless defined($hsp->nE('query'));
+	return 0 unless defined($hsp->nB('hit'));
+	return 0 unless defined($hsp->nE('hit'));
+	return 0 unless defined($hsp->strand('query'));
+	return 0 unless defined($hsp->strand('query'));
+	return 0 unless defined($hsp->strand('hit'));
+	return 0 unless defined($hsp->strand('hit'));
+	
+	my $q_str = $hsp->query_string();
+	my $h_str = $hsp->hit_string();
+	
+	if ($h_str =~ /Target Intron/) {
+	    print STDERR "BADDD EXONERATE!\n";
+	    sleep 4;
+	    return 0;
+	}
+	elsif ($q_str =~ /Target Intron/) {
+	    print STDERR "BADDD EXONERATE!\n";
+	    sleep 4;
+	    return 0;
+	}
+	$i++;
+    }
+    
+    return 1;
 }
+
 #-----------------------------------------------------------------------------
 sub to_polisher {
    my $d_file   = shift;
@@ -1416,8 +1326,8 @@ sub blastn_as_chunks {
        }
    }
    elsif (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless $main::quiet;
-      print STDERR "$blast_finished\n" unless $main::quiet;
+      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
+      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
       return $blast_dir;
    }
 	
@@ -1589,6 +1499,9 @@ sub runBlastn {
       $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
       $command .= " gi";
+      $command .= " warnings"; #suppress certain warnings
+      $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " shortqueryok"; #fixes failure related to very short sequence
       $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
@@ -1684,8 +1597,8 @@ sub blastx_as_chunks {
        }
    }
    elsif (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless $main::quiet;
-      print STDERR "$blast_finished\n" unless $main::quiet;
+      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
+      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
       return $blast_dir;
    }
 
@@ -1876,6 +1789,9 @@ sub runBlastx {
       $command .= " lcmask";
       $command .= " kap";
       $command .= " gi";
+      $command .= " warnings"; #suppress certain warnings
+      $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " shortqueryok"; #fixes failure related to very short sequence
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
    }
@@ -1964,8 +1880,8 @@ sub tblastx_as_chunks {
        }
    }
    elsif (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless $main::quiet;
-      print STDERR "$blast_finished\n" unless $main::quiet;
+      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
+      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
       return $blast_dir;
    }
 	
@@ -2105,7 +2021,7 @@ sub tblastx {
 
    $chunk->erase_fasta_file();
 
-   return $chunk_keepers
+   return $chunk_keepers;
 }
 #-----------------------------------------------------------------------------
 sub runtBlastx {
@@ -2134,6 +2050,9 @@ sub runtBlastx {
       $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
       $command .= " gi";
+      $command .= " warnings"; #suppress certain warnings
+      $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " shortqueryok"; #fixes failure related to very short sequence
       $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";

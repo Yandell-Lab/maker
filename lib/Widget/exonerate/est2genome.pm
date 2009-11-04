@@ -645,8 +645,10 @@ sub assemble {
 		$phat_hit->add_hsp($hsp);	
 	}
 
-	$phat_hit = PhatHit_utils::copy($phat_hit, 'both') 
-	if exonerate::splice_info::needs_to_be_revcomped($phat_hit);	
+	if (exonerate::splice_info::needs_to_be_revcomped($phat_hit)){
+	    $phat_hit = PhatHit_utils::copy($phat_hit, 'both');
+	}
+
 
 	return $phat_hit;
 }

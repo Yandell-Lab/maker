@@ -41,28 +41,37 @@ sub sort_hits {
 sub seperate_by_strand {
 	my $what = shift;
 	my $hits = shift;
+	my $exonerate_flag = shift || 0;
+	
+	#The exonerate flag specifies whether to take into account
+	#exonerate realignment alignment flip.  In other words should
+	#a blastn hit be considered to belong to the opposite strand
+	#if its exonerate counterpart was flipped
 
 	my @p;
 	my @m;
 	my @x;
 	my @z;
 	foreach my $hit (@{$hits}){
-		
-        	if ($hit->strand($what) eq '-1/1'){
-                	push(@x, $hit);
-        	}
-		elsif ($hit->strand($what) eq '1/-1'){
-                	push(@x, $hit);
-        	}
-		elsif ($hit->strand($what) == 1) {
-                	push(@p, $hit); 
-        	}        
-        	elsif ($hit->strand($what) == -1 ){
-                	push(@m, $hit);
-        	}      
-		elsif ($hit->strand($what) == 0 ){
-			push(@z, $hit);
-		}
+	    my $strand = $hit->strand($what);
+	    
+	    unless($strand =~ /^\-?\d$/){
+		die "FATAL: Could not get stand correctly. Perhaps".
+		    "your using the wrong version of BioPerl.\n\n";
+	    }	    
+
+	    $strand *= -1 if($exonerate_flag && $hit->{_exonerate_flipped});
+	    
+	    if ($strand == 1) {
+		push(@p, $hit);
+	    }        
+	    elsif ($strand == -1 ){
+		push(@m, $hit);
+	    }      
+	    elsif ($strand == 0 ){
+		push(@z, $hit);
+	    }
+
 	}
 	return (\@p, \@m, \@x, \@z);
 }
@@ -812,6 +821,7 @@ sub copy {
 	my @sorted;
 	if ($what eq 'both' || $what eq 'rev'){
 		@sorted = sort {$b->nB('query') <=> $a->nB('query') } @new_hsps;
+		$new_hit->{_was_flipped} = 1;
 	}
 	elsif ($what eq 'revh'){
 		@sorted = sort {$b->nB('hit') <=> $a->nB('hit') } @new_hsps;
