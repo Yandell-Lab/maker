@@ -213,7 +213,10 @@ sub getSeqRef {
 	next if $l =~ /^>/;
 	$seq .= $l;
     }
-    
+
+    #remove contaminating whitespace
+    $seq =~ s/\s+//g;
+
     return \$seq;
 }
 #-------------------------------------------------------------------------------
