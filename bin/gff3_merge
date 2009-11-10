@@ -8,18 +8,19 @@ my $usage = "
 
 Synopsis:
 
-gff3_merge -d maker_datastore_index
+gff3_merge -d maker_datastore_index.log
 gff3_merge -o genome.all.gff <gff3_file1> <gff3_file2> ...
 
 Descriptions:
 
-This script will take a MAKER datastore, extract all the relevant
-GFF3 files and combined GFF3 file.  The script can also combine 
-other correctly formated GFF3 files.
+This script will take a MAKER datastore index log file, extract all
+the relevant GFF3 files and combined GFF3 file.  The script can also
+combine other correctly formated GFF3 files.  For this to work
+properly you need to be in the same directory as the datastore index.
 
 Options:
 
-  -d The location of the MAKER datastore index.
+  -d The location of the MAKER datastore index log file.
   -o Alternate base name for the output files.
 
 ";
@@ -37,7 +38,7 @@ if(! $datastore){
     @files = @ARGV;
 }
 
-if((! $datastore && ! @files) || ! $outfile){
+if(! $datastore && ! @files) {
     print $usage;
     exit();
 }
@@ -96,11 +97,11 @@ foreach my $file (@files){
 	    next;
 	}
 	if($line =~ /^\#\#sequence-region/){
-            die "ERROR: This contig has already been added\: $line\n" if exists $uniq{$line};
-            $uniq{$line}++;
-            print $GFF $line;
-            next;
-        }
+	    die "ERROR: This contig has already been added\: $line\n" if exists $uniq{$line};
+	    $uniq{$line}++;
+	    print $GFF $line;
+	    next;
+	}
 	if ($line =~ /^\#\#FASTA/){
 	    $FH = $FAS;
 	    next;

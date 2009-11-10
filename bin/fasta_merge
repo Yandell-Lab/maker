@@ -8,18 +8,20 @@ my $usage = "
 
 Synopsis:
 
-fasta_merge -d maker_datastore_index
+fasta_merge -d maker_datastore_index.log
 fasta_merge -o genome.all -i <fasta1> <fasta2> ...
 
 Descriptions:
 
-This script will take a MAKER datastore, extract all the relevant
-fasta files and create fasta files with relevant categories of
-sequence (i.e. transcript, protein, GeneMark protien, etc.).
+This script will take a MAKER datastore index log file, extract all
+the relevant fasta files and create fasta files with relevant
+categories of sequence (i.e. transcript, protein, GeneMark protien,
+etc.).  For this to work properly you need to be in the same directory
+as the datastore index.
 
 Options:
 
-  -d The location of the MAKER datastore.
+  -d The location of the MAKER datastore index log.
   -o Alternate base name for the output files.
   -i A optional list of files to process along with or instead of the
      datastore.
@@ -40,21 +42,21 @@ if(! $datastore){
     print $usage;
     exit();
 }
-   
+
 if (! $outfile){
     ($outfile) = $datastore =~ /([^\/]+)$/;
     $outfile =~ s/_master_datastore_index.log//;
     $outfile = "genome" if(! defined $outfile);
 }
 
-die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
+die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -r $datastore);
 if ($datastore){
-    open(IN, "< $datastore");
+    open(IN, '<', $datastore) or die "Can't open $datastore for reading\n";
 
     #uniq the entries
     my %entries;
     @entries{@{[<IN>]}} = ();
-    
+
     my @dirs;
     foreach my $e (keys %entries){
 	next unless ($e =~ /FINISHED/);
@@ -98,12 +100,12 @@ while(my $key = each %groups){
     #maker standard naming convention
     my $source = 'maker';
     $source .= ".$key" if($key ne 'maker');
-    
+
     #protein and transcript files
     my $trans = [sort @{$groups{$key}{transcripts}}];
     my $prot  = [sort @{$groups{$key}{proteins}}];
 
-    
+
     dump_it($trans, "$outfile.all.$source.transcripts.fasta");
     dump_it($prot, "$outfile.all.$source.proteins.fasta");
 }
