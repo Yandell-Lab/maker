@@ -45,7 +45,7 @@ sub run {
 		waitpid $pid, 0;
 		if ($? != 0){
 		   if($all_err !~ /There are no valid contexts/){
-		      die "ERROR: Blastx failed\n";
+		      die "ERROR: blastn failed\n";
 		   }
 		   else{
 		      print STDERR "NOTE: BLAST failed because the length of unmasked\n".
