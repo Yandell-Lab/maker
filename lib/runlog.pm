@@ -26,7 +26,6 @@ my @ctl_to_log = ('genome_gff',
 		  'rm_gff',
 		  'organism_type',
 		  'predictor',
-		  'run',
 		  'snaphmm',
 		  'gmhmm',
 		  'augustus_species',
@@ -72,7 +71,8 @@ my @ctl_to_log = ('genome_gff',
 		  'protein_pass',
 		  'rm_pass',
 		  'other_pass',
-		  'pred_pass'
+		  'pred_pass',
+		  'run'
 		 );
 
 my %SEEN;
@@ -201,6 +201,11 @@ sub _clean_files{
 	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
 	    foreach my $key (@ctl_to_log) {
+		#changes to hidden key only important when nothing else changed
+		if($key eq 'run'){
+		    next if(exists $rm_key{gff});
+		}
+
 		#these are only sometimes important
 		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$|^rm_pass$/ ||
 		   $key =~ /^pred_pass$|^model_pass$|^other_pass$/
@@ -259,6 +264,12 @@ sub _clean_files{
 
 		#softmask was always true before and not logged
 		if($key eq 'softmask' && $log_val eq ''){
+		    $log_val = 1;
+		}
+
+
+		#AED_thrshold was always 1 before and not logged
+		if($key eq 'AED_threshold' && $log_val eq ''){
 		    $log_val = 1;
 		}
 

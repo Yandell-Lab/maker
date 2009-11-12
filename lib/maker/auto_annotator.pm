@@ -710,22 +710,14 @@ sub annotate {
 
     #add abinits to their predictor type after they have been proccessed
     #remeber they get treated differently so you want to add them as a
-    #seperate step.
+    #seperate step from hint based predictions.
     foreach my $g (@$all_ab){
-	if($g->{algorithm} =~ /^snap/i){
-	    push(@{$annotations{'snap'}}, $g);
-	}
-	elsif($g->{algorithm} =~ /^genemark/i){
-	    push(@{$annotations{'genemark'}}, $g);
-	}
-	elsif($g->{algorithm} =~ /^augustus/i){
-	    push(@{$annotations{'augustus'}}, $g);
-	}
-	elsif($g->{algorithm} =~ /^fgenesh/i){
-	    push(@{$annotations{'fgenesh'}}, $g);
-	}
-	elsif($g->{algorithm} =~ /^pred_gff/i){
-	    push(@{$annotations{'pred_gff'}}, $g);
+	my $al = lc($g->{algorithm});
+	$al =~ s/_masked$//;
+	$al =~ s/(pred_gff).*$/$1/;
+
+	if($al =~ /^snap$|^genemark$|^augustus$|^fgenesh$|^pred_gff$/i){
+	    push(@{$annotations{$al}}, $g);
 	}
 	else{
 	    die "ERROR: Not a supported algorithm: ".$g->{algorithm}."\n";
@@ -1236,28 +1228,28 @@ sub run_it {
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
 	    if(! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
-		    my $clean  = clean::purge_single_exon_hits($alt_ests);
-		    if(! @$clean){
-			    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-			    my $pieces = Shadower::getPieces($seq, $coors, 0);
-			    
-			    if(@$pieces <= 1){
-				    my $keep;
-				    
-				    my $set = get_overlapping_hits($model, $predictions);
-				    $keep = 1 if(@$set);
-				    
-				    my $abAED = shadow_AED::get_abAED($set, $model);
-				    $keep = 0 if($abAED > 0.3);
-				    
-				    my $AED = shadow_AED::get_AED($blastx,$model);
-				    $keep = 0 if($AED > 0.3);
-				    
-				    next if(! $keep); #skip these spurious predictions
-			    }
+		my $clean  = clean::purge_single_exon_hits($alt_ests);
+		if(!@$clean){	
+		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
+		    my $pieces = Shadower::getPieces($seq, $coors, 0);
+		    
+		    if(@$pieces <= 1){
+			my $keep;
+			
+			my $set = get_overlapping_hits($model, $predictions);
+			$keep = 1 if(@$set);
+			
+			my $abAED = shadow_AED::get_abAED($set, $model);
+			$keep = 0 if($abAED > 0.3);
+			
+			my $AED = shadow_AED::get_AED($blastx,$model);
+			$keep = 0 if($AED > 0.3);
+			
+			next if(! $keep); #skip these spurious predictions
 		    }
+		}
 	    }
-	    
+  
 	    #add UTR to ab-inits
 	    my $transcript = pneu($ests, $model, $seq);
 
@@ -1343,27 +1335,27 @@ sub run_it {
 
 	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
 	if(@$on_right_strand && ! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
-		my $clean  = clean::purge_single_exon_hits($alt_ests);
-		if(!@$clean){
-			my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-			my $pieces = Shadower::getPieces($seq, $coors, 0);
+	    my $clean  = clean::purge_single_exon_hits($alt_ests);
+	    if(!@$clean){
+		my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
+		my $pieces = Shadower::getPieces($seq, $coors, 0);
+		
+		if(@$pieces <= 1){
+		    my $keep;
+		    foreach my $h (@$on_right_strand){
+			my $set = get_overlapping_hits($h, $predictions);
+			$keep = 1 if(@$set);
+			
+			my $abAED = shadow_AED::get_abAED($set, $h);
+			$keep = 0 if($abAED > 0.3);
+			
+			my $AED = shadow_AED::get_AED($blastx,$h);
+			$keep = 0 if($AED > 0.3);
+		    }
 
-			if(@$pieces <= 1){
-				my $keep;
-				foreach my $h (@$on_right_strand){
-					my $set = get_overlapping_hits($h, $predictions);
-					$keep = 1 if(@$set);
-
-					my $abAED = shadow_AED::get_abAED($set, $h);
-					$keep = 0 if($abAED > 0.3);
-
-					my $AED = shadow_AED::get_AED($blastx,$h);
-					$keep = 0 if($AED > 0.3);
-				}
-
-				next if(! $keep); #skip these spurious predictions
-			}
+		    next if(! $keep); #skip these spurious predictions
 		}
+	    }
 	}
 
 	#add transcripts
@@ -1515,7 +1507,7 @@ sub load_transcript_struct {
 #------------------------------------------------------------------------
 #takes an array of annotations and only returns those that overlap a maker
 #annotation (doesn't care if on opposite strand so be careful)
-sub get_geness_overlapping_gene {
+sub get_genes_overlapping_gene {
    my $gene  = shift;
    my $genes = shift;
 
@@ -1769,25 +1761,22 @@ sub merge_evidence {
     my $evi1 = shift;
     my $evi2 = shift;
 
-    #reset uniq for set to be added
+
     while(my $key = each %$evi2){
 	next if(ref($evi2->{$key}) ne 'ARRAY');
+
+	#reset uniq for set to be added
 	foreach my $f (@{$evi2->{$key}}){
 	    $f->{_uniq_set} = 0;
 	}
-    }
-    #set uniq for existing set
-    while(my $key = each %$evi1){
-	next if(ref($evi1->{$key}) ne 'ARRAY');
+
+        #set uniq for existing set
+	$evi1->{$key} = [] if(! $evi1->{$key});
 	foreach my $f (@{$evi1->{$key}}){
 	    $f->{_uniq_set} = 1;
 	}
-    }
 
-    #now only add hits where uniq is not set
-    while(my $key = each %$evi2){
-	next if(ref($evi2->{$key}) ne 'ARRAY');
-	$evi1->{$key} = [] if(! $evi1->{$key});
+	#now only add hits where uniq is not set
 	foreach my $f (@{$evi2->{$key}}){
 	    push(@{$evi1->{$key}}, $f) if(! $f->{_uniq_set});
 	    $f->{_uniq_set} = 1;
@@ -2172,7 +2161,7 @@ sub get_overlapping_hits {
 
     my @keepers;
     foreach my $hit (@{$hits}){
-	next unless $hit->strand eq $eat->strand;
+	next unless $hit->strand('query') eq $eat->strand('query');
       push(@keepers, $hit)
 	  if compare::overlap($hit, $eat, 'query', 3);
     }

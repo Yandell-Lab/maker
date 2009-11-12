@@ -440,7 +440,7 @@ sub careful_cluster {
 	for (my $j = $i +1 ; $j < @{$phat_hits}; $j++){
 	    my $hit_j = $phat_hits->[$j];
 	    $lookup{$hit_j->{temp_id}} = $hit_j;
-	    if (compare::overlap($hit_i, $hit_j, 'query', $flank)){
+	    if (compare::hsps_overlap($hit_i, $hit_j, 'query', $flank)){
 		$matrix{$hit_i->{temp_id}}{$hit_j->{temp_id}}++;
 	    }
 	    else {

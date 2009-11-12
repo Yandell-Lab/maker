@@ -91,7 +91,7 @@ sub is_redundant_alt_form {
         }
 }
 #------------------------------------------------------------------------
-sub overlap {
+sub hsps_overlap {
        my $hit_a = shift;
        my $hit_b = shift;
        my $what  = shift;
@@ -120,6 +120,28 @@ sub overlap {
 		}
 	}
 	return 0;
+}
+#------------------------------------------------------------------------
+sub overlap {
+       my $hit_a = shift;
+       my $hit_b = shift;
+       my $what  = shift;
+       my $r     = shift || 0;
+
+       my $aB = $hit_a->nB($what);
+       my $aE = $hit_a->nE($what);
+       
+       ($aB, $aE) = ($aE, $aB) if $aB > $aE;
+       
+       my $bB = $hit_b->nB($what);
+       my $bE = $hit_b->nE($what);
+       
+       ($bB, $bE) = ($bE, $bB) if $bB > $bE;
+       my $class = compare($aB, $aE, $bB, $bE, $r);
+       
+       return 1 if $class ne '0';
+	   
+       return 0;
 }
 #------------------------------------------------------------------------
 sub compare_by_shadow {

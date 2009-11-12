@@ -31,6 +31,9 @@ use vars qw(@ISA @EXPORT_OK $VERSION $TYPES
             $graceful_sig @CATCH_SIGS);
 use Carp qw(croak confess);
 use File::Copy;
+use File::Temp;
+use Storable;
+use IPC::Open3;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -268,6 +271,14 @@ sub DESTROY {
 
 sub unlock ($) {
   my $self = shift;
+
+  #remove maintainer if running
+  if($self->{_maintain}){
+      kill(1, $self->{_maintain});
+      waitpid($self->{_maintain}, 0);
+      $self->{_maintain} = undef;
+  }
+
   if (!$self->{unlocked}) {
     unlink( $self->{rand_file} ) if -e $self->{rand_file};
     if( $self->{lock_type} & LOCK_SH ){
@@ -306,6 +317,13 @@ sub create_magic ($;$) {
   $errstr = undef;
   my $self = shift;
   my $append_file = shift || $self->{rand_file};
+
+  ### need the hostname
+  if( !$HOSTNAME ){
+    require Sys::Hostname;
+    $HOSTNAME = &Sys::Hostname::hostname();
+  }
+
   $self->{lock_line} ||= "$HOSTNAME $self->{lock_pid} ".time()." ".int(rand()*10000)."\n";
   local *_FH;
   open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
@@ -434,12 +452,48 @@ sub uncache ($;$) {
   return ( link( $file, $rand_file) && unlink($rand_file) );
 }
 
+sub maintain {
+    my $self = shift;
+    my $time = shift; #refresh interval
+
+    die "ERROR: No time interval given to maintain lock\n\n"
+	if(! $time || $time < 1);
+
+    #create temporary file to for lock serialization
+    my (undef, $file) = File::Temp::tempfile();
+    Storable::nstore($self, $file);
+    
+    #run maintainer executable in background
+    my $exe = $INC{'File/NFSLock.pm'};
+    die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
+	if(! $exe || ! -f $exe);
+
+    $self->refresh; #refresh one on it's own
+    if($self->{_maintain}){
+	kill(1, $self->{_maintain});
+	waitpid($self->{_maintain}, 0);
+    }
+
+    $exe =~ s/NFSLock\.pm$/maintain\.pl/;
+    my $pid = open3(undef, undef, undef, "$exe $file $time $$");
+    $self->{_maintain} = $pid;
+
+    return 1;
+}
+
 sub refresh {
   my $self = shift;
 
   $errstr = undef;
   my $rand_file = $self->{rand_file};
   my $file = $self->{lock_file};
+
+  ### need the hostname
+  if( !$HOSTNAME ){
+    require Sys::Hostname;
+    $HOSTNAME = &Sys::Hostname::hostname();
+  }
+
   $self->{lock_line} = "$HOSTNAME $self->{lock_pid} ".time()." ".int(rand()*10000)."\n";
   local *_FH;
   open (_FH,">$rand_file") or do { $errstr = "Couldn't open \"$rand_file\" [$!]"; return undef; };

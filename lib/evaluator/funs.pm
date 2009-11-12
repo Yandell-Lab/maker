@@ -544,7 +544,7 @@ sub alt_spli {
 	$est->temp_id($temp_id);
 	
 	foreach my $eat (@{$eats}){
-	    if(compare::overlap($eat, $est, 'query', 0) &&
+	    if(compare::hsps_overlap($eat, $est, 'query', 0) &&
 	       compare::is_same_alt_form($eat, $est, $seq, 0)
 	       ){
 		$how_many{$est->temp_id}++;

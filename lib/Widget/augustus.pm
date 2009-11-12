@@ -517,20 +517,17 @@ sub refactor {
 	my $genes = shift;
 
 	foreach my $g (@{$genes}){
-		my $CDS = $g->{CDS};
-		my $start_codon = $g->{start_codon} || undef;
-		my $stop_codon  = $g->{stop_codon}  || undef;
-		foreach my $cds (reverse sort sort_cdss @{$CDS}){
-			
-	                if ($cds->{strand} == 1){
-                        	$cds->{e} = $stop_codon->{e} if($stop_codon);
-                	}
-                	else {
-                        	$cds->{b} = $stop_codon->{b} if ($stop_codon);
-                	}
-
-			last;
-		}
+	    my $CDS = $g->{CDS};
+	    my $start_codon = $g->{start_codon} || undef;
+	    my $stop_codon  = $g->{stop_codon}  || undef;
+	    my ($last) = @{[sort sort_cdss @{$CDS}]}[-1];
+	    
+	    if ($last->{strand} == 1){
+		$last->{e} = $stop_codon->{e} if($stop_codon);
+	    }
+	    else {
+		$last->{b} = $stop_codon->{b} if ($stop_codon);
+	    }
 	}
 }
 #-------------------------------------------------------------------------------
@@ -580,7 +577,9 @@ sub load_phat_hits {
 
                 my $overhang = $length % 3;
                 if($overhang != 0){
-                    if($features->[0]->{strand} == 1){
+                    if(($features->[0]->{strand} == 1 && ! defined $g->{stop_codon}) ||
+		       ($features->[0]->{strand} == -1 && ! defined $g->{start_codon})
+		      ){
                         my $last = $features->[-1];
                         my $l_length = abs($last->{e} - $last->{b}) + 1;
 
@@ -593,7 +592,9 @@ sub load_phat_hits {
 
                         $last->{e} -= $overhang;
                     }
-                    elsif($features->[0]->{strand} == -1){
+                    elsif(($features->[0]->{strand} == -1 && ! defined $g->{stop_codon}) ||
+			  ($features->[0]->{strand} == 1 && ! defined $g->{start_codon})
+			 ){
                         my $last = $features->[0];
                         my $l_length = abs($last->{e} - $last->{b}) + 1;
 
@@ -607,7 +608,7 @@ sub load_phat_hits {
                         $last->{b} += $overhang;
                     }
                     else{
-                        die "FATAL: No exon strand in Widget::snap\n";
+                        die "FATAL: Can not fix overhang in Widget::augustus\n";
                     }
                 }
 

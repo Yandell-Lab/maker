@@ -42,7 +42,6 @@ use maker::sens_spec;
 use File::NFSLock;
 use FastaDB;
 use Digest::MD5;
-use threads;
 
 @ISA = qw(
 	);
@@ -2187,16 +2186,6 @@ sub build_the_void {
    return $the_void;
 }
 #-----------------------------------------------------------------------------
-#refreshes the maker directory lock every 30 seconds
-sub maintain_lock {
-   my $lock  = shift;
-
-   while(1){
-       sleep 30;
-       $lock->refresh;
-   }
-}
-#-----------------------------------------------------------------------------
 #this function sets the defualt values for control options
 #the function also determines what control options are valid, so
 #to add control options edit this function
@@ -2761,8 +2750,7 @@ sub load_control_files {
    if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.maker_lock", 'EX', 40, 40)){
        warn "Everything seems ok!!\n\n" if($check);
 
-       my $thr = threads->create(\&maintain_lock, $LOCK); 
-       $thr->detach;
+       $LOCK->maintain(30);
    }
    else{
        die "ERROR: Another instance of maker is already running for this dataset.\n\n";
