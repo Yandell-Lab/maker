@@ -232,7 +232,7 @@ foreach my $file ( @lst_files ){
 	}
 	
 	#set correct length in header (not needed in prokaryotic)
-	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/ || $line !~ /^\s*\d+\s+[\+\-]\s+\d+\s+\d+/){
+	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/ && $line !~ /^\s*\d+\s+[\+\-]\s+\d+\s+\d+/){
 	    if($header_flag){
 		$line =~ s/(Sequence length:\s*)\d+/$1$length/;
 		$line =~ s/(G\+C content:\s*)[^\n]+/$1/;
