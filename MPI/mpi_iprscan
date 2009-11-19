@@ -174,6 +174,8 @@ my @appl;
 my $root = 0; #define root node (only changed for debugging)
 
 $CTL_OPT{retry} = 2;
+$CTL_OPT{datastore} = 1;
+$CTL_OPT{always_try} = 1;
 $CTL_OPT{seqtype} = 'p'; #default
 
 #---Process options on the command line
@@ -214,7 +216,7 @@ if(! @appl){
 $CTL_OPT{appl} = \@appl; #apply apps to CTL_OPT
 
 #build out_base and out_name for datastore
-$CTL_OPT{out_name} = ($CTL_OPT{outfile}) ? $CTL_OPT{outfile} : $CTL_OPT{infile};
+$CTL_OPT{out_name} = $CTL_OPT{infile};
 $CTL_OPT{out_name} =~ /([^\/]+)$/;
 $CTL_OPT{out_name} = $1;
 $CTL_OPT{out_name} =~ s/(.+)\.[^\.]+$/$1/;
@@ -336,12 +338,9 @@ if ($rank == $root){
 
     #====ACTUAL MPI COMMUNICATION
     #---main code for distribution of mpi data starts here
-
-    my ($name) = $CTL_OPT{infile} =~ /([^\/]+)$/;
-    $name = $CTL_OPT{outfile} if($CTL_OPT{outfile});
-
     my $DS_CTL = new ds_utility(\%CTL_OPT);
     my $iterator = new Iterator::Fasta($CTL_OPT{infile});
+    unlink($CTL_OPT{outfile}) if(-e $CTL_OPT{outfile}); #clear preexisting outfile
 
     #thread for root node to do other things than just manage mpi
     my $thr = threads->create(\&node_thread);

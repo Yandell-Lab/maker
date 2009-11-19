@@ -120,6 +120,11 @@ sub _clean_files{
 		$rm_key{force}++;
 		$SEEN{$log_file}++;
 	    }
+            elsif($CTL_OPTIONS{always_try} && ! $SEEN{$log_file}){
+                $self->{die_count} = 0; #reset the die count
+                $continue_flag = 1; #re-run
+                $SEEN{$log_file}++;
+	    }
 	    else{
 		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
