@@ -65,8 +65,10 @@ sub _prepare {
    my $self = shift;
    my $VARS = shift;
 
+   $self->{VARS} = $VARS;
+
    try{
-      $self->{CHUNK_REF}->prepare($VARS);
+      $self->{CHUNK_REF}->_prepare($VARS);
    }
    catch Error::Simple with {
       my $E = shift;
@@ -76,20 +78,10 @@ sub _prepare {
 
    return if($self->failed);
 
-   if(! defined $VARS->{c_flag}){
-       die "ERROR: VARS->{c_flag} is not set in MpiTier.\n".
-	   "This value should be set by ".ref($self->{CHUNK_REF})."::prepare\n".
-	   "durring initialization of the MpiTier. Please\n".
-	   "edit the ".ref($self->{CHUNK_REF})."::prepare code to set this\n".
-	   "value appropriately\n\n";
-   }
-
-   if($VARS->{c_flag} <= 0){
-      $self->{TERMINATE} = 1;
+   if($self->{CHUNK_REF}->_should_continue($self) <= 0){
+      $self->_set_terminate(1);
       return;
    }
-
-   $self->{VARS} = $VARS;
 }
 #--------------------------------------------------------------
 #defines variables for new level and undefines last level
@@ -106,8 +98,7 @@ sub _initialize_level {
 
    #terminate
    if (! defined $level){ #level will be undefined when finished
-      $self->{TERMINATE} = 1;
-      $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tFINISHED";
+      $self->_set_terminate(1);
       $level = $self->{LEVEL}{CURRENT};
    }
 
@@ -222,7 +213,7 @@ sub _next_level {
    my $next_level;
 
    try {
-      $next_level = $self->{CHUNK_REF}->flow($level, $self->{VARS});
+      $next_level = $self->{CHUNK_REF}->_flow($level, $self->{VARS});
    }
    catch Error::Simple with {
       my $E = shift;
@@ -248,7 +239,7 @@ sub _load_chunks {
    my $chunks;
 
    try {
-      $chunks = $self->{CHUNK_REF}->loader($level, $self->{VARS}, $self->id);
+      $chunks = $self->{CHUNK_REF}->_loader($level, $self->{VARS}, $self->id);
    }
    catch Error::Simple with {
       my $E = shift;
@@ -293,7 +284,7 @@ sub update_chunk {
    }
    else{
        #let the chunk add results to $self->{VARS}
-       $chunk->result($self->{VARS});
+       $chunk->_result($self->{VARS});
    }
 
    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;    
@@ -332,13 +323,39 @@ sub _level_started {
 sub terminated {
    my $self = shift;
 
+   #set terminate if initialization step said not to continue
+   #this is semi-redundant depending on how the MpiChunk::prepare
+   #method was set up
+   if($self->{CHUNK_REF}->_should_continue($self) <= 0){
+       $self->_set_terminate(1);
+   }
+
    #_level_finished is required because there may still be chunks
    #that must be gathered and destroyed before terminating the tier
    if ($self->failed && $self->_level_finished){
-       $self->{TERMINATE} = 1;
+       $self->_set_terminate(1);
    }
 
    return $self->{TERMINATE};
+}
+#--------------------------------------------------------------
+#sets $self->{TERMINATE}
+
+sub _set_terminate {
+   my $self = shift;
+   my $arg = shift;
+
+   if(! defined($arg) || $arg !~ /^0$|^1$/){
+       die "FATAL:  Attempt to set TERMINATE to an illegal value\n".
+	   "in Process::MpiTiers\n\n";
+   }
+
+   my $old = $self->{TERMINATE};
+   $self->{TERMINATE} = $arg;
+
+   if($arg == 1 &&(! defined($old) || $old != 1)){
+       $self->_on_termination;
+   }
 }
 
 #-------------------------------------------------------------
@@ -347,6 +364,26 @@ sub terminated {
 sub failed{
    my $self = shift;
    return $self->{FAILED};
+}
+
+#-------------------------------------------------------------
+#sets $self->{FAILED}
+
+sub _set_failed {
+   my $self = shift;
+   my $arg = shift;
+
+   if(! defined($arg) || $arg !~ /^0$|^1$/){
+       die "FATAL:  Attempt to set FAILED to an illegal value\n".
+	   "in Process::MpiTiers\n\n";
+   }
+
+   my $old = $self->{FAILED};
+   $self->{FAILED} = $arg;
+
+   if($arg == 1 &&(! defined($old) || $old != 1)){
+       $self->_on_failure;
+   }
 }
 #-------------------------------------------------------------
 #returns whatevever is strored in $self->{ERROR}
@@ -391,20 +428,24 @@ sub clone {
     
    return Storable::dclone($self);
 }
-#--------------------------------------------------------------
-#returns a line giving name of sequence and the location where
-#analysis is stored.  Used for datastore implementation.
 
-sub DS {
+#--------------------------------------------------------------
+#returns the MpiChunk::_on_failure method
+
+sub _on_failure {
    my $self = shift;
-   return $self->{DS} || $self->{VARS}{seq_id} . "\t" . $self->{VARS}{out_dir};
+
+   return $self->{CHUNK_REF}->_on_failure($self);
+}
+#--------------------------------------------------------------
+#returns the MpiChunk::_on_termination method
+
+sub _on_termination {
+   my $self = shift;
+
+   return $self->{CHUNK_REF}->_on_termination($self);
 }
 #-------------------------------------------------------------
-sub fasta{
-   my $self = shift;
-   return $self->{VARS}{fasta};
-}
-#--------------------------------------------------------------
 #exception handler
 
 sub _handler {
@@ -413,29 +454,38 @@ sub _handler {
    my $extra = shift || '';
 
    my $level = $self->current_level;
-   my $seq_id = $self->{VARS}{seq_id};
-   my $LOG = $self->{VARS}{LOG};
 
    print STDERR $E->{-text};
-   print STDERR "ERROR: ".$extra."!!\n";
-   print STDERR "FAILED CONTIG:$seq_id\n\n" if(defined $seq_id);
-
-   if(defined $LOG){
-      my $die_count = $LOG->get_die_count();
-      $die_count++;
-      $LOG->add_entry("DIED","RANK", $self->id);
-      $LOG->add_entry("DIED","COUNT",$die_count);
-   }
+   print STDERR "ERROR: ".$extra."!!\n" if($extra);
 
    #clear queue on error
    while(my $chunk = $self->next_chunk){
        $self->{LEVEL}{$level}{RESULT_COUNT}++;
    }
 
-   $self->{DS} = "$self->{VARS}{seq_id}\t$self->{VARS}{out_dir}\tDIED";
-   $self->{FAILED} = 1;
+   $self->_set_failed(1);
 }
+#--------------------------------------------------------------
 
+sub AUTOLOAD {
+    my $self = shift;
+
+    my $caller = caller();
+    use vars qw($AUTOLOAD);
+    my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
+    $call =~/DESTROY/ && return;
+
+    if (! exists $self->{VARS}{$call}) {
+	die "Error: Invalid method \'$call\' in Process::MpiTiers\n".
+	    "call to AutoLoader issued from: $caller\n\n";
+    }
+
+    if (@_) {
+	$self->{VARS}{$call} = shift;
+    }
+
+    return $self->{VARS}{$call};
+}
 #-----------------------------------------------------------------------------
 #------------------------------------SUBS-------------------------------------
 #-----------------------------------------------------------------------------

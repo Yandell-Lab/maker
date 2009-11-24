@@ -57,9 +57,13 @@ sub _initialize {
       $self->{ds_object} = undef;
    }
 
-   #initialize the log
-   open(my $IN, ">", $self->{log});
-   close($IN);
+   #initialize a new blank log,
+   #except when using the hidden chpc option
+   #then just append to the existing log
+   unless($CTL_OPTIONS{_chpc}){
+       open(my $IN, ">", $self->{log});
+       close($IN);
+   }
 }
 #------------------------------------------------------------------------
 sub get_index {
@@ -138,9 +142,16 @@ sub add_entry {
        $entry =~ s/$cwd\/.*\.maker\.output\/*//;
    }
 
-   open(my $IN, ">>", $self->{log});
-   print $IN $entry . "\n";
-   close($IN);
+   if(my $lock = new File::NFSLock($self->{log}, 'EX', 5, 5)){
+       open(my $IN, ">>", $self->{log});
+       print $IN $entry . "\n";
+       close($IN);
+       $lock->unlock;
+   }
+   else{
+       die "ERROR: ds_utility::add_entry method timed out\n\n";
+   }
+
 }
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------

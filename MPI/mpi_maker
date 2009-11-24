@@ -116,21 +116,19 @@ Usage:
 
      Maker is a program that produces gene annotations in GFF3 file format using
      evidence such as EST alignments and protein homology.  Maker can be used to
-     produce gene annotations for new genomes as well as update annoations from
+     produce gene annotations for new genomes as well as update annotations from
      existing genome databases.
 
-     The four input arguments are user control files that specify how maker
-     should behave. The evaluator options file contains control options specific
-     for the evaluation of gene annotations. All options for maker should be set
-     in the control files, but a few can also be set on the command line.
-     Command line options provide a convenient machanism to override commonly
-     altered control file values.
+     The three input arguments are user control files that specify how maker
+     should behave. All options for maker should be set in the control files,
+     but a few can also be set on the command line. Command line options provide
+     a convenient machanism to override commonly altered control file values.
 
-     Input files listed in the control options files must be in fasta format.
-     Please see maker documentation to learn more about control file
-     configuration.  Maker will automatically try and locate the user control
-     files in the current working directory if these arguments are not supplied
-     when initializing maker.
+     Input files listed in the control options files must be in fasta format
+     unless otherwise specified. Please see maker documentation to learn more
+     about control file  configuration.  Maker will automatically try and locate
+     the user control files in the current working directory if these arguments
+     are not supplied when initializing maker.
 
      It is important to note that maker does not try and recalculated data that
      it has already calculated.  For example, if you run an analysis twice on
@@ -168,7 +166,7 @@ Options:
 			 This will require all blast analyses to be rerun.
 
      -again|a            Caculate all annotations and output files again even if
-			 no settings have changed.
+			 no settings have changed. Does not delete old analyses.
 
      -evaluate|e         Run Evaluator on final annotations (under development).
 
@@ -262,7 +260,7 @@ try{
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
-	       "no_thread" =>\$main::no_thread,
+	       "no_thread" =>\$main::no_thread, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
@@ -359,8 +357,6 @@ if ($rank == $root) {
 	 $t_tier_result = undef;
 	 $active[$root] = 0;
 
-	 $DS_CTL->add_entry($t_res->{-DS});
-
 	 if ($t_res->{-failed}){
 	    push(@failed, $t_res->{-fasta});
 	 }
@@ -449,7 +445,6 @@ if ($rank == $root) {
 	    if($rs_type == $yes_result){
 	       my $result;
 	       MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
-	       $DS_CTL->add_entry($result->{-DS});
 
 	       if ($result->{-failed}){
 		  push(@failed, $result->{-fasta});
@@ -659,7 +654,6 @@ else {
 	    #collect errors and failures if any
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
-	    $tier_result->{-DS} = $tier->DS;
 	    $tier_result->{-fasta} = $tier->fasta if($tier->failed);
 	    $tier = undef;
 	 }
@@ -878,7 +872,6 @@ sub node_thread {
 	    my $tier_result;
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
-	    $tier_result->{-DS} = $tier->DS;
 	    $tier_result->{-fasta} = $tier->fasta if ($tier->failed);
 
 	    sleep 1 while (defined ($t_tier_result)); #pause incase result will be overwritten

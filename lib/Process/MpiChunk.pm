@@ -34,8 +34,8 @@ sub new { #do not change or edit this
 	 $self->{RANK}  = shift @args || 0;
 	 $self->{FINISHED} = 0;
 	 $self->{FAILED}   = 0;
-	 $self->{VARS} = {};
-	 $self->{RESULTS} = {};
+	 $self->{VARS}     = {};
+	 $self->{RESULTS}  = {};
 
 	 $self->_initialize();
 	 $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
@@ -55,6 +55,8 @@ sub new { #do not change or edit this
 
 sub _initialize{
    my $self = shift;
+
+   #do something here
 }
 
 #--------------------------------------------------------------
@@ -84,6 +86,76 @@ sub _initialize_vars{
 }
 
 #--------------------------------------------------------------
+#gets called by MpiTiers object following a failure
+sub _on_failure {
+   my $self = shift;
+   my $tier = shift;
+
+   #handle case of calling as function rather than method
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
+      $tier = $self;
+      $self = new Process::MpiChunk();
+   }
+
+   my $level = $tier->current_level;
+   my $seq_id = $tier->{VARS}{seq_id};
+   my $out_dir = $tier->{VARS}{out_dir};
+   my $LOG = $tier->{VARS}{LOG};
+   my $DS_CTL = $tier->{VARS}{DS_CTL};
+
+   print STDERR "FAILED CONTIG:$seq_id\n\n" if(defined $seq_id);
+
+   if(defined $LOG){
+       my $die_count = $LOG->get_die_count();
+       $die_count++;
+       $LOG->add_entry("DIED","RANK", $tier->id);
+       $LOG->add_entry("DIED","COUNT",$die_count);
+   }
+
+   $DS_CTL->add_entry("$seq_id\t$out_dir\tFAILED");
+
+   return;
+}
+#--------------------------------------------------------------
+#gets called by MpiTiers object following termination
+sub _on_termination {
+   my $self = shift;
+   my $tier = shift;
+
+   #handle case of calling as function rather than method
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
+      $tier = $self;
+      $self = new Process::MpiChunk();
+   }
+
+   return if($tier->failed);
+   return if($tier->{VARS}{c_flag} <= 0);
+
+   #only reach this point if termination is due to success
+   my $seq_id = $tier->{VARS}{seq_id};
+   my $out_dir = $tier->{VARS}{out_dir};
+   my $LOG = $tier->{VARS}{LOG};
+   my $DS_CTL = $tier->{VARS}{DS_CTL};
+
+   $DS_CTL->add_entry("$seq_id\t$out_dir\tFINISHED");
+
+   return;
+}
+#--------------------------------------------------------------
+#gets called by MpiTiers object following termination
+sub _should_continue {
+   my $self = shift;
+   my $tier = shift;
+
+   #handle case of calling as function rather than method
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
+      $tier = $self;
+      $self = new Process::MpiChunk();
+   }
+
+   return $tier->{VARS}{c_flag};
+}
+#--------------------------------------------------------------
 #this function/method is called by MpiTiers as part of MpiTiers
 #initialization to prepare incoming data before building chunks.
 #This method should not be called directly by the user or inside
@@ -91,7 +163,7 @@ sub _initialize_vars{
 #MpiTiers makes MpiChunks more portable and makes debugging
 #easier.
 
-sub prepare {
+sub _prepare {
    my $self = shift;
    my $VARS = shift;
 
@@ -100,92 +172,39 @@ sub prepare {
       $VARS = $self;
       $self = new Process::MpiChunk();
    }
+
+   #instantiate empty LOG
+   $VARS->{LOG} = undef;
    
    #==Prepare data here as part of initialization
 
-   my $status = ''; #for error control
-   #process fasta file
-   try{
-      #===
-      $status = 'examining contents of the fasta file';
-      #===
-
-      #build uppercase fasta
-      $VARS->{fasta} = Fasta::ucFasta(\$VARS->{fasta});
-
-      #get fasta parts
-      $VARS->{q_def} = Fasta::getDef(\$VARS->{fasta}); #Get fasta header
-      $VARS->{q_seq_ref} = Fasta::getSeqRef(\$VARS->{fasta}); #Get reference to fasta sequence
-      $VARS->{seq_id} = Fasta::def2SeqID($VARS->{q_def}); #Get sequence identifier
-      $VARS->{safe_seq_id} = Fasta::seqID2SafeID($VARS->{seq_id}); #Get safe named identifier
-
-      #set up base and void directories for output
-      ($VARS->{out_dir}, $VARS->{the_void}) = $VARS->{DS_CTL}->seq_dirs($VARS->{seq_id});      
-
-      #===
-      $status = 'trying to build/process the run.log file';
-      #===
-
-      #-build and proccess the run log
-      $VARS->{LOG} = runlog->new($VARS->{CTL_OPT},
-				 {seq_id     => $VARS->{seq_id},
-				  seq_length => length(${$VARS->{q_seq_ref}}),
-				  out_dir    => $VARS->{out_dir},
-				  the_void   => $VARS->{the_void},
-				  fasta_ref  => \$VARS->{fasta}},
-				  $VARS->{the_void}."/run.log"
-				 );
-      
-      ($VARS->{c_flag}, my $message) = $VARS->{LOG}->get_continue_flag();
-      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, $VARS->{out_dir}, $message);
-   }
-   catch Error::Simple with {
-      my $E = shift;
-
-      $self->_handler($E, $status, 'throw');
-   };
-
-   return if($VARS->{c_flag} <= 0);
-
-   #set up contig variables and GFF3 output object
-   try{
-      #===
-      $status = 'setting ip contig variables and GFF3 output object';
-      #===
-
-      #-set up variables that are heldover from last chunk
-      $VARS->{holdover_blastn}     = [];
-      $VARS->{holdover_blastx}     = [];
-      $VARS->{holdover_tblastx}    = [];
-      $VARS->{holdover_pred}       = [];
-      $VARS->{holdover_est_gff}    = [];
-      $VARS->{holdover_altest_gff} = [];
-      $VARS->{holdover_prot_gff}   = [];
-      $VARS->{holdover_pred_gff}   = [];
-      $VARS->{holdover_model_gff}  = [];
-      
-      #-set up variables that are the result of chunk accumulation
-      $VARS->{masked_total_seq} = '';
-      $VARS->{p_fastas} = {};
-      $VARS->{t_fastas} = {};
-
-      #--prebuild an index of the databases
-      my $proteins = $VARS->{CTL_OPT}{_protein};
-      my $trans    = $VARS->{CTL_OPT}{_est};
-      my $altests  = $VARS->{CTL_OPT}{_altest};
-      GI::build_fasta_index($trans) if($trans); 
-      GI::build_fasta_index($proteins) if($proteins);
-      GI::build_fasta_index($altests) if($altests);
-
-      #--other variables
-      $VARS->{res_dir} = undef;
-   }
-   catch Error::Simple with{
-      my $E = shift;
-
-      $self->_handler($E, $status, 'throw');
-   };
+   #set up contig variables
+   #===
+   my $status = 'setting ip contig variables and GFF3 output object';
+   #===
    
+   #-set up variables that are heldover from last chunk
+   $VARS->{holdover_blastn}     = [];
+   $VARS->{holdover_blastx}     = [];
+   $VARS->{holdover_tblastx}    = [];
+   $VARS->{holdover_pred}       = [];
+   $VARS->{holdover_est_gff}    = [];
+   $VARS->{holdover_altest_gff} = [];
+   $VARS->{holdover_prot_gff}   = [];
+   $VARS->{holdover_pred_gff}   = [];
+   $VARS->{holdover_model_gff}  = [];
+   
+   #-set up variables that are the result of chunk accumulation
+   $VARS->{masked_total_seq} = '';
+   $VARS->{p_fastas} = {};
+   $VARS->{t_fastas} = {};
+   
+   #--other variables
+   $VARS->{res_dir} = undef;
+   $VARS->{c_flag} = 1; #always continue with this implementation and
+                        #let child nodes decide on running chunk.
+                        #Other implementations let the root node decide
+
    return 1;
 }
 #--------------------------------------------------------------
@@ -193,7 +212,7 @@ sub prepare {
 #chunks for a given level.  This allows for the number of
 #chunks created per level to be controlled within MpiChunks.
 
-sub loader {
+sub _loader {
    my $self = shift;
    my $level = shift;
    my $VARS = shift;
@@ -245,7 +264,7 @@ sub run {
 #this funcion is called by MakerTiers.  It returns the flow of
 #levels, i.e. order control, looping, etc.
 
-sub flow {
+sub _flow {
    my $self = shift;
    my $level = shift;
    my $VARS = shift;
@@ -278,7 +297,71 @@ sub _go {
    my $level_status = '';
 
    try{
-      if ($level == 0) {	#set up GFF3 output and fasta chunks
+      if ($level == 0) {	#examining contents of the fasta file and run log
+	 $level_status = 'examining contents of the fasta file and run log';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw{fasta
+			CTL_OPT
+		        DS_CTL}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my $fasta = Fasta::ucFasta(\$VARS->{fasta}); #build uppercase fasta
+	    my $DS_CTL = $VARS->{DS_CTL};
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+
+
+	    #get fasta parts
+	    my $q_def = Fasta::getDef(\$fasta); #Get fasta header
+	    my $q_seq_ref = Fasta::getSeqRef(\$fasta); #Get reference to fasta sequence
+	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
+	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier	    
+
+	    #set up base and void directories for output
+	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
+	    
+	    #-build and proccess the run log
+	    my $LOG = runlog->new(\%CTL_OPT,
+				  {seq_id     => $seq_id,
+				   seq_length => length(${$q_seq_ref}),
+				   out_dir    => $out_dir,
+				   the_void   => $the_void,
+				   fasta_ref  => \$fasta},
+				  $the_void."/run.log"
+				  );
+	    
+	    my ($c_flag, $message) = $LOG->get_continue_flag();
+	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
+	    #-------------------------CODE
+	 
+	    #------------------------RESULTS
+	    %results = (fasta => $fasta,
+			q_def => $q_def,
+			q_seq_ref => $q_seq_ref,
+			seq_id => $seq_id,
+			safe_seq_id => $safe_seq_id,
+			out_dir => $out_dir,
+			the_void => $the_void,
+			c_flag => $c_flag,
+			LOG => $LOG
+		       );
+	    #------------------------RESULTS
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+     }
+     elsif ($level == 1) {	#set up GFF3 output and fasta chunks
 	 $level_status = 'setting up GFF3 output and fasta chunks';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -350,7 +433,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 1) {	#do repeat masking
+      elsif ($level == 2) {	#do repeat masking
 	 $level_status = 'doing repeat masking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -437,7 +520,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 2) {	#blastx repeat mask
+      elsif ($level == 3) {	#blastx repeat mask
 	 $level_status = 'doing blastx repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -494,7 +577,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 3) {	#collect blastx repeatmask
+      elsif ($level == 4) {	#collect blastx repeatmask
 	 $level_status = 'collecting blastx repeatmasking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -544,7 +627,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 4) {	#process all repeats
+      elsif ($level == 5) {	#process all repeats
 	 $level_status = 'processing all repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -605,12 +688,12 @@ sub _go {
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    if ($VARS->{chunk} = $VARS->{fasta_chunker}->next_chunk) {
-	       $next_level = 1;
+	       $next_level = 2;
 	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 5) {	#prep masked sequence and abinits
+      elsif ($level == 6) {	#prep masked sequence and abinits
 	 $level_status = 'preparing masked sequence and ab-inits';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -696,7 +779,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 6) {	#prep new fasta chunks
+      elsif ($level == 7) {	#prep new fasta chunks
 	 $level_status = 'preparing new fasta chunks';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -740,7 +823,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 7) {	#blastn
+      elsif ($level == 8) {	#blastn
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -802,7 +885,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 8) {	#collect blastn
+      elsif ($level == 9) {	#collect blastn
 	 $level_status = 'collecting blastn reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -898,7 +981,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 9) {	#blastx
+      elsif ($level == 10) {	#blastx
 	 $level_status = 'doing blastx of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -957,7 +1040,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 10) {	#collect blastx
+      elsif ($level == 11) {	#collect blastx
 	 $level_status = 'collecting blastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1052,7 +1135,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 11) {	#tblastx
+      elsif ($level == 12) {	#tblastx
 	 $level_status = 'doing tblastx of altESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1110,7 +1193,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 12) {	#collect tblastx
+      elsif ($level == 13) {	#collect tblastx
 	 $level_status = 'collecting tblastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1208,7 +1291,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 13) {	#exonerate proteins
+      elsif ($level == 14) {	#exonerate proteins
 	 $level_status = 'doing exonerate of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1269,7 +1352,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 14) {	#exonerate ESTs
+      elsif ($level == 15) {	#exonerate ESTs
 	 $level_status = 'doing exonerate of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1329,7 +1412,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 15) {	#process chunk divide
+      elsif ($level == 16) {	#process chunk divide
 	 $level_status = 'processing the chunk divide';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1536,7 +1619,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 16) {	#annotations
+      elsif ($level == 17) {	#annotations
 	 $level_status = 'calculating annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1678,7 +1761,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 17) {	#local output
+      elsif ($level == 18) {	#local output
 	 $level_status = 'processing chunk output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1762,12 +1845,12 @@ sub _go {
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    if ($VARS->{chunk} = $VARS->{fasta_chunker}->next_chunk) {
-	       $next_level = 7;
+	       $next_level = 8;
 	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 18) {	#global output
+      elsif ($level == 19) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1866,7 +1949,7 @@ sub _go {
 #of data structure inside of MpiChunk which makes for easier
 #debugging
 
-sub result {
+sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
    my $RESULTS = $self->{RESULTS};	#this ia a hash reference

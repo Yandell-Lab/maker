@@ -6,6 +6,7 @@ use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use Fasta;
+use File::NFSLock;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -109,6 +110,16 @@ sub _initialize {
    $self->{CWD} = $self->{CTL_OPTIONS}->{CWD};
    my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
    my $length = $self->{params}->{seq_length};
+
+   #lock must be persitent in object or it is detroyed outside of block
+   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', 10, 10)){
+       $self->{LOCK}->maintain(5);
+   }
+   else{
+       $self->{continue_flag} = -3;
+       
+       return 0;
+   }
 
    if($length < $min_contig){#skip if this is a short contig
       $self->{continue_flag} = -2; #skipped signal is -2
@@ -738,6 +749,13 @@ sub report_status {
                    "Length: $length\n",
 		   "#---------------------------------------------------------------------\n\n\n";
    }
+   elsif($flag == -3){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Another instance of maker is processing this contig!!\n",
+		   "SeqID: $seq_id\n",
+                   "Length: $length\n",
+		   "#---------------------------------------------------------------------\n\n\n";
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -766,6 +784,9 @@ sub get_continue_flag {
    elsif($flag == -2){
       $message = 'SKIPPED_SMALL'; #not finished but skipped
    }
+   elsif($flag == -3){
+      $message = ''; #no short message, as contig is running elsewhere
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -773,4 +794,9 @@ sub get_continue_flag {
    return $flag, $message;
 }
 #-------------------------------------------------------------------------------
+sub DESTROY {
+    my $self = shift;
+
+    $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
 1;

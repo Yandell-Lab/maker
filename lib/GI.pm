@@ -488,10 +488,10 @@ sub write_p_and_t_fastas{
 sub create_blastdb {
    my $CTL_OPT = shift @_;
    my $mpi_size = shift@_ || 1;
-
+       
    #rebuild all fastas when specified
-   File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if($CTL_OPT->{force});
-
+   File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if ($CTL_OPT->{force});
+   
    ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
    ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
    ($CTL_OPT->{_est_reads},  $CTL_OPT->{d_db}) = split_db($CTL_OPT, 'est_reads', $mpi_size);
@@ -541,48 +541,34 @@ sub split_db {
    my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
    my $f_dir = "$b_dir/$d_name";
    my $t_dir = $TMP."/$d_name";
-   #my $t_full = "$t_dir\.fasta";
-   #my $f_full = "$b_dir/$f_name\.fasta";
 
-   #delete old indexes if full file does not exist
-   #if(! -e $f_full && -e "$f_full.index"){
-   #    unlink("$f_full.index");
-   #}
+   if(my $lock = new File::NFSLock($f_dir, 'EX', 40, 600)){
+       $lock->maintain(30);
+       
+       if(-e "$f_dir"){ #on multi processors check if finished
+	   my @t_db = <$f_dir/*$d_name*\.fasta>;
+	   
+	   my @existing_db;
+	   foreach my $f (@t_db) {
+	       push (@existing_db, $f) if (! -d $f);
+	   }
+	   
+	   if(@existing_db == $bins){ #use existing if right count
+	       $lock->unlock;
+	       return $f_dir, \@existing_db;
+	   }
+	   else{ #remove if there is an error
+	       File::Path::rmtree($f_dir);
+	     }
+       }
+       
+       #make needed output directories
+       mkdir($t_dir);
+       mkdir($b_dir) unless (-e $b_dir);
+       
+       #open filehandles for  pieces on multi processors
+       my @fhs;
 
-   #check if files exist
-   #if($mpi_size == 1 && -e $f_full){ #on one processor check if finished
-   #    return $f_full, [$f_full];
-   #}
-   #elsif(-e "$f_dir"){ #on multi processors check if finished
-   if(-e "$f_dir"){ #on multi processors check if finished
-      my @t_db = <$f_dir/*$d_name*\.fasta>;
-
-      my @existing_db;
-      foreach my $f (@t_db) {
-	  push (@existing_db, $f) if (! -d $f);
-      }
-
-      if(@existing_db == $bins){ #use existing if right count
-	  #if(! -e $f_full){ #fix full file
-	  #    concatenate_files(\@existing_db, $f_full);
-	  #}
-
-	  #return $f_full, \@existing_db;
-	  return $f_dir, \@existing_db;
-      }
-      else{ #remove if there is an error
-	  File::Path::rmtree($f_dir);
-      }
-   }
-
-   #make needed output directories
-   #mkdir($t_dir) unless ($mpi_size == 1);
-   mkdir($t_dir);
-   mkdir($b_dir) unless (-e $b_dir);
-
-   #open filehandles for  pieces on multi processors
-   my @fhs;
-   #if($mpi_size != 1){
        for (my $i = 0; $i < $bins; $i++) {
 	   my $name = "$t_dir/$d_name\.$i\.fasta";
 	   my $fh;
@@ -590,100 +576,89 @@ sub split_db {
 	   
 	   push (@fhs, $fh);
        }
-   #}
-   
-   #write fastas here
-   my %alias;
-   #my $FA;
-   #open($FA, "> $t_full"); #full file
+       
+       #write fastas here
+       my %alias;
+       
+       my $wflag = 1; #flag set so warnings gets printed only once 
+       while (my $fasta = $fasta_iterator->nextEntry()) {
+	   my $def = Fasta::getDef(\$fasta);
+	   my $seq_id = Fasta::def2SeqID($def);
+	   my $seq_ref = Fasta::getSeqRef(\$fasta);
+	   
+	   #fix non standard peptides
+	   if (defined $alt) {
+	       $$seq_ref =~ s/[\*\-]//g;
+	       $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxABCDEFGHIKLMNPQRSTVWYZX\-\n]/$alt/g;
+	   }
+	   #fix nucleotide sequences
+	   elsif($key !~ /protein/){
+	       #most programs use N for masking but for some reason the NCBI decided to
+	       #use X to mask their sequence, which causes many many programs to fail
+	       $$seq_ref =~ s/\-//g;
+	       $$seq_ref =~ s/X/N/g;
+	       die "ERROR: The nucleotide sequence file \'$file\'\n".
+		   "appears to contain protein sequence or unrecognized characters.\n".
+		   "Please check/fix the file before continuing.\n".
+		   "Invalid Character: $1\n\n"
+		   if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
+	   }
+	   
+	   #Skip empty fasta entries
+	   next if($$seq_ref eq '');
+	   
+	   #fix weird blast trimming error for long seq IDs by replacing them
+	   if(length($seq_id) > 78){
+	       warn "WARNING: The fasta file contains sequences with names longer\n".
+		   "than 78 characters.  Long names get trimmed by BLAST, making\n".
+		   "it harder to identify the source of an alignmnet. You might\n".
+		   "want to reformat the fasta file with shorter IDs.\n".
+		   "File_name:$file\n\n" if($wflag-- > 0);
+	       
+	       my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
+	       die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+		   if($alias{$new_id});
+	       $alias{$new_id}++;
+	       $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+	   }
+	   
+	   #reformat fasta, just incase
+	   my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+	   
+	   #build part files only on multi processor
+	   my $fh = shift @fhs;
+	   print $fh $$fasta_ref;
+	   push (@fhs, $fh);
+       }
+       
+       #close part file handles
+       foreach my $fh (@fhs) {
+	   close ($fh);
+       }
+       
+       #move finished files into place
+       system("mv $t_dir $f_dir");
+       
+       #check if everything is ok
+       if (-e $f_dir) { #multi processor
+	   my @t_db = <$f_dir/*$d_name*\.fasta>;
+	   
+	   my @db_files;
+	   foreach my $f (@t_db) {
+	       push (@db_files, $f) if (! -d $f);
+	   }
+	   
+	   die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $bins); #not ok
+	   $lock->unlock;
 
-   my $wflag = 1; #flag set so warnings gets printed only once 
-   while (my $fasta = $fasta_iterator->nextEntry()) {
-      my $def = Fasta::getDef(\$fasta);
-      my $seq_id = Fasta::def2SeqID($def);
-      my $seq_ref = Fasta::getSeqRef(\$fasta);
-
-      #fix non standard peptides
-      if (defined $alt) {
-	 $$seq_ref =~ s/[\*\-]//g;
-	 $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxABCDEFGHIKLMNPQRSTVWYZX\-\n]/$alt/g;
-      }
-      #fix nucleotide sequences
-      elsif($key !~ /protein/){
-	  #most programs use N for masking but for some reason the NCBI decided to
-	  #use X to mask their sequence, which causes many many programs to fail
-	  $$seq_ref =~ s/\-//g;
-	  $$seq_ref =~ s/X/N/g;
-	  die "ERROR: The nucleotide sequence file \'$file\'\n".
-	      "appears to contain protein sequence or unrecognized characters.\n".
-	      "Please check/fix the file before continuing.\n".
-	      "Invalid Character: $1\n\n"
-	      if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
-      }
-
-      #Skip empty fasta entries
-      next if($$seq_ref eq '');
-
-      #fix weird blast trimming error for long seq IDs by replacing them
-      if(length($seq_id) > 78){
-	  warn "WARNING: The fasta file contains sequences with names longer\n".
-	       "than 78 characters.  Long names get trimmed by BLAST, making\n".
-	       "it harder to identify the source of an alignmnet. You might\n".
-	       "want to reformat the fasta file with shorter IDs.\n".
-	       "File_name:$file\n\n" if($wflag-- > 0);
-
-	  my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
-	  die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
-	      if($alias{$new_id});
-	  $alias{$new_id}++;
-	  $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
-      }
-
-      #reformat fasta, just incase
-      my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
-
-      #build full file
-      #print $FA $$fasta_ref;
-
-      #build part files only on multi processor
-      #if($mpi_size != 1){
-	  my $fh = shift @fhs;
-	  print $fh $$fasta_ref;
-	  push (@fhs, $fh);
-      #}
+	   return $f_dir, \@db_files;
+       }
+       else {
+	   die "ERROR: Could not split db\n"; #not ok
+       }
    }
-   #close($FA); #close full file
-
-   #close part file handles
-   foreach my $fh (@fhs) {
-      close ($fh);
-   }
-
-   #move finished files into place
-   #system("mv $t_full $f_full");
-   #system("mv $t_dir $f_dir") unless($mpi_size == 1);
-   system("mv $t_dir $f_dir");
-
-   #check if everything is ok
-   #if($mpi_size == 1 && -e $f_full){ #single processor
-   #    return $f_full, [$f_full];
-   #}
-   #elsif (-e $f_dir && -e $f_full) { #multi processor
-   if (-e $f_dir) { #multi processor
-      my @t_db = <$f_dir/*$d_name*\.fasta>;
-
-      my @db_files;
-      foreach my $f (@t_db) {
-	 push (@db_files, $f) if (! -d $f);
-      }
-
-      die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $bins); #not ok
-
-      #return $f_full, \@db_files;
-      return $f_dir, \@db_files;
-   }
-   else {
-      die "ERROR: Could not split db\n"; #not ok
+   else{
+       die "ERROR: Could not get lock to process fasta\n\n";
    }
 }
 #----------------------------------------------------------------------------
@@ -1204,7 +1179,9 @@ sub make_multi_fasta {
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
    my $db = shift;
+
    my $index = new FastaDB($db);
+
    return $index;
 }
 #-----------------------------------------------------------------------------
@@ -1220,12 +1197,8 @@ sub build_all_indexes {
 
    foreach my $db (@dbs){
        next if(! $db);
-       if($CTL_OPT->{force}){
-	   foreach my $f (@{[<$db/*.index>]}){
-	       unlink("$f") if(-f $f);
-	   }
-       }
-       new FastaDB($db);
+       my $index = build_fasta_index($db);
+       $index->reindex() if($CTL_OPT->{force});
    }
 }
 #-----------------------------------------------------------------------------
@@ -2249,7 +2222,7 @@ sub set_defaults {
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
-      $CTL_OPT{'run'} = '';
+      $CTL_OPT{'run'} = ''; #hidden option
       $CTL_OPT{'unmask'} = 0;
       $CTL_OPT{'clean_up'} = 0;
       #evaluator below here
@@ -2652,7 +2625,6 @@ sub load_control_files {
       $CTL_OPT{max_dna_len} = 50000;
    }
    if ($CTL_OPT{split_hit} > 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
-      warn "WARNING: \'split_hit\' is meaningless for prokaryotic genomes and will be set to 0.\n\n";
       $CTL_OPT{split_hit} = 0;
    }
    if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
@@ -2738,24 +2710,7 @@ sub load_control_files {
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
 
-   #--check if another instance of maker is running, if not lock the directory
-   my $check;
-   if(-e $CTL_OPT{out_base}."/.maker_lock.NFSLock"){
-       warn "WARNING: Lock found, maker may already be running.\n".
-	   "Checking for other instance.\n\n";
-       $check = 1;
-   }
 
-   #lock must be global or it is detroyed outside of block
-   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.maker_lock", 'EX', 40, 40)){
-       warn "Everything seems ok!!\n\n" if($check);
-
-       $LOCK->maintain(30);
-   }
-   else{
-       die "ERROR: Another instance of maker is already running for this dataset.\n\n";
-   }
-   
    #--set up optional global TMP (If TMP is not accessible from other nodes
    #)
    if($CTL_OPT{TMP}){
@@ -2767,27 +2722,100 @@ sub load_control_files {
 
    set_global_temp($CTL_OPT{_TMP});
 
+   #--set an initialization lock so steps are locked to a single process
+   my $i_lock; #init lock, it is only a temporary blocking lock
+   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 5, 5)){
+       die "ERROR: Cannot get initialization lock.\n\n";
+   }
+
+   #--check if another instance of maker is running, and lock the directory
+   #lock must be global or it will be destroyed outside of block
+   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.gi_lock", 'SH', 40, 40)){
+       $LOCK->maintain(30);
+   }
+   else{
+       die "ERROR: The directory is locked.  Perhaps by an instance of MAKER or Evaluator.\n\n";
+   }
+
+   #check who else is also sharing the lock and if running same settings
+   my $app = ($main::eva) ? "eval" : "maker";
+
+   if($LOCK->owners() == 1){
+       #log the control files
+       generate_control_files($CTL_OPT{out_base}, %CTL_OPT);
+   }
+   elsif($CTL_OPT{force}){
+       die "ERROR: You can not run multiple MAKER/Evaluator processes in\n".
+	   "the same directory when the -force flag is set.  Otherwise\n".
+	   "each process would clobber the others data\n\n";
+   }
+   else{
+       #compare current control files to logged files
+       my @ctl_logs = ($CTL_OPT{out_base}."/$app\_opts.log",
+		       $CTL_OPT{out_base}."/$app\_bopts.log",
+		       $CTL_OPT{out_base}."/$app\_exe.log"
+		       );
+
+       my @ctl_news = ($TMP."/$app\_opts.log",
+		       $TMP."/$app\_bopts.log",
+		       $TMP."/$app\_exe.log"
+		       );
+
+       unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
+	   die "ERROR: Could not query control option logs\n\n";
+       }
+
+       #log the current control files for comparison
+       generate_control_files($TMP, %CTL_OPT);
+
+       my $log_data;
+       my $new_data;
+       foreach my $ctl (@ctl_logs){
+	   open(my $FH, "< $ctl");
+	   $log_data .= join('', <$FH>);
+	   close($FH);
+       }
+
+       foreach my $ctl (@ctl_news){
+	   open(my $FH, "< $ctl");
+	   $new_data .= join('', <$FH>);
+	   close($FH);
+       }
+
+       #should be exactly identical
+       if($log_data ne $new_data){
+	   die "ERROR: Cannot start process. MAKER/Evaluator already running\n".
+	       "with different settings in this same directory.\n\n";
+       }
+       else{#start a second MAKER process, but give a warning
+	   warn "WARNING: Multiple MAKER processes have been started in the\n".
+	        "same directory.\n\n";
+
+	   $CTL_OPT{_chpc}++;
+       }
+   }
+
+   $i_lock->unlock; #release init lock
+
    #---set up blast databases and indexes for analyisis
    create_blastdb(\%CTL_OPT, $mpi_size);
    build_all_indexes(\%CTL_OPT);
-
-   #--log the control files
-   generate_control_files($CTL_OPT{out_base}, %CTL_OPT);
 
    return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
 #this function generates generic control files
 sub generate_control_files {
-   my $dir = shift || Cwd::cwd();
+   my $dir = shift @_ || Cwd::cwd();
    my %O = (@_) ? @_ : set_defaults();
    my $ev = 1 if($main::eva);
    my $log = 1 if(@_);
 
+   my $app = ($ev) ? "eval" : "maker"; #extension
+   my $ext = ($log) ? "log" : "ctl"; #extension
+
    #--build opts.ctl file
-   open (OUT, "> $dir/eval_opts.ctl") if($ev);
-   open (OUT, "> $dir/maker_opts.log") if(!$ev && $log);
-   open (OUT, "> $dir/maker_opts.ctl") if(!$ev && !$log);
+   open (OUT, "> $dir/$app\_opts.$ext");
    print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
    print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
    print OUT "genome:$O{genome} #genome sequence file in fasta format\n";
@@ -2872,9 +2900,7 @@ sub generate_control_files {
    close (OUT);
     
    #--build bopts.ctl file
-   open (OUT, "> $dir/eval_bopts.ctl") if($ev);
-   open (OUT, "> $dir/maker_bopts.log") if(!$ev && $log);
-   open (OUT, "> $dir/maker_bopts.ctl") if(!$ev && !$log);
+   open (OUT, "> $dir/$app\_bopts.$ext");
    print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
    print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
    print OUT "\n";
@@ -2906,11 +2932,9 @@ sub generate_control_files {
    print OUT "ep_score_limit:$O{ep_score_limit} #exonerate protein percent of maximal score threshold\n";
    print OUT "en_score_limit:$O{en_score_limit} #exonerate nucleotide percent of maximal score threshold\n";
    close(OUT);
-    
+   
    #--build maker_exe.ctl file
-   open (OUT, "> $dir/eval_exe.ctl") if($ev);
-   open (OUT, "> $dir/maker_exe.log") if(!$ev && $log);
-   open (OUT, "> $dir/maker_exe.ctl") if(!$ev && !$log);
+   open (OUT, "> $dir/$app\_exe.$ext");
    print OUT "#-----Location of Executables Used by Maker/Evaluator\n";
    print OUT "formatdb:$O{formatdb} #location of NCBI formatdb executable\n";
    print OUT "blastall:$O{blastall} #location of NCBI blastall executable\n";

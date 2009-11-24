@@ -9,6 +9,7 @@ use PostData;
 use FileHandle;
 use URI::Escape;
 use Bio::DB::Fasta;
+use File::NFSLock;
 
 @ISA = qw(
           );
@@ -41,11 +42,20 @@ sub new {
 
     #build indexes
     foreach my $file (@keep){
-	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	if(my $lock = new File::NFSLock($file, 'EX', 40, 600)){
+	    $lock->maintain(30);
 
-	#build reverse index to get the correct index based on file name
-	my ($title) = $file =~ /([^\/]+)$/;
-	$self->{file2index}{$title} = $self->{index}->[-1];
+	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+
+	    #build reverse index to get the correct index based on file name
+	    my ($title) = $file =~ /([^\/]+)$/;
+	    $self->{file2index}{$title} = $self->{index}->[-1];
+
+	    $lock->unlock;
+	}
+	else{
+	    die "ERROR: Could not get lock for indexing\n\n";
+	}
     }
 
     return $self;
@@ -76,11 +86,18 @@ sub reindex {
 
     #build indexes
     foreach my $file (@keep){
-	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-
-	#build reverse index to get the correct index based on file name
-	my ($title) = $file =~ /([^\/]+)$/;
-	$self->{file2index}{$title} = $self->{index}->[-1];
+	if(my $lock = new File::NFSLock($file, 'EX', 40, 600)){
+	    $lock->maintain(30);
+	    
+	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	    
+	    #build reverse index to get the correct index based on file name
+	    my ($title) = $file =~ /([^\/]+)$/;
+	    $self->{file2index}{$title} = $self->{index}->[-1];
+	}
+	else{
+	    die "ERROR: Could not get lock for re-indexing\n\n";
+	}
     }
 
     return $self;

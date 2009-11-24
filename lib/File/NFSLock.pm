@@ -94,6 +94,7 @@ sub new {
   $self->{stale_lock_timeout} ||= 0;
   $self->{lock_pid} = $$;
   $self->{unlocked} = 1;
+  $self->{id} = int(rand()*10000);
   foreach my $signal (@CATCH_SIGS) {
     if (!$SIG{$signal} ||
         $SIG{$signal} eq "DEFAULT") {
@@ -317,6 +318,7 @@ sub create_magic ($;$) {
   $errstr = undef;
   my $self = shift;
   my $append_file = shift || $self->{rand_file};
+  my $id = $self->{id};
 
   ### need the hostname
   if( !$HOSTNAME ){
@@ -324,7 +326,7 @@ sub create_magic ($;$) {
     $HOSTNAME = &Sys::Hostname::hostname();
   }
 
-  $self->{lock_line} ||= "$HOSTNAME $self->{lock_pid} ".time()." ".int(rand()*10000)."\n";
+  $self->{lock_line} ||= "$HOSTNAME $self->{lock_pid} ".time()." $id\n";
   local *_FH;
   open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
   print _FH $self->{lock_line};
@@ -405,6 +407,8 @@ sub do_unlock_shared ($) {
   my $self = shift;
   my $lock_file = $self->{lock_file};
   my $lock_line = $self->{lock_line};
+  my $pid = $self->{lock_pid};
+  my $id = $self->{id};
 
   ### lock the locking process
   local $LOCK_EXTENSION = '.shared';
@@ -423,7 +427,11 @@ sub do_unlock_shared ($) {
   ### read existing file
   my $content = '';
   while(defined(my $line=<_FH>)){
-    next if $line eq $lock_line;
+    next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
+    #ginore  shared hosts where lock appears to be stale
+    next if ($self->{stale_lock_timeout} > 0 &&
+	     time() - (stat _)[9] > $self->{stale_lock_timeout}
+	     );
     $content .= $line;
   }
 
@@ -459,6 +467,8 @@ sub maintain {
     die "ERROR: No time interval given to maintain lock\n\n"
 	if(! $time || $time < 1);
 
+    $self->refresh; #refresh once on it's own
+
     #create temporary file to for lock serialization
     my (undef, $file) = File::Temp::tempfile();
     Storable::nstore($self, $file);
@@ -468,7 +478,6 @@ sub maintain {
     die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
 	if(! $exe || ! -f $exe);
 
-    $self->refresh; #refresh one on it's own
     if($self->{_maintain}){
 	kill(1, $self->{_maintain});
 	waitpid($self->{_maintain}, 0);
@@ -482,11 +491,15 @@ sub maintain {
 }
 
 sub refresh {
-  my $self = shift;
-
   $errstr = undef;
-  my $rand_file = $self->{rand_file};
-  my $file = $self->{lock_file};
+  my $self = shift;
+  my $lock_file = $self->{lock_file};
+  my $old_lock_line = $self->{lock_line};
+  my $id = $self->{id};
+
+  ### lock the locking process
+  local $LOCK_EXTENSION = '.shared';
+  my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
 
   ### need the hostname
   if( !$HOSTNAME ){
@@ -494,18 +507,78 @@ sub refresh {
     $HOSTNAME = &Sys::Hostname::hostname();
   }
 
-  $self->{lock_line} = "$HOSTNAME $self->{lock_pid} ".time()." ".int(rand()*10000)."\n";
+  $self->{lock_line} = "$HOSTNAME $self->{lock_pid} ".time()." $id\n";
+
+  ### get the handle on the lock file
   local *_FH;
-  open (_FH,">$rand_file") or do { $errstr = "Couldn't open \"$rand_file\" [$!]"; return undef; };
-  print _FH $self->{lock_line};
-  close _FH;
+  if( ! open (_FH,"+<$lock_file") ){
+    if( ! -e $lock_file ){
+      return 1;
+    }else{
+      die "Could not open for writing lock file $lock_file ($!)";
+    }
+  }
 
-  my $err;
-  move($rand_file, $file) || ($err = "ERROR: Could not refresh lock\n");
-  unlink($rand_file) if(-e $rand_file);
-  die $err if($err);
 
-  return 1;
+  my $content = '';
+  ### read existing file
+  if($self->{lock_type} & LOCK_SH){
+      while(defined(my $line=<_FH>)){
+	  next if $line eq $old_lock_line;
+	  #ignore re-adding shared line if they appear to be stale 
+	  next if($self->{stale_lock_timeout} > 0 &&
+		  time() - (stat _)[9] > $self->{stale_lock_timeout}
+		 );
+	  $content .= $line;
+      }
+  }
+  ### add new tag
+  $content .= $self->{lock_line};
+
+  ### fix file contents
+  seek     _FH, 0, 0;
+  print    _FH $content;
+  truncate _FH, length($content);
+  close    _FH;
+}
+
+sub owners {
+    my $self = shift;
+    my $lock_file = $self->{lock_file};
+    my $lock_line = $self->{lock_line};
+    my $pid = $self->{lock_pid};
+    my $id = $self->{id};
+
+    return 1 unless ($self->{lock_type} & LOCK_SH);
+
+    ### lock the parsing process
+    local $LOCK_EXTENSION = '.shared';
+    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    
+    ### get the handle on the lock file
+    local *_FH;
+    if( ! open (_FH,"< $lock_file") ){
+	if( ! -e $lock_file ){
+	    return 0;
+	}else{
+	    die "Could not open for reading the lock file $lock_file ($!)";
+	}
+    }
+
+    ### read existing file
+    my $count = 1; #self is alway an owner
+    while(defined(my $line=<_FH>)){
+	next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
+	#ignore  shared hosts where lock appears to be stale
+	next if ($self->{stale_lock_timeout} > 0 &&
+		 time() - (stat _)[9] > $self->{stale_lock_timeout}
+		 );
+	$count++;
+    }
+
+    $lock->unlock;
+
+    return $count;
 }
 
 sub newpid {
