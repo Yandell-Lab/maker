@@ -1,0 +1,206 @@
+#!/usr/bin/perl -w
+
+eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use strict "vars";
+use strict "refs";
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+use vars qw($RANK $LOG $CMD_ARGS);
+
+BEGIN{
+   if (not ($ENV{CGL_SO_SOURCE})) {
+      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+   }
+   if (not ($ENV{CGL_GO_SOURCE})) {
+      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
+   }
+   
+   $CMD_ARGS = join(' ', @ARGV);
+   
+   #what to do on ^C
+   $SIG{'INT'} = sub {
+      print STDERR "\n\nAborted by user!!\n\n";
+      exit (1);
+   };    
+   
+   #supress warnings from storable module
+   $SIG{'__WARN__'} = sub {
+      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+		      $_[0] !~ /Can\'t store item /
+		    );
+   };
+
+   #output to log file of seq that caused rank to die
+   $SIG{'__DIE__'} =
+   sub {
+      if (defined ($LOG) && defined $_[0]) {
+	 my $die_count = $LOG->get_die_count();
+	 $die_count++;
+	 
+	 $LOG->add_entry("DIED","RANK",$RANK);
+	 $LOG->add_entry("DIED","COUNT",$die_count);
+      }
+
+      die $_[0]."\n".
+	  "FATAL ERROR\n";
+   };
+}
+
+use Cwd;
+use FileHandle;
+use File::Path;
+use Getopt::Long qw(:config no_ignore_case);
+use File::Temp qw(tempfile tempdir);
+use GI;
+use Dumper::GFF::GFFV3;
+use Iterator::Any;
+use Iterator::Fasta;
+use Iterator::GFF3;
+use Fasta;
+use FastaChunker;
+use maker::auto_annotator;
+use cluster;
+use repeat_mask_seq;
+use runlog;
+use ds_utility;
+use GFFDB;
+use Error qw(:try);
+use Error::Simple;
+use Process::MpiChunk;
+use Process::MpiTiers;
+
+$| = 1;
+
+my $usage = "
+Usage:
+
+     map2assembly <genome.fasta> <transcripts.fasta>
+
+     Maps old gene models to a new assembly where possible.
+
+
+Option:
+
+     -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
+
+     -retry|r <integer>  Rerun failed contigs up to the specified count.
+
+     -force|f            Delete old files before running again.
+
+     -quiet|q            Silences most status messages.
+
+     -help|?             Prints this usage statement.
+
+
+";
+
+#-------------------------------------------------------------------------------
+#------------------------------------ MAIN -------------------------------------
+#-------------------------------------------------------------------------------
+
+#---global variables
+my %OPT;
+my $rank = 0;
+my $size = 1;
+$RANK = $rank;
+
+#---Process options on the command line 
+try{
+    GetOptions("cpus|c=i" => \$OPT{cpus},
+	       "force|f" => \$OPT{force},
+	       "retry=i" =>\$OPT{retry},
+	       "quiet" =>\$main::quiet,
+	       "help|?" => sub {print $usage; exit(0)}
+	       );
+    $OPT{again} = 1; #always try again
+}
+catch Error::Simple with{
+    my $E = shift;
+    
+    print STDERR $E->{-text};
+    die "\n\nFailed while parsing command line options!!\n\n";
+};
+
+#varibles that are persistent outside of try
+my %CTL_OPT;
+my $iterator;
+my $DS_CTL;
+my $GFF_DB;
+my $build;
+my @failed;
+
+try{
+    my $genome      = shift @ARGV;
+    my $transcripts = shift @ARGV;
+
+    if (! $genome || ! $transcripts) {
+	print STDERR  "ERROR: Input files not provided\n";
+	print $usage;
+	exit(1);
+    }
+
+    #--load special options for CTL_OPT integration
+    $OPT{genome}         = $genome;
+    $OPT{predictor}      = 'est2genome';
+    $OPT{est}            = $transcripts;
+    $OPT{est_forward}    = 1;
+    $OPT{single_exon}    = 1;
+    $OPT{single_length}  = 1;
+    $OPT{pcov_blastn}    = .90;
+    $OPT{pid_blastn}     = .95;
+    #$OPT{en_score_limit} = 95;
+    $OPT{R}              = 1;
+
+    #--Control file processing
+   
+    #set up control options from control files
+    %CTL_OPT = GI::load_control_files([], \%OPT, $size);
+    
+    #--open datastructure controller
+    $DS_CTL = ds_utility->new(\%CTL_OPT);
+    
+    #--set up gff database
+    $GFF_DB = new GFFDB(\%CTL_OPT);
+    $build = $GFF_DB->next_build;
+    
+    #---load genome multifasta/GFF3 file
+    $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
+				   -gff => $CTL_OPT{'genome_gff'},
+				   );
+}
+catch Error::Simple with{
+    my $E = shift;
+    print STDERR $E->{-text};
+    #print STDERR "\n\nMaker failed while examining startup data\n",
+    #"(control files and input fasta files)!!\n\n";
+    my $code = 2;
+    $code = $E->{-value} if (defined($E->{-value}));
+    
+    exit($code);
+};
+
+my $tier;
+while (my $fasta = $iterator->nextFasta() || shift @failed){
+    $tier = Process::MpiTiers->new({fasta =>$fasta,
+				    CTL_OPT => \%CTL_OPT,
+				    DS_CTL  => $DS_CTL,
+				    GFF_DB  => $GFF_DB,
+				    build   => $build},
+				   '0',
+				   'Process::MpiChunk'
+				   );
+
+    next if($tier->terminated);
+    $tier->run_all;
+    push(@failed, $tier->fasta) if ($tier->failed);
+}
+
+print STDERR "\n\nMaker is now finished!!!\n\n";
+
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
