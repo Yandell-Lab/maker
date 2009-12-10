@@ -86,34 +86,45 @@ print $FAS "\#\#FASTA\n";
 
 my %uniq;
 foreach my $file (@files){
-    die "ERROR: The file \'$file\' does not exist\n" if (! -e $file);
+    #fix for not being in working directory with datastore
+    if (! -f $file){
+	my $dir = $datastore;
+	$dir =~ s/[^\/]+$/\./;
+	$file = "$dir/$file";
+    }
+
+    die "ERROR: The file \'$file\' does not exist\n" if (! -f $file);
     open(IN, "< $file") || die "ERROR: Could not open file \'$file\'\n";
 
     my $FH = $ANN;
 
     while (defined(my $line = <IN>)){
-	next if ($line =~ /^\#\#gff-version 3/);
-	if($line =~ /^\#\#genome-build/){
+	if ($line =~ /^\#\#gff-version 3/){
+	    next;
+	}
+	elsif($line =~ /^\#\#genome-build/){
 	    next if exists $uniq{$line};
 	    $uniq{$line}++;
 	    print $GFF $line;
 	    next;
 	}
-	if($line =~ /^\#\#sequence-region/){
+	elsif($line =~ /^\#\#sequence-region/){
 	    die "ERROR: This contig has already been added\: $line\n" if exists $uniq{$line};
 	    $uniq{$line}++;
 	    print $GFF $line;
 	    next;
 	}
-	if ($line =~ /^\#\#FASTA/){
+	elsif($line =~ /^\#\#FASTA/){
 	    $FH = $FAS;
 	    next;
 	}
-	if ($line =~ /^>/){
+	elsif($line =~ /^>/){
 	    $FH = $FAS;
 	}
-
-	next if($g_flag && $line !~ /^[^\t]+\tmaker\t/);
+	elsif($line =~ /^[^\s\t\#\>\n]+\t([^\t]+)\t/){
+	    $FH = $ANN;
+	    next if($g_flag && $1 ne 'maker');
+	}
 
 	chomp $line;
 	print $FH $line . "\n" if($line);

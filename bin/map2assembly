@@ -116,7 +116,6 @@ try{
 	       "quiet" =>\$main::quiet,
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
-    $OPT{again} = 1; #always try again
 }
 catch Error::Simple with{
     my $E = shift;
@@ -201,7 +200,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 
 #merge gff3 files into big file
 print STDERR "\n\nBuilding final GFF3 file.\n\n";
-system("$FindBin::Bin/gff3_merge -d -genes ".$DS_CTL->index);
+system("$FindBin::Bin/gff3_merge -g -d ".$DS_CTL->get_index);
 
 if($?){
     die "ERROR: Failed while trying to build final GFF3 file\n\n";
