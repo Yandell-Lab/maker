@@ -199,7 +199,16 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
     push(@failed, $tier->fasta) if ($tier->failed);
 }
 
-print STDERR "\n\nMaker is now finished!!!\n\n";
+#merge gff3 files into big file
+print STDERR "\n\nBuilding final GFF3 file.\n\n";
+system("$FindBin::Bin/gff3_merge -d -genes ".$DS_CTL->index);
+
+if($?){
+    die "ERROR: Failed while trying to build final GFF3 file\n\n";
+}
+
+print STDERR "\n\nNow Finished!!!\n\n";
+
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------

@@ -22,15 +22,18 @@ Options:
 
   -d The location of the MAKER datastore index log file.
   -o Alternate base name for the output files.
+  -g Only write gene models to the file, and ignore evidence.
 
 ";
 
 my $datastore;
 my @files;
 my $outfile;
+my $g_flag;
 
 GetOptions ("datastor|d=s" => \$datastore,
 	    "o=s" => \$outfile,
+	    "g" => \$g_flag,
 	    "help|?" => sub{print $usage; exit();}
 	    );
 
@@ -109,6 +112,9 @@ foreach my $file (@files){
 	if ($line =~ /^>/){
 	    $FH = $FAS;
 	}
+
+	next if($g_flag && $line !~ /^[^\t]+\tmaker\t/);
+
 	chomp $line;
 	print $FH $line . "\n" if($line);
     }
