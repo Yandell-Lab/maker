@@ -2,11 +2,18 @@
 #------                           runlog                               ---------
 #-------------------------------------------------------------------------------
 package runlog;
+
+BEGIN {
+    @AnyDBM_File::ISA = qw(DB_File GDBM_File NDBM_File SDBM_File);
+}
+
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
+use IO::File;
 use Fasta;
 use File::NFSLock;
+use AnyDBM_File;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -76,8 +83,6 @@ my @ctl_to_log = ('genome_gff',
 		  'run'
 		 );
 
-my %SEEN;
-
 #-------------------------------------------------------------------------------
 #------------------------------- Methods ---------------------------------------
 #-------------------------------------------------------------------------------
@@ -112,8 +117,8 @@ sub _initialize {
    my $length = $self->{params}->{seq_length};
 
    #lock must be persitent in object or it is detroyed outside of block
-   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', 10, 10)){
-       $self->{LOCK}->maintain(5);
+   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', , 40)){
+       $self->{LOCK}->maintain(30);
    }
    else{
        $self->{continue_flag} = -3;
@@ -178,6 +183,15 @@ sub _clean_files{
     my @dirs; #list of directories to remove
     
     if (-e $log_file) {
+	
+	die "ERROR: Database timed out in runlog::_clean_files\n\n"
+	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 600, 40));
+
+	$lock->maintain(30);
+
+	my %SEEN;
+	tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
+
 	if (exists $logged_vals{DIED}) {
 	    if($CTL_OPTIONS{force} && ! $SEEN{$log_file}){
 		$self->{die_count} = 0; #reset the die count
@@ -211,6 +225,9 @@ sub _clean_files{
 	    $continue_flag = 0 if (-e $gff_file); #don't re-run finished
 	    $SEEN{$log_file}++;
 	}
+
+	untie %SEEN;
+	$lock->unlock;
 	
 	if($continue_flag >= 0 || $continue_flag == -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
@@ -794,9 +811,25 @@ sub get_continue_flag {
    return $flag, $message;
 }
 #-------------------------------------------------------------------------------
+#used to pull lock off before serialization of runlog object
+sub strip_off_lock {
+    my $self = shift;
+    my $lock = $self->{LOCK};
+
+    $self->{LOCK} = undef;
+
+    return $lock;
+}
+#-------------------------------------------------------------------------------
+sub unlock {
+    my $self = shift;
+    
+    $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
+#-------------------------------------------------------------------------------
 sub DESTROY {
     my $self = shift;
 
-    $self->{LOCK}->unlock if(defined $self->{LOCK});
+    $self->unlock;
 }
 1;

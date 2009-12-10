@@ -135,9 +135,11 @@ sub _on_termination {
    my $seq_id = $tier->{VARS}{seq_id};
    my $out_dir = $tier->{VARS}{out_dir};
    my $LOG = $tier->{VARS}{LOG};
+   my $LOCK = $tier->{VARS}{LOCK};
    my $DS_CTL = $tier->{VARS}{DS_CTL};
 
    $DS_CTL->add_entry("$seq_id\t$out_dir\tFINISHED");
+   $LOCK->unlock; #releases locks on the log file
 
    return;
 }
@@ -336,8 +338,10 @@ sub _go {
 				   out_dir    => $out_dir,
 				   the_void   => $the_void,
 				   fasta_ref  => \$fasta},
-				  $the_void."/run.log"
+				  "$out_dir/run.log"
 				  );
+
+	    my $LOCK = $LOG->strip_off_lock();
 	    
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
@@ -352,7 +356,8 @@ sub _go {
 			out_dir => $out_dir,
 			the_void => $the_void,
 			c_flag => $c_flag,
-			LOG => $LOG
+			LOG => $LOG,
+			LOCK => $LOCK
 		       );
 	    #------------------------RESULTS
 	 }
@@ -1335,6 +1340,7 @@ sub _go {
 							 $CTL_OPT{pid_blastx},
 							 $CTL_OPT{ep_score_limit},
 							 $CTL_OPT{ep_matrix},
+							 $CTL_OPT{est_forward},
 							 $LOG
 							);
 	    }
@@ -1870,7 +1876,9 @@ sub _go {
 			t_fastas
 			GFF3
 			DS_CTL
-			CTL_OPT}
+			CTL_OPT
+			LOG
+			LOCK}
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1887,7 +1895,8 @@ sub _go {
 	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};
 	    my $DS_CTL = $VARS->{DS_CTL};
-
+	    my $LOG = $VARS->{LOG};
+	    my $LOCK = $VARS->{LOCK};
 
 	    #--- write fastas for ab-initio predictions
 	    GI::write_p_and_t_fastas($p_fastas, $t_fastas, $safe_seq_id, $out_dir);
@@ -1897,12 +1906,6 @@ sub _go {
 	    
 	    #--cleanup maker files created with each fasta sequence
 	    File::Path::rmtree ($the_void) if $CTL_OPT{clean_up}; #rm temp directory
-	    
-	    #-- write to DS log the finished files
-	    #$DS_CTL->add_entry($seq_id, $out_dir, 'FINISHED');
-	    
-	    #--- clear the log variable
-	    $VARS->{LOG} = undef;
 	    #-------------------------CODE
 
 	    #------------------------RESULTS

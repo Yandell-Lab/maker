@@ -42,7 +42,7 @@ sub new {
 
     #build indexes
     foreach my $file (@keep){
-	if(my $lock = new File::NFSLock($file, 'EX', 40, 600)){
+	if(my $lock = new File::NFSLock("$file.index", 'EX', , 40)){
 	    $lock->maintain(30);
 
 	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
@@ -86,7 +86,7 @@ sub reindex {
 
     #build indexes
     foreach my $file (@keep){
-	if(my $lock = new File::NFSLock($file, 'EX', 40, 600)){
+	if(my $lock = new File::NFSLock("$file.index", 'EX', , 40)){
 	    $lock->maintain(30);
 	    
 	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));

@@ -35,26 +35,32 @@ sub new {
 	    $dbfile = "$CTL_OPTIONS{out_base}/$CTL_OPTIONS{out_name}.db";
 
 	    #rebuild database from scratch on force
-	    unlink($dbfile) if($CTL_OPTIONS{force});
+	    unlink($dbfile) if($CTL_OPTIONS{force} && !$CTL_OPTIONS{_chpc});
 
 	    $self->{dbfile} = $dbfile;
 	    $self->{last_build} = undef;
 	    $self->{next_build} = $CTL_OPTIONS{out_name}."::1.00";
 	    $self->{go_gffdb} = $CTL_OPTIONS{go_gffdb};
 	    
-	    $self->initiate();
+	    if(my $lock = new File::NFSLock($self->{dbfile}.".gff", 'EX', 600, 40)){
+		$self->initiate();
+		return $self unless($self->{go_gffdb});
 
-	    return $self unless($self->{go_gffdb});
-
-	    $self->add_maker($CTL_OPTIONS{genome_gff},\%CTL_OPTIONS);
-	    $self->add_repeat($CTL_OPTIONS{rm_gff});
-	    $self->add_est($CTL_OPTIONS{est_gff});
-	    $self->add_altest($CTL_OPTIONS{altest_gff});
-	    $self->add_protein($CTL_OPTIONS{protein_gff});
-	    $self->add_pred($CTL_OPTIONS{pred_gff});
-	    $self->add_model($CTL_OPTIONS{model_gff});
-	    $self->add_other($CTL_OPTIONS{other_gff});
-	    $self->do_indexing();
+		$lock->maintain(30);
+		$self->add_maker($CTL_OPTIONS{genome_gff},\%CTL_OPTIONS);
+		$self->add_repeat($CTL_OPTIONS{rm_gff});
+		$self->add_est($CTL_OPTIONS{est_gff});
+		$self->add_altest($CTL_OPTIONS{altest_gff});
+		$self->add_protein($CTL_OPTIONS{protein_gff});
+		$self->add_pred($CTL_OPTIONS{pred_gff});
+		$self->add_model($CTL_OPTIONS{model_gff});
+		$self->add_other($CTL_OPTIONS{other_gff});
+		$self->do_indexing();
+		$lock->unlock;
+	    }
+	    else{
+		die "ERROR: Could not get lock to create GFF3 DB\n\n";
+	    }
 	}
 	elsif(defined $in){
 	    $dbfile = $in;
@@ -75,7 +81,8 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-	if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+	if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	    $lock->maintain(30);
 	    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
@@ -89,6 +96,9 @@ sub initiate {
 	    $dbh->disconnect;
 	    $lock->unlock;
 	}
+	else{
+	    die "ERROR: Could not get lock for in GFFDD::initiate\n\n";
+	}
     }
     elsif($dbfile && -e $dbfile){
        unlink($dbfile);
@@ -101,7 +111,8 @@ sub do_indexing {
     return unless($self->{go_gffdb});
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
@@ -119,6 +130,9 @@ sub do_indexing {
 	$dbh->commit;
 	$dbh->disconnect;
 	$lock->unlock;
+    }
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
     }
 }
 #-------------------------------------------------------------------------------
@@ -140,7 +154,8 @@ sub add_maker {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
@@ -248,12 +263,16 @@ sub add_maker {
 	    }
 	    close($IN);
 	}
-	
+
 	#commit changes
 	$dbh->commit;
 	$dbh->disconnect;
 	$lock->unlock;
     }
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
+    }
+
 }
 #-------------------------------------------------------------------------------
 sub add_repeat {
@@ -322,7 +341,8 @@ sub _add_type {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
@@ -377,6 +397,9 @@ sub _add_type {
 	$dbh->commit();
 	$dbh->disconnect();
 	$lock->unlock;
+    }
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
     }
 }
 #-------------------------------------------------------------------------------
@@ -434,7 +457,8 @@ sub phathits_on_chunk {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 	
 	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -451,6 +475,9 @@ sub phathits_on_chunk {
 
 	$dbh->disconnect;
 	$lock->unlock;
+    }
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
     }
 	
     my $features = _ary_to_features($ref1, $ref2);
@@ -502,7 +529,8 @@ sub phathits_on_contig {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbfile = $self->{dbfile};
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 	
@@ -521,6 +549,9 @@ sub phathits_on_contig {
 	$dbh->disconnect;
 	$lock->unlock;
     }	
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
+    }
 
     my $features = _ary_to_features($ref1, $ref2);
     
@@ -567,7 +598,8 @@ sub get_existing_gene_names {
     return {} unless($self->{go_gffdb});
 
     my %names;
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', , 300)){
+    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 600, 40)){
+	$lock->maintain(30);
 	my $dbfile = $self->{dbfile};
 	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 
@@ -646,6 +678,9 @@ sub get_existing_gene_names {
 
 	$dbh->disconnect;
 	$lock->unlock;
+    }
+    else{
+	die "ERROR: Could not get lock in GFFDB\n\n";
     }
 
     return \%names;

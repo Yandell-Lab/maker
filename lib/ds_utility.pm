@@ -10,6 +10,7 @@ use Datastore::MD5;
 use File::Path;
 use Cwd;
 use URI::Escape;
+use File::NFSLock;
 
 @ISA = qw(
        );
@@ -35,10 +36,11 @@ sub _initialize {
    my $self = shift @_;
    my %CTL_OPTIONS = %{shift @_};
 
-   $CWD = $CTL_OPTIONS{CWD};
+   $CWD = $CTL_OPTIONS{CWD} || $CWD;
 
-   my $out_base = $CTL_OPTIONS{out_base};
-   my $out_name = $CTL_OPTIONS{out_name};
+   my $out_base = $CTL_OPTIONS{out_base} || $CWD;
+   my $out_name = $CTL_OPTIONS{out_name} || "output";
+   my $ds_flag  = (exists($CTL_OPTIONS{datastore})) ? $CTL_OPTIONS{datastore} : 1;
 
    $self->{root} = "$out_base/$out_name\_datastore";
    $self->{log} = "$out_base/$out_name\_master_datastore_index.log";
@@ -48,7 +50,7 @@ sub _initialize {
    "To access files for individual sequences use the datastore index:\n".
    $self->{log}."\n\n";
 
-   if($CTL_OPTIONS{datastore}){   
+   if($ds_flag){   
       $self->{ds_object} = new Datastore::MD5('root' => $self->{root},
 					      'depth' => 2
 					     );
@@ -138,10 +140,12 @@ sub add_entry {
    my $cwd = ($CWD) ? $CWD : Cwd::getcwd();
    my $entry = join("\t", @F);
 
+   #maker/mpi_iprscan specific if statement
    if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY/){
-       $entry =~ s/$cwd\/.*\.maker\.output\/*//;
+       $entry =~ s/$cwd\/.*\.maker\.output\/*|$cwd\/.*\.iprscan\.output\/*//;
    }
 
+   #lock file so no one else writes to it (MPI safe)
    if(my $lock = new File::NFSLock($self->{log}, 'EX', 5, 5)){
        open(my $IN, ">>", $self->{log});
        print $IN $entry . "\n";

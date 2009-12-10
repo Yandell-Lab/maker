@@ -44,6 +44,7 @@ sub prep_hits {
 	my $single_exon      = shift;
 	my $single_length    = shift;
 	my $organism_type    = shift;
+	my $est_forward      = shift;
 
 	my $clean_est = [];
 	my $clean_altest = [];
@@ -60,7 +61,7 @@ sub prep_hits {
 	    }
 
 	    # throw out the exonerate est hits with weird splice sites
-	    $clean_est = clean::throw_out_bad_splicers($clean_est, $seq);
+	    $clean_est = clean::throw_out_bad_splicers($clean_est, $seq) unless($est_forward);
 	}
 	#include blastn and don't filter for splicing
 	else{
@@ -154,7 +155,7 @@ sub prep_hits {
 	my $c_id = 0;
 	my @bx_data;
 	foreach my $c (@{$hint_clusters}){
-	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
+	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type, $est_forward);
 	   push(@bx_data, @{$bx}) if defined $bx;
 
 	   $c_id++;
@@ -389,6 +390,7 @@ sub prep_blastx_data {
 	my $c_id = shift;
 	my $seq  = shift;
 	my $org_type = shift || 'eukaryotic';
+	my $est_forward = shift;
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
@@ -405,7 +407,10 @@ sub prep_blastx_data {
 	# group of most informative alt splices
 	my $gomias = [];
 
-	if($org_type eq 'eukaryotic'){
+	if($est_forward){
+	    $gomias = $ests_in_cluster;
+	}
+	elsif($org_type eq 'eukaryotic'){
 	    $gomias = clean::purge_single_exon_hits($ests_in_cluster);
 	    $gomias = clean::get_best_alt_splices($gomias, $seq, 10);
 	}
@@ -626,7 +631,8 @@ sub annotate {
 						  $v_seq_ref,
 						  $CTL_OPTS->{single_exon},
 						  $CTL_OPTS->{single_length},
-						  $CTL_OPTS->{organism_type}
+						  $CTL_OPTS->{organism_type},
+						  $CTL_OPTS->{est_forward}
 						  );
 
     my %annotations;
@@ -873,14 +879,34 @@ sub best_annotations {
 
     #keep all gff3 passthrough if there's nothing else
     if(@{$CTL_OPTS->{_predictor}} == 1 && $CTL_OPTS->{_predictor}->[0] eq 'model_gff'){
+	my @final;
 	foreach my $g (@{$annotations->{'model_gff'}}){
 	    if($g->{g_strand} == 1){
-		push(@p_keepers, $g);
+		push(@final, $g);
 	    }
 	    elsif($g->{g_strand} == -1){
-		push(@m_keepers, $g);
+		push(@final, $g);
 	    }
 	}
+
+	return \@final;
+    }
+    #keep all est2genome genes if mapping forward onto a new assembly
+    elsif($CTL_OPTS->{est_forward} &&
+	  @{$CTL_OPTS->{_predictor}} == 1 &&
+	  $CTL_OPTS->{_predictor}->[0] eq 'est2genome'
+	  ){
+	my @final;
+	foreach my $g (@{$annotations->{'est2genome'}}){
+	    if($g->{g_strand} == 1){
+		push(@final, $g);
+	    }
+	    elsif($g->{g_strand} == -1){
+		push(@final, $g);
+	    }
+	}
+
+	return \@final;
     }
     elsif(@{$CTL_OPTS->{_predictor}}){
 	#set up lists for plus and minus strands as well as possible mergers
@@ -1226,7 +1252,7 @@ sub run_it {
 	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
 
-	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
+	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
 	    if(! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
 		my $clean  = clean::purge_single_exon_hits($alt_ests);
 		if(!@$clean){	
@@ -1265,7 +1291,7 @@ sub run_it {
 	#------est2genome
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
-	    my $transcript = pneu($ests, $mia, $seq);
+	    my $transcript = ($CTL_OPT->{est_forward}) ? $mia : pneu($ests, $mia, $seq);
 
 	    if($CTL_OPT->{organism_type} eq 'prokaryotic'){
 		my $transcript_seq  = get_transcript_seq($transcript, $seq);
@@ -1278,6 +1304,8 @@ sub run_it {
 
 	    my $all_preds = get_overlapping_hits($transcript, $predictions);
 	    $set->{all_preds} = $all_preds;
+
+	    $transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
 
 	    push(@transcripts, [$transcript, $set, $mia]);
 	    $i++;
@@ -1483,7 +1511,7 @@ sub load_transcript_struct {
 	my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 	$f->name($t_name);
 
-	if($p_base && $p_base->algorithm !~ /est2genome|est_gff/){
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
 	    $p_base->name($t_name);
 	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
 	}

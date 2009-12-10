@@ -813,7 +813,7 @@ sub copy {
 
                $new_hsp->{_strand_hack}->{query} = $n_q_s;
                $new_hsp->{_strand_hack}->{hit}   = $n_h_s;
-               $new_hsp->{_indentical_hack}      = $hsp->frac_identical();
+               $new_hsp->{_identical_hack}      = $hsp->frac_identical();
 
 		push(@new_hsps, $new_hsp);
 	}

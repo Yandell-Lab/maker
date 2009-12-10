@@ -33,7 +33,7 @@ use Carp qw(croak confess);
 use File::Copy;
 use File::Temp;
 use Storable;
-use IPC::Open3;
+use IPC::Open2;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -274,8 +274,10 @@ sub unlock ($) {
   my $self = shift;
 
   #remove maintainer if running
-  if($self->{_maintain}){
-      kill(1, $self->{_maintain});
+  if(defined $self->{_maintain}){
+      kill(3, $self->{_maintain});
+      close($self->{_OUT});
+      close($self->{_IN});
       waitpid($self->{_maintain}, 0);
       $self->{_maintain} = undef;
   }
@@ -469,6 +471,15 @@ sub maintain {
 
     $self->refresh; #refresh once on it's own
 
+    #clean up old maintainers
+    if($self->{_maintain}){
+	kill(3, $self->{_maintain});
+	close($self->{_OUT});
+	close($self->{_IN});
+	waitpid($self->{_maintain}, 0);
+	$self->{_maintain} = undef;
+    }
+
     #create temporary file to for lock serialization
     my (undef, $file) = File::Temp::tempfile();
     Storable::nstore($self, $file);
@@ -478,13 +489,10 @@ sub maintain {
     die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
 	if(! $exe || ! -f $exe);
 
-    if($self->{_maintain}){
-	kill(1, $self->{_maintain});
-	waitpid($self->{_maintain}, 0);
-    }
-
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
-    my $pid = open3(undef, undef, undef, "$exe $file $time $$");
+    my $pid = open2(my $OUT, my $IN, "$exe $file $time $$");
+    $self->{_OUT} = $OUT;
+    $self->{_IN} = $IN;
     $self->{_maintain} = $pid;
 
     return 1;

@@ -1,4 +1,8 @@
 #! /usr/bin/perl -w
+BEGIN {
+    $SIG{QUIT} = sub{exit(0)};
+    $SIG{INT} = sub{exit(0)};
+}
 
 use strict;
 use FindBin;

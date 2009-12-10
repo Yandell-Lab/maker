@@ -45,10 +45,8 @@ BEGIN{
 	 $LOG->add_entry("DIED","COUNT",$die_count);
       }
 
-      die "#----------------------\n",
-          "FATAL: failed!!\n",
-	  "#----------------------\n",
-	  $_[0] . "\n";
+      die $_[0]."\n".
+	  "FATAL ERROR\n";
    };
 }
 
@@ -172,6 +170,7 @@ try{
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
+	       "check" =>\$OPT{check},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
@@ -180,7 +179,7 @@ catch Error::Simple with{
     my $E = shift;
     
     print STDERR $E->{-text};
-    die "\n\nMaker failed parsing command line options!!\n\n";
+    die "\n\nMaker failed parsing command line options!!\n\n" if();
 };
 
 #varibles that are persistent outside of try
@@ -233,8 +232,8 @@ try{
 catch Error::Simple with{
     my $E = shift;
     print STDERR $E->{-text};
-    print STDERR "\n\nMaker failed while examining startup data\n",
-    "(control files and input fasta files)!!\n\n";
+    #print STDERR "\n\nMaker failed while examining startup data\n",
+    #"(control files and input fasta files)!!\n\n";
     my $code = 2;
     $code = $E->{-value} if (defined($E->{-value}));
     
