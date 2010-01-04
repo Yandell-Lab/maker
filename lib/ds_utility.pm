@@ -48,7 +48,7 @@ sub _initialize {
    print STDERR "A data structure will be created for you at:\n".
    $self->{root}."\n\n".
    "To access files for individual sequences use the datastore index:\n".
-   $self->{log}."\n\n";
+   $self->{log}."\n\n" unless($main::qq);
 
    if($ds_flag){   
       $self->{ds_object} = new Datastore::MD5('root' => $self->{root},

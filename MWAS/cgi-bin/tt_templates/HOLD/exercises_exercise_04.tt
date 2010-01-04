@@ -1,0 +1,15 @@
+[% WRAPPER main.tt %]
+
+<h2>Exercise 4. Creating an index.</h2>
+
+<ol>
+  <li>Copy your script.template to a file called ascii_index.</li>
+  <li>Now open ascii_index in vi and edit it so that it becomes a script that does the following:</li>
+    <ol type="a">
+      <li>Populates a hash whose keys are the first 5 letters of the alphabet (a, b, c, d, e), and whose values are those letters&rsquo; corresponding ASCII values.</li>
+      <li>Have the script print out a tab-delimited file wherein the zeroth column is the letter, and the 1st column is its ASCII value</li>
+    </ol>
+  <li>Hint: you will need to use the Perl function ord()</li>
+
+[% END %]
+

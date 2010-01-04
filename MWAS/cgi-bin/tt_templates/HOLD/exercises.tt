@@ -1,0 +1,7 @@
+
+[% WRAPPER main.tt %]
+
+This is the content on the exercises page.<br><br>
+
+[% END %]
+

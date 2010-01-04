@@ -1,0 +1,54 @@
+
+[% WRAPPER main.tt %]
+
+[% INCLUDE questions_menu.tt %]
+
+<center><h3>Add a Question</h3></center>
+
+<form method="POST" action="http://bioinfo.genetics.utah.edu/cgi-bin/Course/course_questions.cgi" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="rm" value="questions_add_process" />
+
+<table>
+  <tr>
+    <td>Quiz ID:</td>
+  </tr>
+  <tr>
+    <td><input type="text" name="quiz_id" size="5" maxlength="5" value="[% quiz_id %]"></td>
+  </tr>
+  <tr>
+  <tr>
+    <td>Question Number:</td>
+  </tr>
+  <tr>
+    <td><input type="text" name="question_number" size="5" maxlength="5" value="[% question_number %]"></td>
+  </tr>
+  <tr>
+    <td>Question Text:</td>
+  </tr>
+  <tr>
+    <td>
+      <textarea name="question_text" cols=78 rows=40>
+Enter the text of your question here.
+      </textarea>
+    </td>
+  </tr>
+  <tr>
+    <td>Question Options:</td>
+  </tr>
+  <tr>
+    <td>
+      <textarea name="question_option" cols=78 rows=20>
+Enter the options for your question here.<br />
+Use the following format...
+      </textarea>
+    </td>
+  </tr>
+</table>
+
+<input type="submit" value="Add Question">
+</form>
+
+[% END %]
+
+
+

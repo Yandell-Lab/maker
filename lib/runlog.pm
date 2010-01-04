@@ -310,7 +310,7 @@ sub _clean_files{
 		if ($log_val ne $ctl_val) {
 		    
 		    print STDERR "MAKER WARNING: Control file option \'$key\' has changed\n".
-			"Old:$log_val\tNew:$ctl_val\n\n";
+			"Old:$log_val\tNew:$ctl_val\n\n" unless($main::qq);
 		    
 		    $continue_flag = 1; #re-run because ctlopts changed
 		    
@@ -415,7 +415,7 @@ sub _clean_files{
 	    while (my $key = each %{$logged_vals{STARTED}}) {
 		if (! exists $logged_vals{FINISHED}{$key}) {
 		    print STDERR "MAKER WARNING: The file $key\n".
-			"did not finish on the last run and must be erased\n";
+			"did not finish on the last run and must be erased\n" unless($main::qq);
 
 		    push(@files, $key);
 
@@ -441,7 +441,7 @@ sub _clean_files{
 	
 	#-print file type specific warnings and delete files
 	if (exists $rm_key{force}) {
-	    print STDERR "MAKER WARNING: All old files will be erased before continuing\n";
+	    print STDERR "MAKER WARNING: All old files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
@@ -456,7 +456,7 @@ sub _clean_files{
 	    push (@files, @f);
 	}
 	elsif (exists $rm_key{retry}) {
-	    print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n";
+	    print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
@@ -468,7 +468,7 @@ sub _clean_files{
 	}
 	elsif (exists $rm_key{all}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
-		"All old files will be erased before continuing\n";
+		"All old files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
@@ -480,7 +480,7 @@ sub _clean_files{
 	}
 	elsif (exists $rm_key{all_but}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
-		"All old non-RepeatMasker files will be erased before continuing\n";
+		"All old non-RepeatMasker files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    my @f = <$the_void/*>;
@@ -495,42 +495,42 @@ sub _clean_files{
 	else {
 	    if (exists $rm_key{preds}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
-		    "Old hint based prediction files will be erased before continuing\n";
+		    "Old hint based prediction files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*auto_annotator*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{snap}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
-		    "Old SNAP files will be erased before continuing\n";
+		    "Old SNAP files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*snap*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{augustus}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
-		    "Old Augustus files will be erased before continuing\n";
+		    "Old Augustus files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*augustus*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{fgenesh}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
-		    "Old FGENESH files will be erased before continuing\n";
+		    "Old FGENESH files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*fgenesh*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{genemark}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
-		    "Old GeneMark files will be erased before continuing\n";
+		    "Old GeneMark files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*genemark*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{blastn}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
-		    "Old EST Blastn files will be erased before continuing\n";
+		    "Old EST Blastn files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*blastn*>;
 		foreach my $f (@f){
@@ -541,7 +541,7 @@ sub _clean_files{
 	    else{
 		if (exists $rm_key{est_blastn}) {
 		    print STDERR "MAKER WARNING: Changes in control files make re-use of assembled EST Blastn data impossible\n".
-			"Old EST Blastn files will be erased before continuing\n";
+			"Old EST Blastn files will be erased before continuing\n" unless($main::qq);
 		    
 		    my @f = <$the_void/*est_blastn*>;
 		    foreach my $f (@f){
@@ -551,7 +551,7 @@ sub _clean_files{
 		}
 		elsif (exists $rm_key{read_blastn}) {
 		    print STDERR "MAKER WARNING: Changes in control files make re-use of unassembled EST Blastn data impossible\n".
-			"Old EST reads Blastn files will be erased before continuing\n";
+			"Old EST reads Blastn files will be erased before continuing\n" unless($main::qq);
 		    
 		    my @f = <$the_void/*read_blastn*>;
 		    foreach my $f (@f){
@@ -563,7 +563,7 @@ sub _clean_files{
 	    
 	    if (exists $rm_key{tblastx}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
-		    "Old tBlastx files will be erased before continuing\n";
+		    "Old tBlastx files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*tblastx*>;
 		foreach my $f (@f){
@@ -574,7 +574,7 @@ sub _clean_files{
 	    
 	    if (exists $rm_key{blastx}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
-		    "Old Blastx files will be erased before continuing\n";
+		    "Old Blastx files will be erased before continuing\n" unless($main::qq);
 	 
 		my @f = <$the_void/*blastx*>;
 
@@ -594,7 +594,7 @@ sub _clean_files{
 	    
 	    if (exists $rm_key{e_exonerate}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
-		    "Old EST Exonerate files will be erased before continuing\n";
+		    "Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*est_exonerate*>;
 		push (@files, @f);
@@ -602,14 +602,15 @@ sub _clean_files{
 	    
 	    if (exists $rm_key{p_exonerate}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
-		    "Old protein Exonerate files will be erased before continuing\n";
+		    "Old protein Exonerate files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*p_exonerate*>;
 		push (@files, @f);
 	    }
 	    
 	    if (exists $rm_key{gff}) {
-		print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n";
+		print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n"
+		    unless($main::qq);
 		push (@files, $gff_file);
 		push (@files, @{[<$out_base/evaluator/*.eva>]});
 		push (@files, @{[<$out_base/*maker*.fasta>]});
@@ -719,14 +720,16 @@ sub report_status {
 		   "Run maker with the -f flag to force Maker to recompute all contig data.\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",		   
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    elsif($flag == 1){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now starting the contig!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    elsif($flag == 2){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -735,7 +738,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
 		   "Retry: $die_count!!\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    elsif($flag == 3){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -743,7 +747,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
 		   "Retry: $die_count!!\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    elsif($flag == -1){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -753,7 +758,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
 		   "FASTA: $out_dir/$seq_out_name.died.fasta\n",
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
 
       open (my $DFAS, "> $out_dir/$seq_out_name.died.fasta");
       print $DFAS $$fasta_ref;
@@ -764,14 +770,16 @@ sub report_status {
                    "Skipping the contig because it is too short!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    elsif($flag == -3){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Another instance of maker is processing this contig!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::qq);
    }
    else{
       die "ERROR: No valid continue flag\n";

@@ -1,0 +1,26 @@
+[% WRAPPER main.tt %]
+
+<h2>Exercise 2. Introduction to simple manipulation of fasta files with Unix commands.</h2>
+
+<p>
+Copy the files seq1.fasta &amp; seq2.fasta from the /home/class/data directory to your own data directory.
+</p>
+
+<ol>
+  <li>Count the number of lines in <em>seq1.fasta</em>.</li>
+  <li>Get the first 5 lines of <em>seq1.fasta</em>. Get the last 3 lines.
+  <li>Get the 3rd line of the file using two consecutive commands.
+  <li>Repeat the previous exercise, only now do it on a single line (use the UNIX pipe).
+  <li>Find those lines in <em>seq1.fasta</em> that contain the sub-sequence <em>ACG</em>.
+  <li>Concatenate <em>seq1.fasta </em>and<em> seq2.fasta</em> to make <em>seq3.fasta</em>.
+</ol>
+
+<p> 
+Note: there is nothing to hand in for this exercise. Just make sure
+you can perform all of these tasks. If you have problems see the
+TA. Don't fall behind! It will just get harder and harder to
+catch up.
+</p>
+
+[% END %]
+

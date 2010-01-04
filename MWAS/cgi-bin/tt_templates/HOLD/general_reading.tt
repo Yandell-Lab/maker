@@ -1,0 +1,66 @@
+[% WRAPPER main.tt %]
+
+<h2>Download Course Syllabus</h2>
+
+<p>
+<a href="http://bioinfo.genetics.utah.edu/syll.pdf">Download Syllabus in PDF</a>
+</p>
+
+<h2>Recommended Reading</h2>
+
+<ul>
+<li><a href="http://www.amazon.com/Learning-Perl-Fourth-Randal-Schwartz/dp/0596101058/sr=8-1/qid=1172704501/ref=pd_bbs_sr_1/104-3014075-3675908?ie=UTF8&s=books">
+Learning Perl
+</a>
+<br />
+Randal L. Schwartz, Tom Phoenix, and brian d foy
+<br />
+<br />
+
+<li><a href="http://www.amazon.com/Programming-Perl-3rd-Larry-Wall/dp/0596000278/sr=8-1/qid=1172705207/ref=pd_bbs_sr_1/104-3014075-3675908?ie=UTF8&s=books">
+Programming Perl
+</a>
+<br />
+by Larry Wall, Tom Christiansen, and Jon Orwant
+<br />
+<br />
+
+<li><a href="http://www.amazon.com/Perl-Cookbook-Second-Tom-Christiansen/dp/0596003137/sr=8-1/qid=1172705241/ref=pd_bbs_sr_1/104-3014075-3675908?ie=UTF8&s=books">
+Perl Cookbook
+</a>
+<br />
+Tom Christiansen and Nathan Torkington
+<br />
+<br />
+
+<li><a href="http://www.amazon.com/o/ASIN/0486240614/ref=s9_asin_image_2/002-8352846-3586417">
+An Introduction to Information Theory: Symbols, Signals and Noise
+</a>
+<br />
+John R. Pierce
+<br />
+<br />
+
+<li><a href="http://www.amazon.com/Blast-Ian-Korf/dp/1600330312/sr=8-6/qid=1172705336/ref=pd_bbs_6/104-3014075-3675908?ie=UTF8&s=books">
+Blast
+</a>
+<br />
+Ian Korf, Mark Yandell, and Joseph Bedell
+<br />
+
+</ul>
+
+<h2>Software Downloads</h2>
+
+<h4>
+Secure Shell Client</h4> <p> You can get SSH for free from the <a
+href="http://software.utah.edu/">University Office of Software
+Liscensing</a>.  From their main menu choose either the Student Store
+or the Faculty/Staff store.  Follow links to 'A-Z Listing by Product'.
+Then surf on to 'SSH Secure Shell for Workstations' and download away.
+Remember, you only need this if you're on a PC.  Linux and MacOSX have
+these shells built in.
+</p>
+
+[% END %]
+

@@ -1,0 +1,6 @@
+[% WRAPPER main.tt %]
+
+<h2>Exercise #[% exercise_number %] successfully uploaded for [% student.first_name %] [% student.last_name %]</h2>
+
+[% END %]
+

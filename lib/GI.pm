@@ -2197,8 +2197,9 @@ sub build_the_void {
 #to add control options edit this function
 sub set_defaults {
    my $type = shift || 'all';
-
-   if ($type !~ /^all$|^opts$|^bopt$|^exe$||^server$/) {
+   my $user_default = shift; #hash ref
+   
+   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$/) {
       warn "WARNING: Invalid type \'$type\' in S_Func ::set_defaults";
       $type = 'all';
    }
@@ -2224,15 +2225,18 @@ sub set_defaults {
       $CTL_OPT{'protein'} = '';
       $CTL_OPT{'protein_gff'} = '';
       $CTL_OPT{'model_org'} = 'all';
+      $CTL_OPT{'model_org'} = 'all=STATIC' if($main::server);
       $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta");
+      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../../data/te_proteins.fasta")."=STATIC" if($main::server);
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
-      $CTL_OPT{'predictor'} = 'est2genome';
+      $CTL_OPT{'predictor'} = '';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
-      $CTL_OPT{'predictor'} = '' if($main::server);
       $CTL_OPT{'snaphmm'} = '';
       $CTL_OPT{'gmhmm'} = '';
+      $CTL_OPT{'gmhmm_E'} = '' if($main::server);
+      $CTL_OPT{'gmhmm_P'} = '' if($main::server);
       $CTL_OPT{'augustus_species'} = '';
       $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'model_gff'} = '';
@@ -2240,11 +2244,11 @@ sub set_defaults {
       $CTL_OPT{'other_gff'} = '';
       $CTL_OPT{'alt_peptide'} = 'C';
       $CTL_OPT{'cpus'} = 1;
+      $CTL_OPT{'cpus'} = '1=DISABLED' if($main::server);
       $CTL_OPT{'evaluate'} = 0;
       $CTL_OPT{'evaluate'} = 1 if($main::eva);
       $CTL_OPT{'max_dna_len'} = 100000;
       $CTL_OPT{'min_contig'} = 1;
-      $CTL_OPT{'min_contig'} = 10000 if($main::server);
       $CTL_OPT{'split_hit'} = 10000;
       $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'pred_flank'} = 200;
@@ -2257,6 +2261,7 @@ sub set_defaults {
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
+      $CTL_OPT{'TMP'} = '=DISABLED' if($main::server);
       $CTL_OPT{'run'} = ''; #hidden option
       $CTL_OPT{'unmask'} = 0;
       $CTL_OPT{'clean_up'} = 0;
@@ -2274,6 +2279,7 @@ sub set_defaults {
    #maker_bopts
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'wublast';
+      $CTL_OPT{'blast_type'} = 'wublast=DISABLED' if($main::server);
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -2335,32 +2341,225 @@ sub set_defaults {
 
    #server
    if ($type eq 'server') {
-      $CTL_OPT{'DBI'} = '';
-      $CTL_OPT{'dbname'} = '';
+      $CTL_OPT{'DBI'} = 'SQLite';
+      $CTL_OPT{'dbname'} = "$FindBin::Bin/../data/makerweb.db";
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
       $CTL_OPT{'username'} = '';
       $CTL_OPT{'password'} = '';
+      $CTL_OPT{'admin_email'} = '';
+      $CTL_OPT{'smtp_server'} = '';
+      $CTL_OPT{'MPI'} = 0;
+      $CTL_OPT{'max_cpus'} = 1;
+      $CTL_OPT{'job_cpus'} = 1;
+      $CTL_OPT{'use_login'} = 1;
       $CTL_OPT{'allow_guest'} = 1;
+      $CTL_OPT{'allow_register'} = 1;
       $CTL_OPT{'max_submit_user'} = 2000000; #length in base pairs
       $CTL_OPT{'max_submit_guest'} = 200000; #length in base pairs
       $CTL_OPT{'persist_time_user'} = 336; #in hours
       $CTL_OPT{'persist_time_guest'} = 72; #in hours
+      $CTL_OPT{'inactive_user'} = 0; #in days
+      $CTL_OPT{'inactive_guest'} = 14; #in days
+      $CTL_OPT{'data_dir'} = "$FindBin::Bin/../data";
+      $CTL_OPT{'cgi_dir'} = '';
+      $CTL_OPT{'html_dir'} = '';
+      $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
+   }
+
+   #server menus
+   if ($type eq 'menus') {
+      $CTL_OPT{'genome'}             = {'D. melanogaster : example contig' =>
+					    "$FindBin::Bin/../../data/dpp_contig.fasta"};
+      $CTL_OPT{'snaphmm'}          = {};
+      $CTL_OPT{'augustus_species'} = {};
+      $CTL_OPT{'fgenesh_par_file'} = {};
+      $CTL_OPT{'gmhmm_E'}          = {};
+      $CTL_OPT{'gmhmm_P'}          = {};
+      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' =>
+                                          "$FindBin::Bin/../../data/dpp_transcripts.fasta"};
+      $CTL_OPT{'altest'}           = {};
+      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' =>
+                                          "$FindBin::Bin/../../data/dpp_proteins.fasta"};
+      $CTL_OPT{'est_gff'}          = {};
+      $CTL_OPT{'altest_gff'}       = {};
+      $CTL_OPT{'protein_gff'}      = {};
+      $CTL_OPT{'pref_gff'}         = {};
+      $CTL_OPT{'model_gff'}        = {};
+      $CTL_OPT{'rmlib'}            = {};
+      $CTL_OPT{'repeat_gff'}       = {};
+      $CTL_OPT{'model_org'}        = {'All species' => 'all'};
+      $CTL_OPT{'repeat_protein'}   = {'RepeatRunner te_proteins' =>
+					  "$FindBin::Bin/../../data/te_proteins.fasta"
+				     };
+      #this step is required since menu defaults are exe dependant
+      my %exe_ctl = set_defaults('exe', $user_default); 
+      %CTL_OPT = (%CTL_OPT, %{collect_hmms(\%exe_ctl)}); #add exe dependant values
+      %CTL_OPT = (%CTL_OPT, %{$user_default->{menus}})
+	  if($user_default->{menus}); #restore user supplied values
+   }
+
+   #reset values with user supplied defaults
+   if($user_default && $type ne 'menus'){
+       while(my $key = each %$user_default){
+	   #will ignore invalid/iappropriate entries
+	   $CTL_OPT{$key} = $user_default->{$key} if(exists $CTL_OPT{$key});
+       }
    }
 
    return %CTL_OPT;
+}
+#-----------------------------------------------------------------------------
+#this function will collect HMM file names and there locations for different
+#prediction algorithms, and it returns the data in a hash reference
+sub collect_hmms {
+    my %exes = %{shift @_}; #make a copy of the location of executables
+
+    my %hmms; #hold the hmms for each algorithm
+
+    #find augustus HMMs
+    if(-f $exes{augustus}){
+	open(my $EXE, "$exes{augustus} --species=help 2>&1|");
+	my $flag;
+	while(my $line = <$EXE>){
+	    if($flag){
+		chomp $line;
+		my ($value, $name) = split(/\|/, $line);
+		next if(!$value || !$name);
+
+		$name =~ s/^[\s\t\n]+|[\s\t\n]+$//g;
+		$value =~ s/^[\s\t\n]+|[\s\t\n]+$//g;
+
+		next if( $value =~ /^\(/ );
+
+		$hmms{augustus_species}{$name} = $value;
+	    }
+
+	    $flag++ if($line =~ /----------------/);
+	}
+	close($EXE);
+    }
+
+    #find snap HMMs
+    if(defined $ENV{ZOE} && -d "$ENV{ZOE}/HMM/"){
+	$exes{snap} = "$ENV{ZOE}/HMM/";
+    }
+    elsif($exes{snap}){
+	$exes{snap} =~ s/[^\/]+$//;
+	$exes{snap} = "$exes{snap}/HMM/";
+    }
+    if(-d $exes{snap}){
+	foreach my $file (grep {!/README/} <$exes{snap}/*>){
+	    my ($name) = $file =~ /([^\/]+)$/;
+	    $name =~ s/\.hmm$//;
+	    my $value = Cwd::abs_path("$file");
+
+	    next if(!$name || !$value);
+
+	    $hmms{snaphmm}{$name} = $value;
+	}
+    }
+
+    #find genemark Eukaryotic HMMs
+    if($exes{gmhmme3}){
+	$exes{gmhmme3} =~ s/[^\/]+$//;
+	$exes{gmhmme3} = "$exes{gmhmme3}/HMM/";
+    }
+    if(-d $exes{gmhmme3}){
+	foreach my $file (<$exes{gmhmme3}/*.mod>){
+	    my ($name) = $file =~ /([^\/]+)\.mod$/;
+	    my $value = Cwd::abs_path("$file");
+
+	    next if(!$name || !$value);
+
+	    $hmms{gmhmm_E}{$name} = $value;
+	}
+    }
+
+    #find fgenesh HMMs
+    if($exes{fgenesh}){
+	$exes{fgenesh} =~ s/[^\/]+$//;
+    }
+    if(-d $exes{fgenesh}){
+	foreach my $file (<$exes{fgenesh}/*>){
+	    my ($name) = $file =~ /([^\/]+)$/;
+	    my $value =Cwd::abs_path("$file");
+
+	    next if(!$name || !$value);
+
+	    my $filesize = [stat($file)]->[7]; #size in bytes
+
+        #rough size of all parameter files
+	    $hmms{fgenesh_par_file}{$name} = $value if($filesize >= 200000);
+	}
+    }
+
+    return \%hmms;
+}
+#-----------------------------------------------------------------------------
+#this function parses the control files and does no error checking
+#this is dirty method to load subsections of control files
+sub parse_ctl_files {
+    my @ctlfiles = @{shift @_};
+
+    my %CTL_OPT;
+    #--load values from control files
+    foreach my $ctlfile (@ctlfiles) {
+	open (CTL, "< $ctlfile") or die"ERROR: Could not open the control file \"$ctlfile\".\n";
+	
+	while (my $line = <CTL>) {
+	    chomp($line);
+	   
+	    if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\n\#]*)/) {
+		my $key = $1;
+		my $value = $2;
+		my $stat;
+
+		#remove preceding and trailing whitespace
+		$value =~ s/^[\s\t]+|[\s\t]+$//g;
+
+		($value, $stat) = split("=", $value);
+
+		#set value
+		$CTL_OPT{$key} = defined($value) ? $value : '';
+		$CTL_OPT{STAT}{$key} = defined($stat) ? $stat : ''
+		    if($stat);
+		
+	    }#now load menus
+	    elsif($line =~ /^\#\#Menus from Data::Dumper/){ #only non-sandard format control file
+		my $data = join('', <CTL>);
+		my $menus; #will be set by data
+		eval $data;
+
+		while(my $key = each %$menus){
+		    #set value
+		    $CTL_OPT{menus}{$key} = $menus->{$key};
+		}
+	    }
+	}
+    }
+
+    return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
 #this function parses the control files and sets up options for each maker run
 #error checking for starup occurs here
 sub load_server_files {
     my @ctlfiles = @{shift @_};
-    
+
     #make list of permited values
-    my %CTL_OPT = set_defaults('server');
-    while (my $key = each %{set_defaults('all')}){
+    my %CTL_OPT  = set_defaults('server');
+    my %defaults = set_defaults('all');
+    my %menus    = set_defaults('menus');
+
+    #initialize all display status flags to empty
+    while (my $key = each %defaults){
 	$CTL_OPT{STAT}{$key} = '';
+	$CTL_OPT{$key} = $defaults{$key};
     }
+
+    #add menus to the control options
+    $CTL_OPT{menus} = \%menus;
 
     #--load values from control files
     foreach my $ctlfile (@ctlfiles) {
@@ -2379,19 +2578,53 @@ sub load_server_files {
 
 		($value, $stat) = split("=", $value);
 		
-		if (exists $CTL_OPT{$key}) { #should already exist or is a bad value
+		if(exists $CTL_OPT{STAT}{$key}){
 		    #set value
 		    $CTL_OPT{$key} = defined($value) ? $value : '';
+		    $CTL_OPT{STAT}{$key} = defined($stat) ? $stat : '';
 		}
-		elsif(exists $CTL_OPT{STAT}{$key}){
+		elsif (exists $CTL_OPT{$key}) { #should already exist or is a bad value
 		    #set value
 		    $CTL_OPT{$key} = defined($value) ? $value : '';
-		    $CTL_OPT{STAT}{$key} = $stat;
 		}
 		else {
 		    warn "WARNING: Invalid option \'$key\' in control file $ctlfile\n\n";
 		}
+	    }#now load menus
+	    elsif($line =~ /^\#\#Menus from Data::Dumper/){ #only non-sandard format control file
+		my $data = join('', <CTL>);
+		my $menus; #will be set by data
+		eval $data;
+
+		while(my $key = each %$menus){
+		    if (exists $CTL_OPT{menus}{$key}) { #should already exist or is a bad value
+			#set value
+			$CTL_OPT{menus}{$key} = $menus->{$key};
+		    }
+		    else {
+			warn "WARNING: Invalid option \'$key\' in control file $ctlfile\n\n";
+		    }
+		}
 	    }
+	}
+    }
+
+    #error correct status values
+    while(my $key = each %{$CTL_OPT{STAT}}){
+	#empty static values are the same as disabled values
+	$CTL_OPT{STAT}{$key} = 'DISABLED' if($CTL_OPT{$key} eq '' && $CTL_OPT{STAT}{$key} eq 'STATIC');
+
+	#disabling some options must automatically disable others
+	if($key eq 'predictor' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){
+	    $CTL_OPT{STAT}{snaphmm} = 'DISABLED';
+	    $CTL_OPT{STAT}{gmhmm} = 'DISABLED';
+	    $CTL_OPT{STAT}{augustus_species} = 'DISABLED';
+	    $CTL_OPT{STAT}{fgenesh_par_file} = 'DISABLED';
+	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
+	}
+
+	if($key eq 'gmhmm' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){
+	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
     }
 
@@ -2465,6 +2698,7 @@ sub load_control_files {
 	       pcov_blastn
 	       pid_blastn
 	       en_score_limit
+	       out_name
 	       );
 
    foreach my $key (@OK){
@@ -2488,10 +2722,10 @@ sub load_control_files {
       $CTL_OPT{rm_gff} = '';
       $CTL_OPT{rm_pass} = 0;
 
-      print STDERR "INFO: ";
+      print STDERR "INFO: " unless($main::qq);
       print STDERR "No repeats expected in prokaryotic organisms.\n"
-	  if($CTL_OPT{organism_type} eq 'prokaryotic');
-      print STDERR "All repeat masking options will be skipped.\n\n";
+	  if($CTL_OPT{organism_type} eq 'prokaryotic' && !$main::qq);
+      print STDERR "All repeat masking options will be skipped.\n\n" unless($main::qq);
    }
 
    #if no repeat masking options are set don't run masking dependent methods
@@ -2841,9 +3075,11 @@ sub load_control_files {
    #--set values for datastructure
    my $genome = $CTL_OPT{genome};
    $genome = $CTL_OPT{genome_gff} if (not $genome);
-   ($CTL_OPT{out_name}) = $genome =~ /([^\/]+)$/;
-   $CTL_OPT{out_name} =~ s/\.[^\.]+$//;
    $CTL_OPT{CWD} = Cwd::cwd();
+   if(! $CTL_OPT{out_name}){
+       ($CTL_OPT{out_name}) = $genome =~ /([^\/]+)$/;
+       $CTL_OPT{out_name} =~ s/\.[^\.]+$//;
+   }
    if(! $CTL_OPT{out_base}){
       $CTL_OPT{out_base} = $CTL_OPT{CWD}."/$CTL_OPT{out_name}.maker.output";
    }
@@ -2950,14 +3186,14 @@ sub load_control_files {
 sub generate_control_files {
    my $dir = shift @_ || Cwd::cwd();
    my $type = shift @_ || 'all';
-   my %O = (@_) ? (set_defaults(), %{shift @_}) : set_defaults();
+   my %O = set_defaults($type, shift @_);
    my $log = shift;
    my $ev = 1 if($main::eva);
 
    my $app = ($ev) ? "eval" : "maker"; #extension
    my $ext = ($log) ? "log" : "ctl"; #extension
 
-   if ($type !~ /^all$|^opts$|^bopt$|^exe$||^server$/) {
+   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$/) {
        warn "WARNING: Invalid type \'$type\' in GI::generate_control_files";
        $type = 'all';
    }
@@ -3125,12 +3361,35 @@ sub generate_control_files {
        print OUT "username:$O{username} #username to connect to database\n";
        print OUT "password:$O{password} #password to connect to database\n";
        print OUT "\n";
+       print OUT "#-----Communication Options\n";
+       print OUT "admin_email:$O{admin_email} #an e-mail address to send error and status information to\n";
+       print OUT "smtp_server:$O{smtp_server} #outgoing e-mail. Required for users to receive notification of finished jobs.\n";
+       print OUT "\n";
        print OUT "#-----MAKER Server Specific Options\n";
+       print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";
        print OUT "allow_guest:$O{allow_guest} #enable guest accounts on the server, 1 = yes, 0 = no\n";
+       print OUT "allow_register:$O{allow_register} #allow users to register themselves vs. manually by admin, 1 = yes, 0 = no\n";
+       print OUT "MPI:$O{MPI} #use mpi_maker instead of maker\n";
+       print OUT "max_cpus:$O{max_cpus} #maximum number of cpus that can be dedicated to all MAKER jobs\n";
+       print OUT "job_cpus:$O{job_cpus} #maximum number of cpus that can be used by a single MAKER job\n";
        print OUT "max_submit_user:$O{max_submit_user} #maximum submission size for registered users (0 to disable limit)\n";
        print OUT "max_submit_guest:$O{max_submit_guest} #maximum submission size for guest users (0 to disable limit)\n";
-       print OUT "persist_time_user:$O{persist_time_user} #amount of time results persist for registered users, in hours (0 to disable limit)\n";
-       print OUT "persist_time_guest:$O{persist_time_guest} #amount of time results persist for guest users, in hours (0 to disable limit)\n";
+       print OUT "persist_time_user:$O{persist_time_user} #time results persist for registered users, in hours (0 to disable limit)\n";
+       print OUT "persist_time_guest:$O{persist_time_guest} #time results persist for guest users, in hours (0 to disable limit)\n";
+       print OUT "inactive_user:$O{inactive_user} #time user account can be inactive before disabling, in days (0 to disable limit)\n";
+       print OUT "inactive_guest:$O{inactive_guest} #time guest account can be inactive before disabling, in days (0 to disable limit)\n";
+       print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and results\n";
+       print OUT "cgi_dir:$O{cgi_dir} #web accesible directory where web interface CGI content is stored\n";
+       print OUT "html_dir:$O{html_dir} #web accesible directory where web interface HTML conent is stored\n";
+       print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.  Used for building webstart of Apollo.\n";
+       close(OUT);    
+   }
+
+   #--build menus.ctl file
+   if($type eq 'menus'){
+       open (OUT, "> $dir/menus.$ext");
+       print OUT "##Menus from Data::Dumper\n";
+       print OUT Data::Dumper->Dump([\%O], [qw(menus)]);
        close(OUT);    
    }
 }

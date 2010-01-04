@@ -1,0 +1,41 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+  <link rel=stylesheet type="text/css" href="/Course/css/course.css">
+  <title>Course Admin</title>
+</head>
+
+<body>
+<br>
+<table border class="main" cellspacing="0" cellpadding="0">
+  <tbody>
+    <tr>
+      <td class="title">
+        <a href="course_admin.cgi">Bioinformatics Course - HGEN 6090</a>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <table border class="menu">
+          <tr>
+            <td><a href="course_admin.cgi">Home</a></td>
+            <td><a href="course_students.cgi">Students</a></td>
+            <td><a href="course_quizzes.cgi">Quizzes</a></td>
+            <td><a href="course_questions.cgi">Questions</a></td>
+            <td><a href="course_exercises.cgi">Exercises</a></td>
+            <td><a href="course_reports.cgi">Reports</a></td>
+          </td>
+        </tr>
+      </table>
+    </tr>
+    <tr>
+      <td>
+        [% content %]
+      </td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

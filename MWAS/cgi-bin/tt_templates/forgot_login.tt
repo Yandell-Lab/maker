@@ -1,0 +1,53 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2><img src="/Student/images/mail_sent.png">  Forgot login?</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_general.cgi" name="general_add">
+
+<input type="hidden" name="rm" value="forgot_login_process">
+<table width=100%  bgcolor="#EDDA74"><tr><td>  <h2> [% message %]</td></tr></table></h2> 	
+<table bgcolor="#99CCCC">
+  <tr>
+   
+  </tr>
+  <tr>
+   
+  </tr>
+<td><h4>No worries! Enter your email address that you previously used to create your account</h4></td>
+  
+
+
+
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=30 maxlength=60 name="e_mail">
+    </td>
+  </tr>
+  <tr>
+  <tr>
+      <td>Enter Value:</td>
+    <td>   
+        <input type="text" size=10 maxlength=10 name="captcha" value="">
+    </td>   
+  </tr>
+  <tr>
+    <td>   
+    </td>   
+    <td>   
+        <img src="/cgi-bin/Student/student_general.cgi?rm=general_captcha_create">
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Email me my login info">
+</form>
+
+[% END %]
+

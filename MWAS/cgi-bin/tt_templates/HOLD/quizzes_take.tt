@@ -1,0 +1,52 @@
+[% WRAPPER main.tt %]
+
+[% USE autoformat(right => 80) %]
+
+<h2>Quiz Number [% quiz.quiz_number %]<br />[% quiz.quiz_title %]</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_quizzes.cgi">
+<input type="hidden" name="rm" value="quizzes_process">
+<input type="hidden" name="quiz_id" value="[% quiz.quiz_id %]">
+<input type="hidden" name="student_id" value="[% student.student_id %]">
+
+
+<table border width="100%" cellspacing=0 cellpadding=5>
+  [% FOREACH question = questions.nsort('question_number') %]
+  <tr>
+    <td rowspan="2">[% question.question_number %]</td>
+    <td>[%- autoformat(question.question_text) | remove(' +$') | replace(' ', '&nbsp;') | html_line_break -%]</td>
+  </tr>
+  <tr>
+    <td>
+    [% IF question.question_type == 'select' %]
+      [% options = question.question_options %]
+      <table width=100%>
+      [% FOREACH option = options %]
+	[% count = loop.count %]
+          <tr>
+            <td width=10px valign='top'>[% loop.count %]</td>
+            <td width=10px valign='top'><input type="checkbox" name="select_[% question.question_id %]_[% loop.count %]"
+                [%- IF question.student_options.${loop.count} %]
+                  checked="checked"
+                [% END -%]> 
+            </td>
+            <td valign='top'>[% option %]</td>
+          </tr>
+      [% END %]
+      </table>
+    [% ELSE %]
+        <textarea cols="60" rows="5" name="text_[% question.question_id %]_0">[% question.student_answer %]</textarea><br />
+    [% END %]
+    </td>
+  </tr>
+  [% END %]
+  <tr>
+    <td colspan="2" align="center">
+      <input type="submit" value="Submit Quiz">
+    </td>
+  </tr>
+</table>
+
+</form>
+
+[% END %]

@@ -1,0 +1,113 @@
+[% WRAPPER main.tt %]
+
+<h2>Help Pages</h2>
+
+<ul>
+  <li><h2>Connecting to <a href="http://bioinfo.genetics.utah.edu/ssh.html">bioinfo.genetics.utah.edu </a></h2></li>
+  <li><h2><a href="http://bioinfo.genetics.utah.edu/cgi-bin/wiki/wiki.pl?Documentation">Tutorials, reference card and resources</a></h2></li>
+  <li><h2>Instructor's Office Hours:</h2></li>
+    <ul>
+      <li>
+          Mark Yandell will meet with students as needed in 6100 EIHG.  Send e-mail to
+          <a href="mailto:myandell@genetics.utah.edu">myandell@genetics.utah.edu</a> to schedule an appointment.
+      </li>
+      <br />
+      <li>
+          Bob Weiss will meet with students as needed in 308 BPRB.  Send e-mail to
+          <a href="mailto:bob@genetics.utah.edu">bob@genetics.utah.edu</a> to schedule an appointment.</li>
+      </li>
+    </ul>
+  <li><h2>Teaching Assistant Consulting Hours:</h2></li>
+    <ul>
+      <li>Carson Holt</li>
+    </ul>
+    <br />
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+
+    <th>MEETING</th>
+    <th>DATE</th>
+    <th>DAY</th>
+    <th>START</th>
+    <th>END</th>
+    <th>LOCATION</th>
+
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>03/06/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:00 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>03/13/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>03/20/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>03/27/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>04/03/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>04/10/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>04/17/2008</td>
+    <td>Thur</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+  <tr>
+    <td>Bioinfo Review Session</td>
+    <td>04/22/2008</td>
+    <td>Tues</td>
+    <td>02:30 PM</td>
+    <td>03:15 PM</td>
+    <td>HSEB 3100C</td>
+  </tr>
+
+</table>
+</ul>
+
+[% END %]
+

@@ -1,0 +1,44 @@
+<form method="POST" action="maker.cgi" name="launch" enctype="multipart/form-data">
+<input type="hidden" name="rm" value="launch">
+<input type="hidden" name="job_id" value="[% job_id %]">
+<table width= 100%>
+<tr>
+  <td nowrap>
+    <h3 align=left>Annotation Status Summery:</h3>
+    <center>
+    <p style="font-size : 12">
+	TOTAL Contigs: [% counts.TOTAL %]<br>
+	FINISHED: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[% counts.FINISHED %]<br>
+	INCOMPLETE: [% counts.INCOMPLETE %]<br>
+	FAILED: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[% counts.FAILED %]<br>
+	SKIPPED: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[% counts.SKIPPED %]
+    </p>
+	<br>
+	<a href="stream.cgi?type=tarball&job_id=[% job_id %]&user_id=[% user_id %]"><img src="http://www.famfamfam.com/lab/icons/silk/icons/disk.png" border="0px"><b>Download All Data</b></a>
+
+	<br>
+	<br>
+	<br>
+	View contigs individually.<br>
+   <select name="contig">
+     [% FOREACH opt = menus.sort('name') %]
+     <option value="[% opt.value %]">[% opt.name %]</option>
+     [% END %]
+   </select>
+<br>
+<br>
+    <input type="submit" name="apollo" value="View in Apollo">
+    <input type="submit" name="soba" value="SOBA Statistics">
+   </center>
+  </td>
+</tr>
+<tr>
+  <td>
+    <p style="font-size : 10"><br>
+      Clicking on "Launch in Apollo" will install a Java Web Start version of Apollo if not already installed. If for some inexplicable reason the program Dashcode starts <a href="http://malachite.genetics.utah.edu/apollo/index.html">click here</a>.
+    </p>
+  </td>
+</tr>
+
+</table>
+</form>

@@ -1,0 +1,18 @@
+[% WRAPPER main.tt %]
+
+<h2>Exercise 3. Mirror Mirror</h2>
+<ol>
+  <li>Copy your script.template to a file called mirror.</li>
+  <li>
+    Now open mirror in vi and edit it so that it becomes a script that
+    prints out your last name (all uppercase), followed by a colon and
+    your last name reversed and in lower case.  For example: YANDELL:llednay
+  </li>
+  <li>
+    Hint: you will need to use the Perl functions reverse(), uc() and
+    lc(). Also you will need to chmod mirror to make it executable.
+  </li>
+</ol>
+
+[% END %]
+

@@ -1,0 +1,72 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2><img src="http://www.famfamfam.com/lab/icons/mini/icons/icon_user.gif">User Registration</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_general.cgi" name="general_add">
+
+<input type="hidden" name="rm" value="general_add_process">
+
+<table>
+  <tr>
+    <td>Login ID:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="c_id">
+    </td>
+  </tr>
+  <tr>
+    <td>Last Name:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="last_name" >
+    required</td>
+  </tr>
+  <tr>
+    <td>First Name:</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 name="first_name">
+    </td>
+  </tr>
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=30 maxlength=60 name="e_mail">
+    </td>
+  </tr>
+  <tr>
+  <tr>
+    <td>Password:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password">
+    </td>
+  </tr>
+  <tr>
+    <td>Verify Password:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password_verify">
+    </td>
+  </tr>
+  <tr>
+    <td>Enter Value:</td>
+    <td>   
+        <input type="text" size=10 maxlength=10 name="captcha" value="">
+    </td>   
+  </tr>
+  <tr>
+    <td>   
+    </td>   
+    <td>   
+        <img src="http://derringer.genetics.utah.edu/cgi-bin/Student/student_general.cgi?rm=general_captcha_create">
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Update Profile">
+</form>
+
+[% END %]
+

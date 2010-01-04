@@ -1,0 +1,11 @@
+
+[% WRAPPER main.tt %]
+
+This is the content on the home page.<br><br>
+
+[% FOREACH student = students %]
+  Student's name is [% student.first_name %]; <br>
+[% END %]
+
+[% END %]
+

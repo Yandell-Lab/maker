@@ -1,0 +1,108 @@
+body
+	{width:755px;
+	height:566px;}
+.T
+	{text-align:center;
+	font-family:"MS PGothic";
+	color:#775F55;
+	mso-color-index:3;
+	font-size:293%;}
+.B
+	{text-align:left;
+	font-family:"MS PGothic";
+	color:black;
+	mso-color-index:1;
+	font-size:213%;}
+.B1 {}
+.B2 {}
+.B3 {}
+.B4 {}
+.N {}
+.N1 {}
+.N2 {}
+.N3 {}
+.N4 {}
+.O
+	{text-align:left;
+	font-family:"MS PGothic";
+	color:black;
+	mso-color-index:1;
+	font-size:160%;
+	mso-char-wrap:1;
+	mso-kinsoku-overflow:1;}
+.O1
+	{mso-char-wrap:1;
+	mso-kinsoku-overflow:1;}
+.O2
+	{mso-char-wrap:1;
+	mso-kinsoku-overflow:1;}
+.O3
+	{mso-char-wrap:1;
+	mso-kinsoku-overflow:1;}
+.O4
+	{mso-char-wrap:1;
+	mso-kinsoku-overflow:1;}
+.CB
+	{text-align:center;
+	font-family:"MS PGothic";
+	color:black;
+	mso-color-index:1;
+	font-size:213%;}
+.CB1 {}
+.CB2 {}
+.CB3 {}
+.CB4 {}
+.CT
+	{text-align:center;
+	font-family:"MS PGothic";
+	color:#775F55;
+	mso-color-index:3;
+	font-size:293%;}
+.HB {}
+.HB1 {}
+.HB2 {}
+.HB3 {}
+.HB4 {}
+.QB {}
+.QB1 {}
+.QB2 {}
+.QB3 {}
+.QB4 {}
+.Tbl {}
+.Tbl1 {}
+.Tbl2 {}
+.Tbl3 {}
+.Tbl4 {}
+.defaultB
+	{mso-special-format:nobullet¥;}
+.default
+	{text-align:left;
+	font-family:"MS PGothic";
+	mso-ascii-font-family:Arial;
+	mso-fareast-font-family:"MS PGothic";
+	mso-hansi-font-family:Arial;
+	font-weight:normal;
+	font-style:normal;
+	text-decoration:none;
+	text-shadow:none;
+	text-effect:none;
+	mso-fareast-hint:no;
+	layout-flow:horizontal;
+	color:black;
+	mso-color-index:1;
+	font-size:160%;
+	mso-text-raise:0%;
+	mso-line-spacing:"100 0 0";
+	mso-margin-left-alt:0;
+	mso-text-indent-alt:0;
+	mso-char-wrap:1;
+	mso-kinsoku-overflow:1;
+	direction:ltr;
+	mso-word-wrap:1;
+	mso-ansi-language:1033;}
+a:link
+	{color:#F7B615 !important;}
+a:active
+	{color:#DD8047 !important;}
+a:visited
+	{color:#704404 !important;}

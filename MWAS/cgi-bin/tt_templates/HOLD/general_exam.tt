@@ -1,0 +1,114 @@
+[% WRAPPER main.tt %]
+
+<h2 style="text-align: center">
+FINAL EXAM
+</h2>
+
+<h2 style="text-align: center">
+HGEN 6090-001 (Class #12526)
+</h2>
+
+<p style="text-align: center; color: red">
+Your exam must be uploaded by midnight May 1st.
+</p>
+
+<p>
+/home/class/data contains three microarray expression datasets called
+Male_to_Female.txt, NMD_microarray.txt and 72_hr_to_96_hr.txt.
+</p>
+
+<p>
+The first column of each file is a Celera gene id (CG). The second
+column in each file is a LOD2 expression value. Male_to_female.txt,
+for example, compares relative expression levels of genes in females
+to those of males. Consider the following line drawn from this file:
+</p>
+
+<p style="text-align: center">
+CG4201  2.02186292415597
+</p>
+
+<p>
+The line shown above means that the expression of gene CG4201 was
+up-regulated about 4.1-fold in females relative to males.  Similarly,
+NMD_microarray.txt compares expression levels for genes in flies
+mutant in the NMD pathway to the expression of those same genes in
+wt-files. And 72_hr_to_96_hr.txt compares expression levels in
+96 hrs-old flies to those 72 hrs-old.
+</p>
+
+<p> 
+Your assignment is to investigate whether or not any of these data
+are correlated with 3-prime UTR length. Use the multi-fasta file of
+3-prime UTRs called
+/home/class/data/dmel-utr3.longest_only.fasta. Answer each of the
+following questions using some of your own scripts to manufacture the
+inputs to /home/class/bin/randomizer: 
+</p>
+
+<ol>
+  <li>
+    Is the expression of genes that have transcripts with longer UTRs up
+    or down regulated in NMD mutant flies compared to genes whose
+    transcripts have shorter 3-prime UTRs?  E.g is the correlation
+    coeffecient negative or positive?
+  </li>
+  <li>
+    Are genes with longer UTRs preferentially up or down regulated in
+    females relative to males?
+  </li>
+  <li>
+    What about as flies grow older? Early in development are
+    transcripts with short UTRs less or more abundant than those with long
+    UTRs?  Again, think about the sign of the coorelation coeffecient.
+  </li>
+  <li>
+    Determine both the Pearson & Spearman correlation coefficients for
+    each of the three hypotheses outlined above.  Are the observed
+    correlations statistically significant? At P < 0.01?
+  </li>
+  <li>
+    Critically discuss your results (from 1-4 above) in a short essay
+    (somewhere between 3/4 and 1-1/2 pages in length). Your essay
+    should include the correlation coefficients you obtained in 1-4
+    above. Which (if either) of the two correlation coefficients is
+    best suited for these analyses? Why?  Can you think of
+    biologically meaningful explanation for the trends you observe as
+    regards development, NMD, and sex specific gene-regulation? Be
+    critical, but also feel free to speculate a bit.
+  </li>
+
+<p style="text-align: center; color: red">
+Remember: Your exam must be uploaded by midnight May 1st.
+</p>
+
+<h2 style="text-align: center">
+Good Night and Good Luck
+</h2>
+
+<hr />
+
+<h2>Upload Your Exam</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_general.cgi" enctype="multipart/form-data">
+<input type="hidden" name="rm" value="general_exam_upload">
+
+<table>
+  <tr>
+    <td colspan="2"; style="text-align: center; color: red">Exam should be in TEXT format</td>
+  </tr>
+  <tr>
+    <td>Find Your Exam File:</td>
+    <td><input type="file" name="file_name"></td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <input type="submit" name="Submit" value="Submit Your Exam">
+    </td>
+  </tr>
+</table>
+
+</form>
+
+[% END %]
+

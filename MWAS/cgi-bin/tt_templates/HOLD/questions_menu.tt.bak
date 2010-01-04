@@ -1,0 +1,12 @@
+<br />
+<center>
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+    <td><a href="course_questions.cgi?rm=questions_add">Add Question</a></td>
+    <td><a href="course_questions.cgi?rm=questions_delete">Delete Question</a></td>
+    <td><a href="course_questions.cgi?rm=questions_list">List Questions</a></td>
+    <td><a href="course_questions.cgi?rm=questions_edit">Edit Questions</a></td>
+  </tr>
+</table>
+</center>
+<br />

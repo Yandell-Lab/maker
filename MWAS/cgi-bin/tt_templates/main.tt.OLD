@@ -1,0 +1,79 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+  <link rel=stylesheet type="text/css" href="/Student/css/student.css">
+  <title>HGEN 6090 - Student Site</title>
+</head>
+
+<body>
+<br>
+<table border class="main" cellspacing="0" cellpadding="0">
+  <tbody>
+    <tr>
+      <td colspan="3">
+        <table width=100%>
+          <tr>
+            <td class="title">
+              <a href="/cgi-bin/Student/student_home.cgi">Bioinformatics Course - HGEN 6090</a>
+            </td>
+          </tr>
+          <tr>
+            <td align="right">
+            [% IF logged_in  %]
+              logged-in as [% session.param('AUTH_USERNAME') %] | <a href="student_general.cgi?rm=general_home;authen_logout=1">logout</a>&nbsp;
+            [% ELSE %]
+               <a href="student_students.cgi?rm=students_list">login</a> &nbsp;
+            [% END %]
+            </td>
+          </tr>
+        </table>
+      </td>
+    <tr>
+      <td colspan="3">
+        <table border class="menu">
+          <tr>
+            <td><a href="student_general.cgi?rm=general_home">Home</a></td>
+            <td><a href="student_general.cgi?rm=general_course_details">Course Details</a></td>
+            <td><a href="student_general.cgi?rm=general_lectures">Lectures</a></td>
+            <td><a href="student_general.cgi?rm=general_reading">Books, Software, Downloads</a></td>
+	    [% IF logged_in %]
+            <td><a href="student_students.cgi?rm=students_list">Student Profiles</a></td>
+            <td><a href="student_quizzes.cgi">Quizzes</a></td>
+            <td><a href="student_exercises.cgi">Exercises</a></td>
+            <td><a href="student_general.cgi?rm=general_exam">Final Exam</a></td>
+            [% ELSE %]
+            <td><a href="student_students.cgi?rm=students_list">Student Login</a></td>
+            [% END %]
+            <td><a href="student_general.cgi?rm=general_help">Help</a></td>
+            <td><a href="http://bioinfo.genetics.utah.edu/cgi-bin/wiki/wiki.pl?Bioinfo_Wiki">Course Wiki</a></td>
+          </td>
+        </tr>
+      </table>
+    </tr>
+    <tr>
+      <td width="15%" valign="top">
+        <br />
+        <br />
+        <center><h4>Perl/Linux Tips</h4></center>
+	[% INCLUDE tips.tt %]
+	<br />
+      </td>
+      <td>
+        <br />
+        [% content %]
+        <br />
+      </td>
+      <td width="15%" valign="top">
+        <br />
+        <br />
+        <center><h4>Course News</H4></center>
+	[% INCLUDE news.tt %]
+        <br />
+      </td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

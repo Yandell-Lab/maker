@@ -1,0 +1,1163 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+function org_type_changed(type){
+  document.job_form.just_update_opt.value = 1;
+  for (i=0;i < document.job_form.organism_type.length;i++) {
+    if(document.job_form.organism_type[i].value == type){
+	document.job_form.organism_type[i].checked = true;
+    }
+    else{
+      document.job_form.organism_type[i].checked = false;
+    }
+  }
+  document.job_form.submit();
+}
+
+function change_field(field_name, new_value){
+}
+</script>
+
+<center>
+[% MACRO add_options BLOCK %]
+  [% IF options.size > 0 || empty_message %]
+  <OPTGROUP LABEL="[% label %]">
+    [% IF options.size <= 0 %]
+      <OPTION DISABLED VALUE="">[% empty_message %]</OPTION>
+    [% END %]
+  
+    [% FOREACH file = options.sort('name') %]
+      [% IF logged && file.value == logged %]
+        <OPTION SELECTED VALUE="[% file.value %]">[% file.name %]</OPTION>
+      [% ELSIF filter and file.length > filter %]
+        <OPTION DISABLED VALUE="[% file.value %]">[% file.name %] -- TOO LONG!</OPTION>
+      [% ELSE %]
+        <OPTION VALUE="[% file.value %]">[% file.name %]</OPTION>
+      [% END %]
+    [% END %]
+  </OPTGROUP>
+  [% END %]	  
+[% END %]
+
+[% MACRO set_static BLOCK %]
+  [% FOREACH file = options %]
+    [% IF value == '' || file.value == value %]
+      <input type="text" name="[% name %]" value="[% value %]" disabled>
+      [% LAST %]
+    [% ELSE %]
+      <input type="text" name="NULL" value="ERROR" disabled>
+    [% END %]
+  [% END %]
+[% END %]
+
+<br>
+
+[% IF message %]
+<h3>[% message %]</h3>
+[% END %]
+
+<table width=90% bgcolor=CACACA style="border-collapse: collapse">
+  <tr bgcolor=white>
+    <td>
+      <p>
+      Use the options below to configure your annotation job[% IF menus.tutorials.size > 0 %], or load one of the provided example annotation jobs.  After clicking load for an example job, the fields below will be filled out for you.  You can can then review them or edit them[% END %].  Click "Add Job to Queue" at the bottom of the page to submit a job.  Click "Save" to save progress without submitting.
+      For more information on using the MAKER Web Annotation Service, click "Help" above.
+      </p>
+    </td>
+    [% IF menus.tutorials.size > 0 %]
+    <td align="right">
+	<form method="POST" action="maker.cgi" name="example_form" enctype="multipart/form-data">
+	<input type="hidden" name="rm" value="job_create">
+	<center>
+	Example Jobs
+	<SELECT name='job_id'>
+	[% add_options(options = menus.tutorials) %]
+	</SELECT>
+	<br>
+	</center>
+	<p><input type="submit" name="load" value="Load"></p>
+	</form>
+    </td>
+    [% END %]
+  </tr>
+</table>
+
+<br>
+
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td>
+      <center><img src="stream.cgi?type=img&src=barcode.png"></center>
+    </td>
+    <td bgcolor=CACACA align=right>
+      <h3>MAKER Job Details</h3>
+    </td>
+    <td bgcolor=CACACA align=right>
+      <h3>Assigned id:</h3>
+    </td>
+    <td>
+      <center>[% IF job_id %][% job_id %][% ELSE %]Click save<br>to assign[% END %]</center>
+    </td>
+  </tr>
+</table>
+
+<form method="POST" action="maker.cgi" name="job_form" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="submit_to_db">
+<input type="hidden" name="job_id" value="[% job_id %]">
+<input type="hidden" name="just_update_opt" value="0">
+<br>
+
+[% IF stat.genome != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Denovo Annotation</span></h2>
+    </td>
+  </tr>
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight:bold">Begin by selecting a sequence file to annotate.  You also need to select the type of organism the sequence was derived from.  This is important because annotation strategies and gene prediction algorithms differ for Eukaryotic and Prokaryotic organisms.</p>
+    </td>  
+  </tr>
+  <tr bgcolor=white>
+    [% IF stat.genome == 'STATIC' %]
+    <td>
+     <p style="font-weight:bold">The following genome fasta file will be annotated:
+    </p>
+   </td>
+   <td>
+    [% set_static(name    = 'genome',
+		  value   = ctl_opt.genome,
+                  options = menus.genome.server,
+                  logged  = log_opt.genome
+                 )
+    %]
+   </td>
+   
+   <td>
+   </td>
+   [% ELSE %]
+   <td>
+     <p style="font-weight:bold">Choose a genome fasta file:
+     [% SET max_submit = (user.type == 'guest') ? ctl_opt.max_submit_guest : ctl_opt.max_submit_user %]
+     [% IF max_submit > 0 %]
+       <span style="color:red">Submissions must be [% max_submit %] base pairs or less.</span>
+     [% END %]
+     </p>
+     <br>
+     <p style="font-size : 11">
+       <b>Organism Type:</b>
+       <input type=radio name="organism_type" value="eukaryotic" [% IF o_type == 'eukaryotic' %] checked="checked" [% END %] onclick="org_type_changed('eukaryotic');"> Eukaryotic
+       <input type=radio name="organism_type" value="prokaryotic" [% IF o_type == 'prokaryotic' %] checked="checked" [% END %] onclick="org_type_changed('prokaryotic');"> Prokaryotic
+     </p>
+   </td>
+   <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='genome'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.genome.server,
+	               logged  = log_opt.genome
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged  = log_opt.genome,
+	               empty_message = 'You must upload a file first...',
+	               filter = max_submit
+	              )
+	%]
+     </SELECT></center>
+   </td>
+   
+   <td nowrap>
+     <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+   </td>
+   [% END %]
+  </tr>
+
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>
+  </tr>
+</table>
+
+<br>
+[% END %]
+
+[% IF ctl_opt.est != 'DISABLED' && ctl_opt.altest != 'DISABLED' && ctl_opt.est_gff != 'DISABLED' && ctl_opt.altest_gff != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=CACACA>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">EST Evidence</span></h2>
+    </td>
+  </tr>
+</table>
+[% END %]
+
+[% IF ctl_opt.est != 'DISABLED' && ctl_opt.altest != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight:bold">ESTs aligned against the genome are used to infer correct intron/exon structure of a gene as well as the location of 5' and 3' UTR. Two different types of ESTs can be used: (1) ESTs from the same source as your genomic sequence; and (2) (optionally) ESTs from a closely related organism, for example if your genomic sequence is human, this second set of ESTs might be from mouse.</p>
+    </td>
+  </tr>
+
+  [% IF ctl_opt.est != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs to be aligned from the same source as your genomic sequence.</p>
+    </td>
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+      <center><SELECT name='est'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.est.server,
+	               logged     = log_opt.est
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged     = log_opt.est,
+	               empty_message = 'You must upload a file first...'
+	              )
+	%]
+     </SELECT></center>
+   </td>	    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+
+  [% IF ctl_opt.altest != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from related organisms; this file is optional. Please keep in mind that these ESTs must be aligned to the genomic sequence using TBLASTX, and providing this file may substantially increase compute time. <span style="color: blue; font-weight: bold">Optional</span></p>
+    </td>
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+      <center><SELECT name='altest'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.altest.server,
+	               logged     = log_opt.altest
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged     = log_opt.altest,
+	               empty_message = 'You must upload a file first...'
+	              )
+	%]
+     </SELECT></center>
+    </td>
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+  
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>	  
+  </tr>
+</table>
+
+<br>
+[% END %]
+
+[% IF stat.est_gff != 'DISABLED' && stat.altest_gff != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+   <tr bgcolor=white>
+     <td colspan=3>
+       <p style="font-weight: bold">If you have already aligned ESTs against the genome on your own, you can provide these alignments to MAKER in GFF3 formated files. Having the alignments precomputed will of course save on computation time.
+       </p>
+     </td>
+  </tr>
+
+  [% IF stat.est_gff != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of aligned ESTs from the same source as your genomic sequence. <span style="color: blue; font-weight: bold">Optional</span></p>
+    </td>
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+      <center><SELECT name='est_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.est_gff.server,
+	               logged     = log_opt.est_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.est_gff,
+	               empty_message = 'You must upload a file first...'
+	              )
+	%]
+     </SELECT></center>
+   </td>	    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+  
+  [% IF stat.altest_gff != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of aligned ESTs from related organisms. <span style="color: blue; font-weight: bold">Optional</span>
+      </p>
+    </td>
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+      <center><SELECT name='altest_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.altest_gff.server,
+	               logged     = log_opt.altest_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.altest_gff,
+	               empty_message = 'You must upload a file first...'
+	              )
+	%]
+     </SELECT></center>
+   </td>
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+  
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+   </td>
+ </tr>
+</table>
+ 
+<br>
+[% END %]
+
+[% IF stat.protein != 'DISABLED' && stat.protein_gff != 'DISABLED' %]
+<table width=90%  bgcolor=CACACA>
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Protein Homology Evidence</span></h2>
+    </td>
+  </tr>
+</table>
+[% END %]
+   
+[% IF stat.protein != 'DISABLED' %] 
+<table width=90%  bgcolor=CACACA>
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">Select a multi-fasta file of proteins; these will be aligned to your genomic sequence and used to help inform the final annotations. Proteins do not need to come from the same organism as the genomic sequence.  Because peptide sequence diverges slower than nucleotide sequence, this file can contain proteins from both closely and distantly related organisms.  Large protein databases like UniProt/Swiss-Prot are good general options for identifying protein homology.
+      </p>
+    </td>
+  </tr>
+   
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of proteins, or if you simply wish to use the current UniProt/Swiss-Prot database, select UniProt from the drop-down menu.
+      </p>
+    </td>
+	  
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='protein'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.protein.server,
+	               logged     = log_opt.protein
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged     = log_opt.protein,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center>
+    </td>
+	  
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>	  
+  </tr>	
+
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>
+  </tr>
+</table>
+
+<br>
+[% END %]
+
+[% IF stat.protein_gff != 'DISABLED' %] 
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">If you have already aligned proteins against the genome on your own, you can provide these alignments to MAKER in a GFF3 formated file.
+      </p>
+    </td>
+  </tr>
+     
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of aligned proteins. <span style="color: blue; font-weight: bold">Optional</span></p>
+    </td>
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+      <center><SELECT name='protein_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.protein_gff.server,
+	               logged     = log_opt.protein_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.protein_gff,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+      </SELECT></center>
+    </td>	    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+   
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>
+  </tr>
+</table>
+      
+<br>
+[% END %]
+
+[% IF o_type != 'prokaryotic' &&( stat.model_org != 'DISABLED' && stat.rmlib != 'DISABLED' && stat.rm_gff != 'DISABLED'  && stat.repeat_protein != 'DISABLED') %]
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Configure Repeat Masking</span></h2>
+    </td>
+  </tr>
+</table>
+[% END %]
+
+[% IF o_type != 'prokaryotic' && stat.model_org != 'DISABLED' && stat.repeat_protein != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td>
+      <p style="font-weight: bold">MAKER uses RepeatMasker as well as RepeatRunner (a protein-based repeat-masking protocol) to identify, annotate, and then mask repeats.  Both RepeatMasker and RepeatRunner rely on internal databases for repeat identification.  RepeatMasker uses RepBase, while RepeatRunner uses a MAKER internal transposable element protein file.  Repeat-masking is highly recommended as part of the annotaion process, as repetative elements can induce false exons and false gene predictions in the final set of annotations.
+      [% IF stat.model_org != 'DISABLED' && stat.repeat_protein != 'DISABLED' && stat.model_org != 'STATIC' && stat.repeat_protein != 'STATIC' %]
+        <span style="color: red; font-weight: bold">Not masking repeats will seriously compromise the quality of your annotations;</span> but if you don't want to, you don't have to, just leave the boxes below unchecked.
+      [% END %]
+      </p>
+    </td>
+  </tr>
+</table>
+
+<table width=90% bgcolor=CACACA >
+  [% IF stat.model_org != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox"  name="go_masker" value="1"
+      [% IF log_opt.model_org %]
+        checked
+      [% END %]
+      [% IF stat.model_org == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td>
+      <p> Run RepeatMasker against the genome using RepBase (recommended).</p>
+    </td>
+    [% IF stat.model_org == 'STATIC' %]
+    <td>
+      [% set_static(name    = 'model_org',
+    		    value   = ctl_opt.model_org,
+                    options = menus.model_org.server,
+                    logged  = log_opt.model_org
+                   )
+      %]
+    </td>
+    [% ELSIF menus.model_org.server.size > 0 %]
+    <td>
+     <!--
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a species/group for filtering repeats</center>
+      <center><SELECT name='model_org'>
+	[% add_options(label   = 'Server Provided Options',
+	               options = menus.model_org.server,
+	               logged     = log_opt.model_org
+	              )
+	%]
+      </SELECT></center>
+	-->
+	<input type="hidden" value="all" name="model_org">
+    </td>
+    [% ELSE %]
+    <td>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Enter a species/group for filtering repeats</center>
+      <center><input type="text" size=20 maxlength=20 name="model_org" value="[% ctl_opt.modle_org %]"></center>
+    </td>
+    [% END %]
+    <td>
+    </td>
+  </tr>
+  [% END %]
+  
+  [% IF stat.repeat_protein != 'DISABLED' %]  
+  <tr bgcolor=white>
+    <td>
+      <input type="checkbox" name="go_runner" value="1"
+      [% IF log_opt.repeat_protein %]
+        checked
+      [% END %]
+      [% IF stat.repeat_protein == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td>
+      <p> Run RepeatRunner using a transposable element protein database (recommended).</p>
+    </td>
+    [% IF stat.repeat_protein == 'STATIC' %]
+    <td>
+      [% set_static(name    = 'repeat_protein',
+                    value   = ctl_opt.repeat_protein,
+                    options = menus.repeat_protein.server,
+                    logged  = log_opt.repeat_protein
+                   )
+      %]
+    </td>
+    [% ELSE %]
+    <td nowrap>
+      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><SELECT name='repeat_protein'>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.repeat_protein.server,
+	               logged     = log_opt.repeat_protein
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged     = log_opt.repeat_protein,
+	               empty_message = 'You must upload a file first...'
+	              )
+	%]
+      </SELECT></center>
+    </td>
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+    [% END %]
+  </tr>
+  [% END %]
+</table>
+
+<br>
+[% END %]
+
+
+[% IF o_type != 'prokaryotic' && stat.rmlib != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">Perhaps you have manufactured your own nucleotide repeat library or have found a library that you think would work well with RepeatMasker? If so, you can use that nucelotide multi-fasta file to supplement the repeat-masking process.
+      </p>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a custom repeat nucleotide multi-fasta file. <span style="color: blue; font-weight: bold">Optional</span></p>
+    </td>
+    
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='rmlib'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Fasta Files',
+	               options = menus.rmlib.server,
+	               logged     = log_opt.rmlib
+	              )
+	%]
+	[% add_options(label   = 'User Provided Fasta Files',
+	               options = menus.fastas.user,
+	               logged     = log_opt.rmlib,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center>	   
+    </td>
+    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>	 
+  </tr>
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>
+  </tr>
+</table>
+
+<br>
+[% END %]
+
+[% IF stat.rm_gff != 'DISABLED' %]
+<table width=90% bgcolor=CACACA >
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">If you have already identified repeats in the genome, you can provide these to MAKER in a GFF3 formated file.
+      </p>
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of repeat elements. <span style="color: blue; font-weight: bold">Optional</span></p>
+    </td>
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='rm_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.rm_gff.server,
+	               logged     = log_opt.rm_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.rm_gff,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center
+    </td>	    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">
+    </td>
+  </tr>
+</table>
+
+<br>
+[% END %]
+
+[% IF stat.predictor != 'DISABLED' %]
+<table width=90%  bgcolor=CACACA>
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Choose Your Gene-predictor(s)</span></h2>
+    </td>
+  </tr>
+
+  [% IF stat.snaphmm != 'DISABLED' && stat.gmhmm != 'DISABLED' && stat.augustus_species != 'DISABLED' && stat.fgenesh_par_file != 'DISABLED' %]
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">MAKER can use a number of popular gene predictors. Even better, it can 'talk' to the gene predictors you choose, passing them information about EST and protein alignments in order to improve the quality of the predictions. Choose the ones you want to use below. Keep in mind that every gene predictor must be 'trained' for the organism whose DNA you wish to annotate; thus you will have to choose a predictor and then provide that predictor with a model file. You can upload your own files or select from the options already provided in the drop-down menus below.  If you don't find the organism your looking for, files can also be found at the gene-predictor's own web-site.  Check there to find more.
+<!--
+      [% IF stat.self_train != 'DISABLED' %]
+        Still can't find a model file for your organism? Don't despair; just choose the GENEMARK option and select self train.
+      [% END %]
+-->
+      </p> 
+    </td>
+  </tr>
+  [% END %]
+</table>
+
+<br>
+
+<table width=90% bgcolor=white>  
+  <tr bgcolor=white>
+    <td colspan=4 align=left>
+      <h4>Gene Predictors:</h4>
+    </td>
+  </tr>
+
+  [% IF stat.snaphmm != 'DISABLED' && o_type == 'eukaryotic' %]
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="go_snap" value="snap"
+      [% IF log_opt.predictor_hash.snap %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3>
+      SNAP
+    </td>
+  </tr>
+ 
+  <tr bgcolor=white>	 
+    <td></td>
+    <td>
+      Select either a server provided or a user provided SNAP model file.
+    </td>
+    
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='snaphmm'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided HMM Files',
+	               options = menus.snaphmm.server,
+	               logged     = log_opt.snaphmm
+	              )
+	%]
+	[% add_options(label   = 'User Provided HMM Files',
+	               options = menus.snaphmm.user,
+	               logged     = log_opt.snaphmm,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center	    
+    </td>
+    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+  
+  [% IF stat.augustus_species != 'DISABLED' && o_type == 'eukaryotic' %]
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="go_augustus" value="augustus"
+      [% IF log_opt.predictor_hash.augustus %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3>
+      AUGUSTUS
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>	 
+    <td></td>
+    <td>
+      Select from the server providedd AUGUSTUS model file.
+    </td>
+    
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='augustus_species'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided Species Files',
+	               options = menus.augustus_species.server,
+	               logged     = log_opt.augustus_species
+	              )
+	%]
+	<!--
+	[% add_options(label   = 'User Provided Species Files',
+	               options = menus.augustus_species.user,
+	               logged     = log_opt.augustus_species,
+	               empty_message = 'You must upload species files first...',
+	              )
+	%]
+       -->
+     </SELECT></center	    
+    </td>
+    
+    <td nowrap>
+	<!--
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      -->
+    </td>
+  </tr>
+  [% END %]
+  
+  [% IF stat.fgenesh_par_file != 'DISABLED' && o_type == 'eukaryotic' %]
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="go_fgenesh" value="fgenesh"
+      [% IF log_opt.predictor_hash.fgenesh %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3>
+      FGENESH
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>	 
+    <td></td>
+    <td>
+      Select either a server provided or a user provided FGENESH model file.
+    </td>
+    
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='fgenesh_par_file'>
+	<OPTION SELECTED VALUE="">No HMM selected...</OPTION>
+	[% add_options(label   = 'Server Provided HMM Files',
+	               options = menus.fgenesh_par_file.server,
+	               logged     = log_opt.fgenesh_par_file
+	              )
+	%]
+	[% add_options(label   = 'User Provided HMM Files',
+	               options = menus.fgenesh_par_file.user,
+	               logged     = log_opt.fgenesh_par_file,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center	    
+    </td>
+    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+
+  [% IF stat.gmhmm != 'DISABLED' %]  
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="go_genemark" value="genemark"
+      [% IF log_opt.predictor_hash.genemark %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3>
+      GeneMark
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>	 
+    <td></td>
+    <td>
+      <p>Select either a server provided or a user provided GeneMark model file. <!-- You can also select a fasta file from the drop down menu for self training.  At least 10 megabases of sequence is required.  GeneMark can take up tp 7 hours for self training, so this will significantaly add to computation time. The resulting model file will be saved in your file box. -->
+      </p>
+    </td>
+    
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><SELECT name='gmhmm'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided HMM Files',
+	               options = menus.gmhmm.server,
+	               logged     = log_opt.gmhmm
+	              )
+	%]
+	[% add_options(label   = 'User Provided HMM Files',
+	               options = menus.gmhmm.user,
+	               logged     = log_opt.gmhmm,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center	    
+    </td>
+    
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+  [% END %]
+
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="est2genome" value="est2genome"
+      [% IF log_opt.predictor_hash.est2genome %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3 align=left>
+      Est2Genome
+    </td>
+  </tr>
+ 
+  <tr bgcolor=white>
+    <td></td>
+    <td colspan=3>
+      Make gene annotation directly from EST alignments built from the files provided as EST evidence.  This will produce rough/aproximate gene models in the absence of other gene predictors.
+    </td>
+  </tr>
+
+  
+  [% IF o_type == 'prokaryotic' %]
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="protein2genome" value="checked" [% protein2genome %]
+      [% IF log_opt.predictor_hash.protein2genome %]
+        checked
+      [% END %]
+      [% IF stat.predictor == 'STATIC' %]
+        disabled
+      [% END %]
+      />
+    </td>
+    <td colspan=3 align=left>
+      Protein2Genome
+    </td>
+  </tr>
+ 
+  <tr bgcolor=white>
+    <td></td>
+    <td colspan=3>
+      Make gene annotation directly from protein alignments built from the files provided as protein homolgy evidence.
+    </td>
+  </tr>
+  [% END %]
+</table>
+
+<br>
+
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Already Have Your Own Gene Models/Ab-inito Predictions?</span></h2>
+    <td>
+  </tr>
+  
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">MAKER can also integrate pre-existing gene annotations and ab-initio gene predictions. You need only provide the annotations/predictions in GFF3 format.  When provided with multiple legacy annotation datasets, MAKER will merge them and produce an updated consensus dataset that is best supported by the evidence. <!--Selecting the 'Map Forward' option will map pre-existing gene model names onto all new and updated gene models that replace them because of better evidence support. -->
+      </p>
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of ab-initio gene predictions. <span style="color: blue; font-weight: bold">Optional</span>
+      </p>
+    </td>
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='pred_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.pred_gff.server,
+	               logged     = log_opt.pref_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.pred_gff,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center	  
+    </td>
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+      <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of gene models. <span style="color: blue; font-weight: bold">Optional</span>
+      </p>
+    </td>
+    <td nowrap>
+     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+
+     <center><SELECT name='model_gff'>
+	<OPTION SELECTED VALUE="">No file selected...</OPTION>
+	[% add_options(label   = 'Server Provided GFF3 Files',
+	               options = menus.model_gff.server,
+	               logged     = log_opt.model_gff
+	              )
+	%]
+	[% add_options(label   = 'User Provided GFF3 Files',
+	               options = menus.gff3.user,
+	               logged     = log_opt.model_gff,
+	               empty_message = 'You must upload a file first...',
+	              )
+	%]
+     </SELECT></center	  
+    </td>
+    <td nowrap>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+    </td>	
+  </tr>
+  
+  <tr bgcolor=white>
+    <td></td>
+    <td></td>
+    <td>
+      <input type="submit" name="save" value="save">     
+    </td>
+  </tr>     
+</table>
+    
+<br>
+[% END %]
+  
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Annotation Properties</span></h2>
+    </td>
+  </tr>
+  
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight: bold">
+	These are other options that can have an effect on the annotation process.  For the most part, you can leave these set to their default values.
+      </p>
+    </td>
+  </tr>
+</table>
+
+<table width=90%>
+  <tr bgcolor=white>
+    <td>
+      <p>Non standard amino acids generally cause problems for alignment
+      algorithms. Here you can select a standard amino acids to replace non
+      standard amino acids.
+      </p>
+    </td>
+    <td>
+      <SELECT name="alt_peptide">
+	[% FOREACH pep = menus.alt_peptide.sort %]	
+	  [% IF log_opt.alt_peptide == pep %]
+	    <OPTION SELECTED VALUE=[% pep %]>[% pep %]</OPTION>
+	  [% ELSE %]
+	    <OPTION VALUE=[% pep %]>[% pep %]</OPTION>
+	  [% END %]
+	[% END %]
+      </SELECTED>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+      <p>All contigs from the input genome file below this size will be skipped.</p>
+    </td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_contig" value="[% log_opt.min_contig %]">
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+      <p>All final gene annotations must produce a protein of at least this many amino acids in length.</p>
+    </td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_protein" value="[% log_opt.min_protein %]">
+    </td>
+  </tr>
+
+  [% IF o_type != 'prokaryotic' %]  
+  <tr bgcolor=white>
+    <td>
+      <p>Expected maximum intron size for evidence alignments (in base pairs).</p>
+    </td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="split_hit" value="[% log_opt.split_hit %]">
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+	<p>Consider single exon EST evidence when generating annotations.  Single exon ESTs usually result from genomic contamination of the cDNA, so ignoring them is recommended.</p>
+    </td>
+    <td>
+      <SELECT name="single_exon">
+	<OPTION	SELECTED VALUE="1">Yes</OPTION>
+	[% IF ctl_opt.single_exon == 0 %]
+	  <OPTION SELECTED VALUE="0">No</OPTION>
+	[% ELSE %]
+	  <OPTION VALUE="0">No</OPTION>
+	[% END %]
+     </SELECTED>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td>
+     <p>Minumum length required for single exon ESTs if single exon EST alignments are used (see above option).</p>
+    </td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="single_length" value="[% log_opt.single_length %]">
+    </td>
+  </tr>
+[% END %]
+</table>
+
+<br>
+<br>
+
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td>
+      <input type="submit" name="add" value="Add Job to Queue">
+      <input type="submit" name="later" value="Save/Come Back Later">
+      <input type="reset" value="Clear"><br>
+    </td>
+  </tr>
+</table>
+</form>
+</center>
+[% END %]
+
+      

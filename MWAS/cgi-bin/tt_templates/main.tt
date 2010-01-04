@@ -1,0 +1,226 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<head>
+    <meta http-equiv="content-cype" content="text/html; charset=iso-8859-1" />
+    <meta name="description" content="MAKER Web Annotation Service:Your genome annotated" />
+    <meta name="keywords" content="MAKER" />
+    <link rel="stylesheet" type="text/css" href="http://malachite.genetics.utah.edu/MWAS/css/style.css" media="screen"/>
+    <link rel="stylesheet" type="text/css" href="http://malachite.genetics.utah.edu/MWAS/css/print.css" media="print"/>
+    <title>MAKER Web Annotation Service</title>
+</head>
+
+<script type="text/javascript" src="sarissa.js"></script>
+<script language="JavaScript1.2">
+<!--
+isIE=document.all;
+isNN=!document.all&&document.getElementById;
+isN4=document.layers;
+isActive=false;
+
+function MoveInit(e){
+  topOne=isIE ? "BODY" : "HTML";
+  whichOne=isIE ? document.all.FloatingLayer : document.getElementById("FloatingLayer");  
+  ActiveOne=isIE ? event.srcElement : e.target;  
+  while (ActiveOne.id!="titleBar"&&ActiveOne.tagName!=topOne){
+    ActiveOne=isIE ? ActiveOne.parentElement : ActiveOne.parentNode;
+  }  
+  if (ActiveOne.id=="titleBar"){
+    offsetx=isIE ? event.clientX : e.clientX;
+    offsety=isIE ? event.clientY : e.clientY;
+    nowX=parseInt(whichOne.style.left);
+    nowY=parseInt(whichOne.style.top);
+    MoveEnabled=true;
+    document.onmousemove=Move;
+  }
+}
+
+function Move(e){
+  if (!MoveEnabled) return;
+  whichOne.style.left=isIE ? nowX+event.clientX-offsetx : nowX+e.clientX-offsetx; 
+  whichOne.style.top=isIE ? nowY+event.clientY-offsety : nowY+e.clientY-offsety;
+  return false;  
+}
+
+function MoveN4(whatOne){
+  if (!isN4) return;
+  N4=eval(whatOne);
+  N4.captureEvents(Event.MOUSEDOWN|Event.MOUSEUP);
+  N4.onmousedown=function(e){
+    N4.captureEvents(Event.MOUSEMOVE);
+    N4x=e.x;
+    N4y=e.y;
+  }
+  N4.onmousemove=function(e){
+    if (isActive){
+      N4.moveBy(e.x-N4x,e.y-N4y);
+      return false;
+    }
+  }
+  N4.onmouseup=function(){
+    N4.releaseEvents(Event.MOUSEMOVE);
+  }
+}
+
+function ToggleFloatingLayer(DivID, iState) // 1 visible, 0 hidden
+{
+    if(document.layers)   //NN4+
+    {
+        if(iState == 2)
+        {
+            iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
+        }
+        document.layers[DivID].visibility = iState ? "show" : "hide";
+    }
+    else if(document.getElementById)  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        if(iState == 2)
+        {
+            iState = (obj.style.visibility == "visible") ? 0 : 1;
+        }
+        obj.style.visibility = iState ? "visible" : "hidden";
+    }
+    else if(document.all)// IE 4
+    {
+        if(iState == 2)
+        {
+            iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
+        }
+        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
+    }
+}
+
+function resize(big)
+{
+    var DivID = 'FloatingTable';
+    if(document.layers)   //NN4+
+    {
+        document.layers[DivID].width = big ? "740" : "350";
+    }
+    else if(document.getElementById)  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        obj.width = big ? "740" : "350";
+    }
+    else if(document.all)// IE 4
+    {
+        document.all[DivID].width = big ? "740" : "350";
+    }
+}
+
+document.onmousedown=MoveInit;
+document.onmouseup=Function("MoveEnabled=false");
+// -->
+</script>
+
+<script type="text/javascript">
+<!--
+function LoadURL(DivID, url) {
+document.getElementById(DivID).innerHTML = 'Loading...';
+  var xmlhttp = new XMLHttpRequest();
+  xmlhttp.open("GET", url += (url.match(/\?/) == null ? "?" : "&") + (new Date()).getTime(), true);
+  xmlhttp.onreadystatechange = function() {
+                                              if (xmlhttp.readyState == 4) {
+					          document.getElementById(DivID).innerHTML = xmlhttp.responseText;
+					      }
+					  };
+  xmlhttp.send('');
+}
+// -->
+</script>
+
+
+<!-- Start Floating Layer -->
+<div id="FloatingLayer" style="position:absolute;left:500;top:300;visibility:hidden;overflow:auto"> 
+  <table id="FloatingTable" border="0" width="350" length="400" bgcolor="#CFECEC" cellspacing="0" cellpadding="5">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="100%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="#FFFFFF"></font></layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="black" size="2" face="arial"  style="text-decoration:none">X</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="2" id="floating_content_area"> 
+              <!-- place your HTML content here-->
+
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+<!--
+<a href="javascript:ToggleFloatingLayer('FloatingLayer',2);">Show</a>
+<input type="button" onClick="LoadURL('floating_content_area','file:///Users/cholt/Desktop/contig-dpp-500-500.gff');" value="Show Layer">
+
+<a href="javascript:ToggleFloatingLayer('FloatingLayer',2);">Hide</a>
+<input type="button" onClick="resize(1);" value="Hide Layer">
+-->
+
+
+<body>
+<div id="wrapper">
+
+    <div id="navigation">
+	<table>
+	<tr>
+	<td>
+	<img src="http://www.yandell-lab.org/images/Maker-Logo.png">
+	</td>
+	<td>
+	<h1>MAKER Web Annotation Service</h1>
+	<h2>Your Genome Annotated</h2>
+	</td>
+	</tr>
+	</table>
+        <ul>
+            <li><a href="maker.cgi?rm=frontpage[% IF user.user_id %]&user_id=[% user.user_id %][% END %]"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_home.gif"> Home</span></a></li>
+	[% IF logged_in == 1 %]
+            <li><a href="maker.cgi?rm=job_create"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/page_new.gif"> New Job</span></a></li>
+            <li><a href="maker.cgi?rm=filebox"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Manage Files</span></a></li>
+	<!--
+            <li><a href="maker.cgi?rm=queue"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_history.gif"> Job Queue</span></a></li>
+        -->
+            <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_light.gif"> Edit Account</span></a></li>
+        <!--        
+           <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/comment.gif"> Contact Us</span></a></li>
+        -->
+	[% END %]
+            <li><a href="maker.cgi?rm=help"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_info.gif"> Help</span></a></li>
+            <li><a href="http://www.yandell-lab.org"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_up.gif"> Yandell Lab</span></a></li>
+        </ul>
+   </div>
+
+   <div id="content">
+       <table width=100%>
+       <tr align=right>
+       <td>
+       [% IF logged_in %]
+           <font size=1>logged-in as <font color="blue">[% session.param('AUTH_USERNAME') %]</font> | <a href="maker.cgi?rm=home_login;authen_logout=1">logout</a></font>
+       [% ELSE %]
+	   <font size=1>not logged-in | <a href="maker.cgi?rm=login">sign in</a></font>
+       [% END %]
+       </td>
+       </tr>
+       </table>
+
+       [% content %]  
+   </div>
+
+    <div id="footer">
+        <span class="left">&copy; 2007-2009 Mark Yandell</span>
+
+        <span class="right">Valid CSS/XHTML 1.0</span>
+
+    </div>
+
+</div>
+
+</body>
+</html>

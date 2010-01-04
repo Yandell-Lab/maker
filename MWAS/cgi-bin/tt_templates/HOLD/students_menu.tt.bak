@@ -1,0 +1,12 @@
+<br />
+<center>
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+    <td><a href="course_students.cgi?rm=students_add">Add Student</a></td>
+    <td><a href="course_students.cgi?rm=students_delete">Delete Student</a></td>
+    <td><a href="course_students.cgi?rm=students_list">List Students</a></td>
+    <td><a href="course_students.cgi?rm=students_edit">Edit Students</a></td>
+  </tr>
+</table>
+</center>
+<br />

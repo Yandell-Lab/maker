@@ -1,0 +1,38 @@
+
+[% WRAPPER main.tt %]
+
+[% INCLUDE questions_menu.tt %]
+
+<center><h3>Delete Questions</h3></center>
+
+<form method="POST" action="/cgi-bin/Course/course_questions.cgi">
+<input type="hidden" name="rm" value="questions_delete_process">
+
+<center>
+<table border cellspacing=0 cellpadding=5>
+  [% FOREACH question = questions.sort('quiz_id') %]
+  <tr>
+    <td>Delete This Question: <input type="checkbox" name="question_id" value="[%question.question_id %]"></td>
+  </tr>
+  <tr>
+    <td>[% question.question_id %]</td>
+  </tr>
+  <tr>
+    <td>[% question.quiz_id %]</td>
+  </tr>
+  <tr>
+    <td>[% question.question_number %]</td>
+  </tr>
+  <tr>
+    <td>[% question.question_text %]</td>
+  </tr>
+  <tr>
+    <td>[% question.question_options %]</td>
+  </tr>
+  [% END %]
+</table>
+<br \>
+<input type="submit" value="Delete Checked Questions">
+
+[% END %]
+

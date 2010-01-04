@@ -1,0 +1,59 @@
+[% WRAPPER main.tt %]
+
+[% INCLUDE questions_menu.tt %]
+
+<center><h3>Edit Questions</h3></center>
+
+<form method="POST" action="/cgi-bin/Course/course_questions.cgi">
+<input type="hidden" name="rm" value="questions_edit_process">
+
+<table>
+  <tr>
+    <td>DB ID:</td>
+  </tr>
+  <tr>
+    <td>    
+	<input type="hidden" name="question_id" value="[% question.question_id %]">
+	[% question.question_id %]
+    </td>
+  </tr>
+  <tr>
+    <td>Quiz ID:</td>
+  </tr>
+  <tr>
+    <td>    
+        <input type="text" size=5 maxlength=5 name="quiz_id" value="[% question.quiz_id %]">
+    </td>
+  </tr>
+  <tr>
+    <td>Question Number:</td>
+  </tr>
+  <tr>
+    <td>    
+        <input type="text" size=5 maxlength=5 name="question_number" value="[% question.question_number %]">
+    </td>
+  </tr>
+  <tr>
+    <td>Question Text:</td>
+  </tr>
+  <tr>
+    <td>    
+      <textarea cols=78 rows=40 name="question_text">[% question.question_text %]</textarea>
+    </td>
+  </tr>
+  <tr>
+    <td>Question Options:</td>
+  </tr>
+  <tr>
+    <td>    
+      <textarea cols=78 rows=20 name="question_options">[% question.question_options %]</textarea>
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Update Questions">
+</form>
+
+[% END %]

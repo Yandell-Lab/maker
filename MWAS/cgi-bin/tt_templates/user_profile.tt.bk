@@ -1,0 +1,429 @@
+
+[% WRAPPER main.tt  %]
+
+<!-- ALWAYS ON TOP FLOATING LAYER POP-UP -->
+
+
+
+<br><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_dark.gif">
+[% first %][% lastt %]
+<br>[% email %]
+<br>
+<br>
+<br>
+<br>
+<br>
+
+[% UID = session.param('AUTH_USERNAME') %]
+<img src="http://www.famfamfam.com/lab/icons/silk/icons/cart.png">JobView</a>
+<h2>Your Jobs ([% count %])</h2>
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker.cgi?rm=maker_add&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_new.gif"> Add new job  </a>
+
+&nbsp;
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_file_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif">  FILEBOX </a>
+&nbsp
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_user_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_light.gif"> Account </a>
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_feedback_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/comment_new.gif"> Feedback </a>
+&nbsp;
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_help_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif"> Help </a>
+
+
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=students_list"><img  src="/Student/images/c1.ico"> Update Jobs</a>
+<hr>
+[% IF count ==  0 %]
+
+<table>
+<tr><td>FILEBOX</td><td></td><td>A central repository for all your uploaded files. File box is accessible any time you need a file</td><tr/>
+<tr><td>JobView</td><td></td><td> A list of all your jobs can be seen from JobView.When you add a new job, your job will also be added to the que.You can acccess your jobs as well as download finished maker job from here.</td><tr/>
+
+<tr><td>UpdateJobs</td><td></td><td> Updates  current status of your jobs </td><tr/>
+
+</table>
+
+
+
+
+
+
+
+[% END %]
+
+[% IF count > 0 %]
+
+
+<script type="text/javascript">
+
+
+[% FOREACH student = students %]
+ var text[% student.idjob %]='[% student.note %]'
+[% END %]
+
+
+
+function writetext(what){
+document.getElementById('textarea').innerHTML=''+what+'';
+}
+function notext(){
+document.getElementById('textarea').innerHTML='';
+}
+//-->
+</script>
+
+
+
+
+<script language="JavaScript1.2">
+<!--
+isIE=document.all;
+isNN=!document.all&&document.getElementById;
+isN4=document.layers;
+isActive=false;
+
+function MoveInit(e){
+  topOne=isIE ? "BODY" : "HTML";
+  whichOne=isIE ? document.all.FloatingLayer : document.getElementById("FloatingLayer");  
+  ActiveOne=isIE ? event.srcElement : e.target;  
+  while (ActiveOne.id!="titleBar"&&ActiveOne.tagName!=topOne){
+    ActiveOne=isIE ? ActiveOne.parentElement : ActiveOne.parentNode;
+  }  
+  if (ActiveOne.id=="titleBar"){
+    offsetx=isIE ? event.clientX : e.clientX;
+    offsety=isIE ? event.clientY : e.clientY;
+    nowX=parseInt(whichOne.style.left);
+    nowY=parseInt(whichOne.style.top);
+    MoveEnabled=true;
+    document.onmousemove=Move;
+  }
+}
+
+function Move(e){
+  if (!MoveEnabled) return;
+  whichOne.style.left=isIE ? nowX+event.clientX-offsetx : nowX+e.clientX-offsetx; 
+  whichOne.style.top=isIE ? nowY+event.clientY-offsety : nowY+e.clientY-offsety;
+  return false;  
+}
+
+function MoveN4(whatOne){
+  if (!isN4) return;
+  N4=eval(whatOne);
+  N4.captureEvents(Event.MOUSEDOWN|Event.MOUSEUP);
+  N4.onmousedown=function(e){
+    N4.captureEvents(Event.MOUSEMOVE);
+    N4x=e.x;
+    N4y=e.y;
+  }
+  N4.onmousemove=function(e){
+    if (isActive){
+      N4.moveBy(e.x-N4x,e.y-N4y);
+      return false;
+    }
+  }
+  N4.onmouseup=function(){
+    N4.releaseEvents(Event.MOUSEMOVE);
+  }
+}
+
+function ToggleFloatingLayer(DivID, iState) // 1 visible, 0 hidden
+{
+    if(document.layers)	   //NN4+
+    {
+       document.layers[DivID].visibility = iState ? "show" : "hide";
+    }
+    else if(document.getElementById)	  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        obj.style.visibility = iState ? "visible" : "hidden";
+    }
+    else if(document.all)	// IE 4
+    {
+        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
+    }
+}
+
+
+document.onmousedown=MoveInit;
+document.onmouseup=Function("MoveEnabled=true");
+// -->
+</script>
+<div id="FloatingLayer" style="position:absolute;visibility:hidden;overflow:auto;"> 
+
+  <table border="0" width=350 length=400 bgcolor="#CFECEC" cellspacing="0" cellpadding="5">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="black"><img src="http://www.famfamfam.com/lab/icons/mini/icons/action_paste.gif">Maker Log</font></layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="red" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="50"> 
+              <!-- place your HTML content here-->
+
+
+<textarea id="textarea" rows=15 cols=50 "> </textarea>
+
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 
+click <img onClick="ToggleFloatingLayer('FloatingLayer',0);return false" src="http://www.famfamfam.com/lab/icons/mini/icons/table_delete.gif">to close</img> 
+<br>
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+
+
+<div id="LayerSave" style="position:absolute;visibility:hidden;overflow:auto;"> 
+
+  <table border="0" width=600 length=5500 bgcolor="white" cellspacing="0" cellpadding="0">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="#FFFFFF">
+</layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="#ffffff" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="50"> 
+              <!-- place your HTML content here-->
+
+
+<div id=layer_save_text>
+<h2>Click <img src="http://www.famfamfam.com/lab/icons/silk/icons/disk.png"> to download  	annotated fasta only(GFF3)</h2>
+</div>
+
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+
+
+<div id="LayerSaveAtier" style="position:absolute;visibility:hidden;overflow:auto;"> 
+
+  <table border="0" width=600 length=5500 bgcolor="white" cellspacing="0" cellpadding="0">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="#FFFFFF">
+</layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="#ffffff" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="100"> 
+              <!-- place your HTML content here-->
+
+
+<div id=layer_save_text>
+<h2>Click<img src="http://www.famfamfam.com/lab/icons/mint/icons/sound_grey.png"> to download tier file for Appollo Genome Browser. 
+
+</div>
+
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+<div id="LayerResubmit" style="position:absolute;visibility:hidden;overflow:auto;"> 
+
+  <table border="0" width=600 length=5500 bgcolor="white" cellspacing="0" cellpadding="0">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="#FFFFFF">
+</layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="#ffffff" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="50"> 
+              <!-- place your HTML content here-->
+
+
+<div id=layer_save_text>
+<h2>Click <img src="http://www.famfamfam.com/lab/icons/silk/icons/arrow_redo.png"> to make changes and resubmit this job to the que</h2>
+
+</div>
+
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+
+
+
+<div id="LayerSaveData" style="position:absolute;visibility:hidden;overflow:auto;"> 
+
+  <table border="0" width=600 length=5500 bgcolor="white" cellspacing="0" cellpadding="0">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="#FFFFFF">
+</layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="#ffffff" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="50"> 
+              <!-- place your HTML content here-->
+
+
+<div id=layer_save_text>
+<h2>Click <img src="http://www.famfamfam.com/lab/icons/mint/icons/disk.png"> to download entire maker output dir in a tarball</h2>
+</div>
+
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+
+
+
+<table border=0 cellspacing=1 cellpadding=5>
+  <tr  BGCOLOR="#99CCCC">
+
+<th bgcolor=white></th>
+    <th>JobId</th>
+    <th>Genome Fasta</th>
+    <th>Status</th>
+    <th>Start Time</th>
+
+
+    <th>End Time</th>
+<th>Download</th>
+<th>Log</th>
+<th><img src="/Student/images/trashcan-empty-24x24.png"></th>
+	
+ 	
+  [% FOREACH student = students %]
+   <TR BGCOLOR="#CFECEC">
+    
+<td bgcolor="white">
+[% IF student.jobstatus=="Finished" %]
+<center>
+
+<a href="/cgi-bin/Maker/maker.cgi?rm=maker_add&&view=1&&noclue=[% UID %]&&jid=[% student.idjob %]">
+
+<img src="http://www.famfamfam.com/lab/icons/silk/icons/arrow_redo.png" onmouseover="ToggleFloatingLayer('LayerResubmit',1);writetext(text)" onmouseout=ToggleFloatingLayer('LayerResubmit',0);>
+</center>
+[% END %]
+</td>
+
+<td>
+
+
+<a href="/cgi-bin/Maker/maker.cgi?rm=maker_add&&view=1&&noclue=[% UID %]&&jid=[% student.idjob %]">
+[% student.idjob %]</td>
+
+    <td>[% student.data_name %]</td>
+    <td>
+[% IF student.jobstatus=="edit" %]
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker.cgi?rm=maker_add&&view=1&&noclue=[% UID %]&&jid=[% student.idjob %]">
+[% END %]
+
+
+[% student.jobstatus %]
+
+
+
+    </td>
+    <td>[% student.starttime %]</td>
+    <td>[% student.endtime %]</td>	
+<td>
+
+
+
+
+[% IF student.jobstatus=="Finished" %]
+<center>
+<a href="/cgi-bin/genome_download_gff3.cgi?target=[% student.idjob %]&&whoami=[% noclue %]"><img src="http://www.famfamfam.com/lab/icons/silk/icons/disk.png" onmouseover="ToggleFloatingLayer('LayerSave',1);writetext(text)" onmouseout=ToggleFloatingLayer('LayerSave',0);>&nbsp;<a href="/cgi-bin/genome_download.cgi?target=[% student.idjob %]&&whoami=[% noclue %]"><img src="http://www.famfamfam.com/lab/icons/mint/icons/disk.png" onmouseover="ToggleFloatingLayer('LayerSaveData',1);writetext(text)" onmouseout=ToggleFloatingLayer('LayerSaveData',0);><a href="/cgi-bin/genome_download_aptier.cgi?target=[% student.idjob %]&&whoami=[% noclue %]"><img src="http://www.famfamfam.com/lab/icons/mint/icons/sound_grey.png" onmouseover="ToggleFloatingLayer('LayerSaveAtier',1);writetext(text)" onmouseout=ToggleFloatingLayer('LayerSaveAtier',0);>
+</center>
+[% END %]
+
+
+
+</td>
+<td>
+
+<center>
+
+<div id="p6" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(text[%student.idjob%])" >
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/action_paste.gif">
+</div>
+</center>
+</td>
+   <td>
+
+
+<SCRIPT LANGUAGE="JavaScript"> 
+function confirmBox[% student.idjob %]() { if (confirm("Do you want to delete the job identified by:[% student.idjob %]?")) { location.href="/cgi-bin/Maker/maker2.cgi?rm=removeJob&&jn=[% student.idjob %]";} } 
+</SCRIPT> <P> 
+<center> 
+<FORM> 
+<INPUT TYPE ="button"  src = "http://www.famfamfam.com/lab/icons/mini/icons/page_cross.gif"  onClick="confirmBox[% student.idjob %]()" >
+</FORM>
+</td>
+  </tr>
+  [% END %]
+[% END %]
+</table>
+
+<br>
+<br>
+
+
+
+[% END %]
+

@@ -1,0 +1,366 @@
+[% WRAPPER main.tt %]
+
+<h2>Calendar of Lectures</h2>
+
+<table border width=100%>
+  <tr valign=top align=center bgcolor=lightgray>
+    <th colspan=5>February</th>
+  <tr valign=top align=left>
+    <th width="20%">Monday</th>
+    <th width="20%">Tuesday</th>
+    <th width="20%">Wednesday</th>
+    <th width="20%">Thursday</th>
+    <th width="20%">Friday</th>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>25</b><br />
+    </td>
+    <td>
+      <b>26</b><br />
+    </td>
+    <td>
+      <b>27</b><br />
+    </td>
+    <td>
+      <b>28</b><br />
+      <a href="#Lect_1">Lecture 1: Introduction to Unix</a>
+    </td>
+    <td>
+      <b>29</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=center bgcolor=lightgray>
+    <th colspan=5>March</th>
+  <tr valign=top align=left>
+    <td>
+      <b>3</b><br />
+    </td>
+    <td>
+      <b>4</b><br />
+      <a href="#Lect_2">Lecture 2: More Unix & Fun With Fasta Files</a>
+    </td>
+    <td>
+      <b>5</b><br />
+    </td>
+    <td>
+      <b>6</b><br />
+      <a href="#Lect_3">Lecture 3: Introduction to VI & Perl</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:00 pm
+    </td>
+    <td>
+      <b>7</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>10</b><br />
+    </td>
+    <td>
+      <b>11</b><br />
+      <a href="#Lect_4">Lecture 4: Introduction to Arrays & Hashes</a>
+    </td>
+    <td>
+      <b>12</b><br />
+    </td>
+    <td>
+      <b>13</b><br />
+      <a href="#Lect_5">Lecture 5: Control Structures, Their Associated Operators & Variable Scope</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>14</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=center>
+    <td colspan=5>
+      <b>Spring Break:  March 17-22</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>24</b><br />
+    </td>
+    <td>
+      <b>25</b><br />
+      <a href="#Lect_6">Lecture 6: Introduction to Regular Expressions</a>
+    </td>
+    <td>
+      <b>26</b><br />
+    </td>
+    <td>
+      <b>27</b><br />
+      <a href="#Lect_7">Lecture 7: IO, Files, Directories and Some Functions</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>28</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>31</b><br />
+    </td>
+    <td>
+      <b></b><br />
+    </td>
+    <td>
+      <b></b><br />
+    </td>
+    <td>
+      <b></b><br />
+    </td>
+    <td>
+      <b></b><br />
+    </td>
+  </tr>
+  <tr valign=top align=center bgcolor=lightgray>
+    <th colspan=5>April</th>
+  <tr valign=top align=left>
+    <td>
+      <b></b><br />
+    </td>
+    <td>
+      <b>1</b><br />
+      <a href="#Lect_8">Lecture 8: Parsing Multi Fasta Files with Subroutines</a>
+    </td>
+    <td>
+      <b>2</b><br />
+    </td>
+    <td>
+      <b>3</b><br />
+      <a href="#Lect_9">Lecture 9: From Subroutines to Modules</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>4</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>7</b><br />
+    </td>
+    <td>
+      <b>8</b><br />
+      <a href="#Lect_10">Lecture 10: References and Data Structures I</a>
+    </td>
+    <td>
+      <b>9</b><br />
+    </td>
+    <td>
+      <b>10</b><br />
+      <a href="#Lect_11">Lecture 11: References and Data Structures II</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>11</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>14</b><br />
+    </td>
+    <td>
+      <b>15</b><br />
+      <a href="#Lect_12">Lecture 12: Probability with perl & Sequence Entropy</a>
+    </td>
+    <td>
+      <b>16</b><br />
+    </td>
+    <td>
+      <b>17</b><br />
+      <a href="#Lect_13">Lecture 13: Introduction to Objects with BLAST</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>18</b><br />
+    </td>
+  </tr>
+  <tr valign=top align=left>
+    <td>
+      <b>21</b><br />
+    </td>
+    <td>
+      <b>22</b><br />
+      <a href="#Lect_14">Lecture 14: Command Line BLAST</a>
+      <br />
+      Bioinfo Review Session 2:30 - 3:15 pm
+    </td>
+    <td>
+      <b>23</b><br />
+    </td>
+    <td>
+      <b>24</b><br />
+      <a href="#Lect_15">Lecture 15: Prepare for Final Exam</a>
+    </td>
+    <td>
+      <b>25</b><br />
+    </td>
+  </tr>
+</table>
+
+<br /><h2>Outline of Lectures</h2>
+
+<ol>
+  <li><a name="Lect_1">Introduction to UNIX</a></li>
+    <ol type="a">
+      <li>Short presentation on <a href="http://en.wikipedia.org/wiki/Unix">Unix</a> & <a href="http://en.wikipedia.org/wiki/Perl">Perl</a>.</li>
+      <li>SSH: HowTo.</li>
+      <li>Navigation: Moving between directories (<a href="http://www.linuxmanpages.com/">cd</a>) and getting basic information (<a href="http://www.linuxmanpages.com/">pwd, whoami, hostname, uname -a</a>).</li>
+      <li><a href="http://www.linuxmanpages.com/">history</a></li>
+      <li>UNIX directories: Listing, navigating, making and removing directories (<a href="http://www.linuxmanpages.com/">ls, cd, mkdir, rmdir rm)</a>.</li>
+      <li>UNIX files: Reading, listing files, managing file permissions (<a href="http://www.linuxmanpages.com/">man, cat, more, less chmod, rm</a>).</li>
+      <li>Environment variables: Examining and setting the environment - Common environment variables.</li>
+      <li>Exercise 1 (In class): <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Setting up your working environment.</a></li>
+      <li>Quiz 1: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Online survey</a></li>
+    </ol>
+
+  <li><a name="Lect_2">More Unix & Fun With Fasta Files</a></li>
+    <ol type="a">
+      <li>What is a <a href="http://www.ncbi.nlm.nih.gov/blast/fasta.shtml">fasta file?</a></li>
+      <li>Manipulating files: Reading parts of files, getting stats on files, sorting files (<a href="http://www.linuxmanpages.com/">head, tail, wc sort, uniq</a>).</li>
+      <li>Standard input and standard output. File redirection. File concatenation.</li>
+      <li>Getting statistics on commands and computer resource usage (<a href="http://www.linuxmanpages.com/">top</a>).</li>
+      <li>Searching for specific content in files. Using <a href="http://www.linuxmanpages.com/">grep.</a></li>
+      <li>Command pipes. Sending the output of one command to another.</li>
+      <li>Wildcards</li>
+      <li>Exercise 2. <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Introduction to simple manipulation of fasta files with Unix commands.</a></li>
+      <li>Quiz 2: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Unix commands</a></li>
+    </ol>
+
+  <li><a name="Lect_3">Introduction to VI & Perl</a></li>
+    <ol type="a">
+      <li>Content: basic <a href="http://www.eng.hawaii.edu/Tutor/vi.html">vi commands</a></li>
+      <li>Write hello world.</li>
+      <li>Introduction to scalars</li>
+      <li>Scalar operators:  +, -, **, ^2, etc</li>
+      <li>Increment operators ++, +=, --, -=, .=</li>
+      <li>Quotes: single, double & backticks.</li>
+      <li>Exercise 3:  <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Mirror Mirror.</a></li>
+    </ol>
+
+  <li><a name="Lect_4">Introduction to Arrays & Hashes.</a></li>
+    <ol type="a">
+      <li>Introduction to  @ & %</li>
+      <li>Array & hash functions: shift(), keys(), etc</li>
+      <li>Sorting arrays, & Hashes;</li>
+      <li>Quiz 3: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Basic Data Types</a></li>
+      <li>Exercise 4: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Creating an index.</a></li>
+    </ol>
+
+  <li><a name="Lect_5">Control Structures, Their Associated Operators & Variable Scope.</a></li>
+    <ol type="a">
+      <li>If/else</li>
+      <li>Operators for strings: ==, !=, , ne, <=>,eq, etc</li>
+      <li> Boole; true, false & undef</li>
+      <li>&&,  ||,?:</li>
+      <li>while/until</li>
+      <li>for</li>
+      <li>foreach</li>
+      <li>last, next, labeled blocks</li>
+      <li>die.</li>
+      <li>Scoping variables with my; use strict.</li>
+      <li>tr///, =~ s///, =~; and on to regular expressions.</li>
+      <li>Quiz 4: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Basic Control Structures & Scope</a></li>
+      <li>Exercise 5: <a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">A table of even and odd numbers</a></li>
+    </ol>
+     
+  <li><a name="Lect_6">Introduction to Regular Expressions (Bob Weiss)</a></li>
+    <ol type="a">
+      <li>Regular expressions</li>
+      <li>Pattern matching and substitute, match & transform</li>
+      <li><a href="#">Quiz 5: Regular Expressions</a></li>
+      <li><a href="#">Exercise 6: Scripts for parsing a text file using pattern matching with regular expressions</a></li>
+    </ol>
+     
+  <li><a name="Lect_7">IO, Files, Directories and Some Functions</a></li>
+    <ol type="a">
+      <li>STDIN, @ARGV, getopts.</li>
+      <li>STDOUT & STDERR</li>
+      <li>Warn vs. die</li>
+      <li>Capturing outputs in files : | tee, >&, ></li>
+      <li>Open a file</li>
+      <li>FH</li>
+      <li>Directory access.</li>
+      <li>Introduction to functions: split, substring, uc, tr</li>
+      <li>In class tutorial: first parser for a single fasta file.</li>
+      <li>Introduce subroutines: get_seq().</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Quiz 6: IO, files, dirs, and some functions</a></li>
+    </ol>
+
+  <li><a name="Lect_8">Parsing Multi Fasta Files with Subroutines</a></li>
+    <ol type="a">
+      <li>Subroutines. How to write them.</li>
+      <li>Variable scope: MAIN and  subroutines</li>
+      <li>Using yesterday's parser for a single fasta file, introduce subroutines: get_seq, get_def, etc..</li>
+      <li>Parsing In class example: Write a multi-fasta parser: next_entry, get_def, get_seq, format_fasta.</li>
+      <li>Using tr///</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Exercise 7: A subroutine to reverse complement a fasta file.</a></li>
+    </ol>
+
+  <li><a name="Lect_9"><a href="http://bioinfo.genetics.utah.edu/cgi-bin/wiki/wiki.pl?From_Subroutines_To_Modules">From Subroutines to Modules</a></a></li>
+    <ol type="a">
+      <li>Basic modules and how to use them.</li>
+      <li>Some examples PostData, Cwd, FileHandle, etc.</li>
+      <li>Perldoc & CPAN</li>
+      <li>In class tutorial: write a module that has simple fasta manipulations in it:  next_entry, get_def, get_seq, rev_comp.</li>
+      <li>Downloading a package from CPAN (Barry Moore).</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Exercise 8: a script using modules</a></li>
+    </ol>
+
+  <li><a name="Lect_10">References and Data Structures I</a></li>
+    <ol type="a">
+      <li>Hashes of arrays; arrays of hashes; dereferencing and sorting</li>
+      <li>Passing references to subroutines</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_quizzes.cgi">Quiz 7. References and data structures.</a></li>
+    </ol>
+
+  <li><a name="Lect_11">References and Data Structures II</a></li>
+    <ol type="a">
+      <li>Review of lecture 10; work through quiz 4.</li>
+      <li>Explain microarray data files and lod scores.</li>
+      <li>In class example: write a script to populate a data structure for id->value lookup</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Exercise 9. ID swapping</a></li>
+    </ol>
+
+  <li><a name="Lect_12">Probability with Perl & Sequence Entropy.</a></li>
+    <ol type="a">
+      <li><a href="http://en.wikipedia.org/wiki/Dice">http://en.wikipedia.org/wiki/Dice</a></li>
+      <li>calculation vs. simulation</li>
+      <li>srand & rand</li>
+      <li>roll two dice example</li>
+      <li>In class tutorial calc P of multiple dice. Produce a frequency table.</li>
+      <li>Understanding Gaussian sum notation</li>
+      <li>Entropy of a die</li>
+      <li>Entropy of a sequence</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Exercise 10: UTR lengths and entropy</a></li>
+    </ol>
+
+  <li><a name="Lect_13">Introduction to Objects with <a href="http://www.ncbi.nlm.nih.gov/Education/BLASTinfo/information3.html">BLAST</a></a></li>
+
+  <li><a name="Lect_14">Command line BLAST (setdb/pressdb)</a></li>
+    <ol type="a">
+      <li>Anatomy of a blast report.</li>
+      <li>Write in class starter script to run blast</li>
+      <li>Write a starter script to parse a blast report.</li>
+      <li>Discussion of objects.</li>
+      <li><a href="http://bioinfo.genetics.utah.edu/cgi-bin/Student/student_exercises.cgi">Exercise 11: Parsing a blast report with bioperl.</a></li>
+    </ol>
+
+  <li><a name="Lect_15">Prepare for Final Exam</a></li>
+    <ol type="a">
+      <li>Produce file of lengths & entropies</li>
+      <li>Set up question</li>
+      <li>Write randomizer in class</li>
+      <li>Show them your code doing it for 24-72 hrs data.</li>
+      <li>Hand out final exam assignment.</li>
+    </ol>
+</ol>
+
+[% END %]

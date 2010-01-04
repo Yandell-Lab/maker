@@ -23,7 +23,7 @@ BEGIN{
    
    #what to do on ^C
    $SIG{'INT'} = sub {
-      print STDERR "\n\nMaker aborted by user!!\n\n";
+      print STDERR "\n\nMaker aborted by user!!\n\n" unless($main::qq);
       exit (1);
    };    
    
@@ -170,10 +170,13 @@ try{
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
+	       "qq"    =>\$main::qq,
 	       "check" =>\$OPT{check},
+	       "base=s" =>\$OPT{out_name},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
+    $main::quiet = 1 if($main::qq);
 }
 catch Error::Simple with{
     my $E = shift;
@@ -256,7 +259,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
     push(@failed, $tier->fasta) if ($tier->failed);
 }
 
-print STDERR "\n\nMaker is now finished!!!\n\n";
+print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------

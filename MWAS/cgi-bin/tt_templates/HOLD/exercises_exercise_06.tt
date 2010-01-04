@@ -1,0 +1,22 @@
+[% WRAPPER main.tt %]
+
+<h2>Exercise 6. Scripts for parsing a text file using pattern matching with regular expressions</strong></h2>
+
+<p>
+
+For today's exercise write a script to read and parse a Genbank format
+text file using regular expressions like those discussed in class.
+Copy the file DQ497008.gb from the /home/class/data directory into
+your working directory. Read the file into your script and find lines
+of coding sequence annotation (CDS) and extract and print the separate
+sequence coordinates (get each number into a separate variable).  Try
+and get as many CDS lines and coordinates as you can.
+</p>
+
+<p>
+Hint: for file input remember while(<>) {}
+</p>
+
+
+[% END %]
+

@@ -1,0 +1,52 @@
+[% WRAPPER main.tt %]
+
+<h2>Course Location</h2>
+<ul>
+<li>
+<p>
+Tuesdays & Thursdays 1:00-2:30 pm
+</p>
+</li>
+
+<li>
+<p>
+Health Science Education Building 3100 C
+</p>
+</li>
+</ul>
+
+<h2>Instructors and Staff</h2>
+
+<ul>
+<li>
+<p>
+Instructor:   Mark Yandell<br />
+Office:   EIHG 6100<br />
+Phone:   581-7707<br />
+Email:   <a href="mailto://myandell@genetics.utah.edu">myandell@genetics.utah.edu</a><br />
+</p>
+
+<li>
+<p>
+Instructor:   Robert Weiss<br />
+Office:   BPRB 308<br />
+Phone:   585-5606<br />
+Email:   <a href="mailto://bob@genetics.utah.edu">bob@genetics.utah.edu</a><br />
+</p>
+
+<li>
+<p>
+Teaching Assistant:  Carson Holt<br />
+Office:  6250 EIHG Phone:  585-3543<br />
+Email:   <a href="mailto://carson.holt@genetics.utah.edu">carson.holt@genetics.utah.edu</a><br />
+</p>
+<li>
+<p>
+Web/System Administrator:  Barry Moore<br />
+Office:  6250 EIHG Phone:  585-3543<br />
+Email:   <a href="mailto://barry.moore@genetics.utah.edu">barry.moore@genetics.utah.edu</a><br />
+</p>
+</ul>       
+
+[% END %]
+

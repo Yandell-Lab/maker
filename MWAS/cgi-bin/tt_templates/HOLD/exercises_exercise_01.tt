@@ -1,0 +1,12 @@
+[% WRAPPER main.tt %]
+
+<p><strong>Exercise 1. Setting up your working environment</strong></p>
+<ul>
+<li>Move to your home directory (cd ~).</li>
+<li>Create a directory called 'bin'. This directory will hold your scripts. More about that later. Now copy the file 'script.template' from /home/class/bin to your ~/bin.</li>
+<li>Create a directory called 'lib'. This directory will hold your modules. More about that later. Now copy the file 'module.template.pm' from /home/class/lib to your ~/lib.</li>
+<li>Look in your home directory for your .bash_profile. Edit your PATH to include your bin.</li>
+<li>Create a directory called 'data'. This directory will hold your data files.</li>
+
+[% END %]
+

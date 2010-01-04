@@ -1,0 +1,88 @@
+[% WRAPPER main.tt %]
+
+<h2>Listing of Quizzes</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_quizzes.cgi">
+<input type="hidden" name="rm" value="quizzes_take">
+
+<br >
+<br >
+
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+    <th colspan="4">
+      <h2>Choose a Quiz to Take</h2>
+    </th>
+  </tr>
+  <tr>
+    <th>Quiz<br />Number</th>
+    <th>Quiz Title</th>
+    <th>Quiz End Date</th>
+    <th>Select<br />Quiz</th>
+  </tr>
+
+  [% USE now = DateTime(today = 1) %]
+
+  [% FOREACH quiz = quizzes.sort('quiz_number') %]
+  <tr>
+    <td>[% quiz.quiz_number %]</td>
+    <td>[% quiz.quiz_title %]</td>
+    [% this_quiz_id = quiz.quiz_id %]
+    <td>[% student_quizzes.$this_quiz_id.quiz_end_date or quiz.quiz_end_date %]</td>
+    <td>
+      [% IF quiz.is_open OR student_quizzes.$this_quiz_id.is_open %]
+        <input type="radio" name="quiz_id" value="[% quiz.quiz_id %]">
+      [% ELSE %]
+        Quiz Closed
+      [% END %]
+    </td>
+  [% END %]
+  <tr>
+    <td align="center" colspan="4">
+      <input type="submit" value="Take a Quiz">
+</table>
+
+</form>
+
+<br />
+<br />
+<br />
+
+<form method="POST" action="/cgi-bin/Student/student_quizzes.cgi">
+<input type="hidden" name="rm" value="quizzes_review">
+
+
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+    <th colspan="3">
+      <h2>Choose a Quiz to Review</h2>
+    </th>
+  </tr>
+  <tr>
+    <th>Quiz<br />Number</th>
+    <th>Quiz Title</th>
+    <th>Select<br />Review Quiz</th>
+  </tr>
+  [% FOREACH quiz = quizzes.sort('quiz_number') %]
+  <tr>
+    <td>[% quiz.quiz_number %]</td>
+    <td>[% quiz.quiz_title %]</td>
+    [% this_quiz_id = quiz.quiz_id %]
+    <td>
+      [% IF quiz.is_open OR student_quizzes.$this_quiz_id.is_open %]
+        Quiz Still Open
+      [% ELSE %]
+        <input type="radio" name="quiz_id" value="[% quiz.quiz_id %]">
+      [% END %]
+    </td>
+  </tr>
+  [% END %]
+  <tr>
+    <td align="center" colspan="3">
+      <input type="submit" value="Review a Quiz">
+</table>
+
+
+</form>
+
+[% END %]
