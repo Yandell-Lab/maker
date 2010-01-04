@@ -1,7 +1,7 @@
 #! /usr/bin/perl -w
 
 #Maker server 2.0-------------------------------------------------
-# is being run to serve maker queue. maker_server is
+# is being run to serve maker queue. mwas_server is
 # an inifinite loop to check the queue and execute maker jobs as
 # soon as they are added to the maker queue.
 #-------------------------------------------------------------hadi islam
@@ -10,7 +10,7 @@ use strict;
 use DBI;
 use DateTime;
 use Mail::Sender;
-use vars qw($LOG %CTL_OPT $EXE);
+use vars qw($LOG %CTL_OPT $EXE $DEBUG);
 use POSIX qw(:sys_wait_h setsid EAGAIN);
 use Template;
 use FindBin;
@@ -34,6 +34,9 @@ BEGIN{
     $LOG = "$FindBin::Bin/../MWAS.log";
     umask 0;
 
+    #set debugging mode
+    $DEBUG=1;
+
     #exit subroutine for signals
     my $exit = sub{die "SIGNAL: Caught @_ exiting\n\n";};
 
@@ -51,26 +54,26 @@ BEGIN{
 
 my $usage = "
 Usage:
-     maker_server [option]
+     mwas_server [option]
 
      This is a daemon responsible for the operation of the MAKER Web Annotation
      Service (MWAS).  The daemon checks an SQL database for job submissions and
      then runs MAKER for those jobs.  You must supply an option when executing
-     the maker_server script otherwise it will just return the usage statement.
+     the mwas_server script otherwise it will just return the usage statement.
 
      Please note that you can also use maker with the -MWAS option to control
-     the maker_server daemon instead of using the maker_server script directly
-     (i.e. maker -MWAS START is the equivilent of maker_server START).
+     the mwas_server daemon instead of using the mwas_server script directly
+     (i.e. maker -MWAS START is the equivilent of mwas_server START).
 
-     The behavior of the MAKER Web Annotation Service and maker_server is
+     The behavior of the MAKER Web Annotation Service and mwas_server is
      dependant on control files found in the /maker/config directory. There are
      five files:  server.ctl, menus.ctl, maker_opts.ctl, maker_bopts.ctl, and
      maker_exe.ctl.  If these files are missing they can be regenerate by
-     calling the CTL with maker_server (i.e. maker_server CTL).
+     calling the CTL with mwas_server (i.e. mwas_server CTL).
 
      The server.ctl file is used to configure server specific and some web
-     interface specific options.  The database used by maker_server is
-     configured here.  By default, maker_server will create a database using
+     interface specific options.  The database used by mwas_server is
+     configured here.  By default, mwas_server will create a database using
      SQLite, but you can designate any SQL database supported by the Perl DBI.
 
      The menus.ctl file in the maker/config directory is used to configure
@@ -90,7 +93,7 @@ Usage:
      The MAKER Web Annotation Service has two parts.  A web interface front end
      that users access via a browser to configure a MAKER job, and a server
      backend that monitor for job submissions and executes MAKER.  The
-     maker_server script is responsible for the back end, but can be used to
+     mwas_server script is responsible for the back end, but can be used to
      generate the front end CGI/HTML in the directory of your choosing (i.e a
      web accessible directy like /var/www/cgi-bin/maker for Apache).  To do 
      this use the CGI option (don't forget to specify the value for the
@@ -177,7 +180,7 @@ elsif($opt eq 'SETUP'){
     if(@exists < @files){
 	die "ERROR: You must run $EXE with the CTL option first to create MAKER\n".
 	    "configuration files. Once you are finished building and editing these file\n".
-	    "you can run $EXE with the WEB option, to build the web interface.\n\n";
+	    "you can run $EXE with the SETUP option, to build the web interface.\n\n";
     }
 
     my $cgi_dir  = $CTL_OPT{cgi_dir}; #get directory to build CGI/HTML files
@@ -188,9 +191,6 @@ elsif($opt eq 'SETUP'){
 
     die "ERROR: The directory '$cgi_dir' does not exist\n" if(! -d $cgi_dir);
     die "ERROR: The directory '$html_dir' does not exist\n" if(! -d $html_dir);
-
-    #menus can be dependant on values in maker_exe.ctl (which may have been edited by user)
-    GI::generate_control_files($c_dir,'menus', \%CTL_OPT);
 
     #copy all cgi, html, and support files to a web accessible directory
     my $co_dir = "$FindBin::Bin/../cgi-bin/"; #original direcory
@@ -208,7 +208,13 @@ elsif($opt eq 'SETUP'){
 	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
 	$dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
 	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
-	
+
+	if(!$CTL_OPT{username}){ #warn if no db_username specified
+	    warn "WARNING: No username for connecting to the database is specified\n".
+		"without a username online requests to MWAS will fail because of\n".
+		"permission issues. Please make the necessary changes to server.ctl.\n\n";
+	}
+
 	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
 	    or die "<br>Got error $DBI::errstr when connecting to database\n";
 	
@@ -216,6 +222,11 @@ elsif($opt eq 'SETUP'){
 	check_table_structure($dbh);
 	reset_queue($dbh);
 	$dbh->disconnect;
+    }
+    else{
+	die "ERROR: Could not setup the database structure because no database\n".
+	    "or database interface is specified in server.ctl.  Please finish\n".
+	    "editing the control files and run SETUP again.\n\n";
     }
 }
 elsif($opt eq 'APOLLO'){
@@ -309,7 +320,44 @@ elsif($opt eq 'START'){
     }
     else{
 	print STDERR "STATUS: Now starting $EXE\!\n";
-	start_daemon();
+
+	#error checking
+	if(@exists < @files){
+	    die "ERROR: Server control files are missing.  Run $EXE\n".
+		"with the CTL option first to create the control files.\n".
+		"Once you are finished building and editing these files\n".
+		"run with the SETUP option to build all files necessary\n".
+		"for client side web access to the server. Then you can\n".
+		"start the server.\n\n";
+	}
+
+	#try to connect to the database as a test
+	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
+	$dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
+	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
+
+	if(!$CTL_OPT{username}){ #warn if no db_username specified
+	    warn "WARNING: No username for connecting to the database is specified\n".
+		"without a username online requests to MWAS will fail because of\n".
+		"permission issues. Please make the necessary changes to server.ctl.\n\n";
+	}
+
+	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	    or die "<br>Got error $DBI::errstr when connecting to database\n";
+	$dbh->disconnect;
+
+	#check permissions on data directory
+	if(! -w $CTL_OPT{data_dir} || ! -r $CTL_OPT{data_dir} || ! -x $CTL_OPT{data_dir}){
+	    die "ERROR: Current file permissions won't allow you to use $CTL_OPT{data_dir}\n".
+		"as the ouput directory for the MAKER Web Annotation Service\n\n";
+	}
+
+	if($DEBUG){ #run server in forground for debugger
+	    run_server();
+	}
+	else{#run server as a daemon
+	    start_daemon();
+	}
     }
 }
 else{
@@ -324,8 +372,8 @@ sub start_daemon {
     unless(my $pid = fork()) {
 	exit if $pid;
         setsid();
-        my $date = date_time();
-
+	my $date = date_time();
+	
 	#rediret STDERR to the log file since there will be no terminal
 	close(STDERR);
 	open(STDERR, ">> $LOG"); #append
@@ -622,7 +670,7 @@ sub start_job {
     #fork off the MAKER proccess and return process id of the child
     FORK: { 
 	my $pid;
-	if ($pid=fork) { # this is the parent, so return the pid
+	if (!$DEBUG || ($pid=fork())) { # this is the parent, so return the pid
 			 # everything below here is either the child or a very major 
 	                 # system failure
 
@@ -631,7 +679,7 @@ sub start_job {
 
 	    return $pid;
 	}
-	elsif (defined $pid){ #this is the child
+	elsif ($DEBUG || defined $pid){ #this is the child
 	    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
 		or die "<br>Got error $DBI::errstr when connecting to database\n";
 

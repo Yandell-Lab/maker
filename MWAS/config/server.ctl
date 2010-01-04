@@ -23,7 +23,7 @@ persist_time_user:336 #time results persist for registered users, in hours (0 to
 persist_time_guest:72 #time results persist for guest users, in hours (0 to disable limit)
 inactive_user:0 #time user account can be inactive before disabling, in days (0 to disable limit)
 inactive_guest:14 #time guest account can be inactive before disabling, in days (0 to disable limit)
-data_dir:/home/apache/MWS/data
-cgi_dir:/data/var/www/cgi-bin/MWAS/ #web accesible directory where web interface CGI content is stored
-html_dir:/data/var/www/html/MWAS/ #web accesible directory where web interface HTML conent is stored
+data_dir:/home/cholt/usr/local/maker/MWAS/data
+cgi_dir:/data/var/www/cgi-bin/cholt/ #web accesible directory where web interface CGI content is stored
+html_dir:/data/var/www/html/cholt/ #web accesible directory where web interface HTML conent is stored
 APOLLO_ROOT:/usr/local/gmod/apollo #base directory for Apollo installation.  Used for building webstart of Apollo.
