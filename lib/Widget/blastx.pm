@@ -45,13 +45,13 @@ sub run {
 		waitpid $pid, 0;
 		if ($? != 0){
 		   if($all_err !~ /There are no valid contexts/){
-		      die "ERROR: Blastx failed\n";
+		      die "ERROR: BLASTX failed\n";
 		   }
 		   else{
-		      print STDERR "NOTE: BLAST failed because the length of unmasked\n".
-		                   "sequence is too short to produce a statistically\n".
-				   "significant alignment.  You can usually ignore\n".
-				   "this error\n\n";
+		      #print STDERR "NOTE: BLAST failed because the length of unmasked\n".
+		      #             "sequence is too short to produce a statistically\n".
+		      #             "significant alignment.  You can usually ignore\n".
+		      #	            "this error\n\n";
 		   }
 		}
 	}

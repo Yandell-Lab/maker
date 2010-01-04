@@ -266,6 +266,7 @@ try{
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
+    $main::quiet = 1 if($main::qq);
 }
 catch Error::Simple with{
     my $E = shift;

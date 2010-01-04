@@ -3050,9 +3050,12 @@ sub load_control_files {
    if ($iterator->number_of_entries() > 1000 && ! $CTL_OPT{datastore}) {
       warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
       "A two depth datastore will be used to avoid overloading the data structure of\n".
-      "the output directory.\n\n";
+      "the output directory.\n\n" unless($main::qq);
       
       $CTL_OPT{datastore} = 1;
+   }
+   else{
+       $CTL_OPT{datastore} = 0;
    }
 
    #--decide if gff database should be created
