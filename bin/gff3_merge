@@ -22,18 +22,27 @@ Options:
 
   -d The location of the MAKER datastore index log file.
   -o Alternate base name for the output files.
-  -g Only write gene models to the file, and ignore evidence.
-
+  -s Use STDOUT for output.
+  -g Only write MAKER gene models to the file, and ignore evidence.
+  -n Do not print fasta sequence in footer
+  -l Merge legacy annotation sets (ignores already having seen
+     features more than once for the same contig)
 ";
 
 my $datastore;
 my @files;
 my $outfile;
 my $g_flag;
+my $l_flag;
+my $s_flag;
+my $n_flag;
 
 GetOptions ("datastor|d=s" => \$datastore,
 	    "o=s" => \$outfile,
 	    "g" => \$g_flag,
+	    "l" => \$l_flag,
+	    "s" => \$s_flag,
+	    "n" => \$n_flag,
 	    "help|?" => sub{print $usage; exit();}
 	    );
 
@@ -46,12 +55,12 @@ if(! $datastore && ! @files) {
     exit();
 }
 
-if (! $outfile){
+if (! $outfile && $datastore){
     ($outfile) = $datastore =~ /([^\/]+)$/;
     $outfile =~ s/_master_datastore_index.log//;
     $outfile .= ".all.gff";
-    $outfile = "genome.all.gff" if(! defined $outfile);
 }
+$outfile = "genome.all.gff" if(! $outfile);
 
 die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
 if ($datastore){
@@ -77,15 +86,24 @@ if ($datastore){
 
 @files = sort @files;
 
-open(my $GFF, "> $outfile");
+my $GFF;
+if($s_flag){
+    open ($GFF, ">&STDOUT")
+}
+else{
+    open($GFF, "> $outfile");
+}
+
 print $GFF "\#\#gff-version 3\n";
 
 my ($ANN, $ann_file) = tempfile();
-my ($FAS, $fas_file) = tempfile();
-print $FAS "\#\#FASTA\n";
+my ($FAS, $fas_file) = tempfile() unless($n_flag);
+print $FAS "\#\#FASTA\n" unless($n_flag);
 
+my $i = 0;
 my %uniq;
-foreach my $file (@files){
+foreach  my $file (@files){
+    my $file = $files[$i];
     #fix for not being in working directory with datastore
     if (! -f $file){
 	my $dir = $datastore;
@@ -96,8 +114,8 @@ foreach my $file (@files){
     die "ERROR: The file \'$file\' does not exist\n" if (! -f $file);
     open(IN, "< $file") || die "ERROR: Could not open file \'$file\'\n";
 
+    my $seen_flag; #keep seen fasta sequnce from being printed twice
     my $FH = $ANN;
-
     while (defined(my $line = <IN>)){
 	if ($line =~ /^\#\#gff-version 3/){
 	    next;
@@ -109,12 +127,17 @@ foreach my $file (@files){
 	    next;
 	}
 	elsif($line =~ /^\#\#sequence-region/){
-	    die "ERROR: This contig has already been added\: $line\n" if exists $uniq{$line};
+	    if(exists $uniq{$line}){
+		die "ERROR: This contig has already been added\: $line\n"
+		    if (! $l_flag);
+		$seen_flag = 1;
+	    } 
 	    $uniq{$line}++;
 	    print $GFF $line;
 	    next;
 	}
 	elsif($line =~ /^\#\#FASTA/){
+	    last if($seen_flag || $n_flag);
 	    $FH = $FAS;
 	    next;
 	}
@@ -123,18 +146,30 @@ foreach my $file (@files){
 	}
 	elsif($line =~ /^[^\s\t\#\>\n]+\t([^\t]+)\t/){
 	    $FH = $ANN;
+	    if($l_flag){
+		$line =~ s/ID=/ID=$i:/;
+		$line =~ s/Parent=/Parent=$i:/;
+	    }
 	    next if($g_flag && $1 ne 'maker');
 	}
 
 	chomp $line;
 	print $FH $line . "\n" if($line);
     }
+
+    $i++; #for unique identifier
 }
 close($GFF);
 close($ANN);
-close($FAS);
+close($FAS) unless($n_flag);
+if($s_flag){
+    print `cat $ann_file`;
+    print `cat $fas_file` unless($n_flag);
+}
+else{
+    system ("cat $ann_file >> $outfile");
+    system ("cat $fas_file >> $outfile") unless($n_flag);
+}
 
-system ("cat $ann_file >> $outfile");
-system ("cat $fas_file >> $outfile");
 unlink("$ann_file");
-unlink("$fas_file");
+unlink("$fas_file") unless($n_flag);

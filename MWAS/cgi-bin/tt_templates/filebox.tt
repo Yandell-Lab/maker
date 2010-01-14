@@ -6,7 +6,7 @@
 <form method="POST" action="maker.cgi" name="filebox_form" enctype="multipart/form-data">
 <input type="hidden" name="rm" value="upload_file">
 <input type="hidden" name="from_job" value="[% from_job %]">
-
+<center>
 <table width=90%>
   <tr>
     <td>Select a file type to upload:<br>
@@ -37,6 +37,7 @@
     </td>
   </tr>
 </table>
+</center>
 </form>
 
 [% IF ! from_job %]
@@ -50,9 +51,9 @@
     <th>Description</th>
     <th>Type</th>
     <th>Size/Sequece Length</th>
-    <th><img src="stream.cgi?type=img&src=trashcan-empty-24x24.png"></th>
+    <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
   </tr>
-[% IF jobs.size == 0 %]
+[% IF files.size == 0 %]
   <tr bgcolor="#CFECEC">
     <td></td>
     <td></td>

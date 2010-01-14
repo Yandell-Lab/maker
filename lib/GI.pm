@@ -2235,8 +2235,8 @@ sub set_defaults {
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = '';
       $CTL_OPT{'gmhmm'} = '';
-      $CTL_OPT{'gmhmm_E'} = '' if($main::server);
-      $CTL_OPT{'gmhmm_P'} = '' if($main::server);
+      $CTL_OPT{'gmhmm_e'} = '' if($main::server);
+      $CTL_OPT{'gmhmm_p'} = '' if($main::server);
       $CTL_OPT{'augustus_species'} = '';
       $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'model_gff'} = '';
@@ -2362,8 +2362,10 @@ sub set_defaults {
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
       $CTL_OPT{'data_dir'} = "$FindBin::Bin/../data";
-      $CTL_OPT{'cgi_dir'} = '';
-      $CTL_OPT{'html_dir'} = '';
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/MWAS';
+      $CTL_OPT{'cgi_web'} = '/cgi-bin/MWAS';
+      $CTL_OPT{'html_dir'} = '/var/www/html/MWAS';
+      $CTL_OPT{'html_web'} = '/MWAS';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
    }
 
@@ -2374,8 +2376,8 @@ sub set_defaults {
       $CTL_OPT{'snaphmm'}          = {};
       $CTL_OPT{'augustus_species'} = {};
       $CTL_OPT{'fgenesh_par_file'} = {};
-      $CTL_OPT{'gmhmm_E'}          = {};
-      $CTL_OPT{'gmhmm_P'}          = {};
+      $CTL_OPT{'gmhmm_e'}          = {};
+      $CTL_OPT{'gmhmm_p'}          = {};
       $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' =>
                                           "$FindBin::Bin/../../data/dpp_transcripts.fasta"};
       $CTL_OPT{'altest'}           = {};
@@ -2402,7 +2404,7 @@ sub set_defaults {
    #reset values with user supplied defaults
    if($user_default && $type ne 'menus'){
        while(my $key = each %$user_default){
-	   #will ignore invalid/iappropriate entries
+	   #will ignore invalid/inappropriate entries
 	   $CTL_OPT{$key} = $user_default->{$key} if(exists $CTL_OPT{$key});
        }
    }
@@ -2472,7 +2474,7 @@ sub collect_hmms {
 
 	    next if(!$name || !$value);
 
-	    $hmms{gmhmm_E}{$name} = $value;
+	    $hmms{gmhmm_e}{$name} = $value;
 	}
     }
 
@@ -2915,15 +2917,26 @@ sub load_control_files {
 	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files.\n\n";
 	 next;
       }
-      elsif (not -f $CTL_OPT{$in}) {
+      elsif ((my @files = split(/\,/, $CTL_OPT{$in})) > 1){#handle comma seperated list
+	  my %uniq; #make files uniq
+	  @files = grep {! $uniq{$_}++} @files;
+	  my @non = grep {! -f $_} @files;
+	  $error .= "ERROR: The \'$in\' files ".join(', ', @files)." do not exist.\n".
+	      "Please check settings in the control files.\n\n"if(@non);
+
+	  @files = map {Cwd::abs_path($_)} @files unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
+	  $CTL_OPT{$in} = join(',', @files); #order entries for logging (lets run log work as is)
+      }
+      elsif (! -f $CTL_OPT{$in}) {
 	 $error .= "ERROR: The \'$in\' file $CTL_OPT{$in} does not exist.\n".
 	 "Please check settings in the control files.\n\n";
 	 next;
       }
-      
-      #set the absolute path to the file to reduce ambiguity
-      #this breaks blast which requires symbolic links
-      $CTL_OPT{$in} = Cwd::abs_path($CTL_OPT{$in}) unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
+      else{
+	  #set the absolute path to the file to reduce ambiguity
+	  #this breaks blast which requires symbolic links
+	  $CTL_OPT{$in} = Cwd::abs_path($CTL_OPT{$in}) unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
+      }
    }
 
    #--error check sometimes required values
@@ -3383,7 +3396,9 @@ sub generate_control_files {
        print OUT "inactive_guest:$O{inactive_guest} #time guest account can be inactive before disabling, in days (0 to disable limit)\n";
        print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and results\n";
        print OUT "cgi_dir:$O{cgi_dir} #web accesible directory where web interface CGI content is stored\n";
+       print OUT "cgi_web:$O{cgi_web} #url to cgi_dir\n";
        print OUT "html_dir:$O{html_dir} #web accesible directory where web interface HTML conent is stored\n";
+       print OUT "html_web:$O{html_web} #url to html_dir\n";
        print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.  Used for building webstart of Apollo.\n";
        close(OUT);    
    }

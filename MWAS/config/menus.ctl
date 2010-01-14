@@ -1,48 +1,50 @@
 ##Menus from Data::Dumper
 $menus = {
-           'repeat_gff' => {},
-           'genome' => {
-                         'D. melanogaster : example contig' => '/home/cholt/maker/MWAS/bin/../../data/dpp_contig.fasta'
-                       },
            'altest' => {},
+           'gmhmm_e' => {
+                          'P. ultimum' => '/home/apache/MWS/users/1/pyu.mod',
+                          'M. truncatula' => '/home/cholt/usr/local/gmes/HMM/m_truncatula.mod',
+                          'C. remanei' => '/home/cholt/usr/local/gmes/HMM/c_remanei.mod',
+                          'C. briggsae' => '/home/cholt/usr/local/gmes/HMM/c_briggsae.mod',
+                          'O. sativa' => '/home/cholt/usr/local/gmes/HMM/o_sativa.mod',
+                          'A. gambiae' => '/home/cholt/usr/local/gmes/HMM/a_gambiae.mod',
+                          'A. thaliana' => '/home/cholt/usr/local/gmes/HMM/a_thaliana.mod',
+                          'D. melanogaster' => '/home/cholt/usr/local/gmes/HMM/d_melanogaster.mod',
+                          'C. reinhardtii' => '/home/cholt/usr/local/gmes/HMM/c_reinhardtii.mod',
+                          'C. elegans' => '/home/cholt/usr/local/gmes/HMM/c_elegans.mod',
+                          'C. intestinalis' => '/home/cholt/usr/local/gmes/HMM/c_intestinalis.mod'
+                        },
+           'est' => {
+                      'D. melanogaster : example cDNA' => '/data1/cholt/maker/MWAS/bin/../../data/dpp_transcripts.fasta',
+	              'De novo/Legacy Annotaion : example ESTs' => '/home/apache/MWS/users/1/pyu-est.fasta'
+                    },
+           'genome' => {
+                         'D. melanogaster : example contig' => '/data1/cholt/maker/MWAS/bin/../../data/dpp_contig.fasta',
+	              'De novo Annotation : example contig' => '/home/apache/MWS/users/1/pyu-contig.fasta',
+	              'Legacy Annotation : example contig' => '/home/apache/MWS/users/1/legacy-contig.fasta',
+	              'Pass-through : example contig' => '/home/apache/MWS/users/1/pass-contig.fasta'
+                       },
            'snaphmm' => {
-                          'A. mellifera' => '/home/cholt/usr/local/snap/HMM/A.mellifera.hmm',
-                          'C. elegans' => '/home/cholt/usr/local/snap/HMM/C.elegans.hmm',
-                          'C. intestinalis' => '/home/cholt/usr/local/snap/HMM/C.intestinalis.hmm',
-                          'B. malayi' => '/home/cholt/usr/local/snap/HMM/B.malayi.hmm',
-                          'A. gambiae' => '/home/cholt/usr/local/snap/HMM/A.gambiae.hmm',
+                          'P. ultimum' => '/home/apache/MWS/users/1/pyu.hmm',
                           'A. thaliana' => '/home/cholt/usr/local/snap/HMM/A.thaliana.hmm',
                           'D. melanogaster' => '/home/cholt/usr/local/snap/HMM/D.melanogaster.hmm',
+                          'B. malayi' => '/home/cholt/usr/local/snap/HMM/B.malayi.hmm',
+                          'C. elegans' => '/home/cholt/usr/local/snap/HMM/C.elegans.hmm',
                           'O. sativa' => '/home/cholt/usr/local/snap/HMM/O.sativa.hmm',
-                          'P. marinus' => '/home/cholt/usr/local/snap/HMM/P.marinus.hmm'
+                          'P. marinus' => '/home/cholt/usr/local/snap/HMM/P.marinus.hmm',
+                          'A. gambiae' => '/home/cholt/usr/local/snap/HMM/A.gambiae.hmm',
+                          'C. intestinalis' => '/home/cholt/usr/local/snap/HMM/C.intestinalis.hmm',
+                          'A. mellifera' => '/home/cholt/usr/local/snap/HMM/A.mellifera.hmm',
                         },
-           'rmlib' => {},
            'protein_gff' => {},
+           'repeat_gff' => {},
            'model_org' => {
                             'All species' => 'all'
                           },
-           'pref_gff' => {},
-           'fgenesh_par_file' => {},
-           'gmhmm_E' => {
-                          'C. elegans' => '/home/cholt/usr/local/gmes/HMM/c_elegans.mod',
-                          'C. intestinalis' => '/home/cholt/usr/local/gmes/HMM/c_intestinalis.mod',
-                          'C. remanei' => '/home/cholt/usr/local/gmes/HMM/c_remanei.mod',
-                          'A. gambiae' => '/home/cholt/usr/local/gmes/HMM/a_gambiae.mod',
-                          'M. truncatula' => '/home/cholt/usr/local/gmes/HMM/m_truncatula.mod',
-                          'A. thaliana' => '/home/cholt/usr/local/gmes/HMM/a_thaliana.mod',
-                          'C. reinhardtii' => '/home/cholt/usr/local/gmes/HMM/c_reinhardtii.mod',
-                          'C. briggsae' => '/home/cholt/usr/local/gmes/HMM/c_briggsae.mod',
-                          'D. melanogaster' => '/home/cholt/usr/local/gmes/HMM/d_melanogaster.mod',
-                          'O. sativa' => '/home/cholt/usr/local/gmes/HMM/o_sativa.mod'
-                        },
-           'protein' => {
-                          'D. melanogaster : example proteins' => '/home/cholt/maker/MWAS/bin/../../data/dpp_proteins.fasta',
-                          'UniProt' => '/home/cholt/maker/data/uniprot_swissprot.prot'
-                        },
-           'est' => {
-                      'D. melanogaster : example cDNA' => '/home/cholt/maker/MWAS/bin/../../data/dpp_transcripts.fasta'
-                    },
-           'gmhmm_P' => {},
+           'fgenesh_par_file' => {
+                                   'Phytophtora' => '/home/cholt/usr/local/fgenesh/Phytophtora',
+                                   'Dicots' => '/home/cholt/usr/local/fgenesh/Dicots'
+                                 },
            'augustus_species' => {
                                    'Zea mays' => 'maize',
                                    'Saccharomyces cerevisiae' => 'saccharomyces_cerevisiae_rm11-1a_1',
@@ -92,10 +94,22 @@ $menus = {
                                    'Nasonia vitripennis' => 'nasonia',
                                    'Fusarium graminearum' => 'fusarium_graminearum'
                                  },
-           'model_gff' => {},
-           'altest_gff' => {},
+           'gmhmm_p' => {},
+           'model_gff' => {
+			     'Legacy Annotation : example model set 1' => '/home/apache/MWS/users/1/legacy-set1.gff',
+			     'Legacy Annotation : example model set 2' => '/home/apache/MWS/users/1/legacy-set2.gff'
+	                  },
            'repeat_protein' => {
-                                 'RepeatRunner te_proteins' => '/home/cholt/maker/MWAS/bin/../../data/te_proteins.fasta'
+                                 'RepeatRunner te_proteins' => '/data1/cholt/maker/MWAS/bin/../../data/te_proteins.fasta'
                                },
-           'est_gff' => {}
+           'rmlib' => {},
+           'pref_gff' => {},
+           'protein' => {
+                          'D. melanogaster : example proteins' => '/data1/cholt/maker/MWAS/bin/../../data/dpp_proteins.fasta',
+		              'De novo/Legacy Annotation : example Protein' => '/home/apache/MWS/users/1/pyu-protein.fasta'
+                        },
+           'altest_gff' => {},
+           'est_gff' => {
+    		          'Pass-through : example mRNAseq' => '/home/apache/MWS/users/1/pass-mRNAseq.gff'
+	                }
          };

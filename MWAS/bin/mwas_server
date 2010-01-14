@@ -22,11 +22,16 @@ use lib "$FindBin::Bin/../lib"; #/MWAS/lib
 use lib "$FindBin::Bin/../perl/lib"; #/MWAS/perl/lib
 use Proc::Signal;
 use File::NFSLock;
-use GI;
-use MWAS_util;
 use File::Path qw(mkpath rmtree);
 
 BEGIN{
+    if (not ($ENV{CGL_SO_SOURCE})) {
+	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../../lib/CGL/so.obo";
+    }
+    if (not ($ENV{CGL_GO_SOURCE})) {
+	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../../lib/CGL/gene_ontology.obo"
+    }
+
     #get my own name
     $EXE = $FindBin::Script;
 
@@ -35,7 +40,7 @@ BEGIN{
     umask 0;
 
     #set debugging mode
-    $DEBUG=1;
+    $DEBUG=0;
 
     #exit subroutine for signals
     my $exit = sub{die "SIGNAL: Caught @_ exiting\n\n";};
@@ -51,6 +56,10 @@ BEGIN{
 		      exec($0, @ARGV);
 		     };
 }
+
+use GI;
+use MWAS_util;
+
 
 my $usage = "
 Usage:
@@ -115,9 +124,9 @@ Options:
                  directory, does not destroy existing files.
 
      SETUP       Setup the GGI/HTML files needed to launch the web interface.
-                 Also sets up the database the web interface will use.  You
-                 must set cgi_dir and html_dir in /config/server.ctl as well
-                 as DBI and dbname before running SETUP.
+                 Also sets up the database that the web interface will use.
+                 You  must set cgi_dir in /config/server.ctl as well as DBI
+                 and dbname before running SETUP.
 
      APOLLO      Setup a webstart version of Apollo for browsing job results. 
                  You must set APOLLO_ROOT in /config/server.ctl first.
@@ -183,11 +192,13 @@ elsif($opt eq 'SETUP'){
 	    "you can run $EXE with the SETUP option, to build the web interface.\n\n";
     }
 
-    my $cgi_dir  = $CTL_OPT{cgi_dir}; #get directory to build CGI/HTML files
-    my $html_dir = $CTL_OPT{cgi_dir}; #get directory to build CGI/HTML files
+    my $cgi_dir  = $CTL_OPT{cgi_dir}; #get directory to build CGIL files
+    my $html_dir  = $CTL_OPT{html_dir}; #get directory to build HTML files
 
-    die "ERROR: You must supply a directory for both cgi_dir and html_dir\n".
-	"to install CGI/HTML files\n" if(! $cgi_dir || ! $html_dir);
+    die "ERROR: You must supply a directory for both cgi_dir\n".
+	"to install CGI/HTML files\n" if(! $cgi_dir);
+    die "ERROR: You must supply a directory for both html_dir\n".
+	"to install CGI/HTML files\n" if(! $html_dir);
 
     die "ERROR: The directory '$cgi_dir' does not exist\n" if(! -d $cgi_dir);
     die "ERROR: The directory '$html_dir' does not exist\n" if(! -d $html_dir);
@@ -197,11 +208,12 @@ elsif($opt eq 'SETUP'){
     my $ho_dir = "$FindBin::Bin/../html/"; #original direcory
     my $m_lib = "$FindBin::Bin/../../lib/"; #/maker/lib
     my $p_lib = "$FindBin::Bin/../../perl/lib/"; #/maker/perl/lib
-    system("cp -R -u $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    system("cp -R -u $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
-    system("cp -R -u $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    system("cp -R -u $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    system("cp -R -u $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    mkdir("$cgi_dir/config/") if(! -d "$cgi_dir/config/");
+    system("cp -R $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
+    system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
 
     if($CTL_OPT{DBI} && $CTL_OPT{dbname}){
 	#try to connect to the database as a test
@@ -210,8 +222,8 @@ elsif($opt eq 'SETUP'){
 	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
 
 	if(!$CTL_OPT{username}){ #warn if no db_username specified
-	    warn "WARNING: No username for connecting to the database is specified\n".
-		"without a username online requests to MWAS will fail because of\n".
+	    warn "WARNING: No username for connecting to the database is specified.\n".
+		"Without a username, online requests to MWAS will fail because of\n".
 		"permission issues. Please make the necessary changes to server.ctl.\n\n";
 	}
 
@@ -437,7 +449,7 @@ sub run_server {
 	die "ERROR: You must specify a database to connecty to in: $FindBin::Bin/../config/server.ctl\n\n";
     }
 
-    if(! $CTL_OPT{cgi_dir}){
+    if(! $CTL_OPT{cgi_dir} || ! $CTL_OPT{html_dir}){
 	die "ERROR: You must specify the directory where web content is installed in: $FindBin::Bin/../config/server.ctl\n\n";
     }
 
@@ -456,6 +468,7 @@ sub run_server {
     #update web interface to current configuration
     my $p_lib = "$FindBin::Bin/../config/"; #config directory
     my $w_dir = $CTL_OPT{cgi_dir}; #web accessible directory
+    mkdir("$w_dir/config") if(! -d "$w_dir/config");
     system("cp -R $c_dir/* $w_dir/config/") && die("ERROR: Copying files to $w_dir failed\n");
 
     $dbh->disconnect; #database found successfully
@@ -536,8 +549,8 @@ sub run_server {
 		next;
 	    }
 	    else{#no free cpus, just wait
-		sleep 10;
 		$dbh->disconnect;
+		sleep 10;
 		next;
 	    }
 	}
@@ -579,9 +592,14 @@ sub clean_and_package {
 	File::Path::rmtree($f) if(-d $f);
     }
 
-    #rap everything up into a nice package
+    #build merged gff3 and fasta files
+    system("cd $job_dir/$r_dir\n".
+	   "$FindBin::Bin/../../bin/gff3_merge -d $job_id\_master_datastore_index.log\n".
+	   "$FindBin::Bin/../../bin/fasta_merge -d $job_id\_master_datastore_index.log");
+
+    #wrap everything up into a nice package
     system("cd $job_dir\n".
-	   "tar -zcf $r_dir.tar.gz $r_dir --exclude \"run.log\" --exclude \"theVoid\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\"") &&
+	   "tar -zcf $r_dir.tar.gz $r_dir --exclude \"run.log\" --exclude \"theVoid\*\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\"") &&
 	   die("ERROR: Building tarball for job '$job_id' failed\n");
 
     my $index = "$job_dir/$r_dir/$job_id\_master_datastore_index.log";
@@ -656,6 +674,15 @@ sub start_job {
     
     #build control files for job
     my $job_ctl = $dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$job_id});
+
+    #check if a finished job used these exact same settings
+    if(my $other_job_id = MWAS_util::package_already_exists($dbh, $job_ctl, $user_id)){
+	$dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
+	MWAS_util::copy_package($dbh, $other_job_id, $job_id);
+	$dbh->commit;
+	return;
+    }
+
     %CTL_OPT = (%CTL_OPT, %{$job_ctl}); #override current defaults with user values
     GI::generate_control_files($job_dir, 'all', \%CTL_OPT) if(! -f "$job_dir/maker_opts.ctl" ||
 							      ! -f "$job_dir/maker_bopts.ctl" ||
@@ -670,7 +697,7 @@ sub start_job {
     #fork off the MAKER proccess and return process id of the child
     FORK: { 
 	my $pid;
-	if (!$DEBUG || ($pid=fork())) { # this is the parent, so return the pid
+	if (!$DEBUG && ($pid=fork())) { # this is the parent, so return the pid
 			 # everything below here is either the child or a very major 
 	                 # system failure
 
@@ -828,12 +855,14 @@ sub check_table_structure {
     #log/re-log last unique key ids used (this is to help generate new keys)
     #Most versions of SQL can do this automatically but not all, so I will handle it in perl
     #please note that job_id 1 is reserved for tutorial data and user_id 1 for administrator
-    $dbh->do(qq{DROP TABLE id_store}) if(grep {/id_store/} @tables);
-    $dbh->do(qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER)});
-    my ($last_user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1}) || 1;
-    my ($last_job_id)  = $dbh->selectrow_array(qq{SELECT job_id FROM jobs ORDER BY job_id DESC LIMIT 1}) || 1;
-    $dbh->do(qq{INSERT INTO id_store (last_user_id, last_job_id) VALUES ($last_user_id, $last_job_id)});
-    
+    #$dbh->do(qq{DROP TABLE id_store}) if(grep {/id_store/} @tables);
+    if(! grep {/id_store/} @tables){
+	$dbh->do(qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER)});
+	my ($last_user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1}) || 1;
+	my ($last_job_id)  = $dbh->selectrow_array(qq{SELECT job_id FROM jobs ORDER BY job_id DESC LIMIT 1}) || 1;
+	$dbh->do(qq{INSERT INTO id_store (last_user_id, last_job_id) VALUES ($last_user_id, $last_job_id)});
+    }
+
     #add administrator to database
     my ($user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users WHERE user_id=1});
     $dbh->do(qq{INSERT INTO users (user_id, login, password, first, last, e_mail, is_guest, is_admin, date_created) }.
@@ -898,7 +927,7 @@ sub check_table_structure {
 		 qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		 qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		 qq{VALUES(1, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-                 qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '', '', 'D. melanogaster : Dpp','$t_message')}
+                 qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'D. melanogaster : Dpp','$t_message')}
 		 ) if(! $job_id); #add job
     }
     

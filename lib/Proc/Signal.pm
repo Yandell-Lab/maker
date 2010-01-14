@@ -97,7 +97,7 @@ sub exists_killall {
 	my $cmdline  = $p->cmndline() || '';
 	my ($front)  = $p->cmndline() =~ /^([^\s]+)/ || '';
 	my ($f_name) = $front =~ /([^\/]+)$/ || '';
-	my $exe      = $p->exec() || '';
+	my $exe      = ''; #$p->exec() || '';
 	my $e_name   = $p->fname() || '';
 	my $script   = '';
 	my $s_name   = '';

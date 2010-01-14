@@ -16,6 +16,34 @@ function org_type_changed(type){
 
 function change_field(field_name, new_value){
 }
+
+function make_multiple(DivID, DivID2){
+    var iState;
+    if(document.layers)   //NN4+
+    {
+        iState = (document.layers[DivID].multiple == true) ? 1 : 0;
+        document.layers[DivID].multiple = iState ? false : true;
+        document.layers[DivID].size = iState ? 1 : 4;
+        document.layers[DivID2].checked = iState ? false : true;
+    }
+    else if(document.getElementById)  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        iState = (obj.multiple == true) ? 1 : 0;
+        obj.multiple = iState ? false : true;
+        obj.size = iState ? 1 : 4;
+        obj = document.getElementById(DivID2);
+        obj.checked = iState ? false : true;
+    }
+    else if(document.all)// IE 4
+    {
+        iState = (document.all[DivID].multiple == true) ? 1 : 0;
+        document.all[DivID].multiple = iState ? false : true;
+        document.all[DivID].size = iState ? 1 : 4;
+        document.all[DivID2].checked = iState ? false : true;
+    }
+}
+
 </script>
 
 <center>
@@ -58,13 +86,28 @@ function change_field(field_name, new_value){
 
 <table width=90% bgcolor=CACACA style="border-collapse: collapse">
   <tr bgcolor=white>
-    <td>
+    <td colspan=2>
       <p>
-      Use the options below to configure your annotation job[% IF menus.tutorials.size > 0 %], or load one of the provided example annotation jobs.  After clicking load for an example job, the fields below will be filled out for you.  You can can then review them or edit them[% END %].  Click "Add Job to Queue" at the bottom of the page to submit a job.  Click "Save" to save progress without submitting.
-      For more information on using the MAKER Web Annotation Service, click "Help" above.
+      Use the options below to configure your annotation job[% IF menus.tutorials.size > 0 %],
+      or load one of the provided example annotation jobs[% END %].
+      Click "Add Job to Queue" at the bottom of the page to submit a job.  Click "Save" to save
+      progress without submitting. For more information on using the MAKER Web Annotation Service,
+      click "Help" above.
       </p>
     </td>
-    [% IF menus.tutorials.size > 0 %]
+  </tr>
+[% IF menus.tutorials.size > 0 %]
+  <tr bgcolor=white>
+    <td>
+      <p>
+      Example jobs are meant to be used with the
+      <a href="http://gmod.org/wiki/MWAS_Tutorial">step by step tutorial</a>
+      hosted by the Generic Model Organism Database Project.  After clicking load for an example
+      job, the fields below will be filled out for you.  You can can then review them or edit them.
+      You will need to click on "Add Job to Queue" at the bottom of the page before the example job
+      will start.
+      </p>
+    </td>
     <td align="right">
 	<form method="POST" action="maker.cgi" name="example_form" enctype="multipart/form-data">
 	<input type="hidden" name="rm" value="job_create">
@@ -78,8 +121,8 @@ function change_field(field_name, new_value){
 	<p><input type="submit" name="load" value="Load"></p>
 	</form>
     </td>
-    [% END %]
   </tr>
+[% END %]
 </table>
 
 <br>
@@ -87,7 +130,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr bgcolor=white>
     <td>
-      <center><img src="stream.cgi?type=img&src=barcode.png"></center>
+      <center><img src="[% server_opt.html_web %]/images/barcode.png"></center>
     </td>
     <td bgcolor=CACACA align=right>
       <h3>MAKER Job Details</h3>
@@ -112,7 +155,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Denovo Annotation</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">Denovo Annotation</span></h2>
     </td>
   </tr>
   <tr bgcolor=white>
@@ -153,7 +196,7 @@ function change_field(field_name, new_value){
      </p>
    </td>
    <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='genome'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -173,7 +216,7 @@ function change_field(field_name, new_value){
    </td>
    
    <td nowrap>
-     <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+     <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
    </td>
    [% END %]
   </tr>
@@ -194,7 +237,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr bgcolor=CACACA>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">EST Evidence</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">EST Evidence</span></h2>
     </td>
   </tr>
 </table>
@@ -214,7 +257,7 @@ function change_field(field_name, new_value){
       <p><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs to be aligned from the same source as your genomic sequence.</p>
     </td>
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
       <center><SELECT name='est'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -232,7 +275,7 @@ function change_field(field_name, new_value){
      </SELECT></center>
    </td>	    
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -243,7 +286,7 @@ function change_field(field_name, new_value){
       <p><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from related organisms; this file is optional. Please keep in mind that these ESTs must be aligned to the genomic sequence using TBLASTX, and providing this file may substantially increase compute time. <span style="color: blue; font-weight: bold">Optional</span></p>
     </td>
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
       <center><SELECT name='altest'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -261,7 +304,7 @@ function change_field(field_name, new_value){
      </SELECT></center>
     </td>
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -293,7 +336,7 @@ function change_field(field_name, new_value){
       <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of aligned ESTs from the same source as your genomic sequence. <span style="color: blue; font-weight: bold">Optional</span></p>
     </td>
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
       <center><SELECT name='est_gff'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -311,7 +354,7 @@ function change_field(field_name, new_value){
      </SELECT></center>
    </td>	    
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -323,7 +366,7 @@ function change_field(field_name, new_value){
       </p>
     </td>
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
       <center><SELECT name='altest_gff'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -341,7 +384,7 @@ function change_field(field_name, new_value){
      </SELECT></center>
    </td>
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -362,7 +405,7 @@ function change_field(field_name, new_value){
 <table width=90%  bgcolor=CACACA>
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Protein Homology Evidence</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">Protein Homology Evidence</span></h2>
     </td>
   </tr>
 </table>
@@ -384,7 +427,7 @@ function change_field(field_name, new_value){
     </td>
 	  
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='protein'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -403,7 +446,7 @@ function change_field(field_name, new_value){
     </td>
 	  
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>	  
   </tr>	
 
@@ -433,7 +476,7 @@ function change_field(field_name, new_value){
       <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of aligned proteins. <span style="color: blue; font-weight: bold">Optional</span></p>
     </td>
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
       <center><SELECT name='protein_gff'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -451,7 +494,7 @@ function change_field(field_name, new_value){
       </SELECT></center>
     </td>	    
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
    
@@ -471,7 +514,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Configure Repeat Masking</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">Configure Repeat Masking</span></h2>
     </td>
   </tr>
 </table>
@@ -518,7 +561,7 @@ function change_field(field_name, new_value){
     [% ELSIF menus.model_org.server.size > 0 %]
     <td>
      <!--
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a species/group for filtering repeats</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a species/group for filtering repeats</center>
       <center><SELECT name='model_org'>
 	[% add_options(label   = 'Server Provided Options',
 	               options = menus.model_org.server,
@@ -531,7 +574,7 @@ function change_field(field_name, new_value){
     </td>
     [% ELSE %]
     <td>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Enter a species/group for filtering repeats</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Enter a species/group for filtering repeats</center>
       <center><input type="text" size=20 maxlength=20 name="model_org" value="[% ctl_opt.modle_org %]"></center>
     </td>
     [% END %]
@@ -566,7 +609,7 @@ function change_field(field_name, new_value){
     </td>
     [% ELSE %]
     <td nowrap>
-      <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+      <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
       <center><SELECT name='repeat_protein'>
 	[% add_options(label   = 'Server Provided Fasta Files',
 	               options = menus.repeat_protein.server,
@@ -582,7 +625,7 @@ function change_field(field_name, new_value){
       </SELECT></center>
     </td>
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
     [% END %]
   </tr>
@@ -608,7 +651,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='rmlib'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -627,7 +670,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>	 
   </tr>
   <tr bgcolor=white>
@@ -656,7 +699,7 @@ function change_field(field_name, new_value){
       <p><span style="color: red; font-weight: bold">Upload</span> a GFF3 file of repeat elements. <span style="color: blue; font-weight: bold">Optional</span></p>
     </td>
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='rm_gff'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -674,7 +717,7 @@ function change_field(field_name, new_value){
      </SELECT></center
     </td>	    
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   
@@ -694,7 +737,7 @@ function change_field(field_name, new_value){
 <table width=90%  bgcolor=CACACA>
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Choose Your Gene-predictor(s)</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png"> Choose Your Gene-predictor(s)</span></h2>
     </td>
   </tr>
 
@@ -746,7 +789,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='snaphmm'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -765,7 +808,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -794,7 +837,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='augustus_species'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -816,7 +859,7 @@ function change_field(field_name, new_value){
     
     <td nowrap>
 	<!--
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
       -->
     </td>
   </tr>
@@ -846,7 +889,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='fgenesh_par_file'>
 	<OPTION SELECTED VALUE="">No HMM selected...</OPTION>
@@ -865,7 +908,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -895,7 +938,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
      <center><SELECT name='gmhmm'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
 	[% add_options(label   = 'Server Provided HMM Files',
@@ -913,7 +956,7 @@ function change_field(field_name, new_value){
     </td>
     
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
   [% END %]
@@ -973,7 +1016,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Already Have Your Own Gene Models/Ab-inito Predictions?</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">Already Have Your Own Gene Models/Ab-inito Predictions?</span></h2>
     <td>
   </tr>
   
@@ -990,7 +1033,7 @@ function change_field(field_name, new_value){
       </p>
     </td>
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
      <center><SELECT name='pred_gff'>
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
@@ -1008,7 +1051,7 @@ function change_field(field_name, new_value){
      </SELECT></center	  
     </td>
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>
   </tr>
 
@@ -1018,9 +1061,9 @@ function change_field(field_name, new_value){
       </p>
     </td>
     <td nowrap>
-     <center><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Select a file below</center>
+     <center><img src="[% server_opt.html_web %]/images/folder_images.gif"> Select a file below</center>
 
-     <center><SELECT name='model_gff'>
+     <center><SELECT name='model_gff' id="model_gff_menu">
 	<OPTION SELECTED VALUE="">No file selected...</OPTION>
 	[% add_options(label   = 'Server Provided GFF3 Files',
 	               options = menus.model_gff.server,
@@ -1033,10 +1076,12 @@ function change_field(field_name, new_value){
 	               empty_message = 'You must upload a file first...',
 	              )
 	%]
-     </SELECT></center	  
+     </SELECT></center><br>
+     <input type="radio" id='model_gff_check' onclick="make_multiple('model_gff_menu', 'model_gff_check');">
+     Select Multiple Files
     </td>
     <td nowrap>
-      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a>
+      <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
     </td>	
   </tr>
   
@@ -1055,7 +1100,7 @@ function change_field(field_name, new_value){
 <table width=90% bgcolor=CACACA >
   <tr>
     <td colspan=3>
-      <h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Annotation Properties</span></h2>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png"> Annotation Properties</span></h2>
     </td>
   </tr>
   

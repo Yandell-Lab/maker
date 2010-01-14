@@ -159,7 +159,7 @@ ul.message li.warning {
        $stash->set('u_max' => $u_max);
        $stash->set('g_max' => $g_max);
    [% END %]
-   <h2>This website is free and open to all users and there is no login requirement</h2>
+   <h2>This website is free and open to all users for academic use and there is no login requirement</h2>
 
    <p>Welcome to the MAKER Web Annotation Service.  Log into your account below, or you can
       access the server as a guest.  While there is no login requirement for this site, users
@@ -180,15 +180,15 @@ function doguest() {
 }
 </script>
 
-
+<div name="other" style="text-align : center;">
 <form name="loginform" method="post" action="maker.cgi">
-<div class="login">
+<div class="login" style="text-align : left;">
   <div class="login_header">
     [% message %]
   </div>
   <div class="login_content">
 
-    <span style="padding : 0em 0em 0em 4em"><img src="http://www.yandell-lab.org/images/Maker-Logo.png" height="39" width="45">Maker Web Annotation Service</span>
+    <span style="padding : 0em 0em 0em 4em"><img src="[% server_opt.html_web %]/images/Maker-Logo.png" height="39" width="45">Maker Web Annotation Service</span>
 
 
     <fieldset>
@@ -200,15 +200,15 @@ function doguest() {
     
     <table>
       <td nowrap>
-	<img src="http://www.famfamfam.com/lab/icons/mini/icons/icon_user.gif">
+	<img src="[% server_opt.html_web %]/images/icon_user.gif">
 	<a href="maker.cgi?rm=register"> New user registration</a>
       </td>
       <td nowrap>
-	<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_lock.gif">
+	<img src="[% server_opt.html_web %]/images/folder_lock.gif">
 	<a href="maker.cgi?rm=forgot_login"> Forgot login?</label>  </a>
       </td>
       <td nowrap>
-	<img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif">
+	<img src="[% server_opt.html_web %]/images/icon_info.gif">
 	<a href="maker.cgi?rm=help"> Help</a>
       </td>
     </table>
@@ -230,6 +230,7 @@ function doguest() {
 <input type="hidden" name="destination" value="maker.cgi?rm=frontpage" />
 <input type="hidden" name="rm" value="authen_login" />
 </form>
+</div>
 
 </body>
 [% END %]

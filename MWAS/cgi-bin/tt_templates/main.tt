@@ -4,12 +4,12 @@
     <meta http-equiv="content-cype" content="text/html; charset=iso-8859-1" />
     <meta name="description" content="MAKER Web Annotation Service:Your genome annotated" />
     <meta name="keywords" content="MAKER" />
-    <link rel="stylesheet" type="text/css" href="http://malachite.genetics.utah.edu/MWAS/css/style.css" media="screen"/>
-    <link rel="stylesheet" type="text/css" href="http://malachite.genetics.utah.edu/MWAS/css/print.css" media="print"/>
+    <link rel="stylesheet" type="text/css" href="[% server_opt.html_web %]/css/style.css" media="screen"/>
+    <link rel="stylesheet" type="text/css" href="[% server_opt.html_web %]/css/print.css" media="print"/>
     <title>MAKER Web Annotation Service</title>
 </head>
 
-<script type="text/javascript" src="sarissa.js"></script>
+<script type="text/javascript" src="[% server_opt.html_web %]/js/sarissa.js"></script>
 <script language="JavaScript1.2">
 <!--
 isIE=document.all;
@@ -171,7 +171,7 @@ document.getElementById(DivID).innerHTML = 'Loading...';
 	<table>
 	<tr>
 	<td>
-	<img src="http://www.yandell-lab.org/images/Maker-Logo.png">
+	<img src="[% server_opt.html_web %]/images/Maker-Logo.png">
 	</td>
 	<td>
 	<h1>MAKER Web Annotation Service</h1>
@@ -180,20 +180,16 @@ document.getElementById(DivID).innerHTML = 'Loading...';
 	</tr>
 	</table>
         <ul>
-            <li><a href="maker.cgi?rm=frontpage[% IF user.user_id %]&user_id=[% user.user_id %][% END %]"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_home.gif"> Home</span></a></li>
+            <li><a href="maker.cgi?rm=frontpage"><span><img border="0" src="[% server_opt.html_web %]/images/icon_home.gif"> Home</span></a></li>
 	[% IF logged_in == 1 %]
-            <li><a href="maker.cgi?rm=job_create"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/page_new.gif"> New Job</span></a></li>
-            <li><a href="maker.cgi?rm=filebox"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif"> Manage Files</span></a></li>
-	<!--
-            <li><a href="maker.cgi?rm=queue"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_history.gif"> Job Queue</span></a></li>
-        -->
-            <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_light.gif"> Edit Account</span></a></li>
-        <!--        
-           <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/comment.gif"> Contact Us</span></a></li>
-        -->
+            <li><a href="maker.cgi?rm=job_create"><span><img border="0" src="[% server_opt.html_web %]/images/page_new.gif"> New Job</span></a></li>
+            <li><a href="maker.cgi?rm=filebox"><span><img border="0" src="[% server_opt.html_web %]/images/folder_images.gif"> Manage Files</span></a></li>
+            <li><a href="maker.cgi?rm=queue"><span><img border="0" src="[% server_opt.html_web %]/images/icon_history.gif"> Job Queue</span></a></li>
+            <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="[% server_opt.html_web %]/images/page_user_light.gif"> Edit Account</span></a></li>
+           <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="[% server_opt.html_web %]/images/comment.gif"> Contact Us</span></a></li>
 	[% END %]
-            <li><a href="maker.cgi?rm=help"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/icon_info.gif"> Help</span></a></li>
-            <li><a href="http://www.yandell-lab.org"><span><img border="0" src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_up.gif"> Yandell Lab</span></a></li>
+            <li><a href="maker.cgi?rm=help"><span><img border="0" src="[% server_opt.html_web %]/images/icon_info.gif"> Help</span></a></li>
+            <li><a href="http://www.yandell-lab.org"><span><img border="0" src="[% server_opt.html_web %]/images/arrow_up.gif">Yandell Lab</span></a></li>
         </ul>
    </div>
 
@@ -209,6 +205,14 @@ document.getElementById(DivID).innerHTML = 'Loading...';
        </td>
        </tr>
        </table>
+
+      [% IF user.is_guest %]
+      <h3 style="border-style:solid; border-width:1px;">
+      You are logged in as a guest user.  You may become a registered user at any time by clicking on "Edit Account".<br>
+      <br>
+      Copy the URL <font color="blue">http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi?rm=frontpage&guest_id=[% user.user_id %]</font>
+      or login with the username <font color="blue">[% user.login %]</font> to return to your jobs after exiting.</h3>
+      [% END %]
 
        [% content %]  
    </div>

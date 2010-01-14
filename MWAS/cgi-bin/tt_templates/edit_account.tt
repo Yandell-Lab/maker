@@ -2,20 +2,20 @@
 
 <script type="text/javascript"></script>
 
-<h2><img src="/Student/images/MSN2.ico">Edit Account Information</h2>
+<h2><img src="[% server_opt.html_web %]/images/MSN2.ico" width=32 height=32> Edit Account Information</h2>
 
 <form method="POST" action="maker.cgi" name="edit_account">
 <input type="hidden" name="rm" value="edit_account">
 
 <p>
 Edit your account information below.  You must enter your current password before any changes will take effect.
-If you wish to change your password, use the new password field.  Leaving this field blank will maintain your current password.
+If you wish to change your password, use the new password field.
 </p>
 <br>
 [% IF user.is_guest %]
 
-<h3 style="padding : 0 0 0 5em">
-  You are currently logged in via a guest account.  Update and submit the information below to become a registered user.
+<h3>
+  You are currently logged in via a guest account.  Update your information below to become a registered user.
 </h3>
 <br>
 
@@ -23,17 +23,17 @@ If you wish to change your password, use the new password field.  Leaving this f
 
 [% IF errors.size > 0 %]
 
-<h4 style="padding : 0 0 0 5em">
-  Update Failed: Please check values marked by <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif">
+<h4>
+  Update Failed: Please check values marked by <img src="[% server_opt.html_web %]/images/action_stop.gif">
 </h4>
 
 [% ELSIF message %]
-<h4 style="padding : 0 0 0 5em">
+<h4>
   [% message %]
 </h4>
 [% END %]
 
-<table style="padding : 0 0 0 4em">
+<table style="padding : 0 0 0 5em">
   <tr>
     <td>Login Name:</td>
     <td>
@@ -41,7 +41,7 @@ If you wish to change your password, use the new password field.  Leaving this f
     </td>
     <td nowrap>
 	[% IF errors.login %]
-           <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif"> [% errors.login %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.login %]
         [% END %]
     </td>
   </tr>
@@ -64,7 +64,7 @@ If you wish to change your password, use the new password field.  Leaving this f
     </td>
     <td nowrap>
 	[% IF errors.e_mail %]
-           <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif"> [% errors.e_mail %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.e_mail %]
         [% END %]
     </td>
   </tr>
@@ -74,19 +74,11 @@ If you wish to change your password, use the new password field.  Leaving this f
       <input type="text" size=20 maxlength=70 name="institution"[% IF user.institution %] value="[% user.institution %]"[% END %]>
     </td>
   </tr>
-  [% IF ! user.is_guest %]
   <tr>
-    <td>Current Password:</td>
-    <td>    
-      <input type="password" size=20 maxlength=10 name="old_password">
-    </td>
-    <td nowrap>
-	[% IF errors.old_password %]
-           <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif"> [% errors.old_password %]
-        [% END %]
+    <td>
+    <br>
     </td>
   </tr>
-  [% END %]
   <tr>
     <td>New Password:</td>
     <td>    
@@ -94,7 +86,7 @@ If you wish to change your password, use the new password field.  Leaving this f
     </td>
     <td nowrap>
 	[% IF errors.new_password %]
-          <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif"> [% errors.new_password %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.new_password %]
         [% END %]
     </td>
   </tr>
@@ -105,15 +97,35 @@ If you wish to change your password, use the new password field.  Leaving this f
     </td>
     <td nowrap>
 	[% IF errors.verify %]
-          <img src="http://www.famfamfam.com/lab/icons/mini/icons/action_stop.gif"> [% errors.verify %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.verify %]
         [% END %]
     </td>
   </tr>
+  [% IF ! user.is_guest %]
+  <tr>
+    <td>
+    <br>
+    </td>
+  </tr>
+  <tr>
+    <td>Current Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="old_password">
+    </td>
+    <td nowrap>
+	[% IF errors.old_password %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.old_password %]
+        [% END %]
+    </td>
+  </tr>
+  [% END %]
+  <tr>
+    <td>
+      <br>
+      <input type="submit" value="Submit">
+    </td>
+  </tr>
 </table>
-
-<br />
-
-<input type="submit" value="Submit">
 </form>
 
 [% END %]

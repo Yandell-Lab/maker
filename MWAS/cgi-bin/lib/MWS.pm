@@ -91,11 +91,12 @@ sub cgiapp_init {
 #-----------------------------------------------------------------------------
 sub cgiapp_prerun {
         my $self = shift;
-
+	
         $self->tt_params({logged_in  => $self->authen->is_authenticated,
-                          server_opt => $self->param('server_opt'),
+                          server_opt => $self->param('server_opt'), #server options file
                           session    => $self->session,
-                          #query    => Dumper($self->query),
+                          user       => $self->get_user_info,
+                          #query     => Dumper($self->query),
 		      });
 }
 #-----------------------------------------------------------------------------
@@ -149,7 +150,7 @@ sub login {
 
    if($self->authen->is_authenticated){
        my $user_id = $self->get_user_id;
-       return $self->redirect("maker.cgi?rm=frontpage&user_id=$user_id");
+       return $self->frontpage;
    }
    else{
        return $self->tt_process('maker_login.tt', {message => $add_text});
@@ -161,6 +162,7 @@ sub delete_job {
 
    my $q = $self->query;
    my $job_id = $q->param('job_id');
+   my $dest = $q->param('goto');
    my $user = $self->get_user_info();
    my $job = $self->get_job_info($job_id);
 
@@ -175,7 +177,8 @@ sub delete_job {
    }
 
    my $user_id = $self->get_user_id();
-   return $self->redirect("maker.cgi?rm=frontpage&user_id=$user_id");
+   return $self->queue if($dest && $dest eq 'queue');
+   return $self->frontpage;
 }
 #-----------------------------------------------------------------------------
 sub home_login {
@@ -233,11 +236,11 @@ sub launch {
    my $data_dir = $self->param('server_opt')->{data_dir};
 
    #make path
-   File::Path::mkpath("/data/var/www/html/MWAS/users/$user_id/");
-   my $gff = "http://malachite.genetics.utah.edu/MWAS/users/$user_id/$name.gff";
-   my $xml = "http://malachite.genetics.utah.edu/MWAS/users/$user_id/$name.xml";
+   File::Path::mkpath("/var/www/html/MWAS/users/$user_id/");
+   my $gff = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/$name.gff";
+   my $xml = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/$name.xml";
 
-   open(OUT,  "> /data/var/www/html/MWAS/users/$user_id/$name.gff");
+   open(OUT,  "> /var/www/html/MWAS/users/$user_id/$name.gff");
    open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff");
    while(my $line = <IN>){
        print OUT $line;
@@ -245,7 +248,7 @@ sub launch {
    close(OUT);
    close(IN);
 
-   open(OUT,  "> /data/var/www/html/MWAS/users/$user_id/$name.xml");
+   open(OUT,  "> /var/www/html/MWAS/users/$user_id/$name.xml");
    open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.xml");
    while(my $line = <IN>){
        print OUT $line;
@@ -254,11 +257,11 @@ sub launch {
    close(IN);
 
    if($q->param('apollo')){
-       my $url_base_dir = "http://malachite.genetics.utah.edu/MWAS/";
-       my $url_jnlp_base = "http://malachite.genetics.utah.edu/MWAS/users/$user_id/";
-       my $url_gff3_file = $xml;;
+       my $url_base_dir = "http://derringer.genetics.utah.edu/MWAS/";
+       my $url_jnlp_base = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/";
+       my $url_gff3_file = $xml;
        
-       open(OUT,  "> /data/var/www/html/MWAS/users/$user_id/apollo.jnlp");
+       open(OUT,  "> /var/www/html/MWAS/users/$user_id/apollo.jnlp");
        open(IN, "< tt_templates/apollo.tt");
        while(my $line = <IN>){
 	   $line =~ s/\[\% url_base_dir \%\]/$url_base_dir/g;
@@ -270,10 +273,18 @@ sub launch {
        close(OUT);
        close(IN);
        
-       return $self->redirect("http://malachite.genetics.utah.edu/MWAS/users/$user_id/apollo.jnlp");
+       return $self->redirect("http://derringer.genetics.utah.edu/MWAS/users/$user_id/apollo.jnlp");
    }
    elsif($q->param('soba')){
-      
+
+       ##temp
+       use Net::SCP::Expect;
+       my $scpe = Net::SCP::Expect->new(auto_yes => 1);
+       $scpe->login('cholt', 'feb1982');
+       $scpe->scp("$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff", "malachite.genetics.utah.edu:/data/var/www/html/cholt/$name.gff");
+       $gff="http://malachite.genetics.utah.edu/cholt/$name.gff";
+       ##temp
+
        return $self->redirect("http://www.sequenceontology.org/cgi-bin/soba.cgi?rm=upload_urls&url=$gff");
    }
 }
@@ -419,7 +430,7 @@ sub register {
 
        my $user_id = $self->get_user_id();
        #forward user to account frontpage
-       return $self->redirect("maker.cgi?rm=frontpage&user_id=$user_id");
+       return $self->redirect("maker.cgi?rm=frontpage");
    }
 }
 #-----------------------------------------------------------------------------
@@ -442,7 +453,7 @@ sub edit_account {
    if(!$login && !$first && !$last && !$institution &&
       !$e_mail && !$old_password && ! $new_password && !$verify
      ){
-       return $self->tt_process('edit_account.tt', {user => $user});
+       return $self->tt_process('edit_account.tt');
    }
    
    #holds any errors related to bad input
@@ -485,9 +496,7 @@ sub edit_account {
 
    #depending on errors go back or create account
    if(keys %errors){ #there are errors
-       return $self->tt_process('edit_account.tt', {errors => \%errors,
-						    user => $user
-						    }); #was general_add.tt
+       return $self->tt_process('edit_account.tt', {errors => \%errors});
    }
    else{ #everything is fine, update user in database
 #      my $lock = MWAS_util::lockDB($serv_opt->{data_dir});
@@ -498,11 +507,16 @@ sub edit_account {
        $self->dbh->commit();
 #       $lock->unlock;
 
+       #force reauthentication since login may have changed
+       $q->param(authen_username => $login);
+       $q->param(authen_password => $password);
+       $self->authen->{initialized} = 0; #force reauthentication
+       $self->authen->initialize();
+
        #update user info
        $user = $self->get_user_info();
-       return $self->tt_process('edit_account.tt', {user => $user,
-						    message => 'Account updated successfullyy'
-						    }); #was general_add.tt
+       return $self->tt_process('edit_account.tt', {message => 'Account updated successfully',
+						    user => $user});
    }
 }
 #-----------------------------------------------------------------------------
@@ -529,9 +543,9 @@ sub guest_login {
     $self->query->param(authen_password => $password);
     $self->authen->{initialized} = 0; #force reauthentication
     $self->authen->initialize();
-   my $user_id = $self->get_user_id();    
+    my $user_id = $self->get_user_id();    
     #forward user to account frontpage
-    return $self->redirect("maker.cgi?rm=frontpage&user_id=$user_id");
+    return $self->redirect("maker.cgi?rm=frontpage");
 }
 #-----------------------------------------------------------------------------
 sub help {
@@ -545,7 +559,7 @@ sub frontpage {
    my $message = shift;
 
    if(! $self->authen->is_authenticated){
-       my $in_id = $self->query->param('user_id');
+       my $in_id = $self->query->param('guest_id');
        my $q = $self->query;
 
        if($in_id){
@@ -557,6 +571,8 @@ sub frontpage {
 	   $q->param(authen_password => $user->{password});
 	   $self->authen->{initialized} = 0; #force reauthentication
 	   $self->authen->initialize();
+
+	   return $self->redirect("http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi");
        }
        else{
 	   return $self->home_login;
@@ -565,8 +581,47 @@ sub frontpage {
 
    my $user = $self->get_user_info();
 
-   my $jobs = $self->dbh->selectall_arrayref(qq{SELECT * FROM jobs WHERE user_id=}.
-					     $user->{user_id}.qq{ AND is_saved=1 ORDER BY job_id DESC},
+   my $dsn = "SELECT * FROM jobs WHERE user_id=".$user->{user_id};
+   $dsn .= " AND is_tutorial=0" unless($user->{is_admin});
+   $dsn .= " AND is_saved=1 ORDER BY job_id DESC";
+   my $jobs = $self->dbh->selectall_arrayref($dsn, {Slice => {}});
+
+   #set job status
+   foreach my $job (@$jobs){
+       if($job->{is_packaged}){
+	   $job->{status} = 'results ready';
+       }
+       elsif($job->{is_finished} && !$job->{is_running}){
+	   $job->{status} = 'finishing';
+       }
+       elsif($job->{admin_block}){
+	   $job->{status} = 'blocked';
+       }
+       elsif($job->{is_running}){
+	   $job->{status} = 'running';
+       }
+       elsif($job->{is_started} && !$job->{is_queued}){
+	   $job->{status} = 'idle';
+       }
+       elsif($job->{is_queued}){
+	   $job->{status} = 'waiting in queue';
+       }
+       elsif($job->{is_saved}){
+	   $job->{status} = 'edit';
+       }
+   }
+
+   return $self->tt_process('frontpage.tt', {jobs => $jobs,
+					     message => $message});
+}
+#-----------------------------------------------------------------------------
+sub queue {
+   my $self = shift;
+   my $message = shift;
+
+   my $jobs = $self->dbh->selectall_arrayref(qq{SELECT * FROM jobs WHERE is_queued=1 }.
+					     qq{and admin_block=0 and is_error=0 and }.
+					     qq{is_finished=0 AND is_tutorial=0 ORDER BY job_id},
 					     {Slice => {}}
 					    );
 
@@ -595,9 +650,8 @@ sub frontpage {
        }
    }
 
-   return $self->tt_process('frontpage.tt', {jobs => $jobs,
-					     user => $user,
-					     message => $message});
+   return $self->tt_process('queue.tt', {jobs => $jobs,
+					 message => $message});
 }
 #-----------------------------------------------------------------------------
 sub job_create {
@@ -646,8 +700,8 @@ sub job_create {
    $menus{alt_peptide}         = [qw(A C D E F G H I K L M N P Q R S T V W Y)];
    $menus{model_org}{server}   = $self->get_menus('model_org', 'server');
    $menus{snaphmm}{server}     = $self->get_menus('snaphmm', 'server');
-   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_E', 'server') if($o_type eq 'eukaryotic');
-   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_P', 'server') if($o_type eq 'prokaryotic');
+   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_e', 'server') if($o_type eq 'eukaryotic');
+   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_p', 'server') if($o_type eq 'prokaryotic');
    $menus{augustus_species}{server} = $self->get_menus('augustus_species', 'server');
    $menus{fgenesh_par_file}{server} = $self->get_menus('fgenesh_par_file', 'server');
    $menus{genome}{server}      = $self->get_menus('genome', 'server');
@@ -667,9 +721,8 @@ sub job_create {
    $menus{snaphmm}{user}  = $self->get_menus('snaphmm', 'user', $user->{user_id});
    $menus{augustus_species}{user}  = $self->get_menus('augustus_species', 'user', $user->{user_id});
    $menus{fgenesh_par_file}{user} = $self->get_menus('fgenesh_par_file', 'user', $user->{user_id});
-   $menus{gmhmm}{user}  = $self->get_menus('gmhmm_E', 'user', $user->{user_id}) if($o_type eq 'eukaryotic');
-   $menus{gmhmm}{user}  = $self->get_menus('gmhmm_P', 'user', $user->{user_id}) if($o_type eq 'prokaryotic');
-   $menus{fastas}{user}   = $self->get_menus('fastas', 'user', $user->{user_id});
+   $menus{gmhmm}{user}  = $self->get_menus('gmhmm', 'user', $user->{user_id});
+   $menus{fastas}{user}   = $self->get_menus('fasta', 'user', $user->{user_id});
    $menus{gff3}{user}     = $self->get_menus('gff3', 'user', $user->{user_id});
 
    #example/tutorial menu options
@@ -680,7 +733,6 @@ sub job_create {
 					     log_opt => \%LOG_OPT, #logged values
 					     stat    => \%STAT, #opt status values
 					     o_type  => $o_type,
-					     user    => $user,
 					     message    => $message,
 					     job_id  => $job_id});
 }
@@ -708,8 +760,9 @@ sub submit_to_db {
    %CTL_OPT = (GI::set_defaults('opts', \%CTL_OPT),
 	       GI::set_defaults('bopts', \%CTL_OPT)); #filter to needed sub-set
    while(my $key = each %CTL_OPT){
-       my $value = $q->param($key);
-       $CTL_OPT{$key} = $value if(defined $value);
+       my @values = $q->param($key);
+       @values = grep {$_ ne ''} @values; #filter empty values
+       $CTL_OPT{$key} = join(',', @values) if(@values);
    }
 
    #evaluate checkboxes
@@ -736,7 +789,7 @@ sub submit_to_db {
    #get length of fasta file from db
    my $length = $self->get_length_for_value($CTL_OPT{genome});
 
-   #get namen for job
+   #get name for job
    my $j_name = $self->get_name_for_value($CTL_OPT{genome});
 
    #if job exist update else make a new one
@@ -750,10 +803,16 @@ sub submit_to_db {
        #add job
        $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
 		      qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
-		      qq{is_tutorial, cpus, start_time, finish_time, name)}.
-		      qq{VALUES($job_id, $user_id, '$length', $is_queued, 0, 0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
-		      );
+		      qq{is_tutorial, cpus, start_time, finish_time, name) }.
+		      qq{VALUES ($job_id, $user_id, '$length', $is_queued, 0, 0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
+	   );
    }
+
+#   #check if a finished job used these exact same settings
+ #  if(my $other_job_id = MWAS_util::package_already_exists($self->dbh, \%CTL_OPT, $user_id)){
+  #     $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
+  #     MWAS_util::copy_package($self->dbh, $job_id, $other_job_id);
+  # }
 
    #if ctl_opt exists update else make new entry
    if($self->dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$job_id})){
@@ -784,325 +843,42 @@ sub submit_to_db {
    return $self->job_create();
 }
 #---------------------------------------------------------------------------
-#    my $sql_job= qq{INSERT INTO job (iduser,
-# 				 description,
-# 				 isstarted,
-# 				 isended,
-# 				 iscomplication,
-# 				 iscomplicationNote,
-# 				 note,
-# 				 starttime,
-# 				 endtime,
-# 				 elapsetime,
-# 				 totaltime,
-# 				 isqued,
-# 				 isflagged,
-# 				 isevaluator,
-# 				 jobstatus,
-# 				 data_name,
-# 				 data_format,
-# 				 jobtype)
-#                  VALUES($UID,
-# 			'',
-# 			0,
-# 			0,
-# 			0,
-# 			0,
-# 			'',
-# 			NULL,
-# 			NULL,
-# 			0,
-# 			0,
-# 			0,
-# 			0,
-# 			0,
-# 			'edit',
-# 			'',
-# 			'---',
-# 			'$OT'
-# 		       )
-# 	      };
-#---------------------------------------------------------------------------
 sub feedback {
    my $self = shift;
-   
+   my $serv_opt = $self->param('server_opt');
+
    my $q = $self->query();
-   my $feedback = $q->param('comment_text');
-   
-   use Mail::Sender;
-   my $sender = Mail::Sender->new({smtp => 'm2.genetics.utah.edu'});
-   
-   my $mm = ("Maker Web Service\n".
-	     "User feed back:\n".
-	     "--------------------------------------\n".
-	     "$feedback\n".
-	     "--------------------------------------\n"
-	    );
-   
-   my $sq = $sender->MailMsg({to      => "hadi\@genetics.utah.edu",
-			      from    => "noreply\@genetics.utah.edu",
-			      subject => "MWS:user Feed back",
-			      msg     => $mm
-			     });
-      
-   my $message="Your feed back has been sent.";
-   
-   return $self->tt_process('action_success.tt',{message=>$message});
-}
-#--------------------------------------------------------------------
-sub update_user{
-   my $self = shift;
+   my $comment = $q->param('comment_text');
+   my $user_email = $q->param('e_mail') || "noreply@".$serv_opt->{smtp};
 
-=head1
-   # Get CGI query object
-   my $session = $self->session;
-   my $q = $self->query();
-	
-
-
-   #	use Data::Dumper;
-   #	my $st= "<br>";
-   my $view = $q->param('pass');
-   #	$st.=Dumper($session);
-   #	return $st;
-
-   my $UID= $self->get_user_id();
-
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   #	my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore';
-
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-
-
-
-
-
-
-
-   if ($q->param('profile') eq "Change Profile") {
-
-      my $student_id      = $q->param('student_id');
-      my $first_name      = $q->param('first_name');
-	    
-	    
-	    
-
-	    
-	    
-      if ($first_name) {
-      } else {
-	 return $self->tt_process('general_add_error.tt',{message=>"First Name:$first_name is required"});
-      }
-	    
-      my $last_name       = $q->param('last_name');
-	    
-      if ($last_name) {
-      } else {
-	 return $self->tt_process('general_add_error.tt',{message=>"Last Name: is required"});
-      }
-	    
-
-      my $c_id            = $q->param('c_id');
-	    
-      if ($c_id) {
-      } else {
-	 return $self->tt_process('general_add_error.tt',{message=>"login: is required"});
-      }
-	
-
-
-
-      my $e_mail          = $q->param('e_mail');
-	    
-      if ($e_mail) {
-      } else {
-	 return $self->tt_process('general_add_error.tt',{message=>"Email: is required"});
-      }
-	
-
-
-	    
-      my $same_login_sql="SELECT login                                                                                                                                                
-           FROM user where login=\'".$c_id."\'";
-      my @lg;
-
-      my $sth = $dbh->prepare($same_login_sql);
-      $sth->execute();
-
-      my $ret;
-
-
-      my @lg;
-
-
-      while ( my $href = $sth->fetchrow_hashref ) {
-	
-	 return $self->tt_process('general_add_error.tt',{message=>"login: is already taken"});
-
-		
-	 last;
-		
-      }
-
-
-      my $sql_i="update user                                                                                                                                                      
-                               set first=\'$first_name\' ,                                                                                                                          
-                               last=\'$last_name\',                                                                                                                                 
-                               e_mail=\'$e_mail\',                                                                                                                                  
-                               login= \'$c_id\'                                                                                                                                    
-                                                                                                                                                                                    
-                                                                                                                                                                                    
-                      where iduser=$UID";
-      #return $self->tt_process('action_success.tt',{message=>$sql_i});
-
-      my $sth = $dbh->prepare($sql_i);
-      my $rv = $sth->execute();
-	    
-      return $self->tt_process('action_success.tt',{message=>"Your profile has been updated"});
-
+   if($comment){
+       my $user = $self->get_user_info;
+       my $sender = Mail::Sender->new({smtp => $serv_opt->{smtp}});
+       
+       my $mm = "Maker Web Annotation Service - User Feedback:\n".
+	        "---------------------------------------------\n".
+		"$comment\n".
+		"---------------------------------------------\n";
+       
+       if($user && ! $user->{is_guest}){
+	   $mm .= "User: ".$user->{user_id}."\n".
+	          "First: ".$user->{first}."\n".
+		  "Last: ".$user->{last}."\n".
+		  "Institution: ".$user->{institution}."\n".
+		  "E-mail: ".$user->{e_mail}."\n";
+       }
+       
+       my $sq = $sender->MailMsg({to      => $serv_opt->{admin_email},
+				  from    => $user_email,
+				  subject => "MWAS: User Feedback",
+				  msg     => $mm
+				  });
+       
+       return $self->frontpage("Your message has been sent. Thank you for your feedback.");
    }
-
-	
-
-
-
-   my $password        = $q->param('password');
-	
-   if ($password) {
-   } else {
-      return $self->tt_process('general_add_error.tt',{message=>"password: is required"});
+   else{
+       return $self->tt_process('feedback.tt');
    }
-	    
-	    
-	    
-   my $password_verify        = $q->param('password_verify');
-	    
-   if ($password_verify) {
-   } else {
-      return $self->tt_process('general_add_error.tt',{message=>"password verify: is required"});
-   }
-	    
-	    
-	    
-   if ($password eq $password_verify) {
-		
-      #    return "<br>password matches";
-   } else {
-      return $self->tt_process('general_add_error.tt',{message=>"password: does not match"});
-		
-   }
-	    
-	    
-
-
-
-   my $sql_up="update  user  set pass=\'$password\' where iduser=$UID";
-
-   #	return $self->tt_process('action_success.tt',{message=>$sql_up});
-
-   #print "<br>$sql_up";die; 
-   my $sth = $dbh->prepare($sql_up);
-   my $rv = $sth->execute();
-   return $self->tt_process('action_success.tt',{message=>"Your password is updated"});
-
-=cut
-}
-#-----------------------------------------------------------------------------
-sub maker_add_one{
-
-   my $self = shift;
-   my $q = $self->query();
-
-   my $noclue = $self->session->param('AUTH_USERNAME');
-
-   my $session=$self->session;
-   return $self->tt_process('maker_add_step1.tt',{
-						  noclue=>$noclue,
-						  session => $session});
-}
-#-----------------------------------------------------------------------------
-sub maker_add_trained{
-
-   my $self = shift;
-   my $q = $self->query();
-   my $noclue = $q->param('noclue');
-
-   my $session=$self->session;
-   return $self->tt_process('maker_add_trained.tt',{
-						    noclue=>$noclue,
-
-						    session => $session});
-
-
-}
-#------------------------------------------------------------------------------
-sub maker_add_reannote{
-
-   my $self = shift;
-   my $q = $self->query();
-   my $noclue = $q->param('noclue');
-
-   my $session=$self->session;
-   return $self->tt_process('maker_add_reannote.tt',{
-						     noclue=>$noclue,
-						     session => $session});
-}
-#-----------------------------------------------------------------------------
-sub maker_add_notrained{
-
-   my $self = shift;
-   my $q = $self->query();
-   my $noclue = $q->param('noclue');
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
- 
- 
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
- 
-
-
-   #my @students = CourseDB::Student->retrieve_all();
-
-
-   #    my @files=@{$self->get_file_box_entries()};
-
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   #my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore';
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-
-
-
-   my $files_sql="SELECT distinct filename  FROM filebox  where iduser=$UID";
-
-
-
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my @files;
-   while ( my $href = $sth->fetchrow_hashref ) {
-
-      push @files,$href->{filename};
-   }
-
-   my $count=$#files+1;
-
-
-
-
-
-
-   my $session=$self->session;
-   return $self->tt_process('maker_add_notrained.tt',{
-						      noclue=>$noclue,
-						      files=>\@files,
-						      session => $session});
 }
 #-----------------------------------------------------------------------------
 #returns the captcha image
@@ -1110,495 +886,6 @@ sub create_captcha {
    my $self = shift;
 
    return $self->captcha_create;
-}
-#----------------------------------------------------------------------------
-sub removeF{
-   my $self = shift;
-   my $errors = shift;
-
-=head1
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
- 
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-
-   my $q = $self->query();
-   my $fn = $q->param('fn');
-   my $noclue=$q->param('noclue');
-
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-   my $del="delete from  filebox where iduser=\'$UID\' and filename=\'$fn\'";
-   my $sth = $dbh->prepare($del);
-   $sth->execute();
-
-   my $ti="insert into  trash (iduser,filename)values ($UID,\'$fn\')";
-   my $sth = $dbh->prepare($ti);
-   $sth->execute();
-
-   return $self->maker_file_view();    
-=cut
-}
-#-----------------------------------------------------------------------------
-sub removeJob{
-   my $self = shift;
-   my $errors = shift;
-
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
- 
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-
-   my $q = $self->query();
-   my $jn = $q->param('jn');
-   my $noclue=$q->param('noclue');
-
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   my $dbh = DBI->connect($connect_string)
-     or die "<br>Got error $DBI::errstr when connecting to database\n";
-    
-   my $del="delete from  job  where iduser=$UID and idjob=$jn";
-   my $sth = $dbh->prepare($del);
-   $sth->execute();
-
-   return $self->students_list();
-}
-#-----------------------------------------------------------------------------
-sub maker_job_view{
-
-=head1
-   my $self = shift;
-   my $errors = shift;
-
-   my $q = $self->query();
-   my $noclue = $q->param('noclue');
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-   my $sqlhmm="select * from snaphmm";
-   my $sth = $dbh->prepare($sqlhmm);
-   $sth->execute();
-
-   my @hmms;
-   my $ret;
-   while ( my $href = $sth->fetchrow_hashref ) {
-      push @hmms,$href;
-      $ret.= "\n".Dumper(\@hmms);
-   }
-
-   my $sqlaug="select * from augustus_species";
-   my $sth = $dbh->prepare($sqlaug);
-   $sth->execute();
-
-   my @agu;
-   my $ret;
-   while ( my $href = $sth->fetchrow_hashref ) {
-      push @agu,$href;
-      $ret.= "\n".Dumper(\@agu);
-   }
-
-   my $sqlmodel="select * from model_org";
-   my $sth = $dbh->prepare($sqlmodel);
-   $sth->execute();
-
-   my @morg;
-   my $ret;
-   while ( my $href = $sth->fetchrow_hashref ) {
-      push @morg,$href;
-      $ret.= "\n".Dumper(\@morg);
-   }
-
-   my $sqlpred="select * from predictor";
-   my $sth = $dbh->prepare($sqlpred);
-   $sth->execute();
-
-   my @pred;
-
-   while ( my $href = $sth->fetchrow_hashref ) {
-      push @pred,$href;
-      $ret.= "\n".Dumper(\@pred);
-   }
-
-   my $session=$self->session;
-
-   return $self->tt_process('maker_add.tt',{snaphmms=>\@hmms,
-					    predictor=>\@pred,
-					    model_org=>\@morg,
-					    agustus=>\@agu,
-					    noclue=>$noclue,
-					    session => $session,
-					    errors  => $errors});
-=cut
-}
-#------------------------------------------------------------------------------
-sub maker_file_view_process{
-
-=head1
-   my $self = shift;
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
- 
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-
-   my $dir = "/home/apache/MWS/$UID/";
-   unless(-d $dir){
-      mkdir $dir or "Unable to create directory: ";
-   }
-
-   my $file_box_entry="default";
-   my $file_box_desc="default";
-
-   my $q = $self->query();
-
-   my $jobid=$q->param('jid');
-
-   my $FT=$q->param('FT');
-   my $VL=$q->param('VL');
-
-   #print 
-   my $dumper=Dumper($self);
-   #return "<br>chicka<hr>".$dumper;
-   if ($q->param('gzip') eq 'Upload') {
-      my $filename = $q->param('comp');
-      my $output_file = $dir.$filename;
-      #remove slashes
-      my $file_desc=$q->param('file_desc');
-    
-      $file_box_entry = $filename;
-      $file_box_desc =$file_desc;
-    
-      my $upload_filehandle = $q->upload('comp');
-    
-      open UPLOADFILE, ">>$output_file" ;
-    
-      binmode UPLOADFILE;
-    
-      while ( <$upload_filehandle> ) {
-	 print UPLOADFILE;
-      }
-    
-      close UPLOADFILE;
-      if ($FT eq "gzip") {
-	 use Archive::Tar;
-	 my $tar = Archive::Tar->new;
-	
-	 $tar->read($output_file);
-	 my $next = Archive::Tar->iter( $output_file, 1 );
-	
-	 my $nunu;
-	
-	 my $istar=0;
-	 while ( my $f = $next->() ) {
-	    $nunu .= $f->name;
-	    $istar++;	    
-	    my $buf=$tar->get_content($f->name);
-	    open UPLOADFILE, ">>$output_file".$f->name ;
-	    binmode UPLOADFILE;
-	    print UPLOADFILE $buf;
-	    close UPLOADFILE;
-	 }
-	
-	 if ($istar < 1) {
-	    return $self->tt_process('general_add_error.tt',
-				     {message=>"Could not retrieve at least one file from compressed source. Must be a valid tar gzip archived file<hr><br><br>File:".$output_file."<hr><br>Please Examine the file and try again.Possible causes:<br>"
-				     });	    
-	 }
-
-	 my $t=Dumper($tar);
-	 return "<br>$nunu.yes";
-      }
-    
-      if ($VL =~ /Fasta/) {
-	 my $i=0;
-	 my $output_file = $output_file;
-	
-	 open(my $OUT, $output_file) or die "Can't open  $output_file for writing\n$!";
-	
-	 my $isa=0;
-	
-	 while (<$OUT>) {
-	    if (/^>\w/) {
-	       $isa++;
-	       if ($isa==1) {
-		  print $OUT $_;
-		  $i++;
-	       } else {
-		  return $self->tt_process('general_add_error.tt',{message=>"Could not validate as a fasta file<hr><br><br>File:".$output_file."<hr><br>Line".$i."+1: ".$_."<br>Please Examine the file and try again.Possible causes:<br>Your previous fasta header did not have any sequence. <br>Does not start with >seqid format<br>Must have neocleotides from the standard table"});
-		    
-	       }
-		
-	    } else {
-	       if (/^[A-IK-NP-Z*]+$/i) {
-		  print $OUT $_;
-		  $i++;
-		  $isa=0;
-	       } else {
-		  return $self->tt_process('general_add_error.tt',{message=>"Could not validate as a fasta file<hr><br><br>File:".$output_file."<hr><br>Line  ".$i."+1: ".$_."<br>Please Examine the file and try again.<br>You should not have any GAP(-)<br>Must have neocleotides from the standrd table"});
-	       }
-	    }
-	 }
-	 close $OUT;
-      }
-   }
-
-
-
-
-
-
-
-
-   if ($q->param('copy') eq 'Save') {
-
-
-
-
-      my $copy_name = $q->param('copy_name');
-      my $copy_text=$q->param('copy_text');
-
-
-      $file_box_entry=$copy_name;
-      $file_box_desc="copy and paste";
-
-
-    
-      if ($copy_name) {
-	 my $out_file = $dir.$copy_name;
-	 open(my $OUT, '>', $out_file) or die "Can't open est $out_file for writing\n$!";
-        
-
-
-	 print $OUT $copy_text;
-	 close $OUT;
-      }
-
-      #my $ss=Dumper($dir);
-      #return "<br>$ss";
-   }
-
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   #my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore';
-
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-   my $sql_filebox="INSERT INTO filebox (iduser,filename,filedesc
-				    )
-
-				     VALUES
-					  ($UID,\'$file_box_entry\',\'$file_box_desc\')";
-					
-
-   my $sth = $dbh->prepare($sql_filebox);
-   my $rv = $sth->execute();
-   my $file_id = $dbh->{insertid};
-   $dbh->commit();
-
-
-
-
-
-
-   #fileview after add
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   #my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore';
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-
-
-
-   my $files_sql="SELECT DISTINCT filename,filedesc  FROM filebox  where iduser=$UID";
-
-
-
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my @files;
-   while ( my $href = $sth->fetchrow_hashref ) {
-
-      push @files,$href;
-   }
-
-   my $count=$#files+1;
-   
-   #return "<br>@files\n";
-   #print add description with files
-   return $self->tt_process('fileview.tt', {files => \@files,
-					    UID      =>$UID,
-					    count    =>$count,
-					    first    =>$first_name.'   ',
-					    lastt    =>$last_name,
-					  
-					    email    =>$e_mail,,
-					    jobid   =>$jobid,
-					    session  => $self->session});
-
-
-   #get nd show done
-   #x-
-=cut
-}
-#-----------------------------------------------------------------------------
-sub maker_user_view{
-   my $self = shift;
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
-    
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-    
-   my $q = $self->query();
-    
-   my $jid=$q->param('jid');
-   my $jobid=$jid;
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-    
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-     
-   my $files_sql="SELECT login  FROM user  where iduser=$UID";
-    
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my $cid = $sth->fetchrow_hashref;
-   my $session = $self->session;
-    
-   #return "<br>$files_sql";
-   return $self->tt_process('user_account.tt', {UID      =>$UID,
-						first    =>$first_name,
-						lastt    =>$last_name,
-						email    =>$e_mail,
-						jobid    =>$jobid,
-						cid      =>$cid->{login},
-						session  => $session});
-}
-#-----------------------------------------------------------------------------
-sub maker_feedback_view{
-   my $self = shift;
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
-    
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-    
-   my $q = $self->query();
-    
-   my $jid=$q->param('jid');
-   my $jobid=$jid;
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-    
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-    
-   my $files_sql="SELECT login  FROM user  where iduser=$UID";
-    
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my $cid = $sth->fetchrow_hashref;
-   my $session = $self->session;
-
-   return $self->tt_process('user_feedback.tt', {UID      =>$UID,				  
-						 first    =>$first_name,
-						 lastt    =>$last_name,
-						 email    =>$e_mail,
-						 jobid    =>$jobid,
-						 cid      =>$cid->{login},
-						 session  => $session});
-}
-#-----------------------------------------------------------------------------
-sub maker_help_view{
-   my $self = shift;
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
-    
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-    
-   my $q = $self->query();
-    
-   my $jid=$q->param('jid');
-   my $jobid=$jid;
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-
-   my $files_sql="SELECT login  FROM user  where iduser=$UID";
-
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my $cid = $sth->fetchrow_hashref;
-   my $session = $self->session;
-    
-   return $self->tt_process('help.tt', {UID      =>$UID,
-					first    =>$first_name,
-					lastt    =>$last_name,
-					email    =>$e_mail,
-					jobid    =>$jobid,
-					cid      =>$cid->{login},
-					session  => $session});
-}
-
-#-----------------------------------------------------------------------------
-sub validate_file_view{
-   my $self = shift;
-   my $uref=$self->get_user_id("last");
-   my $UID=$uref->{iduser};
-    
-   my $first_name=$uref->{first};
-   my $last_name=$uref->{last};
-   my $e_mail=$uref->{e_mail};
-    
-   my $q = $self->query();
-    
-   my $jid=$q->param('jid');
-   my $jobid=$jid;
-   my $connect_string = 'dbi:mysql:dbname=makerweb;user=bmoore;host=derringer.genetics.utah.edu';
-
-   my $dbh = DBI->connect($connect_string)
-     or die "Got error $DBI::errstr when connecting to database\n";
-    
-   my $files_sql="SELECT DISTINCT filename,filedesc  FROM filebox  where iduser=$UID";
-    
-   my $sth = $dbh->prepare($files_sql);
-   $sth->execute();
-    
-   my @files;
-   while ( my $href = $sth->fetchrow_hashref) {
-	
-      push @files,$href;
-   }
-    
-   my $count=$#files+1;
-    
-   my $session = $self->session;
-    
-   return $self->tt_process('validate_file_view.tt', {files => \@files,
-						      UID      =>$UID,
-						      count    =>$count,
-						      first    =>$first_name,
-						      lastt    =>$last_name,
-						      email    =>$e_mail,
-						      jobid    =>$jobid,
-						      session  => $session});
 }
 #-----------------------------------------------------------------------------
 sub upload_file{
@@ -1640,7 +927,7 @@ sub upload_file{
    $self->dbh->commit();
 
    if($from_job){
-       $self->redirect("maker.cgi?rm=job_create&job_id=$from_job");
+       $self->frontpage;
    }
 
    return $self->filebox;
@@ -1745,7 +1032,7 @@ sub get_name_for_value {
    my $value = shift;
 
    #get value from user file options
-   my ($nam) = $self->dbh->selectrow_arrayref(qq{SELECT name FROM files WHERE value='$value'});
+   my ($nam) = $self->dbh->selectrow_array(qq{SELECT name FROM files WHERE value='$value'});
 
    #user values always override system values
    return $nam if($nam);
@@ -1799,19 +1086,18 @@ sub get_user_info {
    my $self = shift;
 
    my $username = $self->session->param('AUTH_USERNAME');
+
    my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE login='$username'});
     
    return $info;
-}#-----------------------------------------------------------------------------
+}
+#-----------------------------------------------------------------------------
 #this method collects all information on the user from the database
 #and returns a hash reference with all info
-sub get_user_info {
-   my $self = shift;
+sub is_guest {
+    my $self = shift;
 
-   my $username = $self->session->param('AUTH_USERNAME');
-   my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE login='$username'});
-    
-   return $info;
+    return $self->get_user_info()->{is_guest};
 }
 #-----------------------------------------------------------------------------
 #this method collects all information on the user files

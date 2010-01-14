@@ -24,7 +24,7 @@ protein_gff:  #protein homology evidence from an external gff3 file
 
 #-----Repeat Masking (leave values blank to skip)
 model_org:all #model organism for RepBase masking in RepeatMasker
-repeat_protein:/home/cholt/usr/local/maker/data/te_proteins.fasta #a database of transposable element proteins in fasta format
+repeat_protein:/usr/local/maker/data/te_proteins.fasta #a database of transposable element proteins in fasta format
 rmlib: #an organism specific repeat library in fasta format
 rm_gff: #repeat elements from an external gff3 file
 
@@ -35,7 +35,7 @@ unmask:0 #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no
 snaphmm: #SNAP HMM model
 gmhmm: #GeneMark HMM model
 augustus_species: #Augustus gene prediction model
-fgenesh_par_file:=DISABLED #Fgenesh parameter file
+fgenesh_par_file: #Fgenesh parameter file
 model_gff: #gene models from an external gff3 file (annotation pass-through)
 pred_gff: #ab-initio predictions from an external gff3 file
 
@@ -44,7 +44,7 @@ other_gff: #features to pass-through to final output from an extenal gff3 file
 
 #-----External Application Specific Options
 alt_peptide:C #amino acid used to replace non standard amino acids in blast databases
-cpus:3 #max number of cpus to use in BLAST and RepeatMasker
+cpus:1 #max number of cpus to use in BLAST and RepeatMasker
 
 #-----MAKER Specific Options
 evaluate:0 #run EVALUATOR on all annotations, 1 = yes, 0 = no
@@ -58,7 +58,7 @@ pred_flank:200 #length of sequence surrounding EST and protein evidence used to 
 single_exon:0 #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no
 single_length:250 #min length required for single exon ESTs if 'single_exon is enabled'
 keep_preds:0 #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no
-map_forward:0 #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no
+map_forward:1 #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no
 retry:1 #number of times to retry a contig if there is a failure for some reason
 clean_try:0 #removeall data from previous run before retrying, 1 = yes, 0 = no
 clean_up:1 #removes theVoid directory with individual analysis files, 1 = yes, 0 = no

@@ -6,6 +6,8 @@ use warnings;
 use FindBin;
 use GI;
 use File::NFSLock;
+use Data::Dumper;
+use File::Copy;
 
 =head1
 #-----------------------------------------------------------------------------
@@ -75,7 +77,81 @@ sub get_files_from_user_id{
    return $files;    
 }
 =cut
+#-----------------------------------------------------------------------------
+#check to see if a job with the exact same control file options exists
+#and returns its id
+sub package_already_exists{
+    my $dbh = shift @_;
+    my %CTL_OPT = %{shift @_};
+    my $user_id = shift @_;
 
+    my %def_opt = (GI::set_defaults('opts'), GI::set_defaults('bopts')); #get system produced CTL_OPT
+    my @set = map {"ctl_opt.".lc($_)." \= '".$CTL_OPT{lc($_)}."'" } grep {!/gmhmm_e|gmhmm_p/i}keys %def_opt;
+
+
+    my $dsn = "SELECT ctl_opt.job_id FROM ctl_opt JOIN jobs ON ctl_opt.job_id=jobs.job_id WHERE ".join(' AND ', @set)." AND jobs.is_packaged=1";
+#    $dsn .= ($user_id) ? " AND (user_id=$user_id OR is_tutorial=1)" : " AND is_tutorial=1";
+
+    my ($job_id) = $dbh->selectrow_array($dsn);
+
+    return $job_id;
+}
+#-----------------------------------------------------------------------------
+#copies a finhed job_package to another job_id
+sub copy_package{
+    my $dbh = shift;
+    my $job_old = shift;
+    my $job_new = shift;
+    my $data_dir = get_data_dir($dbh);
+
+    #get job run directory
+    my $job_dir = "$data_dir/jobs/$job_old/";
+    my $new_dir = "$data_dir/jobs/$job_new/";
+
+    #get new result directory
+    my $r_dir = "$job_new.maker.output";
+
+    #copy and rename files
+    mkdir($new_dir) if(! -d $new_dir);
+
+    my @files =  <$job_dir/*>;
+
+    @files = grep {!/\.tar\.gz$/} @files;
+
+    system("cp -R ".join(' ', @files)." $new_dir/");
+    @files = (<$new_dir/*/$job_old*>,<$new_dir/$job_old*>);
+    foreach my $f (@files){
+	my $new = $f;
+	$new =~ s/\/$job_old([\.\_][^\/]+)$/\/$job_new$1/;
+	move($f, $new);
+    }
+
+    #fix log contents on copy
+    open(my $IN, "< $job_dir/$job_old.maker.output/$job_old\_master_datastore_index.log");
+    open(my $OUT, "> $new_dir/$job_new.maker.output/$job_new\_master_datastore_index.log");
+    while(my $line = <$IN>){
+	my @F = split("\t", $line);
+	$F[1] =~ s/^$job_old\_/$job_new\_/;
+	print $OUT join("\t", @F);
+    }
+    close($OUT);
+    close($IN);
+
+    #re-tar everything
+    system("cd $new_dir\n".
+	   "tar -zcf $r_dir.tar.gz $r_dir --exclude \"run.log\" --exclude ".
+	   "\"theVoid\*\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\"") &&
+	   die("ERROR: Building tarball for job '$job_new' failed\n");
+}
+
+#-----------------------------------------------------------------------------
+sub get_data_dir {
+    my $dbh = shift;
+    
+    my ($data_dir) = $dbh->selectrow_array("SELECT data_dir FROM all_default_opt");
+
+    return $data_dir;
+}
 #-----------------------------------------------------------------------------
 sub get_length_for_value {
     my $dbh = shift || die "ERROR: No dbh provided\n";

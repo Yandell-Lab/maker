@@ -1,10 +1,10 @@
 #-----Location of Executables Used by MAKER/EVALUATOR
-formatdb:
-blastall:
-xdformat:/home/cholt/usr/local/wublast/xdformat
-blastn:/home/cholt/usr/local/wublast/blastn
-blastx:/home/cholt/usr/local/wublast/blastx
-tblastx:/home/cholt/usr/local/wublast/tblastx
+formatdb:/usr/local/bin/formatdb #location of NCBI formatdb executable
+blastall:/usr/local/bin/blastall #location of NCBI blastall executable
+xdformat:/usr/local/bin/xdformat #location of WUBLAST xdformat executable
+blastn:/usr/local/bin/blastn #location of WUBLAST blastn executable
+blastx:/usr/local/bin/blastx #location of WUBLAST blastx executable
+tblastx:/usr/local/bin/tblastx #location of WUBLAST tblastx executable
 RepeatMasker:/home/cholt/usr/local/RepeatMasker/RepeatMasker #location of RepeatMasker executable
 exonerate:/home/cholt/usr/local/exonerate/bin/exonerate #location of exonerate executable
 

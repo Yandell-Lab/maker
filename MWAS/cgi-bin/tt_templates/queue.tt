@@ -45,23 +45,16 @@ function toggleLog(iState, url) {
 <h3>[% message %]<h3>
 [% END %]
 
-<h2>Welcome to the MAKER Web Annotation Service (MWAS)</h2>
+<h2><img src="[% server_opt.html_web %]/images/c1.png" width=32 height=32> Job Queue</h2>
 <p>
-To get started just click on "New Job" above.  You can then submit a sequence for annotation
-or select from a list of pre-loaded example annotation jobs.  Once a job has been added to the
-queue you can see your job's run status below.
-<!--
-You can also see your jobs position in the queue
-relative to other user's jobs by clicking "Job Queue".
--->
-For more infomation on using the MAKER
-Web Annotation Service, click on "Help" above.
+Use this screen to see where your jobs are located relative to all other users' jobs.
+Most details are hidden on jobs that do not belong to you.
 </p>
 
 <br>
-<a align=right href="maker.cgi"><img  src="[% server_opt.html_web %]/images/page_refresh.gif"> Refresh Job Status</a>
+<a align=right href="maker.cgi?rm=queue"><img  src="[% server_opt.html_web %]/images/page_refresh.gif"> Refresh Job Status</a>
 
-<h2>Your Jobs ([% jobs.size %])</h2>
+<h2>All Jobs in Queue([% jobs.size %])</h2>
 <center>
 <table width=90% border=0 cellspacing=1 cellpadding=5>
   <tr bgcolor="#99CCCC">
@@ -69,9 +62,8 @@ Web Annotation Service, click on "Help" above.
     <th>Description</th>
     <th>Job Status</th>
     <th>Start Time</th>
-    <th>Finish Time</th>
+    <th>Length</th>
     <th>Log</th>
-    <th>View Results</th>
     <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
   </tr>
 [% IF jobs.size == 0 %]
@@ -83,37 +75,50 @@ Web Annotation Service, click on "Help" above.
     <td></td>
     <td></td>
     <td></td>
-    <td></td>
   </tr>
 [% ELSE %]
   [% FOREACH job = jobs%]
-  <tr bgcolor="#CFECEC">
-    <td align=center><a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.job_id %]</a></td>
-    <td>[% job.name %]</td>
+  <tr bgcolor="#CFECEC" [% IF job.user_id != user.user_id %]style="opacity: 0.4; filter: alpha(opacity = 40);"[% END %]>
+    <td align=center>
+    [% IF job.user_id == user.user_id %]
+      <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.job_id %]</a>
+    [% ELSE %]
+      [% job.job_id %]
+    [% END %]
+    </td>
+    <td>
+      [% IF job.user_id == user.user_id %]
+        [% job.name %]
+      [% END %]
+    </td>
     <td align=center>
         [% IF job.status == 'edit' %]
-	   <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.status %]</a>
+          [% IF job.user_id == user.user_id %]
+	    <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.status %]</a>
+          [% ELSE %]
+            saved
+          [% END %]
         [% ELSE %]
 	   [% job.status %]
         [% END %]
     </td>
     <td align=center>[% job.start_time %]</td>
-    <td align=center>[% job.finish_time %]</td>
+    <td align=center>[% job.length || '0' %] bp</td>
     <td align=center>
-      [% IF job.status != 'waiting in queue' && job.status != 'edit' %]
+      [% IF job.status != 'waiting in queue' && job.status != 'edit' && job.user_id == user.user_id %]
         <a href="javascript:toggleLog(1, 'stream.cgi?type=log&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="http://www.famfamfam.com/lab/icons/silk/icons/report.png"></a>
       [% END %]
     </td>
     <td align=center>
-      [% IF job.status == 'results ready' %]
-        <a href="javascript:toggleLog(1, 'maker.cgi?rm=results&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="[% server_opt.html_web %]/images/disk.png"></a>
-      [% END %]
-    </td>
-    <td align=center>
       <form method="POST" action="maker.cgi" name="delete" enctype="multipart/form-data">
+      [% IF job.user_id == user.user_id %]
 	<input type="hidden" name="rm" value="delete_job">
+	<input type="hidden" name="goto" value="queue">
 	<input type="hidden" name="job_id" value="[% job.job_id %]">
 	<input type="submit" name="delete_button" value="">
+      [% ELSE %]
+        <input type="button" name="delete_button" value="" disabled>
+      [% END %]
       </form>
     </td>
   </tr>

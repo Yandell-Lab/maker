@@ -14,8 +14,6 @@ use strict;
 use warnings;
 
 use base qw(CGI::Application);
-use CGI::Application::Plugin::Session;
-use CGI::Application::Plugin::Authentication;
 use CGI::Application::Plugin::DBH (qw/dbh_config dbh/);
 use CGI::Application::Plugin::TT;
 use CGI::Application::Plugin::DevPopup;
@@ -34,48 +32,28 @@ sub cgiapp_init {
     my $self = shift;
     $self->SUPER::cgiapp_init;
 
-   #load the server control files
+    #setup template params
+    $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => "$FindBin::Bin/tt_templates/",
+					  EVAL_PERL => 1});
+    #load the server control files
     my %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/config/server.ctl"])});
-
-   #make sure required database values are setup
+    
+    #make sure required database values are setup
     if (! $serv_opt{DBI}) {
 	die "ERROR: You must specify a DBI connection method in: $FindBin::Bin/config/server.ctl\n\n";
     }
     if (! $serv_opt{dbname}) {
 	die "ERROR: You must specify a database to connect to in: $FindBin::Bin/config/server.ctl\n\n";
     }
-
+    
     #connect to the database
     my $dsn = "DBI:$serv_opt{DBI}:dbname=$serv_opt{dbname};";
     $dsn .= "host=$serv_opt{host};" if($serv_opt{host});
     $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
-
+    
     $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0})
 	or die "Got error $DBI::errstr when connecting to database\n";;
-
-    #setup template params
-    $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => "$FindBin::Bin/tt_templates/",
-					  EVAL_PERL => 1});
     
-    #setup authentication
-   __PACKAGE__->authen->config(DRIVER => ['DBI',
-                                          DBH         => $self->dbh,
-                                          TABLE       => 'users',
-                                          CONSTRAINTS => {'users.login'    => '__CREDENTIAL_1__',
-                                                          'users.password' => '__CREDENTIAL_2__',
-						      }
-                                         ],
-                               STORE => 'Session',
-                               LOGIN_RUNMODE => 'home_login',
-                               POST_LOGIN_RUNMODE => 'frontpage',
-                               LOGOUT_RUNMODE => 'home_login',
-                               LOGIN_SESSION_TIMEOUT => {IDLE_FOR => '30m',
-                                                         EVERY => '1d'
-							 },
-			       );
- 
-  $self->authen->protected_runmodes(qw());
-
     #add default control options from server
     $self->param(server_opt => \%serv_opt);
 }
@@ -83,11 +61,8 @@ sub cgiapp_init {
 sub cgiapp_prerun {
         my $self = shift;
 
-        $self->tt_params({logged_in  => $self->authen->is_authenticated,
-                          server_opt => $self->param('server_opt'),
-                          session    => $self->session,
-                          #query    => Dumper($self->query),
-                      });
+        $self->tt_params({#query    => Dumper($self->query)
+			 });
 }
 #-----------------------------------------------------------------------------
 sub setup {
@@ -107,10 +82,25 @@ sub stream {
     my $self = shift;
     my $q = $self->query();
     my $type = $q->param('type');
-
+    
+    if($type =~ /^log$|^tarball$|^gff3$|^jnlp$/){
+    }
+    
     if($type eq 'img'){
 	my $src = $self->query->param('src') || return;
 	my $file = "images/$src";
+
+	return $self->_stream($file);
+    }
+    elsif($type eq 'css'){
+	my $src = $self->query->param('src') || return;
+	my $file = "css/$src";
+
+	return $self->_stream($file);
+    }
+    elsif($type eq 'js'){
+	my $src = $self->query->param('src') || return;
+	my $file = "js/$src";
 
 	return $self->_stream($file);
     }
@@ -150,6 +140,13 @@ sub stream {
 
 	return $self->_stream($file);
     }
+}
+#-----------------------------------------------------------------------------
+sub login{
+    my $self = shift;
+    my $file = shift;
+
+    return $self->redirect("maker.cgi");
 }
 #-----------------------------------------------------------------------------
 sub _stream{
