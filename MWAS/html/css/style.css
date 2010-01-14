@@ -2,7 +2,7 @@
 
 body {
     background: #FFFFFF;
-    background-image: url( '/cholt/images/body-bg.jpg' );
+    background-image: url( '../images/body-bg.jpg' );
     background-position: top;
     background-repeat: repeat-x;
     color: #333;
@@ -37,6 +37,9 @@ body a:visited {
 
 /***** Wrapper *****/
 
+body {
+text-align: center
+}
 #wrapper {
     background: #DDD;
     border: 1px solid #999;
@@ -44,6 +47,7 @@ body a:visited {
     margin: 0 auto;
     padding: 1em;
     width: 740px;
+text-align: left
 }
 
 /***** Navigation *****/
@@ -54,14 +58,14 @@ body a:visited {
     color: #FFFFFF;
     background-color: #999;
     border: 1px solid #666;
-    background-image:url('/cholt/images/nav_back.jpg');
+    background-image:url('../images/nav_back.jpg');
     background-position:top left;
     background-repeat:no-repeat;
 }
 
 #navigation ul {
     margin: 0;
-    padding: 3.8em 0 0 .3em;
+    padding: 3.4em 0 0 .2em;
     list-style: none;
 }
 
@@ -76,7 +80,7 @@ body a:visited {
     margin: 0;
     padding: 0 0 0 4px;
     text-decoration: none;
-    background-image: url( '/cholt/images/tableftB.gif' );
+    background-image: url( '../images/tableftB.gif' );
     background-position: left top;
     background-repeat: no-repeat;
 }
@@ -84,11 +88,11 @@ body a:visited {
 #navigation a span {
     float: left;
     display: block;
-    background-image: url( '/cholt/images/tabrightB.gif' );
+    background-image: url( '../images/tabrightB.gif' );
     background-position: right top;
     background-repeat: no-repeat;
     background-color: transparent;
-    padding: 3px 8px 3px 2px;
+    padding: 3px 7px 3px 3px;
     color: #444;
 }
 
