@@ -28,6 +28,7 @@ use GI;
 use Data::Dumper;
 use MWAS_util;
 use URI::Escape;
+use Mail::Sender;
 
 #-----------------------------------------------------------------------------
 sub cgiapp_init {
@@ -209,7 +210,7 @@ sub forgot_login {
 	     "Password: ".$user->{password}."\n";
 
        MWAS_util::send_message($user->{e_mail},
-				  $serv_opt->{smtp},
+				  $serv_opt->{smtp_server},
 				  'MWAS: Forgotten login/password request',
 				  $mm
 				 );
@@ -238,7 +239,7 @@ sub launch {
    #make path
    File::Path::mkpath("/var/www/html/MWAS/users/$user_id/");
    my $gff = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/$name.gff";
-   my $xml = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/$name.xml";
+   my $xml = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/".uri_escape("$name.xml", '%');
 
    open(OUT,  "> /var/www/html/MWAS/users/$user_id/$name.gff");
    open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff");
@@ -280,9 +281,9 @@ sub launch {
        ##temp
        use Net::SCP::Expect;
        my $scpe = Net::SCP::Expect->new(auto_yes => 1);
-       $scpe->login('cholt', 'feb1982');
+       $scpe->login('cholt', 's@nti@g0');
        $scpe->scp("$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff", "malachite.genetics.utah.edu:/data/var/www/html/cholt/$name.gff");
-       $gff="http://malachite.genetics.utah.edu/cholt/$name.gff";
+       $gff="http://malachite.genetics.utah.edu/cholt/".uri_escape("$name.gff", '%');
        ##temp
 
        return $self->redirect("http://www.sequenceontology.org/cgi-bin/soba.cgi?rm=upload_urls&url=$gff");
@@ -619,9 +620,9 @@ sub queue {
    my $self = shift;
    my $message = shift;
 
-   my $jobs = $self->dbh->selectall_arrayref(qq{SELECT * FROM jobs WHERE is_queued=1 }.
+   my $jobs = $self->dbh->selectall_arrayref(qq{SELECT * FROM jobs WHERE (is_queued=1 or is_running=1) }.
 					     qq{and admin_block=0 and is_error=0 and }.
-					     qq{is_finished=0 AND is_tutorial=0 ORDER BY job_id},
+					     qq{is_finished=0 ORDER BY job_id},
 					     {Slice => {}}
 					    );
 
@@ -849,12 +850,12 @@ sub feedback {
 
    my $q = $self->query();
    my $comment = $q->param('comment_text');
-   my $user_email = $q->param('e_mail') || "noreply@".$serv_opt->{smtp};
+   my $user_email = $q->param('e_mail') || "noreply@".$serv_opt->{smtp_server};
 
    if($comment){
        my $user = $self->get_user_info;
-       my $sender = Mail::Sender->new({smtp => $serv_opt->{smtp}});
-       
+       my $sender = Mail::Sender->new({smtp => $serv_opt->{smtp_server}});
+
        my $mm = "Maker Web Annotation Service - User Feedback:\n".
 	        "---------------------------------------------\n".
 		"$comment\n".

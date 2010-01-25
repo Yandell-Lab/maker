@@ -3016,7 +3016,7 @@ sub load_control_files {
       $CTL_OPT{split_hit} = 0;
    }
    if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
-      warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n";
+      warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n" unless($main::qq);
       $CTL_OPT{single_exon} = 1;
    }
    if ($CTL_OPT{min_contig} <= 0) {

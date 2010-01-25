@@ -6,9 +6,9 @@
 
 <h2><img src="/Student/images/mail_sent.png">  Forgot login?</h2>
 
-<form method="POST" action="/cgi-bin/Student/student_general.cgi" name="general_add">
+<form method="POST" action="maker.cgi" name="forgot_login_form">
 
-<input type="hidden" name="rm" value="forgot_login_process">
+<input type="hidden" name="rm" value="forgot_login">
 <table width=100%  bgcolor="#EDDA74"><tr><td>  <h2> [% message %]</td></tr></table></h2> 	
 <table bgcolor="#99CCCC">
   <tr>
@@ -39,7 +39,7 @@
     <td>   
     </td>   
     <td>   
-        <img src="/cgi-bin/Student/student_general.cgi?rm=general_captcha_create">
+        <img src="maker.cgi?rm=create_captcha">
     </td>
   </tr>
 </table>

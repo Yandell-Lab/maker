@@ -135,6 +135,7 @@ sub stream {
 	my $value = $self->query->param('value') || return;
 	$value =~ s/\/+$//;
 	my ($name) = $value =~ /([^\/]+)$/;
+#	$name = URI:Escape::uri_escape($name, /\%/) if($name =~ /\%/);
 	my $data_dir = $self->param('server_opt')->{data_dir};
 	my $file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
 

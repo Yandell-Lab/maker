@@ -117,7 +117,7 @@ sub keepers {
       foreach my $hit (@{$hits}) {
 	 my $significance = $hit->significance();
 	 $significance = "1".$significance if  $significance =~ /^e/;
-	 $significance = 0                 if  $significance =~ /0\./;
+	 $significance = 0                 if  $significance =~ /0\.$/;
 	 next unless $significance < $params->{significance};
 	 next unless $hit->pAh > $params->{percov};
 	 next unless $hit->hsp('best')->frac_identical() > $params->{percid};

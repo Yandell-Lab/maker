@@ -988,7 +988,7 @@ function make_multiple(DivID, DivID2){
   [% IF o_type == 'prokaryotic' %]
   <tr bgcolor=white>
     <td align=right>
-      <input type="checkbox" name="protein2genome" value="checked" [% protein2genome %]
+      <input type="checkbox" name="protein2genome" value="protein2genome" [% protein2genome %]
       [% IF log_opt.predictor_hash.protein2genome %]
         checked
       [% END %]
