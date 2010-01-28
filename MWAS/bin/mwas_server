@@ -830,9 +830,27 @@ sub check_table_structure {
 	while(my $name = each %{$CTL_OPT{menus}{$type}}){
 	    my $value = $CTL_OPT{menus}{$type}{$name};
 	    my $is_tutorial = 0;
-	    $is_tutorial++ if($value =~ /\/dpp_contig.fasta$/ ||
-			      $value =~ /\/dpp_proteins.fasta$/ ||
-			      $value =~ /\/dpp_transcripts.fasta$/);
+
+	    if($value =~ /\/dpp_contig.fasta$/ ||
+	       $value =~ /\/dpp_proteins.fasta$/ ||
+	       $value =~ /\/dpp_transcripts.fasta$/ ||
+	       $value =~ /\/pyu-contig.fasta$/ ||
+	       $value =~ /\/pyu-est.fasta$/ ||
+	       $value =~ /\/pyu-protein.fasta$/ ||
+	       $value =~ /\/pyu.hmm$/ ||
+	       $value =~ /\/pyu.mod$/ ||
+	       $value =~ /\/legacy-contig.fasta$/ ||
+	       $value =~ /\/legacy-set1.gff$/ ||
+	       $value =~ /\/legacy-set2.gff$/ ||
+	       $value =~ /\/pass-contig.fasta$/ ||
+	       $value =~ /\/pass-mRNAseq.gff$/ ||
+	       $value =~ /\/ecoli_contig.fasta$/ ||
+	       $value =~ /\/ecoli_est.fasta$/ ||
+	       $value =~ /\/ecoli_protein.fasta$/ ||
+	       $value =~ /\/ecoli.mod$/
+	       ){
+		 $is_tutorial++;
+	     }
 
 	    if(! -e $value && $type !~ /^augustus_species$|^model_org$/){
 		warn "WARNING: The menu option '$name => $value'\n".
@@ -881,56 +899,6 @@ sub check_table_structure {
 	$dbh->do(qq{UPDATE users SET e_mail='$CTL_OPT{admin_email}' WHERE user_id=1}); #update admin e-mail address
     }
 
-    #--add tutorial job (always adds/re-adds)
-    my $t_message = "This example job will annotate the region of Drosophila melanogaster ".
-                    "chromosome 2L that encodes the gene decapentaplegic.  This is a gene ".
-		    "with multiple confirmed alternately spliced transcripts, and it ".
-		    "illustrates how EST evidence can suggest differtent splice forms ".
-		    "and UTR variation";
-    
-    #drop job from table
-    $dbh->do(qq{DELETE FROM jobs WHERE job_id=1}); #drop
-    $dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=1}); #drop
-    
-    #add/re-add control file options	
-    my @files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
-					   qq{(value LIKE '%dpp_contig.fasta' or }.
-					   qq{value LIKE '%dpp_transcripts.fasta' or }.
-					   qq{value LIKE '%dpp_proteins.fasta')}
-					   )};	
-    if(@files == 3 && -f $files[0] && -f $files[1] && -f $files[2]){ #re-add here
-	my %job_opt = %CTL_OPT; #make a copy of control file settings
-	
-	#add needed values
-	($job_opt{genome})  = grep {/dpp_contig.fasta/} @files;
-	($job_opt{est})     = grep {/dpp_transcripts.fasta/} @files;
-	($job_opt{protein}) = grep {/dpp_proteins.fasta/} @files;
-	$job_opt{predictor} = 'est2genome';
-	
-	#look for snap hmm to use
-	my ($hmm) = $dbh->selectrow_array(qq{SELECT value FROM menus WHERE name='fly' or name='D. melanogaster'}.
-					  qq{ or name='Drosophila melanogaster'});
-	$job_opt{predictor} .= ",$hmm" if($hmm);
-	
-	#add to ctl_opt table
-	@defaults = (keys %def_opt); #keys to add
-	my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES (1, '".join("', '", @job_opt{@defaults})."')";
-	$dbh->do($do_string); #add ctl_opt
-    }
-    
-    #add job but only if control file options were ok
-    my ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=1});
-    if($job_id){
-	my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=1});
-	($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=1});
-	$dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
-		 qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
-		 qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
-		 qq{VALUES(1, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-                 qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'D. melanogaster : Dpp','$t_message')}
-		 ) if(! $job_id); #add job
-    }
-    
     #create/re-create all_default_opt table
     $dbh->do(qq{DROP TABLE all_default_opt}) if(grep {/all_default_opt/} @tables); #drop table
     @defaults = map {"$_ $t_type"} grep {!/^menus$|^stat%/i} keys %CTL_OPT; #get table column names and datatype
@@ -949,6 +917,283 @@ sub check_table_structure {
     @defaults = keys %stat; #keys to add
     $do_string = "INSERT INTO stat (".join(", ", @defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
     $dbh->do($do_string); #add ctl_opt
+
+    #--add tutorial jobs (always adds/re-adds)
+    if($CTL_OPT{tutorials}){
+	### JOB 1 ###
+	my $id = 1;
+	my $t_message = "This example job will annotate the region of Drosophila melanogaster ".
+	    "chromosome 2L that encodes the gene decapentaplegic.  This is a gene ".
+	    "with multiple confirmed alternately spliced transcripts, and it ".
+	    "illustrates how EST evidence can suggest differtent splice forms ".
+	    "and UTR variation";
+	
+	#drop job from table
+	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$id}); #drop
+	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$id}); #drop
+    
+	#add/re-add control file options	
+	my @files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
+					       qq{(value LIKE '%dpp_contig.fasta' or }.
+						      qq{value LIKE '%dpp_transcripts.fasta' or }.
+						      qq{value LIKE '%dpp_proteins.fasta')}
+					       )};	
+	if(@files == 3 && -f $files[0] && -f $files[1] && -f $files[2]){ #re-add here
+	    my %job_opt = %CTL_OPT; #make a copy of control file settings
+	    
+	    #add needed values
+	    ($job_opt{genome})  = grep {/dpp_contig.fasta/} @files;
+	    ($job_opt{est})     = grep {/dpp_transcripts.fasta/} @files;
+	    ($job_opt{protein}) = grep {/dpp_proteins.fasta/} @files;
+	    $job_opt{organism_type} = 'eukaryotic';
+	    $job_opt{predictor} = 'est2genome';
+	    
+	    #add to ctl_opt table
+	    @defaults = (keys %def_opt); #keys to add
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($do_string); #add ctl_opt
+	}
+	
+	#add job but only if control file options were ok
+	my ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$id});
+	if($job_id){
+	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
+	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+			    qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+			    qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		            qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+			    qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'D. melanogaster : Dpp','$t_message')}
+		     ) if(! $job_id); #add job
+	}
+	
+	### JOB 2 ###
+	$id = 2;
+	$t_message = "This example job will annotate a region of the Pythium ultimum genome. ".
+	    "P. ultimum is an emerging model organism genome and this example illustrates ".
+	    "how to perform de novo annotaion on a new genome";
+	
+	#drop job from table
+    $dbh->do(qq{DELETE FROM jobs WHERE job_id=$id}); #drop
+	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$id}); #drop
+	
+	#add/re-add control file options	
+	@files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
+					    qq{(value LIKE '%pyu-contig.fasta' or }.
+					    qq{value LIKE '%pyu-est.fasta' or }.
+					    qq{value LIKE '%pyu-protein.fasta' or }.
+					    qq{value LIKE '%pyu.hmm' or }.
+					    qq{value LIKE '%pyu.mod')}
+					    )};
+	if(@files == 3 && -f $files[0] && -f $files[1] && -f $files[2]){ #re-add here
+	    my %job_opt = %CTL_OPT; #make a copy of control file settings
+	    
+	    #add needed values
+	    ($job_opt{genome})  = grep {/pyu-contig.fasta/} @files;
+	    ($job_opt{est})     = grep {/pyu-est.fasta/} @files;
+	    ($job_opt{protein}) = grep {/pyu-protein.fasta/} @files;
+	    ($job_opt{snaphmm}) = grep {/pyu.hmm/} @files;
+	    ($job_opt{gmhmm}) = grep {/pyu.mod/} @files;
+	    $job_opt{organism_type} = 'eukaryotic';
+	    $job_opt{predictor} = '';
+	    
+	    my @predictors;
+	    push(@predictors, 'snap') if($job_opt{'snap'});
+	    push(@predictors, 'genemark') if($job_opt{'gmhmme3'});
+	    push(@predictors, 'est2genome') if(!@predictors);
+	    $job_opt{predictor} .= join(',', @predictors);
+	    
+	    #add to ctl_opt table
+	    @defaults = (keys %def_opt); #keys to add
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($do_string); #add ctl_opt
+	}
+	
+	#add job but only if control file options were ok
+	($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$id});
+	if($job_id){
+	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
+	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     ) if(! $job_id); #add job
+	}
+	
+	### JOB 3 ###
+	$id = 3;
+	$t_message = "This example job will annotate a region of the Pythium ultimum genome. ".
+	    "In the example mRNAseq data crossing spice site junctions is integrated ".
+	    "into a MAKER run. The data data was processed and aligned by an external ".
+	    "program and will be passed to MAKER in a GFF3 formated file. This example ".
+	    "demonstrates how you might use the GFF3 pass-through capability of MAKER.";
+	
+	#drop job from table
+	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$id}); #drop
+	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$id}); #drop
+	
+	#add/re-add control file options	
+	@files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
+					    qq{(value LIKE '%pass-contig.fasta' or }.
+					    qq{value LIKE '%pyu-est.fasta' or }.
+					    qq{value LIKE '%pyu-protein.fasta' or }.
+					    qq{value LIKE '%pass-mRNAseq.gff' or }.
+					    qq{value LIKE '%pyu.hmm' or }.
+					    qq{value LIKE '%pyu.mod')}
+					    )};
+	if(@files == 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
+	    my %job_opt = %CTL_OPT; #make a copy of control file settings
+	    
+	    #add needed values
+	    ($job_opt{genome})  = grep {/pass-contig.fasta/} @files;
+	    ($job_opt{est})     = grep {/pyu-est.fasta/} @files;
+	    ($job_opt{protein}) = grep {/pyu-protein.fasta/} @files;
+	    ($job_opt{est_gff}) = grep {/pass-mRNAseq.gff/} @files;
+	    ($job_opt{snaphmm}) = grep {/pyu.hmm/} @files;
+	    ($job_opt{gmhmm}) = grep {/pyu.mod/} @files;
+	    $job_opt{organism_type} = 'eukaryotic';
+	    $job_opt{predictor} = '';
+	    
+	    my @predictors;
+	    push(@predictors, 'snap') if($job_opt{'snap'});
+	    push(@predictors, 'genemark') if($job_opt{'gmhmme3'});
+	    push(@predictors, 'est2genome') if(!@predictors);
+	    $job_opt{predictor} .= join(',', @predictors);
+	    
+	    #add to ctl_opt table
+	    @defaults = (keys %def_opt); #keys to add
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($do_string); #add ctl_opt
+	}
+	
+	#add job but only if control file options were ok
+	($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$id});
+	if($job_id){
+	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
+	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     ) if(! $job_id); #add job
+	}
+	
+	### JOB 4 ###
+	$id = 4;
+	$t_message = "This example job will annotate a region of the Pythium ultimum genome. ".
+	    "In this example two pre-existing legacy annotation sets will be merged ".
+	    "and integrated with EST and protein homology data to produce a consensus ".
+	    "set of annotations.  This example demonstrates how legacy annotations can be ".
+	    "integrated into a MAKER run. Legacy annotation sets are passed to MAKER in ".
+	    "GFF3 format.";
+	
+	#drop job from table
+	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$id}); #drop
+	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$id}); #drop
+	
+	#add/re-add control file options	
+	@files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
+					    qq{(value LIKE '%legacy-contig.fasta' or }.
+					    qq{value LIKE '%pyu-est.fasta' or }.
+					    qq{value LIKE '%pyu-protein.fasta' or }.
+					    qq{value LIKE '%legacy-set1.gff' or }.
+					    qq{value LIKE '%legacy-set2.gff' or }.
+					    qq{value LIKE '%pyu.hmm' or }.
+					    qq{value LIKE '%pyu.mod')}
+					    )};
+	if(@files == 5 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3] && -f $files[4]){ #re-add here
+	    my %job_opt = %CTL_OPT; #make a copy of control file settings
+	    
+	    #add needed values
+	    ($job_opt{genome})  = grep {/legacy-contig.fasta/} @files;
+	    ($job_opt{est})     = grep {/pyu-est.fasta/} @files;
+	    ($job_opt{protein}) = grep {/pyu-protein.fasta/} @files;
+	    ($job_opt{model_gff}) = grep {/legacy-set1.gff/} @files;
+	    ($job_opt{model_gff}) .= ",".grep {/legacy-set2.gff/} @files;
+	    ($job_opt{snaphmm}) = grep {/pyu.hmm/} @files;
+	    ($job_opt{gmhmm}) = grep {/pyu.mod/} @files;
+	    $job_opt{organism_type} = 'eukaryotic';
+	    $job_opt{predictor} = '';
+	    
+	    my @predictors;
+	    push(@predictors, 'snap') if($job_opt{'snap'});
+	    push(@predictors, 'genemark') if($job_opt{'gmhmme3'});
+	    push(@predictors, 'est2genome') if(!@predictors);
+	    $job_opt{predictor} .= join(',', @predictors);
+	    
+	    #add to ctl_opt table
+	    @defaults = (keys %def_opt); #keys to add
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($do_string); #add ctl_opt
+	}
+	
+	#add job but only if control file options were ok
+	($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$id});
+	if($job_id){
+	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
+	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     ) if(! $job_id); #add job
+	}    
+	
+	### JOB 5 ###
+	$id = 5;
+	$t_message = "This example job will annotate a region of the Escherichia coli genome. ".
+	    "This is an example of how to use MAKER for annotating prokaryotic genomes";
+	
+	#drop job from table
+	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$id}); #drop
+	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$id}); #drop
+	
+	#add/re-add control file options	
+	@files = @{$dbh->selectcol_arrayref(qq{SELECT value FROM menus WHERE is_tutorial=1 and }.
+					    qq{(value LIKE '%ecoli-contig.fasta' or }.
+					    qq{value LIKE '%ecoli-est.fasta' or }.
+					    qq{value LIKE '%ecoli-protein.fasta' or }.
+					    qq{value LIKE '%ecoli.mod')}
+					    )};
+	if(@files == 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
+	    my %job_opt = %CTL_OPT; #make a copy of control file settings
+	    
+	    #add needed values
+	    ($job_opt{genome})  = grep {/ecoli-contig.fasta/} @files;
+	    ($job_opt{est})     = grep {/ecoli-est.fasta/} @files;
+	    ($job_opt{protein}) = grep {/ecoli-protein.fasta/} @files;
+	    ($job_opt{gmhmm}) = grep {/ecoli.mod/} @files;
+	    $job_opt{organism_type} = 'prokaryotic';
+	    
+	    my @predictors;
+	    push(@predictors, 'protein2genome');
+	    push(@predictors, 'genemark') if($job_opt{'gmhmmp'});
+	    $job_opt{predictor} .= join(',', @predictors);
+	    
+	    #add to ctl_opt table
+	    @defaults = (keys %def_opt); #keys to add
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($do_string); #add ctl_opt
+	}
+	
+	#add job but only if control file options were ok
+	($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$id});
+	if($job_id){
+	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
+	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     ) if(! $job_id); #add job
+	}    
+    }
+    ### END ADD TUTORIAL JOBS ###
 
     #commit changes
     $dbh->commit;

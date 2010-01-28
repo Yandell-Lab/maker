@@ -1,8 +1,0 @@
-[% WRAPPER main.tt %]
-
-[% INCLUDE questions_menu.tt %]
-
-<center><h3>Choose an tool from the Questions menu above to administer the question table in the database.</h3></center>
-
-[% END %]
-

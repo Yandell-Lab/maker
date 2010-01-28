@@ -1,6 +1,0 @@
-[% WRAPPER main.tt %]
-
-<h2 style="text-align: center">The final exam was successfully uploaded for [% student.first_name %] [% student.last_name %]</h2>
-
-[% END %]
-

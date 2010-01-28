@@ -182,14 +182,19 @@ function make_multiple(DivID, DivID2){
    </td>
    [% ELSE %]
    <td>
-     <p style="font-weight:bold">Choose a genome fasta file:
+     <p style="font-weight:bold">Choose a genome fasta file:<br>
      [% SET max_submit = (user.type == 'guest') ? ctl_opt.max_submit_guest : ctl_opt.max_submit_user %]
      [% IF max_submit > 0 %]
-       <span style="color:red">Submissions must be [% max_submit %] base pairs or less.</span>
+     [% PERL %]
+       my $u_max = $stash->get('max_submit');
+       $u_max =~ s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g;
+       $stash->set('u_max' => $u_max);
+     [% END %]
+       <span style="color:red">Submissions must be [% u_max %] base pairs or less.</span>
      [% END %]
      </p>
      <br>
-     <p style="font-size : 11">
+     <p style="font-size : 11; white-space : nowrap;">
        <b>Organism Type:</b>
        <input type=radio name="organism_type" value="eukaryotic" [% IF o_type == 'eukaryotic' %] checked="checked" [% END %] onclick="org_type_changed('eukaryotic');"> Eukaryotic
        <input type=radio name="organism_type" value="prokaryotic" [% IF o_type == 'prokaryotic' %] checked="checked" [% END %] onclick="org_type_changed('prokaryotic');"> Prokaryotic

@@ -1,9 +1,0 @@
-
-[% WRAPPER main.tt %]
-
-[% INCLUDE students_menu.tt %]
-
-<center><h3>Choose an tool from the Students menu above to administer the student table in the database.</h3></center>
-
-[% END %]
-

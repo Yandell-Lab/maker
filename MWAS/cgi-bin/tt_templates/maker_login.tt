@@ -167,7 +167,7 @@ ul.message li.warning {
       benefits.  Registered users can submit up to [% u_max %] base pairs of
       sequence for each annotation job, while guest users are limited to [% g_max %]
       base pairs per submission.  Registered users also recieve e-mail notifications as to
-      the status of theirjobs, have longer persistance of results on the server, and their
+      the status of their jobs, have longer persistance of results on the server, and their
       jobs/results are protected by extra layers of security.
    </p>
 
