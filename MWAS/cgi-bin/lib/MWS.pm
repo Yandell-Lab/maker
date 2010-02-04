@@ -7,7 +7,7 @@ BEGIN{
    if (not ($ENV{CGL_GO_SOURCE})) {
       $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/lib/CGL/gene_ontology.obo"
    }
-   #{ $ENV{'CAP_DEVPOPUP_EXEC'} = 1; }
+   { $ENV{'CAP_DEVPOPUP_EXEC'} = 1; }
 }
 
 use strict;
@@ -52,7 +52,11 @@ sub cgiapp_init {
    $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
 
    $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0}) 
-     or die "Got error $DBI::errstr when connecting to database\n";;
+     or die "Got error $DBI::errstr when connecting to database\n";
+
+   #reload default server options from server
+   my %CTL_OPT = %{$self->get_server_default_options()}; #this is all control options
+   @serv_opt{keys %serv_opt} = @CTL_OPT{keys %serv_opt}; #just get server options
 
    #setup template params
    $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => "$FindBin::Bin/tt_templates/",
@@ -149,6 +153,20 @@ sub login {
    my $self = shift;
    my $add_text= shift;
 
+   my %serv_opt = %{$self->param('server_opt')};
+
+   #if no login is used then just use the administrator account
+   if(! $serv_opt{use_login}){
+       my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id = 1});
+
+       #authenticate user
+       $self->query->param(authen_username => $user->{login});
+       $self->query->param(authen_password => $user->{password});
+       $self->authen->{initialized} = 0; #force reauthentication
+       $self->authen->initialize();
+       $self->cgiapp_prerun; #reload tt_template options because of changes
+   }
+
    if($self->authen->is_authenticated){
        my $user_id = $self->get_user_id;
        return $self->frontpage;
@@ -201,8 +219,21 @@ sub forgot_login {
    my $e_mail = $q->param('e_mail');
    my $serv_opt = $self->param('server_opt');
 
+   #if no smtp server I can't send the username and password
+   if(! $serv_opt->{smtp_server}){
+       return $self->frontpage;
+   }
+
+   #evaluate captcha
+   my $captcha = $q->param("captcha");
+   if(! $self->captcha_verify($q->cookie("hash"), $captcha)){
+       return $self->tt_process('forgot_login.tt', {message => "Value did not match image"});
+   }
+
+   #look up user
    my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE e_mail='$e_mail'}) if($e_mail);
 
+   #send mesage
    my $mm;
    if(defined $user && defined $user->{login}){
        $mm = "MWAS: Forgotten login/password request\n\n".
@@ -218,7 +249,7 @@ sub forgot_login {
        return $self->login("Your username and password have been e-mailed to you");    
    }
    elsif(defined $e_mail){
-       return $self->login("No account associated with e-mail address");    
+       return $self->tt_process('forgot_login.tt', {message => "No account associated with e-mail address"});
    }    
    else{
        return $self->tt_process('forgot_login.tt');
@@ -234,14 +265,15 @@ sub launch {
    my $user_id = $self->get_user_id();
    $value =~ s/\/+$//;
    my ($name) = $value =~ /([^\/]+)$/;
-   my $data_dir = $self->param('server_opt')->{data_dir};
+   my %serv_opt = %{self->param('server_opt')};
+   my $data_dir = $serv_opt{data_dir};
 
    #make path
    File::Path::mkpath("/var/www/html/MWAS/users/$user_id/");
-   my $gff = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/$name.gff";
-   my $xml = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/".uri_escape("$name.xml", '%');
+   my $gff = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$name.gff";
+   my $xml = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/".uri_escape("$name.xml", '%');
 
-   open(OUT,  "> /var/www/html/MWAS/users/$user_id/$name.gff");
+   open(OUT,  "> $serv_opt{html_dir}/users/$user_id/$name.gff");
    open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff");
    while(my $line = <IN>){
        print OUT $line;
@@ -249,7 +281,7 @@ sub launch {
    close(OUT);
    close(IN);
 
-   open(OUT,  "> /var/www/html/MWAS/users/$user_id/$name.xml");
+   open(OUT,  "> $serv_opt{html_dir}/users/$user_id/$name.xml");
    open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.xml");
    while(my $line = <IN>){
        print OUT $line;
@@ -258,11 +290,11 @@ sub launch {
    close(IN);
 
    if($q->param('apollo')){
-       my $url_base_dir = "http://derringer.genetics.utah.edu/MWAS/";
-       my $url_jnlp_base = "http://derringer.genetics.utah.edu/MWAS/users/$user_id/";
+       my $url_base_dir = "$serv_opt{web_address}/$serv_opt{html_web}/";
+       my $url_jnlp_base = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/";
        my $url_gff3_file = $xml;
        
-       open(OUT,  "> /var/www/html/MWAS/users/$user_id/apollo.jnlp");
+       open(OUT,  "> $serv_opt{html_dir}/users/$user_id/apollo.jnlp");
        open(IN, "< tt_templates/apollo.tt");
        while(my $line = <IN>){
 	   $line =~ s/\[\% url_base_dir \%\]/$url_base_dir/g;
@@ -274,7 +306,7 @@ sub launch {
        close(OUT);
        close(IN);
        
-       return $self->redirect("http://derringer.genetics.utah.edu/MWAS/users/$user_id/apollo.jnlp");
+       return $self->redirect("/users/$user_id/apollo.jnlp");
    }
    elsif($q->param('soba')){
 
@@ -361,6 +393,11 @@ sub register {
    my $verify = $q->param('verify');
    my $captcha = $q->param("captcha");
 
+   #if no registration is allower redirect back to login
+   if(! $serv_opt->{allow_register}){
+       return $self->home_login;
+   }
+
    #no input this must be a new request
    if(!$login && !$first && !$last && !$institution &&
       !$e_mail && !$password && !$verify && !$captcha){
@@ -428,10 +465,11 @@ sub register {
        $q->param(authen_password => $password);
        $self->authen->{initialized} = 0; #force reauthentication
        $self->authen->initialize();
+       $self->cgiapp_prerun; #reload tt_template options because of changes
 
        my $user_id = $self->get_user_id();
        #forward user to account frontpage
-       return $self->redirect("maker.cgi?rm=frontpage");
+       return $self->redirect("maker.cgi");
    }
 }
 #-----------------------------------------------------------------------------
@@ -449,6 +487,11 @@ sub edit_account {
    my $old_password = $q->param('old_password');
    my $new_password = $q->param('new_password');
    my $verify = $q->param('verify');
+
+   #if not using login then you can't edit accounts
+   if(! $serv_opt->{use_login}){
+       return $self->frontpage;
+   }
 
    #no input this must be a new request
    if(!$login && !$first && !$last && !$institution &&
@@ -513,16 +556,20 @@ sub edit_account {
        $q->param(authen_password => $password);
        $self->authen->{initialized} = 0; #force reauthentication
        $self->authen->initialize();
+       $self->cgiapp_prerun; #reload tt_template options because of changes
 
        #update user info
        $user = $self->get_user_info();
-       return $self->tt_process('edit_account.tt', {message => 'Account updated successfully',
-						    user => $user});
+       return $self->tt_process('edit_account.tt', {message => 'Account updated successfully',});
    }
 }
 #-----------------------------------------------------------------------------
 sub guest_login {
     my $self = shift;
+
+    my $serv_opt = $self->param('server_opt');
+
+    return $self->home_login if(! $serv_opt->{allow_guest}); #redirect back to login if guest is not allowed
 
 #   my $lock = MWAS_util::lockDB($serv_opt->{data_dir});
     my ($new_id) = $self->dbh->selectrow_array(qq{SELECT last_user_id FROM id_store}); #get last new user_id
@@ -544,9 +591,11 @@ sub guest_login {
     $self->query->param(authen_password => $password);
     $self->authen->{initialized} = 0; #force reauthentication
     $self->authen->initialize();
+    $self->cgiapp_prerun; #reload tt_template options because of changes
+
     my $user_id = $self->get_user_id();    
     #forward user to account frontpage
-    return $self->redirect("maker.cgi?rm=frontpage");
+    return $self->redirect("maker.cgi");
 }
 #-----------------------------------------------------------------------------
 sub help {
@@ -560,8 +609,8 @@ sub frontpage {
    my $message = shift;
 
    if(! $self->authen->is_authenticated){
-       my $in_id = $self->query->param('guest_id');
        my $q = $self->query;
+       my $in_id = $q->param('guest_id');
 
        if($in_id){
 	   my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id=$in_id});
@@ -572,8 +621,9 @@ sub frontpage {
 	   $q->param(authen_password => $user->{password});
 	   $self->authen->{initialized} = 0; #force reauthentication
 	   $self->authen->initialize();
+	   $self->cgiapp_prerun; #reload tt_template options because of changes
 
-	   return $self->redirect("http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi");
+	   return $self->redirect("maker.cgi");
        }
        else{
 	   return $self->home_login;
@@ -582,9 +632,8 @@ sub frontpage {
 
    my $user = $self->get_user_info();
 
-   my $dsn = "SELECT * FROM jobs WHERE user_id=".$user->{user_id};
-   $dsn .= " AND is_tutorial=0" unless($user->{is_admin});
-   $dsn .= " AND is_saved=1 ORDER BY job_id DESC";
+   my $dsn = "SELECT * FROM jobs WHERE user_id=".$user->{user_id}.
+             " AND is_tutorial=0 AND is_saved=1 ORDER BY job_id DESC";
    my $jobs = $self->dbh->selectall_arrayref($dsn, {Slice => {}});
 
    #set job status
@@ -622,7 +671,7 @@ sub queue {
 
    my $jobs = $self->dbh->selectall_arrayref(qq{SELECT * FROM jobs WHERE (is_queued=1 or is_running=1) }.
 					     qq{and admin_block=0 and is_error=0 and }.
-					     qq{is_finished=0 ORDER BY job_id},
+					     qq{is_finished=0 ORDER BY submit_id},
 					     {Slice => {}}
 					    );
 
@@ -793,19 +842,28 @@ sub submit_to_db {
    #get name for job
    my $j_name = $self->get_name_for_value($CTL_OPT{genome});
 
+   #get new submit_id for job submission
+   my $submit_id = '';
+   if($is_queued){
+       ($submit_id) = $self->dbh->selectrow_array(qq{SELECT last_submit_id FROM id_store}); #get last submit_id
+       $submit_id++; #iterate the value
+       $self->dbh->do(qq{UPDATE id_store SET last_submit_id=$submit_id}); #record new value
+       $self->dbh->commit();
+   }
+
    #if job exist update else make a new one
    if(my ($owner) = $self->dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id})){
        die "ERROR: This job does not belong to you\n" if($owner != $user_id);
 
        #update job
-       $self->dbh->do(qq{UPDATE jobs SET length='$length', is_queued=$is_queued, name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
+       $self->dbh->do(qq{UPDATE jobs SET submit_id='$submit_id', length='$length', is_queued=$is_queued, name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
    }
    else{
        #add job
-       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, is_queued, is_started, }.
 		      qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		      qq{is_tutorial, cpus, start_time, finish_time, name) }.
-		      qq{VALUES ($job_id, $user_id, '$length', $is_queued, 0, 0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
+		      qq{VALUES ($job_id, $user_id, $submit_id, '$length', $is_queued, 0, 0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
 	   );
    }
 
@@ -847,6 +905,11 @@ sub submit_to_db {
 sub feedback {
    my $self = shift;
    my $serv_opt = $self->param('server_opt');
+
+   #if there is no admin e-mail and smtp server then I can't send feedback
+   if(! $serv_opt->{smtp_server} && ! $serv_opt->{admin_email}){
+       return $self->frontpage;
+   }
 
    my $q = $self->query();
    my $comment = $q->param('comment_text');
@@ -1067,7 +1130,7 @@ sub get_server_default_options {
    my $self = shift;
 
    my $def_opt = $self->dbh->selectrow_hashref(qq{SELECT * FROM all_default_opt});
-    
+
    return $def_opt;
 }
 #-----------------------------------------------------------------------------

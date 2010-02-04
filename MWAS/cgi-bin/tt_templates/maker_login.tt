@@ -159,16 +159,22 @@ ul.message li.warning {
        $stash->set('u_max' => $u_max);
        $stash->set('g_max' => $g_max);
    [% END %]
-   <h2>This website is free and open to all users for academic use and there is no login requirement</h2>
+   [% IF server_opt.allow_guest %]
+     <h2>This website is free and open to all users for academic use and there is no login requirement</h2>
+   [% ELSE %]
+     <h2>This website is restricted to registered users only</h2>
+   [% END %]
 
-   <p>Welcome to the MAKER Web Annotation Service.  Log into your account below, or you can
+   <p>Welcome to the MAKER Web Annotation Service.  Log into your account below[% IF server_opt.allow_guest %], or you can
       access the server as a guest.  While there is no login requirement for this site, users
-      are highly encouraged to set up an account.  Registration is free, and has several
-      benefits.  Registered users can submit up to [% u_max %] base pairs of
-      sequence for each annotation job, while guest users are limited to [% g_max %]
-      base pairs per submission.  Registered users also recieve e-mail notifications as to
-      the status of their jobs, have longer persistance of results on the server, and their
-      jobs/results are protected by extra layers of security.
+      are highly encouraged to set up an account[% END %]. [% IF ! server_opt.allow_register %]You must contact the server
+      administrator to set up an account.[% ELSE %]Use the "New user registration" link to register a new account.[% END %]
+      [% IF server_opt.allow_guest %]Registration [% IF server_opt.allow_register %]is free, and [% END %] has several
+      benefits.[% END %]  [% IF server_opt.allow_guest %][% IF u_max %]Registered users can submit up to [% u_max %] base pairs of
+      sequence for each annotation job.[% END %] [% IF g_max %]Guest users are limited to [% g_max %]
+      base pairs per annotation job submission.[% END %] Registered users receive e-mail notifications as to
+      the status of their jobs, have persistance of results on the server, and their
+      jobs/results are protected by extra layers of security. [% END %]
    </p>
 
 
@@ -176,7 +182,7 @@ ul.message li.warning {
 
 <script language='javascript'>
 function doguest() {
-  document.location='maker.cgi?rm=guest_login';
+  document.location='maker.cgi';
 }
 </script>
 
@@ -198,14 +204,18 @@ function doguest() {
     <input id="authen_passwordfield" tabindex="2" type="password" name="authen_password" size="20" /><br />
     <input id="authen_rememberuserfield" tabindex="3" type="checkbox" name="authen_rememberuser" value="1" />Remember User Name<br />
     
-    <table>
+    <table align=center>
       <td nowrap>
-	<img src="[% server_opt.html_web %]/images/icon_user.gif">
-	<a href="maker.cgi?rm=register"> New user registration</a>
+	[% IF server_opt.allow_register %]
+	  <img src="[% server_opt.html_web %]/images/icon_user.gif">
+	  <a href="maker.cgi?rm=register"> New user registration</a>
+ 	[% END %]
       </td>
       <td nowrap>
-	<img src="[% server_opt.html_web %]/images/folder_lock.gif">
-	<a href="maker.cgi?rm=forgot_login"> Forgot login?</label>  </a>
+	[% IF server_opt.smtp_server %]
+	  <img src="[% server_opt.html_web %]/images/folder_lock.gif">
+	  <a href="maker.cgi?rm=forgot_login"> Forgot login?</label></a>
+	[% END %]
       </td>
       <td nowrap>
 	<img src="[% server_opt.html_web %]/images/icon_info.gif">
@@ -218,16 +228,16 @@ function doguest() {
   <div class="login_footer">
     <div class="buttons">
       <input id="authen_loginbutton" tabindex="4" type="submit" name="authen_loginbutton" value="Resgistered User Sign In" class="button" />
-    </div>
     
-    
-    <div class="buttons">
+      [% IF server_opt.allow_guest %]    
       <input type="Button" name="guest_loginbutton" value="Guest Sign In" onclick="doguest()" class="button" />
+      [% END %]
     </div>
+
   </div>
 </div>
 
-<input type="hidden" name="destination" value="maker.cgi?rm=frontpage" />
+<input type="hidden" name="destination" value="maker.cgi" />
 <input type="hidden" name="rm" value="authen_login" />
 </form>
 </div>

@@ -34,6 +34,7 @@ use File::Copy;
 use File::Temp;
 use Storable;
 use IPC::Open2;
+use POSIX qw(:sys_wait_h);
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -278,7 +279,23 @@ sub unlock ($) {
       kill(3, $self->{_maintain});
       close($self->{_OUT});
       close($self->{_IN});
-      waitpid($self->{_maintain}, 0);
+
+      #attempt kill multiple times if still running
+      my $stat = waitpid($self->{_maintain}, WNOHANG);
+      my $count = 0;
+      while($stat == 0 && $count < 20){
+	  sleep 1;
+	  kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
+	  $stat = waitpid($self->{_maintain}, WNOHANG);
+	  $count++;
+      }
+
+      #if still running throw error
+      $stat = waitpid($self->{_maintain}, WNOHANG);
+      if($stat == 0){
+	  die "ERROR: Could not destroy lock maintainer\n";
+      }
+
       $self->{_maintain} = undef;
   }
 

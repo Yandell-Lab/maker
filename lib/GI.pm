@@ -2345,7 +2345,7 @@ sub set_defaults {
       $CTL_OPT{'dbname'} = "$FindBin::Bin/../data/makerweb.db";
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
-      $CTL_OPT{'username'} = '';
+      $CTL_OPT{'username'} = 'MWAS';
       $CTL_OPT{'password'} = '';
       $CTL_OPT{'admin_email'} = '';
       $CTL_OPT{'smtp_server'} = '';
@@ -2355,6 +2355,7 @@ sub set_defaults {
       $CTL_OPT{'use_login'} = 1;
       $CTL_OPT{'allow_guest'} = 1;
       $CTL_OPT{'allow_register'} = 1;
+      $CTL_OPT{'tutorials'} = 1;
       $CTL_OPT{'max_submit_user'} = 2000000; #length in base pairs
       $CTL_OPT{'max_submit_guest'} = 200000; #length in base pairs
       $CTL_OPT{'persist_time_user'} = 336; #in hours
@@ -2362,43 +2363,66 @@ sub set_defaults {
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
       $CTL_OPT{'data_dir'} = "$FindBin::Bin/../data";
-      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/MWAS';
-      $CTL_OPT{'cgi_web'} = '/cgi-bin/MWAS';
-      $CTL_OPT{'html_dir'} = '/var/www/html/MWAS';
-      $CTL_OPT{'html_web'} = '/MWAS';
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/';
+      $CTL_OPT{'cgi_web'} = '/cgi-bin/';
+      $CTL_OPT{'html_dir'} = '/var/www/html/';
+      $CTL_OPT{'html_web'} = '/';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
+      ($CTL_OPT{'web_address'}) = 'http://'.`hostname` =~ /^([^\n]+)/;
    }
 
    #server menus
    if ($type eq 'menus') {
-      $CTL_OPT{'genome'}             = {'D. melanogaster : example contig' =>
-					    "$FindBin::Bin/../../data/dpp_contig.fasta"};
-      $CTL_OPT{'snaphmm'}          = {};
-      $CTL_OPT{'augustus_species'} = {};
-      $CTL_OPT{'fgenesh_par_file'} = {};
-      $CTL_OPT{'gmhmm_e'}          = {};
-      $CTL_OPT{'gmhmm_p'}          = {};
-      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' =>
-                                          "$FindBin::Bin/../../data/dpp_transcripts.fasta"};
-      $CTL_OPT{'altest'}           = {};
-      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' =>
-                                          "$FindBin::Bin/../../data/dpp_proteins.fasta"};
-      $CTL_OPT{'est_gff'}          = {};
-      $CTL_OPT{'altest_gff'}       = {};
-      $CTL_OPT{'protein_gff'}      = {};
-      $CTL_OPT{'pref_gff'}         = {};
-      $CTL_OPT{'model_gff'}        = {};
-      $CTL_OPT{'rmlib'}            = {};
-      $CTL_OPT{'repeat_gff'}       = {};
-      $CTL_OPT{'model_org'}        = {'All species' => 'all'};
-      $CTL_OPT{'repeat_protein'}   = {'RepeatRunner te_proteins' =>
-					  "$FindBin::Bin/../../data/te_proteins.fasta"
-				     };
       #this step is required since menu defaults are exe dependant
       my %exe_ctl = set_defaults('exe', $user_default); 
       %CTL_OPT = (%CTL_OPT, %{collect_hmms(\%exe_ctl)}); #add exe dependant values
+
+      #now add static defaults
+      $CTL_OPT{'genome'}           = {'D. melanogaster : example contig' => "$FindBin::Bin/../../data/dpp_contig.fasta",
+				      'De novo Annotation : example contig' => "$FindBin::Bin/../data/pyu-contig.fasta",
+				      'Pass-through : example contig' => "$FindBin::Bin/../data/pass-contig.fasta",
+				      'Legacy Annotation : example contig' => "$FindBin::Bin/../data/legacy-contig.fasta",
+				      'E. coli : example contig' => "$FindBin::Bin/../data/ecoli-contig.fasta"};
+      $CTL_OPT{'snaphmm'}          = {'P. ultimum' => "$FindBin::Bin/../data/pyu.hmm"};
+      $CTL_OPT{'augustus_species'} = {};
+      $CTL_OPT{'fgenesh_par_file'} = {};
+      $CTL_OPT{'gmhmm_e'}          = {'P. ultimum' => "$FindBin::Bin/../data/pyu.mod"};
+      $CTL_OPT{'gmhmm_p'}          = {'E. coli' => "$FindBin::Bin/../data/ecoli.mod"};
+      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' => "$FindBin::Bin/../../data/dpp_transcripts.fasta",
+				      'De novo/Legacy/Pass-through : example ESTs' => "$FindBin::Bin/../data/pyu-est.fasta",
+				      'E. coli : example ESTs' => "$FindBin::Bin/../data/ecoli-est.fasta"};
+      $CTL_OPT{'altest'}           = {};
+      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' => "$FindBin::Bin/../../data/dpp_proteins.fasta",
+				      'E. coli : example proteins' => "$FindBin::Bin/../data/ecoli-protein.fasta",
+				      'De novo/Legacy/Pass-through : example proteins' => "$FindBin::Bin/../data/pyu-protein.fasta"};
+      $CTL_OPT{'est_gff'}          = {'Pass-through : example mRNAseq' => "$FindBin::Bin/../data/pass-mRNAseq.gff"};
+      $CTL_OPT{'altest_gff'}       = {};
+      $CTL_OPT{'protein_gff'}      = {};
+      $CTL_OPT{'pred_gff'}         = {};
+      $CTL_OPT{'model_gff'}        = {'Legacy Annotation : example model set 1' => "$FindBin::Bin/../data/legacy-set1.gff",
+				      'Legacy Annotation : example model set 2' => "$FindBin::Bin/../data/legacy-set2.gff"};
+      $CTL_OPT{'repeat_gff'}       = {};
+      $CTL_OPT{'rmlib'}            = {};
+      $CTL_OPT{'repeat_protein'}   = {'RepeatRunner te_proteins' => "$FindBin::Bin/../../data/te_proteins.fasta"};
+      $CTL_OPT{'model_org'}        = {'All species' => 'all',
+				      'Fungi' => 'fungi',
+				      'Deuterostomes' => 'deuterostomes',
+				      'Protostomes' => 'protostomes',
+				      'Drosophila' => 'drosophila',
+				      'Human' => 'human',
+				      'Mouse' => 'mouse',
+				      'Nematode' => 'nematode',
+				      'Vertibrates' => 'vertibrates',
+				      'Plants' => 'plants'};
+
+
+      #auto add uniprot if user downloaded it into data directory
+      $CTL_OPT{'protein'}{'UniProt'} = "$FindBin::Bin/../data/uniprot_sprot.fasta"
+	  if(-f "$FindBin::Bin/../data/uniprot_sprot.fasta");
+
+      #restore any user supplied values
       %CTL_OPT = (%CTL_OPT, %{$user_default->{menus}})
-	  if($user_default->{menus}); #restore user supplied values
+	  if($user_default->{menus});
    }
 
    #reset values with user supplied defaults
@@ -3385,6 +3409,7 @@ sub generate_control_files {
        print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";
        print OUT "allow_guest:$O{allow_guest} #enable guest accounts on the server, 1 = yes, 0 = no\n";
        print OUT "allow_register:$O{allow_register} #allow users to register themselves vs. manually by admin, 1 = yes, 0 = no\n";
+       print OUT "tutorials:$O{tutorials} #Let users load example data on \"New Job\" screen, 1 = yes, 0 = no\n";
        print OUT "MPI:$O{MPI} #use mpi_maker instead of maker\n";
        print OUT "max_cpus:$O{max_cpus} #maximum number of cpus that can be dedicated to all MAKER jobs\n";
        print OUT "job_cpus:$O{job_cpus} #maximum number of cpus that can be used by a single MAKER job\n";
@@ -3399,6 +3424,7 @@ sub generate_control_files {
        print OUT "cgi_web:$O{cgi_web} #url to cgi_dir\n";
        print OUT "html_dir:$O{html_dir} #web accesible directory where web interface HTML conent is stored\n";
        print OUT "html_web:$O{html_web} #url to html_dir\n";
+       print OUT "web_address:$O{web_address} #base web address to server hosting MWAS\n";
        print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.  Used for building webstart of Apollo.\n";
        close(OUT);    
    }

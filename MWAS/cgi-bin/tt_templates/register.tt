@@ -83,7 +83,7 @@
   <tr>
     <td>Value Below:</td>
     <td>   
-        <input type="text" size=10 maxlength=10 name="captcha" value="">
+        <input type="text" size=10 maxlength=10 name="captcha" value="" autocomplete="off">
     </td>
     <td nowrap>
 	[% IF errors.captcha %]

@@ -57,7 +57,7 @@ function make_multiple(DivID, DivID2){
     [% FOREACH file = options.sort('name') %]
       [% IF logged && file.value == logged %]
         <OPTION SELECTED VALUE="[% file.value %]">[% file.name %]</OPTION>
-      [% ELSIF filter and file.length > filter %]
+      [% ELSIF filter && file.length > filter %]
         <OPTION DISABLED VALUE="[% file.value %]">[% file.name %] -- TOO LONG!</OPTION>
       [% ELSE %]
         <OPTION VALUE="[% file.value %]">[% file.name %]</OPTION>
@@ -88,7 +88,7 @@ function make_multiple(DivID, DivID2){
   <tr bgcolor=white>
     <td colspan=2>
       <p>
-      Use the options below to configure your annotation job[% IF menus.tutorials.size > 0 %],
+      Use the options below to configure your annotation job[% IF server_opt.tutorials && menus.tutorials.size > 0 %],
       or load one of the provided example annotation jobs[% END %].
       Click "Add Job to Queue" at the bottom of the page to submit a job.  Click "Save" to save
       progress without submitting. For more information on using the MAKER Web Annotation Service,
@@ -96,7 +96,7 @@ function make_multiple(DivID, DivID2){
       </p>
     </td>
   </tr>
-[% IF menus.tutorials.size > 0 %]
+[% IF server_opt.tutorials && menus.tutorials.size > 0 %]
   <tr bgcolor=white>
     <td>
       <p>
@@ -184,6 +184,7 @@ function make_multiple(DivID, DivID2){
    <td>
      <p style="font-weight:bold">Choose a genome fasta file:<br>
      [% SET max_submit = (user.type == 'guest') ? ctl_opt.max_submit_guest : ctl_opt.max_submit_user %]
+     [% max_submit = 0 IF user.is_admin %]
      [% IF max_submit > 0 %]
      [% PERL %]
        my $u_max = $stash->get('max_submit');

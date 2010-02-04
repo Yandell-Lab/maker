@@ -9,18 +9,20 @@
 <form method="POST" action="maker.cgi" name="forgot_login_form">
 
 <input type="hidden" name="rm" value="forgot_login">
-<table width=100%  bgcolor="#EDDA74"><tr><td>  <h2> [% message %]</td></tr></table></h2> 	
-<table bgcolor="#99CCCC">
+<table width=100%  bgcolor="#EDDA74">
   <tr>
-   
+    <td>
+      <h3>[% message %]</h3>
+    </td>
   </tr>
+</table>
+
+<table bgcolor="#99CCCC" width=100%>
   <tr>
-   
+  <td colspan=2>
+    <h4>No worries! Enter the email address that you previously used to create your account</h4>
+  </td>
   </tr>
-<td><h4>No worries! Enter your email address that you previously used to create your account</h4></td>
-  
-
-
 
   <tr>
     <td>E-mail:</td>
@@ -32,7 +34,7 @@
   <tr>
       <td>Enter Value:</td>
     <td>   
-        <input type="text" size=10 maxlength=10 name="captcha" value="">
+        <input type="text" size=10 maxlength=10 name="captcha" value="" autocomplete="off">
     </td>   
   </tr>
   <tr>

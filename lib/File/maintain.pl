@@ -1,14 +1,15 @@
 #! /usr/bin/perl -w
-BEGIN {
-    $SIG{QUIT} = sub{exit(0)};
-    $SIG{INT} = sub{exit(0)};
-}
-
 use strict;
 use FindBin;
 use lib "$FindBin::Bin/../";
 use File::NFSLock;
 use Storable;
+use vars qw($LOCK);
+
+BEGIN {
+    $SIG{QUIT} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{INT} = sub{$LOCK->unlock if($LOCK); exit(0)};
+}
 
 my $file = shift;
 my $time = shift;
@@ -19,16 +20,22 @@ die "ERROR: Lock serialization file does not exist\n\n"
 die "ERROR:  Lacking input for lock maintainer\n\n"
     if(! defined($time) || ! defined($pid));
 
-my $lock = Storable::retrieve($file);
+my $LOCK = Storable::retrieve($file);
 unlink($file);
 
-die "ERROR: Could not retrieve lock" if(! $lock);
+#attempted fix of file not being deleted error
+for(my $i = 0; $i < 20 && -f $file; $i++){
+    unlink($file);
+    sleep 1 if(-f $file);
+}
 
-while(-f $lock->{lock_file}){
-    $lock->refresh;
+die "ERROR: Could not retrieve lock" if(! $LOCK);
+
+while(-f $LOCK->{lock_file}){
+    $LOCK->refresh;
     sleep $time;
     my $p = `ps -p $pid`;
     last if(@{[$p =~ /(\n)/g]} < 2); #pid not running
 }
 
-$lock->unlock;
+$LOCK->unlock;

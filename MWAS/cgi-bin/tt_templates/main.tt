@@ -180,13 +180,19 @@ document.getElementById(DivID).innerHTML = 'Loading...';
 	</tr>
 	</table>
         <ul>
-            <li><a href="maker.cgi?rm=frontpage"><span><img border="0" src="[% server_opt.html_web %]/images/icon_home.gif"> Home</span></a></li>
+            <li><a href="maker.cgi"><span><img border="0" src="[% server_opt.html_web %]/images/icon_home.gif"> Home</span></a></li>
 	[% IF logged_in == 1 %]
             <li><a href="maker.cgi?rm=job_create"><span><img border="0" src="[% server_opt.html_web %]/images/page_new.gif"> New Job</span></a></li>
             <li><a href="maker.cgi?rm=filebox"><span><img border="0" src="[% server_opt.html_web %]/images/folder_images.gif"> Manage Files</span></a></li>
-            <li><a href="maker.cgi?rm=queue"><span><img border="0" src="[% server_opt.html_web %]/images/icon_history.gif"> Job Queue</span></a></li>
-            <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="[% server_opt.html_web %]/images/page_user_light.gif"> Edit Account</span></a></li>
-           <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="[% server_opt.html_web %]/images/comment.gif"> Contact Us</span></a></li>
+            [% IF server_opt.use_login %]
+              <li><a href="maker.cgi?rm=queue"><span><img border="0" src="[% server_opt.html_web %]/images/icon_history.gif"> Job Queue</span></a></li>
+              <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="[% server_opt.html_web %]/images/page_user_light.gif"> Edit Account</span></a></li>
+	    [% END %]
+            [% IF server_opt.smtp_server && server_opt.admin_email && server_opt.use_login %]
+              <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="[% server_opt.html_web %]/images/comment.gif"> Contact Us</span></a></li>
+            [% ELSIF server_opt.smtp_server && server_opt.admin_email %]
+              <li><a href="maker.cgi?rm=feedback"><span><img border="0" src="[% server_opt.html_web %]/images/comment.gif"> Contact Administrator</span></a></li>
+  	    [% END %]
 	[% END %]
             <li><a href="maker.cgi?rm=help"><span><img border="0" src="[% server_opt.html_web %]/images/icon_info.gif"> Help</span></a></li>
             <li><a href="http://www.yandell-lab.org"><span><img border="0" src="[% server_opt.html_web %]/images/arrow_up.gif">Yandell Lab</span></a></li>
@@ -197,10 +203,12 @@ document.getElementById(DivID).innerHTML = 'Loading...';
        <table width=100%>
        <tr align=right>
        <td>
-       [% IF logged_in %]
-           <font size=1>logged-in as <font color="blue">[% session.param('AUTH_USERNAME') %]</font> | <a href="maker.cgi?rm=home_login;authen_logout=1">logout</a></font>
-       [% ELSE %]
-	   <font size=1>not logged-in | <a href="maker.cgi?rm=login">sign in</a></font>
+       [% IF server_opt.use_login %]
+         [% IF logged_in %]
+           <font size=1>logged-in as <font color="blue">[% session.param('AUTH_USERNAME') %]</font> | <a href="maker.cgi?authen_logout=1">logout</a></font>
+         [% ELSE %]
+	   <font size=1>not logged-in | <a href="maker.cgi">sign in</a></font>
+         [% END %]
        [% END %]
        </td>
        </tr>
@@ -210,7 +218,7 @@ document.getElementById(DivID).innerHTML = 'Loading...';
       <h3 style="border-style:solid; border-width:1px;">
       You are logged in as a guest user.  You may become a registered user at any time by clicking on "Edit Account".<br>
       <br>
-      Copy the URL <font color="blue">http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi?rm=frontpage&guest_id=[% user.user_id %]</font>
+      Copy the URL <font color="blue">http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi?guest_id=[% user.user_id %]</font>
       or login with the username <font color="blue">[% user.login %]</font> to return to your jobs after exiting.</h3>
       [% END %]
 

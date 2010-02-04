@@ -48,14 +48,10 @@ function toggleLog(iState, url) {
 <h2>Welcome to the MAKER Web Annotation Service (MWAS)</h2>
 <p>
 To get started just click on "New Job" above.  You can then submit a sequence for annotation
-or select from a list of pre-loaded example annotation jobs.  Once a job has been added to the
-queue you can see your job's run status below.
-<!--
-You can also see your jobs position in the queue
-relative to other user's jobs by clicking "Job Queue".
--->
-For more infomation on using the MAKER
-Web Annotation Service, click on "Help" above.
+[% IF server_opt.tutorials %] or select from a list of pre-loaded example annotation jobs[% END %].  Once a job has been added to the
+queue you can see your job's run status as well as the results below.  You can also see your jobs position in the execution queue
+relative to other user's jobs by clicking "Job Queue" above.
+For more infomation on using the MAKER Web Annotation Service, click on "Help" above.
 </p>
 
 <br>
@@ -74,19 +70,9 @@ Web Annotation Service, click on "Help" above.
     <th>View Results</th>
     <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
   </tr>
-[% IF jobs.size == 0 %]
-  <tr bgcolor="#CFECEC">
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-    <td></td>
-  </tr>
-[% ELSE %]
-  [% FOREACH job = jobs%]
+[% count = 0 %]
+[% FOREACH job = jobs%]
+  [% count = count + 1 %]
   <tr bgcolor="#CFECEC">
     <td align=center><a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.job_id %]</a></td>
     <td>[% job.name %]</td>
@@ -117,8 +103,21 @@ Web Annotation Service, click on "Help" above.
       </form>
     </td>
   </tr>
-  [% END %]
+[% END %]
+
+[% IF count == 0 %]
+  <tr bgcolor="#CFECEC">
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
 [% END %]
 </table>
 </center>
+
 [% END %]

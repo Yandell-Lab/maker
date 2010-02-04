@@ -46,12 +46,12 @@ BEGIN{
     my $exit = sub{die "SIGNAL: Caught @_ exiting\n\n";};
 
     #Signals to trap and handle
-    $SIG{'INT' } = $exit;
-    $SIG{'ABRT'} = $exit;
-    $SIG{'QUIT'} = $exit;
-    $SIG{'TRAP'} = $exit;
-    $SIG{'STOP'} = $exit;
-    $SIG{'TERM'} = $exit;
+    $SIG{'INT' } =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    $SIG{'ABRT'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    $SIG{'QUIT'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    $SIG{'TRAP'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    $SIG{'STOP'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    $SIG{'TERM'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
     $SIG{'HUP'} = sub{print STDERR "STATUS: Signal received, attempting to restart $EXE\n";
 		      exec($0, @ARGV);
 		     };
@@ -534,13 +534,13 @@ sub run_server {
 	}
 	
 	#check for available jobs in queue
-	my ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE is_queued=1 and admin_block=0 and is_error=0 and is_finished=0 ORDER BY job_id LIMIT 1});
+	my ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE is_queued=1 and admin_block=0 and is_error=0 and is_finished=0 ORDER BY submit_id LIMIT 1});
 	
 	if(! $job_id){ #no job in queue
 	    #see if I can give extra cpus to existing jobs
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE is_running=1 and cpus }.
 					      qq{< $CTL_OPT{job_cpus} and is_finished=0 and admin_block=0 }.
-					      qq{and is_error=0 ORDER BY job_id LIMIT 1});
+					      qq{and is_error=0 ORDER BY submit_id LIMIT 1});
 
 	    if($job_id){ #give more cpus to the job
 		my $child = start_job($job_id, \%CTL_OPT, $dbh);
@@ -810,7 +810,7 @@ sub check_table_structure {
 	     ) if(! grep {/files/} @tables);
     
     #create jobs table
-    $dbh->do(qq{CREATE TABLE jobs (job_id INTEGER PRIMARY KEY, user_id INTEGER, length $t_type, }.
+    $dbh->do(qq{CREATE TABLE jobs (job_id INTEGER PRIMARY KEY, user_id INTEGER, submit_id INTEGER, length $t_type, }.
 		    qq{is_queued INTEGER, is_started INTEGER, is_running INTEGER, is_finished INTEGER, }.
 		    qq{is_error INTEGER, is_packaged INTEGER, is_saved INTEGER, admin_block INTEGER, is_tutorial INTEGER, }.
 		    qq{cpus INTEGER, start_time $t_type, finish_time $t_type, name $t_type, note $t_type)}
@@ -844,9 +844,9 @@ sub check_table_structure {
 	       $value =~ /\/legacy-set2.gff$/ ||
 	       $value =~ /\/pass-contig.fasta$/ ||
 	       $value =~ /\/pass-mRNAseq.gff$/ ||
-	       $value =~ /\/ecoli_contig.fasta$/ ||
-	       $value =~ /\/ecoli_est.fasta$/ ||
-	       $value =~ /\/ecoli_protein.fasta$/ ||
+	       $value =~ /\/ecoli-contig.fasta$/ ||
+	       $value =~ /\/ecoli-est.fasta$/ ||
+	       $value =~ /\/ecoli-protein.fasta$/ ||
 	       $value =~ /\/ecoli.mod$/
 	       ){
 		 $is_tutorial++;
@@ -872,13 +872,15 @@ sub check_table_structure {
 
     #log/re-log last unique key ids used (this is to help generate new keys)
     #Most versions of SQL can do this automatically but not all, so I will handle it in perl
-    #please note that job_id 1 is reserved for tutorial data and user_id 1 for administrator
+    #please note that job_ids 1-5 aare reserved for tutorial data and user_id 1 for administrator
     #$dbh->do(qq{DROP TABLE id_store}) if(grep {/id_store/} @tables);
     if(! grep {/id_store/} @tables){
-	$dbh->do(qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER)});
+	$dbh->do(qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER, last_submit_id INTEGER)});
 	my ($last_user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1}) || 1;
 	my ($last_job_id)  = $dbh->selectrow_array(qq{SELECT job_id FROM jobs ORDER BY job_id DESC LIMIT 1}) || 1;
-	$dbh->do(qq{INSERT INTO id_store (last_user_id, last_job_id) VALUES ($last_user_id, $last_job_id)});
+	my ($last_submit_id)  = $dbh->selectrow_array(qq{SELECT submit_id FROM jobs ORDER BY submit_id DESC LIMIT 1}) || 1;
+	$last_job_id = 6 if($last_job_id < 6);
+	$dbh->do(qq{INSERT INTO id_store (last_user_id, last_job_id, last_submit_id) VALUES ($last_user_id, $last_job_id, $last_submit_id)});
     }
 
     #add administrator to database
@@ -985,7 +987,7 @@ sub check_table_structure {
 					    qq{value LIKE '%pyu.hmm' or }.
 					    qq{value LIKE '%pyu.mod')}
 					    )};
-	if(@files == 3 && -f $files[0] && -f $files[1] && -f $files[2]){ #re-add here
+	if(@files >= 3 && -f $files[0] && -f $files[1] && -f $files[2]){ #re-add here
 	    my %job_opt = %CTL_OPT; #make a copy of control file settings
 	    
 	    #add needed values
@@ -1043,7 +1045,7 @@ sub check_table_structure {
 					    qq{value LIKE '%pyu.hmm' or }.
 					    qq{value LIKE '%pyu.mod')}
 					    )};
-	if(@files == 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
+	if(@files >= 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
 	    my %job_opt = %CTL_OPT; #make a copy of control file settings
 	    
 	    #add needed values
@@ -1077,7 +1079,7 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : Data Pass-through','$t_message')}
 		     ) if(! $job_id); #add job
 	}
 	
@@ -1104,7 +1106,7 @@ sub check_table_structure {
 					    qq{value LIKE '%pyu.hmm' or }.
 					    qq{value LIKE '%pyu.mod')}
 					    )};
-	if(@files == 5 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3] && -f $files[4]){ #re-add here
+	if(@files >= 5 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3] && -f $files[4]){ #re-add here
 	    my %job_opt = %CTL_OPT; #make a copy of control file settings
 	    
 	    #add needed values
@@ -1139,7 +1141,7 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : Legacy Annotations','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
 	
@@ -1159,7 +1161,7 @@ sub check_table_structure {
 					    qq{value LIKE '%ecoli-protein.fasta' or }.
 					    qq{value LIKE '%ecoli.mod')}
 					    )};
-	if(@files == 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
+	if(@files >= 4 && -f $files[0] && -f $files[1] && -f $files[2] && -f $files[3]){ #re-add here
 	    my %job_opt = %CTL_OPT; #make a copy of control file settings
 	    
 	    #add needed values
@@ -1189,7 +1191,7 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'E. coli : De Novo Annotation','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
     }
