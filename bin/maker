@@ -30,7 +30,8 @@ BEGIN{
    #supress warnings from storable module
    $SIG{'__WARN__'} = sub {
       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-		      $_[0] !~ /Can\'t store item /
+		      $_[0] !~ /Can\'t store item / &&
+		      $_[0] !~ /Find\.pm line 900 /
 		    );
    };
 

@@ -78,6 +78,22 @@ sub exists_kill {
     return ($found, $signaled);
 }
 #-----------------------------------------------------------------
+#returns process name for a given ID
+sub get_name_by_id {
+    my $id = shift;
+
+    my $obj = new Proc::ProcessTable;
+    my $name = '';
+    foreach my $p (@{$obj->table}) {
+	#now check for the id
+	if ($p->pid == $id){
+	    $name   = $p->fname() || '';
+	}
+    }
+
+    return $name;
+}
+#-----------------------------------------------------------------
 #this function is used by killall and exists_proc_by_name. it
 #returns processes that were found and how many can be signaled
 sub exists_killall {

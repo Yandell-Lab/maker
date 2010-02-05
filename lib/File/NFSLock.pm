@@ -35,6 +35,7 @@ use File::Temp;
 use Storable;
 use IPC::Open2;
 use POSIX qw(:sys_wait_h);
+use Proc::Signal;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -275,7 +276,7 @@ sub unlock ($) {
   my $self = shift;
 
   #remove maintainer if running
-  if(defined $self->{_maintain}){
+  if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
       kill(3, $self->{_maintain});
       close($self->{_OUT});
       close($self->{_IN});
@@ -489,11 +490,27 @@ sub maintain {
     $self->refresh; #refresh once on it's own
 
     #clean up old maintainers
-    if($self->{_maintain}){
+    if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
 	kill(3, $self->{_maintain});
 	close($self->{_OUT});
 	close($self->{_IN});
-	waitpid($self->{_maintain}, 0);
+
+	#attempt kill multiple times if still running
+	my $stat = waitpid($self->{_maintain}, WNOHANG);
+	my $count = 0;
+	while($stat == 0 && $count < 20){
+	    sleep 1;
+	    kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
+	    $stat = waitpid($self->{_maintain}, WNOHANG);
+	    $count++;
+	}
+	
+	#if still running throw error
+	$stat = waitpid($self->{_maintain}, WNOHANG);
+	if($stat == 0){
+	    die "ERROR: Could not destroy lock maintainer\n";
+	}
+	
 	$self->{_maintain} = undef;
     }
 
@@ -512,7 +529,14 @@ sub maintain {
     $self->{_IN} = $IN;
     $self->{_maintain} = $pid;
 
-    return 1;
+    #try deleting file if not handled by maintainer
+    my $count = 0;
+    while(-f $file && $count < 20){
+	sleep 1;
+	unlink($file);
+    }
+
+    return 1 if($pid);
 }
 
 sub refresh {
