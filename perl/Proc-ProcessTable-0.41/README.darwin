@@ -1,0 +1,62 @@
+     SUPPORTED ATTRIBUTES
+======================================================
+pid              process ID
+ppid             parent process ID
+pgrp             process group ID
+uid              UID of process
+gid              GID of process
+euid             effective UID
+egid             effective GID
+suid             saved UID
+sgid             saved GID
+priority         priority of process
+size             size of process in KB (data + stack)
+rss              resident set size in KB
+flags            process flags (see <sys/proc.h>)
+nice             nice for cpu usage
+sess             session pointer
+time             total cpu time, microseconds
+stime            system time, microseconds
+utime            user time, microseconds
+start            start time of process in seconds since epoch
+wchan            address of current system call (though the docs make
+                 it look like we can have a name if we hold our tongues
+                 right)
+ttydev           device name of tty, or empty if none
+ttynum           device number of tty, or -1 if none
+pctcpu           (decayed) %cpu for this process
+pctmem           %memory for this process
+state            state of process
+cmndline         entire command line for the process
+fname            command name
+
+Note that although time, stime, and utime are returned in microseconds,
+the actual resolution appears to be centiseconds.
+
+BUGS
+====
+The comments in the code for ps indicate that the cmndline and fname
+values are not to be relied on, since they are modifiable by the
+program itself once it begins execution.
+
+I'd like to provide the following attributes, I just can't figure out
+how:
+sid              session id
+majflt           major page faults
+minflt           minor page faults
+
+The page fault information actually looks like it might be available,
+but it appears not to be. At any rate, the distributed ps doesn't
+provide it. The source for ps contains a bunch of conditionalizations
+on FIXME, which appears not to be defined. I have dropped them, but it
+appears that only if FIXME is defined do you get the page fault
+information, and even then not always.
+
+The sess is actually the address of a session structure. I'd love to
+extract the sid from this structure, but I segv when I try. I didn't
+try too hard, because the ps command also reports session pointer, not
+session ID.
+
+I'd like to provide the following attributes, but the Darwin ps
+documentation makes me believe they're not available:
+exec             absolute filename (including path) of executed command

@@ -1,0 +1,38 @@
+Note: On Tru64, scripts have to run as root to get process table access.
+
+SUPPORTED ATTRIBUTES
+====================
+  uid         UID of process
+  gid         GID of process
+  euid        EUID of process
+  egid        EGID of process
+  suid        SUID of process
+  sgid        SGID of process
+  groups      array of supplemental groups
+  pid         process ID
+  ppid        parent process ID
+  pgrp        process group
+  sess        session ID
+  priority    priority of process
+  ttynum      tty number of process
+  flags       flags of process
+  time        user + system time                 
+  size        virtual memory size (bytes)
+  rss         resident set size (bytes)
+  start       start time (seconds since the epoch)
+  fname       file name
+  pctcpu      percent cpu used since process started
+  state       state of process
+  cmndline    full command line of process
+
+
+TODO
+====
+From the pstatus structure available from /proc we could get utime,
+stime, cutime and cstime. 
+Where can we get the number of threads running within the process?
+
+BUGS
+====
+Time for the "time" field is in seconds; this is both
+inconsistent with the linux module (1/100 seconds) and really crude. 

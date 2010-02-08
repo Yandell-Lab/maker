@@ -1,0 +1,19 @@
+     SUPPORTED ATTRIBUTES
+==================================
+uid              UID of process
+gid              GID of process
+pid              process ID
+ppid             parent process ID
+pgrp             process group ID
+pri              priority of process
+sess             pointer to session
+leader           pid of session leader
+time             cpu time of process
+wchan            address of current system call
+fname            command name    
+state            state of process
+started          time/day process started
+ttydev           path of process' tty
+ttynum           tty number of process
+cmndline	 command line of process
+

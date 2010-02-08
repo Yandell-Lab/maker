@@ -1,0 +1,90 @@
+port of Proc::ProcessTable under AIX
+
+New files
+=========
+
+os/aix.c
+os/aix.h
+hints/aix.pl
+README.aix
+
+Sample (low effort) application (please don't laugh ;)
+===============================
+minitop.pl
+xminitop
+
+
+Blah
+====
+
+o Documentation under AIX is rather cryptic and incomplete. I managed to read 
+  the process table using undocumented calls : getproc, getuser, getargs.
+
+  I've read C code from Vic Abell <abe@purdue.edu> in lsof-4.36, Jussi Maki
+  <Jussi.Maki@csc.fi> and Marcel J.E. Mol <marcel@mesa.nl> in monitor-2.1.2
+
+  as well as a usenet news posted by Michael Wojcik <mike@raederle.mfltd.co.uk>
+  (Article: 63164 of comp.unix.aix, Date: 04/04/95)
+
+
+ [lsof is a really nice tool and provides C examples to read low-level
+ structures under nearly any UNIX system on earth. ]
+
+o my port was only tested under the following conditions :
+
+ AIX 4.1.5
+ perl 5.005_02
+
+o I am not a C programming terminator, so consider this as really ALPHA
+  software.
+
+o I wanted this tool to be usable by a non root user. This is why I don't read
+  /dev/kmem unlike Vic and Jussi.
+
+Bugs
+====
+
+o When mapping tty device numbers to names, I get a 'permission denied' message
+  due to the /dev/.SRC-unix directory whose perms are as follows :
+ 
+  drwxrwx---   2 root     system       512 Aug 12 11:26 .SRC-unix/
+
+  This dir contains only a few unix domain socket files used by IBM's System
+  Resource Controller, so it is of no interest for getting ttynames.
+
+  Maybe we should bind STDERR to /dev/null 
+
+o I sometimes get :
+  "Can't access `pctmem' field in class Proc::ProcessTable::Process"
+
+  It comes from the AUTOLOAD function defined in Process.pm. How come we are
+  able to access fields like "pctcpu" but not "pctmem" ? I am puzzled.
+
+  We may chenge the 'croak' statement to a 'warn' but it'd be better if we
+  knew where this error comes from.
+
+o Hidden ones ? I bet there is some ...
+
+
+Thanks
+======
+Daniel J. Urist  <durist@world.std.com>
+Vic Abell        <abe@purdue.edu>
+Jussi Maki       <Jussi.Maki@csc.fi>
+Cedric Le Goater <LE-GOATER_Cedric@stna.dgac.fr>
+Gregory Kurz     <KURZ_Gregory@stna.dgac.fr>
+
+
+COPYRIGHT
+=========
+Copyright (c) 1998, Daniel J. Urist. All rights reserved.  This
+package is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+Copyright (c) 1998, David Paquet. All rights reserved.  This
+package is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+--
+David Paquet
+david-paquet@usa.net

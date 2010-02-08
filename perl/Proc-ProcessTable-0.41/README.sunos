@@ -1,0 +1,23 @@
+     SUPPORTED ATTRIBUTES
+======================================================
+uid              UID of process
+gid              GID of process
+euid             effective UID
+egid             effective GID
+pid              process ID
+ppid             parent process ID
+pgrp             process group ID
+priority         priority of process
+flags            process flags
+size             size of process in KB (data + stack)
+rss              resident set size in KB
+nice             nice for cpu usage
+time             cpu time of process
+fname            command name
+cmndline         entire command line for the process
+cpticks          ticks of cpu time, for pctcpu
+pctcpu           (decayed) %cpu for this process
+state            state of process
+sess             synonym for 'sid'
+sid              session id
+ttynum           tty number of process (-1 if no tty)

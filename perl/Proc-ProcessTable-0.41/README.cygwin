@@ -1,0 +1,11 @@
+SUPPORTED ATTRIBUTES
+====================
+  uid		UID of process
+  pid		process ID
+  ppid		parent process ID
+  pgid		process group ID
+  winpid	Windows process ID
+  fname		file name
+  start		start time (seconds since the epoch)
+  ttynum	tty number of process
+  state		state of process

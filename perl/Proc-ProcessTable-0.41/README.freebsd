@@ -1,0 +1,23 @@
+SUPPORTED ATTRIBUTES
+====================
+  uid         UID of process
+  gid         GID of process
+  euid        effective UID of process
+  egid        effective GID of process
+  pid         process ID
+  ppid        parent process ID
+  pgrp        process group
+  sess        session ID
+  priority    priority of process
+  ttynum      tty number of process
+  flags       flags of process
+  utime       user mode time
+  stime       kernel mode time                  
+  time        user + system time                 
+  wchan       address of current system call 
+  fname       file name
+  start       start time (seconds since the epoch)
+  state       state of process
+  ttydev      path of process's tty
+  cmndline    full command line of process
+  priority    priority of process

@@ -1,0 +1,43 @@
+SUPPORTED ATTRIBUTES
+====================
+  pid          process ID
+  ppid         parent process ID
+  uid          UID
+  euid         effective UID
+  gid          GID
+  pgrp         process GID
+  sess         process session ID
+
+  flags        P_* flags
+  sflags       PS_* flags
+  start        start time
+  time         running time (in seconds)
+  wchan        current system call
+  state        state of process
+
+  ttydev       path of process's tty
+  ttynum       tty number of process
+  fname        command name
+  cmndline     full command line of process
+  priority     user priority of process
+  nice         nice value of process
+  vmsize       virtual size
+  rssize       current resident set size in pages
+  tsize        text size (pages) XXX
+  dsize        data size (pages) XXX
+  ssize        stack size (pages)
+
+
+COMMENT
+=======
+
+FreeBSD 5.X not mounting /proc by default. Procfs is vulnerable system and
+its use is not recommended in future. In addition, mapping processes space
+to /proc is not correct (at least, in 7 of 7 my freebsd servers with
+FreeBSD5 installed).
+
+So, I decided to write this code. This module works via kvm system, all its
+need is access to /dev/mem and /dev/kmem (you can add user to kmem group
+in /etc/groups file).
+
+Any comments please send to king2@kaluga.ru.

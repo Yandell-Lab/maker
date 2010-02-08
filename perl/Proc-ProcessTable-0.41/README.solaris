@@ -1,0 +1,39 @@
+SUPPORTED ATTRIBUTES
+====================
+  uid         UID of process
+  gid         GID of process
+  euid        effective UID of process
+  egid        effective GID of process
+  pid         process ID
+  ppid        parent process ID
+  pgrp        process group
+  sess        session ID
+  priority    priority of process
+  ttynum      tty number of process
+  flags       flags of process
+  time        user + system time                 
+  ctime       child user + system time
+  size        virtual memory size (bytes)
+  rss         resident set size (bytes)
+  wchan       address of current system call 
+  fname       file name
+  start       start time (seconds since the epoch)
+  pctcpu      percent cpu used since process started
+  state       state of process
+  pctmem      percent memory
+  cmndline    full command line of process
+  ttydev      path of process's tty
+
+Thread
+======
+One can enable thread support by adding -DPROCESSTABLE_THREAD to the DEFINE line in Makefile.PL.
+Once this is done, one can invoke Proc::ProcessTable module from multiple threads within the
+same process.
+
+BUGS
+====
+There is an 80-character limit for the cmndline field; this is a
+limitation of the Solaris proc filesystem (at least up to Solaris
+2.7). The only way to get at commandlines longer than that is to read
+/dev/kmem, which would be a major pain. Hopefully sun will fix this at
+some point in the future.

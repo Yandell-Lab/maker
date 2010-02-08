@@ -1,0 +1,28 @@
+- "pctcpu" means different things on different systems. On linux, it
+means percent CPU used by a process since its start; on Solaris, it
+means a recent average of percent CPU ala top (the kernel provides
+this piece of info). Rumor has it that on some systems it means
+percent CPU since boot. The use of the "pctcpu" field should be
+deprecated and it should be replaced in each module by one of three
+fields: pctcpu_r for recent usage, pctcpu_s for since process start,
+and pctcpu_b for since boot. Then, where possible, the other fields
+should be populated (we should look at how top does recent usage).
+
+- Since a lot of systems seem to support microsecond resolution, all
+times should probably be handled in microseconds. The problem of
+course is that this number can get really big; presumably this is why
+Solaris uses a structure to store it. I don't know what the best
+solution is here; pass it in as a long and hope that's big enough, or
+maybe as a string and let perl deal with it?
+
+- There should be some sort of minimal useful set of attributes with
+consistent units that all OS modules should support. Maybe this should
+be part of a firmer spec than what's in the PORTING file.
+
+- Consistent cross-platform performance on multi-cpu machines would be
+really nice for things like pctmem and pctcpu, but this is where the
+operating systems really diverge so getting consistent meaningful
+information would be hard.
+
+
+

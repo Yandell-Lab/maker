@@ -1,0 +1,110 @@
+#!/usr/bin/perl
+use strict;
+use Proc::ProcessTable;
+
+exit if ( $#ARGV == -1 );
+$|++;
+my $ptable = new Proc::ProcessTable;
+my %waited = ();
+my %proc;
+$proc{ $_->pid }=$_->fname foreach (@{$ptable->table});
+
+use Getopt::Long;
+use Pod::Usage;
+
+GetOptions(
+     'e|exit+'       =>  \( my $endfirst = 0 ),
+     'v|verbose+'       =>  \( my $verbose = 0 ),
+     'h|help+'       =>  \( my $help = 0 ),
+     's|sleep=i'     =>  \( my $sleeptime = 1 )
+);
+pod2usage(-verbose => 1) && exit if $help;
+
+foreach (@ARGV) {
+    next if ( $_ == $$ );    # DON'T wait for myself !
+    if (/\d+/) {
+        if ( exists $proc{$_} ) {
+            $waited{$_}++;
+        }
+        else { print "nothing like $_\n" if $verbose }
+        next;
+    }
+    foreach my $p ( keys %proc ) {
+        next if ( $p == $$ );    # DON'T wait for myself I said !
+        $waited{$p}++ if ( $proc{$p} =~ /$_/ );
+    }
+}
+
+if ($verbose) {
+    print "I am process $$\n";
+    print "waiting after $_ \n" for ( keys %waited );
+    print "sleep time set to $sleeptime s\n";
+    print "will exit on first terminated process\n" if ( $endfirst );
+}
+
+my $count = scalar keys(%waited);
+
+while ( scalar keys(%waited) ) {
+    sleep $sleeptime;
+    %proc = ();
+    $proc{ $_->pid }++ foreach (@{$ptable->table});
+    foreach my $p ( keys %waited ) {
+        if ( !exists $proc{$p} ) {
+            print "gone $p\n" if $verbose;
+            delete $waited{$p};
+        }
+    }
+    last if (( scalar keys(%waited) < $count ) && ($endfirst));
+}
+
+__END__
+
+=head1 PSWAIT
+
+pswait  - waiting for process(es) to end before doing things 
+
+=head1 SYNOPSIS
+pswait  [options] [process ID|NAME ...]
+
+=head1 USAGE
+pswait  [options] [process ID|NAME ...]
+
+   Options:
+       -h --help            brief help message
+       -v --verbose         be verbose
+       -e --exit            exit after first process end
+       -s x  --sleep x      set sleep time to x second (default to 1)
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-e, --exit>
+
+When giving a list of process to watch, exit when the first process end, it is usefull to easily manage a pool of proces with a shell script.
+
+=item B<-h. --help>
+
+Print a brief help message and exits.
+
+=item B<-s x, --sleep x>
+
+set sleep time to x seconds between process checking, default to 1 second. On small machines (or overloaded machines) it could help to check process state only once every minutes instead, using for example -s 60
+
+=item B<-v, --verbose>
+
+Inform you on what happening ... which process ends, which process ID are watched for state (usefull when using process names on command line).
+
+=back
+
+=head1 DESCRIPTION
+
+B<pswait> will read the process table of the system
+and wait for some process to end 
+
+=head1 AUTHOR
+
+DominiX <dominix@despammed.com> 
+
+=cut
+
