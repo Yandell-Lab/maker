@@ -7,6 +7,7 @@ use vars qw(@EXPORT @EXPORT_OK @ISA $VERSION);
 
 use Proc::ProcessTable;
 use URI::Escape;
+use FindBin;
 
 @EXPORT_OK=qw(signal killall signalall exists_proc_by_id exists_proc_by_name);
 @ISA=qw(Exporter);

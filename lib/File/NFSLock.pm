@@ -36,6 +36,8 @@ use Storable;
 use IPC::Open2;
 use POSIX qw(:sys_wait_h);
 use Proc::Signal;
+use Time::HiRes qw(usleep);
+use URI::Escape;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(uncache);
@@ -277,7 +279,7 @@ sub unlock ($) {
 
   #remove maintainer if running
   if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
-      kill(3, $self->{_maintain});
+      kill(2, $self->{_maintain});
       close($self->{_OUT});
       close($self->{_IN});
 
@@ -285,17 +287,17 @@ sub unlock ($) {
       my $stat = waitpid($self->{_maintain}, WNOHANG);
       my $count = 0;
       while($stat == 0 && $count < 20){
-	  sleep 1;
 	  kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
 	  $stat = waitpid($self->{_maintain}, WNOHANG);
+	  usleep(10000) if($stat == 0);
 	  $count++;
       }
 
       #if still running throw error
-      $stat = waitpid($self->{_maintain}, WNOHANG);
-      if($stat == 0){
-	  die "ERROR: Could not destroy lock maintainer\n";
-      }
+      $stat = waitpid($self->{_maintain}, 0);
+      #if($stat == 0){
+      #   die "ERROR: Could not destroy lock maintainer\n";
+      #}
 
       $self->{_maintain} = undef;
   }
@@ -491,7 +493,7 @@ sub maintain {
 
     #clean up old maintainers
     if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
-	kill(3, $self->{_maintain});
+	kill(2, $self->{_maintain});
 	close($self->{_OUT});
 	close($self->{_IN});
 
@@ -499,42 +501,35 @@ sub maintain {
 	my $stat = waitpid($self->{_maintain}, WNOHANG);
 	my $count = 0;
 	while($stat == 0 && $count < 20){
-	    sleep 1;
 	    kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
+	    usleep(10000) if($stat == 0);
 	    $count++;
 	}
 	
 	#if still running throw error
-	$stat = waitpid($self->{_maintain}, WNOHANG);
-	if($stat == 0){
-	    die "ERROR: Could not destroy lock maintainer\n";
-	}
+	$stat = waitpid($self->{_maintain}, 0);
+	#if($stat == 0){
+	#    die "ERROR: Could not destroy lock maintainer\n";
+	#}
 	
 	$self->{_maintain} = undef;
     }
 
-    #create temporary file to for lock serialization
-    my (undef, $file) = File::Temp::tempfile();
-    Storable::nstore($self, $file);
-    
+    #create lock serialization
+    my $serial = Storable::freeze($self);
+    $serial = uri_escape($serial, "\0-\377");
+
     #run maintainer executable in background
     my $exe = $INC{'File/NFSLock.pm'};
     die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
 	if(! $exe || ! -f $exe);
 
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
-    my $pid = open2(my $OUT, my $IN, "$exe $file $time $$");
+    my $pid = open2(my $OUT, my $IN, "$exe $$ $time $serial");
     $self->{_OUT} = $OUT;
     $self->{_IN} = $IN;
     $self->{_maintain} = $pid;
-
-    #try deleting file if not handled by maintainer
-    my $count = 0;
-    while(-f $file && $count < 20){
-	sleep 1;
-	unlink($file);
-    }
 
     return 1 if($pid);
 }
