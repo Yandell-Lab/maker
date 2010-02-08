@@ -65,10 +65,9 @@ sub prep_hits {
 	}
 	#include blastn and don't filter for splicing
 	else{
-	    $clean_est = get_selected_types($est_hits,'blastn', 'est_gff', 'blastn');
+	    $clean_est = get_selected_types($est_hits,'blastn', 'est_gff');
 	    $clean_altest = $alt_est_hits;
 	}
-
 
 	#---build clusters for basic evidence
 
@@ -609,7 +608,7 @@ sub annotate {
     my $models           = shift;
     my $the_void         = shift;
     my $build            = shift;
-    my $CTL_OPTS      = shift;
+    my $CTL_OPTS         = shift;
     $LOG                 = shift;
 
     #process fasta files
@@ -1253,9 +1252,12 @@ sub run_it {
 	    next if(! defined $model);
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
-	    if(! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
+	    if($CTL_OPT->{organism_type} ne 'eukaryotic' &&
+	       ! defined $mia && 
+	       (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))
+	      ){
 		my $clean  = clean::purge_single_exon_hits($alt_ests);
-		if(!@$clean){	
+		if(!@$clean){
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 		    my $pieces = Shadower::getPieces($seq, $coors, 0);
 		    
@@ -1293,11 +1295,11 @@ sub run_it {
 	    next if (! defined $mia);
 	    my $transcript = ($CTL_OPT->{est_forward}) ? $mia : pneu($ests, $mia, $seq);
 
-	    if($CTL_OPT->{organism_type} eq 'prokaryotic'){
+	    if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 		my $transcript_seq  = get_transcript_seq($transcript, $seq);
 		my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
 		#at least 60% of EST must be CDS to make a gene prediction
-		next if((length($translation_seq)+1) * 3 / length($transcript_seq) < 60 || ! $has_stop);
+		next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
 	    }
 
 	    next if !$transcript;
@@ -1327,7 +1329,7 @@ sub run_it {
 		    my $transcript_seq  = get_transcript_seq($miph, $seq);
 		    my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
 		    #at least 80% of protein must be CDS to make a gene prediction
-		    next if(length($translation_seq) * 3 / length($transcript_seq) < 80);
+		    next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
 		}
 
 		$miph = PhatHit_utils::trim_to_CDS($miph, $seq);
@@ -1362,7 +1364,10 @@ sub run_it {
 	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 
 	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
-	if(@$on_right_strand && ! defined $mia && (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))){
+	if($CTL_OPT->{organism_type} ne 'eukaryotic' &&
+	   @$on_right_strand && ! defined $mia &&
+	   (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))
+	  ){
 	    my $clean  = clean::purge_single_exon_hits($alt_ests);
 	    if(!@$clean){
 		my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
