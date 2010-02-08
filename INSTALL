@@ -118,6 +118,8 @@ some parts of the installation.
       /usr/local).
   b.  Change to the directory maker/perl and run Install.PL by typing:
       perl Install.PL
+      (The Install.PL step is only required if DBI and DBD::SQLite are not
+       already installed on your system)
   c.  Now add the following to your .bash_profile if you haven't already:
 	export WUBLASTFILTER="where_wublast_is/filter"
 	export WUBLASTMAT="where_wublast_is/matrix"
@@ -148,13 +150,13 @@ See the README file for details on installing mpi_maker
 
 2. GeneMark-ES.  Download from http://exon.biology.gatech.edu
 
-  a.  See installation documentation.
+  a.  See GeneMark-ES installation documentation.
 
 3. FGENESH 2.4 or higher.  Purchase from http://www.softberry.com
 
-  a.  See installation documentation.
+  a.  See FGENESH installation documentation.
 
 4. GeneMarkS.  Used for prokaryotic genomes only.
    Download from http://exon.biology.gatech.edu
 
-  a.  See installation documentation.
+  a.  See GeneMarkS installation documentation.

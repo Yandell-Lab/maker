@@ -17,7 +17,7 @@ To install MAKER, you will first need to install the following
 external programs:
 
     *PERL 5.8.0 or higher
-    *BioPerl 1.5 or higher (www.bioperl.org)
+    *BioPerl 1.6 or higher (www.bioperl.org)
     *SNAP version 2009-02-03  or higher (homepage.mac.com/iankorf)
     *RepeatMasker 3.1.6  or higher (www.repeatmasker.org)
     *Exonerate 1.4  or higher (www.ebi.ac.uk/~guy/exonerate)
@@ -25,7 +25,7 @@ external programs:
 You must also install one of the following:
 
     *Wu-BLAST 2.0 or higher
-     (Wu-BLAST is becoming AB-BLAST which can not yet be downloaded)
+     (Wu-BLAST has become AB-BLAST, AB-BLAST is not supported)
 	or
     *NCBI BLAST 2.2.X or higher
      (http://www.ncbi.nlm.nih.gov/BLAST/download.shtml)
@@ -37,8 +37,8 @@ You might want to also install these optional external programs:
     *FGENESH 2.6 or higher (www.softberry.com) - requires licence
     *GeneMarkS for prokaryotic genomes (exon.biology.gatech.edu)
 
-To install mpi_maker, you must have an mpi package installed, try the
-following:
+To install mpi_maker, you must have an mpi package installed, MAKER
+supports MPICH2:
 
     *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
 
@@ -51,18 +51,18 @@ Also see the mpi_maker installation instructions found further bellow.
 
 Notes:
 
-1) Wu-BLAST is becoming AB-BLAST.  Once AB-BLAST becomes available we
-   will do some testing to see if it is compatible with MAKER.
-   Wu-BLAST is no longer available online, so if you don't already
-   have it, you will have to use NCBI BLAST instead.
+1) Wu-BLAST has become AB-BLAST.  We have not tested AB-BLAST for
+   compatibiliy with MAKER, and currenlty have no plans on supporting
+   it. So if you have an existing copy of Wu-BLAST great, if not
+   use NCBI BLAST.
 2) RepeatMasker requires Wu-BLAST or Cross_Match and a single file
    executable called TRF (see RepeatMasker website for details), so
-   please install these before installing RepeatMasker
+   please install these before installing RepeatMasker.
 3) Exonerate Binaries can be downloaded from the website.  If you use
    Mac OSX, however, binaries are only available for version 1.0.
    This verion will work too.  If you would like to compile exonerate,
-   it requires GLIB, a C-library, that has a link from the exonerate
-   website.  If you use Mac OSX, GLIB can downloaded using FINK.
+   it requires GLIB2, a C-library, that has a link from the exonerate
+   website.  If you use Mac OSX, GLIB2 can downloaded using FINK.
 4) RepeatMasker requires a repeat library file, which can be
    downloaded from Repbase upon registration
    (http://www.girinst.org/), this is explained on the RepeatMasker
@@ -70,27 +70,39 @@ Notes:
 5) Please note the location of all of the programs that you have
    installed, and add them to you $PATH variable in your .profile
    file.  You will need this information in the maker_exe file, one
-   of MAKER's 3 control files.
+   of MAKER's 3 control files. As long as the programs are in your
+   PATH then the correct locations will be automatically entered in
+   the maker_exe file.
 
 Now that you have all the necessary programs installed, MAKER can be
 unpacked using:
 
  tar -zxvf maker.tar.gz
 
-This will create a directory called MAKER with 5 sub directories:
+This will create a directory called MAKER with 7 sub directories:
 
-    bin    - contains the MAKER executables.
-    lib    - contains all the necessary perl libaries for MAKER.
-    MPI    - contains MPI specific data to configure MAKER for a
-             cluster that supports MPI.
-    Apollo - contains gff3.tiers file (See section titled APOLLO
-             below)
-    data   - contains some sample data used to make sure everything
-             works.
-    perl   - contains perl modules that need to be compiled
+    bin     - contains the MAKER executables.
+    lib     - contains necessary perl libaries for MAKER.
+    MPI     - contains MPI specific data to configure MAKER for a
+              cluster that supports MPI.
+    Apollo  - contains gff3.tiers file (See section titled APOLLO
+              below)
+    JBrowse - contains JBrowse configuration files. (See section
+              titled JBrowse)
+    data    - contains some sample data used to make sure everything
+              works.
+    perl    - contains perl modules that need to be compiled
 
-Finally change to the maker/perl directory and type: 'perl Install.PL'
-to compile required perl modules.
+MAKER requires a handfull of CPAN libraries to be installed.  You
+can install them yourself, or let MAKER install it's own local
+copy (the local copy is only used by MAKER and is not system wide).
+
+Libraries:
+   *DBI
+   *DBD::SQLite
+
+To let MAKER install these, change to the maker/perl directory and
+type: 'perl Install.PL' to compile the required perl modules.
 
 Now you can run MAKER!!
 
@@ -102,15 +114,15 @@ below:
 for tcsh:
 setenv PERL5LIB where_bioperl_is_installed
 setenv WUBLASTMAT where_wublast_is_installed/matrix
-setenv ZOE where_snap_is_installed
 setenv WUBLASTFILTER where_wublast_is_installed/filter
+setenv ZOE where_snap_is_installed
 setenv AUGUSTUS_CONFIG_PATH where_augustus_is_installed/config
 
 for bash:
 export PERL5LIB=where_bioperl_is_installed
 export WUBLASTMAT=where_wublast_is_installed/matrix
-export ZOE=where_snap_is_installed
 export WUBLASTFILTER=where_wublast_is_installed/filter
+export ZOE=where_snap_is_installed
 export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
 
 #---------------------------------------------------------------------
@@ -126,6 +138,12 @@ MPI version of MAKER by doing the following:
     3. Use cd to change to the MPI subdirectory in the MAKER
        instalation folder (i.e. maker/MPI/)
     4. Run Install.PL by typing: perl Install.PL
+
+Install.PL will also install an updated version of threads for perl.
+Threads will only be installed for MAKER and is not system wide.
+Advanced users may choose to install threads independently.  If this
+is the case just delete threads.pm from perl/lib to let the system
+library override the local MAKER library. 
 
 A new version of MAKER called mpi_maker should now be installed under
 maker/bin.
@@ -355,8 +373,8 @@ comply with all GFF3 specifications before running MAKER:
 ADDING UTRs FOR GBROWSE
 
 When using APOLLO to visualize gene annotations, UTRs are inferred
-based on exon and CDS locations.  However GMOD and GBROWSE do not
-infer the UTR, so to visualize the UTR, you will have to run:
+based on exon and CDS locations.  However some versions of GBROWSE do
+not infer the UTR, so to visualize the UTR, you will have to run:
 add_utr_gff.pl with the following command:
 
      add_utr_gff.pl <directory>
@@ -384,8 +402,20 @@ located at /Applications/Apollo.app/Contents/Resources/app/conf/.
 
 #---------------------------------------------------------------------
 
-HMM BUILDING (based on snap documentation)
+JBROWSE
 
+MAKER is bundled with a configuration file that improves the color and
+display of MAKER annotations in JBrowse. The is configuration file is
+genome.css. Place it in your JBrowse html directory per JBrowse
+documentation.  You can use the script maker2jbrowse to automatically
+load MAKER produced GFF3 into JBrowse. There is also a second example
+configuration file for loading MAKER data stored in a CHADO database
+into JBrowse.  MAKER data can be loaded into a CHADO database using
+the maker2chado script.
+
+#---------------------------------------------------------------------
+
+HMM BUILDING (for training SNAP, based on snap documentation)
 
 A) First you will need to determine the genes used to model future
    genes, by determining a high quality gene set (annotations for the
