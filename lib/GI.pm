@@ -2995,9 +2995,7 @@ sub load_control_files {
 			       
    #--error check that values are meaningful
    if ((grep {/^augustus$/} @infiles) && not $CTL_OPT{augustus_species}) {
-      warn "WARNING: There is no species specified for Augustus in maker_opts.ctl augustus_species.\n".
-      "As a result the default (fly) will be used.\n\n";
-      $CTL_OPT{augustus_species} = "fly";
+       $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
    }
    if ((grep {/^augustus$/} @infiles) &&
        (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg")
@@ -3007,28 +3005,25 @@ sub load_control_files {
       "installation instructions then try again.\n\n";
    }
    if ((grep {/^snaps$|^fathom$/} @infiles) && not $CTL_OPT{snaphmm}) {
-      warn "WARNING: There is no model specified for for SNAP/Fathom in maker_opts.ctl snaphmm.\n".
-      "As a result, the default (fly) will be used.\n\n";
-      $CTL_OPT{snaphmm} = "fly";
+       $error .= "ERROR: There is no HMM specified for for SNAP/Fathom (snaphmm).\n\n";
    }
-   if ((grep {/^snap$|^fathom$/} @infiles) && ! -f $CTL_OPT{snaphmm} &&
+   elsif ((grep {/^snap$|^fathom$/} @infiles) && ! -f $CTL_OPT{snaphmm} &&
        (! exists $ENV{ZOE} || ! -f $ENV{ZOE}."/HMM/".$CTL_OPT{snaphmm})
       ) {
-      $error .= "ERROR: The snaphmm specified for SNAP/Fathom in maker_opts.ctl does not exist.\n\n";
+      $error .= "ERROR: The snaphmm specified for SNAP/Fathom does not exist.\n\n";
    }
    if ((grep {/^gmhmme3$/} @infiles) && not $CTL_OPT{gmhmm}) {
-      $ error .=  "ERROR: There is no model specified for for GeneMark in maker_opts.ctl gmhmm.\n\n";
+      $ error .=  "ERROR: There is no HMM specified for for GeneMark (gmhmm).\n\n";
    }
    elsif ((grep {/^gmhmme3$/} @infiles) && ! -f $CTL_OPT{gmhmm}) {
-      $error .= "ERROR: The gmhmm specified for GeneMark in maker_opts.ctl does not exist.\n\n";
+      $error .= "ERROR: The HMM specified for GeneMark does not exist.\n\n";
    }
    if (grep {/^fgenesh$/} @infiles) {
       if (! $CTL_OPT{fgenesh_par_file}) {
-	 $error .= "ERROR: There is no parameter file secified for for FgenesH in\n".
-	 "maker_opts.ctl fgenesh_par_file.\n\n";
+	  $error .= "ERROR: There is no parameter file secified for FgenesH (fgenesh_par_file)\n\n";
       }
       elsif (! -f $CTL_OPT{fgenesh_par_file}) {
-	 $error .= "ERROR: The parameter file specified for fgenesh in maker_opts.ctl does not exist.\n\n";
+	 $error .= "ERROR: The parameter file specified for fgenesh does not exist.\n\n";
       }
    }
    if ($CTL_OPT{max_dna_len} < 50000) {

@@ -258,7 +258,7 @@ try{
 	       "retry=i" =>\$OPT{retry},
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
-	       "quiet" =>\$main::quiet,
+	       "quiet|q" =>\$main::quiet,
 	       "qq"    =>\$main::qq,
                "check" =>\$OPT{check},
                "base=s" =>\$OPT{out_name},

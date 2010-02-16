@@ -112,7 +112,7 @@ sub _on_failure {
        $LOG->add_entry("DIED","COUNT",$die_count);
    }
 
-   $DS_CTL->add_entry("$seq_id\t$out_dir\tFAILED");
+   $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
 
    return;
 }
@@ -138,7 +138,7 @@ sub _on_termination {
    my $LOCK = $tier->{VARS}{LOCK};
    my $DS_CTL = $tier->{VARS}{DS_CTL};
 
-   $DS_CTL->add_entry("$seq_id\t$out_dir\tFINISHED");
+   $DS_CTL->add_entry($seq_id, $out_dir, "FINISHED");
    $LOCK->unlock; #releases locks on the log file
 
    return;

@@ -286,18 +286,18 @@ sub unlock ($) {
       #attempt kill multiple times if still running
       my $stat = waitpid($self->{_maintain}, WNOHANG);
       my $count = 0;
-      while($stat == 0 && $count < 20){
-	  kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
+      while($stat == 0 && $count < 200){
+	  kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	  usleep(100000) if($stat == 0);
 	  $stat = waitpid($self->{_maintain}, WNOHANG);
-	  usleep(10000) if($stat == 0);
 	  $count++;
       }
 
-      #if still running throw error
-      $stat = waitpid($self->{_maintain}, 0);
-      #if($stat == 0){
-      #   die "ERROR: Could not destroy lock maintainer\n";
-      #}
+      #if still running, do this
+      if($stat == 0){
+	  waitpid($self->{_maintain}, 0) if($stat == 0);
+          #die "ERROR: Could not destroy lock maintainer\n";
+      }
 
       $self->{_maintain} = undef;
   }
@@ -500,18 +500,18 @@ sub maintain {
 	#attempt kill multiple times if still running
 	my $stat = waitpid($self->{_maintain}, WNOHANG);
 	my $count = 0;
-	while($stat == 0 && $count < 20){
-	    kill(($count % 9) + 1, $self->{_maintain}); #try multiple signal ending in signal 9
+	while($stat == 0 && $count < 200){
+	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    usleep(100000) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
-	    usleep(10000) if($stat == 0);
 	    $count++;
 	}
 	
-	#if still running throw error
-	$stat = waitpid($self->{_maintain}, 0);
-	#if($stat == 0){
-	#    die "ERROR: Could not destroy lock maintainer\n";
-	#}
+	#if still running, do this
+	if($stat == 0){
+	    waitpid($self->{_maintain}, 0) if($stat == 0);
+	    #die "ERROR: Could not destroy lock maintainer\n";
+	}
 	
 	$self->{_maintain} = undef;
     }

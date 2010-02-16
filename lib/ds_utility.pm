@@ -141,7 +141,7 @@ sub add_entry {
    my $entry = join("\t", @F);
 
    #maker/mpi_iprscan specific if statement
-   if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY/){
+   if($entry =~ /\tFINISHED|\tSTARTED|\tDIED|\tSKIPPED|\tRETRY|\tFAILED/){
        $entry =~ s/$cwd\/.*\.maker\.output\/*|$cwd\/.*\.iprscan\.output\/*//;
    }
 

@@ -8,7 +8,6 @@
 
 use strict;
 use DBI;
-use DateTime;
 use Mail::Sender;
 use vars qw($LOG %CTL_OPT $EXE $DEBUG);
 use POSIX qw(:sys_wait_h setsid EAGAIN);
