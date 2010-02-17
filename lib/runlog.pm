@@ -117,7 +117,7 @@ sub _initialize {
    my $length = $self->{params}->{seq_length};
 
    #lock must be persitent in object or it is detroyed outside of block
-   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', , 40)){
+   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
        $self->{LOCK}->maintain(30);
    }
    else{
