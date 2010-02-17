@@ -916,6 +916,8 @@ sub best_annotations {
 	my @m_est2g;
 	foreach my $p (@{$CTL_OPTS->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
+		next if($g->{t_structs}->[0]->{hit}->{_REMOVE}); #added to filter low support abinits
+
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
 		    push(@$p_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold})
 					  || $p eq 'model_gff'
@@ -1252,6 +1254,7 @@ sub run_it {
 	    next if(! defined $model);
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
+	    my $remove = 0;
 	    if($CTL_OPT->{organism_type} ne 'eukaryotic' &&
 	       ! defined $mia && 
 	       (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))
@@ -1261,25 +1264,24 @@ sub run_it {
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 		    my $pieces = Shadower::getPieces($seq, $coors, 0);
 		    
-		    if(@$pieces <= 1){
-			my $keep;
-			
+		    if(@$pieces <= 1){			
 			my $set = get_overlapping_hits($model, $predictions);
-			$keep = 1 if(@$set);
+			$remove = 0 if(@$set);
 			
 			my $abAED = shadow_AED::get_abAED($set, $model);
-			$keep = 0 if($abAED > 0.3);
+			$remove = 1 if($abAED > 0.3);
 			
 			my $AED = shadow_AED::get_AED($blastx,$model);
-			$keep = 0 if($AED > 0.3);
-			
-			next if(! $keep); #skip these spurious predictions
+			$remove = 1 if($AED > 0.3);
 		    }
 		}
 	    }
-  
+
 	    #add UTR to ab-inits
 	    my $transcript = pneu($ests, $model, $seq);
+
+	    #don't tfilter imediately just mark for downstream filtering
+	    $transcript->{_REMOVE} = $remove;
 
 	    my $all_preds = get_overlapping_hits($transcript, $predictions);
 	    $set->{all_preds} = $all_preds;
