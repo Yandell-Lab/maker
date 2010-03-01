@@ -45,7 +45,7 @@ function toggleLog(iState, url) {
 <h3>[% message %]<h3>
 [% END %]
 
-<h2><img src="[% server_opt.html_web %]/images/c1.png" width=32 height=32> Job Queue</h2>
+<h2><img src="[% server_opt.html_web %]/images/c1.png" width=32 height=32> Running Jobs</h2>
 <p>
 Use this screen to see where your jobs are located relative to all other users' jobs.
 Most details are hidden on jobs that do not belong to you.

@@ -185,7 +185,7 @@ document.getElementById(DivID).innerHTML = 'Loading...';
             <li><a href="maker.cgi?rm=job_create"><span><img border="0" src="[% server_opt.html_web %]/images/page_new.gif"> New Job</span></a></li>
             <li><a href="maker.cgi?rm=filebox"><span><img border="0" src="[% server_opt.html_web %]/images/folder_images.gif"> Manage Files</span></a></li>
             [% IF server_opt.use_login %]
-              <li><a href="maker.cgi?rm=queue"><span><img border="0" src="[% server_opt.html_web %]/images/icon_history.gif"> Job Queue</span></a></li>
+              <li><a href="maker.cgi?rm=queue"><span><img border="0" src="[% server_opt.html_web %]/images/icon_history.gif">Running Jobs</span></a></li>
               <li><a href="maker.cgi?rm=edit_account"><span><img border="0" src="[% server_opt.html_web %]/images/page_user_light.gif"> Edit Account</span></a></li>
 	    [% END %]
             [% IF server_opt.smtp_server && server_opt.admin_email && server_opt.use_login %]

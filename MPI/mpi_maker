@@ -391,6 +391,7 @@ if ($rank == $root) {
       #get tier for internal thread
       if($t_need_flag > 0){
 	 my $tier;
+	 my $f_count = @failed;
 	 while (my $fasta = $iterator->nextFasta() || shift @failed){
 	    $tier = Process::MpiTiers->new({fasta =>$fasta,
 					    CTL_OPT => \%CTL_OPT,
@@ -402,6 +403,13 @@ if ($rank == $root) {
 					  );
 
 	    last if(! $tier->terminated);
+	 }
+
+	 #take a short break before processing failed contigs
+	 #this handles heavy processor usage when failure is related
+	 #to maker process overlap
+	 if($f_count != @failed){
+	     sleep 1;
 	 }
 	 if(defined $tier && ! $tier->terminated){
 	    $t_need_flag = 0;
@@ -456,7 +464,7 @@ if ($rank == $root) {
 
 	    #if a contig is available send tier
 	    my $tier;
-
+	    my $f_count = @failed;
 	    while (my $fasta = $iterator->nextFasta() || shift @failed){
 	       $tier = Process::MpiTiers->new({fasta => $fasta,
 					       CTL_OPT => \%CTL_OPT,
@@ -468,6 +476,13 @@ if ($rank == $root) {
 					     );
 
 	       last if(! $tier->terminated);
+	    }
+
+	    #take a short break before processing failed contigs
+	    #this handles heavy processor usage when failure is related
+	    #to maker process overlap
+	    if($f_count != @failed){
+		sleep 1;
 	    }
 	    if(defined $tier && ! $tier->terminated){
 	       #say tier is available and send it

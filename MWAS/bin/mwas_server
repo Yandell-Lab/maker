@@ -36,22 +36,25 @@ BEGIN{
 
     #LOG file
     $LOG = "$FindBin::Bin/../MWAS.log";
-    umask 0;
+
+    #must give group members access i.e. apache group
+    umask 0002;
 
     #set debugging mode
     $DEBUG=0;
 
-    #exit subroutine for signals
-    my $exit = sub{die "SIGNAL: Caught @_ exiting\n\n";};
+    #stop signal subroutine
+    my $exit =  sub{die "STATUS: Caught @_ exiting.\t".date_time()."\n";};
 
     #Signals to trap and handle
-    $SIG{'INT' } =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'ABRT'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'QUIT'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'TRAP'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'STOP'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'TERM'} =  sub{die "SIGNAL: Caught @_ exiting\n\n";};
-    $SIG{'HUP'} = sub{print STDERR "STATUS: Signal received, attempting to restart $EXE\n";
+    $SIG{'INT' } = $exit;
+    $SIG{'ABRT'} = $exit; 
+    $SIG{'QUIT'} = $exit;
+    $SIG{'TRAP'} = $exit;
+    $SIG{'STOP'} = $exit;
+    $SIG{'TERM'} = $exit;
+    $SIG{'HUP'} = sub{print STDERR "STATUS: Signal @_ received, attempting to restart $EXE\t".date_time()."\n";
+		      close(STDERR);
 		      exec($0, @ARGV);
 		     };
 }
@@ -116,7 +119,7 @@ Options:
 
      RESTART     Shutsdown and then restarts the daemon.
 
-     STOP        Shuts down the daemon. SHUTDOWN, QUIT, and KILL are aslo
+     STOP        Shuts down the daemon. SHUTDOWN, QUIT, and KILL are also
                  accepted.
 
      CTL         Generates default control files in the /maker/config
@@ -145,7 +148,7 @@ $main::server = 1;
 my $opt = uc($ARGV[0]) || 'HELP';
 $opt =~ s/^\-+|^\=+//; #fix -'s or ='s in options
 $opt = 'HELP' if($opt eq '?'); #also accept ?
-$opt = 'STOP' if($opt =~ /^SHUTDOWN$|^KILL$|^QUIT$/); #also accept SHUTDOWN, KILL, or QUIT
+$opt = 'STOP' if($opt =~ /^SHUTDOWN$|^KILL$|^QUIT$|^DIE$|^DIEDIE$/); #also accept SHUTDOWN, KILL, or QUIT
 
 #find control files and load them
 my $c_dir = "$FindBin::Bin/../config/"; #configuration file directory
@@ -191,16 +194,37 @@ elsif($opt eq 'SETUP'){
 	    "you can run $EXE with the SETUP option, to build the web interface.\n\n";
     }
 
-    my $cgi_dir  = $CTL_OPT{cgi_dir}; #get directory to build CGIL files
-    my $html_dir  = $CTL_OPT{html_dir}; #get directory to build HTML files
+    my $cgi_dir  = $CTL_OPT{cgi_dir};  #get directory to build CGI files
+    my $html_dir = $CTL_OPT{html_dir}; #get directory to build HTML files
+    my $data_dir = $CTL_OPT{data_dir}; #get directory for storing data
 
-    die "ERROR: You must supply a directory for both cgi_dir\n".
-	"to install CGI/HTML files\n" if(! $cgi_dir);
-    die "ERROR: You must supply a directory for both html_dir\n".
-	"to install CGI/HTML files\n" if(! $html_dir);
+    die "ERROR: You must supply a directory for cgi_dir\n".
+	"to install CGI files\n" if(! $cgi_dir);
+    die "ERROR: You must supply a directory for html_dir\n".
+	"to install HTML files\n" if(! $html_dir);
+    die "ERROR: You must supply a directory for data_dir\n".
+	"to store user files and jobs\n" if(! $data_dir);
 
     die "ERROR: The directory '$cgi_dir' does not exist\n" if(! -d $cgi_dir);
     die "ERROR: The directory '$html_dir' does not exist\n" if(! -d $html_dir);
+    die "ERROR: The directory '$data_dir' does not exist\n" if(! -d $data_dir);
+
+    #set up correct directory permissions and ownership
+    system("chown :$CTL_OPT{apache_user} $cgi_dir $html_dir") &&
+	die "ERROR: Could not establish ownership for $cgi_dir and $html_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+    system("chmod 2774 $cgi_dir $html_dir $data_dir") &&
+	die "ERROR: Could not establish permissions for $cgi_dir and $html_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+    system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
+	die "ERROR: Could not establish ownership for $data_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+    system("chmod 2774 $data_dir") &&
+	die "ERROR: Could not establish permissions for $data_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
 
     #copy all cgi, html, and support files to a web accessible directory
     my $co_dir = "$FindBin::Bin/../cgi-bin/"; #original direcory
@@ -214,6 +238,16 @@ elsif($opt eq 'SETUP'){
     system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
 
+    #build redirection page (so user can see directories if apache is not configured)
+    open(OUT, "> $html_dir/index.html");
+    print OUT "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">\n".
+	      "<HTML>\n".
+	      "<meta http-equiv=\"REFRESH\" content=\"0;url=$CTL_OPT{web_address}/$CTL_OPT{cgi_web}/maker.cgi\">\n".
+	      "</HTML>";
+    
+    close(OUT);
+
+    #DB error checking
     if($CTL_OPT{DBI} && $CTL_OPT{dbname}){
 	#try to connect to the database as a test
 	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
@@ -226,9 +260,16 @@ elsif($opt eq 'SETUP'){
 		"permission issues. Please make the necessary changes to server.ctl.\n\n";
 	}
 
-	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0, RaiseError => 1})
 	    or die "<br>Got error $DBI::errstr when connecting to database\n";
-	
+
+	#fix permissions on SQLite database
+	if($CTL_OPT{DBI} eq 'SQLite'){
+	    system("chmod 774 $CTL_OPT{dbname}") &&
+		die "ERROR: Could not establish permissions for $data_dir\n".
+		    "You may need to log in as 'root' for setup\n\n";
+	}
+
 	#setup the database
 	check_table_structure($dbh);
 	reset_queue($dbh);
@@ -292,31 +333,23 @@ elsif($opt eq 'STOP'){
     }
     else{
 	print STDERR "STATUS: Trying to stop $EXE\n";
-	my $stat = Proc::Signal::killall('STOP', "$EXE");
+	my $stat = Proc::Signal::killall('QUIT', "$EXE");
 	my $run = Proc::Signal::exists_proc_by_name("$EXE");
 	if($stat && ! $run){
 	    print STDERR "STATUS: $EXE was stopped successfully\n";
+	    exit(0);
 	}
 	else{
 	    print STDERR "ERROR: Could not stop $EXE!\n";
 	}
-    }
-}
-elsif($opt eq 'DIEDIE'){
-    my ($exists, $signalable) = Proc::Signal::exists_killall(0, "$EXE");
 
-    if(! $exists){
-	print STDERR "STATUS: $EXE is not currently running\n";
-    }
-    elsif(! $signalable){
-	die "ERROR: you do not have the correct permissions to stop $EXE\n";
-    }
-    else{
-	print STDERR "STATUS: Trying to stop $EXE\n";
-	my $stat = Proc::Signal::killall(9, "$EXE");
-	my $run = Proc::Signal::exists_proc_by_name("$EXE");
+	#server is still running try a more agressive approach
+	print STDERR "STATUS: Agressively trying to stop $EXE\n";
+	$stat = Proc::Signal::killall(9, "$EXE");
+	$run = Proc::Signal::exists_proc_by_name("$EXE");
 	if($stat && ! $run){
 	    print STDERR "STATUS: $EXE was stopped successfully\n";
+	    exit(0);
 	}
 	else{
 	    print STDERR "ERROR: Could not stop $EXE!\n";
@@ -327,7 +360,7 @@ elsif($opt eq 'START'){
     my $exists = Proc::Signal::exists_proc_by_name("$EXE");
 
     if($exists){
-	die "ERROR: $EXE is already running\n";
+	die "ERROR: $EXE is already running.\t".date_time()."\n";
     }
     else{
 	print STDERR "STATUS: Now starting $EXE\!\n";
@@ -389,7 +422,7 @@ sub start_daemon {
 	close(STDERR);
 	open(STDERR, ">> $LOG"); #append
 
-        print STDERR "STATUS: Starting $EXE $date\n";
+        print STDERR "STATUS: Starting $EXE.\t$date\n";
 	run_server();
     }
 }

@@ -85,9 +85,11 @@ sub package_already_exists{
     my %CTL_OPT = %{shift @_};
     my $user_id = shift @_;
 
+    $main::server = 0; #temp main::server to get default values without comments
     my %def_opt = (GI::set_defaults('opts'), GI::set_defaults('bopts')); #get system produced CTL_OPT
-    my @set = map {"ctl_opt.".lc($_)." \= '".$CTL_OPT{lc($_)}."'" } grep {!/gmhmm_e|gmhmm_p/i}keys %def_opt;
+    $main::server = 1; #reset
 
+    my @set = map {"ctl_opt.".lc($_)." \= '".$CTL_OPT{$_}."'" } grep {!/gmhmm_e|gmhmm_p/i} keys %def_opt;
 
     my $dsn = "SELECT ctl_opt.job_id FROM ctl_opt JOIN jobs ON ctl_opt.job_id=jobs.job_id WHERE ".join(' AND ', @set)." AND jobs.is_packaged=1";
 #    $dsn .= ($user_id) ? " AND (user_id=$user_id OR is_tutorial=1)" : " AND is_tutorial=1";

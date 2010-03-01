@@ -246,6 +246,7 @@ catch Error::Simple with{
 };
 
 my $tier;
+my $f_count = @failed;
 while (my $fasta = $iterator->nextFasta() || shift @failed){
     $tier = Process::MpiTiers->new({fasta =>$fasta,
 				    CTL_OPT => \%CTL_OPT,
@@ -255,6 +256,14 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				   '0',
 				   'Process::MpiChunk'
 				   );
+
+    #take a short break before processing previously failed contigs
+    #this handles heavy processor usage when failure is related
+    #to maker process overlap
+    if($f_count != @failed){
+	sleep 1;
+    }
+    $f_count = @failed; #reset failure count
 
     next if($tier->terminated);
     $tier->run_all;

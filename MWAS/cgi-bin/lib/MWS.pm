@@ -7,7 +7,10 @@ BEGIN{
    if (not ($ENV{CGL_GO_SOURCE})) {
       $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/lib/CGL/gene_ontology.obo"
    }
-   { $ENV{'CAP_DEVPOPUP_EXEC'} = 1; }
+   #$ENV{'CAP_DEVPOPUP_EXEC'} = 1;
+   
+   #must give group members access - i.e. apache group
+   umask 0002;
 }
 
 use strict;
@@ -51,7 +54,7 @@ sub cgiapp_init {
    $dsn .= "host=$serv_opt{host};" if($serv_opt{host});
    $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
 
-   $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0}) 
+   $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0, RaiseError => 1}) 
      or die "Got error $DBI::errstr when connecting to database\n";
 
    #reload default server options from server
@@ -309,16 +312,7 @@ sub launch {
        return $self->redirect("/users/$user_id/apollo.jnlp");
    }
    elsif($q->param('soba')){
-
-       ##temp
-       use Net::SCP::Expect;
-       my $scpe = Net::SCP::Expect->new(auto_yes => 1);
-       $scpe->login('cholt', 's@nti@g0');
-       $scpe->scp("$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff", "malachite.genetics.utah.edu:/data/var/www/html/cholt/$name.gff");
-       $gff="http://malachite.genetics.utah.edu/cholt/".uri_escape("$name.gff", '%');
-       ##temp
-
-       return $self->redirect("http://www.sequenceontology.org/cgi-bin/soba.cgi?rm=upload_urls&url=$gff");
+       return $self->redirect("$serv_opt{soba_url}?rm=upload_urls&url=$gff");
    }
 }
 #-----------------------------------------------------------------------------
@@ -843,27 +837,25 @@ sub submit_to_db {
    my $j_name = $self->get_name_for_value($CTL_OPT{genome});
 
    #get new submit_id for job submission
-   my $submit_id = '';
-   if($is_queued){
-       ($submit_id) = $self->dbh->selectrow_array(qq{SELECT last_submit_id FROM id_store}); #get last submit_id
-       $submit_id++; #iterate the value
-       $self->dbh->do(qq{UPDATE id_store SET last_submit_id=$submit_id}); #record new value
-       $self->dbh->commit();
-   }
+   (my $submit_id) = $self->dbh->selectrow_array(qq{SELECT last_submit_id FROM id_store}); #get last submit_id
+   $submit_id++; #iterate the value
+   $self->dbh->do(qq{UPDATE id_store SET last_submit_id=$submit_id}); #record new value
+   $self->dbh->commit();
 
    #if job exist update else make a new one
    if(my ($owner) = $self->dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id})){
        die "ERROR: This job does not belong to you\n" if($owner != $user_id);
 
        #update job
-       $self->dbh->do(qq{UPDATE jobs SET submit_id='$submit_id', length='$length', is_queued=$is_queued, name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
+       $self->dbh->do(qq{UPDATE jobs SET submit_id=$submit_id, length='$length', is_queued=$is_queued, name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
    }
    else{
        #add job
        $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, is_queued, is_started, }.
 		      qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		      qq{is_tutorial, cpus, start_time, finish_time, name) }.
-		      qq{VALUES ($job_id, $user_id, $submit_id, '$length', $is_queued, 0, 0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
+		      qq{VALUES ($job_id, $user_id, $submit_id, '$length', $is_queued, 0, }.
+		      qq{0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
 	   );
    }
 

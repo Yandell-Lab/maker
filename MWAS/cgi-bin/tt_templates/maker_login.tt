@@ -160,12 +160,12 @@ ul.message li.warning {
        $stash->set('g_max' => $g_max);
    [% END %]
    [% IF server_opt.allow_guest %]
-     <h2>This website is free and open to all users for academic use and there is no login requirement</h2>
+     <h2>Welcome to the MAKER Web Annotation Service</h2>
    [% ELSE %]
      <h2>This website is restricted to registered users only</h2>
    [% END %]
 
-   <p>Welcome to the MAKER Web Annotation Service.  Log into your account below[% IF server_opt.allow_guest %], or you can
+   <p>Log into your account below[% IF server_opt.allow_guest %], or you can
       access the server as a guest.  While there is no login requirement for this site, users
       are highly encouraged to set up an account[% END %]. [% IF ! server_opt.allow_register %]You must contact the server
       administrator to set up an account.[% ELSE %]Use the "New user registration" link to register a new account.[% END %]
@@ -182,7 +182,7 @@ ul.message li.warning {
 
 <script language='javascript'>
 function doguest() {
-  document.location='maker.cgi';
+  document.location='maker.cgi?rm=guest_login';
 }
 </script>
 
@@ -227,10 +227,10 @@ function doguest() {
   
   <div class="login_footer">
     <div class="buttons">
-      <input id="authen_loginbutton" tabindex="4" type="submit" name="authen_loginbutton" value="Resgistered User Sign In" class="button" />
+      <input id="authen_loginbutton" tabindex="4" type="submit" name="authen_loginbutton" value="User Sign In" class="button" />
     
       [% IF server_opt.allow_guest %]    
-      <input type="Button" name="guest_loginbutton" value="Guest Sign In" onclick="doguest()" class="button" />
+      <input type="Button" name="guest_loginbutton" value="New Guest Account" onclick="doguest()" class="button" />
       [% END %]
     </div>
 

@@ -2342,7 +2342,7 @@ sub set_defaults {
    #server
    if ($type eq 'server') {
       $CTL_OPT{'DBI'} = 'SQLite';
-      $CTL_OPT{'dbname'} = "$FindBin::Bin/../data/makerweb.db";
+      $CTL_OPT{'dbname'} = 'makerweb.db';
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
       $CTL_OPT{'username'} = 'MWAS';
@@ -2350,6 +2350,7 @@ sub set_defaults {
       $CTL_OPT{'admin_email'} = '';
       $CTL_OPT{'smtp_server'} = '';
       $CTL_OPT{'MPI'} = 0;
+      $CTL_OPT{'mpiexec'} = 'mpiexec';
       $CTL_OPT{'max_cpus'} = 1;
       $CTL_OPT{'job_cpus'} = 1;
       $CTL_OPT{'use_login'} = 1;
@@ -2358,17 +2359,19 @@ sub set_defaults {
       $CTL_OPT{'tutorials'} = 1;
       $CTL_OPT{'max_submit_user'} = 2000000; #length in base pairs
       $CTL_OPT{'max_submit_guest'} = 200000; #length in base pairs
-      $CTL_OPT{'persist_time_user'} = 336; #in hours
-      $CTL_OPT{'persist_time_guest'} = 72; #in hours
+      $CTL_OPT{'persist_user'} = 336; #in hours
+      $CTL_OPT{'persist_guest'} = 72; #in hours
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
       $CTL_OPT{'data_dir'} = "$FindBin::Bin/../data";
-      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/';
-      $CTL_OPT{'cgi_web'} = '/cgi-bin/';
-      $CTL_OPT{'html_dir'} = '/var/www/html/';
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin';
+      $CTL_OPT{'cgi_web'} = '/cgi-bin';
+      $CTL_OPT{'html_dir'} = '/var/www/html';
       $CTL_OPT{'html_web'} = '/';
+      $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
+      $CTL_OPT{'apache_user'} = 'apache';
+      $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
-      ($CTL_OPT{'web_address'}) = 'http://'.`hostname` =~ /^([^\n]+)/;
    }
 
    #server menus
@@ -2565,6 +2568,13 @@ sub parse_ctl_files {
 	}
     }
 
+    #fix dbname for DBI::SQLite 
+    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
+       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
+       ){
+	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
+    }
+    
     return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2610,6 +2620,11 @@ sub load_server_files {
 		    $CTL_OPT{STAT}{$key} = defined($stat) ? $stat : '';
 		}
 		elsif (exists $CTL_OPT{$key}) { #should already exist or is a bad value
+		    #fix database to not be file location on sqlite
+		    if($key eq 'dbname' && defined $value){
+			$value =~ /([^\/]+)$/;
+			$value = $1;
+		    }
 		    #set value
 		    $CTL_OPT{$key} = defined($value) ? $value : '';
 		}
@@ -2652,6 +2667,13 @@ sub load_server_files {
 	if($key eq 'gmhmm' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
+    }
+
+    #fix dbname for DBI::SQLite 
+    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
+       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
+      ){
+	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
     }
 
     return %CTL_OPT;
@@ -3397,30 +3419,38 @@ sub generate_control_files {
        print OUT "password:$O{password} #password to connect to database\n";
        print OUT "\n";
        print OUT "#-----Communication Options\n";
-       print OUT "admin_email:$O{admin_email} #an e-mail address to send error and status information to\n";
-       print OUT "smtp_server:$O{smtp_server} #outgoing e-mail. Required for users to receive notification of finished jobs.\n";
+       print OUT "admin_email:$O{admin_email} #Address for sending error and status information\n";
+       print OUT "smtp_server:$O{smtp_server} #Outgoing e-mail server\n";
+       print OUT "\n";
+       print OUT "#-----Web Setup\n";
+       print OUT "apache_user:$O{apache_user} #username apache runs as\n";
+       print OUT "web_address:$O{web_address} #base web address to server hosting MWAS\n";
+       print OUT "cgi_dir:$O{cgi_dir} #web accesible directory to house MWAS CGI content\n";
+       print OUT "cgi_web:$O{cgi_web} #url to cgi_dir above (can be relative)\n";
+       print OUT "html_dir:$O{html_dir} #web accesible directory to house MWAS HTML conent\n";
+       print OUT "html_web:$O{html_web} #url to html_dir (can be relative)\n";
+       print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and storing results\n";
+       print OUT "\n";
+       print OUT "#-----External Viewer Setup\n";
+       print OUT "soba_url:$O{soba_url} #url to Sequence Ontology SOBA CGI script\n";
+       print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.\n";
        print OUT "\n";
        print OUT "#-----MAKER Server Specific Options\n";
        print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";
        print OUT "allow_guest:$O{allow_guest} #enable guest accounts on the server, 1 = yes, 0 = no\n";
-       print OUT "allow_register:$O{allow_register} #allow users to register themselves vs. manually by admin, 1 = yes, 0 = no\n";
-       print OUT "tutorials:$O{tutorials} #Let users load example data on \"New Job\" screen, 1 = yes, 0 = no\n";
-       print OUT "MPI:$O{MPI} #use mpi_maker instead of maker\n";
+       print OUT "allow_register:$O{allow_register} #allow users to register themselves, 1 = yes, 0 = no\n";
+       print OUT "tutorials:$O{tutorials} #show example data on \"New Job\" screen, 1 = yes, 0 = no\n";
        print OUT "max_cpus:$O{max_cpus} #maximum number of cpus that can be dedicated to all MAKER jobs\n";
        print OUT "job_cpus:$O{job_cpus} #maximum number of cpus that can be used by a single MAKER job\n";
-       print OUT "max_submit_user:$O{max_submit_user} #maximum submission size for registered users (0 to disable limit)\n";
-       print OUT "max_submit_guest:$O{max_submit_guest} #maximum submission size for guest users (0 to disable limit)\n";
-       print OUT "persist_time_user:$O{persist_time_user} #time results persist for registered users, in hours (0 to disable limit)\n";
-       print OUT "persist_time_guest:$O{persist_time_guest} #time results persist for guest users, in hours (0 to disable limit)\n";
-       print OUT "inactive_user:$O{inactive_user} #time user account can be inactive before disabling, in days (0 to disable limit)\n";
-       print OUT "inactive_guest:$O{inactive_guest} #time guest account can be inactive before disabling, in days (0 to disable limit)\n";
-       print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and results\n";
-       print OUT "cgi_dir:$O{cgi_dir} #web accesible directory where web interface CGI content is stored\n";
-       print OUT "cgi_web:$O{cgi_web} #url to cgi_dir\n";
-       print OUT "html_dir:$O{html_dir} #web accesible directory where web interface HTML conent is stored\n";
-       print OUT "html_web:$O{html_web} #url to html_dir\n";
-       print OUT "web_address:$O{web_address} #base web address to server hosting MWAS\n";
-       print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.  Used for building webstart of Apollo.\n";
+       print OUT "max_submit_user:$O{max_submit_user} #maximum submission size for registered users (0 = no limit)\n";
+       print OUT "max_submit_guest:$O{max_submit_guest} #maximum submission size for guest users (0 = no limit)\n";
+       print OUT "persist_user:$O{persist_user} #time results persist for registered users, in hours (0 = no limit)\n";
+       print OUT "persist_guest:$O{persist_guest} #time results persist for guest users, in hours (0 = no limit)\n";
+       print OUT "inactive_user:$O{inactive_user} #time user account can be inactive, in days (0 = no limit)\n";
+       print OUT "inactive_guest:$O{inactive_guest} #time guest account can be inactive, in days (0 = no limit)\n";
+       print OUT "MPI:$O{MPI} #use mpi_maker instead of maker\n";
+       print OUT "mpiexec:$O{mpiexec} #mpiexec command line for running MPI\n";
+
        close(OUT);    
    }
 
