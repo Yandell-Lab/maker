@@ -265,7 +265,7 @@ sub _clean_files{
 		    $log_val = $logged_vals{CTL_OPTIONS}{$key};
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$log_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
+			$log_val =~ s/.*\/(te_proteins.fasta)$/$1/;
 		    }
 		    elsif($key eq 'run'){
 			#don't care about order
@@ -281,7 +281,7 @@ sub _clean_files{
 		    $ctl_val =~ s/^$cwd\/*//;
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
+			$ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
 		    }
 		    elsif($key eq 'run'){
 			#don't care about order
@@ -661,7 +661,7 @@ sub _write_new_log {
 	 $ctl_val =~ s/^$cwd\/*//;
 	 if($key eq 'repeat_protein'){
 	    #don't care about absolute location
-	    $ctl_val =~ s/.*\/(maker\/data\/te_proteins.fasta)$/$1/;
+	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
 	 }
 	 elsif($key eq 'run'){
 	     #don't care about order

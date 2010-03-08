@@ -2708,8 +2708,8 @@ sub load_control_files {
 	    if (exists $CTL_OPT{$key}) { #should already exist or is a bad value
 	       #resolve environmental variables
 	       if ($value =~ /\$/) {
-		  $value =~ s/^\$//;
-		  $value = $ENV{$value};
+		  $value = `echo \"$value\"`;
+		  chomp $value;
 	       }
 
 	       #require numerical values for certain options
@@ -3105,8 +3105,9 @@ sub load_control_files {
       warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
       "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n" unless($main::qq);
-      
+
       $CTL_OPT{datastore} = 1;
+      #$CTL_OPT{datastore} = 0; #temp
    }
    else{
        $CTL_OPT{datastore} = 0;
