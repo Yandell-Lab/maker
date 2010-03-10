@@ -68,6 +68,7 @@ die "ERROR: The file \'$opt_d\' does not exist\n" if ($opt_d && ! -e $opt_d);
 if ($opt_d){
     my $base = $opt_d;
     $base =~ s/[^\/]+$//;
+    $base = '.' if !$base;
     open(IN, "< $opt_d");
 
     #uniq the entries
