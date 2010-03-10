@@ -262,11 +262,13 @@ try{
 	       "qq"    =>\$main::qq,
                "check" =>\$OPT{check},
                "base=s" =>\$OPT{out_name},
+               "off" =>\$OPT{off},
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "no_thread" =>\$main::no_thread, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
+
     $main::quiet = 1 if($main::qq);
 }
 catch Error::Simple with{

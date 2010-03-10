@@ -3109,8 +3109,8 @@ sub load_control_files {
       "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n" unless($main::qq);
 
-      #$CTL_OPT{datastore} = 1;
-      $CTL_OPT{datastore} = 0; #temp
+      $CTL_OPT{datastore} = 1;
+      $CTL_OPT{datastore} = 0 if($OPT{off});
    }
    else{
        $CTL_OPT{datastore} = 0;

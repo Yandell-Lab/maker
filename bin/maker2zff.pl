@@ -170,29 +170,27 @@ foreach my $seqid (sort {$a cmp $b} keys %hc) {
 
 	next if (! @exons);
 
+	#reverse sort exons on minus strand
+	if($exons[0]->[0] > $exons[0]->[1]){
+	    @exons = sort {$b->[0] <=> $a->[0]} @exons;
+	}
+
 	my $f = shift @exons;
 	if(! @exons){
 	    print ZFF join(" ", "Esngl ", $f->[0], $f->[1], $pname),"\n";
 	    next;
 	}
-	elsif($f->[0] < $f->[1]){
+	else{
 	    print ZFF join(" ", "Einit ", $f->[0], $f->[1], $pname),"\n";
 	}
-	else{
-	    print ZFF join(" ", "Eterm ", $f->[0], $f->[1], $pname),"\n";
-	}
 
-	my $l = pop @exons;
-	if($l->[0] < $l->[1]){
-	    print ZFF join(" ", "Eterm ", $l->[0], $l->[1], $pname),"\n";
-	}
-	else{
-	    print ZFF join(" ", "Einit ", $l->[0], $l->[1], $pname),"\n";
-	}
+	my $l = pop @exons; # hold last exon
 
 	foreach my $e (@exons) {
 	    print ZFF join(" ", "Exon ", $e->[0], $e->[1], $pname),"\n";
 	}
+
+	print ZFF join(" ", "Eterm ", $l->[0], $l->[1], $pname),"\n";
     }
 }
 
@@ -204,6 +202,8 @@ close(DNA);
 sub is_hc {
     my $qi = shift @_;
     my $AED = shift @_;
+
+    return 1 if(! $qi); #returns manually edited genes as OK
 
     my @q = split(/\|/, $qi);
     my @qual = (@q[1..5],$q[8]);
