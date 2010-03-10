@@ -1495,6 +1495,7 @@ sub runBlastn {
       $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
       $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
+      $command .= " maskextra=10";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
       $command .= " novalidctxok"; #fixes failure related to short and masked sequence
@@ -1788,6 +1789,7 @@ sub runBlastx {
       $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
       #$command .= " hspsepqmax=10000";
       $command .= " lcmask";
+      $command .= " maskextra=10";
       $command .= " kap";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
@@ -2054,6 +2056,7 @@ sub runtBlastx {
       $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
       $command .= ($org_type eq 'eukaryotic') ? " hspsepqmax=$split_hit" : "";
       $command .= " lcmask";
+      $command .= " maskextra=10";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
       $command .= " novalidctxok"; #fixes failure related to short and masked sequence
@@ -3106,8 +3109,8 @@ sub load_control_files {
       "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n" unless($main::qq);
 
-      $CTL_OPT{datastore} = 1;
-      #$CTL_OPT{datastore} = 0; #temp
+      #$CTL_OPT{datastore} = 1;
+      $CTL_OPT{datastore} = 0; #temp
    }
    else{
        $CTL_OPT{datastore} = 0;

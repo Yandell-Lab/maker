@@ -31,6 +31,12 @@ Usage:
 
      gff3_preds2models <gff3 file> <pred list>
 
+     This script converts two level GFF3 features match/match_part
+     commonly used for alignments or gene predictions and conversts
+     them into three level gene/mRNA/exon gene features.  Useful
+     for converting features for use with MAKERs GFF3 pass-through
+     options.
+
 ";
 
 if(@ARGV != 2){

@@ -79,6 +79,8 @@ name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
 column : GENOMIC_RANGE
 column : GENOMIC_LENGTH
+column : _AED
+column : _QI
 sortbycolumn : GENOMIC_RANGE
 number_of_levels : 3
 
@@ -528,6 +530,7 @@ column : SCORE
 column : GENOMIC_RANGE
 column : query_frame
 column : GENOMIC_LENGTH
+column : _AED
 sortbycolumn : GENOMIC_RANGE
 
 
@@ -544,6 +547,7 @@ column : SCORE
 column : GENOMIC_RANGE
 column : query_frame
 column : GENOMIC_LENGTH
+column : _AED
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -561,6 +565,7 @@ column : SCORE
 column : GENOMIC_RANGE
 column : query_frame
 column : GENOMIC_LENGTH
+column : _AED
 sortbycolumn : GENOMIC_RANGE
 
 # New in CG16983 example of 8/17/2005
@@ -577,6 +582,7 @@ column : SCORE
 column : GENOMIC_RANGE
 column : query_frame
 column : GENOMIC_LENGTH
+column : _AED
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]

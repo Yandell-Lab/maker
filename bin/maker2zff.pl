@@ -5,7 +5,7 @@ use Getopt::Std;
 ##### Initialize Threshhold  ####
 my @thresh = ();
 my $thrAED = 0.5;
-use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x);
+use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x $opt_d);
 
 push @thresh, 0.5;
 push @thresh, 0.5;
@@ -15,11 +15,10 @@ push @thresh, 0;
 push @thresh, 75;
 
 
-getopts("hc:e:o:a:t:x");
-my $usage = "maker2zff.pl directory name [options]
-
-directory  - the location of the gff files to use for the hmm
-name       - a name for the outfile, will produce name.dna and name.ann
+getopts("hc:e:o:a:t:x:l:d:");
+my $usage = "
+maker2zff [options] <gff3_file> <gff3_file> ...
+maker2zff [options] -d <datastore_index>
 
 OPTIONS
 For determining which genes are High Confidence for Retraining, there are 6 criteria.
@@ -48,18 +47,47 @@ my %hc = ();
 my %bad = ();
 my %seq = ();
 
-my $dir = shift @ARGV;
-my $outfile = shift @ARGV;
-
-if ($opt_h) {die $usage;}
-if ((not $dir) || (not $outfile)) {
-    die $usage;
+my @files;
+if(! $opt_d){
+    @files = @ARGV;
 }
 
-#### Get all of the GFF file in the directory  ####
-opendir DIR, "$dir" or die $!;
-my @files = grep /^.+\.gff$/, readdir DIR;
-close DIR;
+if(! $opt_d && ! @files) {
+    print $usage;
+    exit();
+}
+
+my $outfile = "output";
+if ($opt_d){
+    ($outfile) = $opt_d =~ /([^\/]+)$/;
+    $outfile =~ s/_master_datastore_index.log//;
+    $outfile .= ".all";
+}
+
+die "ERROR: The file \'$opt_d\' does not exist\n" if ($opt_d && ! -e $opt_d);
+if ($opt_d){
+    my $base = $opt_d;
+    $base =~ s/[^\/]+$//;
+    open(IN, "< $opt_d");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        next if $seen{$e};
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+        $file = "$base/$file/$1.gff";
+    }
+}
+
 
 #### Go through the GFF file and determine which genes are HC  ####
 #### This step must finish before any output is produced since ####
@@ -69,7 +97,7 @@ my %index; #used to replace long maker names that mess up snap
 my $count = 0;
 
 foreach my $file (@files) {
-    open GFF, "<$dir/$file" or die $!;
+    open GFF, "< $file" or die $!;
     while (my $line = <GFF>) {
 	chomp($line);
         if ($line =~ m/\#\#FASTA/) {
@@ -104,19 +132,21 @@ foreach my $file (@files) {
 		    push(@{$hc{$seqid}}, $id);
 		}
 	    }elsif ($tag eq "CDS" && $source eq "maker") {
-		my $parent = $annotation{'Parent'};
+		my @parents = split(',', $annotation{'Parent'});
 
-		#set alias
-		if(! $index{$parent}){
-		    $index{$parent} = "MODEL$count";
-		    $count++;
+		foreach my $parent (@parents){
+		    #set alias
+		    if(! $index{$parent}){
+			$index{$parent} = "MODEL$count";
+			$count++;
+		    }
+		    
+		    if($strand eq '-'){
+			($start, $end) = ($end, $start);
+		    }
+		    
+		    push @{$exons{$seqid}{$parent}}, [$start, $end];
 		}
-
-		if($strand eq '-'){
-		    ($start, $end) = ($end, $start);
-		}
-
-		push @{$exons{$seqid}{$parent}}, [$start, $end];
 	    }
 	}
     }
