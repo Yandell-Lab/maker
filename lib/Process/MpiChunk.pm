@@ -743,12 +743,14 @@ sub _go {
 				     $the_void,
 				     $safe_seq_id.".masked",
 				     \%CTL_OPT,
-				     $LOG
+				     $LOG,
+				     $unmasked_file #for genemark
 				     );
 	    
 		#add tag that says these are masked
 		foreach my $p (@$preds){
 		    my $alg = $p->algorithm();
+		    next if ($alg eq 'genemark');
 		    $p->algorithm("$alg\_masked");
 		    foreach my $h($p->hsps){
 			$h->algorithm("$alg\_masked");

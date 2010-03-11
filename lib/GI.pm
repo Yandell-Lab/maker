@@ -800,6 +800,9 @@ sub genemark {
    my $CTL_OPT     = shift;
    my $LOG         = shift;
 
+   $in_file        = shift; #temp
+   return []      if(! $in_file); #temp
+
    #genemark sometimes fails if called directly so I built a wrapper
    my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
    my $exe  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
