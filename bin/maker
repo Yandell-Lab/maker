@@ -175,6 +175,7 @@ try{
 	       "check" =>\$OPT{check},
 	       "base=s" =>\$OPT{out_name},
 	       "off" =>\$OPT{off},
+	       "bigdump" =>\$main::bigdump,
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
 	       "help|?" => sub {print $usage; exit(0)}

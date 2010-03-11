@@ -46,19 +46,24 @@ sub clean_and_cluster {
 		print STDERR "total clusters:$num_c now processing $counter\n"
 			unless $main::quiet;
 		my $clean = clean::complexity_filter($c, $seq);
-		#my $alts = clean::get_best_alt_splices($clean, $seq, 10);
-		#my $i = 0;
-		#my @new_cluster;
-		#foreach my $a (@{$alts}){
-		#	push(@new_cluster, $a);
-		#	last if ($i > $depth && $depth > 0);
-		#	$i++;
-		#}
-		#next if(! @new_cluster);
-		#push(@{$clean_clusters[$counter]}, @new_cluster);
 
-		next if(! @$clean);
-		push(@{$clean_clusters[$counter]}, @$clean);
+		if($main::bigdump){
+		    next if(! @$clean);
+		    push(@{$clean_clusters[$counter]}, @$clean);
+		}
+		else{
+		    my $alts = clean::get_best_alt_splices($clean, $seq, 10);
+		    my $i = 0;
+		    my @new_cluster;
+		    foreach my $a (@{$alts}){
+		    	push(@new_cluster, $a);
+		    	last if ($i > $depth && $depth > 0);
+		    	$i++;
+		    }
+		    next if(! @new_cluster);
+		    push(@{$clean_clusters[$counter]}, @new_cluster);
+		}
+
 		$counter++;
 	}		
 
