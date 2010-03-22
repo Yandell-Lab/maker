@@ -61,6 +61,8 @@ OPTIONS:
 
      jobid|j     <id>    JobID (only for MAKER web server use)
 
+     delete              Use GFF3 file to delete DB contents
+
      help|?              Displays this usage statement
 
 
@@ -73,6 +75,7 @@ my $organism;
 my $port;
 my $dstore;
 my $jid;
+my $delete;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -81,8 +84,11 @@ GetOptions("host|h=s" => \$host,
 	   "organism|o=s" => \$organism,
 	   "jobid|j=i" => \$jid,
 	   "ds_index|d=s" => \$dstore,
+	   "delete" => \$delete,
 	   "help|?" => sub {print $usage; exit()}
 	   );
+
+$pass = $pass->{value} if($pass);
 
 my $dbname = shift;
 my @files;
@@ -134,11 +140,12 @@ foreach my $file (@files){
 }
 die $error if $error;
 
-$dbname .= "\@$host" if($host);
-$dbname .= "\:$port" if($port);
+my $dsn .= "dbi:Pg:dbname=$dbname";
+$dsn .= "\;host=$host" if($host);
+$dsn .= "\;port=$port" if($port);
 
 
-$DBH = DBI->connect("dbi:Pg:dbname=$dbname",$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
 my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
 my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
 
@@ -249,6 +256,7 @@ if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
 
 $DBH->disconnect;
 
+open(LOG, "> maker2chado.log");
 
 #build command line
 $GMOD .= " --dbhost $host" if($host);
@@ -256,11 +264,22 @@ $GMOD .= " --dbport $port" if($port);
 $GMOD .= " --dbuser $user" if($user);
 $GMOD .= " --dbpass $pass" if($pass);
 $GMOD .= " --dbname $dbname";
-$GMOD .= " --organism $organism";
+$GMOD .= " --organism '$organism'";
 $GMOD .= " --skip_vacuum";
-$GMOD .= " --recreate_cache";
+$GMOD .= " --delete_i_really_mean_it" if($delete);
 
-foreach my $file (@files){
+my $count = 0;
+while(my $file = shift @files){
+    my $gmod = $GMOD;
+    $count++;
+    if($count % 100 == 0 && $files[-1] ne $file){
+	$gmod .= " --recreate_cache";
+    }
+    elsif($files[-1] eq $file){
+	$gmod .= " --recreate_cache";
+	$gmod =~ s/\-\-skip_vacuum//;
+    }
+
     my $annotations;
     my $analysis;
     my $fasta;
@@ -298,12 +317,23 @@ foreach my $file (@files){
 	print $fh $fasta;
 	close($fh);
 
-	my $command = $GMOD;
+	my $command = $gmod;
 	$command .= " --gfffile $fname";
 	$command .= " --noexon";
 
 	system ($command);
-	unlink($fname);
+	if($? != '0'){
+	    $command .= " --remove_lock";
+	    $command .= " --recreate_cache";
+	    $command .= " --delete_i_really_mean_it";
+
+	    system ($command);
+	    push (@files, $file);
+	    print LOG "FAILED $file\n";
+	    unlink($fname);
+	    next;
+	}
+	unlink($fname)
     }
 
     if($analysis){
@@ -313,15 +343,33 @@ foreach my $file (@files){
 	print $fh $fasta;
 	close($fh);
 
-	my $command = $GMOD;
+	my $command = $gmod;
 	$command .= " --gfffile $fname";
 	$command .= " --analysis";
 
 	system ($command);
+	if($? != '0'){
+	    $command .= " --remove_lock";
+	    $command .= " --recreate_cache";
+	    $command .= " --delete_i_really_mean_it";
+
+	    system ($command);
+
+	    #rebuild annotaion file to delete
+	    open($fh, "> $fname");
+	    print $fh "\#\#gff-version 3\n";
+	    print $fh $annotations;
+	    print $fh $fasta;
+	    close($fh);
+	    system ($command);
+
+	    push (@files, $file);
+	    print LOG "FAILED $file\n";           
+	}
 	unlink($fname);
     }
 }
-
+close(LOG);
 
 #-------subs--------
 sub remove_db_menu{

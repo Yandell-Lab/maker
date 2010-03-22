@@ -750,7 +750,7 @@ sub _go {
 		#add tag that says these are masked
 		foreach my $p (@$preds){
 		    my $alg = $p->algorithm();
-		    next if ($alg eq 'genemark');
+		    next if ($alg eq 'genemark'); #genemark is never masked because it splits genes
 		    $p->algorithm("$alg\_masked");
 		    foreach my $h($p->hsps){
 			$h->algorithm("$alg\_masked");
