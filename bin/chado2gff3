@@ -1,0 +1,381 @@
+#! /usr/bin/perl -w
+
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use DBI;
+use Getopt::Long;
+use File::Temp;
+use vars qw($DBH);
+
+BEGIN{
+    #what to do on ^C
+    $SIG{'INT'} = sub {
+	$DBH->disconnect;
+	exit (1);
+    };
+}
+
+use IO::Prompt;
+use DBD::Pg;
+use Fasta;
+
+my $usage = '
+USAGE:
+     chado2gff3 [OPTION] <database_name>
+
+     This script takes default CHADO database content and produces
+     GFF3 files for each contig/chromosome.
+
+
+OPTIONS:
+     host|h      <host>  Database host address
+
+     port|p      <port>  Database port
+
+     username|U  <user>  Username to access database
+
+     password|W          Promp for password to access database
+
+     organism|o  <name>  Organism in CHADO database to use
+
+     help|?              Displays this usage statement
+
+
+';
+
+my $host = '';
+my $user = '';
+my $pass = '';
+my $organism;
+my $port;
+
+GetOptions("host|h=s" => \$host,
+	   "port|p=i" => \$port,
+	   "username|U=s" => \$user,
+	   "password|W" => sub{$pass = prompt("Please enter your password: ", -echo => '*')},
+	   "organism|o=s" => \$organism,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+$pass = $pass->{value} if($pass);
+
+my $dbname = shift;
+
+if(!$dbname){
+    print $usage;
+    exit();
+}
+
+my $dsn .= "dbi:Pg:dbname=$dbname";
+$dsn .= "\;host=$host" if($host);
+$dsn .= "\;port=$port" if($port);
+
+$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+warn "WARNING: This does not seem to be a chado database\n\n" if(! @$o_list || ! @$c_list);
+
+#check user defined organism
+unless(! $organism || grep {$_ eq $organism} (@$o_list, @$c_list)){
+    warn "WARNING: The organism you specified \'$organism\' does not exist in the database\n\n";
+    undef $organism;
+}
+
+#promt user to select organism
+if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+    die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
+
+    for(my $i = 0; $i <= abs(@$c_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Quit>");
+
+	system("clear");
+	$organism = prompt ("Please select an organism from the database: ",
+			    -menu => \@menu
+			   );
+	
+	if($organism eq 'Show more organisms -->'){
+	    undef $organism;
+	}
+	elsif($organism eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $organism;
+	}
+	elsif($organism eq '<Quit>'){
+	    warn "\n\nWARNING: The user exited the program without doing anything\n\n";
+	    $DBH->disconnect;
+	    exit;
+	}
+	else{
+	    last;
+	}
+    }
+}
+
+
+my ($organism_id) = $DBH->selectrow_array("SELECT organism_id FROM organism WHERE common_name='$organism'");
+my $contigs = $DBH->selectall_arrayref("SELECT f.feature_id, f.uniquename ".
+				       "FROM feature f ".
+				       "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+				       "WHERE f.organism_id=$organism_id AND (c.name='contig' OR c.name='chromosome')");
+
+#exit if there are no contigs to work with
+if(! @$contigs){
+    print STDERR "There is nothing to be done. There are no contigs in database $dbname\n";
+    exit(0);
+}
+
+#output directory
+my $outdir = "$dbname\_chado2gff3";
+if(! -d $outdir){
+    mkdir ($outdir) || die "ERROR: Could not make output directory\n";
+}
+
+#log file
+open(LOG, "> $outdir/chado2gff3.log");
+
+#make contig GFF3 files one at a time
+foreach my $contig (@$contigs) {
+    my ($contig_id, $seqid) = @$contig;
+
+    open(my $OUT, "> $outdir/$seqid.gff");
+
+    print $OUT "##gff-version 3\n";
+    print $OUT get_contig_line($contig_id) . "\n";
+    print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
+    print $OUT "##FASTA\n";
+    print $OUT get_fasta($contig_id) . "\n";
+
+    close($OUT);
+}
+
+close(LOG);
+$DBH->disconnect;
+
+#------------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES ---------------------------------
+#------------------------------------------------------------------------------
+sub get_contig_line {
+    my $contig_id = shift; #contig feature_id
+    my $get_dbxref   = shift || 0;
+    my $get_ontology = shift || 0;
+    my $get_alias    = shift || 0;
+    my $get_other    = shift || 0;
+
+    #get contig line info
+    my ($feature_id,
+	$ID,
+	$type,
+	$end,
+	$Name) = $DBH->selectrow_array("SELECT f.feature_id, f.uniquename, c.name, f.seqlen, f.name ".
+				       "FROM feature f ".
+				       "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+				       "WHERE f.feature_id=$contig_id");
+    $Name = $ID if(! $Name); #add Name feature if needed
+
+    #build standard contig line
+    my $line =  "$ID\t.\t$type\t1\t$end\t.\t.\t.\tID=$ID\;Name=$Name\;";
+
+    #add other attributes if specified
+    if($get_dbxref){
+	my ($att) = get_dbxref_terms([$contig_id]);
+	$line .= $att if($att);
+    }
+    if($get_ontology){
+	my ($att) = get_ontology_terms([$contig_id]);
+	$line .= $att if($att);
+    }
+    if($get_alias){
+	my ($att) = get_aliases([$contig_id]);
+	$line .= $att if($att);
+    }
+    if($get_other){
+	my ($att) = get_other_attributes([$contig_id]);
+	$line .= $att if($att);
+    }
+
+    return $line;
+}
+#------------------------------------------------------------------------------
+sub get_feature_lines {
+    my $contig_id = shift; #contig feature_id
+    my $get_dbxref   = shift || 0;
+    my $get_ontology = shift || 0;
+    my $get_alias    = shift || 0;
+    my $get_other    = shift || 0;
+
+    #get contig name
+    my ($seqid) = $DBH->selectrow_array("SELECT f.uniquename FROM feature f WHERE f.feature_id=$contig_id");
+
+    #get all features
+    my $features = $DBH->selectall_arrayref("SELECT f.feature_id, r.accession, c.name, l.fmin, l.fmax, ".
+					    "a.significance, l.strand, l.phase, f.uniquename, f.name, f2.uniquename, ".
+					    "f3.uniquename, f4.uniquename, l2.fmin, l2.fmax, l2.strand ".
+					    "FROM feature f ".
+					    "JOIN featureloc l ON f.feature_id=l.feature_id ".
+					    "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					    "JOIN feature_dbxref d ON d.feature_id=f.feature_id ".
+					    "JOIN dbxref r ON r.dbxref_id=d.dbxref_id ".
+					    "LEFT JOIN analysisfeature a ON a.feature_id=f.feature_id ".
+					    "LEFT JOIN feature_relationship pt ON pt.subject_id=f.feature_id ".
+					    "LEFT JOIN cvterm c2 ON pt.type_id=c2.cvterm_id ".
+					    "LEFT JOIN dbxref d2 ON d2.dbxref_id=c2.dbxref_id ".
+					    "LEFT JOIN feature f2 ON f2.feature_id=pt.object_id AND c2.name='part_of' ".
+					    "LEFT JOIN feature f3 ON f3.feature_id=pt.object_id AND c2.name='derives_from' ".
+					    "LEFT JOIN featureloc l2 ON f.feature_id=l2.feature_id AND l2.srcfeature_id != l.srcfeature_id ".
+					    "LEFT JOIN feature f4 ON l2.srcfeature_id=f4.feature_id ".
+					    "WHERE l.srcfeature_id = $contig_id;");
+
+    #add other attributes if specified
+    my $dbxref   = {};
+    my $ontology = {};
+    my $alias    = {};
+    my $other    = {};
+
+    if($get_dbxref){
+	
+    }
+    if($get_ontology){
+
+    }
+    if($get_alias){
+
+    }
+    if($get_other){
+
+    }
+
+    #make GFF3 feature lines
+    my @lines;
+    foreach my $feature (@$features){
+	my ($feature_id,
+	    $source,
+	    $type,
+	    $start,
+	    $end,
+	    $score,
+	    $strand,
+	    $phase,
+	    $ID,
+	    $Name,
+	    $Parent,
+	    $Derives_from,
+	    $Target,
+	    $t_start,
+	    $t_end,
+	    $t_strand) = @$feature;
+
+	#fix semantic differences
+	$start++;
+	$end++;
+	$strand = ($strand == 1) ? '+' : '-';
+	$Target =~ s/_\d+$// if($Target);
+	if($t_strand){
+	    $t_strand= ($t_strand == 1) ? '+' : '-';
+	}
+
+	#fix empty values as '.'
+	foreach my $e ($source, $score, $strand, $phase){
+	    $e = '.' if (! defined $e || $e eq '');
+	}
+
+	#make basic GFF3 line
+	my $line = "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\tID=$ID\;Name=$Name\;";
+	$line .= "Parent=$Parent\;" if($Parent);
+	$line .= "Derives_from=$Derives_from\;" if($Derives_from);
+	if($Target){
+	    $line .= "Target=$Target $t_start $t_end";
+	    $line .= ($t_strand) ? " $t_strand\;" : "\;";
+	}
+
+	#add other attributes if specified
+	if($get_dbxref){
+	    my ($att) = $dbxref->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_ontology){
+	    my ($att) = $ontology->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_alias){
+	    my ($att) = $alias->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_other){
+	    my ($att) = $other->{$feature_id};
+	    $line .= $att if($att);
+	}
+
+	push(@lines, $line);
+    }
+    
+    return \@lines;
+}
+#------------------------------------------------------------------------------
+sub get_fasta {
+    my $contig_id = shift; #contig feature_id
+
+    my ($seqid, $seq) = $DBH->selectrow_array("SELECT uniquename, residues ".
+					      "FROM feature ".
+					      "WHERE feature_id=$contig_id");
+
+    return Fasta::toFasta(">$seqid", \$seq);
+}
+#------------------------------------------------------------------------------
+sub get_dbxref_terms {
+    my @feature_ids = @_;
+
+    #get dbxref terms
+    my $dbxrefs = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
+					   "FROM feature_dbxref f ".
+					   "JOIN dbxref d ON f.dbxref_id=d.dbxref_id ".
+					   "JOIN db ON d.db_id=db.db_id ".
+					   "WHERE db.name != 'GFF_source'");
+
+#    my ($feature_id, $odb, $accession) = ;
+}
+#------------------------------------------------------------------------------
+sub get_ontology_terms {
+    my @feature_ids = @_;
+
+    #get ontology terms
+    my $ontologyies = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
+					       "FROM feature_cvterm f ".
+					       "JOIN cvterm c ON f.cvterm_id=c.cvterm_id ".
+					       "JOIN dbxref d ON c.dbxref_id=d.dbxref_id ".
+					       "JOIN db ON d.db_id=db.db_id");
+
+#    my ($feature_id, $db, $accession) = ;
+}
+#------------------------------------------------------------------------------
+sub get_aliases {
+    my @feature_ids = @_;
+
+    #get Aliases
+    my $aliases = $DBH->selectall_arrayref("SELECT f.feature_id, s.name ".
+					   "FROM feature_synonym f ".
+					   "JOIN synonym s ON f.synonym_id=s.synonym_id");
+#    my ($feature_id, $alias) = ;
+}
+#------------------------------------------------------------------------------
+sub get_other_attributes {
+    my @feature_ids = @_;
+
+    #get other attributes
+    my $others = $DBH->selectall_arrayref("SELECT f.feature_id, c.name, f.value ".
+					  "FROM featureprop f ".
+					  "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					  "WHERE c.name!='date' AND c.name!='owner' AND c.name!='problem' AND c.name!='status'");
+#    my ($feature_id, $key, $value) = ;
+}
+#------------------------------------------------------------------------------

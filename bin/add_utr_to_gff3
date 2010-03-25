@@ -1,0 +1,477 @@
+#! /usr/bin/perl -w
+use strict;
+
+my $usage = "
+Usage:
+       add_utr_to_gff3 <maker_gff3_file>
+
+       Use this script to add UTR, start codon, and stop codon entries
+       explicitly to a maker produced gff3 file.
+
+
+";
+
+my $COUNT = 1;
+my $NUM = 1;
+my %INDEX;
+
+my $file = shift;
+my $header;
+my $footer;
+
+if(! $file){
+    print $usage;
+    exit(1);
+}
+
+if(! -e $file){
+    warn "ERROR: File does not exist\n";
+    print $usage;
+    exit(1);
+}
+
+my @regions = ({chr => 'I',  b => '1000001',  e => '2000000'},
+	       {chr => 'I',  b => '14000001', e => '15000000'},
+	       {chr => 'II', b => '1',        e => '1000000'},
+	       {chr => 'IV', b => '1',        e => '1000000'},
+	       {chr => 'IV', b => '14000001', e => '15000000'},
+	       {chr => 'IV', b => '7000001',  e => '8000000'},
+	       {chr => 'V',  b => '12000001', e => '13000000'},
+	       {chr => 'V',  b => '16000001', e => '17000000'},
+	       {chr => 'X',  b => '4000001',  e => '5000000'},
+	       {chr => 'X',  b => '8000001',  e => '9000000'}
+	       );
+
+#parse file
+open (IN, "< $file");
+my @genes;
+my @mRNAs;
+my @stuff;
+my @exons;
+while (defined(my $line = <IN>)){
+    #skip comments and fasta (add to header and footer)
+    if($line =~ /^\#/){
+	next if($line =~/\#\#\#/);
+	if($line =~ /\#\#FASTA/){
+	    $footer .= $line,
+	    $footer .= join('', <IN>);
+	    last;
+	}
+	$header .= $line;
+	next;
+    }
+
+    #add contig lines to header
+    my $f = parse($line);
+    if($f->{type} eq 'contig'){
+	$header .= $line;
+	next;
+    }
+
+    push(@genes, $f) if($f->{type} eq 'gene');
+    push(@mRNAs, $f) if($f->{type} eq 'mRNA');
+    push(@exons, $f) if($f->{type} eq 'exon');
+    push(@stuff, $f) if($f->{type} eq 'CDS');
+    push(@stuff, $f) if($f->{type} eq 'five_prime_UTR');
+    push(@stuff, $f) if($f->{type} eq 'three_prime_UTR');
+}
+close(IN);
+
+#print header
+print $header;
+
+#get fasta index
+my @data = grep {!/\#\#FASTA/} split("\n", $footer);
+my %fastas;
+my $current;
+while (defined(my $line = shift @data)){
+    if($line =~ /^>([^\s\t\n]+)/){
+	$current = $1;
+    }
+    else{
+	chomp($line);
+	$fastas{$current} .= $line;
+    }
+}
+
+#organize UTRs and CDSs
+my %stuffinx;
+foreach my $f (@stuff){
+    my $parent = $f->{Parent};
+    if($parent =~ /\,/){
+	my @Ps = split("\,", $parent);
+	foreach my $p (@Ps){
+	    my %new_f = %$f; #make a copy
+	    $new_f{Parent} = $p;
+	    push (@{$stuffinx{$p}}, \%new_f);
+	}
+	next;
+    }
+    push (@{$stuffinx{$parent}}, $f);
+}
+
+#organize mRNAs
+my %mRNAinx;
+foreach my $f (@mRNAs){
+    my $parent = $f->{Parent};
+    if($parent =~ /\,/){
+	my @Ps = split("\,", $parent);
+	foreach my $p (@Ps){
+	    my %new_f = %$f; #make a copy
+	    $new_f{Parent} = $p;
+	    push (@{$mRNAinx{$p}}, \%new_f);
+	}
+	next;
+    }
+    push (@{$mRNAinx{$parent}}, $f);
+}
+
+#organize exons
+my %exoninx;
+foreach my $f (@exons){
+    my $parent = $f->{Parent};
+    if($parent =~ /\,/){
+	my @Ps = split("\,", $parent);
+	foreach my $p (@Ps){
+	    my %new_f = %$f; #make a copy
+	    $new_f{Parent} = $p;
+	    push (@{$exoninx{$p}}, \%new_f);
+	}
+	next;
+    }
+    push (@{$exoninx{$parent}}, $f);
+}
+
+foreach my $g (@genes){
+    print_it($g);
+    my $g_exons = $exoninx{$g->{ID}};
+    my $g_mRNAs = $mRNAinx{$g->{ID}};
+
+    foreach my $t (@$g_mRNAs){
+	print_it($t);
+	my $t_stuff = $stuffinx{$t->{ID}};
+	my $t_exons = $exoninx{$t->{ID}};
+	if(! $t_exons || ! @$t_exons){
+	    $t_exons = [];
+	    @$t_exons = get_exons($g_exons, $t_stuff);
+	}
+	@$t_stuff = add_UTRs($t_exons, $t_stuff);
+	my $t_CDS = [grep {$_->{type} eq 'CDS'} @$t_stuff];
+
+	if(!@$t_CDS){
+	    sleep 0;
+	}
+
+	my $seq_ref = \$fastas{$t->{seqid}};
+
+	my $start_stop = [];
+	@$start_stop = add_start_stop($t_CDS, $seq_ref);
+
+	print_it(@$t_exons, @$t_stuff, @$start_stop);
+    }
+}
+
+#print footer
+print $footer;
+
+#------------------------SUBS------------------------
+
+sub print_it {
+    while(my $f = shift @_){
+	$INDEX{$f->{ID}} = $COUNT;
+
+	print $f->{seqid} . "\t";
+	print $f->{source} . "\t";
+	print $f->{type} . "\t";
+	print $f->{start} . "\t";
+	print $f->{end} . "\t";
+	print $f->{score} . "\t";
+	print $f->{strand} . "\t";
+	print $f->{phase} . "\t";
+	print 'ID='.$COUNT;
+	print ';Name='.$f->{Name};
+	print ';Parent='.$INDEX{$f->{Parent}} if($f->{Parent});
+	print "\n";
+
+	$COUNT++;
+    }
+}
+
+sub get_exons{
+    my $exons = shift;
+    my $stuff =shift;
+
+    my $t = $stuff->[0];
+    my $parent = $t->{Parent};
+
+    my @seq;
+    foreach my $stuff (@$stuff){
+	@seq[$stuff->{start}..$stuff->{end}] = map {1} @seq[$stuff->{start}..$stuff->{end}];
+    }
+
+    my @coors;
+    my $start;
+    my $end;
+    for(my $i = 0; $i < @seq; $i++){
+	if($seq[$i]){
+	    $start = $i unless($start);
+	    $end = $i;
+	}
+	else{
+	    if($end){
+		push(@coors, [$start, $end]);
+		$start = undef;
+		$end = undef;
+	    }
+	}
+    }
+    push(@coors, [$start, $end]) if(defined $start && defined $end);
+
+    my @keepers;
+    my $i = 1;
+    foreach my $set (@coors){
+	my $b = $set->[0];
+	my $e = $set->[1];
+	my $ok = 0;
+	foreach my $exon (@$exons){
+	    if(is_same($exon->{start}, $b, $exon->{end}, $e)){
+		$exon->{Parent} = $parent;
+		push(@keepers, $exon);
+		$ok = 1;
+		last;
+	    }
+	}
+
+	if(! $ok){
+	    my $exon = {seqid => $t->{seqid},
+			source => $t->{source},
+			type => 'exon',
+			start => $b,
+			end => $e,
+			score => $t->{score},
+			strand => $t->{strand},
+			phase => '.',
+			ID => $parent .":".$i,
+			Name => $parent .":".$i++,
+			Parent => $parent};
+
+	    push(@keepers, $exon);
+	}
+    }
+
+    return @keepers;
+}
+
+sub val{
+    my $val = shift;
+    
+    $val = 0 if(! $val);
+
+    return $val;
+}
+
+sub add_start_stop{
+    my $CDSs = shift;
+    my $seq = shift;
+
+    my $f = $CDSs->[0];
+    my $parent = $f->{Parent};
+
+    my $five;
+    my $three;
+    my $start;
+    my $stop;
+
+    if($f->{strand} eq '+'){
+	@$CDSs = sort {$a->{start} <=> $b->{start}} @$CDSs;
+
+	$five = $CDSs->[0]->{start} - 1;
+	$three = $CDSs->[-1]->{end} - 3;
+
+	$start = substr($$seq, $five, 3);
+	$stop = substr($$seq, $three, 3);
+    }
+    else{
+	@$CDSs = sort {$a->{start} <=> $b->{start}} @$CDSs;
+
+	$three = $CDSs->[0]->{start} - 1;
+	$five = $CDSs->[-1]->{end} - 3;
+
+	$start = reverse substr($$seq, $five, 3);
+	$stop = reverse substr($$seq, $three, 3);
+
+	$start =~ tr/ATCG/TAGC/;
+	$stop =~ tr/ATCG/TAGC/;
+    }
+
+    my $i = 1;
+    my @keep;
+    if($start eq 'ATG'){
+	my $codon = {seqid => $f->{seqid},
+		     source => $f->{source},
+		     type => 'start_codon',
+		     start => $five + 1,
+		     end => $five + 3,
+		     score => $f->{score},
+		     strand => $f->{strand},
+		     phase => '.',
+		     ID => $parent .":start".$i,
+		     Name => $parent .":start".$i++,
+		     Parent => $parent};
+
+	push(@keep, $codon);
+    }
+    if($stop =~/^TGA$|^TAA$|^TAG$/){
+	my $codon = {seqid => $f->{seqid},
+		     source => $f->{source},
+		     type => 'stop_codon',
+		     start => $three + 1,
+		     end => $three + 3,
+		     score => $f->{score},
+		     strand => $f->{strand},
+		     phase => '.',
+		     ID => $parent .":stop".$i,
+		     Name => $parent .":stop".$i++,
+		     Parent => $parent};
+	push(@keep, $codon);
+    }
+
+    return @keep;
+}
+
+sub add_UTRs{
+    my $exons = shift;
+    my $stuff = shift;
+
+    my $t = $stuff->[0];
+    my $parent = $t->{Parent};
+
+    my @seq;
+    foreach my $exon (@$exons){
+        @seq[$exon->{start}..$exon->{end}] = map {1} @seq[$exon->{start}..$exon->{end}];
+    }
+    foreach my $stuff (@$stuff){
+	@seq[$stuff->{start}..$stuff->{end}] = map {val($_) + 2} @seq[$stuff->{start}..$stuff->{end}];
+    }
+
+    my @coors;
+    my $start;
+    my $end;
+    for(my $i = 0; $i < @seq; $i++){
+	if(defined $seq[$i] && $seq[$i] == 1){
+	    $start = $i unless($start);
+	    $end = $i;
+	}
+	else{
+	    if($end){
+		push(@coors, [$start, $end]);
+		$start = undef;
+		$end = undef;
+	    }
+	}
+    }
+    push(@coors, [$start, $end]) if(defined $start && defined $end);
+
+    my @keepers;
+    my $i = 1;
+    foreach my $set (@coors){
+	my $b = $set->[0];
+	my $e = $set->[1];
+
+	my $UTR = {seqid => $t->{seqid},
+		   source => $t->{source},
+		   type => 'UTR',
+		   start => $b,
+		   end => $e,
+		   score => $t->{score},
+		   strand => $t->{strand},
+		   phase => '.',
+		   ID => $parent .":UTR".$i,
+		   Name => $parent .":UTR".$i++,
+		   Parent => $parent};
+	
+	push(@$stuff, $UTR);
+    }
+
+    if($t->{strand} eq '+'){
+	@$stuff = sort {$a->{start} <=> $b->{start}} @$stuff;
+
+	my $utr_type = 'five_prime_UTR';
+	foreach my $f (@$stuff){
+	    if($f->{type} eq 'UTR'){
+		$f->{type} =  $utr_type;
+	    }
+	    else{
+		$utr_type = 'three_prime_UTR';
+	    }
+	}
+    }
+    else{
+	@$stuff = sort {$b->{start} <=> $a->{start}} @$stuff;
+
+        my $utr_type = 'three_prime_UTR';
+        foreach my $f (@$stuff){
+            if($f->{type} eq 'UTR'){
+                $f->{type} =  $utr_type;
+            }
+            else{
+                $utr_type = 'five_prime_UTR';
+            }
+        }
+    }
+
+    return @$stuff;
+}
+
+sub parse {
+    my $l = shift;
+    
+    chomp $l;
+    my @F = split("\t", $l);
+    my @att = attrib($F[8]);
+
+    if(my ($r) = grep { $_->{chr} eq $F[0] && $_->{b} <= $F[3] && $F[3] <= $_->{e} } @regions){
+	$F[0] = $r->{chr}.':'.$r->{b}.'..'.$r->{e};
+
+	$F[3] -= ($r->{b} - 1);
+	$F[4] -= ($r->{b} - 1);
+    }
+    
+    my $f = {seqid => $F[0],
+	    source => $F[1],
+	    type => $F[2],
+	    start => $F[3],
+	    end => $F[4],
+	    score => $F[5],
+	    strand => $F[6],
+	    phase => $F[7],
+	    ID => $att[0],
+	    Name => $att[1],
+	    Parent => $att[2]};
+
+    return $f;
+}
+
+sub attrib {
+    my $att = shift;
+
+    my ($ID) = $att =~ /ID\=([^\;\n]+)/;
+    my ($name) = $att =~ /Name\=([^\;\n]+)/;
+    my ($parent) = $att =~ /Parent\=([^\;\n]+)/;    
+    
+    $ID = $name if(! defined $ID);
+    $name = $ID if(! defined $name);
+    $ID = $NUM++ if(! defined $ID);
+    $name = $ID if(! defined $name);
+
+    return ($ID, $name, $parent);
+}
+
+sub is_same {
+    my $aB = shift;
+    my $aE = shift;
+    my $bB = shift;
+    my $bE = shift;
+
+    return 1 if($aB == $bB && $aE == $bE);
+}

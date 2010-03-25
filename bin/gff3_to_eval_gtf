@@ -1,0 +1,170 @@
+#! /usr/bin/perl -w
+use strict;
+
+my $usage = "
+Usage:
+
+     gff3_to_eval_gtf <maker_gff3_file>
+
+     This script converts MAKER GFF3 files into the version of GTF
+     format used by the program EVAL (a sensitivity/specificity
+     evaluating program).  The script will only extract features
+     explicitly declared in the GFF3 file, and will skip implicit
+     features (i.e. UTR, start codons, and stop codons).  To
+     extract implicit features to the GTF file, you will first need
+     to expicitly declare them in the GFF3 file. This can be done
+     by calling the script add_utr_to_gff3 to add formal
+     declaration lines to the GFF3 file.
+
+";
+
+my $file = shift;
+
+if(! $file){
+    print $usage;
+    exit;
+}
+
+#parse file
+open (IN, "< $file") || die "ERROR: Could not open file $file";
+my @genes;
+my @mRNAs;
+my @stuff;
+
+while (defined(my $line = <IN>)){
+    #skip comments and fasta
+    last if($line =~ /^\#\#FASTA/);
+    next if($line =~ /^\#/);
+
+    #add contig lines to header
+    my $f = parse($line);
+    next if($f->{type} eq 'contig');
+
+    push(@genes, $f) if($f->{type} eq 'gene');
+    push(@mRNAs, $f) if($f->{type} eq 'mRNA');
+    push(@stuff, $f) if($f->{type} eq 'CDS');
+    push(@stuff, $f) if($f->{type} eq 'five_prime_UTR');
+    push(@stuff, $f) if($f->{type} eq 'three_prime_UTR');
+    push(@stuff, $f) if($f->{type} eq 'start_codon');
+    push(@stuff, $f) if($f->{type} eq 'stop_codon');
+}
+close(IN);
+
+#organize transcript features
+my %stuffinx;
+foreach my $f (@stuff){
+    my $parent = $f->{Parent};
+    push (@{$stuffinx{$parent}}, $f);
+}
+
+#organize mRNAs
+my %mRNAinx;
+foreach my $f (@mRNAs){
+    my $parent = $f->{Parent};
+    push (@{$mRNAinx{$parent}}, $f);
+}
+
+foreach my $g (@genes){
+    my $gene_id = $g->{ID};
+    my $g_mRNAs = $mRNAinx{$g->{ID}};
+
+    foreach my $t (@$g_mRNAs){
+	my $transcript_id = $t->{ID};
+	my $t_stuff = $stuffinx{$t->{ID}};
+
+	my @UTRs   = grep {$_->{type} =~ /UTR$/} @$t_stuff;
+	my @CDSs   = grep {$_->{type} eq 'CDS'} @$t_stuff;
+	my @stops  = grep {$_->{type} eq 'stop_codon'} @$t_stuff;
+	my @starts = grep {$_->{type} eq 'start_codon'} @$t_stuff;
+
+	@CDSs = fix_CDS(\@CDSs,\@stops);
+	
+	print_it($gene_id, $transcript_id, @$t_stuff);
+    }
+}
+
+#------------------------SUBS------------------------
+sub fix_CDS {
+    my $CDSs  = shift;
+    my $stops = shift;
+
+    my @keepers;
+    foreach my $CDS (@$CDSs){
+	my $cB = $CDS->{start};
+	my $cE = $CDS->{end};
+
+	foreach my $stop (@$stops){
+	    my $sB = $stop->{start};
+	    my $sE = $stop->{end};
+
+	    if($cB == $sB){
+		$CDS->{start} += 3;
+	    }
+	    elsif($cE == $sE){
+		$CDS->{end} -= 3;
+	    }
+	}
+	
+	push(@keepers, $CDS);
+    }
+
+    return @keepers
+}
+
+sub print_it {
+    my $gene_id = shift;
+    my $transcript_id = shift;
+    
+    ($transcript_id) = $transcript_id =~ /^([^\s\t\n]+)/; 
+    while(my $f = shift @_){
+	$f->{type} = '5UTR' if($f->{type} eq 'five_prime_UTR');
+	$f->{type} = '3UTR' if($f->{type} eq 'three_prime_UTR');
+	
+	print $f->{seqid} . "\t";
+	print $f->{source} . "\t";
+	print $f->{type} . "\t";
+	print $f->{start} . "\t";
+	print $f->{end} . "\t";
+	print $f->{score} . "\t";
+	print $f->{strand} . "\t";
+	print $f->{phase} . "\t";
+	print "gene_id \"".$gene_id."\"\;";
+	print " transcript_id \"".$transcript_id."\"\;";
+	print "\n";
+    }
+}
+
+sub parse {
+    my $l = shift;
+    
+    chomp $l;
+    my @F = split("\t", $l);
+    my @att = attrib($F[8]);
+    
+    my $f = {seqid => $F[0],
+	     source => $F[1],
+	     type => $F[2],
+	     start => $F[3],
+	     end => $F[4],
+	     score => $F[5],
+	     strand => $F[6],
+	     phase => $F[7],
+	     ID => $att[0],
+	     Name => $att[1],
+	     Parent => $att[2]};
+    
+    return $f;
+}
+
+sub attrib {
+    my $att = shift;
+
+    my ($ID) = $att =~ /ID\=([^\;\n]+)/;
+    my ($name) = $att =~ /Name\=([^\;\n]+)/;
+    my ($parent) = $att =~ /Parent\=([^\;\n]+)/;    
+    
+    $ID = $name if(! defined $ID);
+    $name = $ID if(! defined $name);
+    
+    return ($ID, $name, $parent);
+}
