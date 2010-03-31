@@ -272,10 +272,10 @@ my $count = 0;
 while(my $file = shift @files){
     my $gmod = $GMOD;
     $count++;
-    if($count % 100 == 0 && $files[-1] ne $file){
+    if($count % 100 == 0 && @files != 0){
 	$gmod .= " --recreate_cache";
     }
-    elsif($files[-1] eq $file){
+    elsif(@files == 0){
 	$gmod .= " --recreate_cache";
 	$gmod =~ s/\-\-skip_vacuum//;
     }
