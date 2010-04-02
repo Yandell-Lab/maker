@@ -132,12 +132,15 @@ sub exists_killall {
 
 	    #must handle quotes
 	    my @quotes = grep {$_ =~ s/(\'|\"|\`)/\\$1/} $cmdline =~ /(.)/g;
-	    while(my $q = shift @quotes){
+	    while(@quotes){
+		my $q = shift @quotes;
 		if($cmdline =~ /($q[^$q]+$q)/){
+		    my $find = $1;
 		    my $replace = uri_escape($1, "\0-\377");
-		    $cmdline =~ s/\\./$replace/;
+		    $cmdline =~ s/$find/$replace/;
 		    @quotes = grep {/\'|\"|\`/} $cmdline =~ /(.)/g;
 		}
+		@quotes = grep {$_ =~ s/(\'|\"|\`)/\\$1/} $cmdline =~ /(.)/g;
 	    }
 
 	    #now I can split on spaces and recover values
