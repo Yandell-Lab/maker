@@ -135,9 +135,8 @@ sub exists_killall {
 	    while(@quotes){
 		my $q = shift @quotes;
 		if($cmdline =~ /($q[^$q]+$q)/){
-		    my $find = $1;
 		    my $replace = uri_escape($1, "\0-\377");
-		    $cmdline =~ s/$find/$replace/;
+		    $cmdline =~ s/$q[^$q]+$q/$replace/;
 		    @quotes = grep {/\'|\"|\`/} $cmdline =~ /(.)/g;
 		}
 		@quotes = grep {$_ =~ s/(\'|\"|\`)/\\$1/} $cmdline =~ /(.)/g;
