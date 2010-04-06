@@ -83,6 +83,7 @@ sub cgiapp_init {
 			      );
    
    $self->authen->protected_runmodes(qw(edit_account
+					frontpage
 					feedback
 					filebox
 					upload_file
@@ -99,12 +100,21 @@ sub cgiapp_init {
 #-----------------------------------------------------------------------------
 sub cgiapp_prerun {
         my $self = shift;
-	
-        $self->tt_params({logged_in  => $self->authen->is_authenticated,
+
+	my $is_authen = $self->authen->is_authenticated;
+	my $user = $self->get_user_info;
+
+	#false authentication / invalid user, logout
+	if($is_authen && ! $user){
+	    $self->authen->logout();
+	    $is_authen =$self->authen->is_authenticated;
+	}
+
+        $self->tt_params({logged_in  => $is_authen,
                           server_opt => $self->param('server_opt'), #server options file
                           session    => $self->session,
-                          user       => $self->get_user_info,
-                          #query     => Dumper($self->query),
+                          user       => $user,
+                          #authen     => Dumper($self->authen),
 		      });
 }
 #-----------------------------------------------------------------------------
@@ -170,11 +180,32 @@ sub login {
        $self->cgiapp_prerun; #reload tt_template options because of changes
    }
 
+   #if given guest_id auto-login
+   my $q = $self->query;
+   my $in_id = $q->param('guest_id');
+   if(defined $in_id){
+       my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id=$in_id})
+	   if($in_id =~ /^\d+$/);
+       
+       #if not a valid guest make sure to reset authentication rather than returning active account
+       if(! $user || !$user->{is_guest}){
+	   $self->authen->logout();
+	   $self->cgiapp_prerun; #reload tt_template options because of changes
+       }
+       else{ #authenticate guest user
+	   $q->param(authen_username => $user->{login});
+	   $q->param(authen_password => $user->{password});
+	   $self->authen->{initialized} = 0; #force reauthentication
+	   $self->authen->initialize();
+	   $self->cgiapp_prerun; #reload tt_template options because of changes
+       }
+   }
+
+   #already authenticated
    if($self->authen->is_authenticated){
-       my $user_id = $self->get_user_id;
        return $self->frontpage;
    }
-   else{
+   else{ #returns login screen
        return $self->tt_process('maker_login.tt', {message => $add_text});
    }
 }
@@ -268,7 +299,7 @@ sub launch {
    my $user_id = $self->get_user_id();
    $value =~ s/\/+$//;
    my ($name) = $value =~ /([^\/]+)$/;
-   my %serv_opt = %{self->param('server_opt')};
+   my %serv_opt = %{$self->param('server_opt')};
    my $data_dir = $serv_opt{data_dir};
 
    #make path
@@ -454,7 +485,7 @@ sub register {
        $self->dbh->commit();
 #       $lock->unlock;
 
-       #authenticate user
+       #authenticate user for auto-login
        $q->param(authen_username => $login);
        $q->param(authen_password => $password);
        $self->authen->{initialized} = 0; #force reauthentication
@@ -580,7 +611,7 @@ sub guest_login {
     $self->dbh->commit();
 #   $lock->unlock;
 
-    #authenticate user
+    #authenticate user, auto-login
     $self->query->param(authen_username => $login);
     $self->query->param(authen_password => $password);
     $self->authen->{initialized} = 0; #force reauthentication
@@ -603,28 +634,16 @@ sub frontpage {
    my $message = shift;
 
    if(! $self->authen->is_authenticated){
-       my $q = $self->query;
-       my $in_id = $q->param('guest_id');
-
-       if($in_id){
-	   my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id=$in_id});
-	   return $self->home_login if(! $user || !$user->{is_guest});
-
-	   #authenticate user
-	   $q->param(authen_username => $user->{login});
-	   $q->param(authen_password => $user->{password});
-	   $self->authen->{initialized} = 0; #force reauthentication
-	   $self->authen->initialize();
-	   $self->cgiapp_prerun; #reload tt_template options because of changes
-
-	   return $self->redirect("maker.cgi");
-       }
-       else{
-	   return $self->home_login;
-       }
+       return $self->home_login;
    }
 
    my $user = $self->get_user_info();
+
+   #catch instance of false true on is_authenticated
+   if(! $user){
+       $self->authen->logout();
+       return $self->frontpage();
+   }
 
    my $dsn = "SELECT * FROM jobs WHERE user_id=".$user->{user_id}.
              " AND is_tutorial=0 AND is_saved=1 ORDER BY job_id DESC";
