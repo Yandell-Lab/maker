@@ -1,8 +1,8 @@
   "description": "Maker",
   "db_adaptor": "Bio::DB::Das::Chado",
-  "db_args": { "-dsn": "dbi:Pg:dbname=fusarium",
-               "-user": "fusarium",
-               "-pass": "@nn0tatE"},
+  "db_args": { "-dsn": "dbi:Pg:dbname=ant",
+               "-user": "ant",
+               "-pass": "@nt$"},
 
   "TRACK DEFAULTS": {
     "class": "feature"

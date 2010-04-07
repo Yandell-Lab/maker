@@ -13,6 +13,11 @@ BEGIN{
     my $loc = `which flatfile-to-json.pl 2> /dev/null`;
     chomp $loc;
     if ($loc =~ /^no flatfile-to-json.pl/ || ! $loc) {
+	$loc = `which ./bin/flatfile-to-json.pl 2> /dev/null`;
+	chomp $loc;
+    }
+
+    if ($loc =~ /^no flatfile-to-json.pl/ || ! $loc) {
 	die "FATAL: Can not find flatfile-to-json.pl\n".
 	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
 
@@ -23,6 +28,10 @@ BEGIN{
 
     $loc = `which prepare-refseqs.pl 2> /dev/null`;
     chomp $loc;
+    if ($loc =~ /^no prepare-refseqs.pl/ || ! $loc) {
+	$loc = `which ./bin/prepare-refseqs.pl 2> /dev/null`;
+	chomp $loc;
+    }
     if ($loc =~ /^no prepare-refseqs.pl/ || ! $loc) {
 	die "FATAL: Can not find prepare-refseqs.pl\n".
 	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
@@ -57,7 +66,10 @@ GetOptions("ds_index|d=s" => \$dstore,
 my @files;
 
 die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+
 if($dstore){
+    my $base = $dstore;
+    $base =~ s/(\/?)[^\/]+$/$1/;
     open(IN, "< $dstore");
 
     #uniq the entries
@@ -74,7 +86,7 @@ if($dstore){
 
     foreach my $file (@files){
         $file =~ /([^\/]+)$/;
-        $file = "$file/$1.gff";
+        $file = ($base) ? "$base/$file/$1.gff" : "$file/$1.gff";
     }
 }
 else{
@@ -88,19 +100,13 @@ if(!@files){
 }
 
 my $error;
-my $base = $dstore;
-$base =~ s/[^\/]+$// if($base);
 
 foreach my $file (@files){
     if (! -f $file){
-	if($base && -f "$base/$file"){
-	    $file = "$base/$file";
-	    next;
-	}
-
 	$error .= "ERROR: The GFF3 file \'$file\' does not exist\n";
     }
 }
+
 die $error if $error;
 
 #--build command lines

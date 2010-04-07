@@ -273,7 +273,7 @@ while(my $file = shift @files){
     my $gmod = $GMOD;
     $count++;
     if($count % 100 == 0 && @files != 0){
-	$gmod .= " --recreate_cache";
+	#$gmod .= " --recreate_cache";
     }
     elsif(@files == 0){
 	$gmod .= " --recreate_cache";

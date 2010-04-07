@@ -21,6 +21,8 @@ BEGIN{
 use IO::Prompt;
 use DBD::Pg;
 use Fasta;
+use threads;
+use threads::shared;
 
 my $usage = '
 USAGE:
@@ -51,18 +53,23 @@ my $user = '';
 my $pass = '';
 my $organism;
 my $port;
+my $cpus = 1;
+my @for_threads :shared;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
 	   "username|U=s" => \$user,
-	   "password|W" => sub{$pass = prompt("Please enter your password: ", -echo => '*')},
+	   "password|W" => \$pass,
 	   "organism|o=s" => \$organism,
+	   "cpus=i" => \$cpus,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
-$pass = $pass->{value} if($pass);
-
 my $dbname = shift;
+@ARGV = undef; # must empty this or IO::Prompt throws a fit
+
+$pass = prompt("Please enter your password: ", -echo => '*') if($pass);
+$pass = $pass->{value} if($pass);
 
 if(!$dbname){
     print $usage;
@@ -145,18 +152,39 @@ if(! -d $outdir){
 open(LOG, "> $outdir/chado2gff3.log");
 
 #make contig GFF3 files one at a time
-foreach my $contig (@$contigs) {
-    my ($contig_id, $seqid) = @$contig;
+if($cpus <= 1){
+    foreach my $contig (@$contigs) {
+	my ($contig_id, $seqid) = @$contig;
+	
+	open(my $OUT, "> $outdir/$seqid.gff");
+	
+	print $OUT "##gff-version 3\n";
+	print $OUT get_contig_line($contig_id) . "\n";
+	print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
+	print $OUT "##FASTA\n";
+	print $OUT get_fasta($contig_id) . "\n";
+	
+	close($OUT);
+    }
+}
+else{
+    foreach my $contig (@$contigs) {
+	push(@for_threads, $contig->[0]); #only send ID to threads
+    }
+    $DBH->disconnect;
 
-    open(my $OUT, "> $outdir/$seqid.gff");
+    my @thrs;
+    while(@for_threads){
+	if(threads->list(threads::running) < $cpus){
+	    my $thr = threads->create(\&run_thread,$dsn,$user,$pass,{AutoCommit => 0});
+	    push (@thrs, $thr);
+	}
+	sleep 1;
+    }
 
-    print $OUT "##gff-version 3\n";
-    print $OUT get_contig_line($contig_id) . "\n";
-    print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
-    print $OUT "##FASTA\n";
-    print $OUT get_fasta($contig_id) . "\n";
-
-    close($OUT);
+    foreach my $thr (@thrs){
+	$thr->join();
+    }
 }
 
 close(LOG);
@@ -165,6 +193,30 @@ $DBH->disconnect;
 #------------------------------------------------------------------------------
 #-------------------------------- SUBROUTINES ---------------------------------
 #------------------------------------------------------------------------------
+sub run_thread{
+    my $dsn = shift;
+    my $user = shift;
+    my $pass = shift;
+    my $args = shift;
+    
+    $DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+
+    while (my $contig_id = shift @for_threads) {
+	my ($seqid) = $DBH->selectrow_array("SELECT uniquename FROM feature WHERE feature_id=$contig_id");
+	
+        open(my $OUT, "> $outdir/$seqid.gff");
+	
+        print $OUT "##gff-version 3\n";
+        print $OUT get_contig_line($contig_id) . "\n";
+        print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
+        print $OUT "##FASTA\n";
+        print $OUT get_fasta($contig_id) . "\n";
+	
+        close($OUT);
+    }
+
+    $DBH->disconnect;
+}
 sub get_contig_line {
     my $contig_id = shift; #contig feature_id
     my $get_dbxref   = shift || 0;

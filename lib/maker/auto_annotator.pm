@@ -2013,15 +2013,27 @@ sub get_non_overlaping_abinits {
        }
    }
 
-   #separate abinits by strand (only masked unless I'm not masking)
+   #separate abinits by strand
    my @p_ab;
    my @m_ab;
    foreach my $g (@$abin_set){
+       #only accept masked predictions unless I'm not masking or the predictor is genemark
+       my $src = $g->{algorithm};
+       unless($src =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask} || $CTL_OPT->{predictor} eq 'genemark'){
+	   next;
+       }
+
+       #skip prediction in run option but not in predictor
+       $src =~ s/_masked//;
+       unless(grep {/$src/} @{$CTL_OPT->{_predictor}}){
+	   next;
+       }
+
        if($g->{g_strand} == 1){
-	   push(@p_ab, $g) if($g->{algorithm} =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask});
+	   push(@p_ab, $g);
        }
        elsif($g->{g_strand} == -1){
-	   push(@m_ab, $g) if($g->{algorithm} =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask});
+	   push(@m_ab, $g);
        }
        else{
 	   die "ERROR: Logic error in auto_annotator::best_annotations\n";
