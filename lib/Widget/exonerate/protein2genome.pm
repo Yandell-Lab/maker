@@ -369,7 +369,7 @@ sub assemble {
                 # setting strand because bioperl is all fucked up!
                 #------------------------------------------------
                 $hsp->{_strand_hack}->{query} = $exon->{t}->{strand};
-                $hsp->{_strand_hack}->{hit}   = $exon->{q}->{strand};
+                $hsp->{_strand_hack}->{hit}   = 0; #proteins are not stranded
 		$hsp->{_indentical_hack}      = $exon->{identical};
 
 		#print substr($hsp->query_string(), 0, 100)."\n";
@@ -417,42 +417,78 @@ sub add_align_strs {
 	my $q_aa_str = $bad->{q_aa_str};
 
 	if ($q_aa_str =~ /Target Intron/){
-
+	        #build array of exons for string
 		my $q_aa_strs = split_aa_str($q_aa_str);
 
-		my $i = 0;
+		#now build arrays for other string types
+		my $m_strs    = [];
+		my $t_aa_strs = [];
+		my $t_nc_strs = [];
+
 		my $o = 0;
-		foreach my $q_aa_part (@{$q_aa_strs}){
-			my $m_str    = substr($bad->{m_str},    
-				              $o, 
-			                      length($q_aa_part),
-			                      );
+                foreach my $q_aa_part (@{$q_aa_strs}){
+		    my $m_str    = substr($bad->{m_str},
+					  $o,
+					  length($q_aa_part),
+					  );
 
-			my $t_aa_str = substr($bad->{t_aa_str}, 
-			                      $o, 
-			                      length($q_aa_part),
-			                      );
+		    my $t_aa_str = substr($bad->{t_aa_str},
+					  $o,
+					  length($q_aa_part),
+					  );
 
-			my $t_nc_str = substr($bad->{t_nc_str}, 
-			                      $o, 
-			                      length($q_aa_part),
-			                      );
-			
+		    my $t_nc_str = substr($bad->{t_nc_str},
+					  $o,
+					  length($q_aa_part),
+					  );
 
-			$o += length($q_aa_part) + 29;
+		    push(@$m_strs, $m_str);
+		    push(@$t_aa_strs, $t_aa_str);
+		    push(@$t_nc_strs, $t_nc_str);
 
-			# go heare to get phase!
+		    $o += length($q_aa_part) + 29;
+		}
 
-			$q_aa_part =~ s/\{[A-Za-z]+\}//;
-			$m_str     =~ s/\{\|+\}//;
-			$t_nc_str =~ s/\{[A-Z]+\}//;
+		#now correct splice site crossing features to conform to restraints
+		#cooresponding to HSP objects and the GFF3 Gap attribute. 
+		for(my $i = 0; $i < @{$q_aa_strs}; $i++){
+		    #first move the amino acid that crosses the splice site to the next
+		    #exon and replace it with gap characters, then add spaces to the next
+		    #exon's nucleotide sequence to account for the moved amino acid
+		    $q_aa_strs->[$i] =~ /\{([A-Za-z]+)\}$/;
+		    if(my $rep = $1){
+			$q_aa_strs->[$i + 1] = $rep . $q_aa_strs->[$i + 1];
+			$rep =~ s/./-/g;
+			$q_aa_strs->[$i] =~ s/\{([A-Za-z]+)\}$/$rep/;
+			$t_nc_strs->[$i + 1]= $rep . $t_nc_strs->[$i + 1];
+		    }
 
-                	$exons->[$i]->{q_aa_str} = $q_aa_part;
-                	$exons->[$i]->{m_str}    = $m_str;
-                	$exons->[$i]->{t_aa_str} = $t_aa_str;
-                	$exons->[$i]->{t_nc_str} = $t_nc_str;
+		    #also move amino acid for translated target string
+		    $t_aa_strs->[$i] =~ /\{([A-Za-z]+)\}$/;
+                    if(my $rep = $1){
+                        $t_aa_strs->[$i + 1] = $rep . $t_aa_strs->[$i + 1];
+                        $rep =~ s/./-/g;
+                        $t_aa_strs->[$i] =~ s/\{([A-Za-z]+)\}$/$rep/;
+		    }
 
-			$i++;
+		    #now duplicate homology string crossing the splice site to the next exon
+		    #to account for the moved amino acid
+		    $m_strs->[$i] =~ /\{(\|+)\}$/;
+		    if(my $rep = $1){
+			$m_strs->[$i + 1] = $rep . $m_strs->[$i + 1];
+		    }
+
+		    #now safely replace '{' and '}' characters
+		    $q_aa_strs->[$i] =~ s/[\{\}]//g;
+		    $t_aa_strs->[$i] =~ s/[\{\}]//g;
+		    $t_nc_strs->[$i] =~ s/[\{\}]//g;
+		    $m_strs->[$i]    =~ s/[\{\}]//g;
+
+		    #finally add string to exons
+		    $exons->[$i]->{q_aa_str} = $q_aa_strs->[$i];
+		    $exons->[$i]->{t_aa_str} = $t_aa_strs->[$i];
+		    $exons->[$i]->{t_nc_str} = $t_nc_strs->[$i];
+		    $exons->[$i]->{m_str}    = $m_strs->[$i];
 		}
 	}
 	else {
@@ -524,8 +560,9 @@ sub load_args {
         push(@args, '-query_start');
         push(@args, $t_b);
 
+	#reverse hit and target because exonerate reverses them from what is expected
         push(@args, '-query_seq');
-        push(@args, $exon->{t_aa_str});
+        push(@args, $exon->{t_nc_str});
 
         push(@args, '-score');
         push(@args, $v->{score});
@@ -536,8 +573,9 @@ sub load_args {
         push(@args, '-hit_start');
         push(@args, $q_b);
 
+	#reverse hit and target because exonerate reverses them from what is expected
         push(@args, '-hit_seq');
-        push(@args, $exon->{q_nc_str});
+        push(@args, $exon->{q_aa_str});
 
         push(@args, '-hsp_length');
         push(@args, length($exon->{t_aa_str}));
@@ -583,6 +621,9 @@ sub load_args {
 
         push(@args, '-hit_gaps');
         push(@args, $exon->{q_gaps});
+
+        push(@args, '-stranded');
+        push(@args, 'NONE');
 
 
 

@@ -81,6 +81,145 @@ sub nE {
         }
 }
 #-------------------------------------------------------------------------------
+sub cigar_string {
+        my $self = shift;
+
+	my $cigar = '';
+
+	my @nt = $self->query_string() =~ /(.)/g;
+	my @aa = $self->hit_string() =~ /(.)/g;
+	
+	die "ERROR: query and hit string lengths do not match correctly\n".
+	    "in Bio::Search:HSP::PhatHSP::protein2genome\n" if(@nt != @aa);
+
+	my $type = ''; # M, I, R, F, R
+	my $value = 0;
+
+	my $q_buf ='';
+	my $h_buf = '';
+
+	for(my $i = 0; $i < @aa; $i++){
+	    #starts with a capital letter so process string buffer
+	    if($aa[$i] =~ /A-Z/ && $q_buf){
+		my $q_gaps = @{[$q_buf =~ /([^A-Za-z])/g]};
+		my $h_gaps = @{[$h_buf =~ /([^A-Za-z])/g]};
+
+		my $found = ''; #what the buffer says should be done
+		my $step = 0; # what the step value is
+		
+		#M
+		if($q_gaps == 0 && $h_gaps == 0){
+		    $found = 'M';
+		    $step = 1;
+		}
+		#I
+		elsif($q_gaps == 3){
+		    $found = 'I';
+		    $step = 1;
+		}
+		#D
+		elsif($h_gaps == 3){
+		    $found = 'D';
+		    $step = 1;
+		}
+		#R
+		elsif($q_gaps){
+		    $found = 'R';
+		    $step = $q_gaps;
+		}
+		#F
+		elsif($h_gaps){
+		    $found = 'F';
+		    $step = $h_gaps;
+		}
+
+		#cigar buffer was reverse frame shift which simultaneously itterates the match
+		if($type eq 'R'){
+		    $cigar .= $type.$value if($value);
+		    $type = 'M';
+		    $value = 1;
+		}
+
+		#cigar type different than current so process cigar buffer
+		if($found ne $type || $type eq 'F'){
+		    $cigar .= $type.$value if($value);
+		    $type = $found;
+		    $value = 0;
+		}
+		
+		$value += $step;
+
+		$q_buf ='';
+		$h_buf = '';
+	    }
+
+	    #add character to buffer
+	    $h_buf .= $aa[$i];		
+	    $q_buf .= $nt[$i];		
+	    
+	    #cooresponds to one amino acid or is last character so process string buffer
+	    if(length($h_buf) == 3 || $i == @aa - 1){
+		my $q_gaps = @{[$q_buf =~ /([^A-Za-z])/g]};
+		my $h_gaps = @{[$h_buf =~ /([^A-Za-z])/g]};
+		
+		my $found = ''; #what the buffer says should be done
+		my $step = 0; # what the step value is
+		
+		#M
+		if($q_gaps == 0 && $h_gaps == 0){
+		    $found = 'M';
+		    $step = 1;
+		}
+		#I
+		elsif($q_gaps == 3){
+		    $found = 'I';
+		    $step = 1;
+		}
+		#D
+		elsif($h_gaps == 3){
+		    $found = 'D';
+		    $step = 1;
+		}
+		#R
+		elsif($q_gaps){
+		    $found = 'R';
+		    $step = $q_gaps;
+		}
+		#F
+		elsif($h_gaps){
+		    $found = 'F';
+		    $step = $h_gaps;
+		}
+		
+		#cigar buffer was reverse frame shift which simultaneously itterates the match
+		if($type eq 'R'){
+		    $cigar .= $type.$value if($value);
+		    $type = 'M';
+		    $value = 1;
+		}
+
+		#cigar type different than current so process cigar buffer
+		if($found ne $type || $type eq 'F'){
+		    $cigar .= $type.$value if($value);
+		    $type = $found;
+		    $value = 0;
+		}
+		
+		$value += $step;
+
+		$q_buf ='';
+		$h_buf = '';
+
+		#this was the last character so process cigar buffer
+		if($i == @aa - 1){
+		    $cigar .= $type.$value if($value);
+		}
+	    }
+	}
+
+	return $cigar;
+}
+#-------------------------------------------------------------------------------
 sub hasRun {
 
         print " method hasRun is not available for ";

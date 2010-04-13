@@ -383,7 +383,7 @@ sub hit_data {
    
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
-   my $attributes = 'ID='.$h_id.';Name='.$name.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand.';';
+   my $attributes = 'ID='.$h_id.';Name='.$name.';';#.'Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand.';';
    $attributes .= '_AED='.$AED.';' if(defined($AED));
    $attributes .= '_QI='.$QI.';' if(defined($QI));
    $attributes .= $h->{-attrib} if($h->{-attrib});
@@ -426,7 +426,7 @@ sub repeat_data {
    
    my ($class, $type) = get_class_and_type($h, 'hit');
 
-   $class = "blastx:repeatmask" if ($class eq 'blastx');
+   $class = "repeatrunner" if ($class eq 'blastx');
    
    my $h_n = $h->name();
    $h_n   =~ s/\s/_/g;
@@ -778,6 +778,15 @@ sub get_hsp_data {
         my $hsp_str  = $hsp->strand('query') ==  1 ? '+' : '-';
 	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
 
+	#make Gap attribute
+	my $q_string = $hsp->query_string();
+	my $h_string = $hsp->hit_string();
+	if($t_strand eq '-'){
+	    $q_string = reverse($q_string);
+	    $h_string = reverse($h_string);
+	}
+	my @gap = $hsp->cigar_string() =~ /([A-Z]\d+)/g;
+
 	my $score = $hsp->score() || '.';
 	$score .= 0 if $score eq '0.';
 
@@ -798,7 +807,10 @@ sub get_hsp_data {
 
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
-	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand.';';
+	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
+	   $nine .= ' '.$t_strand if($hsp->strand('hit'));
+	   $nine .= ';';
+	   $nine .= 'Gap='.join(' ', @gap).';' if(@gap);
 	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
 	   $nine .= ';' if($nine !~ /\;$/);
         my @data;
@@ -834,7 +846,7 @@ sub get_repeat_hsp_data {
 	($tB, $tE) = ($tE, $tB) if $tB > $tE;
 
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
-	$class = "blastx:repeatmask" if ($class eq 'blastx');
+	$class = "repeatrunner" if ($class eq 'blastx');
 	
 	my $hsp_name = $hit_n;
 	   $hsp_name =~ s/\s/_/g;

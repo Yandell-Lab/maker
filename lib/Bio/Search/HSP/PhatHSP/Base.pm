@@ -791,6 +791,34 @@ sub _getTestHSPs {
 
 ################################################ subroutine header begin ##
 
+=head2 _getTestHSPs
+
+ Usage     : 
+
+ Purpose   : produces a cigar string for use in GFF3 etc.
+ Returns   : A string
+ Argument  : None
+ Throws    :
+ Comments  :
+           :
+ See Also  : 
+
+=cut
+
+################################################## subroutine header end ##
+
+
+sub cigar_string {
+    my $self = shift;
+
+    my $cigar = $self->SUPER::cigar_string();
+    $cigar =~ s/(\d+)([A-Z])/$2$1/g;
+    
+    return $cigar;
+}
+
+################################################ subroutine header begin ##
+
 =head2 AUTOLOAD
 
  Usage     : *private*
