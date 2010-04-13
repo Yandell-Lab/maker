@@ -401,9 +401,8 @@ sub split_aa_str {
         my @q_aa_strs = split(/$reg_ex/, $q_aa_str);
 
         foreach my $str (@q_aa_strs){
-                $str =~ s/[<>]//g;
-                $str =~ s/^\s+//;
-                $str =~ s/\s+$//;
+                $str =~ s/\s+[<>]+\s+$//;
+                $str =~ s/^\s+[<>]+\s+//;
         }
 
         return \@q_aa_strs;
