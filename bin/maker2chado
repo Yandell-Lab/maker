@@ -9,12 +9,14 @@ use DBI;
 use Getopt::Long;
 use File::Temp;
 use vars qw($DBH $GMOD);
+use GI;
+use Fasta;
 
 BEGIN{
     #what to do on ^C
     $SIG{'INT'} = sub {
 	$DBH->disconnect;
-	exit (1);
+	die "\n\nInterupt signal received!\n\n";
     };
 
     my $loc = `which gmod_bulk_load_gff3.pl 2> /dev/null`;
@@ -61,6 +63,8 @@ OPTIONS:
 
      jobid|j     <id>    JobID (only for MAKER web server use)
 
+     fasta               Append sequnces from fasta file.
+
      delete              Use GFF3 file to delete DB contents
 
      help|?              Displays this usage statement
@@ -76,6 +80,7 @@ my $port;
 my $dstore;
 my $jid;
 my $delete;
+my $fasta_file;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -85,6 +90,7 @@ GetOptions("host|h=s" => \$host,
 	   "jobid|j=i" => \$jid,
 	   "ds_index|d=s" => \$dstore,
 	   "delete" => \$delete,
+	   "fasta=s" => \$fasta_file,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
@@ -256,6 +262,14 @@ if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
 
 $DBH->disconnect;
 
+my $index;
+my %done;
+if($fasta_file){
+    my %CTL_OPT = (out_base => '.', alt_peptide => 'C', protein => $fasta_file);
+    ($CTL_OPT{_protein}, $CTL_OPT{p_db}) = GI::split_db(\%CTL_OPT, 'protein', 10);
+    $index = GI::build_fasta_index($CTL_OPT{_protein});
+}
+
 open(LOG, "> maker2chado.log");
 
 #build command line
@@ -282,7 +296,8 @@ while(my $file = shift @files){
 
     my $annotations;
     my $analysis;
-    my $fasta;
+    my $fasta = "##FASTA\n";
+    my $afasta = "##FASTA\n";
 
     open(IN, "< $file");
     my $ff; #fasta flag
@@ -293,17 +308,34 @@ while(my $file = shift @files){
 	}
 	elsif($line =~ /^\#\#FASTA/){
 	    $ff = 1;
-	    $fasta .= $line;
 	    next;
 	}
 	elsif($line =~ /^\#/){
 	    next;
 	}
-	elsif($line =~ /\tmaker\t|\tcontig\t/){
+	elsif($line =~ /\tmaker\t|\tcontig\t|\tgene\t|\tmRNA\t|\tCDS\t/){
 	    $annotations .= $line;
 	    next;
 	}
 	else{
+	    if($index){
+		my ($name) = $line =~ /Target=([^\;\n\s]+)/;
+		if($name && ! $done{$name}){
+		    my $fastaObj = $index->get_Seq_by_id($name);
+		    if(! $fastaObj){
+			$fastaObj = $index->get_Seq_by_alias($name);
+		    }
+		    if($fastaObj){
+			my $t_seq = $fastaObj->seq();
+			my $t_def = $index->header($name);
+			my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
+			$afasta .= $f;
+			print "\n\nWoo Hoo!!\n\n";
+		    }
+		    $done{$name}++;
+		}
+	    }
+
 	    $analysis .= $line;
 	    next;
 	}
@@ -340,7 +372,7 @@ while(my $file = shift @files){
 	my ($fh, $fname) = File::Temp::tempfile();
 	print $fh "\#\#gff-version 3\n";
 	print $fh $analysis;
-	print $fh $fasta;
+	print $fh $afasta;
 	close($fh);
 
 	my $command = $gmod;
@@ -355,7 +387,7 @@ while(my $file = shift @files){
 
 	    system ($command);
 
-	    #rebuild annotaion file to delete
+	    #rebuild annotation file to delete
 	    open($fh, "> $fname");
 	    print $fh "\#\#gff-version 3\n";
 	    print $fh $annotations;

@@ -3117,7 +3117,7 @@ sub load_control_files {
       $CTL_OPT{datastore} = 0 if($OPT{off});
    }
    else{
-       $CTL_OPT{datastore} = 0;
+       $CTL_OPT{datastore} = 1;
    }
 
    #--decide if gff database should be created

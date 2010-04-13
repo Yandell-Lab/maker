@@ -661,9 +661,8 @@ sub split_nc_str {
 	my @q_nc_strs = split(/$reg_ex/, $q_nc_str);
 
 	foreach my $str (@q_nc_strs){
-		$str =~ s/[<>]//g;
-		$str =~ s/^\s+//;
-		$str =~ s/\s+$//;
+	    $str =~ s/\s+[<>]+\s+$//;
+	    $str =~ s/^\s+[<>]+\s+//;
 	}
 
 	return \@q_nc_strs;
@@ -740,11 +739,7 @@ sub add_align_strs {
 			$exons->[$i]->{donor}    = $don;
 			$exons->[$i]->{acceptor} = $acc;
 
-			$o += length($q_nc_part) + 29;
-
-			#$q_nc_part =~ s/\{[A-Za-z]+\}//;
-			#$m_str     =~ s/\{\|+\}//;
-			#$t_nc_str =~ s/\{[A-Z]+\}//;
+			$o += length($q_nc_part) + 28 + length($i);
 
                 	$exons->[$i]->{q_nc_str} = $q_nc_part;
                 	$exons->[$i]->{m_str}    = $m_str;

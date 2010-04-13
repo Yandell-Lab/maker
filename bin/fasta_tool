@@ -94,6 +94,9 @@ Options:
   --remove
       Pass in a file with IDs and remove sequences with these IDs.
 
+  --select
+      Pass in a file with IDs and return sequences with these IDs.
+
   --fix
       Fixes common problems in fasta files that cause many programs to fail
       i.e. BLAST, Exonerate, etc. Fixes include, replacing non-standard amino
@@ -105,7 +108,7 @@ Options:
 my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header,
     $grep_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
     $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order,
-    $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print);
+    $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file);
 
 GetOptions('summary'        => \$summary,
 	   'chunks=i'       => \$chunks,
@@ -130,11 +133,12 @@ GetOptions('summary'        => \$summary,
 	   'shuffle_codon'  => \$shuffle_codon,
 	   'shuffle_pick=i' => \$shuffle_pick,
 	   'remove=s'       => \$remove_file,
+	   'select=s'       => \$select_file,
 	   'fix'            => \$fix,
 	  );
 
 my $file = shift;
-unless (-r $file || ! -t STDIN){
+unless (($file && -r $file) || ! -t STDIN){
     print $usage;
     exit;
 }
@@ -170,6 +174,7 @@ $print++ unless grep {$_} ($chunks,
 			   $shuffle_codon,
 			   $shuffle_pick,
 			   $remove_file,
+			   $select_file,
 			  );
 
 $nt_count++ if $summary;
@@ -207,6 +212,7 @@ shuffle_seq()               if $shuffle_seq;
 shuffle_codon()             if $shuffle_codon;
 shuffle_pick($shuffle_pick) if $shuffle_pick;
 remove($remove_file)        if $remove_file;
+_select($select_file)        if $select_file;
 fix()                       if $fix;
 
 #-----------------------------------------------------------------------------
@@ -560,6 +566,20 @@ sub remove {
 	while (my $seq_obj = $seq_io->next_seq) {
                 my $id = $seq_obj->display_id;
 		next if $ids{$id};
+		my $header = get_header($seq_obj);
+                my $seq = $seq_obj->seq;
+		print_this_seq($header, $seq);
+	}
+}
+#-----------------------------------------------------------------------------
+sub _select {
+
+	my $select_file = shift;
+	open (my $IN, '<', $select_file) or die "Can't open $select_file for reading\n";
+	my %ids = map {chomp;$_, 1} (<$IN>);
+	while (my $seq_obj = $seq_io->next_seq) {
+                my $id = $seq_obj->display_id;
+		next unless $ids{$id};
 		my $header = get_header($seq_obj);
                 my $seq = $seq_obj->seq;
 		print_this_seq($header, $seq);

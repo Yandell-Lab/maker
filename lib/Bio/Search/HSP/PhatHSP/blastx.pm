@@ -467,6 +467,73 @@ sub nE
         }
 }
 
+################################################ subroutine header begin ##
+
+=head2 _check
+
+ Usage     : cigar_string
+
+ Purpose   : produces gff3 compatible cigar sring
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+ See Also  :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub cigar_string {
+    my $self = shift;
+
+    my $cigar = '';
+    my $q_str = ($self->strand("hit") == -1) ? reverse($self->query_string()) : $self->query_string();
+    my $h_str = ($self->strand("hit") == -1) ? reverse($self->hit_string()) : $self->hit_string();
+
+    my @q = $q_str =~ /(.)/g;
+    my @h = $h_str =~ /(.)/g;
+
+    die "ERROR: query and hit string lengths do not match correctly\n".
+        "in Bio::Search:HSP::PhatHSP::protein2genome\n" if(@q != @h);
+
+    my $cigr = '';
+    my $type = ''; # M, I, D
+    my $value = 0;
+
+    for(my $i = 0; $i < @h; $i++){
+        my $found = '';
+
+        #M
+        if($q[$i] ne '-' && $h[$i] ne '-'){
+            $found = 'M';
+        }
+        #I
+        elsif($q[$i] eq '-'){
+            $found = 'I';
+        }
+        #D
+        elsif($h[$i] eq '-'){
+            $found = 'D';
+        }
+
+        if($found eq $type){
+            $value++;
+        }
+        else{
+            $cigar .= "$type$value";
+            $type = $found;
+            $value = 1;
+        }
+    }
+
+    if($value){
+        $cigar .= "$type$value";
+    }
+
+    return $cigar;
+}
 
 ################################################ subroutine header begin ##
 
