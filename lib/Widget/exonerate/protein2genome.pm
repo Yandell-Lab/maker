@@ -425,7 +425,9 @@ sub add_align_strs {
 		my $t_nc_strs = [];
 
 		my $o = 0;
+		my $i = 0;
                 foreach my $q_aa_part (@{$q_aa_strs}){
+		    $i++;
 		    my $m_str    = substr($bad->{m_str},
 					  $o,
 					  length($q_aa_part),
@@ -445,7 +447,7 @@ sub add_align_strs {
 		    push(@$t_aa_strs, $t_aa_str);
 		    push(@$t_nc_strs, $t_nc_str);
 
-		    $o += length($q_aa_part) + 29;
+		    $o += length($q_aa_part) + 28 + length($i);
 		}
 
 		#now correct splice site crossing features to conform to restraints

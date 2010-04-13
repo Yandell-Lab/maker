@@ -811,9 +811,23 @@ sub _getTestHSPs {
 sub cigar_string {
     my $self = shift;
 
-    my $cigar = $self->SUPER::cigar_string();
-    $cigar =~ s/(\d+)([A-Z])/$2$1/g;
-    
+    my $string = $self->SUPER::cigar_string();
+    my $cigar = '';
+    my $type = '';
+    my $value = 0;
+    while($string =~ /(\d+)([A-Z])/g){
+	if($type eq $2){
+	    $value += $1;
+	}
+	else{
+	    $cigar .= "$type$value" if($value);
+	    $type = $2;
+	    $value = $1;
+	}
+    }
+
+    $cigar .=  "$type$value" if($value);
+
     return $cigar;
 }
 
