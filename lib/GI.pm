@@ -2376,6 +2376,7 @@ sub set_defaults {
       $CTL_OPT{'html_web'} = '/';
       $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
       $CTL_OPT{'apache_user'} = 'apache';
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
    }
@@ -3437,6 +3438,7 @@ sub generate_control_files {
        print OUT "html_dir:$O{html_dir} #web accesible directory to house MWAS HTML conent\n";
        print OUT "html_web:$O{html_web} #url to html_dir (can be relative)\n";
        print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and storing results\n";
+       print OUT "font_file:$O{font_file} #font file for webpage CAPTCHA\n";
        print OUT "\n";
        print OUT "#-----External Viewer Setup\n";
        print OUT "soba_url:$O{soba_url} #url to Sequence Ontology SOBA CGI script\n";

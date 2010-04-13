@@ -218,7 +218,7 @@ document.getElementById(DivID).innerHTML = 'Loading...';
       <h3 style="border-style:solid; border-width:1px;">
       You are logged in as a guest user.  You may become a registered user at any time by clicking on "Edit Account".<br>
       <br>
-      Copy the URL <font color="blue">http://derringer.genetics.utah.edu/cgi-bin/MWAS/maker.cgi?guest_id=[% user.user_id %]</font>
+      Copy the URL <font color="blue">[% codebase_cgi %]maker.cgi?guest_id=[% user.user_id %]</font>
       or login with the username <font color="blue">[% user.login %]</font> to return to your jobs after exiting.</h3>
       [% END %]
 

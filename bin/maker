@@ -74,6 +74,7 @@ use Error qw(:try);
 use Error::Simple;
 use Process::MpiChunk;
 use Process::MpiTiers;
+use Proc::Signal;
 
 $| = 1;
 
@@ -274,6 +275,9 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 }
 
 print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
+
+#clean up all chilren processes
+Proc::Signal::reap_children_by_name(9, 'maintain.pl');
 
 exit(0);
 #-----------------------------------------------------------------------------

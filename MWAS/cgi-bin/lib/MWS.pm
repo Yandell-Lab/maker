@@ -147,7 +147,7 @@ sub setup {
    $self->captcha_config(IMAGE_OPTIONS => {width    => 150,
 					   height   => 40,
 					   lines    => 5,
-					   font  => '/usr/share/fonts/bitstream-vera/VeraMono.ttf',
+					   font  => $self->param('server_opt')->{font_file},
 					   ptsize   => 18,
 					   bgcolor  => "#FFFFFF"
 					  },
@@ -295,55 +295,49 @@ sub launch {
 
    my $q = $self->query();
    my $job_id = $q->param('job_id');
-   my $value = $q->param('contig');
+   my $value = $q->param('contig'); #datastore direcory for contig 
    my $user_id = $self->get_user_id();
    $value =~ s/\/+$//;
-   my ($name) = $value =~ /([^\/]+)$/;
+   my ($name) = $value =~ /([^\/]+)$/;   
    my %serv_opt = %{$self->param('server_opt')};
    my $data_dir = $serv_opt{data_dir};
 
+   #build a safename with '%' character escaped to avoid issues with browser interpretation of %
+   my $safe_name = uri_escape($name, '_');
+   $safe_name =~ s/\%/\_/g;
+
    #make path
-   File::Path::mkpath("/var/www/html/MWAS/users/$user_id/");
-   my $gff = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$name.gff";
-   my $xml = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/".uri_escape("$name.xml", '%');
+   File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/");
+   my $gff_url = ($serv_opt{html_web} =~ /http\:\/\//) ?
+       "$serv_opt{html_web}/users/$user_id/$safe_name.gff" :
+       "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$safe_name.gff";
 
-   open(OUT,  "> $serv_opt{html_dir}/users/$user_id/$name.gff");
-   open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff");
-   while(my $line = <IN>){
-       print OUT $line;
-   }
-   close(OUT);
-   close(IN);
+   #fix // in direcory structure
+   $gff_url =~ s/([^\:])\/+/$1\//g;
 
-   open(OUT,  "> $serv_opt{html_dir}/users/$user_id/$name.xml");
-   open(IN, "< $data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.xml");
-   while(my $line = <IN>){
-       print OUT $line;
-   }
-   close(OUT);
-   close(IN);
+   my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
+   my $slink = "$serv_opt{html_dir}/users/$user_id/$safe_name.gff";
+   symlink($gff_file, $slink) if(! -e $slink);
 
    if($q->param('apollo')){
-       my $url_base_dir = "$serv_opt{web_address}/$serv_opt{html_web}/";
-       my $url_jnlp_base = "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/";
-       my $url_gff3_file = $xml;
-       
-       open(OUT,  "> $serv_opt{html_dir}/users/$user_id/apollo.jnlp");
-       open(IN, "< tt_templates/apollo.tt");
-       while(my $line = <IN>){
-	   $line =~ s/\[\% url_base_dir \%\]/$url_base_dir/g;
-	   $line =~ s/\[\% url_jnlp_base \%\]/$url_jnlp_base/g;
-	   $line =~ s/\[\% url_gff3_file \%\]/$url_gff3_file/g;
-	   
-	   print OUT $line;
-       }
-       close(OUT);
-       close(IN);
-       
-       return $self->redirect("/users/$user_id/apollo.jnlp");
+       #base URL for Apollo jars/images
+       my $codebase = ($serv_opt{html_web} =~ /http\:\/\//) ? 
+	   "$serv_opt{html_web}/" :
+	   "$serv_opt{web_address}/$serv_opt{html_web}/";
+
+       #fix // in direcory structure
+       $codebase =~ s/([^\:])\/+/$1\//g;
+       $codebase .= '/' if($codebase !~ /\/$/);
+
+       #manually add outgoing reponse headers
+       $self->header_props('-Content-type' => "application/x-java-jnlp-file",
+			   '-Content-Disposition' => "attachment; filename=apollo.jnlp");
+
+       return $self->tt_process('apollo.jnlp.tt', {codebase => $codebase,
+					           gff_url => $gff_url});
    }
    elsif($q->param('soba')){
-       return $self->redirect("$serv_opt{soba_url}?rm=upload_urls&url=$gff");
+       return $self->redirect("$serv_opt{soba_url}?rm=upload_urls&url=$gff_url");
    }
 }
 #-----------------------------------------------------------------------------

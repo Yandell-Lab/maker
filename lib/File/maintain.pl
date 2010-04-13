@@ -10,8 +10,15 @@ use Proc::Signal;
 use URI::Escape;
 
 BEGIN {
+    foreach my $sig (keys %SIG){
+	$SIG{$sig} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    }
+
     $SIG{QUIT} = sub{$LOCK->unlock if($LOCK); exit(0)};
-    $SIG{INT} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{KILL} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{TERM} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{STOP} = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{INT}  = sub{$LOCK->unlock if($LOCK); exit(0)};
 }
 
 my $pid = shift;
@@ -39,3 +46,4 @@ while(-f $LOCK->{lock_file}){
 
 $LOCK->unlock;
 
+exit(0);

@@ -98,6 +98,8 @@ sub get_name_by_id {
 sub exists_killall {
     my $signal = shift;
     my $name = shift || '';
+    my $parent = shift || '';
+    my $wait = shift || 0;
 
     return (0, 0) if($name eq '');
 
@@ -163,7 +165,12 @@ sub exists_killall {
 	    $script =~ /^$name$/
 	   ) {
 	    next if($p->pid == $$ || $p->pid == 0);
+
+	    next if($parent && $parent != $p->ppid);
+
 	    my $num = kill ($signal, $p->pid);
+	    waitpid($p->pid, 0) if($wait);
+
 	    $found++;
 	    $signaled += $num;
 	    $err = $! if(! $num); 
@@ -174,5 +181,14 @@ sub exists_killall {
 
     return ($found, $signaled);
 }
+#-----------------------------------------------------------------
+#reeps zombies belonging to me
+sub reap_children_by_name {
+    my $signal = shift;
+    my $name = shift;
+
+    exists_killall($signal, $name, $$, 1);
+}
+
 #-----------------------------------------------------------------
 1;
