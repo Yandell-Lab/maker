@@ -794,13 +794,15 @@ sub snap {
 }
 #-----------------------------------------------------------------------------
 sub genemark {
+   $_[2] =~ s/\.masked$// if(@_ == 6); #temp
+
    my $in_file     = shift;
    my $the_void    = shift;
    my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
 
-   $in_file        = shift; #temp
+   $in_file        = shift unless($CTL_OPT->{_no_mask}); #temp
    return []      if(! $in_file); #temp
 
    #genemark sometimes fails if called directly so I built a wrapper
@@ -2754,6 +2756,7 @@ sub load_control_files {
 	       pid_blastn
 	       en_score_limit
 	       out_name
+	       datastore
 	       );
 
    foreach my $key (@OK){
@@ -3107,17 +3110,16 @@ sub load_control_files {
       die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
-   #--decide whether to force datastore 
-   if ($iterator->number_of_entries() > 1000 && ! $CTL_OPT{datastore}) {
+   #--decide whether to force datastore
+   if ($iterator->number_of_entries() > 1000 && ! defined $CTL_OPT{datastore}) {
       warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
       "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n" unless($main::qq);
 
       $CTL_OPT{datastore} = 1;
-      $CTL_OPT{datastore} = 0 if($OPT{off});
    }
-   else{
-       $CTL_OPT{datastore} = 1;
+   elsif(! defined $CTL_OPT{datastore}){
+       $CTL_OPT{datastore} = 0;
    }
 
    #--decide if gff database should be created

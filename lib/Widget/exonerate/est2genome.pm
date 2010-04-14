@@ -729,17 +729,14 @@ sub add_align_strs {
 			                      $o,
 			                      length($q_nc_part),
 			                      );
-			
 
-			my $h = $i < 10 ? 0 : $i - 9; # hack to take into account varible spacing in align. format
-
-			my $don = get_donor($bad->{t_nc_str},   $o + $h, $q_nc_part);
-			my $acc = get_acceptor($bad->{t_nc_str}, $o +$h , $q_nc_part);
+			my $don = get_donor($bad->{t_nc_str}, $o, $q_nc_part);
+			my $acc = get_acceptor($bad->{t_nc_str}, $o, $q_nc_part);
 
 			$exons->[$i]->{donor}    = $don;
 			$exons->[$i]->{acceptor} = $acc;
 
-			$o += length($q_nc_part) + 28 + length($i);
+			$o += length($q_nc_part) + 28 + length($i + 1);
 
                 	$exons->[$i]->{q_nc_str} = $q_nc_part;
                 	$exons->[$i]->{m_str}    = $m_str;
