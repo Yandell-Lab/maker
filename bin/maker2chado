@@ -9,10 +9,15 @@ use DBI;
 use Getopt::Long;
 use File::Temp;
 use vars qw($DBH $GMOD);
-use GI;
-use Fasta;
 
 BEGIN{
+    if (not ($ENV{CGL_SO_SOURCE}) || ! -e $ENV{CGL_SO_SOURCE}) {
+	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+    }
+    if (not ($ENV{CGL_GO_SOURCE}) || ! -e $ENV{CGL_GO_SOURCE}) {
+	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo";
+    }
+
     #what to do on ^C
     $SIG{'INT'} = sub {
 	$DBH->disconnect;
@@ -31,6 +36,8 @@ BEGIN{
     }
 }
 
+use GI;
+use Fasta;
 use IO::Prompt;
 use DBD::Pg;
 
