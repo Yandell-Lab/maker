@@ -41,18 +41,19 @@ Assumptions:
 ";
 
 
-my ($help, $prefix, $justify, $sort_order);
+my ($help, $prefix, $justify, $sort_order, $apollo);
 my $opt_success = GetOptions('help'         => \$help,
 			     'prefix=s'     => \$prefix,
 			     'justify=s'    => \$justify,
 			     'sort_order=s' => \$sort_order,
+			     'apollo' => \$apollo,
 			      );
 
 die $usage if $help || ! $opt_success  || ! $prefix;
 $justify ||= 6;
 
 my $gff_file = shift;
-die $usage unless $gff_file;
+die $usage unless ($gff_file &&  $prefix);
 
 my $sort_map = parse_sort_order($sort_order, $gff_file);
 
@@ -60,6 +61,7 @@ open (my $IN, '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
 
 my %counter;
 my %ids;
+my %parents;
 # Build a hash of ids that need to be mapped;
 while (<$IN>) {
 
@@ -71,23 +73,46 @@ while (<$IN>) {
 
 	# Here we explicity limit the mapping to genes and mRNAs
 	if ($type =~ /^(gene|mRNA)$/) {
-		my ($id) = $attrb_text =~ /ID=(.*?);/;
+		my ($id) = $attrb_text =~ /ID=([^\;\n]*)/;
 		$ids{$seq}{$start}{$id} = $type;
+		if($apollo){
+		    my ($parent) = $attrb_text =~ /Parent=([^\;\n]*)/;
+		    $parents{$seq}{$start}{$id} = $parent;
+		}
 	}
 }
 # Create the new ID map.  Sort contigs by $sort_map in outer loop and 
 # features by $start in second loop.
+my %gene_index;
 for my $contig_id (sort {sort_contigs($a, $b, $sort_map)} keys %ids) {
 	my $contig = $ids{$contig_id};
 	for my $start (sort {$b <=> $a} keys %{$contig}) {
-		for my $id (keys %{$contig->{$start}}) {
+		for my $id (sort {$contig->{$start}{$a} cmp $contig->{$start}{$b}} keys %{$contig->{$start}}) {
 			my $type  = $contig->{$start}{$id};
 			#Here we create gene and mRNA abbreviation.
 			my $abrv  = $type eq 'gene' ? 'G' : 'T';
-			my $count = sprintf '%06s', ++$counter{$type};
-			my $new_id    = 'PYU1_' . $abrv . $count;
-			print "$id\t$new_id\n";
-			print '';
+			my $count = sprintf '%0'.$justify.'s', ++$counter{$type};
+			if($apollo){
+			    if($type eq 'gene'){
+				$gene_index{$id}{count} = $count;
+				$gene_index{$id}{mRNAs} = 'A';
+			    }
+
+			    my $post = '';
+			    if($type eq 'mRNA'){
+				$count = $gene_index{$parents{$contig_id}{$start}{$id}}{count};
+				$post = '-R'.$gene_index{$parents{$contig_id}{$start}{$id}}{mRNAs}++;
+			    }
+
+			    my $new_id  = $prefix . $count . $post;
+			    print "$id\t$new_id\n";
+			    print '';
+			}
+			else{
+			    my $new_id    = $prefix . $abrv . $count;
+			    print "$id\t$new_id\n";
+			    print '';
+			}
 		}
 	}
 }

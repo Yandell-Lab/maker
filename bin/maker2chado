@@ -403,6 +403,27 @@ while(my $file = shift @files){
     }
     close(IN);
 
+    #must delete analysis before annotations
+    if($delete){
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta);
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta);
+    }
+    else{
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta);
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta);
+    }
+}
+close(LOG);
+
+#-------subs--------
+
+sub process_annotations {
+    my $annotations = shift;
+    my $analysis = shift;
+    my $gmod = shift;
+    my $file = shift;
+    my $fasta = shift;
+
     #adds/deletes annotation featues except if in analysis only mode
     #in which case it will only add the contig feature if necessary
     if($annotations && (! $delete || ! $analysis_only)){
@@ -430,6 +451,15 @@ while(my $file = shift @files){
 	}
 	unlink($fname)
     }
+}
+
+sub process_analysis {
+    my $analysis = shift;
+    my $annotations = shift;
+    my $gmod = shift;
+    my $file = shift;
+    my $fasta = shift;
+    my $afasta = shift;
 
     #adds/deletes analysis features if necessary
     if($analysis && ! $annotation_only){
@@ -467,9 +497,7 @@ while(my $file = shift @files){
 	unlink($fname);
     }
 }
-close(LOG);
 
-#-------subs--------
 sub remove_db_menu{
     for(my $i = 0; $i < abs(@$c_list/10); $i ++){
 	my @menu;
