@@ -63,7 +63,15 @@ OPTIONS:
 
      jobid|j     <id>    JobID (only for MAKER web server use)
 
-     fasta               Append sequnces from fasta file.
+     fasta       <file>  Adds sequences for BLAST hit features.
+
+     annotation          Only parse annotation features
+
+     analysis            Only parse analysis features
+
+     match     <regex>   Only use GFF3 lines matching pattern
+
+     exclude   <regex>   exclude GFF3 lines matching pattern
 
      delete              Use GFF3 file to delete DB contents
 
@@ -81,6 +89,10 @@ my $dstore;
 my $jid;
 my $delete;
 my $fasta_file;
+my $annotation_only;
+my $analysis_only;
+my $match;
+my $exclude;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -90,11 +102,18 @@ GetOptions("host|h=s" => \$host,
 	   "jobid|j=i" => \$jid,
 	   "ds_index|d=s" => \$dstore,
 	   "delete" => \$delete,
+	   "annotation" => \$annotation_only,
+	   "analysis" => \$analysis_only,
 	   "fasta=s" => \$fasta_file,
+	   "match=s" => \$match,
+	   "exclude=s" => \$exclude,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
 $pass = $pass->{value} if($pass);
+
+die "ERROR: 'annotation' and 'analysis' are mutually exclusive\n".
+    "You can choose only one!\n\n" if( $analysis_only && $annotation_only);
 
 my $dbname = shift;
 my @files;
@@ -302,6 +321,7 @@ while(my $file = shift @files){
     open(IN, "< $file");
     my $ff; #fasta flag
     while(defined(my $line = <IN>)){
+
 	if($ff){
 	    $fasta .= $line;
 	    next;
@@ -313,11 +333,15 @@ while(my $file = shift @files){
 	elsif($line =~ /^\#/){
 	    next;
 	}
-	elsif($line =~ /\tmaker\t|\tcontig\t|\tgene\t|\tmRNA\t|\tCDS\t/){
-	    $annotations .= $line;
-	    next;
-	}
-	else{
+
+	#skip lines that match regex pattern
+	next if($exclude && $line =~ /$exclude/);
+
+	#skip lines that do not match regex pattern
+	next if($match && $line !~ /$match/);
+
+	if($line =~ /^[^\t]+\t[^\t]+\t(match|[^\t]+_match)/){
+	    #add sequence for features if external fasta provided
 	    if($index){
 		my ($name) = $line =~ /Target=([^\;\n\s]+)/;
 		if($name && ! $done{$name}){
@@ -339,10 +363,42 @@ while(my $file = shift @files){
 	    $analysis .= $line;
 	    next;
 	}
+	elsif($line =~ /\tcontig\t|\tchromosome\t/){
+	    #don't delete contig if analysis is still attached
+	    if($delete && $annotation_only){
+		next;
+	    }
+
+	    #add contig to attach analysis features if not present otherwise skip
+	    if(! $delete && $analysis_only){
+		my ($id) = $line =~ /ID=([^\;\n]+)/;		
+		$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+		my ($contig_id) = $DBH->selectrow_array(qq{SELECT f.feature_id FROM feature f }.
+							qq{JOIN organism o ON f.organism_id=o.organism_id }.
+							qq{WHERE (o.abbreviation='$organism' OR o.common_name='$organism') }.
+							qq{AND (f.uniquename='$id' OR f.name='$id')}
+							);
+		$DBH->disconnect();
+		undef $DBH;
+
+		next if($contig_id);
+	    }
+
+	    #default behavior
+	    $annotations .= $line;
+	    next;
+	}
+	elsif(! $analysis_only){
+	    $annotations .= $line;
+	    next;
+	}
+
     }
     close(IN);
 
-    if($annotations){
+    #adds/deletes annotation featues except if in analysis only mode
+    #in which case it will only add the contig feature if necessary
+    if($annotations && (! $delete || ! $analysis_only)){
 	my ($fh, $fname) = File::Temp::tempfile();
 	print $fh "\#\#gff-version 3\n";
 	print $fh $annotations;
@@ -368,7 +424,8 @@ while(my $file = shift @files){
 	unlink($fname)
     }
 
-    if($analysis){
+    #adds/deletes analysis features if necessary
+    if($analysis && ! $annotation_only){
 	my ($fh, $fname) = File::Temp::tempfile();
 	print $fh "\#\#gff-version 3\n";
 	print $fh $analysis;
@@ -387,13 +444,15 @@ while(my $file = shift @files){
 
 	    system ($command);
 
-	    #rebuild annotation file to delete
-	    open($fh, "> $fname");
-	    print $fh "\#\#gff-version 3\n";
-	    print $fh $annotations;
-	    print $fh $fasta;
-	    close($fh);
-	    system ($command);
+	    if(! $analysis_only){
+		#rebuild annotation file to delete
+		open($fh, "> $fname");
+		print $fh "\#\#gff-version 3\n";
+		print $fh $annotations;
+		print $fh $fasta;
+		close($fh);
+		system ($command);
+	    }
 
 	    push (@files, $file);
 	    print LOG "FAILED $file\n";           

@@ -175,7 +175,7 @@ try{
 	       "qq"    =>\$main::qq,
 	       "check" =>\$OPT{check},
 	       "base=s" =>\$OPT{out_name},
-	       "datastore" =>\$OPT{datastore},
+	       "datastore!" =>\$OPT{datastore},
 	       "bigdump" =>\$main::bigdump,
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},

@@ -43,6 +43,8 @@ OPTIONS:
 
      organism|o  <name>  Organism in CHADO database to use
 
+     cpus|o      <int>   Number of cpus to use (parallelize)
+
      help|?              Displays this usage statement
 
 
@@ -286,7 +288,7 @@ sub get_feature_lines {
 					    "LEFT JOIN feature f3 ON f3.feature_id=pt.object_id AND c2.name='derives_from' ".
 					    "LEFT JOIN featureloc l2 ON f.feature_id=l2.feature_id AND l2.srcfeature_id != l.srcfeature_id ".
 					    "LEFT JOIN feature f4 ON l2.srcfeature_id=f4.feature_id ".
-					    "WHERE l.srcfeature_id = $contig_id;");
+					    "WHERE l.srcfeature_id = $contig_id ORDER BY f.feature_id;");
 
     #add other attributes if specified
     my $dbxref   = {};
@@ -429,5 +431,40 @@ sub get_other_attributes {
 					  "JOIN cvterm c ON f.type_id=c.cvterm_id ".
 					  "WHERE c.name!='date' AND c.name!='owner' AND c.name!='problem' AND c.name!='status'");
 #    my ($feature_id, $key, $value) = ;
+}
+#------------------------------------------------------------------------------
+sub crit1 {
+    my $line = shift;
+
+    return 0 if($line =~ /\tcontig\t|\tchromosome\t/);
+
+    return 1; 
+}
+#-----------------------------------------------------------------------------
+sub crit2 {
+    my $line = shift;
+
+    my @F = split(/\t/, $line);
+    
+    return $F[1];
+}
+#------------------------------------------------------------------------------
+sub crit3 {
+    my $line = shift;
+
+    my @F = split(/\t/, $line);
+    
+    if($F[8] !~ /Parent=/){
+	return 0;
+    }
+    elsif($F[2] =~ /_part/){
+	return 2 ;
+    }
+    elsif($F[2] =~ /exon|CDS/){
+	return 3;
+    }
+    else{
+	return 1;
+    }
 }
 #------------------------------------------------------------------------------
