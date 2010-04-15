@@ -57,9 +57,14 @@ Options:
   --seq_only
       Print only the sequence (without the header) to STDOUT.  This
       can also be accomplished with grep -v '>' fasta_file.
+
   --nt_count
       Print the number and percentage of every nt/aa found in the
       sequence.
+
+  --length
+      Print the length of each sequence.
+
   --tab
       Print the header and sequence on the same line seperated by a tab.
 
@@ -107,7 +112,7 @@ Options:
 
 my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header,
     $grep_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
-    $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order,
+    $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $length,
     $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file);
 
 GetOptions('summary'        => \$summary,
@@ -135,6 +140,7 @@ GetOptions('summary'        => \$summary,
 	   'remove=s'       => \$remove_file,
 	   'select=s'       => \$select_file,
 	   'fix'            => \$fix,
+	   'length'         => \$length,
 	  );
 
 my $file = shift;
@@ -145,7 +151,7 @@ unless (($file && -r $file) || ! -t STDIN){
 
 if ($rev_comp) {$rev_seq++; $comp_seq++}
 
-my $warning = "\n\n" . ('#' x 40) . "\nFeature not thouroughly tested!!\n" . ('#' x 40) . "\n\n";
+my $warning = "\n\n" . ('#' x 40) . "\nThis function is not yet thouroughly tested!!\n" . ('#' x 40) . "\n\n";
 
 warn $warning if grep {$_} ($reverse,
 			    $rev_seq,
@@ -154,6 +160,7 @@ warn $warning if grep {$_} ($reverse,
 			    $shuffle_seq,
 			    $shuffle_codon,
 			    $shuffle_pick,
+			    $length
 			   );
 
 $print++ unless grep {$_} ($chunks,
@@ -202,6 +209,7 @@ grep_seq($grep_seq)         if $grep_seq;
 translate()                 if $translate;
 seq_only()                  if $seq_only;
 nt_count()	            if $nt_count;
+seq_length()                if $length;
 tab()	                    if $tab;
 print_seq()                 if $print;
 reverse_order()             if $reverse;
@@ -457,6 +465,13 @@ sub nt_count {
 	}
 	print "\n";
 	print "Total nts\t$total_count\n";
+}
+#-----------------------------------------------------------------------------
+sub seq_length {
+    while (my $seq_obj = $seq_io->next_seq) {
+	my $length = $seq_obj->length;
+	print $length . "\n";
+    }
 }
 #-----------------------------------------------------------------------------
 sub print_seq {
