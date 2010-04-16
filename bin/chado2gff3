@@ -331,7 +331,8 @@ sub get_feature_lines {
 
 	#fix semantic differences
 	$start++;
-	$end++;
+	#$end++; don't iterate end since it os already correct (coordinates are space based)
+
 	$strand = ($strand == 1) ? '+' : '-';
 	$Target =~ s/_\d+$// if($Target);
 	if($t_strand){

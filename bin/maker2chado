@@ -100,6 +100,7 @@ my $annotation_only;
 my $analysis_only;
 my $match;
 my $exclude;
+my $reindex;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -114,6 +115,7 @@ GetOptions("host|h=s" => \$host,
 	   "fasta=s" => \$fasta_file,
 	   "match=s" => \$match,
 	   "exclude=s" => \$exclude,
+	   "reindex" => \$reindex,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
@@ -133,7 +135,6 @@ if($dstore){
     my %seen;
     while(my $e = <IN>){
         next unless ($e =~ /FINISHED/);
-        next if $seen{$e};
         $seen{$e}++;
         chomp $e;
         my ($id, $dir, $status) = split("\t", $e);
@@ -289,7 +290,6 @@ if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
 $DBH->disconnect;
 
 my $index;
-my %done;
 if($fasta_file){
     my %CTL_OPT = (out_base => '.', alt_peptide => 'C', protein => $fasta_file);
     ($CTL_OPT{_protein}, $CTL_OPT{p_db}) = GI::split_db(\%CTL_OPT, 'protein', 10);
@@ -312,13 +312,6 @@ my $count = 0;
 while(my $file = shift @files){
     my $gmod = $GMOD;
     $count++;
-    if($count % 100 == 0 && @files != 0){
-	#$gmod .= " --recreate_cache";
-    }
-    elsif(@files == 0){
-	$gmod .= " --recreate_cache";
-	$gmod =~ s/\-\-skip_vacuum//;
-    }
 
     my $annotations;
     my $analysis;
@@ -351,7 +344,7 @@ while(my $file = shift @files){
 	    #add sequence for features if external fasta provided
 	    if($index){
 		my ($name) = $line =~ /Target=([^\;\n\s]+)/;
-		if($name && ! $done{$name}){
+		if($name){
 		    my $fastaObj = $index->get_Seq_by_id($name);
 		    if(! $fastaObj){
 			$fastaObj = $index->get_Seq_by_alias($name);
@@ -363,7 +356,6 @@ while(my $file = shift @files){
 			$afasta .= $f;
 			print "\n\nWoo Hoo!!\n\n";
 		    }
-		    $done{$name}++;
 		}
 	    }
 
@@ -405,12 +397,16 @@ while(my $file = shift @files){
 
     #must delete analysis before annotations
     if($delete){
-	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta);
-	process_annotations($annotations, $analysis, $gmod, $file, $fasta);
+	my $flag = (@files == 0 && $reindex) ? 1 : 0;
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta, $flag);
+	$flag = ($annotation_only && $flag) ? 1 : 0;
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta, $flag);
     }
     else{
-	process_annotations($annotations, $analysis, $gmod, $file, $fasta);
-	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta);
+	my $flag = (@files == 0 && $reindex) ? 1 : 0;
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta, $flag);
+	$flag = ($analysis_only && $flag) ? 1 : 0;
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta, $flag);
     }
 }
 close(LOG);
@@ -423,6 +419,12 @@ sub process_annotations {
     my $gmod = shift;
     my $file = shift;
     my $fasta = shift;
+    my $flag = shift;
+
+    if($flag){
+	$gmod .= " --recreate_cache";
+	$gmod =~ s/\-\-skip_vacuum//;
+    }
 
     #adds/deletes annotation featues except if in analysis only mode
     #in which case it will only add the contig feature if necessary
@@ -460,6 +462,12 @@ sub process_analysis {
     my $file = shift;
     my $fasta = shift;
     my $afasta = shift;
+    my $flag = shift;
+
+    if($flag){
+	$gmod .= " --recreate_cache";
+	$gmod =~ s/\-\-skip_vacuum//;
+    }
 
     #adds/deletes analysis features if necessary
     if($analysis && ! $annotation_only){
@@ -481,7 +489,7 @@ sub process_analysis {
 
 	    system ($command);
 
-	    if(! $analysis_only){
+	    if(! $analysis_only && ! $delete){
 		#rebuild annotation file to delete
 		open($fh, "> $fname");
 		print $fh "\#\#gff-version 3\n";
