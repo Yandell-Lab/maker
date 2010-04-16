@@ -897,8 +897,10 @@ sub check_table_structure {
 		$c_count = `grep -c ">" $value`;
 	    }
 
+	    my ($check) = $dbh->selectrow_array(qq{SELECT value FROM menus WHERE value='$value'});
+
 	    $dbh->do(qq{INSERT INTO menus (name, value, type, length, contig_count, is_tutorial) }.
-		     qq{VALUES ('$name', '$value', '$type', '$length', '$c_count', $is_tutorial)});
+		     qq{VALUES ('$name', '$value', '$type', '$length', '$c_count', $is_tutorial)}) unless($check);
 	}
     }    
 

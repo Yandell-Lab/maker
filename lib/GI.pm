@@ -2385,10 +2385,6 @@ sub set_defaults {
 
    #server menus
    if ($type eq 'menus') {
-      #this step is required since menu defaults are exe dependant
-      my %exe_ctl = set_defaults('exe', $user_default); 
-      %CTL_OPT = (%CTL_OPT, %{collect_hmms(\%exe_ctl)}); #add exe dependant values
-
       #now add static defaults
       $CTL_OPT{'genome'}           = {'D. melanogaster : example contig' => "$FindBin::Bin/../../data/dpp_contig.fasta",
 				      'De novo Annotation : example contig' => "$FindBin::Bin/../data/pyu-contig.fasta",
@@ -2432,11 +2428,23 @@ sub set_defaults {
       $CTL_OPT{'protein'}{'UniProt'} = "$FindBin::Bin/../data/uniprot_sprot.fasta"
 	  if(-f "$FindBin::Bin/../data/uniprot_sprot.fasta");
 
-      #restore any user supplied values
-      %CTL_OPT = (%CTL_OPT, %{$user_default->{menus}})
-	  if($user_default->{menus});
-   }
+      #this step is required since menu defaults are exe dependant
+      my %exe_ctl = set_defaults('exe', $user_default); 
+      my %hmm_ctl = %{collect_hmms(\%exe_ctl)};
+      while(my $key = each %hmm_ctl){
+	  $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
+	  %{$CTL_OPT{$key}} = (%{$CTL_OPT{$key}}, %{$hmm_ctl{$key}}); #add exe dependant values
+      }
 
+      #restore any user supplied values
+      if($user_default->{menus}){
+	  my %user_ctl = %{$user_default->{menus}};
+	  while(my $key = each %user_ctl){
+	      $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
+	      %{$CTL_OPT{$key}} = (%{$CTL_OPT{$key}}, %{$user_ctl{$key}});
+	  }
+      }
+   }
    #reset values with user supplied defaults
    if($user_default && $type ne 'menus'){
        while(my $key = each %$user_default){
