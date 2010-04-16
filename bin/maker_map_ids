@@ -71,14 +71,20 @@ while (<$IN>) {
 	my ($seq, $source, $type, $start, $end, $score, $strand,
 	    $phase, $attrb_text) = split /\t/, $_;
 
+	my $last = -1;
 	# Here we explicity limit the mapping to genes and mRNAs
 	if ($type =~ /^(gene|mRNA)$/) {
 		my ($id) = $attrb_text =~ /ID=([^\;\n]*)/;
+		if($type eq 'mRNA' && $start != $last){
+		    $start = $last;
+		}
+
 		$ids{$seq}{$start}{$id} = $type;
 		if($apollo){
 		    my ($parent) = $attrb_text =~ /Parent=([^\;\n]*)/;
 		    $parents{$seq}{$start}{$id} = $parent;
 		}
+		$last = $start;
 	}
 }
 # Create the new ID map.  Sort contigs by $sort_map in outer loop and 
@@ -135,7 +141,7 @@ sub parse_sort_order {
 		my $flag;
 		while (my $line = <$IN>) {
 			if ($line =~ /\#\#sequence-region\s+(\S+)\s+(\d+)\s+(\d+)/) {
-				$flag++;
+				#$flag++;
 				my ($contig_id, $start, $end) = ($1, $2, $3);
 				$sort_order{$contig_id} = ($end - $start);
 			}
@@ -158,6 +164,6 @@ sub parse_sort_order {
 #-----------------------------------------------------------------------------
 sub sort_contigs {
 	my ($a, $b, $sort_map) = @_;
-	return ($sort_order->{$a} <=> $sort_map->{$b}) if defined $sort_order;
-	return ($sort_order->{$b} <=> $sort_map->{$a});
+	return ($sort_order->{$a} <=> $sort_order->{$b}) if defined $sort_order;
+	return ($sort_map->{$b} <=> $sort_map->{$a});
 }
