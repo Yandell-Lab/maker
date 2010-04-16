@@ -47,7 +47,7 @@ sub clean_and_cluster {
 			unless $main::quiet;
 		my $clean = clean::complexity_filter($c, $seq);
 
-		if($main::bigdump){
+		if(! $main::fast){
 		    next if(! @$clean);
 		    push(@{$clean_clusters[$counter]}, @$clean);
 		}
