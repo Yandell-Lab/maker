@@ -31,7 +31,7 @@ BEGIN{
    $SIG{'__WARN__'} = sub {
       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
 		      $_[0] !~ /Can\'t store item / &&
-		      $_[0] !~ /value in regexp .* during global destruction/
+		      $_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
 		    );
    };
 
@@ -88,18 +88,16 @@ Usage:
      produce gene annotations for new genomes as well as update annoations from
      existing genome databases.
 
-     The four input arguments are user control files that specify how maker
-     should behave. The evaluator options file contains control options specific
-     for the evaluation of gene annotations. All options for maker should be set
-     in the control files, but a few can also be set on the command line.
-     Command line options provide a convenient machanism to override commonly
-     altered control file values.
+     The three input arguments are user control files that specify how maker
+     should behave. All options for maker should be set in the control files,
+     but a few can also be set on the command line. Command line options provide
+     a convenient machanism to override commonly altered control file values.
 
      Input files listed in the control options files must be in fasta format.
-     Please see maker documentation to learn more about control file
-     configuration.  Maker will automatically try and locate the user control
-     files in the current working directory if these arguments are not supplied
-     when initializing maker.
+     unless otherwise specified. Please see maker documentation to learn more
+     about control file  configuration.  Maker will automatically try and locate
+     the user control files in the current working directory if these arguments
+     are not supplied when initializing maker.
 
      It is important to note that maker does not try and recalculated data that
      it has already calculated.  For example, if you run an analysis twice on
@@ -121,14 +119,22 @@ Options:
                                  fgenesh
                                  genemark
                                  est2genome (Uses EST's directly)
+                                 protein2genome (For Prokaryotic annotation only)
                                  model_gff (Pass through GFF3 annotations)
                                  pred_gff (Uses passed through GFF3 predictions)
 
                           Use a ',' to seperate types (nospaces)
                           i.e. -predictor=snap,augustus,fgenesh
 
-
      -RM_off|R           Turns all repeat masking off.
+
+     -datastore/         Forcably turn on/off MAKER's use of a two deep datastore
+      nodatastore        directory structure for output.  By default this option
+                         turns on whenever there are more the 1,000 contigs in
+                         the input genome fasta file.
+
+     -base    <string>   Set the base name MAKER uses to save output files.
+                         MAKER uses the input genome file name by default.
 
      -retry|r <integer>  Rerun failed contigs up to the specified count.
 
@@ -138,11 +144,17 @@ Options:
                          This will require all blast analyses to be re-run.
 
      -again|a            Caculate all annotations and output files again even if
-                         no settings have changed.
+                         no settings have changed. Does not delete old analyses.
 
      -evaluate|e         Run Evaluator on final annotations (under development).
 
+     -fast               Causes MAKER to skip most clustering and analysis.
+                         A quick way to align evidence.  You then must re-run
+                         MAKER to produce full GFF3 output and annotations.
+
      -quiet|q            Silences most of maker's status messages.
+
+     -qq                 Really quit. Silences everything but major errors.
 
      -CTL                Generate empty control files in the current directory.
 

@@ -38,7 +38,7 @@ BEGIN{
    $SIG{'__WARN__'} = sub {
       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
 		      $_[0] !~ /Can\'t store item CODE/ &&
-		      $_[0] !~ /value in regexp .* during global destruction/
+		      $_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
 		    );
    };
 
@@ -149,6 +149,7 @@ Options:
                                  fgenesh
                                  genemark
                                  est2genome (Uses EST's directly)
+                                 protein2genome (For Prokaryotic annotation only)
                                  model_gff (Pass through GFF3 annotations)
                                  pred_gff (Uses passed through GFF3 predictions)
 
@@ -156,6 +157,14 @@ Options:
                           i.e. -predictor=snap,augustus,fgenesh
 
      -RM_off|R           Turns all repeat masking off.
+
+     -datastore/         Forcably turn on/off MAKER's use of a two deep datastore
+      nodatastore        directory structure for output.  By default this option
+                         turns on whenever there are more the 1,000 contigs in
+                         the input genome fasta file.
+
+     -base    <string>   Set the base name MAKER uses to save output files.
+                         MAKER uses the input genome file name by default.
 
      -retry|r <integer>  Rerun failed contigs up to the specified count.
 
@@ -170,6 +179,8 @@ Options:
      -evaluate|e         Run Evaluator on final annotations (under development).
 
      -quiet|q            Silences most of maker's status messages.
+
+     -qq                 Really quit. Silences everything but major errors.
 
      -CTL                Generate empty control files in the current directory.
 
