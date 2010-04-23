@@ -1,0 +1,5 @@
+#! /usr/bin/perl -w
+use strict;
+use FindBin;
+
+system("$FindBin::Bin/legacy_blast.pl formatdb ".join(" ", @ARGV)." --path $FindBin::Bin");
