@@ -96,6 +96,17 @@ sub cgiapp_init {
 
    #add default control options from server
    $self->param(server_opt => \%serv_opt);
+
+   #add param for cgi and html urls
+   my $codebase_cgi = ($serv_opt{cgi_web} =~ /http\:\/\//) ? "$serv_opt{cgi_web}" : "$serv_opt{web_address}/$serv_opt{cgi_web}";
+   $codebase_cgi =~ s/([^\:])\/+/$1\//g;
+   $codebase_cgi .= '/' if($codebase !~ /\/$/);
+   $self->param(codebase_cgi => $codebase_cgi);
+   
+   my $codebase_html = ($serv_opt{html_web} =~ /http\:\/\//) ? "$serv_opt{html_web}" : "$serv_opt{web_address}/$serv_opt{html_web}";
+   $codebase_html =~ s/([^\:])\/+/$1\//g;
+   $codebase_html .= '/' if($codebase !~ /\/$/);
+   $self->param(codebase_html => $codebase_html);
 }
 #-----------------------------------------------------------------------------
 sub cgiapp_prerun {
@@ -112,6 +123,8 @@ sub cgiapp_prerun {
 
         $self->tt_params({logged_in  => $is_authen,
                           server_opt => $self->param('server_opt'), #server options file
+                          codebase_html => $self->param('codebase_html'),
+                          codebase_cgi => $self->param('codebase_cgi'),
                           session    => $self->session,
                           user       => $user,
                           #authen     => Dumper($self->authen),
@@ -802,6 +815,7 @@ sub submit_to_db {
    my $is_queued = $q->param('add') ? 1 : 0;
    my $later = $q->param('later') ? 1 : 0; #save and come back later
    my $job_id = $q->param('job_id');
+   my $serv_opt = $self->param('server_opt');
 
    #decide if this is a temporary ctl_opt cache update or not
    my ($is_saved) = $self->dbh->selectrow_array(qq{SELECT is_saved FROM jobs WHERE job_id=$job_id});
@@ -872,12 +886,6 @@ sub submit_to_db {
 	   );
    }
 
-#   #check if a finished job used these exact same settings
- #  if(my $other_job_id = MWAS_util::package_already_exists($self->dbh, \%CTL_OPT, $user_id)){
-  #     $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
-  #     MWAS_util::copy_package($self->dbh, $job_id, $other_job_id);
-  # }
-
    #if ctl_opt exists update else make new entry
    if($self->dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$job_id})){
        #update control options for job
@@ -893,19 +901,38 @@ sub submit_to_db {
 		      );
    }
 
-   $self->dbh->commit();
-
-   if($later){ #save and move to frontpage
+   #save and move to frontpage
+   if($later){
+       $self->dbh->commit();
        return $self->frontpage("Job saved but not added to queue");
    }
+   #save enqueue and move to front page
+   elsif($is_queued){
+       #get control parameters for job
+       my $job_ctl = $self->dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$job_id});
 
-   if($is_queued){ #save enqueue and move to front page
+       #check if a finished job used these exact same settings
+       if(my $other_job_id = MWAS_util::package_already_exists($self->dbh, $job_ctl, $user_id)){
+           #make directories for running maker
+           my $user_dir = $serv_opt->{data_dir}."/users/$user_id";
+           my $job_dir = $serv_opt->{data_dir}."/jobs/$job_id";
+	   File::Path::mkpath($user_dir) if(! -d $user_dir);
+	   File::Path::mkpath($job_dir) if(! -d $job_dir);
+
+           $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
+	   MWAS_util::copy_package($self->dbh, $other_job_id, $job_id);
+       }
+
+       $self->dbh->commit;
        return $self->frontpage("Job added to queue successfully");
    }
-
-   #just go back to creating job
-   return $self->job_create();
+   #otherwise just go back to creating job
+   else{
+       $self->dbh->commit;
+       return $self->job_create();
+   }
 }
+
 #---------------------------------------------------------------------------
 sub feedback {
    my $self = shift;

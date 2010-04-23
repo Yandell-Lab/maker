@@ -1,6 +1,7 @@
 [% WRAPPER main.tt session = session %]
 
 <script type="text/javascript">
+<!--
 function org_type_changed(type){
   document.job_form.just_update_opt.value = 1;
   for (i=0;i < document.job_form.organism_type.length;i++) {
@@ -44,6 +45,44 @@ function make_multiple(DivID, DivID2){
     }
 }
 
+function showFile(selectID) {
+    var file = "";
+    var url = "stream.cgi?file=";
+    var iState = 2;
+    var DivID = 'FloatingLayer';
+    if(document.layers)   //NN4+
+    {
+        if(iState == 2)
+        {
+            iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
+        }
+        document.layers[DivID].visibility = iState ? "show" : "hide";
+ 	file = document.layers[DivID].selected;
+    }
+    else if(document.getElementById)  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        if(iState == 2)
+        {
+            iState = (obj.style.visibility == "visible") ? 0 : 1;
+        }
+        obj.style.visibility = iState ? "visible" : "hidden";
+	
+    }
+    else if(document.all)// IE 4
+    {
+        if(iState == 2)
+        {
+            iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
+        }
+        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
+    }
+
+    if(iState == 1){
+      LoadURL('floating_content_area', url);
+    }
+}
+// -->
 </script>
 
 <center>
@@ -279,6 +318,7 @@ function make_multiple(DivID, DivID2){
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:toggleLog(1, 'stream.cgi?user_id=[% user.user_id %]');">View File Contents</a></center>
    </td>	    
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
