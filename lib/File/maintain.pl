@@ -1,4 +1,4 @@
-#! /uufs/chpc.utah.edu/sys/pkg/perl/5.10.1/bin/perl -w
+#! /usr/bin/env perl -w
 use strict;
 use FindBin;
 use lib "$FindBin::Bin/../";
