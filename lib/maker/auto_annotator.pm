@@ -2023,11 +2023,13 @@ sub get_non_overlaping_abinits {
 	   next;
        }
 
-       #skip prediction in run option but not in predictor
-       $src =~ s/_masked//;
-       unless(grep {/$src/} @{$CTL_OPT->{_predictor}}){
-	   next;
-       }
+       ##temp
+       ##skip prediction in run option but not in predictor
+       #$src =~ s/_masked//;
+       #unless(grep {/$src/} @{$CTL_OPT->{_predictor}}){
+       #next;
+       #}
+       ##temp
 
        if($g->{g_strand} == 1){
 	   push(@p_ab, $g);
