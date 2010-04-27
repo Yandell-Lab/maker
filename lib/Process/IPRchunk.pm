@@ -289,7 +289,11 @@ sub _go {
 	    my $fasta = $VARS->{fasta};
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_id = $VARS->{safe_id};
-	    
+
+	    #safely escape %'s
+	    $safe_id =~ s/x/\%78/g;
+	    $safe_id =~ s/\%/x/g;
+
 	    #get seq
 	    my $seq = Fasta::getSeqRef(\$fasta);
 	    
@@ -381,7 +385,12 @@ sub _go {
 	    open(my $IN, "< $ofile");
 	    my $result;
 	    while(my $line = <$IN>){
-		$result .= uri_unescape($line);
+		#extra steps because InterProScan can't handle %
+		$line =~ s/^([^\s\t]+)//;
+		my $id = $1;
+		$id =~ s/x/\%/g;
+		$id =~ uri_unescape($id);
+		$result .= $id . $line;
 	    }
 	    close($IN);
 	    #-------------------------CODE

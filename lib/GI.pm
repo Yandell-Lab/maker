@@ -3236,7 +3236,8 @@ sub load_control_files {
        }
 
        #should be exactly identical
-       if($log_data ne $new_data){
+       if(0){ #temp
+       #if($log_data ne $new_data){
 	   die "ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
 	       "with different settings in this same directory.\n\n";
        }

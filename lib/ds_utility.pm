@@ -146,7 +146,7 @@ sub add_entry {
    }
 
    #lock file so no one else writes to it (MPI safe)
-   if(my $lock = new File::NFSLock($self->{log}, 'EX', 5, 5)){
+   if(my $lock = new File::NFSLock($self->{log}, 'EX', 30, 30)){
        open(my $IN, ">>", $self->{log});
        print $IN $entry . "\n";
        close($IN);

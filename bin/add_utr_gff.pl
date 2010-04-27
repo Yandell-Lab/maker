@@ -1,6 +1,5 @@
-#!/usr/bin/perl -w
-#make_better_wbannot.pl
-
+#!/usr/bin/env perl -w
+use strict;
 use Bio::DB::GFF;
 use Bio::Tools::GFF;
 use Bio::FeatureIO::gff;

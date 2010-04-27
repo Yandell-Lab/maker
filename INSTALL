@@ -116,10 +116,6 @@ some parts of the installation.
 
   a.  Unpack the MAKER tar file into the directory of your choice (i.e.
       /usr/local).
-  b.  Change to the directory maker/perl and run Install.PL by typing:
-      perl Install.PL
-      (The Install.PL step is only required if DBI and DBD::SQLite are not
-       already installed on your system)
   c.  Now add the following to your .bash_profile if you haven't already:
 	export WUBLASTFILTER="where_wublast_is/filter"
 	export WUBLASTMAT="where_wublast_is/matrix"
