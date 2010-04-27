@@ -100,8 +100,11 @@ while (my $fasta = $iterator->nextFasta){
 						      [],
 						      Cwd::cwd,
 						      $build,
-						      { _predictor => ['gff'],
-							single_exon => '1'
+						      { _predictor => ['pred_gff'],
+							single_exon => '1',
+							organism_type => 'eukaryotic',
+							min_protein => 1,
+							AED_threshold => 1
 						      },
 						     );
 
