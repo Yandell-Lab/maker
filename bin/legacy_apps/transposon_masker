@@ -1,0 +1,305 @@
+#! /usr/bin/perl -w
+use strict "vars";
+use strict "refs";
+
+use Getopt::Std;
+use FileHandle;
+use Fasta;
+use Iterator::Fasta;
+use FastaChunker;
+use Widget::blastx;
+use Widget::RepeatMasker;
+use PhatHit_utils;
+use Shadower;
+use Cwd;
+$|  = 1;
+
+use vars qw($opt_a %CTL_OPTIONS);
+
+getopts('a:');
+
+
+my $usage = "maker [options] maker.ctl 
+where maker.ctl a geneerate name for user control file:
+ Please see maker documentation to learn more about control file format.
+
+options
+
+-a # a user specified id
+";
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $ctlfile = $ARGV[1];
+my $infile = $ARGV[0];
+if (not $ctlfile) {
+	$ctlfile = "maker.ctl"
+    }
+open CTL, "<$ctlfile" or die $usage;
+while (my $line = <CTL>) {
+	chomp($line);
+	if ($line !~ m/^\s+$/ ) {
+		my @l = split(/\:/, (split(/\s+\#/, $line))[0]);
+		$CTL_OPTIONS{$l[0]} = $l[1];
+	}
+}
+$CTL_OPTIONS{'genome'} = $infile;
+#create_blastdb($CTL_OPTIONS{'protein'});
+
+my $run_id = $opt_a || 0;
+
+my $fasta_iterator = new Iterator::Fasta($CTL_OPTIONS{'genome'});
+
+my $fasta     = $fasta_iterator->nextEntry();
+
+my $query_def = Fasta::getDef($fasta);
+
+my $query_seq = Fasta::getSeq($fasta);
+
+my ($seq_id)  = $query_def =~ /^>(\S+)/;
+
+my $the_void  = build_the_void($seq_id, $run_id);
+
+#-- repeatmask the input file 
+my $rm_keepers = repeatmask($fasta, 
+                            $the_void,
+                            length($$query_seq),
+                            $CTL_OPTIONS{'max_dna_len'},
+                            $seq_id,
+			    );
+
+my $simple_masked_seq    = mask_seq($query_seq, $rm_keepers);
+
+my $simple_masked_fasta = Fasta::toFasta($query_def.' simple masked', \$simple_masked_seq);
+
+#-- blastx search  the masked input file
+my $blastx_keepers = blastx($$simple_masked_fasta, 
+	                    $CTL_OPTIONS{'repeat_protein'},
+	                    $the_void,
+	                    length($$query_seq),
+                            $CTL_OPTIONS{'max_dna_len'},
+                            $seq_id,
+			    );
+
+
+my @features = (@{$rm_keepers}, @{$blastx_keepers});
+
+my $total_masked_seq = mask_seq($query_seq, \@features);
+
+my $total_masked_fasta = Fasta::toFasta($query_def.' masked', \$total_masked_seq);
+
+#FastaFile::writeFile($total_masked_fasta ,$the_void."/query.tm_masked.fasta");
+
+print $$total_masked_fasta;
+
+system("rm -r theVoid*") if $CTL_OPTIONS{clean_up}; #rm temp directory
+
+exit(0);
+
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------
+sub create_blastdb {
+    my $proteindbs = shift @_;
+    my $dnadbs = shift @_;
+    my @protdbs = split(/\:/, $proteindbs);
+    my @dnadbs = split(/\:/, $dnadbs);
+    foreach my $p (@protdbs) {
+	system($CTL_OPTIONS{setdb}." $p");
+    }
+    foreach my $d (@dnadbs) {
+	system($CTL_OPTIONS{pressdb}. " $d");
+    }
+}
+#----------------------------------------------------------------------------
+sub repeatmask {
+    my $fasta      = shift;
+    my $theVoid    = shift;
+    my $q_length   = shift;
+    my $chunk_size = shift;
+    my $seq_id     = shift;
+    
+    my $fasta_chunker = new FastaChunker();
+    $fasta_chunker->parent_fasta($fasta);
+    $fasta_chunker->chunk_size($chunk_size);
+    $fasta_chunker->load_chunks();
+    
+    my $rm_keepers = [];
+    my $i = 0;
+    while (my $chunk = $fasta_chunker->get_chunk($i)){
+	my $chunk_number = $chunk->number();
+	my $file_name = "$the_void/$seq_id\.$chunk_number\.tm";
+	my $o_file    = "$the_void/$seq_id\.$chunk_number\.tm\.out";
+	$chunk->write_file($file_name);
+
+	runRepeatMasker($file_name, 
+			$CTL_OPTIONS{'model_org'}, 
+			$the_void, 
+			$o_file, 
+			); # -no_low
+	
+	my $rm_chunk_keepers = 
+	    Widget::RepeatMasker::parse($o_file, 
+					$seq_id, 
+					$q_length,
+					);
+	PhatHit_utils::add_offset($rm_chunk_keepers, 
+				  $chunk->offset(),
+				  );
+	PhatHit_utils::merge_hits($rm_keepers,  
+				  $rm_chunk_keepers, 
+				  20,
+				  );
+	$chunk->erase_file();
+        $i++;
+}
+    return $rm_keepers;
+}
+#-----------------------------------------------------------------------------
+sub blastx {
+    my $fasta      = shift;
+    my $db         = shift;
+    my $theVoid    = shift;
+    my $q_length   = shift;
+    my $chunk_size = shift;
+    my $seq_id     = shift;
+
+    my ($db_n) = $db =~ /([^\/]+)$/;
+    $db_n  =~ s/\.fasta$//;
+
+    my $fasta_chunker = new FastaChunker();
+    $fasta_chunker->parent_fasta($fasta);
+    $fasta_chunker->chunk_size($chunk_size);
+    $fasta_chunker->load_chunks();
+
+    my $blastx_keepers = [];
+    my $i = 0;
+    while (my $chunk = $fasta_chunker->get_chunk($i)){
+	my $chunk_number = $chunk->number();
+
+	my $file_name = "$the_void/$seq_id\.tm.$chunk_number";
+	my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.tm.blastx";
+
+	$chunk->write_file($file_name);
+	runBlastx($file_name,
+		  $db,
+		  $o_file,
+		 );
+	my %params;
+	$params{significance} = $CTL_OPTIONS{'eval_blastx'};
+	$params{hsp_bit_min}  = $CTL_OPTIONS{'bit_blastx'};
+	
+	my $chunk_keepers =
+	    Widget::blastx::parse($o_file,
+				  \%params,
+				 );
+	PhatHit_utils::add_offset($chunk_keepers,
+				  $chunk->offset(),
+				 );
+	PhatHit_utils::merge_hits($blastx_keepers,
+				  $chunk_keepers,
+				  10000,
+				 );
+	$chunk->erase_file();
+	$i++;
+    }
+    return $blastx_keepers;
+}
+
+#-----------------------------------------------------------------------------
+sub runBlastx {
+    my $q_file   = shift;
+    my $db       = shift;
+    my $out_file = shift;
+
+    my $command  = $CTL_OPTIONS{blastx};
+    $command .= " $db $q_file -B10000 -V10000 -E$CTL_OPTIONS{'eval_blastx'}";
+    $command .= " wordmask=seg";
+    #$command .= " T=20";
+    #$command .= " W=5";
+    $command .= " wink=5";
+    $command .= " Z=128000000";
+    $command .= " hspmax=100";
+    $command .= " gspmax=100";
+    $command .= " cpus=12";
+    $command .= " hspsepqmax=10000";
+    $command .= " lcfilter";
+    $command .= " filter=seg";
+    $command .= " > $out_file";
+    my $w = new Widget::blastx();
+    if (-e $out_file){
+	print STDERR "re reading blast report.\n";
+	print STDERR "$out_file\n";
+    }
+    else {
+	print STDERR "running  blast search.\n";
+	$w->run($command);
+    }
+}
+#-----------------------------------------------------------------------------
+sub mask_seq {
+    my $seq      = shift;
+    my $features = shift;
+
+    return $$seq unless defined($features->[0]);
+
+    my @tran_coors;
+    my @lowc_coors;
+    foreach my $f (@{$features}){
+	foreach my $hsp ($f->hsps()){
+	    if (ref($hsp) =~ /repeatmasker/){
+		push(@lowc_coors,
+		     [$hsp->nB('query'), $hsp->nE('query')]);
+	    }
+	    elsif (ref($hsp) =~ /blastx/) {
+		push(@tran_coors, 
+		     [$hsp->nB('query'), $hsp->nE('query')]);
+	    }
+	    else {
+			die "unknown type given to sub mask_seq!\n";
+	    }
+	}
+    }
+    my $masked_seq = Shadower::maskSequence($seq, \@tran_coors, 50, 'N');
+    $masked_seq = Shadower::softMaskSequence($masked_seq,
+					     \@lowc_coors,
+					     0,
+					    );
+    return $masked_seq;
+}
+#-----------------------------------------------------------------------------
+sub runRepeatMasker {
+    my $q_file   = shift;
+    my $species  = shift;
+    my $dir      = shift;
+    my $o_file   = shift;
+    my $no_low   = shift;
+
+    my $command  = $CTL_OPTIONS{repeatmasker};
+    my $rlib     = $CTL_OPTIONS{'rmlib'};
+    if ($rlib) {
+	    $command .= " $q_file -lib $rlib -dir $dir ";    
+    }else {
+	    $command .= " $q_file -species $species -noint";
+    }
+    my $w = new Widget::RepeatMasker();
+    if (-e $o_file){
+	print STDERR "re reading repeat masker report.\n";
+	print STDERR "$o_file\n";
+    }
+    else {
+	print STDERR "running  repeat masker.\n";
+	$w->run($command);
+    }
+}
+#-----------------------------------------------------------------------------
+sub build_the_void {
+    my $seq_id  = shift;
+    my $run_id  = shift;
+    my $the_void = cwd()."/theVoid\.$seq_id\.$run_id";
+    system("mkdir $the_void")  unless -d $the_void;
+    return $the_void;
+}
+#-----------------------------------------------------------------------------
+
