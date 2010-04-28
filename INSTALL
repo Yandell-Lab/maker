@@ -44,8 +44,9 @@ some parts of the installation.
       will install BioPerl where perl is installed.  Press enter to accept all
       defaults. For Mac OS-X BioPerl will install to /Library/Perl/5.8.6/.
 
+3.  Install either WuBlast or NCBI-BLAST using instruction in 3a and 3b
 
-3.  Install WuBlast 2.0 or higher
+3a.  Install WuBlast 2.0 or higher (Alternatively install NCBI-BLAST in 3b)
     (WuBlast has become AB-Blast and is no longer freely available, so if you
     are not lucky enough to have an existing copy of WuBlast, you can use NCBI
     BLAST instead.  See NCBI BLAST documentation for installation instructions.
@@ -60,6 +61,17 @@ some parts of the installation.
 		export WUBLASTMAT="/usr/local/wublast/matrix"
   c.  Add the location where you installed WuBlast to your PATH variable in 
       .bash_profile (i.e. PATH="/usr/local/wublast:$PATH").
+
+3b.  Install NCBI-BLAST 2.2.X or higher (Alternatively install WuBlast in 3a)
+
+  a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
+  b.  If you are installing the new BLAST+ rather than legacy BLAST from NACBI,
+      you will need to copy maker/NCBI/blastall and maker/NCBI/formatdb to the
+      ncbi-blast/bin/ directory.  BLAST+ uses a completely different command
+      line structure than legacy BLAST, and these two files help convert
+      command lines to maintian compatability with all versions of NCBI-BLAST. 
+  c.  Add the location where you installed NCBI-BLAST to your PATH variable in
+      .bash_profile (i.e. PATH="/usr/local/ncbi-blast:$PATH").
 
 
 4.  Install SNAP.  Download from http://homepage.mac.com/iankorf/
@@ -82,16 +94,19 @@ some parts of the installation.
   c.  Make TRF executable by typing chmod +x+u trf.  You can then move this file
       wherever you want.  I just put it in the /RepeatMasker directory.
   d.  Unpack RepeatMasker to the directory of your choice (i.e. /usr/local).
-  e.  Now in the RepeatMasker directory type perl ./configure in the command
+  e.  If you do not have WuBlast installed, you will need to install the program
+      cross_match.  You must request cross_match via e-mail, so this is usually
+      the longest step.  Install according to cross_match documentations.
+  f.  Now in the RepeatMasker directory type perl ./configure in the command
       line. You will be asked to identify the location of perl, wublast, and
       trf.  The script expects the paths to the folders containing the
       executables (because you are pointing to a folder the path must end in a 
       '/' character or the configuration script throws a fit).
-  f.  Add the location where you installed RepeatMasker to your PATH variable in
+  g.  Add the location where you installed RepeatMasker to your PATH variable in
       .bash_profile (i.e. export PATH="/usr/local/RepeatMasker:$PATH").
-  g.  You must register at http://www.girinst.org and download the Repbase
+  h.  You must register at http://www.girinst.org and download the Repbase
       repeat database, Repeat Masker edition, for RepeatMasker to work.
-  h.  Unpack the contents of the RepBase tarball into the RepeatMasker/Libraries
+  i.  Unpack the contents of the RepBase tarball into the RepeatMasker/Libraries
       directory.
 
 
@@ -116,14 +131,12 @@ some parts of the installation.
 
   a.  Unpack the MAKER tar file into the directory of your choice (i.e.
       /usr/local).
-  c.  Now add the following to your .bash_profile if you haven't already:
-	export WUBLASTFILTER="where_wublast_is/filter"
-	export WUBLASTMAT="where_wublast_is/matrix"
+  b.  Now add the following to your .bash_profile if you haven't already:
 	export ZOE="where_snap_is/Zoe"
 	export AUGUSTUS_CONFIG_PATH="where_augustus_is/config
-  d.  Add the location where you installed MAKER to your PATH variable in
+  c.  Add the location where you installed MAKER to your PATH variable in
       .bash_profile (i.e. export PATH=/usr/local/maker/bin:$PATH).
-  e.  You can now run a test of MAKER by following the instructions in the MAKER
+  d.  You can now run a test of MAKER by following the instructions in the MAKER
       README file.
 
 

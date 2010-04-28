@@ -14,8 +14,17 @@ on.  MAKER works on both eukaryotic and prokaryotic genomes.
 
 
 To install MAKER, you will first need to install the following
-external programs:
+prerequisites:
 
+Perl modules (available from CPAN):
+    *DBI
+    *DBD::SQLite
+    *Proc::ProcessTable
+    *threads (Optional for MPI scripts)
+    *IO::All (Optional for accessory scripts)
+    *IO::Prompt (Optional for accessory scripts)
+
+Required external programs:
     *PERL 5.8.0 or higher
     *BioPerl 1.6 or higher (www.bioperl.org)
     *SNAP version 2009-02-03  or higher (homepage.mac.com/iankorf)
@@ -23,7 +32,6 @@ external programs:
     *Exonerate 1.4  or higher (www.ebi.ac.uk/~guy/exonerate)
 
 You must also install one of the following:
-
     *Wu-BLAST 2.0 or higher
      (Wu-BLAST has become AB-BLAST, AB-BLAST is not supported)
 	or
@@ -31,7 +39,6 @@ You must also install one of the following:
      (http://www.ncbi.nlm.nih.gov/BLAST/download.shtml)
  
 You might want to also install these optional external programs:
-
     *Augustus 2.0 or higher (augustus.gobics.de)
     *GeneMark-ES (exon.biology.gatech.edu)
     *FGENESH 2.6 or higher (www.softberry.com) - requires licence
@@ -39,7 +46,6 @@ You might want to also install these optional external programs:
 
 To install mpi_maker, you must have an mpi package installed, MAKER
 supports MPICH2:
-
     *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
 
 Note: Remember to install MPICH2 with the --enable-sharedlibs flag set
@@ -47,7 +53,6 @@ to the appropriate value.  See MPICH2 Installer's Guide at:
 http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
 
 Also see the mpi_maker installation instructions found further bellow.
-
 
 Notes:
 
