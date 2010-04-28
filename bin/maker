@@ -1,10 +1,11 @@
-#!/usr/bin/env perl -w
+#!/usr/bin/env perl
 
 eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
 use strict "vars";
 use strict "refs";
+use warnings;
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
