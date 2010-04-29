@@ -237,7 +237,9 @@ elsif($opt eq 'SETUP'){
     system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
     system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    if(-d $p_lib){
+	system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    }
 
     #build redirection page (so user can see directories if apache is not configured)
     open(OUT, "> $html_dir/index.html");
