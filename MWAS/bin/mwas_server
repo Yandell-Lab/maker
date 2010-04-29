@@ -253,7 +253,9 @@ elsif($opt eq 'SETUP'){
     #DB error checking
     if($CTL_OPT{DBI} && $CTL_OPT{dbname}){
 	#try to connect to the database as a test
-	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
+	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
+	$dsn .= "$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+	$dsn .= "$CTL_OPT{dbname};";
 	$dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
 	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
 
@@ -379,7 +381,9 @@ elsif($opt eq 'START'){
 	}
 
 	#try to connect to the database as a test
-	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
+	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
+	$dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+        $dsn .= "$CTL_OPT{dbname};";
 	$dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
 	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
 
@@ -489,7 +493,9 @@ sub run_server {
     }
 
     #try to connect to the database as a test
-    my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
+    my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
+    $dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+    $dsn .= "$CTL_OPT{dbname};";
     $dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
     $dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
     
@@ -725,7 +731,9 @@ sub start_job {
     $dbh->disconnect; #disconnect before forking
 
     #rebuild connection string
-    my $dsn = "DBI:$CTL_OPT{DBI}:dbname=$CTL_OPT{dbname};";
+    my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
+    $dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+    $dsn .= "$CTL_OPT{dbname};";
     $dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
     $dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
 

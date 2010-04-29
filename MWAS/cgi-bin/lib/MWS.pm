@@ -50,7 +50,9 @@ sub cgiapp_init {
    }
     
    #connect to the database
-   my $dsn = "DBI:$serv_opt{DBI}:dbname=$serv_opt{dbname};";
+   my $dsn = "DBI:$serv_opt{DBI}:dbname=";
+   $dsn .= "$serv_opt{data_dir}/" if($serv_opt{DBI} eq 'SQLite');
+   $dsn .= "$serv_opt{dbname};";
    $dsn .= "host=$serv_opt{host};" if($serv_opt{host});
    $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
 
