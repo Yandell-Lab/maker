@@ -3169,7 +3169,7 @@ sub load_control_files {
 
    #--set an initialization lock so steps are locked to a single process
    my $i_lock; #init lock, it is only a temporary blocking lock
-   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 5, 45)){
+   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45)){
        die "ERROR: Cannot get initialization lock.\n\n";
    }
 
