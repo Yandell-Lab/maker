@@ -41,8 +41,8 @@ die "ERROR: Could not retrieve lock" if(! $LOCK);
 while(-f $LOCK->{lock_file}){
     $LOCK->refresh;
     sleep $time;
-    my $name = Proc::Signal::get_name_by_id($pid);
-    last if(! $name || $name !~ /^maker$|^mpi_maker$/);
+    my $stat = Proc::Signal::id_matches_pattern($pid, 'maker');
+    last if(! $stat);
 }
 
 $LOCK->unlock;

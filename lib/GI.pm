@@ -1315,7 +1315,10 @@ sub blastn_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished)) {
+   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+        (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+       (! -e $blast_finished)
+      ){
        if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
 	   $lock->maintain(30);
 	   copy($db, $tmp_db) if(! -e $tmp_db);
@@ -1591,7 +1594,10 @@ sub blastx_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
    #copy db to local tmp dir and run xdformat or format db 
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
+   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+       (! -e $blast_finished)
+      ){
        if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
 	   $lock->maintain(30);
            copy($db, $tmp_db) if(! -e $tmp_db);
@@ -1879,7 +1885,10 @@ sub tblastx_as_chunks {
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if ((! @{[<$tmp_db.x?d*>]} || ! @{[<$tmp_db.?sq*>]}) && (! -e $blast_finished) ) {
+   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+        (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+       (! -e $blast_finished)
+      ){
        if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
 	   $lock->maintain(30);
            copy($db, $tmp_db) if(! -e $tmp_db);

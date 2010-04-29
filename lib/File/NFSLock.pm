@@ -278,7 +278,7 @@ sub unlock ($) {
   my $self = shift;
 
   #remove maintainer if running
-  if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
+  if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
       kill(2, $self->{_maintain});
       close($self->{_OUT});
       close($self->{_IN});
@@ -492,7 +492,7 @@ sub maintain {
     $self->refresh; #refresh once on it's own
 
     #clean up old maintainers
-    if(defined $self->{_maintain} && Proc::Signal::get_name_by_id($self->{_maintain}) =~ /maintain/){
+    if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
 	kill(2, $self->{_maintain});
 	close($self->{_OUT});
 	close($self->{_IN});
@@ -526,7 +526,7 @@ sub maintain {
 	if(! $exe || ! -f $exe);
 
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
-    my $pid = open2(my $OUT, my $IN, "$exe $$ $time $serial");
+    my $pid = open2(my $OUT, my $IN, "$^X $exe $$ $time $serial");
     $self->{_OUT} = $OUT;
     $self->{_IN} = $IN;
     $self->{_maintain} = $pid;

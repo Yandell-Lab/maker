@@ -117,12 +117,8 @@ sub _initialize {
    my $length = $self->{params}->{seq_length};
 
    #lock must be persitent in object or it is detroyed outside of block
-   if($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
-       $self->{LOCK}->maintain(30);
-   }
-   else{
+   unless($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
        $self->{continue_flag} = -3;
-       
        return 0;
    }
 
@@ -183,11 +179,8 @@ sub _clean_files{
     my @dirs; #list of directories to remove
     
     if (-e $log_file) {
-	
 	die "ERROR: Database timed out in runlog::_clean_files\n\n"
-	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 600, 40));
-
-	$lock->maintain(30);
+	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
 
 	my %SEEN;
 	tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
@@ -712,6 +705,9 @@ sub report_status {
    my $out_dir = $self->{params}->{out_dir};
    my $fasta_ref = $self->{params}->{fasta_ref};
    my $length = $self->{params}->{seq_length};
+
+   #maintain lock only if status id positive (possible race condition?)
+   $self->{LOCK}->maintain(30) if($flag > 0);
 
    if($flag == 0){
       print STDERR "#---------------------------------------------------------------------\n",

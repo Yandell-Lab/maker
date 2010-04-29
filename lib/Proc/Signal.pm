@@ -28,6 +28,15 @@ sub signalall {
     return killall(@_);
 }
 #-----------------------------------------------------------------
+sub id_matches_pattern{
+    my $pid = shift;
+    my $pattern = shift;
+
+    my $stat = grep {/$pattern/} `ps -o command  -p $pid`;
+
+    return $stat;
+}
+#-----------------------------------------------------------------
 #checks to see if a process exists by id
 sub exists_proc_by_id {
     my ($found, $signaled) = exists_kill(0, @_);
