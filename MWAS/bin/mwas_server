@@ -214,17 +214,17 @@ elsif($opt eq 'SETUP'){
     system("chown -R :$CTL_OPT{apache_user} $cgi_dir") &&
 	die "ERROR: Could not establish ownership for $cgi_dir\n".
 	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $cgi_dir)[5]) == $CTL_OPT{apache_user});
+	unless(getgrgid((stat $cgi_dir)[5]) eq $CTL_OPT{apache_user});
 
     system("chown -R :$CTL_OPT{apache_user} $html_dir") &&
 	die "ERROR: Could not establish ownership for $html_dir\n".
 	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $html_dir)[5]) == $CTL_OPT{apache_user});
+	unless(getgrgid((stat $html_dir)[5]) eq $CTL_OPT{apache_user});
 
     system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
 	die "ERROR: Could not establish ownership for $data_dir\n".
 	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $data_dir)[5]) == $CTL_OPT{apache_user});
+	unless(getgrgid((stat $data_dir)[5]) eq $CTL_OPT{apache_user});
 
     #set directory guid to preserve permissions on new files in directory
     system("chmod 2775 $cgi_dir") &&
