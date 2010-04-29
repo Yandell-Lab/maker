@@ -100,12 +100,12 @@ sub cgiapp_init {
    #add param for cgi and html urls
    my $codebase_cgi = ($serv_opt{cgi_web} =~ /http\:\/\//) ? "$serv_opt{cgi_web}" : "$serv_opt{web_address}/$serv_opt{cgi_web}";
    $codebase_cgi =~ s/([^\:])\/+/$1\//g;
-   $codebase_cgi .= '/' if($codebase !~ /\/$/);
+   $codebase_cgi .= '/' if($codebase_cgi !~ /\/$/);
    $self->param(codebase_cgi => $codebase_cgi);
    
    my $codebase_html = ($serv_opt{html_web} =~ /http\:\/\//) ? "$serv_opt{html_web}" : "$serv_opt{web_address}/$serv_opt{html_web}";
    $codebase_html =~ s/([^\:])\/+/$1\//g;
-   $codebase_html .= '/' if($codebase !~ /\/$/);
+   $codebase_html .= '/' if($codebase_html !~ /\/$/);
    $self->param(codebase_html => $codebase_html);
 }
 #-----------------------------------------------------------------------------
