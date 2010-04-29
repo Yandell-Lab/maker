@@ -1229,11 +1229,8 @@ sub dbformat {
    die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
    my $lock;
-   if($lock = new File::NFSLock("$file.dbformat", 'EX', 600, 40)){
-       $lock->maintain(30);
-   }
-   else{
-       die "ERROR:  Could not obain lock to format database\n\n";
+   unless($lock = new File::NFSLock("$file.dbformat", 'EX', 600, 40)){
+       die "ERROR:  Could not obtain lock to format database\n\n";
    }
 
    if ($command =~ /xdformat/) {
@@ -1245,6 +1242,7 @@ sub dbformat {
 	 $command .= " -n" if($type eq 'blastn' || $type eq 'tblastx');
 	 $command .= " $file";
 
+	 $lock->maintain(30);
 	 my $w = new Widget::xdformat();
 	 print STDERR "formating database...\n" unless $main::quiet;
 	 $w->run($command);
@@ -1259,6 +1257,7 @@ sub dbformat {
 	 $command .= " -p F" if($type eq 'blastn' || $type eq 'tblastx');
 	 $command .= " -i $file";
 
+	 $lock->maintain(30);
 	 my $w = new Widget::formatdb();
 	 print STDERR "formating database...\n" unless $main::quiet;
 	 $w->run($command);

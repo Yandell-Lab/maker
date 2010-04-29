@@ -43,7 +43,13 @@ sub new {
     #build indexes
     foreach my $file (@keep){
 	if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){
-	    $lock->maintain(30);
+	    if(! -e "$file.index"){ #maintain lock because I must build index
+		$lock->maintain(30);
+	    }
+	    else{ #release lock because index exists and is ready to use
+		$lock->unlock();
+		$lock = undef;
+	    }
 
 	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
 
@@ -51,7 +57,7 @@ sub new {
 	    my ($title) = $file =~ /([^\/]+)$/;
 	    $self->{file2index}{$title} = $self->{index}->[-1];
 
-	    $lock->unlock;
+	    $lock->unlock if($lock);
 	}
 	else{
 	    die "ERROR: Could not get lock for indexing\n\n";
@@ -84,7 +90,7 @@ sub reindex {
     #clear old index array
     $self->{index} = [];
 
-    #build indexes
+    #rebuilt build indexes
     foreach my $file (@keep){
 	if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){
 	    $lock->maintain(30);

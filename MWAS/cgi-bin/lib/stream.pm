@@ -26,7 +26,7 @@ use GI;
 use Data::Dumper;
 use MWAS_util;
 use URI::Escape;
-use Digest::MD5
+use Digest::MD5;
 
 #-----------------------------------------------------------------------------
 sub cgiapp_init {
