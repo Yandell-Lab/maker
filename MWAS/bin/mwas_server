@@ -300,9 +300,11 @@ elsif($opt eq 'SETUP'){
 
 	#fix permissions on SQLite database
 	if($CTL_OPT{DBI} eq 'SQLite'){
-	    system("chmod 774 $CTL_OPT{dbname}") &&
-		die "ERROR: Could not establish permissions for $data_dir\n".
-		    "You may need to log in as 'root' for setup\n\n";
+	    my $db = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
+	    system("chmod 774 $db") &&
+		die "ERROR: Could not establish permissions for $db\n".
+		"You may need to log in as 'root' for setup\n\n"
+		unless((sprintf "%04o", (stat $db)[2] & 07777)  == 0774);
 	}
 
 	#setup the database
