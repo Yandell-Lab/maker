@@ -210,22 +210,37 @@ elsif($opt eq 'SETUP'){
     die "ERROR: The directory '$html_dir' does not exist\n" if(! -d $html_dir);
     die "ERROR: The directory '$data_dir' does not exist\n" if(! -d $data_dir);
 
-    #set up correct directory permissions and ownership
-    system("chown :$CTL_OPT{apache_user} $cgi_dir $html_dir") &&
-	die "ERROR: Could not establish ownership for $cgi_dir and $html_dir\n".
-	    "You may need to log in as 'root' for setup\n\n";
+    #set up correct ownership
+    system("chown -R :$CTL_OPT{apache_user} $cgi_dir") &&
+	die "ERROR: Could not establish ownership for $cgi_dir\n".
+	"You may need to log in as 'root' for setup\n\n"
+	unless(getgrgid((stat $cgi_dir)[5]) == $CTL_OPT{apache_user});
 
-    system("chmod 2774 $cgi_dir $html_dir $data_dir") &&
-	die "ERROR: Could not establish permissions for $cgi_dir and $html_dir\n".
-	    "You may need to log in as 'root' for setup\n\n";
+    system("chown -R :$CTL_OPT{apache_user} $html_dir") &&
+	die "ERROR: Could not establish ownership for $html_dir\n".
+	"You may need to log in as 'root' for setup\n\n"
+	unless(getgrgid((stat $html_dir)[5]) == $CTL_OPT{apache_user});
 
     system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
 	die "ERROR: Could not establish ownership for $data_dir\n".
-	    "You may need to log in as 'root' for setup\n\n";
+	"You may need to log in as 'root' for setup\n\n"
+	unless(getgrgid((stat $data_dir)[5]) == $CTL_OPT{apache_user});
 
-    system("chmod 2774 $data_dir") &&
+    #set directory guid to preserve permissions on new files in directory
+    system("chmod 2775 $cgi_dir") &&
+	die "ERROR: Could not establish permissions for $cgi_dir\n".
+	"You may need to log in as 'root' for setup\n\n"
+	unless((sprintf "%04o", (stat $cgi_dir)[2] & 07777)  == 2775);
+    
+    system("chmod 2775 $html_dir") &&
+	die "ERROR: Could not establish permissions for $html_dir\n".
+	"You may need to log in as 'root' for setup\n\n"
+	unless((sprintf "%04o", (stat $html_dir)[2] & 07777)  == 2775);
+    
+    system("chmod 2775 $data_dir") &&
 	die "ERROR: Could not establish permissions for $data_dir\n".
-	    "You may need to log in as 'root' for setup\n\n";
+	"You may need to log in as 'root' for setup\n\n"
+	unless((sprintf "%04o", (stat $html_dir)[2] & 07777)  == 2775);
 
     #copy all cgi, html, and support files to a web accessible directory
     my $co_dir = "$FindBin::Bin/../cgi-bin/"; #original direcory
@@ -241,13 +256,28 @@ elsif($opt eq 'SETUP'){
 	system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     }
 
+    #recursively set group permission to write for all files in the directory
+    system("chmod -R g+w $cgi_dir") &&
+	die "ERROR: Could not establish permissions for $cgi_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+    system("chmod -R g+w $html_dir") &&
+	die "ERROR: Could not establish permissions for $html_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+    system("chmod -R g+w $data_dir") &&
+	die "ERROR: Could not establish permissions for $data_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
     #build redirection page (so user can see directories if apache is not configured)
     open(OUT, "> $html_dir/index.html");
+    my $url = ($CTL_OPT{cgi_web} =~ /\:\/\//) ?  $CTL_OPT{cgi_web} : "$CTL_OPT{web_address}/$CTL_OPT{cgi_web}";
+    $url .= "/maker.cgi";
+    $url =~ s/([^:])\/\//$1\//g;
     print OUT "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">\n".
 	      "<HTML>\n".
-	      "<meta http-equiv=\"REFRESH\" content=\"0;url=$CTL_OPT{web_address}/$CTL_OPT{cgi_web}/maker.cgi\">\n".
+	      "<meta http-equiv=\"REFRESH\" content=\"0;url=$url\">\n".
 	      "</HTML>";
-    
     close(OUT);
 
     #DB error checking
