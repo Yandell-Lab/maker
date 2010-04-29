@@ -2353,7 +2353,7 @@ sub set_defaults {
    #server
    if ($type eq 'server') {
       $CTL_OPT{'DBI'} = 'SQLite';
-      $CTL_OPT{'dbname'} = 'makerweb.db';
+      $CTL_OPT{'dbname'} = 'makerweb';
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
       $CTL_OPT{'username'} = 'MWAS';
@@ -2589,10 +2589,8 @@ sub parse_ctl_files {
     }
 
     #fix dbname for DBI::SQLite 
-    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
-       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
-       ){
-	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
+    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' && $CTL_OPT{dbname}){
+	($CTL_OPT{dbname}) = $CTL_OPT{dbname} =~ /([^\/]+)$/
     }
     
     return %CTL_OPT;
