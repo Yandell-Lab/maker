@@ -2339,10 +2339,13 @@ sub set_defaults {
 	 my $loc = `which $exe 2> /dev/null`;
 	 chomp $loc;
 	 if ($loc =~ /^no $exe/) {
-	    $CTL_OPT{$exe} = '';
+	     $CTL_OPT{$exe} = '';
+	 }
+	 elsif($exe =~ /^blastn$|^blastx$|^tblastx$/ && $loc =~ /ncbi-blast/){
+	     $CTL_OPT{$exe} = '';
 	 }
 	 else {
-	    $CTL_OPT{$exe} = $loc;
+	     $CTL_OPT{$exe} = $loc;
 	 }
       }
    }
