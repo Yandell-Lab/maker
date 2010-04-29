@@ -1244,7 +1244,7 @@ sub check_table_structure {
 sub reset_queue {
     my $dbh = shift;
 
-    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_finished=0, cpus=0}.
+    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_finished=0, cpus=0 }.
 		  qq{WHERE is_started=1 and is_packaged=0 and is_error=0});
 }
 #------------------------------------------------------------------------
