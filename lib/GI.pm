@@ -2588,11 +2588,6 @@ sub parse_ctl_files {
 	}
     }
 
-    #fix dbname for DBI::SQLite 
-    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' && $CTL_OPT{dbname}){
-	($CTL_OPT{dbname}) = $CTL_OPT{dbname} =~ /([^\/]+)$/
-    }
-    
     return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2685,13 +2680,6 @@ sub load_server_files {
 	if($key eq 'gmhmm' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
-    }
-
-    #fix dbname for DBI::SQLite 
-    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
-       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
-      ){
-	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
     }
 
     return %CTL_OPT;
