@@ -163,7 +163,8 @@ sub _should_continue {
 #This method should not be called directly by the user or inside
 #MpiChunks. Putting this preparation here as opposed to inside
 #MpiTiers makes MpiChunks more portable and makes debugging
-#easier.
+#easier.  It will always run on the root node before distributing
+#the tier.
 
 sub _prepare {
    my $self = shift;

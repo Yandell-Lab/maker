@@ -53,10 +53,16 @@ $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 sub set_global_temp {
     my $dir = shift;
 
-    return if(! -d $dir);
+    return if(! $dir);
 
     #remove old tempdir if user supplied a new one
     if($TMP ne $dir){
+	my $base = $dir;
+	$base =~ s/[^\/]+$//;
+	return if(! -d $base);
+
+	mkdir($dir) if(! -d $dir);
+
 	File::Path::rmtree($TMP);
     }
 
@@ -3163,7 +3169,7 @@ sub load_control_files {
    $CTL_OPT{SEEN_file} = "$CTL_OPT{out_base}/seen.dbm";   
    
    #--set up optional global TMP (If TMP is not accessible from other nodes
-   #)
+   #they will default back to /tmp)
    if($CTL_OPT{TMP}){
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
    }
