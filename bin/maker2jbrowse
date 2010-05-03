@@ -190,7 +190,10 @@ foreach my $file (@files){
 	while(my $track = each %tracks){
 	    my $command = $JB;
 
-	    die "ERROR: No track information for source \'$track\'\n\n" if(! exists $commands{$track});
+	    if(! exists $commands{$track}){
+		warn "ERROR: No track information for source \'$track\'\n\n";
+		next;
+	    }
 
 	    $command .= $commands{$track};
 	    $command .= " --gff $fname";

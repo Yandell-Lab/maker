@@ -120,7 +120,7 @@ foreach my $file (@files) {
 	else {
 	    my ($seqid, $source, $tag, $start, $end, $score, $strand, $phase, $annot) = split(/\t/, $line);
 	    my %annotation = split(/[;=]/, $annot);
-	    if ($tag eq "mRNA" && $source eq "maker") {
+	    if ($tag eq "mRNA") {
 		my $id = $annotation{'ID'};
 		my $lname = $annotation{'Name'};
 		my $parent = $annotation{'Parent'};
@@ -129,11 +129,11 @@ foreach my $file (@files) {
 		    ($qi) = $line =~ /_QI\=([^\;\n]+)/;
 		}
 		my ($AED) = $line =~ /_AED\=([^\;\n]+)/;
-		my $ishc = is_hc($qi, $AED);
+		my $ishc = ($source eq 'maker') ? is_hc($qi, $AED) : 1; #if not from maker don't try and filter
 		if ($ishc == 1 ) {
 		    push(@{$hc{$seqid}}, $id);
 		}
-	    }elsif ($tag eq "CDS" && $source eq "maker") {
+	    }elsif ($tag eq "CDS") {
 		my @parents = split(',', $annotation{'Parent'});
 
 		foreach my $parent (@parents){
