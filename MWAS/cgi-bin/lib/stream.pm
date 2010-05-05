@@ -24,42 +24,25 @@ use CGI::Application::Plugin::Stream (qw/stream_file/);
 use FindBin;
 use GI;
 use Data::Dumper;
+use MWS;
 use MWAS_util;
 use URI::Escape;
+<<<<<<< .mine
 use Digest::MD5;
+use vars qw(@ISA);
+=======
+use Digest::MD5;
+>>>>>>> .r369
+
+@ISA = ('MWS');
 
 #-----------------------------------------------------------------------------
 sub cgiapp_init {
     my $self = shift;
     $self->SUPER::cgiapp_init;
-
-    #load the server control files
-    my %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/config/server.ctl"])});
-
-    #make sure required database values are setup
-    if (! $serv_opt{DBI}) {
-	die "ERROR: You must specify a DBI connection method in: $FindBin::Bin/config/server.ctl\n\n";
-    }
-    if (! $serv_opt{dbname}) {
-	die "ERROR: You must specify a database to connect to in: $FindBin::Bin/config/server.ctl\n\n";
-    }
-
-    #connect to the database
-    my $dsn = "DBI:$serv_opt{DBI}:dbname=$serv_opt{dbname};";
-    $dsn .= "host=$serv_opt{host};" if($serv_opt{host});
-    $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
+   
+    my %serv_opt = %{$self->param('server_opt')};
     
-    $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0})
-	or die "Got error $DBI::errstr when connecting to database\n";;
-    
-    #reload default server options from server
-    my %CTL_OPT = %{$self->get_server_default_options()}; #this is all control options
-    @serv_opt{keys %serv_opt} = @CTL_OPT{keys %serv_opt}; #just get server options
-    
-    #setup template params
-    $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => "$FindBin::Bin/tt_templates/",
-					  EVAL_PERL => 1});
-
     #setup authentication
     __PACKAGE__->authen->config(DRIVER => ['DBI',
 					   DBH         => $self->dbh,
@@ -137,9 +120,9 @@ sub stream {
     return if(! $job_info || $user_id != $job_info->{user_id});
     
     #authenticate via login params or md5 digest
-    if($m && $job_info){
-	$key =  Digest::MD5::md5_hex(grep {defined($_)} values %$job_info);
-	return if($key != $m);
+    if($md5 && $job_info){
+	my $key =  Digest::MD5::md5_hex(grep {defined($_)} values %$job_info);
+	return if($key != $md5);
     }
     else{
 	my $user_info = $self->get_user_info();
@@ -197,6 +180,14 @@ sub get_job_info {
     my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM jobs WHERE job_id=$job_id});
 
     return $info;
+}
+#-----------------------------------------------------------------------------
+sub get_server_default_options {
+    my $self = shift;
+
+    my $def_opt = $self->dbh->selectrow_hashref(qq{SELECT * FROM all_default_opt});
+
+    return $def_opt;
 }
 #-----------------------------------------------------------------------------
 1;

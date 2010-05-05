@@ -121,18 +121,16 @@ sub exists_killall {
     foreach my $p (@{$obj->table}) {
 	#get all possible name variations for proccess
 	my $cmdline  = $p->cmndline() || '';
-	my ($front)  = $p->cmndline() =~ /^([^\s]+)/ || '';
-	my ($f_name) = $front =~ /([^\/]+)$/ || '';
-	my $exe      = ''; #$p->exec() || '';
-	my $e_name   = $p->fname() || '';
+	my $exe      = ($p->cmndline() =~ /^([^\s]+)/) ? $1 : '';
+	my $f_name   = ($exe =~ /([^\/]+)$/) ? $1 : '';
+	my $e_name   = $p->fname() || ''; #sometimes this is the value after perl or python etc.
 	my $script   = '';
 	my $s_name   = '';
 
 	#split command line into arguments
 	if(($e_name =~ /^perl$/ ||
 	    $exe    =~ /^perl$/ ||
-	    $f_name =~ /^perl$/ ||
-	    $front  =~ /^perl$/) &&
+	    $f_name =~ /^perl$/) &&
 	   $name ne 'perl'
 	  ){
 	    #must handles escaped characters
@@ -155,6 +153,7 @@ sub exists_killall {
 
 	    #now I can split on spaces and recover values
 	    my @args = split(/\s+/, $cmdline);
+	    shift @args; #remove first value because it is perl
 	    foreach my $arg (@args){
 		$arg = uri_unescape($arg);
 		if($arg !~ /^-/){
@@ -169,7 +168,6 @@ sub exists_killall {
 	if ($e_name =~ /^$name$/ ||
 	    $exe    =~ /^$name$/ ||
 	    $f_name =~ /^$name$/ ||
-	    $front  =~ /^$name$/ ||
 	    $s_name =~ /^$name$/ ||
 	    $script =~ /^$name$/
 	   ) {

@@ -14,22 +14,22 @@ use vars qw($LOG %CTL_OPT $EXE $DEBUG);
 use POSIX qw(:sys_wait_h setsid EAGAIN);
 use Template;
 use FindBin;
-use lib "$FindBin::Bin/../../lib"; #/maker/lib?
-use lib "$FindBin::Bin/../../perl/lib"; #/maker/perl/lib?
-use lib "$FindBin::Bin/../../maker/lib"; #/maker/lib?
-use lib "$FindBin::Bin/../../maker/perl/lib"; #/maker/perl/lib?
-use lib "$FindBin::Bin/../lib"; #/MWAS/lib
-use lib "$FindBin::Bin/../perl/lib"; #/MWAS/perl/lib
+use lib "$FindBin::RealBin/../../lib"; #/maker/lib?
+use lib "$FindBin::RealBin/../../perl/lib"; #/maker/perl/lib?
+use lib "$FindBin::RealBin/../../maker/lib"; #/maker/lib?
+use lib "$FindBin::RealBin/../../maker/perl/lib"; #/maker/perl/lib?
+use lib "$FindBin::RealBin/../lib"; #/MWAS/lib
+use lib "$FindBin::RealBin/../perl/lib"; #/MWAS/perl/lib
 use Proc::Signal;
 use File::NFSLock;
 use File::Path qw(mkpath rmtree);
 
 BEGIN{
     if (not ($ENV{CGL_SO_SOURCE})) {
-	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../../lib/CGL/so.obo";
+	$ENV{CGL_SO_SOURCE} = "$FindBin::RealBin/../../lib/CGL/so.obo";
     }
     if (not ($ENV{CGL_GO_SOURCE})) {
-	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../../lib/CGL/gene_ontology.obo"
+	$ENV{CGL_GO_SOURCE} = "$FindBin::RealBin/../../lib/CGL/gene_ontology.obo"
     }
 
     #get my own name
@@ -56,7 +56,7 @@ BEGIN{
     $SIG{'TERM'} = $exit;
     $SIG{'HUP'} = sub{print STDERR "STATUS: Signal @_ received, attempting to restart $EXE\t".date_time()."\n";
 		      close(STDERR);
-		      exec($0, @ARGV);
+		      exec($FindBin::RealScript, @ARGV);
 		     };
 }
 
@@ -152,7 +152,7 @@ $opt = 'HELP' if($opt eq '?'); #also accept ?
 $opt = 'STOP' if($opt =~ /^SHUTDOWN$|^KILL$|^QUIT$|^DIE$|^DIEDIE$/); #also accept SHUTDOWN, KILL, or QUIT
 
 #find control files and load them
-my $c_dir = "$FindBin::Bin/../config/"; #configuration file directory
+my $c_dir = "$FindBin::RealBin/../config/"; #configuration file directory
 my @files = ("$c_dir/maker_opts.ctl",
 	     "$c_dir/maker_bopts.ctl",
 	     "$c_dir/maker_exe.ctl",
@@ -240,21 +240,26 @@ elsif($opt eq 'SETUP'){
     system("chmod 2775 $data_dir") &&
 	die "ERROR: Could not establish permissions for $data_dir\n".
 	"You may need to log in as 'root' for setup\n\n"
-	unless((sprintf "%04o", (stat $html_dir)[2] & 07777)  == 2775);
+	unless((sprintf "%04o", (stat $data_dir)[2] & 07777)  == 2775);
 
     #copy all cgi, html, and support files to a web accessible directory
-    my $co_dir = "$FindBin::Bin/../cgi-bin/"; #original direcory
-    my $ho_dir = "$FindBin::Bin/../html/"; #original direcory
-    my $m_lib = "$FindBin::Bin/../../lib/"; #/maker/lib
-    my $p_lib = "$FindBin::Bin/../../perl/lib/"; #/maker/perl/lib
+    my $m_dir = "$FindBin::RealBin/../../"; #maker package base direcory
+    my $co_dir = "$FindBin::RealBin/../cgi-bin/"; #original direcory
+    my $ho_dir = "$FindBin::RealBin/../html/"; #original direcory
+    my $m_lib = "$FindBin::RealBin/../../lib/"; #/maker/lib
+    my $p_lib = "$FindBin::RealBin/../../perl/lib/"; #/maker/perl/lib
     mkdir("$cgi_dir/config/") if(! -d "$cgi_dir/config/");
     system("cp -R $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
     system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    if(-d $p_lib){
+    if(-d $p_lib){ #only exists when MPI is installed
 	system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     }
+
+    #copy maker executables
+    mkdir("$data_dir/maker") if(! -d "$data_dir/maker");
+    system("cp -R $m_dir/* $data_dir/maker/") && die("ERROR: Copying files to $data_dir/maker/ failed\n");
 
     #recursively set group permission to write for all files in the directory
     system("chmod -R g+w $cgi_dir") &&
@@ -327,10 +332,11 @@ elsif($opt eq 'APOLLO'){
 	my (undef, $t_xml) = File::Temp::tempfile();
 	mkdir("$html_dir/jars") if(! -d "$html_dir/jars");
 
-	#create a dummy congfigurable jnlp for webstart
-	my $tt_xml = "$FindBin::Bin/../lib/tt_templates/apollo_webstart.tt";
-	system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
-	       "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp -D $html_dir/jars") &&
+	#create generate Apollo webstart
+	my $tt_xml = "$FindBin::RealBin/../cgi-bin/tt_templates/apollo_webstart.tt";
+	system("export APOLLO_ROOT=$CTL_OPT{APOLLO_ROOT}\n".
+	       "$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
+	       "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp.tt -D $html_dir/jars") &&
 	       die "ERROR: Generating Apollo webstart jars and jnlp file failed\n";
     }
     else{
@@ -343,7 +349,7 @@ elsif($opt eq 'RESTART'){
 
     if(! $exists){
 	print STDERR "STATUS:  is not currently running\n";
-	exec($0, 'START');
+	exec($FindBin::RealScript, 'START');
     }
     elsif(! $signalable){
 	die "ERROR: you do not have the correct permissions to restart $EXE\n";
@@ -400,8 +406,29 @@ elsif($opt eq 'START'){
 	die "ERROR: $EXE is already running.\t".date_time()."\n";
     }
     else{
-	print STDERR "STATUS: Now starting $EXE\!\n";
+	#set user id to be apache
+	my ($usr_id, $grp_id) = (getpwnam($CTL_OPT{apache_user}))[2..3];
 
+	if($usr_id != $> && ! $DEBUG){
+	    chdir('/');
+	    if(! $grp_id){
+		die "ERROR: Can not find group id for apache user.  Make sure\n".
+		    "apache is installed and the correct value is set for\n".
+		    "apache_user in the server_opt.ctl file.\n\n"
+	    }
+	    $) = $( = $grp_id;
+	    setpgrp($$, $grp_id) &&
+		die "ERROR: Could not attach the server to the apache user group.\n".
+		"You may need to add your current user to the apache user group\n".
+		"or start the server usginG sudo\n\n";
+	    $> = $< = $usr_id;
+
+	    #launch with new user_id from data_dir copy
+	    exec("$CTL_OPT{data_dir}/maker/MWAS/bin/$EXE", 'START');
+	}
+
+	print STDERR "STATUS: Now starting $EXE\!\n";
+	    
 	#error checking
 	if(@exists < @files){
 	    die "ERROR: Server control files are missing.  Run $EXE\n".
@@ -411,6 +438,7 @@ elsif($opt eq 'START'){
 		"for client side web access to the server. Then you can\n".
 		"start the server.\n\n";
 	}
+
 
 	#try to connect to the database as a test
 	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
@@ -503,7 +531,7 @@ sub date_time {
 #------------------------------------------------------------------------
 sub run_server {
     #load the control files
-    my $c_dir = "$FindBin::Bin/../config/"; #configuration file direcdtory
+    my $c_dir = "$FindBin::RealBin/../config/"; #configuration file direcdtory
     %CTL_OPT = GI::load_server_files(["$c_dir/maker_opts.ctl",
 				      "$c_dir/maker_bopts.ctl",
 				      "$c_dir/maker_exe.ctl",
@@ -513,15 +541,15 @@ sub run_server {
 
     #make sure required database values are setup
     if(! $CTL_OPT{DBI}){
-	die "ERROR: You must specify a DBI connection method in: $FindBin::Bin/../config/server.ctl\n\n";
+	die "ERROR: You must specify a DBI connection method in: $FindBin::RealBin/../config/server.ctl\n\n";
     }
 
     if(! $CTL_OPT{dbname}){
-	die "ERROR: You must specify a database to connecty to in: $FindBin::Bin/../config/server.ctl\n\n";
+	die "ERROR: You must specify a database to connecty to in: $FindBin::RealBin/../config/server.ctl\n\n";
     }
 
     if(! $CTL_OPT{cgi_dir} || ! $CTL_OPT{html_dir}){
-	die "ERROR: You must specify the directory where web content is installed in: $FindBin::Bin/../config/server.ctl\n\n";
+	die "ERROR: You must specify the directory where web content is installed in: $FindBin::RealBin/../config/server.ctl\n\n";
     }
 
     #try to connect to the database as a test
@@ -539,7 +567,6 @@ sub run_server {
     reset_queue($dbh);
 
     #update web interface to current configuration
-    my $p_lib = "$FindBin::Bin/../config/"; #config directory
     my $w_dir = $CTL_OPT{cgi_dir}; #web accessible directory
     mkdir("$w_dir/config") if(! -d "$w_dir/config");
     system("cp -R $c_dir/* $w_dir/config/") && die("ERROR: Copying files to $w_dir failed\n");
@@ -667,8 +694,8 @@ sub clean_and_package {
 
     #build merged gff3 and fasta files
     system("cd $job_dir/$r_dir\n".
-	   "$FindBin::Bin/../../bin/gff3_merge -d $job_id\_master_datastore_index.log\n".
-	   "$FindBin::Bin/../../bin/fasta_merge -d $job_id\_master_datastore_index.log");
+	   "$FindBin::RealBin/../../bin/gff3_merge -d $job_id\_master_datastore_index.log\n".
+	   "$FindBin::RealBin/../../bin/fasta_merge -d $job_id\_master_datastore_index.log");
 
     #wrap everything up into a nice package
     system("cd $job_dir\n".
@@ -795,14 +822,14 @@ sub start_job {
 	    $dbh->commit;
 
 	    #run maker
-	    my $exe = "$FindBin::Bin/../../bin/maker";
+	    my $exe = "$FindBin::RealBin/../../bin/maker";
 	    my $job_log = "$job_dir/job.log";
 	    
 	    $lock->unlock;
     	    ####===unlock
 
 	    my $err = system("cd $job_dir\n".
-			     "$exe -qq -base $job_id&> $job_log");
+			     "$exe -qq -base $job_id &> $job_log");
 	    
 	    ####===lock the database so no changes are made while I'm writing
 	    $lock = lockDB() || ((print STDERR lock_error()) & (exit(0)));
@@ -972,7 +999,7 @@ sub check_table_structure {
 	     "will be updated accordingly\n";
 
 	$CTL_OPT{admin_email} = '';
-	GI::generate_control_files("$FindBin::Bin/../config/", 'server', \%CTL_OPT)
+	GI::generate_control_files("$FindBin::RealBin/../config/", 'server', \%CTL_OPT)
     }
     else{
 	$dbh->do(qq{UPDATE users SET e_mail='$CTL_OPT{admin_email}' WHERE user_id=1}); #update admin e-mail address
