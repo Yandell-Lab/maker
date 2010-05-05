@@ -27,12 +27,8 @@ use Data::Dumper;
 use MWS;
 use MWAS_util;
 use URI::Escape;
-<<<<<<< .mine
 use Digest::MD5;
 use vars qw(@ISA);
-=======
-use Digest::MD5;
->>>>>>> .r369
 
 @ISA = ('MWS');
 
