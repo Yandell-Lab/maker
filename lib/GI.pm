@@ -800,15 +800,13 @@ sub snap {
 }
 #-----------------------------------------------------------------------------
 sub genemark {
-   $_[2] =~ s/\.masked$// if(@_ == 6); #temp
-
    my $in_file     = shift;
    my $the_void    = shift;
    my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
 
-   $in_file        = shift unless($CTL_OPT->{_no_mask}); #temp
+   $in_file        = shift; #temp
    return []      if(! $in_file); #temp
 
    #genemark sometimes fails if called directly so I built a wrapper
@@ -2353,13 +2351,10 @@ sub set_defaults {
 	 my $loc = `which $exe 2> /dev/null`;
 	 chomp $loc;
 	 if ($loc =~ /^no $exe/) {
-	     $CTL_OPT{$exe} = '';
-	 }
-	 elsif($exe =~ /^blastn$|^blastx$|^tblastx$/ && $loc =~ /ncbi-blast/){
-	     $CTL_OPT{$exe} = '';
+	    $CTL_OPT{$exe} = '';
 	 }
 	 else {
-	     $CTL_OPT{$exe} = $loc;
+	    $CTL_OPT{$exe} = $loc;
 	 }
       }
    }
@@ -2367,7 +2362,7 @@ sub set_defaults {
    #server
    if ($type eq 'server') {
       $CTL_OPT{'DBI'} = 'SQLite';
-      $CTL_OPT{'dbname'} = 'makerweb';
+      $CTL_OPT{'dbname'} = 'makerweb.db';
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
       $CTL_OPT{'username'} = 'MWAS';
@@ -2602,6 +2597,13 @@ sub parse_ctl_files {
 	}
     }
 
+    #fix dbname for DBI::SQLite 
+    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
+       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
+       ){
+	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
+    }
+    
     return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2696,6 +2698,13 @@ sub load_server_files {
 	}
     }
 
+    #fix dbname for DBI::SQLite 
+    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
+       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
+      ){
+	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
+    }
+
     return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2767,7 +2776,6 @@ sub load_control_files {
 	       pid_blastn
 	       en_score_limit
 	       out_name
-	       datastore
 	       );
 
    foreach my $key (@OK){
@@ -3121,15 +3129,16 @@ sub load_control_files {
       die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
-   #--decide whether to force datastore
-   if ($iterator->number_of_entries() > 1000 && ! defined $CTL_OPT{datastore}) {
+   #--decide whether to force datastore 
+   if ($iterator->number_of_entries() > 1000 && ! $CTL_OPT{datastore}) {
       warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
       "A two depth datastore will be used to avoid overloading the data structure of\n".
       "the output directory.\n\n" unless($main::qq);
 
       $CTL_OPT{datastore} = 1;
+      $CTL_OPT{datastore} = 0 if($OPT{off});
    }
-   elsif(! defined $CTL_OPT{datastore}){
+   else{
        $CTL_OPT{datastore} = 0;
    }
 
@@ -3239,8 +3248,7 @@ sub load_control_files {
        }
 
        #should be exactly identical
-       if(0){ #temp
-       #if($log_data ne $new_data){
+       if($log_data ne $new_data){
 	   die "ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
 	       "with different settings in this same directory.\n\n";
        }
