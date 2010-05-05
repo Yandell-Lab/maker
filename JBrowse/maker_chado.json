@@ -95,7 +95,7 @@
     },
     {
       "track": "RepeatRunner",
-      "feature": ["protein_match:blastx:repeatmask", "match:blastx:repeatmask"],
+      "feature": ["protein_match:repeatrunner", "match:repeatrunner"],
       "class": "generic_parent",
       "subfeatures": true,
       "subfeature_classes": {

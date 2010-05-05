@@ -6,7 +6,7 @@ use Getopt::Std;
 ##### Initialize Threshhold  ####
 my @thresh = ();
 my $thrAED = 0.5;
-use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x $opt_d);
+use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x $opt_d $opt_n); 
 
 push @thresh, 0.5;
 push @thresh, 0.5;
@@ -16,7 +16,7 @@ push @thresh, 0;
 push @thresh, 75;
 
 
-getopts("hc:e:o:a:t:x:l:d:");
+getopts("nhc:e:o:a:t:x:l:d:");
 my $usage = "
 maker2zff [options] <gff3_file> <gff3_file> ...
 maker2zff [options] -d <datastore_index>
@@ -30,6 +30,7 @@ For determining which genes are High Confidence for Retraining, there are 6 crit
 -t fraction  The fraction of exons the overlap an ab-initio SNAP prediction, default 0
 -l number    The min length of the protein sequence produced by the mRNA
 -x number    Max AED to allow 0.5 is default
+-n           No filtering.  Accept all.
 ";
 
 if ($opt_c) {$thresh[0] = $opt_c}
@@ -129,7 +130,8 @@ foreach my $file (@files) {
 		    ($qi) = $line =~ /_QI\=([^\;\n]+)/;
 		}
 		my ($AED) = $line =~ /_AED\=([^\;\n]+)/;
-		my $ishc = ($source eq 'maker') ? is_hc($qi, $AED) : 1; #if not from maker don't try and filter
+		#if not from maker don't try and filter
+		my $ishc = ($source eq 'maker' && ! $opt_n) ? is_hc($qi, $AED) : 1;
 		if ($ishc == 1 ) {
 		    push(@{$hc{$seqid}}, $id);
 		}

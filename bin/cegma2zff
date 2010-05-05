@@ -37,7 +37,12 @@ while(my $line = <IN>){
     $F[2] =~ s/Internal/Exon/;
     $F[2] =~ s/Single/Esngl/;
 
-    push(@{$contigs{$F[0]}{$F[8]}}, "$F[2]\t$F[3]\t$F[4]");
+    $contigs{$F[0]}{$F[8]} = [] if(! $contigs{$F[0]}{$F[8]});
+
+    push(@{$contigs{$F[0]}{$F[8]}}, "$F[2]\t$F[3]\t$F[4]")
+	unless((@{[grep {/^Einit/} @{$contigs{$F[0]}{$F[8]}}]} &&
+		@{[grep {/^Eterm/} @{$contigs{$F[0]}{$F[8]}}]}) ||
+	       @{[grep {/^Esngl/} @{$contigs{$F[0]}{$F[8]}}]});
 }
 
 close(IN);
