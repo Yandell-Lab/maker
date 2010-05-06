@@ -2452,13 +2452,13 @@ sub set_defaults {
       }
 
       #restore any user supplied values
-      if($user_default->{menus}){
-	  my %user_ctl = %{$user_default->{menus}};
-	  while(my $key = each %user_ctl){
-	      $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
-	      %{$CTL_OPT{$key}} = (%{$CTL_OPT{$key}}, %{$user_ctl{$key}});
-	  }
-      }
+#      if($user_default->{menus}){
+#	  my %user_ctl = %{$user_default->{menus}};
+#	  while(my $key = each %user_ctl){
+#	      $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
+#	      %{$CTL_OPT{$key}} = (%{$CTL_OPT{$key}}, %{$user_ctl{$key}});
+#	  }
+#      }
    }
    #reset values with user supplied defaults
    if($user_default && $type ne 'menus'){
