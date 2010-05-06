@@ -2384,13 +2384,19 @@ sub set_defaults {
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
       $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/maker';
+      $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin/maker'
+	  if(! -d '/var/www/cgi-bin' && -d '/usr/lib/cgi-bin/');
       $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
       $CTL_OPT{'html_dir'} = '/var/www/html/maker';
+      $CTL_OPT{'html_dir'} = '/var/www/maker'
+	  if(! -d '/var/www/html' && -d '/var/www');
       $CTL_OPT{'html_web'} = '/maker';
       $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data";
       $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
       $CTL_OPT{'apache_user'} = 'apache';
       $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf'
+	  if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/truetype/freefont/FreeMono.ttf');
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
    }
