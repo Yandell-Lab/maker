@@ -81,7 +81,7 @@ Usage:
      dependant on control files found in the /maker/config directory. There are
      five files:  server.ctl, menus.ctl, maker_opts.ctl, maker_bopts.ctl, and
      maker_exe.ctl.  If these files are missing they can be regenerate by
-     calling the CTL with mwas_server (i.e. mwas_server CTL).
+     calling the CONFIG with mwas_server (i.e. mwas_server CONFIG).
 
      The server.ctl file is used to configure server specific and some web
      interface specific options.  The database used by mwas_server is
@@ -123,7 +123,11 @@ Options:
      STOP        Shuts down the daemon. SHUTDOWN, QUIT, and KILL are also
                  accepted.
 
-     CTL         Generates default control files in the /maker/config
+     PREP        Generates server control file in the /maker/config
+                 directory, does not destroy existing files. Run before CONFIG
+                 as some defaults are dependent on server settings.
+
+     CONFIG      Generates default control files in the /maker/config
                  directory, does not destroy existing files.
 
      SETUP       Setup the GGI/HTML files needed to launch the web interface.
@@ -182,7 +186,10 @@ elsif($opt eq 'STATUS'){
         print STDERR "STATUS: $EXE is running\n";
      }
 }
-elsif($opt eq 'CTL'){
+elsif($opt eq 'PREP'){
+    GI::generate_control_files($c_dir,'server', \%CTL_OPT);
+}
+elsif($opt eq 'CONFIG' | $opt eq 'CTL'){
     GI::generate_control_files($c_dir,'all',\%CTL_OPT);
     GI::generate_control_files($c_dir,'server', \%CTL_OPT);
     GI::generate_control_files($c_dir,'menus', \%CTL_OPT);
@@ -190,14 +197,24 @@ elsif($opt eq 'CTL'){
 elsif($opt eq 'SETUP'){
     #error checking
     if(@exists < @files){
-	die "ERROR: You must run $EXE with the CTL option first to create MAKER\n".
-	    "configuration files. Once you are finished building and editing these file\n".
-	    "you can run $EXE with the SETUP option, to build the web interface.\n\n";
+	die "ERROR: You must run $EXE with the PREP and CONFIG options first to create\n".
+	    "MAKER configuration files. Once you are finished building and editing these\n".
+	    "files you can run $EXE with the SETUP option, to build the web interface.\n\n";
     }
 
     my $cgi_dir  = $CTL_OPT{cgi_dir};  #get directory to build CGI files
     my $html_dir = $CTL_OPT{html_dir}; #get directory to build HTML files
     my $data_dir = $CTL_OPT{data_dir}; #get directory for storing data
+
+    #make directories if they don't exist
+    foreach my $dir ($cgi_dir, $html_dir, $data_dir){
+	my $base = $dir;
+	$base =~ s/[^\/]+\/?$//;
+	if(-d $base && ! -d $dir){
+	    mkdir($dir) or warn "ERROR: Could not create directory. Do you have\n".
+		"sufficient privileges to do this?\n\n";
+	}
+    }
 
     die "ERROR: You must supply a directory for cgi_dir\n".
 	"to install CGI files\n" if(! $cgi_dir);
@@ -213,34 +230,34 @@ elsif($opt eq 'SETUP'){
     #set up correct ownership
     system("chown -R :$CTL_OPT{apache_user} $cgi_dir") &&
 	die "ERROR: Could not establish ownership for $cgi_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $cgi_dir)[5]) eq $CTL_OPT{apache_user});
+	"You may need to log in as 'root' for setup\n\n";
+#	unless(getgrgid((stat $cgi_dir)[5]) eq $CTL_OPT{apache_user});
 
     system("chown -R :$CTL_OPT{apache_user} $html_dir") &&
 	die "ERROR: Could not establish ownership for $html_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $html_dir)[5]) eq $CTL_OPT{apache_user});
+	"You may need to log in as 'root' for setup\n\n";
+#	unless(getgrgid((stat $html_dir)[5]) eq $CTL_OPT{apache_user});
 
     system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
 	die "ERROR: Could not establish ownership for $data_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless(getgrgid((stat $data_dir)[5]) eq $CTL_OPT{apache_user});
+	"You may need to log in as 'root' for setup\n\n";
+#	unless(getgrgid((stat $data_dir)[5]) eq $CTL_OPT{apache_user});
 
     #set directory guid to preserve permissions on new files in directory
     system("chmod 2775 $cgi_dir") &&
 	die "ERROR: Could not establish permissions for $cgi_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless((sprintf "%04o", (stat $cgi_dir)[2] & 07777)  == 2775);
+	"You may need to log in as 'root' for setup\n\n";
+#	unless((sprintf "%04o", (stat $cgi_dir)[2] & 07777)  == 2775);
     
     system("chmod 2775 $html_dir") &&
 	die "ERROR: Could not establish permissions for $html_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless((sprintf "%04o", (stat $html_dir)[2] & 07777)  == 2775);
+	"You may need to log in as 'root' for setup\n\n";
+#	unless((sprintf "%04o", (stat $html_dir)[2] & 07777)  == 2775);
     
     system("chmod 2775 $data_dir") &&
 	die "ERROR: Could not establish permissions for $data_dir\n".
-	"You may need to log in as 'root' for setup\n\n"
-	unless((sprintf "%04o", (stat $data_dir)[2] & 07777)  == 2775);
+	"You may need to log in as 'root' for setup\n\n";
+#	unless((sprintf "%04o", (stat $data_dir)[2] & 07777)  == 2775);
 
     #copy all cgi, html, and support files to a web accessible directory
     my $m_dir = "$FindBin::RealBin/../../"; #maker package base direcory
@@ -306,16 +323,30 @@ elsif($opt eq 'SETUP'){
 	#fix permissions on SQLite database
 	if($CTL_OPT{DBI} eq 'SQLite'){
 	    my $db = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
-	    system("chmod 774 $db") &&
-		die "ERROR: Could not establish permissions for $db\n".
-		"You may need to log in as 'root' for setup\n\n"
-		unless((sprintf "%04o", (stat $db)[2] & 07777)  == 0774);
+	    unless((sprintf "%04o", (stat $db)[2] & 07777)  == 0774){
+		system("chmod 774 $db") &&
+		    die "ERROR: Could not establish permissions for $db\n".
+		    "You may need to log in as 'root' for setup\n\n";
+	    }
 	}
 
 	#setup the database
 	check_table_structure($dbh);
 	reset_queue($dbh);
 	$dbh->disconnect;
+
+	#set up correct ownership
+	system("chown -R :$CTL_OPT{apache_user} $cgi_dir") &&
+	    die "ERROR: Could not establish ownership for $cgi_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+	
+	system("chown -R :$CTL_OPT{apache_user} $html_dir") &&
+	    die "ERROR: Could not establish ownership for $html_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
+	
+	system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
+	    die "ERROR: Could not establish ownership for $data_dir\n".
+	    "You may need to log in as 'root' for setup\n\n";
     }
     else{
 	die "ERROR: Could not setup the database structure because no database\n".
@@ -432,7 +463,7 @@ elsif($opt eq 'START'){
 	#error checking
 	if(@exists < @files){
 	    die "ERROR: Server control files are missing.  Run $EXE\n".
-		"with the CTL option first to create the control files.\n".
+		"with the CONFIG option first to create the control files.\n".
 		"Once you are finished building and editing these files\n".
 		"run with the SETUP option to build all files necessary\n".
 		"for client side web access to the server. Then you can\n".
@@ -442,7 +473,7 @@ elsif($opt eq 'START'){
 
 	#try to connect to the database as a test
 	my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
-	$dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+	$dsn .= "$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
         $dsn .= "$CTL_OPT{dbname};";
 	$dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
 	$dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
@@ -554,7 +585,7 @@ sub run_server {
 
     #try to connect to the database as a test
     my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
-    $dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+    $dsn .= "$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
     $dsn .= "$CTL_OPT{dbname};";
     $dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
     $dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
@@ -791,7 +822,7 @@ sub start_job {
 
     #rebuild connection string
     my $dsn = "DBI:$CTL_OPT{DBI}:dbname=";
-    $dsn .="$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
+    $dsn .= "$CTL_OPT{data_dir}/" if($CTL_OPT{DBI} eq 'SQLite');
     $dsn .= "$CTL_OPT{dbname};";
     $dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
     $dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});

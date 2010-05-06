@@ -2245,9 +2245,9 @@ sub set_defaults {
       $CTL_OPT{'protein'} = '';
       $CTL_OPT{'protein_gff'} = '';
       $CTL_OPT{'model_org'} = 'all';
-      $CTL_OPT{'model_org'} = 'all=STATIC' if($main::server);
+      $CTL_OPT{'model_org'} .= '=STATIC' if($main::server);
       $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta");
-      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../../data/te_proteins.fasta")."=STATIC" if($main::server);
+      $CTL_OPT{'repeat_protein'} .= "=STATIC" if($main::server);
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
@@ -2264,7 +2264,7 @@ sub set_defaults {
       $CTL_OPT{'other_gff'} = '';
       $CTL_OPT{'alt_peptide'} = 'C';
       $CTL_OPT{'cpus'} = 1;
-      $CTL_OPT{'cpus'} = '1=DISABLED' if($main::server);
+      $CTL_OPT{'cpus'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'evaluate'} = 0;
       $CTL_OPT{'evaluate'} = 1 if($main::eva);
       $CTL_OPT{'max_dna_len'} = 100000;
@@ -2281,7 +2281,7 @@ sub set_defaults {
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
-      $CTL_OPT{'TMP'} = '=DISABLED' if($main::server);
+      $CTL_OPT{'TMP'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'run'} = ''; #hidden option
       $CTL_OPT{'unmask'} = 0;
       $CTL_OPT{'clean_up'} = 0;
@@ -2299,7 +2299,7 @@ sub set_defaults {
    #maker_bopts
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'wublast';
-      $CTL_OPT{'blast_type'} = 'wublast=DISABLED' if($main::server);
+      $CTL_OPT{'blast_type'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -2362,10 +2362,10 @@ sub set_defaults {
    #server
    if ($type eq 'server') {
       $CTL_OPT{'DBI'} = 'SQLite';
-      $CTL_OPT{'dbname'} = 'makerweb.db';
+      $CTL_OPT{'dbname'} = 'makerweb';
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
-      $CTL_OPT{'username'} = 'MWAS';
+      $CTL_OPT{'username'} = 'maker';
       $CTL_OPT{'password'} = '';
       $CTL_OPT{'admin_email'} = '';
       $CTL_OPT{'smtp_server'} = '';
@@ -2383,11 +2383,11 @@ sub set_defaults {
       $CTL_OPT{'persist_guest'} = 72; #in hours
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
-      $CTL_OPT{'data_dir'} = "$FindBin::Bin/../data";
-      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin';
-      $CTL_OPT{'cgi_web'} = '/cgi-bin';
-      $CTL_OPT{'html_dir'} = '/var/www/html';
-      $CTL_OPT{'html_web'} = '/';
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/maker';
+      $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
+      $CTL_OPT{'html_dir'} = '/var/www/html/maker';
+      $CTL_OPT{'html_web'} = '/maker';
+      $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data";
       $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
       $CTL_OPT{'apache_user'} = 'apache';
       $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
@@ -2397,33 +2397,36 @@ sub set_defaults {
 
    #server menus
    if ($type eq 'menus') {
+      #this step is required since some defaults are dependent on server setting dependant
+      my %server_ctl = set_defaults('server', $user_default); 
+
       #now add static defaults
-      $CTL_OPT{'genome'}           = {'D. melanogaster : example contig' => "$FindBin::Bin/../../data/dpp_contig.fasta",
-				      'De novo Annotation : example contig' => "$FindBin::Bin/../data/pyu-contig.fasta",
-				      'Pass-through : example contig' => "$FindBin::Bin/../data/pass-contig.fasta",
-				      'Legacy Annotation : example contig' => "$FindBin::Bin/../data/legacy-contig.fasta",
-				      'E. coli : example contig' => "$FindBin::Bin/../data/ecoli-contig.fasta"};
-      $CTL_OPT{'snaphmm'}          = {'P. ultimum' => "$FindBin::Bin/../data/pyu.hmm"};
+      $CTL_OPT{'genome'}           = {'D. melanogaster : example contig' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_contig.fasta",
+				      'De novo Annotation : example contig' => "$server_ctl{data_dir}/maker/MWAS/data/pyu-contig.fasta",
+				      'Pass-through : example contig' => "$server_ctl{data_dir}/maker/MWAS/data/pass-contig.fasta",
+				      'Legacy Annotation : example contig' => "$server_ctl{data_dir}/maker/MWAS/data/legacy-contig.fasta",
+				      'E. coli : example contig' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli-contig.fasta"};
+      $CTL_OPT{'snaphmm'}          = {'P. ultimum' => "$server_ctl{data_dir}/maker/MWAS/data/pyu.hmm"};
       $CTL_OPT{'augustus_species'} = {};
       $CTL_OPT{'fgenesh_par_file'} = {};
-      $CTL_OPT{'gmhmm_e'}          = {'P. ultimum' => "$FindBin::Bin/../data/pyu.mod"};
-      $CTL_OPT{'gmhmm_p'}          = {'E. coli' => "$FindBin::Bin/../data/ecoli.mod"};
-      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' => "$FindBin::Bin/../../data/dpp_transcripts.fasta",
-				      'De novo/Legacy/Pass-through : example ESTs' => "$FindBin::Bin/../data/pyu-est.fasta",
-				      'E. coli : example ESTs' => "$FindBin::Bin/../data/ecoli-est.fasta"};
+      $CTL_OPT{'gmhmm_e'}          = {'P. ultimum' => "$server_ctl{data_dir}/maker/MWAS/data/pyu.mod"};
+      $CTL_OPT{'gmhmm_p'}          = {'E. coli' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli.mod"};
+      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_transcripts.fasta",
+				      'De novo/Legacy/Pass-through : example ESTs' => "$server_ctl{data_dir}/maker/MWAS/data/pyu-est.fasta",
+				      'E. coli : example ESTs' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli-est.fasta"};
       $CTL_OPT{'altest'}           = {};
-      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' => "$FindBin::Bin/../../data/dpp_proteins.fasta",
-				      'E. coli : example proteins' => "$FindBin::Bin/../data/ecoli-protein.fasta",
-				      'De novo/Legacy/Pass-through : example proteins' => "$FindBin::Bin/../data/pyu-protein.fasta"};
-      $CTL_OPT{'est_gff'}          = {'Pass-through : example mRNAseq' => "$FindBin::Bin/../data/pass-mRNAseq.gff"};
+      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_proteins.fasta",
+				      'E. coli : example proteins' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli-protein.fasta",
+				      'De novo/Legacy/Pass-through : example proteins' => "$server_ctl{data_dir}/maker/MWAS/data/pyu-protein.fasta"};
+      $CTL_OPT{'est_gff'}          = {'Pass-through : example mRNAseq' => "$server_ctl{data_dir}/maker/MWAS/data/pass-mRNAseq.gff"};
       $CTL_OPT{'altest_gff'}       = {};
       $CTL_OPT{'protein_gff'}      = {};
       $CTL_OPT{'pred_gff'}         = {};
-      $CTL_OPT{'model_gff'}        = {'Legacy Annotation : example model set 1' => "$FindBin::Bin/../data/legacy-set1.gff",
-				      'Legacy Annotation : example model set 2' => "$FindBin::Bin/../data/legacy-set2.gff"};
+      $CTL_OPT{'model_gff'}        = {'Legacy Annotation : example model set 1' => "$server_ctl{data_dir}/maker/MWAS/data/legacy-set1.gff",
+				      'Legacy Annotation : example model set 2' => "$server_ctl{data_dir}/maker/MWAS/data/legacy-set2.gff"};
       $CTL_OPT{'repeat_gff'}       = {};
       $CTL_OPT{'rmlib'}            = {};
-      $CTL_OPT{'repeat_protein'}   = {'RepeatRunner te_proteins' => "$FindBin::Bin/../../data/te_proteins.fasta"};
+      $CTL_OPT{'repeat_protein'}   = {'RepeatRunner te_proteins' => "$server_ctl{data_dir}/maker/MWAS/../data/te_proteins.fasta"};
       $CTL_OPT{'model_org'}        = {'All species' => 'all',
 				      'Fungi' => 'fungi',
 				      'Deuterostomes' => 'deuterostomes',
@@ -2437,8 +2440,8 @@ sub set_defaults {
 
 
       #auto add uniprot if user downloaded it into data directory
-      $CTL_OPT{'protein'}{'UniProt'} = "$FindBin::Bin/../data/uniprot_sprot.fasta"
-	  if(-f "$FindBin::Bin/../data/uniprot_sprot.fasta");
+      $CTL_OPT{'protein'}{'UniProt'} = "$server_ctl{data_dir}/maker/MWAS/data/uniprot_sprot.fasta"
+	  if(-f "$server_ctl{data_dir}/maker/MWAS/data/uniprot_sprot.fasta");
 
       #this step is required since menu defaults are exe dependant
       my %exe_ctl = set_defaults('exe', $user_default); 
@@ -2597,13 +2600,6 @@ sub parse_ctl_files {
 	}
     }
 
-    #fix dbname for DBI::SQLite 
-    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
-       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
-       ){
-	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
-    }
-    
     return %CTL_OPT;
 }
 #-----------------------------------------------------------------------------
@@ -2696,13 +2692,6 @@ sub load_server_files {
 	if($key eq 'gmhmm' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
-    }
-
-    #fix dbname for DBI::SQLite 
-    if($CTL_OPT{DBI} && $CTL_OPT{DBI} eq 'SQLite' &&
-       $CTL_OPT{dbname} && $CTL_OPT{data_dir}
-      ){
-	$CTL_OPT{dbname} = "$CTL_OPT{data_dir}/$CTL_OPT{dbname}";
     }
 
     return %CTL_OPT;
