@@ -865,6 +865,7 @@ sub start_job {
     	    ####===unlock
 
 	    chdir($job_dir);
+	    sleep 20;
 	    my $command = "$exe -qq -base $job_id &> $job_log";
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
