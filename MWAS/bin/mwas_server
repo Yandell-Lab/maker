@@ -866,7 +866,7 @@ sub start_job {
 	    while (my $line = <CHLD_ERR>){
 		print $OUT $line;
 	    }
-	    close($OUT)
+	    close($OUT);
 	    waitpid $pid, 0;
 	    my $err = $?;
 
