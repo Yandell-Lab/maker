@@ -446,7 +446,7 @@ elsif($opt eq 'START'){
 	my ($usr_id, $grp_id) = (getpwnam($CTL_OPT{apache_user}))[2..3];
 
 	if($usr_id != $> && ! $DEBUG){
-	    chdir("$CTL_OPT{data_dir}/maker/MWAS/"); #change directory just incase
+	    chdir("//"); #change directory just incase
 	    if(! $grp_id){
 		die "ERROR: Can not find group id for apache user.  Make sure\n".
 		    "apache is installed and the correct value is set for\n".
@@ -856,18 +856,20 @@ sub start_job {
 	    $job_cpus++;
 	    $dbh->do(qq{UPDATE jobs SET is_queued=0, is_running=1, cpus=$job_cpus WHERE job_id=$job_id});
 	    $dbh->commit;
-
+	    
 	    #run maker
 	    my $exe = "$FindBin::RealBin/../../bin/maker";
 	    my $job_log = "$job_dir/job.log";
-	    
-	    $lock->unlock;
-    	    ####===unlock
 
 	    chdir($job_dir);
 	    my $command = "$exe -qq -base $job_id &> $job_log";
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
+
+	    $lock->unlock;
+    	    ####===unlock
+
+	    #collect output and STDERR
 	    while (my $line = <CHLD_ERR>){
 		print $OUT $line;
 	    }
