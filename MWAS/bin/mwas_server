@@ -23,6 +23,7 @@ use lib "$FindBin::RealBin/../perl/lib"; #/MWAS/perl/lib
 use Proc::Signal;
 use File::NFSLock;
 use File::Path qw(mkpath rmtree);
+use IPC::Open3;
 
 BEGIN{
     if (not ($ENV{CGL_SO_SOURCE})) {
@@ -859,9 +860,16 @@ sub start_job {
 	    $lock->unlock;
     	    ####===unlock
 
-	    my $err = system("cd $job_dir\n".
-			     "$exe -qq -base $job_id &> $job_log");
-	    
+	    my $command = "cd $job_dir\n"."$exe -qq -base $job_id &> $job_log";
+	    my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	    open(my $OUT, "> $job_log");
+	    while (my $line = <CHLD_ERR>){
+		print $OUT $line;
+	    }
+	    close($OUT)
+	    waitpid $pid, 0;
+	    my $err = $?;
+
 	    ####===lock the database so no changes are made while I'm writing
 	    $lock = lockDB() || ((print STDERR lock_error()) & (exit(0)));
 
