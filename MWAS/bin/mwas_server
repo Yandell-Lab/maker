@@ -10,7 +10,7 @@ use strict;
 use warnings;
 use DBI;
 use Mail::Sender;
-use vars qw($LOG %CTL_OPT $EXE $DEBUG);
+use vars qw($LOG %CTL_OPT $EXE $DEBUG $CWD);
 use POSIX qw(:sys_wait_h setsid EAGAIN);
 use Template;
 use FindBin;
@@ -24,6 +24,7 @@ use Proc::Signal;
 use File::NFSLock;
 use File::Path qw(mkpath rmtree);
 use IPC::Open3;
+use Cwd;
 
 BEGIN{
     if (not ($ENV{CGL_SO_SOURCE})) {
@@ -44,6 +45,9 @@ BEGIN{
 
     #set debugging mode
     $DEBUG=0;
+
+    #current working directory
+    $CWD = Cwd::cwd();
 
     #stop signal subroutine
     my $exit =  sub{die "STATUS: Caught @_ exiting.\t".date_time()."\n";};
@@ -442,7 +446,7 @@ elsif($opt eq 'START'){
 	my ($usr_id, $grp_id) = (getpwnam($CTL_OPT{apache_user}))[2..3];
 
 	if($usr_id != $> && ! $DEBUG){
-	    chdir('/');
+	    chdir("$CTL_OPT{data_dir}/maker/MWAS/"); #change directory just incase
 	    if(! $grp_id){
 		die "ERROR: Can not find group id for apache user.  Make sure\n".
 		    "apache is installed and the correct value is set for\n".
@@ -860,7 +864,8 @@ sub start_job {
 	    $lock->unlock;
     	    ####===unlock
 
-	    my $command = "cd $job_dir\n"."$exe -qq -base $job_id &> $job_log";
+	    chdir($job_dir);
+	    my $command = "$exe -qq -base $job_id &> $job_log";
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
 	    while (my $line = <CHLD_ERR>){
@@ -869,6 +874,7 @@ sub start_job {
 	    close($OUT);
 	    waitpid $pid, 0;
 	    my $err = $?;
+	    chdir($CWD);
 
 	    ####===lock the database so no changes are made while I'm writing
 	    $lock = lockDB() || ((print STDERR lock_error()) & (exit(0)));
