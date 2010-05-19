@@ -4,8 +4,8 @@ use strict;
 
 my $usage = "
 Usage:
-     junctions2gff3 <junctions.bed>
-     junctions2gff3 <junctions1.bed> <junctions2.bed> ...
+     tophat2gff3 <junctions.bed>
+     tophat2gff3 <junctions1.bed> <junctions2.bed> ...
 
 Description:
      This script conversts the juctions file producted by TopHat into
@@ -59,8 +59,8 @@ foreach my $file (@infiles){
 	#get target start and end
 	my $t1_s = 1;
 	my $t1_e = $m1_e - $m1_s + 1;
-	my $t2_s = $m2_s - $m1_s + 1;
-	my $t2_e = $m2_e - $m1_s + 1;
+	my $t2_s = $t1_e + 1;
+	my $t2_e = $m2_e - $m1_s + $t2_s;
 	
 	#print match
 	print "$seqid\tTopHat\tmatch\t$start\t$stop\t$score\t$strand\t.\tID=$ID\:0;Name=$ID;\n";
