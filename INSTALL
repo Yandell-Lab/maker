@@ -10,6 +10,23 @@ some parts of the installation.
 1.  You need to have perl 5.8.0 or higher installed.  You can verify this by
     typing perl -v on the command line in a terminal.
 
+    You will also need to install the following perl modules from CPAN.
+      *DBI
+      *DBD::SQLite
+      *Proc::ProcessTable
+      *threads (Optional for MPI scripts)
+      *IO::All (Optional for accessory scripts)
+      *IO::Prompt (Optional for accessory scripts)
+
+    a. Type 'perl -MCPAN -e shell' to access the CPAN shell.  You may
+       have to answer some configuration questions if this is your first time
+       starting CPAN.  You can normally just hit enter to accept defaults.
+
+    b. Type 'install DBI' to install the first module, then type
+      'install DBD::SQLite' to install the next, and so on.
+
+    c. Alternatively you can download moadules from http://www.cpan.org/.
+       Just follow the instructions that come with each module to install.
 
 2.  Install BioPerl 1.6 or higher.  Download the Core Package from
     http://www.bioperl.org
@@ -65,13 +82,16 @@ some parts of the installation.
 3b.  Install NCBI-BLAST 2.2.X or higher (Alternatively install WuBlast in 3a)
 
   a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
-  b.  If you are installing the new BLAST+ rather than legacy BLAST from NACBI,
-      you will need to copy maker/NCBI/blastall and maker/NCBI/formatdb to the
-      ncbi-blast/bin/ directory.  BLAST+ uses a completely different command
-      line structure than legacy BLAST, and these two files help convert
-      command lines to maintian compatability with all versions of NCBI-BLAST. 
-  c.  Add the location where you installed NCBI-BLAST to your PATH variable in
+  b.  Add the location where you installed NCBI-BLAST to your PATH variable in
       .bash_profile (i.e. PATH="/usr/local/ncbi-blast:$PATH").
+  c.  If you are installing the new BLAST+ rather than legacy BLAST from NACBI,
+      MAKER does not yet natively support BLAST+ and installing BLAST is
+      recommended; however, there is a work around that sometimes works if you
+      are determined to use BLAST+ (be warned this does not work for all
+      versions of BLAST+). You will need to copy maker/NCBI/blastall and
+      maker/NCBI/formatdb to the ncbi-blast+/bin/ directory.  BLAST+ uses a
+      completely different command line structure than legacy BLAST, and these
+      two files help convert command lines to maintian compatability. 
 
 
 4.  Install SNAP.  Download from http://homepage.mac.com/iankorf/
