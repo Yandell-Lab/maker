@@ -271,6 +271,7 @@ sub reblast_merged_hits {
 sub process_the_chunk_divide{
     my $chunk      = shift @_;
     my $split_hit  = shift @_;
+    my $pred_flank = shift @_;
     my $s_flag     = shift @_; #indicates whether to treat strands independantly 
     my $groups_cfh = shift @_; #group to cluster and find holdovers
     
@@ -315,9 +316,9 @@ sub process_the_chunk_divide{
 	$m_coor->[1] = 0 if($m_coor->[1] < 0);
     }
     
-    my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, 10);
+    my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, $pred_flank);
     $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
-    my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, 10);
+    my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, $pred_flank);
     $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
     
     my $cutoff = $chunk->length + $chunk->offset - $split_hit;
@@ -2771,6 +2772,7 @@ sub load_control_files {
 	       pid_blastn
 	       en_score_limit
 	       out_name
+	       datastore
 	       );
 
    foreach my $key (@OK){
@@ -3124,17 +3126,18 @@ sub load_control_files {
       die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
-   #--decide whether to force datastore 
-   if ($iterator->number_of_entries() > 1000 && ! $CTL_OPT{datastore}) {
-      warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
-      "A two depth datastore will be used to avoid overloading the data structure of\n".
-      "the output directory.\n\n" unless($main::qq);
-
-      $CTL_OPT{datastore} = 1;
-      $CTL_OPT{datastore} = 0 if($OPT{off});
-   }
-   else{
-       $CTL_OPT{datastore} = 0;
+   #--decide whether to force datastore, datastore will already be defined if selected by user 
+   if(! defined $CTL_OPT{datastore}){
+       if($iterator->number_of_entries() > 1000) {
+	   warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
+	       "A two depth datastore will be used to avoid overloading the data structure of\n".
+	       "the output directory.\n\n" unless($main::qq);
+	   
+	   $CTL_OPT{datastore} = 1;
+       }
+       else{
+	   $CTL_OPT{datastore} = 0;
+       }
    }
 
    #--decide if gff database should be created

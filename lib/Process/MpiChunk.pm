@@ -958,6 +958,7 @@ sub _go {
 	    if (not $chunk->is_last) {
 		($blastn_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
 									     $CTL_OPT{'split_hit'},
+									     $CTL_OPT{'pred_flank'},
 									     1, #treat strands independently
 									     [$blastn_keepers]
 									     );
@@ -1112,6 +1113,7 @@ sub _go {
 	    if (not $chunk->is_last) {
 		($blastx_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
 									     $CTL_OPT{'split_hit'},
+									     $CTL_OPT{'pred_flank'},
 									     1, #treat strands independently
 									     [$blastx_keepers]
 									     );
@@ -1265,6 +1267,7 @@ sub _go {
 	    if (not $chunk->is_last) {
 		($tblastx_keepers, $holdovers) = GI::process_the_chunk_divide($chunk,
 									      $CTL_OPT{'split_hit'},
+									      $CTL_OPT{'pred_flank'},
 									      1, #treat strands independently
 									      [$tblastx_keepers]
 									     );
@@ -1567,6 +1570,7 @@ sub _go {
 		 $holdover_model_gff
 		 ) = GI::process_the_chunk_divide($chunk,
 						  $CTL_OPT{'split_hit'},
+						  $CTL_OPT{'pred_flank'},
 						  1,
 						  [$blastn_keepers,
 						   $blastx_keepers,

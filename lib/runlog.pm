@@ -608,7 +608,14 @@ sub _clean_files{
 		push (@files, @{[<$out_base/evaluator/*.eva>]});
 		push (@files, @{[<$out_base/*maker*.fasta>]});
 	    }
-	    
+
+	    #see if died fasta exists
+	    my $d_fasta = $gff_file;
+	    $d_fasta =~ s/\.gff$/.died.fasta/;
+	    if(-e $d_fasta){
+                push (@files, $d_fasta);
+            }
+
 	    #delete files in the void
 	    foreach my $file (@files) {
 		unlink($file);
@@ -624,7 +631,6 @@ sub _clean_files{
 	    foreach my $d (@d){
 		File::Path::rmtree($d) if (-d $d);
 	    }
-
 	}
     }
     

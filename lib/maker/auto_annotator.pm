@@ -43,6 +43,7 @@ sub prep_hits {
 	my $seq              = shift;
 	my $single_exon      = shift;
 	my $single_length    = shift;
+	my $pred_flank       = shift;
 	my $organism_type    = shift;
 	my $est_forward      = shift;
 
@@ -81,8 +82,8 @@ sub prep_hits {
 			   );
 
 	my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
-	my $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+	my $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
+	my $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
 	#purge after clustering so as to still have the effect of evidence joining ESTs
 	$p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
@@ -126,8 +127,8 @@ sub prep_hits {
 				);
 
 	    ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $m_bag);
-	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, 10);
-	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, 10);
+	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
+	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
 	    #purge after clustering so as to still have the effect of evidence joining ESTs
 	    $p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
@@ -630,6 +631,7 @@ sub annotate {
 						  $v_seq_ref,
 						  $CTL_OPTS->{single_exon},
 						  $CTL_OPTS->{single_length},
+						  $CTL_OPTS->{pred_flank},
 						  $CTL_OPTS->{organism_type},
 						  $CTL_OPTS->{est_forward}
 						  );
@@ -1254,25 +1256,43 @@ sub run_it {
 	    next if(! defined $model);
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
-	    my $remove = 0;
-	    if($CTL_OPT->{organism_type} ne 'eukaryotic' &&
-	       ! defined $mia && 
-	       (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))
-	      ){
-		my $clean  = clean::purge_single_exon_hits($alt_ests);
-		if(!@$clean){
+	    my $remove = 1;
+	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+		#make sure the spliced EST evidence actually overlaps
+		if($remove && defined $mia){
+		    my $mAED = shadow_AED::get_AED([$mia],$model);
+		    $remove = 0 if($mAED < 1);
+		}
+
+		#make sure the polished protein evidence actually overlaps
+		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
+		    my $pAED = shadow_AED::get_AED($pol_p, $model);
+		    $remove = 0 if($pAED < 1);
+		}
+
+		#make sure the alt est evidence is not single exon and actually overlaps
+		if($remove && @$alt_ests){
+		    my $clean  = clean::purge_single_exon_hits($alt_ests);
+		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_AED($clean,$model);
+		    $remove = 0 if ($aAED < 1);
+		}
+
+		#make sure blastx evidence is sufficient and 
+		if($remove && @$blastx){
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 		    my $pieces = Shadower::getPieces($seq, $coors, 0);
-		    
-		    if(@$pieces <= 1){			
+
+		    if(@$pieces <= 1 && $model->hsps <= 2){ # if single exon evidence model should be close
 			my $set = get_overlapping_hits($model, $predictions);
-			$remove = 0 if(@$set);
-			
 			my $abAED = shadow_AED::get_abAED($set, $model);
-			$remove = 1 if($abAED > 0.3);
-			
-			my $AED = shadow_AED::get_AED($blastx,$model);
-			$remove = 1 if($AED > 0.3);
+
+			if($abAED <= 0.25){
+			    my $bAED = shadow_AED::get_AED($blastx,$model);
+			    $remove = 0 if($bAED <= 0.25);
+			}
+		    }
+		    elsif(@$pieces > 1){
+			$remove = 0;
 		    }
 		}
 	    }
@@ -1280,7 +1300,7 @@ sub run_it {
 	    #add UTR to ab-inits
 	    my $transcript = pneu($ests, $model, $seq);
 
-	    #don't tfilter imediately just mark for downstream filtering
+	    #don't filter imediately just mark for downstream filtering
 	    $transcript->{_REMOVE} = $remove;
 
 	    my $all_preds = get_overlapping_hits($transcript, $predictions);
@@ -1366,34 +1386,65 @@ sub run_it {
 	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 
 	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
-	if($CTL_OPT->{organism_type} ne 'eukaryotic' &&
-	   @$on_right_strand && ! defined $mia &&
-	   (!@$pol_p  || (@$pol_p == 1 && $pol_p->[0]->hsps == 1))
-	  ){
-	    my $clean  = clean::purge_single_exon_hits($alt_ests);
-	    if(!@$clean){
-		my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-		my $pieces = Shadower::getPieces($seq, $coors, 0);
-		
-		if(@$pieces <= 1){
-		    my $keep;
-		    foreach my $h (@$on_right_strand){
-			my $set = get_overlapping_hits($h, $predictions);
-			$keep = 1 if(@$set);
-			
-			my $abAED = shadow_AED::get_abAED($set, $h);
-			$keep = 0 if($abAED > 0.3);
-			
-			my $AED = shadow_AED::get_AED($blastx,$h);
-			$keep = 0 if($AED > 0.3);
-		    }
-
-		    next if(! $keep); #skip these spurious predictions
+	my $remove = 1;
+	if($CTL_OPT->{organism_type} eq 'eukaryotic' && @$on_right_strand){
+	    my @keepers;
+	    
+	    my $clean;
+	    my $pieces;
+	    foreach my $h (@$on_right_strand){
+		#make sure the spliced EST evidence actually overlaps
+		if($remove && defined $mia){
+		    my $mAED = shadow_AED::get_AED([$mia],$h);
+		    $remove = 0 if($mAED < 1);
 		}
+		
+		#make sure the polished protein evidence actually overlaps
+		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
+		    my $pAED = shadow_AED::get_AED($pol_p, $h);
+		    $remove = 0 if($pAED < 1);
+		}
+		
+		#make sure the alt est evidence is not single exon and actually overlaps
+		if($remove && @$alt_ests){
+		    $clean  = clean::purge_single_exon_hits($alt_ests) if(! $clean); #only calculate once
+		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_AED($clean,$h);
+		    $remove = 0 if ($aAED < 1);
+		}
+		
+		#make sure blastx evidence is sufficient
+		if($remove && @$blastx){
+		    if(! $pieces){ # only calculate once
+			my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
+			$pieces = Shadower::getPieces($seq, $coors, 0);
+		    }
+		    
+		    if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
+			my $set = get_overlapping_hits($h, $predictions);
+			#make sure ab initio evidence can support a single exon alignment
+			#this step not needed in ab inits because the test model is an abinit model
+			if(grep {$_->hsps <= 2} @$set){
+			    my $abAED = shadow_AED::get_abAED($set, $h);
+			    
+			    if($abAED <= 0.25){
+				my $bAED = shadow_AED::get_AED($blastx, $h);
+				$remove = 0 if($bAED <= 0.25);
+			    }
+			}
+		    }
+		    elsif(@$pieces > 1){
+			$remove = 0;
+		    }
+		}
+		push(@keepers, $h) if(! $remove);
+		$remove = 1; #reset for next itteration of loop
 	    }
+
+	    @$on_right_strand = @keepers;
 	}
 
 	#add transcripts
+	next if(!@{$on_right_strand});
 	foreach my $pred_shot (@{$on_right_strand}) {
 	    if (defined($pred_shot)){
 		my $transcript = (defined($mia)) ? pneu($ests, $pred_shot, $seq) : $pred_shot;
@@ -2211,8 +2262,8 @@ sub get_overlapping_hits {
     my @keepers;
     foreach my $hit (@{$hits}){
 	next unless $hit->strand('query') eq $eat->strand('query');
-      push(@keepers, $hit)
-	  if compare::overlap($hit, $eat, 'query', 3);
+	push(@keepers, $hit)
+	    if compare::overlap($hit, $eat, 'query', 3);
     }
     return \@keepers;
 }
