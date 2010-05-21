@@ -6,6 +6,7 @@ use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use Fasta;
+use File::NFSLock;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -54,15 +55,14 @@ sub _initialize {
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
-   #my $min_contig = $self->{CTL_OPTIONS}->{min_contig} || 0;
-   #my $length = $self->{params}->{seq_length};
+   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD} || Cwd::cwd();
 
-   #if($length < $min_contig){#skip if this is a short contig
-   #   $self->{continue_flag} = -2; #skipped signal is -2
-   #
-   #   return 0;
-   #}
-   
+   #lock must be persitent in object or it is detroyed outside of block
+   unless($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
+       $self->{continue_flag} = -3;
+       return 0;
+   }
+
    return 1;
 }
 #-------------------------------------------------------------------------------
@@ -149,7 +149,7 @@ sub _clean_files{
 	
 	if($continue_flag >= 0 || $continue_flag == -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	    my $cwd = Cwd::cwd();
+	    my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
 	    while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
 		my $log_val = '';
 		if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
@@ -286,7 +286,7 @@ sub _write_new_log {
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = Cwd::cwd();
+   my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
       if(defined $CTL_OPTIONS{$key}){
@@ -311,7 +311,7 @@ sub add_entry {
    my $value = shift;
 
    my $log_file = $self->{file_name};
-   my $cwd = Cwd::cwd();
+   my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security
@@ -393,6 +393,13 @@ sub report_status {
                    #"Length: $length\n",
 		   "#---------------------------------------------------------------------\n\n\n";
    }
+   elsif($flag == -3){
+      print STDERR "#---------------------------------------------------------------------\n",
+                   "Another instance of is processing this contig!!\n",
+                   "SeqID: $seq_id\n",
+                   #"Length: $length\n",
+                   "#---------------------------------------------------------------------\n\n\n"
+		   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -421,11 +428,36 @@ sub get_continue_flag {
    elsif($flag == -2){
       $message = 'SKIPPED_SMALL'; #not finished but skipped
    }
+   elsif($flag == -3){
+       $message = ''; #no short message, as contig is running elsewhere
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
 
    return $flag, $message;
+}
+#-------------------------------------------------------------------------------
+#used to pull lock off before serialization of runlog object
+sub strip_off_lock {
+    my $self = shift;
+    my $lock = $self->{LOCK};
+
+    $self->{LOCK} = undef;
+
+    return $lock;
+}
+#-------------------------------------------------------------------------------
+sub unlock {
+    my $self = shift;
+
+    $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
+#-------------------------------------------------------------------------------
+sub DESTROY {
+    my $self = shift;
+
+    $self->unlock;
 }
 #-------------------------------------------------------------------------------
 1;

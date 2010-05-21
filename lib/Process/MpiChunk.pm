@@ -183,7 +183,7 @@ sub _prepare {
 
    #set up contig variables
    #===
-   my $status = 'setting ip contig variables and GFF3 output object';
+   my $status = 'instantiating tier variables';
    #===
    
    #-set up variables that are heldover from last chunk

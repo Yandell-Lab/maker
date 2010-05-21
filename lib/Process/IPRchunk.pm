@@ -40,7 +40,7 @@ sub new {
 	 $self->{RANK}  = shift @args || 0;
 	 $self->{FINISHED} = 0;
 	 $self->{FAILED}   = 0;
-	 $self->{VARS} = {};
+	 $self->{VARS}     = {};
 	 $self->{RESULTS} = {};
 
 	 $self->_initialize();
@@ -60,6 +60,8 @@ sub new {
 
 sub _initialize{
     my $self = shift;
+
+    #do something here
 }
 
 #--------------------------------------------------------------
@@ -89,14 +91,90 @@ sub _initialize_vars{
 }
 
 #--------------------------------------------------------------
+#gets called by MpiTiers object following a failure
+sub _on_failure {
+    my $self = shift;
+    my $tier = shift;
+    
+    #handle case of calling as function rather than method
+    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
+	$tier = $self;
+	$self = new Process::IPRchunk();
+    }
+    
+    my $level = $tier->current_level;
+    my $seq_id = $tier->{VARS}{seq_id};
+    my $out_dir = $tier->{VARS}{out_dir};
+    my $LOG = $tier->{VARS}{LOG};
+    my $DS_CTL = $tier->{VARS}{DS_CTL};
+    
+    print STDERR "FAILED CONTIG:$seq_id\n\n" if(defined $seq_id);
+    
+   if(defined $LOG){
+       my $die_count = $LOG->get_die_count();
+       $die_count++;
+       $LOG->add_entry("DIED","RANK", $tier->id);
+       $LOG->add_entry("DIED","COUNT",$die_count);
+   }
+    
+    $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
+    
+    return;
+}
+
+#--------------------------------------------------------------
+#gets called by MpiTiers object following termination
+sub _on_termination {
+    my $self = shift;
+    my $tier = shift;
+
+    #handle case of calling as function rather than method
+    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
+	$tier = $self;
+	$self = new Process::IPRchunk();
+    }
+
+    return if($tier->failed);
+    return if($tier->{VARS}{c_flag} <= 0);
+
+    #only reach this point if termination is due to success
+    my $seq_id = $tier->{VARS}{seq_id};
+    my $out_dir = $tier->{VARS}{out_dir};
+    my $LOG = $tier->{VARS}{LOG};
+    my $LOCK = $tier->{VARS}{LOCK};
+    my $DS_CTL = $tier->{VARS}{DS_CTL};
+
+    $DS_CTL->add_entry($seq_id, $out_dir, "FINISHED");
+    $LOCK->unlock; #releases locks on the log file
+
+    return;
+}
+
+#--------------------------------------------------------------
+#gets called by MpiTiers object following termination
+sub _should_continue {
+    my $self = shift;
+    my $tier = shift;
+
+    #handle case of calling as function rather than method
+    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
+	$tier = $self;
+	$self = new Process::IPRchunk();
+    }
+
+    return $tier->{VARS}{c_flag};
+}
+
+#--------------------------------------------------------------
 #this function/method is called by IPRtiers as part of IPRtiers
 #initialization to prepare incoming data before building chunks.
 #This method should not be called directly by the user or inside
 #IPRchunks. Putting this preparation here as opposed to inside
 #IPRtiers makes IPRchunks more portable and makes debugging
-#easier.
+#easier. It will always run on the root node before distributing
+#the tier.
 
-sub prepare {
+sub _prepare {
    my $self = shift;
    my $VARS = shift;
 
@@ -105,76 +183,24 @@ sub prepare {
       $VARS = $self;
       $self = new Process::IPRchunk();
    }
-   
+
+   #instantiate empty LOG   
+   $VARS->{LOG} = undef;
+
    #==Prepare data here as part of initialization
 
-   my $status = ''; #for error control
-   #process fasta file
-   try{
-      #===
-      $status = 'preparing iprscan job';
-      #===
-      
-      my ($outname) = $VARS->{CTL_OPT}{infile} =~ /([^\/]+)$/;
-      $outname = $VARS->{CTL_OPT}{outfile} if($VARS->{outfile});
+   #set up contig variables
+   #===
+   my $status = 'instantiating tier variables';
+   #===
 
-      $VARS->{seq_id} = Fasta::getSeqID(\$VARS->{fasta});
-      $VARS->{safe_id} = Fasta::seqID2SafeID($VARS->{seq_id});
+   #-set up variables that are the result of chunk accumulation
+   #$VAR->{} = [];
 
-      #set up base and void directories for output
-      ($VARS->{out_dir}, $VARS->{the_void}) = $VARS->{DS_CTL}->seq_dirs($VARS->{seq_id});
-
-      #contig combined output file
-      $VARS->{cfile} = $VARS->{out_dir}."/".$VARS->{safe_id}.".ipr";
-
-      #===
-      $status = 'trying to build/process the run.log file';
-      #===
-
-      $VARS->{LOG} = iprscan::runlog->new($VARS->{CTL_OPT},
-					  {seq_id     => $VARS->{seq_id},
-					   out_dir    => $VARS->{out_dir},
-					   the_void   => $VARS->{the_void},
-					   fasta_ref  => \$VARS->{fasta}},
-					  $VARS->{the_void}."/run.log"
-					  );
-
-      ($VARS->{c_flag}, my $message) = $VARS->{LOG}->get_continue_flag();
-      $VARS->{DS_CTL}->add_entry($VARS->{seq_id}, $VARS->{out_dir}, $message);
-      if($VARS->{c_flag} == 0){
-	  my $cfile = $VARS->{cfile};
-	  die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
-	      if(! -e $cfile);
-	  
-	  my $lock = new File::NFSLock(".iprscan_lock", 'EX', 40, 40);
-	  my $outfile = $VARS->{CTL_OPT}{outfile};
-
-	  my $FH;
-	  if($outfile){
-	      open($FH, ">> $outfile");
-	  }
-	  else{
-	      open($FH, ">&STDOUT");
-	  }
-
-	  #open for reading
-	  open(my $CFH, "< $cfile");
-	  
-	  while(my $line = <$CFH>){
-	      print $FH $line;
-	  }
-	  
-	  close($FH);
-	  close($CFH);
-	  
-	  $lock->unlock;
-      }
-   }
-   catch Error::Simple with {
-      my $E = shift;
-
-      $self->_handler($E, $status, 'throw');
-   };
+   #--other variables
+   $VARS->{c_flag} = 1; #always continue with this implementation and
+                        #let child nodes decide on running chunk.
+                        #Other implementations let the root node decide
    
    return 1;
 }
@@ -183,7 +209,7 @@ sub prepare {
 #chunks for a given level.  This allows for the number of
 #chunks created per level to be controlled within IPRchunks.
 
-sub loader {
+sub _loader {
    my $self = shift;
    my $level = shift;
    my $VARS = shift;
@@ -235,7 +261,7 @@ sub run {
 #this funcion is called by MakerTiers.  It returns the flow of
 #levels, i.e. order control, looping, etc.
 
-sub flow {
+sub _flow {
    my $self = shift;
    my $level = shift;
    my $VARS = shift;
@@ -268,7 +294,98 @@ sub _go {
    my $level_status = '';
 
    try{
-      if ($level == 0) {	#fixing fasta
+      if ($level == 0) { #run log and initilaization
+	 $level_status = 'initialization and checking run log';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::IPRchunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw{fasta
+			CTL_OPT
+			DS_CTL}
+		     );
+            #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my $fasta   = Fasta::ucFasta(\$VARS->{fasta});
+	    my $DS_CTL  =  $VARS->{DS_CTL};
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	     
+	    #get fasta parts
+	    my $seq_id = Fasta::getSeqID(\$VARS->{fasta});
+	    my $safe_id = Fasta::seqID2SafeID($VARS->{seq_id});
+	    
+	    #set up base and void directories for output
+	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
+	    
+	    #contig combined output file
+	    my $cfile = $out_dir."/".$safe_id.".ipr";
+	    
+	    my $LOG = iprscan::runlog->new(\%CTL_OPT,
+					   {seq_id     => $seq_id,
+					    out_dir    => $out_dir,
+					    the_void   => $the_void,
+					    fasta_ref  => \$fasta},
+					   $the_void."/run.log"
+					   );
+	    
+	    my $LOCK = $LOG->strip_off_lock();
+	     
+	    my ($c_flag, $message) = $LOG->get_continue_flag();
+	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
+	     
+	    #process existing iprscan output
+	    if($c_flag == 0){		   
+		die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
+		    if(! -e $cfile);
+		 
+		my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
+		my $outfile = $CTL_OPT{outfile};
+		 
+		my $FH;
+		if($outfile){
+		    open($FH, ">> $outfile");
+		}
+		else{
+		    open($FH, ">&STDOUT");
+		}
+		 
+		#open for reading
+		open(my $CFH, "< $cfile");
+		 
+		while(my $line = <$CFH>){
+		    print $FH $line;
+		}
+		 
+		close($FH);
+		close($CFH);
+		 
+		$lock->unlock;
+	    }
+	    #-------------------------CODE
+	     
+	    #------------------------RESULTS
+	    %results = (seq_id => $seq_id,
+			safe_id => $safe_id,
+			the_void => $the_void,
+			cfile => $cfile,
+			c_flag => $c_flag,
+			out_dir => $out_dir,
+			LOG => $LOG,
+			LOCK => $LOCK);
+	    #------------------------RESULTS
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 1) {	#fixing fasta
 	 $level_status = 'fixing fasta';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -315,7 +432,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 1) {	#running iprscan
+      elsif ($level == 2) {	#running iprscan
 	 $level_status = 'running iprscan';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -405,7 +522,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 2) {	#blastx repeat mask
+      elsif ($level == 3) {	#blastx repeat mask
 	 $level_status = 'collecting iprscan results';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
