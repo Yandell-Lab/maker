@@ -42,7 +42,7 @@ sub new {
        $self->_write_new_log();
     }
 
-    $self->report_status() unless($main::quiet);
+    $self->report_status();
 
     return $self;
 }
@@ -340,20 +340,25 @@ sub report_status {
    my $fasta_ref = $self->{params}->{fasta_ref};
    #my $length = $self->{params}->{seq_length};
 
+   #maintain lock only if status id positive (possible race condition?)
+   $self->{LOCK}->maintain(30) if($flag > 0);
+
    if($flag == 0){
       print STDERR "#---------------------------------------------------------------------\n",
                    "The contig has already been processed!!\n",
 		   "mpi_iprscan will now skip to the next contig.\n",
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",		   
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
    }
    elsif($flag == 1){
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now starting the contig!!\n",
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
    }
    elsif($flag == 2){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -362,7 +367,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",
 		   "Retry: $die_count!!\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
    }
    elsif($flag == 3){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -370,7 +376,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",
 		   "Retry: $die_count!!\n",
-                   "#---------------------------------------------------------------------\n\n\n";
+                   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
    }
    elsif($flag == -1){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -380,7 +387,8 @@ sub report_status {
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",
 		   "FASTA: $out_dir/$seq_out_name.died.fasta\n",
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
 
       open (my $DFAS, "> $out_dir/$seq_out_name.died.fasta");
       print $DFAS $$fasta_ref;
@@ -391,7 +399,8 @@ sub report_status {
                    "Skipping the contig because it is too short!!\n",
 		   "SeqID: $seq_id\n",
                    #"Length: $length\n",
-		   "#---------------------------------------------------------------------\n\n\n";
+		   "#---------------------------------------------------------------------\n\n\n"
+		       unless($main::quiet);
    }
    elsif($flag == -3){
       print STDERR "#---------------------------------------------------------------------\n",
@@ -399,7 +408,8 @@ sub report_status {
                    "SeqID: $seq_id\n",
                    #"Length: $length\n",
                    "#---------------------------------------------------------------------\n\n\n"
-		   }
+		       unless($main::quiet);
+  }
    else{
       die "ERROR: No valid continue flag\n";
    }

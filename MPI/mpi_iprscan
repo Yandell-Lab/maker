@@ -9,7 +9,7 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG $EXE $TMP);
+use vars qw($RANK $LOG $EXE $TMP $LOCK);
 use Storable qw(freeze thaw);
 use threads;
 use threads::shared;
@@ -199,7 +199,7 @@ try{
 	       "cli"       => \$CTL_OPT{cli}, #just used to strip off the option
 	       );
     
-    $main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages
+#    $main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages
     
     #collect app list from iprscan if not suplied by user
     if(! @appl){
@@ -221,6 +221,9 @@ try{
     
     $CTL_OPT{appl} = \@appl; #apply apps to CTL_OPT
     
+    #get current working directory
+    $CTL_OPT{CWD} = Cwd::cwd();
+
     #build out_base and out_name for datastore
     $CTL_OPT{out_name} = $CTL_OPT{infile};
     $CTL_OPT{out_name} =~ /([^\/]+)$/;
@@ -341,14 +344,20 @@ if ($rank == $root){
 	    
 	    die join('', @err);
 	}
+
+	mkdir $CTL_OPT{out_base} if(! -d $CTL_OPT{out_base}); #make output directory
+
+	if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.gi_lock", 'SH', 40, 40)){
+	    $LOCK->maintain(30);
+	    $CTL_OPT{_multi_chpc}++ if($LOCK->owners() > 1);
+	    unlink($CTL_OPT{outfile}) if(-e $CTL_OPT{outfile}); #clear preexisting outfile
+	}
+	else{
+	    die "ERROR: The directory is locked.  Perhaps by an instance of mpi_iprscan.\n\n";
+	}	
+
 	$DS_CTL = new ds_utility(\%CTL_OPT);
 	$iterator = new Iterator::Fasta($CTL_OPT{infile});
-	unlink($CTL_OPT{outfile}) if(-e $CTL_OPT{outfile}); #clear preexisting outfile
-
-
-
-
-
     }
     catch Error::Simple with{
 	my $E = shift;

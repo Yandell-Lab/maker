@@ -317,8 +317,8 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	     
 	    #get fasta parts
-	    my $seq_id = Fasta::getSeqID(\$VARS->{fasta});
-	    my $safe_id = Fasta::seqID2SafeID($VARS->{seq_id});
+	    my $seq_id = Fasta::getSeqID(\$fasta);
+	    my $safe_id = Fasta::seqID2SafeID($seq_id);
 	    
 	    #set up base and void directories for output
 	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
@@ -331,7 +331,7 @@ sub _go {
 					    out_dir    => $out_dir,
 					    the_void   => $the_void,
 					    fasta_ref  => \$fasta},
-					   $the_void."/run.log"
+					   "$out_dir/run.log"
 					   );
 	    
 	    my $LOCK = $LOG->strip_off_lock();
@@ -397,7 +397,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{fasta			
 		        seq_id
-		        safe_id}
+		        safe_id
+			the_void}
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -406,6 +407,7 @@ sub _go {
 	    my $fasta = $VARS->{fasta};
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_id = $VARS->{safe_id};
+	    my $the_void = $VARS->{the_void};
 
 	    #safely escape %'s
 	    $safe_id =~ s/x/\%78/g;
@@ -421,10 +423,13 @@ sub _go {
 
 	    #make a safe fasta
 	    my $safe_fasta = Fasta::toFasta('>'.$safe_id, $seq);
+	    my $fasta_file = "$the_void/query.fasta";
+	    FastaFile::writeFile($safe_fasta, $fasta_file);
 	    #-------------------------CODE
 	 
 	    #------------------------RESULTS
-	    %results = (safe_fasta => $safe_fasta);
+	    %results = (safe_fasta => $safe_fasta,
+			fasta_file => $fasta_file);
 	    #------------------------RESULTS
 	 }
 	 elsif ($flag eq 'flow') {
@@ -447,7 +452,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{CTL_OPT
 			safe_id
-			safe_fasta
+			fasta_file
 			app
 			params
 			iprscan
@@ -460,7 +465,7 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT    = %{$VARS->{CTL_OPT}};
-	    my $safe_fasta = $VARS->{safe_fasta};
+	    my $fasta_file = $VARS->{fasta_file};
 	    my $safe_id    = $VARS->{safe_id};
 	    my $app        = $VARS->{app};
 	    my $params     = $VARS->{params};
@@ -468,10 +473,8 @@ sub _go {
 	    my $the_void   = $VARS->{the_void};
 	    my $LOG        = $VARS->{LOG};
 	    
-	    #make files
-	    my (undef, $ifile) = tempfile();
+	    #specify output files
 	    my $ofile = "$the_void/$safe_id.$app";
-	    FastaFile::writeFile($safe_fasta, $ifile);
 
 	    #build command
 	    my $command = $iprscan;
@@ -483,7 +486,7 @@ sub _go {
 	    $command .= " -format $CTL_OPT{format}" if(defined $CTL_OPT{format});
 	    $command .= " -verbose" if($CTL_OPT{verbose});
 	    $command .= " " . join(' ', @$params);
-	    $command .= " -appl $app -i $ifile -o $ofile";
+	    $command .= " -appl $app -i $fasta_file -o $ofile";
 
 	    $LOG->add_entry("STARTED", $ofile, "");
 
@@ -498,7 +501,6 @@ sub _go {
 
 	    $LOG->add_entry("FINISHED", $ofile, "");
 
-	    unlink($ifile);
 	    open(my $IN, "< $ofile");
 	    my $result;
 	    while(my $line = <$IN>){
@@ -614,7 +616,7 @@ sub _go {
 #of data structure inside of IPRchunk which makes for easier
 #debugging
 
-sub result {
+sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
    my $RESULTS = $self->{RESULTS};	#this ia a hash reference

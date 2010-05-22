@@ -498,7 +498,7 @@ sub create_blastdb {
        
    #rebuild all fastas when specified
    File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if ($CTL_OPT->{force} &&
-							       ! $CTL_OPT->{_chpc});
+							       ! $CTL_OPT->{_multi_chpc});
    
    ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
    ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
@@ -1220,7 +1220,7 @@ sub build_all_indexes {
    foreach my $db (@dbs){
        next if(! $db);
        my $index = build_fasta_index($db);
-       $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_chpc});
+       $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
    }
 }
 #-----------------------------------------------------------------------------
@@ -3254,7 +3254,7 @@ sub load_control_files {
 	   warn "WARNING: Multiple MAKER processes have been started in the\n".
 	        "same directory.\n\n";
 
-	   $CTL_OPT{_chpc}++;
+	   $CTL_OPT{_multi_chpc}++;
        }
    }
 

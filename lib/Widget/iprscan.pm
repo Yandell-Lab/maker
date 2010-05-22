@@ -47,6 +47,24 @@ sub run {
 	       $fail = 1;
 	   }
 
+	   #stop if everything is ok
+	   return if ($? == 0 && ! $fail);
+
+	   #always try twice because iprscan is unstable
+	   $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	   local $/ = \1;
+	   $err = '';
+	   while (my $line = <CHLD_ERR>){
+	       print STDERR $line unless($main::quiet);
+	       $err .= $line;
+	   }
+	   waitpid $pid, 0;
+	   
+	   $fail = 0;
+	   if($err !~ /^SUBMITTED iprscan-\d+-\d+\n*$/){
+	       $fail = 1;
+	   }
+
 	   die "ERROR: Iprscan failed\n" if ($? != 0 || $fail);
 	}
 	else {

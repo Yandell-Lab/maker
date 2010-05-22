@@ -35,7 +35,7 @@ sub new {
 	    $dbfile = "$CTL_OPTIONS{out_base}/$CTL_OPTIONS{out_name}.db";
 
 	    #rebuild database from scratch on force
-	    unlink($dbfile) if($CTL_OPTIONS{force} && !$CTL_OPTIONS{_chpc});
+	    unlink($dbfile) if($CTL_OPTIONS{force} && !$CTL_OPTIONS{_multi_chpc});
 
 	    $self->{dbfile} = $dbfile;
 	    $self->{last_build} = undef;

@@ -62,7 +62,7 @@ sub _initialize {
    #initialize a new blank log,
    #except when using the hidden chpc option
    #then just append to the existing log
-   unless($CTL_OPTIONS{_chpc}){
+   unless($CTL_OPTIONS{_multi_chpc}){
        open(my $IN, ">", $self->{log});
        close($IN);
    }
