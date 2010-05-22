@@ -69,6 +69,12 @@ while (my $line = <$IN>) {
 		my $alias;
 		if ($type eq 'mRNA' || $type eq 'gene') {
 			$alias = $attrb{ID}[0] if $type =~ /^(gene|mRNA)$/;
+			#avoids redundancy in existing Aliases
+			if($attrb{Alias}){
+			    @{$attrb{Alias}} = grep {$_ ne $attrb{ID}[0]} @{$attrb{Alias}};  
+			}
+			#don't make aliases to Apollo's temporary ID's
+			$alias = undef if($alias =~ /^[^\:]+\:temp\d+\:/);
 		}
 
 		# Collect all IDs that should be mapped for this feature
@@ -76,6 +82,7 @@ while (my $line = <$IN>) {
 		my @ids;
 		push @ids, @{$attrb{Parent}} if $attrb{Parent};
 		push @ids, @{$attrb{ID}}     if $attrb{ID};
+		push @ids, @{$attrb{Alias}}  if $attrb{Alias};
 
 		# Keep only the IDs that are in the mapping file.
 		my @map_ids;
@@ -90,18 +97,19 @@ while (my $line = <$IN>) {
 
 		# Map old_name to new_name for each tag value...
 		for my $tag (keys %attrb) {
+		    next unless($tag eq 'ID' || $tag eq 'Name'); #avoid replacing values in other tags
 			for my $value (@{$attrb{$tag}}) {
 				for my $id (@map_ids) {
 					# Only if the value (or the portion preceding
 					# the first colon) is equal to the map key.
-					next unless ($value eq $id || $value =~ /$id:/);
+					next unless ($value eq $id || $value =~ /^$id:/);
 					$value =~ s/$id/$map{$id}/;
 				}
 			}
 		}
 		# Now that we're done mapping, add the alias to the attributes
 		# if we have one.
-		$attrb{Alias} = [$alias] if $alias;
+		push(@{$attrb{Alias}}, $alias) if $alias;
 
 		# Make sure we have all attribute keys added to sort order to
 		# avoid undef in <=>
