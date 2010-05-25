@@ -604,7 +604,7 @@ sub get_cds_data {
 	#sometimes happens with GFF3 passthrough
 	#important for phase calculation
 	my $sum;
-	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques
+	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques;
 	my $fix = (@uniques && $uniques[0][2]==-1) ? 3 - ($sum % 3) : 0;
 
         my $c_l = '';
