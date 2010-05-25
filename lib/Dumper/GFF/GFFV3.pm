@@ -626,7 +626,8 @@ sub get_cds_data {
 		   $nine .= ';' if($nine !~ /\;$/);
                 push(@data, $nine);
 
-		$phase = (3 - (($nE - $nB + 1) % 3)) % 3;
+		# $phase = (3 - (($nE - $nB + 1) % 3)) % 3;
+		$phase = ($phase - ($nE - $nB + 1)) % 3;
 
                 $c_l .= join("\t", @data)."\n";
         }
