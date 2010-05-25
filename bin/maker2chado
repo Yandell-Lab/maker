@@ -83,6 +83,10 @@ OPTIONS:
 
      delete              Use GFF3 file to delete DB contents
 
+     reindex             Recreate inexes and name cache
+
+     dropindex           Drop indexes before adding features
+
      help|?              Displays this usage statement
 
 
@@ -102,6 +106,7 @@ my $analysis_only;
 my $match;
 my $exclude;
 my $reindex;
+my $dropindex;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -117,6 +122,7 @@ GetOptions("host|h=s" => \$host,
 	   "match=s" => \$match,
 	   "exclude=s" => \$exclude,
 	   "reindex" => \$reindex,
+	   "dropindex" => \$dropindex,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
@@ -308,6 +314,7 @@ $GMOD .= " --dbname $dbname";
 $GMOD .= " --organism '$organism'";
 $GMOD .= " --skip_vacuum";
 $GMOD .= " --delete_i_really_mean_it" if($delete);
+$GMOD .= " --drop_indexes" if($dropindex);
 
 my $count = 0;
 while(my $file = shift @files){

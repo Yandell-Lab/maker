@@ -600,6 +600,12 @@ sub get_cds_data {
                 $seen{$nB}{$nE}++;
         }
 
+	#use case, tests for CDS not divisible by 3
+	#sometimes happens with GFF3 passthrough
+	#important for phase calculation
+	my $sum;
+	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques;
+
         my $c_l = '';
 	my $phase = 0;
         foreach my $e (@uniques){
@@ -627,7 +633,8 @@ sub get_cds_data {
                 push(@data, $nine);
 
 		# $phase = (3 - (($nE - $nB + 1) % 3)) % 3;
-		$phase = ($phase - ($nE - $nB + 1)) % 3;
+		$fix = ($strand eq '-') ? $sum % 3 : 0;
+		$phase = ($phase - ($nE - $nB + 1) - $fix) % 3;
 
                 $c_l .= join("\t", @data)."\n";
         }
@@ -762,8 +769,23 @@ sub get_transcript_data {
 	   $nine .= '_QI='.$t_qi.';' if(defined($t_qi));
 	   $nine .= $t_hit->{-attrib} if($t_hit->{-attrib});
 	   $nine .= ';' if($nine !~ /\;$/);
-	push(@data, $nine);
+	if($t->{hit}->{_Alias}){
+	    if($nine =~ /Alias\=([^\;\n]+)/){
+		my @keepers = (@{[split(',', $1)]}, @{$t->{hit}->{_Alias}});
+		my %uniq;
+		@uniq{@keepers} =();
+		my $alias = join(',', keys %uniq);
+		$nine =~ s/Alias\=[^\;\n]+\;*/Alias=$alias\;/;
+	    }
+	    else{
+                my %uniq;
+		@uniq{@{$t->{hit}->{_Alias}}} =();
+                my $alias = join(',', keys %uniq);
+                $nine .= "Alias=$alias\;";
+	    }
+	}
 
+	push(@data, $nine);
 
 	my $l = join("\t", @data);
 	return $l;

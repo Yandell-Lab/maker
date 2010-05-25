@@ -97,7 +97,8 @@ while (my $line = <$IN>) {
 
 		# Map old_name to new_name for each tag value...
 		for my $tag (keys %attrb) {
-		    next unless($tag eq 'ID' || $tag eq 'Name'); #avoid replacing values in other tags
+		    #avoid replacing values in other tags
+		    next unless($tag eq 'ID' || $tag eq 'Name' || $tag eq 'Parent' || $tag eq 'Derives_from');
 			for my $value (@{$attrb{$tag}}) {
 				for my $id (@map_ids) {
 					# Only if the value (or the portion preceding
@@ -109,6 +110,7 @@ while (my $line = <$IN>) {
 		}
 		# Now that we're done mapping, add the alias to the attributes
 		# if we have one.
+		$alias = undef if($alias && ($alias eq $attrb{ID}[0] || $alias eq $attrb{Name}[0]));
 		push(@{$attrb{Alias}}, $alias) if $alias;
 
 		# Make sure we have all attribute keys added to sort order to

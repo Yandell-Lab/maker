@@ -1943,6 +1943,10 @@ sub map_forward {
 	    my $g_id = $gff->{_temp_id};
 	    my $AED = shadow_AED::get_AED([$gff], $ann);
 	    next if($AED > 0.5); #must be closer than 0.5
+	    push(@{$ann->{_Alias}}, $gff->name);
+	    push(@{$ann->{_Alias}}, $ann->name); 
+	    push(@{$gff->{_Alias}}, $ann->name); 
+
 	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
 		$closest[$a_id] = $g_id;
 		$AEDs[$a_id] = $AED;
@@ -1962,6 +1966,9 @@ sub map_forward {
 	    my $g_id = $gff->{_temp_id};
 	    my $AED = shadow_AED::get_AED([$gff], $ann);
 	    next if($AED > 0.5); #must be closer than 0.5
+	    push(@{$ann->{_Alias}}, $gff->name); 
+	    push(@{$ann->{_Alias}}, $ann->name); 
+	    push(@{$gff->{_Alias}}, $ann->name); 
 	    if (! defined($AEDs[$a_id]) || $AEDs[$a_id] > $AED){
 		$closest[$a_id] = $g_id;
 		$AEDs[$a_id] = $AED;
