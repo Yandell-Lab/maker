@@ -599,13 +599,9 @@ sub get_cds_data {
                 push(@uniques, $e) unless defined($seen{$nB}{$nE});
                 $seen{$nB}{$nE}++;
         }
-
-	#use case for CDS not divisible by 3
-	#sometimes happens with GFF3 passthrough
-	#important for phase calculation
-	my $sum;
-	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques;
-	#my $fix = (@uniques && $uniques[0][2]==-1) ? 3 - ($sum % 3) : 0;
+	
+	#reverse for minus strand, important for phase calculation
+	@uniques = reverse(@uniques) if(@uniques && $uniques[0][2]==-1);
 
         my $c_l = '';
 	my $phase = 0;# + $fix;
@@ -635,8 +631,15 @@ sub get_cds_data {
 
 		# $phase = (3 - (($nE - $nB + 1) % 3)) % 3;
 		$phase = ($phase - ($nE - $nB + 1)) % 3;
-
-                $c_l .= join("\t", @data)."\n";
+		
+		#make sure CDS lines are ordered along plus strand
+		#needed because of previous reveral for minus strand
+		if($strand eq '+'){
+		    $c_l .= join("\t", @data)."\n";
+		}
+		else{
+		    $c_l = join("\t", @data)."\n".$c_l;
+		}
         }
 
         return $c_l;
