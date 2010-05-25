@@ -633,7 +633,7 @@ sub get_cds_data {
                 push(@data, $nine);
 
 		# $phase = (3 - (($nE - $nB + 1) % 3)) % 3;
-		$fix = ($strand eq '-') ? $sum % 3 : 0;
+		my $fix = ($strand eq '-') ? $sum % 3 : 0;
 		$phase = ($phase - ($nE - $nB + 1) - $fix) % 3;
 
                 $c_l .= join("\t", @data)."\n";
