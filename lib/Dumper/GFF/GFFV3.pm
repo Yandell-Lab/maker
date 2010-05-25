@@ -604,10 +604,11 @@ sub get_cds_data {
 	#sometimes happens with GFF3 passthrough
 	#important for phase calculation
 	my $sum;
-	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques;
+	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques
+	my $fix = (@uniques && $uniques[0][2]==-1) ? 3 - ($sum % 3) : 0;
 
         my $c_l = '';
-	my $phase = 0;
+	my $phase = 0 + $fix;
         foreach my $e (@uniques){
                 my $nB = $e->[0];
                 my $nE = $e->[1];
@@ -633,8 +634,7 @@ sub get_cds_data {
                 push(@data, $nine);
 
 		# $phase = (3 - (($nE - $nB + 1) % 3)) % 3;
-		my $fix = ($strand eq '-') ? $sum % 3 : 0;
-		$phase = ($phase - ($nE - $nB + 1) - $fix) % 3;
+		$phase = ($phase - ($nE - $nB + 1)) % 3;
 
                 $c_l .= join("\t", @data)."\n";
         }
