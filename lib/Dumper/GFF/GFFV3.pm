@@ -600,15 +600,15 @@ sub get_cds_data {
                 $seen{$nB}{$nE}++;
         }
 
-	#use case, tests for CDS not divisible by 3
+	#use case for CDS not divisible by 3
 	#sometimes happens with GFF3 passthrough
 	#important for phase calculation
 	my $sum;
 	grep {$sum += ($_->[1] - $_->[0]) +1} @uniques;
-	my $fix = (@uniques && $uniques[0][2]==-1) ? 3 - ($sum % 3) : 0;
+	#my $fix = (@uniques && $uniques[0][2]==-1) ? 3 - ($sum % 3) : 0;
 
         my $c_l = '';
-	my $phase = 0 + $fix;
+	my $phase = 0;# + $fix;
         foreach my $e (@uniques){
                 my $nB = $e->[0];
                 my $nE = $e->[1];
