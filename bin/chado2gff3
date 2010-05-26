@@ -277,18 +277,18 @@ sub get_feature_lines {
 					    "a.significance, l.strand, l.phase, f.uniquename, f.name, f2.uniquename, ".
 					    "f3.uniquename, f4.uniquename, l2.fmin, l2.fmax, l2.strand ".
 					    "FROM feature f ".
-					    "JOIN featureloc l ON f.feature_id=l.feature_id ".
-					    "JOIN cvterm c ON f.type_id=c.cvterm_id ".
-					    "JOIN feature_dbxref d ON d.feature_id=f.feature_id ".
-					    "JOIN dbxref r ON r.dbxref_id=d.dbxref_id ".
-					    "LEFT JOIN analysisfeature a ON a.feature_id=f.feature_id ".
-					    "LEFT JOIN feature_relationship pt ON pt.subject_id=f.feature_id ".
-					    "LEFT JOIN cvterm c2 ON pt.type_id=c2.cvterm_id ".
-					    "LEFT JOIN dbxref d2 ON d2.dbxref_id=c2.dbxref_id ".
-					    "LEFT JOIN feature f2 ON f2.feature_id=pt.object_id AND c2.name='part_of' ".
-					    "LEFT JOIN feature f3 ON f3.feature_id=pt.object_id AND c2.name='derives_from' ".
-					    "LEFT JOIN featureloc l2 ON f.feature_id=l2.feature_id AND l2.srcfeature_id != l.srcfeature_id ".
-					    "LEFT JOIN feature f4 ON l2.srcfeature_id=f4.feature_id ".
+					    "LEFT OUTER JOIN featureloc l ON f.feature_id=l.feature_id ".
+					    "LEFT OUTER JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					    "LEFT OUTER JOIN feature_dbxref d ON d.feature_id=f.feature_id ".
+					    "LEFT OUTER JOIN dbxref r ON r.dbxref_id=d.dbxref_id ".
+					    "LEFT OUTER JOIN analysisfeature a ON a.feature_id=f.feature_id ".
+					    "LEFT OUTER JOIN feature_relationship pt ON pt.subject_id=f.feature_id ".
+					    "LEFT OUTER JOIN cvterm c2 ON pt.type_id=c2.cvterm_id ".
+					    "LEFT OUTER JOIN dbxref d2 ON d2.dbxref_id=c2.dbxref_id ".
+					    "LEFT OUTER JOIN feature f2 ON f2.feature_id=pt.object_id AND c2.name='part_of' ".
+					    "LEFT OUTER JOIN feature f3 ON f3.feature_id=pt.object_id AND c2.name='derives_from' ".
+					    "LEFT OUTER JOIN featureloc l2 ON f.feature_id=l2.feature_id AND l2.srcfeature_id != l.srcfeature_id ".
+					    "LEFT OUTER JOIN feature f4 ON l2.srcfeature_id=f4.feature_id ".
 					    "WHERE l.srcfeature_id = $contig_id ORDER BY f.feature_id;");
 
     #add other attributes if specified
@@ -311,6 +311,7 @@ sub get_feature_lines {
     }
 
     #make GFF3 feature lines
+    my %order;
     my @lines;
     foreach my $feature (@$features){
 	my ($feature_id,
@@ -340,6 +341,14 @@ sub get_feature_lines {
 	    $t_strand= ($t_strand == 1) ? '+' : '-';
 	}
 
+	if($type eq 'transcript'){
+	    $type = 'mRNA';
+	}
+
+	if($type eq 'mRNA' && !$Parent && $Derives_from){
+	    $Parent = $Derives_from;
+	}
+
 	#fix empty values as '.'
 	foreach my $e ($source, $score, $strand, $phase){
 	    $e = '.' if (! defined $e || $e eq '');
@@ -348,7 +357,7 @@ sub get_feature_lines {
 	#make basic GFF3 line
 	my $line = "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\tID=$ID\;Name=$Name\;";
 	$line .= "Parent=$Parent\;" if($Parent);
-	$line .= "Derives_from=$Derives_from\;" if($Derives_from);
+	$line .= "Derives_from=$Derives_from\;" if($Derives_from && $type ne 'mRNA');
 	if($Target){
 	    $line .= "Target=$Target $t_start $t_end";
 	    $line .= ($t_strand) ? " $t_strand\;" : "\;";
@@ -372,10 +381,109 @@ sub get_feature_lines {
 	    $line .= $att if($att);
 	}
 
-	push(@lines, $line);
+	$order{$ID}{line} = $line;
+	$order{$ID}{parent_id} = $Parent;
+	$order{$ID}{seqid} = $seqid;
+	$order{$ID}{strand} = $strand;
+	$order{$ID}{source} = $source;
+	$order{$ID}{type} = $type;
+	$order{$ID}{start} = $start;
+	$order{$ID}{end} = $end;
+
+	if($Parent && ! $order{$Parent}){
+	    $order{$Parent} = {};
+	}
+
+	push(@{$order{$Parent}{children}}, $order{$ID}) if($Parent);
+	$order{$ID}{parent} = ($Parent) ? $order{$Parent} : undef;
+
+
+	if($type eq 'polypeptide' || $type eq 'CDS'){
+	    if(! $order{$Derives_from}){
+		$order{$Derives_from} = {};
+	    }
+	    push(@{$order{$Derives_from}{children}}, $order{$ID});
+	    $order{$ID}{parent} = $order{$Derives_from};
+	    $Parent = $Derives_from;
+	}
+    }
+
+    #get top level features and work down heirarchy
+    foreach my $key (grep {!$order{$_}{parent}} keys %order){
+	my $f = $order{$key};
+
+	push(@lines, $f->{line});
+	handle_children($f, \@lines) if($f->{children});
     }
     
     return \@lines;
+}
+#------------------------------------------------------------------------------
+my $COUNT;
+sub handle_children {
+    my $f = shift;
+    my $lines = shift;
+
+    #if a gene feature, sort the exons on the RNA
+    if ($f->{parent} && $f->{parent}{type} eq 'gene'){
+	my %sort;
+	foreach my $c (@{$f->{children}}){
+	    push(@{$sort{$c->{type}}}, $c); 
+	}
+
+	#arrange based on position
+	while(my $key = each %sort){
+	    if($f->{strand} eq '-'){
+		@{$sort{$key}} = sort {$b->{end} <=> $a->{end}} @{$sort{$key}};
+	    }
+	    else{
+		@{$sort{$key}} = sort {$a->{start} <=> $b->{start}} @{$sort{$key}};
+	    }
+	}
+
+	my @keepers;
+	foreach my $key (@{[grep {/^exon$/} keys %sort]}, @{[grep {/^CDS$|^polypeptide$/} keys %sort]}, @{[grep {!/^CDS$|^exon$|^polypeptide$/} keys %sort]}){
+	    push(@keepers, @{$sort{$key}});
+	}
+
+	@{$f->{children}} = @keepers;
+    }
+
+    foreach my $c (@{$f->{children}}){
+	if($c->{type} eq 'polypeptide' || $c->{type} eq 'CDS'){
+	    my $p = $c->{parent};
+	    my @exons = grep {$_->{type} eq 'exon'} @{$p->{children}};
+	    my $B = $c->{start};
+	    my $E = $c->{end};
+
+	    foreach my $e (@exons){
+		my $cB = $e->{start};
+		my $cE = $e->{end};
+
+		if( $cE < $B || $cB > $E){
+		    next;
+		}
+		
+		if($cB < $B){
+		    $cB = $B;
+		}
+		
+		if($cE > $E){
+		    $cE = $E;
+		}
+
+		my $ID = $e->{seqid}.":CDS:".$COUNT++;
+
+		my $line = $e->{seqid}."\t".$e->{source}."\tCDS\t$cB\t$cE\t.\t".$e->{strand}."\t.\tID=$ID\;Name=$ID\;";
+		$line .= "Parent=".$e->{parent_id}."\;";
+		push(@$lines, $line);
+	    }
+	}
+	else{
+	    push(@$lines, $c->{line});
+	    handle_children($c, $lines) if($c->{children});
+	}
+    }
 }
 #------------------------------------------------------------------------------
 sub get_fasta {
