@@ -25,6 +25,7 @@ use CGI::Application::Plugin::TT;
 use CGI::Application::Plugin::DevPopup;
 use CGI::Application::Plugin::DevPopup::HTTPHeaders;
 use CGI::Application::Plugin::Redirect;
+use LWP::UserAgent;
 
 use FindBin;
 use GI;
@@ -339,7 +340,23 @@ sub launch {
 					           gff_url => $gff_url});
    }
    elsif($q->param('soba')){
-       return $self->redirect("$serv_opt{soba_url}?rm=upload_urls&url=$gff_url");
+       #post the file to SOBA
+       my $ua = LWP::UserAgent->new;
+       my $response = $ua->post($serv_opt{soba_url},
+				Content_Type => 'form-data',
+				Content      => [ rm  => 'upload_files',
+						  gff_file   => [$gff_file]]
+				);
+       
+       #fix the retunred content to remove relative URLs
+       my $content = $response->content;
+       my ($soba_base) = $serv_opt{soba_url} =~ /((http\:\/\/)?[^\/]+)/;
+       $content =~ s/\"\/([^\"])/\"$soba_base\/$1/g;
+
+       #return the HTML content provided by SOBA
+       #SOBA server must have 'Access-Control-Allow-Origin: *' in the
+       #soba.cgi headers for cross site AJAX to work in FireFox
+       return $content;
    }
 }
 #-----------------------------------------------------------------------------
