@@ -735,7 +735,7 @@ sub clean_and_package {
 
     #wrap everything up into a nice package
     system("cd $job_dir\n".
-	   "tar -zcf $r_dir.tar.gz $r_dir --exclude \"run.log\" --exclude \"theVoid\*\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\"") &&
+	   "tar --exclude \"theVoid\*\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\" -zcf $r_dir.tar.gz $r_dir") &&
 	   die("ERROR: Building tarball for job '$job_id' failed\n");
 
     my $index = "$job_dir/$r_dir/$job_id\_master_datastore_index.log";

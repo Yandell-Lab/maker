@@ -332,12 +332,21 @@ sub launch {
        $codebase =~ s/([^\:])\/+/$1\//g;
        $codebase .= '/' if($codebase !~ /\/$/);
 
-       #manually add outgoing reponse headers
-       $self->header_props('-Content-type' => "application/x-java-jnlp-file",
-			   '-Content-Disposition' => "attachment; filename=apollo.jnlp");
+       #make jnlp file and URL
+       my $jnlp_file = $slink;
+       my $jnlp_url = $gff_url;
+       $jnlp_file =~ s/gff$/jnlp/;
+       $jnlp_url =~ s/gff$/jnlp/;
 
-       return $self->tt_process('apollo.jnlp.tt', {codebase => $codebase,
-					           gff_url => $gff_url});
+       #build jnlp content from template
+       my $content = ${$self->tt_process('apollo.jnlp.tt', {codebase => $codebase,
+							    gff_url => $gff_url})};
+
+       open(JNLP, "> $jnlp_file");
+       print JNLP $content;
+       close(JNLP);
+
+       return $self->redirect("$jnlp_url");       
    }
    elsif($q->param('soba')){
        #post the file to SOBA

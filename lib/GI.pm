@@ -2399,20 +2399,27 @@ sub set_defaults {
       $CTL_OPT{'persist_guest'} = 72; #in hours
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
-      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/maker';
-      $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin/maker'
-	  if(! -d '/var/www/cgi-bin' && -d '/usr/lib/cgi-bin/');
+      $CTL_OPT{'cgi_dir'} = '';
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/var/www/cgi-bin');
+      $CTL_OPT{'cgi_dir'} = '/Library/WebServer/CGI-Executables/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/Library/WebServer/CGI-Executables');
+      $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/usr/lib/cgi-bin');
       $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
-      $CTL_OPT{'html_dir'} = '/var/www/html/maker';
-      $CTL_OPT{'html_dir'} = '/var/www/maker'
-	  if(! -d '/var/www/html' && -d '/var/www');
+      $CTL_OPT{'html_dir'} = '';
+      $CTL_OPT{'html_dir'} = '/var/www/html/maker' if(! $CTL_OPT{'html_dir'} && -d '/var/www/html/maker');
+      $CTL_OPT{'html_dir'} = '/Library/WebServer/Documents/maker' if(! $CTL_OPT{'html_dir'} && -d '/Library/WebServer/Documents');
+      $CTL_OPT{'html_dir'} = '/var/www/maker' if(! $CTL_OPT{'html_dir'} && -d '/var/www');
       $CTL_OPT{'html_web'} = '/maker';
-      $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data";
+      $CTL_OPT{'data_dir'} = '';
+      $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data" if($CTL_OPT{html_dir});
       $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
-      $CTL_OPT{'apache_user'} = 'apache';
-      $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
-      $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf'
-	  if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/truetype/freefont/FreeMono.ttf');
+      $CTL_OPT{'apache_user'} = '';
+      $CTL_OPT{'apache_user'} = 'apache' if(@{[getpwnam('apache')]});
+      $CTL_OPT{'apache_user'} = 'www' if(@{[getpwnam('www')]});
+      $CTL_OPT{'apache_user'} = 'www-data' if(@{[getpwnam('www-data')]});
+      $CTL_OPT{'font_file'} = '';
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/bitstream-vera/VeraMono.ttf');
+      $CTL_OPT{'font_file'} = '/Library/Fonts/Verdana.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/Library/Fonts/Verdana.ttf');
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/truetype/freefont/FreeMono.ttf');
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
    }
