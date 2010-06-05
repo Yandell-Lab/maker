@@ -2399,15 +2399,17 @@ sub set_defaults {
       $CTL_OPT{'persist_guest'} = 72; #in hours
       $CTL_OPT{'inactive_user'} = 0; #in days
       $CTL_OPT{'inactive_guest'} = 14; #in days
-      $CTL_OPT{'cgi_dir'} = '';
-      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/var/www/cgi-bin');
-      $CTL_OPT{'cgi_dir'} = '/Library/WebServer/CGI-Executables/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/Library/WebServer/CGI-Executables');
-      $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin/maker' if(! $CTL_OPT{'cgi_dir'} && -d '/usr/lib/cgi-bin');
+      $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin';
+      $CTL_OPT{'cgi_dir'} = '/Library/WebServer/CGI-Executables' if(! -d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_dir'} = '' if(! -d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_dir'} .= '/maker' if(-d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
-      $CTL_OPT{'html_dir'} = '';
-      $CTL_OPT{'html_dir'} = '/var/www/html/maker' if(! $CTL_OPT{'html_dir'} && -d '/var/www/html/maker');
-      $CTL_OPT{'html_dir'} = '/Library/WebServer/Documents/maker' if(! $CTL_OPT{'html_dir'} && -d '/Library/WebServer/Documents');
-      $CTL_OPT{'html_dir'} = '/var/www/maker' if(! $CTL_OPT{'html_dir'} && -d '/var/www');
+      $CTL_OPT{'html_dir'} = '/var/www/html';
+      $CTL_OPT{'html_dir'} = '/Library/WebServer/Documents' if(! -d $CTL_OPT{'html_dir'});
+      $CTL_OPT{'html_dir'} = '/var/www' if(! -d $CTL_OPT{'html_dir'});
+      $CTL_OPT{'html_dir'} = '' if(! -d $CTL_OPT{'html_dir'});
+      $CTL_OPT{'html_dir'} .= '/maker' if(-d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_web'} = '/maker';
       $CTL_OPT{'data_dir'} = '';
       $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data" if($CTL_OPT{html_dir});
@@ -2416,12 +2418,15 @@ sub set_defaults {
       $CTL_OPT{'apache_user'} = 'apache' if(@{[getpwnam('apache')]});
       $CTL_OPT{'apache_user'} = 'www' if(@{[getpwnam('www')]});
       $CTL_OPT{'apache_user'} = 'www-data' if(@{[getpwnam('www-data')]});
-      $CTL_OPT{'font_file'} = '';
-      $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/bitstream-vera/VeraMono.ttf');
-      $CTL_OPT{'font_file'} = '/Library/Fonts/Verdana.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/Library/Fonts/Verdana.ttf');
-      $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -e $CTL_OPT{'font_file'} && -e '/usr/share/fonts/truetype/freefont/FreeMono.ttf');
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
+      $CTL_OPT{'font_file'} = '/Library/Fonts/Verdana.ttf' if(! -f $CTL_OPT{'font_file'});
+      $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -f $CTL_OPT{'font_file'});
+      $CTL_OPT{'font_file'} = '' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
+      $CTL_OPT{'JBROWSE_ROOT'} = '';
+      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf';
+      $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
    }
 
    #server menus
@@ -3486,6 +3491,8 @@ sub generate_control_files {
        print OUT "#-----External Viewer Setup\n";
        print OUT "soba_url:$O{soba_url} #url to Sequence Ontology SOBA CGI script\n";
        print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.\n";
+       print OUT "JBROWSE_ROOT:$O{JBROWSE_ROOT} #base directory for JBrowse installation.\n";
+       print OUT "GBROWSE_MASTER:$O{GBROWSE_MASTER} #path to GBrowse.conf file.\n";
        print OUT "\n";
        print OUT "#-----MAKER Server Specific Options\n";
        print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";

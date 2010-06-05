@@ -40,7 +40,14 @@ sub cgiapp_init {
    $self->SUPER::cgiapp_init;
 
    #load the server control files
-   my %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/config/server.ctl"])});
+   my %serv_opt;
+
+   if(-f "$FindBin::Bin/config/server.ctl"){
+       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/config/server.ctl"])});
+   }
+   else{
+       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/../config/server.ctl"])});
+   }
 
    #make sure required database values are setup
    if (! $serv_opt{DBI}) {
@@ -90,7 +97,7 @@ sub cgiapp_init {
 					feedback
 					filebox
 					upload_file
-					launch
+					
 					results
 					submit_to_db
 					delete_job
@@ -294,79 +301,129 @@ sub forgot_login {
 }
 #-----------------------------------------------------------------------------
 sub launch {
-   my $self = shift;
+    my $self = shift;
+    
+    my $q = $self->query();
+    my $job_id = $q->param('job_id');
+    my $user_id =  $q->param('user_id') || $self->get_user_id();
+    my $value = $q->param('contig'); #datastore direcory for contig 
+    $value =~ s/\/+$//;
+    my ($name) = $value =~ /([^\/]+)$/;   
+    my %serv_opt = %{$self->param('server_opt')};
+    my $data_dir = $serv_opt{data_dir};
+    
+    #build a safename with '%' character escaped to avoid issues with browser interpretation of %
+    my $safe_name = uri_escape($name, '_');
+    $safe_name =~ s/\%/\_/g;
+    
+    #make path
+    File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/");
+    my $gff_url = ($serv_opt{html_web} =~ /http\:\/\//) ?
+	"$serv_opt{html_web}/users/$user_id/$safe_name.gff" :
+	"$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$safe_name.gff";
+    
+    #fix // in direcory structure
+    $gff_url =~ s/([^\:])\/+/$1\//g;
+    
+    my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
+    my $slink = "$serv_opt{html_dir}/users/$user_id/$safe_name.gff";
+    symlink($gff_file, $slink) if(! -e $slink);
+    
+    if($q->param('apollo')){
+	#base URL for Apollo jars/images
+	my $codebase = ($serv_opt{html_web} =~ /http\:\/\//) ? 
+	    "$serv_opt{html_web}/" :
+	    "$serv_opt{web_address}/$serv_opt{html_web}/";
+	
+	#fix // in direcory structure
+	$codebase =~ s/([^\:])\/+/$1\//g;
+	$codebase .= '/' if($codebase !~ /\/$/);
+	
+	#make jnlp file and URL
+	my $jnlp_file = $slink;
+	my $jnlp_url = $gff_url;
+	$jnlp_file =~ s/gff$/jnlp/;
+	$jnlp_url =~ s/gff$/jnlp/;
+	
+	#build jnlp content from template
+	my $content = ${$self->tt_process('apollo.jnlp.tt', {codebase => $codebase,
+							     gff_url => $gff_url})};
+	
+	open(JNLP, "> $jnlp_file");
+	print JNLP $content;
+	close(JNLP);
+	
+	return $self->redirect("$jnlp_url");       
+    }
+    elsif($q->param('soba')){
+	#post the file to SOBA
+	my $ua = LWP::UserAgent->new;
+	my $response = $ua->post($serv_opt{soba_url},
+				 Content_Type => 'form-data',
+				 Content      => [ rm  => 'upload_files',
+						   gff_file   => [$gff_file]]
+	    );
+	
+	#fix the retunred content to remove relative URLs
+	my $content = $response->content;
+	my ($soba_base) = $serv_opt{soba_url} =~ /((http\:\/\/)?[^\/]+)/;
+	$content =~ s/\"\/([^\"])/\"$soba_base\/$1/g;
+	
+	#return the HTML content provided by SOBA
+	#SOBA server must have 'Access-Control-Allow-Origin: *' in the
+	#soba.cgi headers for cross site AJAX to work in FireFox
+	return $content;
+    }
+    elsif($q->param('gbrowse')){
+	#show contig in GBrowse
+	my $url = "$serv_opt{web_address}/cgi-bin/gb2/gbrowse/";
+	$url =~ s/([^\:])\/+/$1\//g;
+	$url .= "MWAS_$user_id\_$job_id/?name=$name";
+	
+	return $self->redirect($url);
+    }
+    elsif($q->param('jbrowse')){
+	#show contig in JBrowse
+	my $j_dir = $serv_opt{JBROWSE_ROOT};
+	my $dir = "$serv_opt{html_dir}/users/$user_id/$job_id/";
+	
+	#copy necessary JBrowse files if not yet copied
+	if(! -d $dir){
+	    File::Path::mkpath("$dir");
+	    
+	    #get all JBrowse contents
+	    my @to_copy = qw(LICENSE
+		             Makefile
+		             bin
+			     closedhand.cur
+			     docs
+			     img
+			     index.html
+			     js
+			     jslib
+			     lib
+			     openhand.cur
+			     src
+			     twiki);
 
-   my $q = $self->query();
-   my $job_id = $q->param('job_id');
-   my $value = $q->param('contig'); #datastore direcory for contig 
-   my $user_id = $self->get_user_id();
-   $value =~ s/\/+$//;
-   my ($name) = $value =~ /([^\/]+)$/;   
-   my %serv_opt = %{$self->param('server_opt')};
-   my $data_dir = $serv_opt{data_dir};
+	    #get MAKER specific configuration file
+	    my $conf = "$data_dir/maker/JBROWSE/genome.css";
+	    system("cp -R $conf ".join(' ', @to_copy)." $dir");
+	}
 
-   #build a safename with '%' character escaped to avoid issues with browser interpretation of %
-   my $safe_name = uri_escape($name, '_');
-   $safe_name =~ s/\%/\_/g;
+	#add tracks if not currently added
+	if(!-d "$dir/data"){
+	    my $dstore = "$data_dir/jobs/$job_id/$job_id.maker.output/$job_id\_master_datastore_index.log";
+	    system("cd $dir\n".
+		   "$data_dir/maker/bin/maker2jbrowse -d $dstore");
+	}
 
-   #make path
-   File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/");
-   my $gff_url = ($serv_opt{html_web} =~ /http\:\/\//) ?
-       "$serv_opt{html_web}/users/$user_id/$safe_name.gff" :
-       "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$safe_name.gff";
-
-   #fix // in direcory structure
-   $gff_url =~ s/([^\:])\/+/$1\//g;
-
-   my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
-   my $slink = "$serv_opt{html_dir}/users/$user_id/$safe_name.gff";
-   symlink($gff_file, $slink) if(! -e $slink);
-
-   if($q->param('apollo')){
-       #base URL for Apollo jars/images
-       my $codebase = ($serv_opt{html_web} =~ /http\:\/\//) ? 
-	   "$serv_opt{html_web}/" :
-	   "$serv_opt{web_address}/$serv_opt{html_web}/";
-
-       #fix // in direcory structure
-       $codebase =~ s/([^\:])\/+/$1\//g;
-       $codebase .= '/' if($codebase !~ /\/$/);
-
-       #make jnlp file and URL
-       my $jnlp_file = $slink;
-       my $jnlp_url = $gff_url;
-       $jnlp_file =~ s/gff$/jnlp/;
-       $jnlp_url =~ s/gff$/jnlp/;
-
-       #build jnlp content from template
-       my $content = ${$self->tt_process('apollo.jnlp.tt', {codebase => $codebase,
-							    gff_url => $gff_url})};
-
-       open(JNLP, "> $jnlp_file");
-       print JNLP $content;
-       close(JNLP);
-
-       return $self->redirect("$jnlp_url");       
-   }
-   elsif($q->param('soba')){
-       #post the file to SOBA
-       my $ua = LWP::UserAgent->new;
-       my $response = $ua->post($serv_opt{soba_url},
-				Content_Type => 'form-data',
-				Content      => [ rm  => 'upload_files',
-						  gff_file   => [$gff_file]]
-				);
-       
-       #fix the retunred content to remove relative URLs
-       my $content = $response->content;
-       my ($soba_base) = $serv_opt{soba_url} =~ /((http\:\/\/)?[^\/]+)/;
-       $content =~ s/\"\/([^\"])/\"$soba_base\/$1/g;
-
-       #return the HTML content provided by SOBA
-       #SOBA server must have 'Access-Control-Allow-Origin: *' in the
-       #soba.cgi headers for cross site AJAX to work in FireFox
-       return $content;
-   }
+	my $url = ($serv_opt{html_web} =~ /http\:\/\//) ?
+	    "$serv_opt{html_web}/users/$user_id/$job_id/" :
+	    "$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$job_id/";
+	
+	return $self->redirect($url);
+    }
 }
 #-----------------------------------------------------------------------------
 sub results {

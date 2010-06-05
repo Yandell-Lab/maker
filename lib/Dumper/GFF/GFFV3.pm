@@ -86,7 +86,11 @@ sub set_current_contig {
 
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
-    print_txt($ANN, $self->contig_comment."\n");
+
+    #skip adding the optional sequence-region line because many programs
+    #do not handle it correctly or consistently - 06/05/2010
+    #print_txt($ANN, $self->contig_comment."\n");
+
     print_txt($ANN, $self->contig_line."\n"); 
     close($ANN);
 

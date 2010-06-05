@@ -27,6 +27,9 @@
    </select>
 <br>
 <br>
+    <input type="submit" name="gbrowse" value="View in GBrowse">
+    <input type="submit" name="jbrowse" value="View in JBrowse">
+<br>
     <input type="submit" name="apollo" value="View in Apollo">
     <input type="submit" name="soba" value="SOBA Statistics">
    </center>

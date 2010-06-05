@@ -37,29 +37,29 @@ sub cgiapp_init {
     my $self = shift;
     $self->SUPER::cgiapp_init;
    
-    my %serv_opt = %{$self->param('server_opt')};
-    
-    #setup authentication
-    __PACKAGE__->authen->config(DRIVER => ['DBI',
-					   DBH         => $self->dbh,
-					   TABLE       => 'users',
-					   CONSTRAINTS => {'users.login'    => '__CREDENTIAL_1__',
-							   'users.password' => '__CREDENTIAL_2__',
-						       }
-					   ],
-				STORE => 'Session',
-				LOGIN_URL => $serv_opt{html_web},
-				POST_LOGIN_URL => $serv_opt{html_web},
-				LOGOUT_URL => $serv_opt{html_web},
-				LOGIN_SESSION_TIMEOUT => {IDLE_FOR => '30m',
-							  EVERY => '1d'
-							  },
-				);
-
-    $self->authen->protected_runmodes(qw());
-
-    #add default control options from server
-    $self->param(server_opt => \%serv_opt);
+#    my %serv_opt = %{$self->param('server_opt')};
+#    
+#    #setup authentication
+#    __PACKAGE__->authen->config(DRIVER => ['DBI',
+#					   DBH         => $self->dbh,
+#					   TABLE       => 'users',
+#					   CONSTRAINTS => {'users.login'    => '__CREDENTIAL_1__',
+#							   'users.password' => '__CREDENTIAL_2__',
+#						       }
+#					   ],
+#				STORE => 'Session',
+#				LOGIN_URL => $serv_opt{html_web},
+#				POST_LOGIN_URL => $serv_opt{html_web},
+#				LOGOUT_URL => $serv_opt{html_web},
+#				LOGIN_SESSION_TIMEOUT => {IDLE_FOR => '30m',
+#							  EVERY => '1d'
+#							  },
+#				);
+#
+#    $self->authen->protected_runmodes(qw());
+#
+#    #add default control options from server
+#    $self->param(server_opt => \%serv_opt);
 }
 #-----------------------------------------------------------------------------
 sub cgiapp_prerun {
@@ -75,8 +75,8 @@ sub cgiapp_prerun {
         }
 
         $self->tt_params({logged_in  => $is_authen,
-                          server_opt => $self->param('server_opt'), #server options file                                                                                                                                                        
-                          session    => $self->session,
+                          server_opt => $self->param('server_opt'), #server options file
+			  session    => $self->session,
                           user       => $user,
                           #authen     => Dumper($self->authen)
 			 });
@@ -98,46 +98,66 @@ sub teardown {
 sub stream {
     my $self = shift;
     my $q = $self->query();
-    my $type = $q->param('type');
 
-    my $job_id = $self->query->param('job_id') || return;
-    my $user_id = $self->query->param('user_id') || return;
-    my $md5 = $self->query->param('m');
+    #hack - handle case for gbrowse calling stream and splitting on '='
+    if(@ARGV && ! @{[grep {/\=/} @ARGV]}){
+	my %params = @ARGV;
+	map {$q->param($_ => $params{$_})} keys %params;
+    }
+
+    my $type = $q->param('type');
+    my $job_id = $q->param('job_id');
+    my $user_id = $q->param('user_id');
+    my $md5 = $q->param('m');
     my $data_dir = $self->param('server_opt')->{data_dir};
-    
+
     #for security remove non-digit characters
     $job_id =~ s/[^\d]+//g;
-    $user_id = ~ s/[^\d]+//g;
+    $user_id =~ s/[^\d]+//g;
 
     #validate parameters
     return if(! $job_id);
     return if(! $user_id);
+
     my $job_info = $self->get_job_info($job_id);
     return if(! $job_info || $user_id != $job_info->{user_id});
     
     #authenticate via login params or md5 digest
-    if($md5 && $job_info){
-	my $key =  Digest::MD5::md5_hex(grep {defined($_)} values %$job_info);
-	return if($key != $md5);
-    }
-    else{
-	my $user_info = $self->get_user_info();
-	return if(! $user_info || $user_id != $user_info->{user_id});
-    }
+#    if($md5 && $job_info){
+#    	my $key =  Digest::MD5::md5_hex(grep {defined($_)} values %$job_info);
+#	return if($key != $md5);
+#    }
+#    else{
+#	my $user_info = $self->get_user_info();
+#	return if(! $user_info || $user_id != $user_info->{user_id});
+#    }
 
     #send file for requested file type
     if($type eq 'log'){
+	#-return the contents of the MAKER produced STDERR log file
+
 	my $file = "$data_dir/jobs/$job_id/job.log";
 
 	return $self->_stream($file) if(-e $file);
     }
     elsif($type eq 'tarball'){
-	my $job_id = $self->query->param('job_id') || return;
-	my $user_id = $self->query->param('user_id') || return;
-	my $data_dir = $self->param('server_opt')->{data_dir};
+	#-returns the tarball of MAKER results
+
 	my $file = "$data_dir/jobs/$job_id/$job_id.maker.output.tar.gz";
 
 	return $self->_stream($file) if(-e $file);
+    }
+    elsif($type eq 'gbrowse'){
+	#-the gbrowse portion of stream is actually expected to
+	#-be called outside of the webrowser so it will return
+	#-STDOUT rather than a webpage and then exit
+
+	#create GBrowse configuration file for this Job
+	my $content = ${$self->tt_process('gbrowse.conf.tt', {contig_dir => "$data_dir/jobs/$job_id/$job_id.maker.output/",
+							      })};
+
+	print $content;
+	exit(0);
     }
 
     return;
@@ -161,6 +181,8 @@ sub get_user_info {
     my $self = shift;
 
     my $username = $self->session->param('AUTH_USERNAME');
+
+    return if(! defined $username);
 
     my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE login='$username'});
 

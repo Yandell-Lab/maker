@@ -134,14 +134,17 @@ document.getElementById(DivID).innerHTML = 'Loading...';
 <div id="FloatingLayer" style="position:absolute;left:500;top:300;visibility:hidden;overflow:auto"> 
   <table id="FloatingTable" border="0" width="350" length="400" bgcolor="#CFECEC" cellspacing="0" cellpadding="5">
     <tr> 
-      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+      <td width="100%">
+        <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
           <tr> 
-            <td id="titleBar" style="cursor:move" width="100%"> <ilayer width="100%" onSelectStart="return false"> 
+            <td id="titleBar" style="cursor:move; width:340px">
+              <ilayer width="100%" onSelectStart="return false"> 
               <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
-              <font face="Arial" color="#FFFFFF"></font></layer>
-              </ilayer></td>
-            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="black" size="2" face="arial"  style="text-decoration:none">X</font></a> 
+              <font face="Arial" color="#FFFFFF"></font>
+              </layer>
+              </ilayer>
             </td>
+            <td style="cursor:hand" valign="top" align="right"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="black" size="2" face="arial" style="text-decoration:none">X</font></a></td>
           </tr>
           <tr> 
             <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="2" id="floating_content_area"> 
@@ -150,7 +153,8 @@ document.getElementById(DivID).innerHTML = 'Loading...';
               <!-- End of content area -->
             </td>
           </tr>
-        </table></td>
+        </table>
+      </td>
     </tr>
   </table>
 </div>
