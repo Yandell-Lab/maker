@@ -96,8 +96,7 @@ sub cgiapp_init {
 					frontpage
 					feedback
 					filebox
-					upload_file
-					
+					upload_file					
 					results
 					submit_to_db
 					delete_job
@@ -120,11 +119,28 @@ sub cgiapp_prerun {
 	    $is_authen =$self->authen->is_authenticated;
 	}
 
-        $self->tt_params({logged_in  => $is_authen,
-                          server_opt => $self->param('server_opt'), #server options file
-                          session    => $self->session,
-                          user       => $user,
-                          #authen     => Dumper($self->authen),
+	my $web_address = $self->param('server_opt')->{web_address};
+	my $html_web    = $self->param('server_opt')->{html_web};
+	my $cgi_web     = $self->param('server_opt')->{cgi_web};
+
+	my $base_url_html = ($html_web =~ /http\:\/\//) ?
+	    "$html_web" : "$web_address/$html_web";
+	$base_url_html =~ s/([^\:])\/+/$1\//g;
+
+	my $base_url_cgi = ($cgi_web =~ /http\:\/\//) ?
+	    "$cgi_web" : "$web_address/$cgi_web";
+	$base_url_cgi =~ s/([^\:])\/+/$1\//g;
+	
+	$self->param(base_url_html => $base_url_html);
+	$self->param(base_url_cgi => $base_url_cgi);
+	
+        $self->tt_params({logged_in     => $is_authen,
+                          server_opt    => $self->param('server_opt'), #server options file
+                          session       => $self->session,
+                          user          => $user,
+			  base_url_html => $base_url_html,
+			  base_url_cgi  => $base_url_cgi,
+                          #authen       => Dumper($self->authen),
 		      });
 }
 #-----------------------------------------------------------------------------
@@ -386,25 +402,27 @@ sub launch {
 	#show contig in JBrowse
 	my $j_dir = $serv_opt{JBROWSE_ROOT};
 	my $dir = "$serv_opt{html_dir}/users/$user_id/$job_id/";
+
+	die "ERROR: JBROWSE_ROOT $j_dir does not exist\n" if(! -d $j_dir);
 	
 	#copy necessary JBrowse files if not yet copied
 	if(! -d $dir){
 	    File::Path::mkpath("$dir");
 	    
 	    #get all JBrowse contents
-	    my @to_copy = qw(LICENSE
-		             Makefile
-		             bin
-			     closedhand.cur
-			     docs
-			     img
-			     index.html
-			     js
-			     jslib
-			     lib
-			     openhand.cur
-			     src
-			     twiki);
+	    my @to_copy = map {"$j_dir/$_"} qw(LICENSE
+		                               Makefile
+					       bin
+					       closedhand.cur
+					       docs
+					       img
+					       index.html
+					       js
+					       jslib
+					       lib
+					       openhand.cur
+					       src
+					       twiki);
 
 	    #get MAKER specific configuration file
 	    my $conf = "$data_dir/maker/JBROWSE/genome.css";
@@ -415,7 +433,7 @@ sub launch {
 	if(!-d "$dir/data"){
 	    my $dstore = "$data_dir/jobs/$job_id/$job_id.maker.output/$job_id\_master_datastore_index.log";
 	    system("cd $dir\n".
-		   "$data_dir/maker/bin/maker2jbrowse -d $dstore");
+		   "$data_dir/maker/bin/maker2jbrowse -d $dstore 1>&2");
 	}
 
 	my $url = ($serv_opt{html_web} =~ /http\:\/\//) ?
@@ -902,6 +920,8 @@ sub submit_to_db {
    my %CTL_OPT = %{$self->get_server_default_options()};
    %CTL_OPT = (GI::set_defaults('opts', \%CTL_OPT),
 	       GI::set_defaults('bopts', \%CTL_OPT)); #filter to needed sub-set
+
+   #join CTL_OPT in array to be seperated by comma
    while(my $key = each %CTL_OPT){
        my @values = $q->param($key);
        @values = grep {$_ ne ''} @values; #filter empty values
@@ -946,7 +966,8 @@ sub submit_to_db {
        die "ERROR: This job does not belong to you\n" if($owner != $user_id);
 
        #update job
-       $self->dbh->do(qq{UPDATE jobs SET submit_id=$submit_id, length='$length', is_queued=$is_queued, name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
+       $self->dbh->do(qq{UPDATE jobs SET submit_id=$submit_id, length='$length', is_queued=$is_queued, }.
+		      qq{name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
    }
    else{
        #add job
@@ -962,13 +983,14 @@ sub submit_to_db {
    if($self->dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$job_id})){
        #update control options for job
        my @defaults = (keys %CTL_OPT); #keys to add
-       my @set = map {"$_ \= '$CTL_OPT{$_}'" } @defaults;
+       my @set = map {lc($_)." = '$CTL_OPT{$_}'" } @defaults;
        $self->dbh->do("UPDATE ctl_opt SET ".join(", ", @set) . "WHERE job_id=$job_id");
    }
    else{
        #add control options for job
        my @defaults = (keys %CTL_OPT); #keys to add
-       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @defaults).qq{) }.
+       my @lc_defaults = map {lc($_)} @defaults;
+       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @lc_defaults).qq{) }.
 		      qq{VALUES ($job_id, \'}.join("', '", @CTL_OPT{@defaults}).qq{\')}
 		      );
    }
@@ -991,8 +1013,10 @@ sub submit_to_db {
 	   File::Path::mkpath($user_dir) if(! -d $user_dir);
 	   File::Path::mkpath($job_dir) if(! -d $job_dir);
 
-	   $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
 	   MWAS_util::copy_package($self->dbh, $other_job_id, $job_id);
+	   $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1, start_time='}.
+			  MWAS_util::date_time . qq{', finish_time='}.
+			  MWAS_util::date_time . qq{' WHERE job_id=$job_id});
        }
 
        $self->dbh->commit;
@@ -1232,9 +1256,19 @@ sub get_length_for_value {
 sub get_server_default_options {
    my $self = shift;
 
-   my $def_opt = $self->dbh->selectrow_hashref(qq{SELECT * FROM all_default_opt});
+   my $ctl_opt = $self->dbh->selectrow_hashref(qq{SELECT * FROM all_default_opt});
+   my %def_opt = (GI::set_defaults('opts'), GI::set_defaults('bopts'),
+		  GI::set_defaults('exe'), GI::set_defaults('server'));
 
-   return $def_opt;
+   #fix control options to account for database lowercase restrictions
+   while(my $key = each %def_opt){
+       if(! exists $ctl_opt->{$key} && exists $ctl_opt->{lc($key)}){
+	   $ctl_opt->{$key} = $ctl_opt->{lc($key)};
+	   delete $ctl_opt->{lc($key)};
+       }
+   }   
+
+   return $ctl_opt;
 }
 #-----------------------------------------------------------------------------
 #this method collects all opt status

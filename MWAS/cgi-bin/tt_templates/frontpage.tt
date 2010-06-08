@@ -5,31 +5,26 @@
 <!--
 function toggleLog(iState, url) {
     var DivID = 'FloatingLayer';
-    if(document.layers)   //NN4+
+
+    if(iState == 2)
     {
-        if(iState == 2)
-        {
-            iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
-        }
-        document.layers[DivID].visibility = iState ? "show" : "hide";
-    }
-    else if(document.getElementById)  //gecko(NN6) + IE 5+
-    {
+      if(document.layers)   //NN4+
+      {
+        iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
+      }
+      else if(document.getElementById)  //gecko(NN6) + IE 5+
+      {
         var obj = document.getElementById(DivID);
-        if(iState == 2)
-        {
-            iState = (obj.style.visibility == "visible") ? 0 : 1;
-        }
-        obj.style.visibility = iState ? "visible" : "hidden";
+        iState = (obj.style.visibility == "visible") ? 0 : 1;
+      }
+      else if(document.all)// IE 4
+      {
+        iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
+      }
     }
-    else if(document.all)// IE 4
-    {
-        if(iState == 2)
-        {
-            iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
-        }
-        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
-    }
+
+    if(iState == 1){CenterFloatingLayer()};
+    ToggleFloatingLayer(DivID, iState);
 
     if(iState == 1){
       LoadURL('floating_content_area', url);

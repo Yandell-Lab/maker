@@ -1,6 +1,7 @@
-<form method="POST" action="maker.cgi" name="launch" enctype="multipart/form-data">
+<form method="POST" action="maker.cgi" name="launch" onSubmit="if(this.selected.value != 'apollo'){this.target='popup_win'; window.open('','popup_win', 'width=1024,height=600,left=20,scrollbars=yes')}else{this.target='_self'}" enctype="multipart/form-data">
 <input type="hidden" name="rm" value="launch">
 <input type="hidden" name="job_id" value="[% job_id %]">
+<input type="hidden" name="selected" value="">
 <table width= 100%>
 <tr>
   <td nowrap>
@@ -27,11 +28,11 @@
    </select>
 <br>
 <br>
-    <input type="submit" name="gbrowse" value="View in GBrowse">
-    <input type="submit" name="jbrowse" value="View in JBrowse">
+    <input type="submit" name="gbrowse" value="View in GBrowse" onclick="this.form.selected.value = 'gbrowse'">
+    <input type="submit" name="jbrowse" value="View in JBrowse" onclick="this.form.selected.value = 'jbrowse'">
 <br>
-    <input type="submit" name="apollo" value="View in Apollo">
-    <input type="submit" name="soba" value="SOBA Statistics">
+    <input type="submit" name="apollo" value="View in Apollo" onclick="this.form.selected.value = 'apollo'">
+    <input type="submit" name="soba" value="SOBA Statistics" onclick="this.form.selected.value = 'soba'">
    </center>
   </td>
 </tr>

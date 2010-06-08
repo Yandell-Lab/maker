@@ -110,17 +110,15 @@ sub stream {
     my $user_id = $q->param('user_id');
     my $md5 = $q->param('m');
     my $data_dir = $self->param('server_opt')->{data_dir};
+    my $html_dir = $self->param('server_opt')->{html_dir};
+    my $html_web = $self->param('server_opt')->{html_web};
+    my $web_address = $self->param('server_opt')->{web_address};
 
     #for security remove non-digit characters
-    $job_id =~ s/[^\d]+//g;
-    $user_id =~ s/[^\d]+//g;
+    $job_id =~ s/[^\d]+//g if($job_id);
+    $user_id =~ s/[^\d]+//g if($user_id);
 
-    #validate parameters
-    return if(! $job_id);
-    return if(! $user_id);
-
-    my $job_info = $self->get_job_info($job_id);
-    return if(! $job_info || $user_id != $job_info->{user_id});
+    my $job_info = $self->get_job_info($job_id) if($job_id);
     
     #authenticate via login params or md5 digest
 #    if($md5 && $job_info){
@@ -136,12 +134,15 @@ sub stream {
     if($type eq 'log'){
 	#-return the contents of the MAKER produced STDERR log file
 
+	return if(! $job_info || ! $user_id || $user_id != $job_info->{user_id});
 	my $file = "$data_dir/jobs/$job_id/job.log";
 
 	return $self->_stream($file) if(-e $file);
     }
     elsif($type eq 'tarball'){
 	#-returns the tarball of MAKER results
+
+	return if(! $job_info || ! $user_id || $user_id != $job_info->{user_id});
 
 	my $file = "$data_dir/jobs/$job_id/$job_id.maker.output.tar.gz";
 
@@ -152,12 +153,32 @@ sub stream {
 	#-be called outside of the webrowser so it will return
 	#-STDOUT rather than a webpage and then exit
 
+	return if(! $job_info || ! $user_id || $user_id != $job_info->{user_id});
+
 	#create GBrowse configuration file for this Job
 	my $content = ${$self->tt_process('gbrowse.conf.tt', {contig_dir => "$data_dir/jobs/$job_id/$job_id.maker.output/",
 							      })};
 
 	print $content;
 	exit(0);
+    }
+    elsif($type eq 'file'){
+	my $file = $q->param('value');
+
+	return if(! $file || ! $user_id);
+
+	my ($name) = $file =~ /([^\/]+)$/;
+	my $new = "$html_dir/users/$user_id/$name";
+
+	my $url = ($html_web =~ /http\:\/\//) ?
+        "$html_web/users/$user_id/$new" :
+        "$web_address/$html_web/users/$user_id/$name";
+
+	File::Path::mkpath("$html_dir/users/$user_id/");
+
+	symlink($file, $new);
+
+	return $self->redirect($url);
     }
 
     return;

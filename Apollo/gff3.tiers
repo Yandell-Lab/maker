@@ -1,3 +1,6 @@
+# Tiers for /Users/cholt/apollo-webstart/conf/gff3.style saved by cholt on Thu May 20 15:57:19 MDT 2010
+
+# Tiers for /Users/cholt/apollo-webstart/conf/gff3.style saved by cholt on Thu May 20 15:10:33 MDT 2010
 # This is based on the public fly.tiers file for displaying Drosophila
 # melanogaster annotations.  You might want to modify the tiers file
 # to display the annotation/results for your specific project.
@@ -56,16 +59,15 @@
 #
 # The fields for a Type or Tier record can appear in any order, one per
 # line.  Be sure that none of the lines get broken up by inserted newlines.
+# Default utr_color is "transparent" (same as AnnotationBackgroundColor defined in game.style)
+# (So if you change AnnotationBackgroundColor, be sure to change utr_color to match!)
 
 [Tier]
 tiername : Annotation
 expanded : true
 labeled : true
 curated : true
-warnonedit : false
 
-# Default utr_color is "transparent" (same as AnnotationBackgroundColor defined in game.style)
-# (So if you change AnnotationBackgroundColor, be sure to change utr_color to match!)
 [Type]
 label : gene
 tiername : Annotation
@@ -77,13 +79,13 @@ color : 51,102,255
 utr_color : 176,224,230
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
-column : _AED
-column : _QI
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
+column : _AED 1
+column : _QI 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 3
 
+number_of_levels : 3
 [Type]
 label : tRNA
 tiername : Annotation
@@ -92,8 +94,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -104,8 +106,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -116,8 +118,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -129,8 +131,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -141,8 +143,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -154,8 +156,8 @@ glyph : DrawableResultFeatureSet
 color : 0,204,0
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -166,54 +168,51 @@ glyph : DrawableResultFeatureSet
 color : 153,153,255
 name_method : FlyNameAdapter
 overlap_method : ORF_Overlap
-column : GENOMIC_RANGE
-column : ID
-number_of_levels : 3
+column : GENOMIC_RANGE 1
+column : ID 1
 
+number_of_levels : 3
+# expand while testing
 [Type]
 label : transposable_element
 tiername : Annotation
 datatype : transposable_element
 glyph : DoubleHeadedArrow
 color : 255,0,203
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
+column : ID 1
+column : GENOMIC_RANGE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-warnonedit : true
-number_of_levels : 1
 
-
+# There's an insertion_site in CG9884: P{PZ}oaf[E-32].  I assume it
+# belongs in this tier.
+# Now hot pink--turquoise was too hard to see on aqua annotation background
+# column : SCORE
 [Tier]
 tiername : Other annotated features
-# expand while testing
 expanded : true
-labeled : false
 curated : true
-warnonedit : true
 
+# ARGS types
 [Type]
 label : P insertion_site
 tiername : Other annotated features
 datatype : p_insertion
 datatype : P insertion_site
 datatype : transposable_element_insertion_site
-# There's an insertion_site in CG9884: P{PZ}oaf[E-32].  I assume it
-# belongs in this tier.
 datatype : insertion_site
 glyph : Triangle
-# Now hot pink--turquoise was too hard to see on aqua annotation background
 color : 255,0,203
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-# column : SCORE
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : remark
@@ -222,26 +221,25 @@ datatype : miscellaneous curator's observation
 datatype : remark
 glyph : Zigzag
 color : 255,255,204
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : GENOMIC_RANGE
-column : ID
-number_of_levels : 1
+column : GENOMIC_RANGE 1
+column : ID 1
 
-# ARGS types
 [Type]
 label : rescue fragment
 tiername : Other annotated features
 datatype : rescue_fragment
 glyph : ThinRectangle
 color : 153,51,255
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : point mutation
@@ -249,12 +247,12 @@ tiername : Other annotated features
 datatype : point_mutation
 glyph : Triangle
 color : 0,102,204
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
+column : ID 1
+column : GENOMIC_RANGE 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : protein binding site
@@ -262,13 +260,13 @@ tiername : Other annotated features
 datatype : protein_binding_site
 glyph : DrawableResultFeatureSet
 color : 255,204,0
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : sequence variant
@@ -276,13 +274,13 @@ tiername : Other annotated features
 datatype : sequence_variant
 glyph : ThinRectangle
 color : 0,153,255
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID      
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : aberration junction
@@ -290,13 +288,13 @@ tiername : Other annotated features
 datatype : aberration_junction
 glyph : Zigzag
 color : 153,0,51
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : regulatory region
@@ -304,13 +302,13 @@ tiername : Other annotated features
 datatype : regulatory_region
 glyph : DrawableResultFeatureSet
 color : 102,255,255
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : region
@@ -318,13 +316,13 @@ tiername : Other annotated features
 datatype : region
 glyph : DrawableResultFeatureSet
 color : 102,255,255
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : oligonucleotide
@@ -332,13 +330,13 @@ tiername : Other annotated features
 datatype : oligonucleotide
 glyph : DrawableResultFeatureSet
 color : 204,102,0
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : DNA motif
@@ -346,13 +344,13 @@ tiername : Other annotated features
 datatype : DNA_motif
 glyph : ThinRectangle
 color : 102,102,102
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
 
 [Type]
 label : enhancer
@@ -360,78 +358,75 @@ tiername : Other annotated features
 datatype : enhancer
 glyph : DrawableResultFeatureSet
 color : 255,153,255
+warnonedit : true
 name_method : FlyNameAdapter
 overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : ID 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
-number_of_levels : 1
-
-[Type]
-label : mature peptide
-tiername : Other annotated features
-datatype : mature_peptide 
-glyph : DrawableResultFeatureSet
-color : 102,102,255
-column : ID
-name_method : FlyNameAdapter
-overlap_method : NoOverlap
-column : GENOMIC_RANGE
-number_of_levels : 1
-
-[Type]
-label : signal peptide
-tiername : Other annotated features
-datatype : signal_peptide 
-glyph : DrawableResultFeatureSet
-color : 153,153,255
-name_method : FlyNameAdapter
-overlap_method : NoOverlap
-column : ID
-column : GENOMIC_RANGE
-number_of_levels : 1
 
 # This tier is for showing new analysis results that you layer on with
 # "Add analysis result".  I tried putting it at the beginning (before the
 # Annotation tier) but that led to a weird display bug.
+[Type]
+label : mature peptide
+tiername : Other annotated features
+datatype : mature_peptide
+glyph : DrawableResultFeatureSet
+color : 102,102,255
+warnonedit : true
+name_method : FlyNameAdapter
+overlap_method : NoOverlap
+column : ID 1
+column : GENOMIC_RANGE 1
+
+[Type]
+label : signal peptide
+tiername : Other annotated features
+datatype : signal_peptide
+glyph : DrawableResultFeatureSet
+color : 153,153,255
+warnonedit : true
+name_method : FlyNameAdapter
+overlap_method : NoOverlap
+column : ID 1
+column : GENOMIC_RANGE 1
+
 [Tier]
 tiername : New analysis results
 expanded : true
-labeled : true
 
 [Type]
 label : New analysis results
 tiername : New analysis results
 glyph : DrawableResultFeatureSet
-color : 255,255,0
+color : yellow
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
 tiername : sequence
 expanded : true
-labeled : true
 
+# Sima and Andy prefer these collapsed
 [Type]
 label : sequence
 tiername : sequence
 datatype : sequence:dummy
 glyph : DrawableResultFeatureSet
 color : 51,102,255
-usescore : false
-column : GENOMIC_RANGE
-column : ID
+column : GENOMIC_RANGE 1
+column : ID 1
 
 [Tier]
 tiername : Previous Releases
-# Sima and Andy prefer these collapsed
-expanded : false
+expanded : true
 
 [Type]
 label : Release 2 GadFly
@@ -441,11 +436,11 @@ datatype : sim4:na_gadfly.dros.RELEASE2
 glyph : DrawableResultFeatureSet
 color : 153,255,255
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -455,11 +450,11 @@ datatype : sim4:na_transcript.dmel.RELEASE31
 glyph : DrawableResultFeatureSet
 color : 0,204,255
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -470,11 +465,11 @@ datatype : sim4_na_het_transcript.dmel.RELEASE32
 glyph : DrawableResultFeatureSet
 color : 0,153,153
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
@@ -491,10 +486,10 @@ glyph : DrawableResultFeatureSet
 color : 153,51,255
 usescore : true
 minscore : 100.0
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -509,10 +504,10 @@ color : 204,153,255
 usescore : true
 minscore : -1.0
 maxscore : 50.0
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -526,14 +521,14 @@ datatype : GeneMark
 datatype : pred_gff:GeneMark
 glyph : DrawableResultFeatureSet
 color : 103,155,104
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
-column : _AED
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
+column : _AED 1
 sortbycolumn : GENOMIC_RANGE
 
-
+# New in CG16983 example of 8/17/2005
 [Type]
 label : SNAP
 tiername : Gene Prediction
@@ -543,11 +538,11 @@ datatype : snap_masked
 datatype : snap_masked:dummy
 glyph : DrawableResultFeatureSet
 color : 153,255,204
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
-column : _AED
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
+column : _AED 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -561,14 +556,13 @@ glyph : DrawableResultFeatureSet
 color : 255,153,255
 usescore : true
 minscore : 100.0
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
-column : _AED
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
+column : _AED 1
 sortbycolumn : GENOMIC_RANGE
 
-# New in CG16983 example of 8/17/2005
 [Type]
 label : augustus
 tiername : Gene Prediction
@@ -578,11 +572,11 @@ datatype : augustus_masked
 datatype : augustus_masked:dummy
 glyph : DrawableResultFeatureSet
 color : 255,204,255
-column : SCORE
-column : GENOMIC_RANGE
-column : query_frame
-column : GENOMIC_LENGTH
-column : _AED
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : GENOMIC_LENGTH 1
+column : _AED 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
@@ -598,11 +592,11 @@ glyph : DrawableResultFeatureSet
 color : 255,255,51
 usescore : true
 minscore : 100.0
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -614,12 +608,12 @@ glyph : DrawableResultFeatureSet
 color : 255,153,153
 usescore : true
 minscore : 100.0
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : query_frame
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : query_frame 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
@@ -635,13 +629,18 @@ datatype : transposable_element
 glyph : DoubleHeadedArrow
 color : 255,0,203
 annot_type : transposable_element
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
+#datatype : sim4:na_gb.dros.02-21-02_to_01-14-03
+#datatype : mapgb:na_gb.dros
+#datatype : sim4:na_Adh.dros
+#datatype : sim4:na_adh.cDNAs.dros
+#datatype : sim4:na_ARGsCDS.dros
 [Tier]
 tiername : Fly Sequence
 expanded : true
@@ -653,22 +652,17 @@ datatype : sim4tandem:na_gb.dmel
 datatype : sim4_na_gb.dmel
 datatype : sim4:na_ARGs.dros
 datatype : sim4:na_gb.dros
-#datatype : sim4:na_gb.dros.02-21-02_to_01-14-03
-#datatype : mapgb:na_gb.dros
-#datatype : sim4:na_Adh.dros
-#datatype : sim4:na_adh.cDNAs.dros
-#datatype : sim4:na_ARGsCDS.dros
 glyph : DrawableResultFeatureSet
 color : 0,240,0
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : NCBI fly cDNAs
@@ -677,33 +671,31 @@ datatype : splign:na_cDNA_ncbi
 glyph : DrawableResultFeatureSet
 color : 0,153,0
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
-
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Tier]
 tiername : ARGS
 expanded : true
-visible : false
 
 [Type]
-label : ARGS genomic 
-tiername : ARGS 
+label : ARGS genomic
+tiername : ARGS
 datatype : sim4:na_ARGs.dros
 glyph : DrawableResultFeatureSet
 color : 0,154,97
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -714,11 +706,11 @@ datatype : sim4:na_ARGsCDS.dros
 glyph : DrawableResultFeatureSet
 color : 0,154,97
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -733,15 +725,15 @@ datatype : splign:na_EST_ncbi
 glyph : DrawableResultFeatureSet
 color : 102,255,102
 usescore : true
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : EST Same Strain
@@ -751,15 +743,15 @@ datatype : sim4_na_dbEST.same.dmel
 glyph : DrawableResultFeatureSet
 color : 153,255,153
 usescore : true
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : EST Different Strain
@@ -769,15 +761,15 @@ datatype : sim4_na_dbEST.diff.dmel
 glyph : DrawableResultFeatureSet
 color : 255,255,153
 usescore : true
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Tier]
 tiername : Non-coding RNA
@@ -792,11 +784,11 @@ glyph : DrawableResultFeatureSet
 color : 204,255,51
 annot_type : tRNA
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : trna_type
-column : anticodon
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : trna_type 1
+column : anticodon 1
 sortbycolumn : SCORE
 
 [Type]
@@ -806,10 +798,10 @@ datatype : sim4:na_smallRNA.dros
 glyph : DrawableResultFeatureSet
 color : 50,255,10
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : query_frame
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : query_frame 1
 sortbycolumn : SCORE
 groupby : HOMOLOGY
 
@@ -830,17 +822,17 @@ datatype : blastx_masked:aa_SP.hyp.dros
 glyph : DrawableResultFeatureSet
 color : 255,20,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Sat Jan 1 00:00:00 PST 2005
+freshdate : Sat Jan 01 01:00:00 MST 2005
 
 [Type]
 label : NCBI fly proteins
@@ -849,17 +841,17 @@ datatype : prosplign:aa_ncbi_dmel
 glyph : DrawableResultFeatureSet
 color : 255,153,153
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Sat Jan 1 00:00:00 PST 2005
+freshdate : Sat Jan 01 01:00:00 MST 2005
 
 [Type]
 label : BLASTX to Community Error Report
@@ -869,18 +861,18 @@ datatype : blastx_masked:aa_users_i.dros
 glyph : DrawableResultFeatureSet
 color : 255,250,10
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
-tiername : Putative Ortholog 
+tiername : Putative Ortholog
 expanded : true
 
 [Type]
@@ -889,11 +881,11 @@ tiername : Putative Ortholog
 datatype : syntenicblock:dummy
 glyph : DrawableResultFeatureSet
 color : 255,102,153
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 
 [Tier]
 tiername : TBLASTX to Insects
@@ -906,14 +898,14 @@ datatype : tblastxwrap_masked:na_baylorf1_scfchunk.dpse
 glyph : DrawableResultFeatureSet
 color : 255,102,51
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -926,17 +918,17 @@ datatype : tblastxwrap_masked:na_scf_chunk_agambiae.fa
 glyph : DrawableResultFeatureSet
 color : 255,204,102
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Insect dbEST
@@ -946,17 +938,17 @@ datatype : tblastx_masked:na_dbEST.insect
 glyph : DrawableResultFeatureSet
 color : 255,255,153
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Tier]
 tiername : BLASTX Similarity to Other Species
@@ -969,17 +961,17 @@ datatype : prosplign:aa_ncbi_other
 glyph : DrawableResultFeatureSet
 color : 204,102,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Worm
@@ -989,17 +981,17 @@ datatype : blastx:aa_SPTR.worm
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Primate
@@ -1009,17 +1001,18 @@ datatype : blastx:aa_SPTR.primate
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
+
 [Type]
 label : Rodent
 tiername : BLASTX Similarity to Other Species
@@ -1029,17 +1022,17 @@ datatype : blastx:aa_SPTR.rodent
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Yeast
@@ -1049,17 +1042,18 @@ datatype : blastx:aa_SPTR.yeast
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
+
 [Type]
 label : Plant
 tiername : BLASTX Similarity to Other Species
@@ -1069,17 +1063,17 @@ datatype : blastx:aa_SPTR.plant
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : expect
-column : identity
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : expect 1
+column : identity 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Insect
@@ -1091,17 +1085,17 @@ datatype : blastx:aa_SPTR.insect
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Other Vertebrates
@@ -1111,17 +1105,17 @@ datatype : blastx:aa_SPTR.othvert
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
 [Type]
 label : Other Invertebrates
@@ -1131,20 +1125,23 @@ datatype : blastx:aa_SPTR.othinv
 glyph : DrawableResultFeatureSet
 color : 255,153,0
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
+# color : 64,224,208
+# Now hot pink to match annotated P elements
 [Tier]
 tiername : Insertion Site
+expanded : true
 
 [Type]
 label : P Element Insertion
@@ -1153,14 +1150,12 @@ datatype : sim4:na_pe.dros
 datatype : pinsertion:dummy
 datatype : pinsertion
 glyph : Triangle
-# color : 64,224,208
-# Now hot pink to match annotated P elements
 color : 255,0,203
 annot_type : P insertion_site
-column : SCORE
-column : identity
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : SCORE 1
+column : identity 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
@@ -1175,10 +1170,10 @@ datatype : dmel_r3_to_dmel_r4_migration:dmel_r3_affy_oligos
 glyph : DrawableResultFeatureSet
 color : 204,102,0
 usescore : true
-column : score
-column : GENOMIC_RANGE
-column : query_frame
-column : probability
+column : score 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : probability 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -1188,20 +1183,29 @@ datatype : sim4:na_newAffy_oligo.dmel
 glyph : DrawableResultFeatureSet
 color : 204,102,0
 usescore : true
-column : score
-column : GENOMIC_RANGE
-column : query_frame
-column : probability
+column : score 1
+column : GENOMIC_RANGE 1
+column : query_frame 1
+column : probability 1
 sortbycolumn : GENOMIC_RANGE
 
 [Tier]
 tiername : Cytology
-visible : false
 expanded : true
+
+[Type]
+label : Cytology
+tiername : Cytology
+datatype : locator:cytology
+datatype : aubrey_cytolocator:cytology
+glyph : DrawableResultFeatureSet
+color : 102,102,102
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
+sortbycolumn : GENOMIC_RANGE
 
 [Tier]
 tiername : BAC Scaffold
-visible : false
 expanded : true
 
 [Type]
@@ -1211,14 +1215,13 @@ datatype : clonelocator:scaffoldBACs
 datatype : bdgp_unknown_clonelocator:scaffoldBACs
 glyph : DrawableResultFeatureSet
 color : 153,153,153
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
 [Tier]
 tiername : Tiling Path
-visible : false
 expanded : true
 
 [Type]
@@ -1227,13 +1230,14 @@ tiername : Tiling Path
 datatype : assembly:path
 glyph : DrawableResultFeatureSet
 color : 204,204,204
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
 [Tier]
 tiername : Start Codon
+expanded : true
 
 [Type]
 label : startcodon_frame1
@@ -1242,8 +1246,8 @@ datatype : codons
 datatype : startcodon_frame1
 glyph : SiteCodon
 color : 34,220,34
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Type]
@@ -1253,8 +1257,8 @@ datatype : codons
 datatype : startcodon_frame2
 glyph : SiteCodon
 color : 34,220,34
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Type]
@@ -1264,12 +1268,13 @@ datatype : codons
 datatype : startcodon_frame3
 glyph : SiteCodon
 color : 34,220,34
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Tier]
 tiername : Stop Codon
+expanded : true
 
 [Type]
 label : stopcodon_frame1
@@ -1278,8 +1283,8 @@ datatype : codons
 datatype : stopcodon_frame1
 glyph : SiteCodon
 color : red
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Type]
@@ -1289,8 +1294,8 @@ datatype : codons
 datatype : stopcodon_frame2
 glyph : SiteCodon
 color : red
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Type]
@@ -1300,14 +1305,12 @@ datatype : codons
 datatype : stopcodon_frame3
 glyph : SiteCodon
 color : red
-column : NAME
-column : GENOMIC_RANGE
+column : NAME 1
+column : GENOMIC_RANGE 1
 sortbycolumn : NAME
 
 [Tier]
 tiername : Repeat
-visible : true
-expanded : false
 
 [Type]
 label : Repeatmasker
@@ -1318,12 +1321,12 @@ datatype : RepeatMasker:dummy
 datatype : repeatmasker
 glyph : DrawableResultFeatureSet
 color : red
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -1332,12 +1335,12 @@ tiername : Repeat
 datatype : blastx:repeatmask
 glyph : DrawableResultFeatureSet
 color : red
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -1347,12 +1350,12 @@ datatype : repeat_gff:censor
 datatype : repeat_gff:dummy
 glyph : DrawableResultFeatureSet
 color : red
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
 [Type]
@@ -1362,16 +1365,15 @@ datatype : repeat_runner_seg:dummy
 datatype : repeat_runner_seg
 glyph : DrawableResultFeatureSet
 color : 255,152,255
-usescore : false
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 
+#annot_type : promoter
 [Tier]
 tiername : Promoter prediction
-visible : false
 expanded : true
 
 [Type]
@@ -1383,44 +1385,34 @@ datatype : McProm5_20_03:promoter
 datatype : McPromoter3.0
 glyph : PromoterGlyph
 color : 255,255,51
-#annot_type : promoter
 usescore : true
 maxscore : 1.0
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : GENOMIC_LENGTH 1
 sortbycolumn : SCORE
-
-[Type]
-label : Cytology
-tiername : Cytology
-datatype : locator:cytology
-datatype : aubrey_cytolocator:cytology
-glyph : DrawableResultFeatureSet
-color : 102,102,102
-column : GENOMIC_RANGE
-column : GENOMIC_LENGTH
-sortbycolumn : GENOMIC_RANGE
 
 [Tier]
 tiername : Sequence selection
+expanded : true
 
+# The result types that follow are just in example.xml.  If we change
+# example.xml, we may be able to delete these.
 [Type]
 label : Sequence selection
 tiername : Sequence selection
 datatype : Sequence selection
 glyph : DrawableResultFeatureSet
 color : orange
-column : NAME
+column : NAME 1
 sortbycolumn : NAME
 
 [Tier]
 tiername : Do Not Show
-visible : false
+expanded : true
 
-# The result types that follow are just in example.xml.  If we change
-# example.xml, we may be able to delete these.
+# nothing like this in chado
 [Type]
 label : DGC cDNA
 tiername : Do Not Show
@@ -1431,17 +1423,18 @@ datatype : sim4:na_DGC.in_process.dros
 glyph : DrawableResultFeatureSet
 color : white
 usescore : true
-column : NAME
-column : SCORE
-column : description
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : description 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-freshdate : Fri Jan 31 00:00:00 PST 2003
+freshdate : Fri Jan 31 01:00:00 MST 2003
 
+# currently nothing like this in chado
 [Type]
 label : EST group
 tiername : Do Not Show
@@ -1456,16 +1449,16 @@ datatype : groupest:ncRNA_RT-PCR_seqs.fasta
 glyph : DrawableResultFeatureSet
 color : white
 usescore : true
-column : NAME
-column : SCORE
-column : READS
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : READS 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : MATCH_RANGE
 
-# nothing like this in chado
+// These two are in gadfly3 (but not gadflyx)
 [Type]
 label : Fly EST All
 tiername : Do Not Show
@@ -1474,16 +1467,16 @@ datatype : sim4:na_EST.all_nr.dros
 glyph : DrawableResultFeatureSet
 color : 153,255,153
 usescore : true
-column : NAME
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : NAME 1
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
-# currently nothing like this in chado
+// for synteny
 [Type]
 label : Community Error Report
 tiername : Do Not Show
@@ -1491,15 +1484,14 @@ datatype : sim4:na_users_i.dros
 glyph : DrawableResultFeatureSet
 color : 0,240,0
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
-// These two are in gadfly3 (but not gadflyx)
 [Type]
 label : small RNA result
 tiername : Do Not Show
@@ -1509,87 +1501,68 @@ datatype : snRNA
 glyph : DrawableResultFeatureSet
 color : 50,255,10
 usescore : true
-column : SCORE
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : query_frame
+column : SCORE 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : query_frame 1
 sortbycolumn : SCORE
 groupby : HOMOLOGY
 
-
-// for synteny
 [Tier]
 tiername : Synteny
+expanded : true
 
 [Type]
-typename : Putative Ortholog
+label : Putative Ortholog
 tiername : Synteny
-resulttype : syntenicblock:dummy
+datatype : syntenicblock:dummy
 glyph : DrawableResultFeatureSet
 color : 255,102,153
-usescore : false
-scorethreshold : -1.0
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
-groupby : GENE
-synteny_link_type : SELF
-link_query_species : Drosophila melanogaster
-link_hit_species : Drosophila pseudoobscura
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 
 [Tier]
 tiername : Comparative Dmel
-visible : true
 expanded : true
 
 [Type]
-typename : BLASTX to Dmel
+label : BLASTX to Dmel
 tiername : Comparative Dmel
-resulttype : blastx:dmel_translation.FASTA
-resulttype : blastx:aa_dmel_RELEASE3-1.FASTA
-resulttype : blastx_masked:aa_dmel_RELEASE3-1.FASTA
+datatype : blastx:dmel_translation.FASTA
+datatype : blastx:aa_dmel_RELEASE3-1.FASTA
+datatype : blastx_masked:aa_dmel_RELEASE3-1.FASTA
 glyph : DrawableResultFeatureSet
 color : 255,130,120
-minscore : 0
-maxscore : 100
-column : SCORE
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-synteny_link_type : PEPTIDE
-link_query_species : Drosophila pseudoobscura
-link_hit_species : Drosophila melanogaster
+column : SCORE 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 
 [Tier]
 tiername : Comparative Dpse
-visible : true
 expanded : true
 
 [Type]
-typename : BLASTX to Dpse
+label : BLASTX to Dpse
 tiername : Comparative Dpse
-resulttype : blastx_masked:aa_vivekprom.dpse
+datatype : blastx_masked:aa_vivekprom.dpse
 glyph : DrawableResultFeatureSet
 color : 255,204,51
-minscore : 0
-maxscore : 100
-column : SCORE
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-synteny_link_type : PEPTIDE
-link_query_species : Drosophila melanogaster
-link_hit_species : Drosophila pseudoobscura
+column : SCORE 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 
 [Tier]
 tiername : Exonerate::EST2Genome
@@ -1602,11 +1575,11 @@ datatype : exonerate::est2genome
 datatype : est2genome
 glyph : DrawableResultFeatureSet
 color : 250,250,210
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1617,11 +1590,11 @@ datatype : est2genome:P_oligandrum
 datatype : est2genome:P_oligandrum;
 glyph : DrawableResultFeatureSet
 color : 250,250,210
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1632,14 +1605,13 @@ datatype : est2genome:P_ultimum_Sanger
 datatype : est2genome:P_ultimum_Sanger;
 glyph : DrawableResultFeatureSet
 color : 240,240,202
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
-
 
 [Type]
 label : P_ultimum_454_Sanger
@@ -1648,11 +1620,11 @@ datatype : est2genome:P_ultimum_454_Sanger
 datatype : est2genome:P_ultimum_454_Sanger;
 glyph : DrawableResultFeatureSet
 color : 230,230,194
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1666,12 +1638,12 @@ tiername : Exonerate::Protein2Genome
 datatype : exonerate::protein2genome
 datatype : protein2genome
 glyph : DrawableResultFeatureSet
-color : 255,255,0
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+color : yellow
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1681,12 +1653,12 @@ tiername : Exonerate::Protein2Genome
 datatype : protein2genome:UniProt_SwissProt
 datatype : protein2genome:UniProt_SwissProt;
 glyph : DrawableResultFeatureSet
-color : 255,255,0
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+color : yellow
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1697,19 +1669,17 @@ datatype : protein2genome:Phytophthora
 datatype : protein2genome:Phytophthora;
 glyph : DrawableResultFeatureSet
 color : 255,255,110
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
 [Tier]
 tiername : BLASTN
 expanded : true
-sorted : true
-labeled : false
 
 [Type]
 label : BLASTN
@@ -1717,11 +1687,11 @@ tiername : BLASTN
 datatype : blastn
 glyph : DrawableResultFeatureSet
 color : 102,204,0
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1732,11 +1702,11 @@ datatype : blastn:P_ultimum_454_Sanger
 datatype : blastn:P_ultimum_454_Sanger;
 glyph : DrawableResultFeatureSet
 color : 102,204,0
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1747,11 +1717,11 @@ datatype : blastn:P_ultimum_Sanger
 datatype : blastn:P_ultimum_Sanger;
 glyph : DrawableResultFeatureSet
 color : 102,204,102
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1762,19 +1732,17 @@ datatype : blastn:P_oligandrum
 datatype : blastn:P_oligandrum;
 glyph : DrawableResultFeatureSet
 color : 102,153,102
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
 [Tier]
 tiername : BLASTX
 expanded : true
-sorted : true
-labeled : false
 maxrows : 22
 
 [Type]
@@ -1783,11 +1751,11 @@ tiername : BLASTX
 datatype : blastx
 glyph : DrawableResultFeatureSet
 color : pink
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1798,11 +1766,11 @@ datatype : blastx:UniProt_SwissProt
 datatype : blastx:UniProt_SwissProt;
 glyph : DrawableResultFeatureSet
 color : pink
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1813,11 +1781,11 @@ datatype : blastx:Phytophthora
 datatype : blastx:Phytophthora;
 glyph : DrawableResultFeatureSet
 color : 255,51,204
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : SCORE
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1832,14 +1800,14 @@ datatype : tblastx
 glyph : DrawableResultFeatureSet
 color : 102,51,102
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1851,14 +1819,14 @@ datatype : tblastx:Other_Oomycete;
 glyph : DrawableResultFeatureSet
 color : 103,51,102
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
@@ -1870,13 +1838,79 @@ datatype : tblastx:Phytophthora;
 glyph : DrawableResultFeatureSet
 color : 102,51,153
 usescore : true
-column : SCORE
-column : identity
-column : expect
-column : query_frame
-column : GENOMIC_RANGE
-column : MATCH_RANGE
-column : GENOMIC_LENGTH
-column : MATCH_LENGTH
+column : SCORE 1
+column : identity 1
+column : expect 1
+column : query_frame 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
+
+[Tier]
+tiername : est_gff:cufflinks
+expanded : true
+
+[Type]
+label : est_gff:cufflinks
+tiername : est_gff:cufflinks
+datatype : est_gff:cufflinks
+glyph : DrawableResultFeatureSet
+color : 251,255,179
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
+
+[Tier]
+tiername : est_gff:tophat
+expanded : true
+
+[Type]
+label : est_gff:tophat
+tiername : est_gff:tophat
+datatype : est_gff:tophat
+glyph : DrawableResultFeatureSet
+color : 255,140,0
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
+
+[Tier]
+tiername : contig
+expanded : true
+
+[Type]
+label : contig
+tiername : contig
+datatype : contig
+glyph : DrawableResultFeatureSet
+color : 250,250,210
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
+
+[Tier]
+tiername : mRNA
+expanded : true
+
+[Type]
+label : mRNA
+tiername : mRNA
+datatype : mRNA
+glyph : DrawableResultFeatureSet
+color : 250,250,210
+utr_color : black
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
+

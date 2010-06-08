@@ -85,14 +85,13 @@ sub package_already_exists{
     my %CTL_OPT = %{shift @_};
     my $user_id = shift @_;
 
-    $main::server = 0; #temp main::server to get default values without comments
     my %def_opt = (GI::set_defaults('opts'), GI::set_defaults('bopts')); #get system produced CTL_OPT
-    $main::server = 1; #reset
 
-    my @set = map {"ctl_opt.".lc($_)." \= '".$CTL_OPT{$_}."'" } grep {!/gmhmm_e|gmhmm_p/i} keys %def_opt;
+    my @to_map =  grep {defined $CTL_OPT{$_} && !/gmhmm_e|gmhmm_p/i} keys %def_opt;
+    my @set = map {"ctl_opt.".lc($_)." \= '".$CTL_OPT{$_}."'" } @to_map;
 
-    my $dsn = "SELECT ctl_opt.job_id FROM ctl_opt JOIN jobs ON ctl_opt.job_id=jobs.job_id WHERE ".join(' AND ', @set)." AND jobs.is_packaged=1";
-#    $dsn .= ($user_id) ? " AND (user_id=$user_id OR is_tutorial=1)" : " AND is_tutorial=1";
+    my $dsn = "SELECT ctl_opt.job_id FROM ctl_opt JOIN jobs ON ctl_opt.job_id=jobs.job_id ".
+	      "WHERE ".join(' AND ', @set)." AND jobs.is_packaged=1";
 
     my ($job_id) = $dbh->selectrow_array($dsn);
 
@@ -114,7 +113,7 @@ sub copy_package{
     my $r_dir = "$job_new.maker.output";
 
     #copy and rename files
-    mkdir($new_dir) if(! -d $new_dir);
+    File::Path::mkpath($new_dir) if(! -d $new_dir);
 
     my @files =  <$job_dir/*>;
 
@@ -141,8 +140,8 @@ sub copy_package{
 
     #re-tar everything
     system("cd $new_dir\n".
-	   "tar -zcf $r_dir.tar.gz $r_dir --exclude \"run.log\" --exclude ".
-	   "\"theVoid\*\" --exclude \"seen.dbm\" --exclude \"mpi_blastdb\"") &&
+	   "tar --exclude \"run.log\" --exclude \"theVoid\*\" --exclude \"seen.dbm\"".
+	   " --exclude \"mpi_blastdb\" -zcf $r_dir.tar.gz $r_dir") &&
 	   die("ERROR: Building tarball for job '$job_new' failed\n");
 }
 

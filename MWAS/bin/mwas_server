@@ -50,7 +50,7 @@ BEGIN{
     $CWD = Cwd::cwd();
 
     #stop signal subroutine
-    my $exit =  sub{die "STATUS: Caught @_ exiting.\t".date_time()."\n";};
+    my $exit =  sub{die "STATUS: Caught @_ exiting.\t".MWAS_util::date_time()."\n";};
 
     #Signals to trap and handle
     $SIG{'INT' } = $exit;
@@ -59,7 +59,7 @@ BEGIN{
     $SIG{'TRAP'} = $exit;
     $SIG{'STOP'} = $exit;
     $SIG{'TERM'} = $exit;
-    $SIG{'HUP'} = sub{print STDERR "STATUS: Signal @_ received, attempting to restart $EXE\t".date_time()."\n";
+    $SIG{'HUP'} = sub{print STDERR "STATUS: Signal @_ received, attempting to restart $EXE\t".MWAS_util::date_time()."\n";
 		      close(STDERR);
 		      exec($FindBin::RealScript, @ARGV);
 		     };
@@ -481,7 +481,7 @@ elsif($opt eq 'START'){
     my $exists = Proc::Signal::exists_proc_by_name("$EXE");
 
     if($exists){
-	die "ERROR: $EXE is already running.\t".date_time()."\n";
+	die "ERROR: $EXE is already running.\t".MWAS_util::date_time()."\n";
     }
     else{
 	#set user id to be apache
@@ -561,7 +561,7 @@ sub start_daemon {
     unless(my $pid = fork()) {
 	exit if $pid;
         setsid();
-	my $date = date_time();
+	my $date = MWAS_util::date_time();
 	
 	#rediret STDERR to the log file since there will be no terminal
 	close(STDERR);
@@ -586,25 +586,6 @@ sub send_message{
 			       subject => $subject,
 			       msg     => $msg
 			      });
-}
-#------------------------------------------------------------------------
-sub date_time {
-    #get time values
-    my ($sec, $min, $hour, $mday, $month,
-	$year, $wday, $yday, $iddst) = localtime(time);
-    
-    #fix values
-    $year += 1900;
-    $month++;
-    
-    #fix digit spacing
-    foreach my $v ($month, $mday, $hour, $min){
-	if ($v < 10) {
-	    $v = "0$v";
-	}
-    }
-    
-    return "$month/$mday/$year $hour:$min";
 }
 #------------------------------------------------------------------------
 sub run_server {
@@ -786,20 +767,19 @@ sub clean_and_package {
         chomp $line;
         my @data = split("\t", $line);
 
-        if($data[2] eq 'FINISHED'){
-            my $val = "$job_dir/$r_dir/$data[1]";
-            $val =~ s/[\/]+$//;
-            my ($name) = $val =~ /([^\/]+)$/;
-            my $gff = "$val/$name.gff";
-            my $xml = "$val/$name.xml";
-	    
-            system("/usr/local/gmod/apollo/bin/apollo -i gff3 -f $gff -o game -w $xml &> /dev/null")if(! -f $xml);
-        }
+        #if($data[2] eq 'FINISHED'){
+        #    my $val = "$job_dir/$r_dir/$data[1]";
+        #    $val =~ s/[\/]+$//;
+        #    my ($name) = $val =~ /([^\/]+)$/;
+        #    my $gff = "$val/$name.gff";
+	#    
+	#    syste(); # something
+        #}
     }
     close($IN);
 
 
-    my $date = date_time();
+    my $date = MWAS_util::date_time();
     dbh_do_commit($dbh, qq{UPDATE jobs SET is_packaged=1, finish_time='$date' WHERE job_id=$job_id});
 }
 #------------------------------------------------------------------------
@@ -819,7 +799,7 @@ sub start_job {
     my ($owner) = $dbh->selectrow_array(qq{SELECT user_id FROM users WHERE user_id=$user_id});
     
     if(! $owner){ #the user was deleted, so we need to clean up their job
-	print STDERR "ERROR: Job '$job_id' from inactive user '$user_id' must be deleted.\t".date_time();
+	print STDERR "ERROR: Job '$job_id' from inactive user '$user_id' must be deleted.\t".MWAS_util::date_time();
 	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$job_id});
 	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$job_id});
 	$dbh->commit;
@@ -830,7 +810,7 @@ sub start_job {
     my ($status) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE (is_queued=1 or is_running=1) and is_finished=0 and is_error=0});
     
     if($status){ #job can be started
-	my $date = date_time();
+	my $date = MWAS_util::date_time();
 	print STDERR "Starting job: $job_id for user: $user_id\t$date\n";
 
 	$dbh->do(qq{UPDATE jobs SET start_time='$date' WHERE job_id=$job_id and is_started=0});	
@@ -929,10 +909,10 @@ sub start_job {
 	    
 	    if($err){
 		$dbh->do(qq{UPDATE jobs SET is_error=1, cpus=$job_cpus WHERE job_id=$job_id});
-		print STDERR "Failed job: $job_id for user: $user_id\t".date_time()."\n";
+		print STDERR "Failed job: $job_id for user: $user_id\t".MWAS_util::date_time()."\n";
 	    }
 	    else{
-		my $date = date_time();
+		my $date = MWAS_util::date_time();
 		$dbh->do(qq{UPDATE jobs SET is_finished=1, cpus=$job_cpus WHERE job_id=$job_id});
 		print STDERR "Finished job: $job_id for user: $user_id\t$date\n";
 	    }
@@ -949,7 +929,7 @@ sub start_job {
 	    redo FORK;
 	}
 	else {
-	    print STDERR "ERROR: Can not start fork for MAKER.\t".date_time()."\n$!";
+	    print STDERR "ERROR: Can not start fork for MAKER.\t".MWAS_util::date_time()."\n$!";
 
 	    return 0;
 	}
@@ -1008,7 +988,7 @@ sub check_table_structure {
 	     ) if(! grep {/jobs/} @tables);
     
     #create ctl_opt table
-    my @defaults = map {"$_ $t_type"} keys %def_opt; #get table column names and datatype
+    my @defaults = map {lc($_)." $t_type"} keys %def_opt; #get table column names and datatype
     my $do_string = 'CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, '.join(', ', @defaults).')';
     $dbh->do($do_string) if(! grep {/ctl_opt/} @tables);
 
@@ -1079,7 +1059,7 @@ sub check_table_structure {
     #add administrator to database
     my ($user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users WHERE user_id=1});
     $dbh->do(qq{INSERT INTO users (user_id, login, password, first, last, e_mail, is_guest, is_admin, date_created) }.
-	     qq{VALUES (1, 'admin', 'password', 'Server', 'Administrator', '', 0, 1, \'}.date_time().qq{\')}) if(! $user_id);
+	     qq{VALUES (1, 'admin', 'password', 'Server', 'Administrator', '', 0, 1, \'}.MWAS_util::date_time().qq{\')}) if(! $user_id);
 
     #update administrator e-mail
     if($dbh->selectrow_array(qq{SELECT e_mail FROM users WHERE e_mail='$CTL_OPT{admin_email}' and user_id != 1})){
@@ -1096,21 +1076,23 @@ sub check_table_structure {
 
     #create/re-create all_default_opt table
     $dbh->do(qq{DROP TABLE all_default_opt}) if(grep {/all_default_opt/} @tables); #drop table
-    @defaults = map {"$_ $t_type"} grep {!/^menus$|^stat%/i} keys %CTL_OPT; #get table column names and datatype
+    @defaults = map {lc($_)." $t_type"} grep {!/^menus$|^stat$/i} keys %CTL_OPT; #get table column names and datatype
     $do_string = 'CREATE TABLE all_default_opt ('.join(', ', @defaults).')';
     $dbh->do($do_string);
-    @defaults = grep {!/^menus$|^stat%/i} keys %CTL_OPT; #keys to add
-    $do_string = "INSERT INTO all_default_opt (".join(", ", @defaults).") VALUES ('".join("', '", @CTL_OPT{@defaults})."')";
+    @defaults = grep {!/^menus$|^stat$/i} keys %CTL_OPT; #keys to add
+    my @lc_defaults = map {lc($_)}  @defaults;
+    $do_string = "INSERT INTO all_default_opt (".join(", ", @lc_defaults).") VALUES ('".join("', '", @CTL_OPT{@defaults})."')";
     $dbh->do($do_string); #add ctl_opt
 
     #create/re-create stat table
     my %stat = %{$CTL_OPT{STAT}};
     $dbh->do(qq{DROP TABLE stat}) if(grep {/stat/} @tables); #drop table
-    @defaults = map {"$_ $t_type"}  keys %stat; #get table column names and datatype
+    @defaults = map {lc($_)." $t_type"}  keys %stat; #get table column names and datatype
     $do_string = 'CREATE TABLE stat ('.join(', ', @defaults).')';
     $dbh->do($do_string);
     @defaults = keys %stat; #keys to add
-    $do_string = "INSERT INTO stat (".join(", ", @defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
+    @lc_defaults = map {lc($_)}  @defaults;
+    $do_string = "INSERT INTO stat (".join(", ", @lc_defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
     $dbh->do($do_string); #add ctl_opt
 
     #--add tutorial jobs (always adds/re-adds)
@@ -1145,7 +1127,8 @@ sub check_table_structure {
 	    
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    my @lc_defaults = map {lc($_)}  @defaults;
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
 	    $dbh->do($do_string); #add ctl_opt
 	}
 	
@@ -1155,10 +1138,11 @@ sub check_table_structure {
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
 	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
-			    qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
-			    qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
-		            qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-			    qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'D. melanogaster : Dpp','$t_message')}
+		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
+		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     MWAS_util::date_time . qq{', 'D. melanogaster : Dpp','$t_message')}
 		     ) if(! $job_id); #add job
 	}
 	
@@ -1200,7 +1184,8 @@ sub check_table_structure {
 	    
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    my @lc_defaults = map {lc($_)}  @defaults;
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
 	    $dbh->do($do_string); #add ctl_opt
 	}
 	
@@ -1213,7 +1198,8 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : De Novo Annotation','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     MWAS_util::date_time . qq{', 'P. ultimum : De Novo Annotation','$t_message')}
 		     ) if(! $job_id); #add job
 	}
 	
@@ -1259,7 +1245,8 @@ sub check_table_structure {
 	    
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    my @lc_defaults = map {lc($_)}  @defaults;
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
 	    $dbh->do($do_string); #add ctl_opt
 	}
 	
@@ -1272,7 +1259,8 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : Data Pass-through','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     MWAS_util::date_time . qq{', 'P. ultimum : Data Pass-through','$t_message')}
 		     ) if(! $job_id); #add job
 	}
 	
@@ -1321,7 +1309,8 @@ sub check_table_structure {
 	    
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    my @lc_defaults = map {lc($_)}  @defaults;
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
 	    $dbh->do($do_string); #add ctl_opt
 	}
 	
@@ -1334,7 +1323,8 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'P. ultimum : Legacy Annotations','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     MWAS_util::date_time . qq{', 'P. ultimum : Legacy Annotations','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
 	
@@ -1371,7 +1361,8 @@ sub check_table_structure {
 	    
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    my @lc_defaults = map {lc($_)}  @defaults;
+	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
 	    $dbh->do($do_string); #add ctl_opt
 	}
 	
@@ -1384,7 +1375,8 @@ sub check_table_structure {
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.date_time.qq{', '}.date_time.qq{', 'E. coli : De Novo Annotation','$t_message')}
+		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     MWAS_util::date_time . qq{', 'E. coli : De Novo Annotation','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
     }
@@ -1411,7 +1403,7 @@ sub lockDB {
 #------------------------------------------------------------------------
 #standard message for not getting the lock
 sub lock_error {
-    print STDERR "ERROR: Could not get lock on database:\t".date_time()."\n";
+    print STDERR "ERROR: Could not get lock on database:\t".MWAS_util::date_time()."\n";
 }
 #------------------------------------------------------------------------
 #standard message for not getting the lock

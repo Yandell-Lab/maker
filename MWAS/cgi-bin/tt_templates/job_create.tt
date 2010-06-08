@@ -45,43 +45,25 @@ function make_multiple(DivID, DivID2){
     }
 }
 
-function showFile(selectID) {
-    var file = "";
-    var url = "stream.cgi?file=";
-    var iState = 2;
-    var DivID = 'FloatingLayer';
-    if(document.layers)   //NN4+
-    {
-        if(iState == 2)
-        {
-            iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
-        }
-        document.layers[DivID].visibility = iState ? "show" : "hide";
- 	file = document.layers[DivID].selected;
-    }
-    else if(document.getElementById)  //gecko(NN6) + IE 5+
-    {
-        var obj = document.getElementById(DivID);
-        if(iState == 2)
-        {
-            iState = (obj.style.visibility == "visible") ? 0 : 1;
-        }
-        obj.style.visibility = iState ? "visible" : "hidden";
-	
-    }
-    else if(document.all)// IE 4
-    {
-        if(iState == 2)
-        {
-            iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
-        }
-        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
-    }
+function viewFile(section) {
+    var user_id = [% user.user_id %];
 
-    if(iState == 1){
-      LoadURL('floating_content_area', url);
+    var obj = (isIE) ? document.getElementById(section) : document.all[section];
+    var loc = obj.options[obj.selectedIndex].value;
+
+    if(loc.length > 0){
+        url = "stream.cgi?user_id="+user_id+"&type=file&value="+loc;
+        document.getElementById('floating_content_area').innerHTML = '<iframe name="ifrm" id="ifrm" src="' + url + '" frameborder="0" width=100% height=100% >Your browser doesn\'t support iframes.</iframe>';
+
+        resize(1);
+	var DivID = 'floating_content_area';
+	obj = (isIE) ? document.getElementById(DivID) : document.all[DivID];
+	obj.style.height = 400;
+   	CenterFloatingLayer();
+	ToggleFloatingLayer('FloatingLayer', 1);
     }
 }
+
 // -->
 </script>
 
@@ -258,6 +240,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:viewFile('genome')">View File Contents</a></center>
    </td>
    
    <td nowrap>
@@ -318,7 +301,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
-     <center><a href="javascript:toggleLog(1, 'stream.cgi?user_id=[% user.user_id %]');">View File Contents</a></center>
+     <center><a href="javascript:viewFile('est')">View File Contents</a></center>
    </td>	    
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -348,6 +331,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:viewFile('altest')">View File Contents</a></center>
     </td>
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -398,6 +382,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:viewFile('est_gff')">View File Contents</a></center>
    </td>	    
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -428,6 +413,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:viewFile('altest_gff')">View File Contents</a></center>
    </td>
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -489,6 +475,7 @@ function showFile(selectID) {
 	              )
 	%]
      </SELECT></center>
+     <center><a href="javascript:viewFile('protein')">View File Contents</a></center>
     </td>
 	  
     <td nowrap>
@@ -538,6 +525,7 @@ function showFile(selectID) {
 	              )
 	%]
       </SELECT></center>
+     <center><a href="javascript:viewFile('protein_gff')">View File Contents</a></center>
     </td>	    
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -669,6 +657,7 @@ function showFile(selectID) {
 	              )
 	%]
       </SELECT></center>
+     <center><a href="javascript:viewFile('repeat_protein')">View File Contents</a></center>
     </td>
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -712,7 +701,8 @@ function showFile(selectID) {
 	               empty_message = 'You must upload a file first...',
 	              )
 	%]
-     </SELECT></center>	   
+     </SELECT></center>	 
+     <center><a href="javascript:viewFile('rmlib')">View File Contents</a></center>  
     </td>
     
     <td nowrap>
@@ -760,7 +750,8 @@ function showFile(selectID) {
 	               empty_message = 'You must upload a file first...',
 	              )
 	%]
-     </SELECT></center
+     </SELECT></center>
+     <center><a href="javascript:viewFile('rm_gff')">View File Contents</a></center>
     </td>	    
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -1094,7 +1085,8 @@ function showFile(selectID) {
 	               empty_message = 'You must upload a file first...',
 	              )
 	%]
-     </SELECT></center	  
+     </SELECT></center>
+     <center><a href="javascript:viewFile('pred_gff')">View File Contents</a></center>
     </td>
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
@@ -1125,6 +1117,7 @@ function showFile(selectID) {
      </SELECT></center><br>
      <input type="radio" id='model_gff_check' onclick="make_multiple('model_gff_menu', 'model_gff_check');">
      Select Multiple Files
+     <center><a href="javascript:viewFile('model_gff')">View File Contents</a></center>
     </td>
     <td nowrap>
       <a href="maker.cgi?rm=filebox&&jid=[% job_id %]" style="font-size:.8em;">Upload File<img src="[% server_opt.html_web %]/images/folder_new.gif"></a>
