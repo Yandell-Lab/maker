@@ -1,0 +1,102 @@
+#! /usr/bin/perl -w
+use strict;
+use FindBin;
+use Cwd;
+
+my ($job, $d, $f, $n) = @ARGV;
+
+die "ERROR: Job ID is missing\n" if(!$job);
+
+my $file = "$job.maker.output/$job\_master_datastore_index.log";
+
+die "ERROR: There are no index file for the MAKER job\n" if(! -f $file);
+my $cwd = Cwd::cwd();
+
+my %to_do;
+open(IN, "< $file");
+while(my $line = <IN>){
+    chomp $line;
+    my @F = split("\t", $line);
+    next if(@F != 3);
+    next if($F[2] ne 'FINISHED');
+    my $dir = "$cwd/$job.maker.output/$F[1]";
+    $to_do{$dir}++;
+}
+close(IN);
+
+foreach my $dir (keys %to_do){
+    chdir($dir);
+
+    if($d){
+	my ($prot) = <$dir/*.maker.proteins.fasta>;
+	my ($gff) = <$dir/*.gff>;
+	my $out = $prot;
+	$out =~ s/\.fasta$/\.iprscan.raw/;
+
+	next if(! $prot || !$gff);
+	next if(-f $out);
+
+	my @commands = ("$FindBin::Bin/iprscan_wrap -i $prot -format raw -iprlookup -goterms -nocrc > $out.tmp",
+			"$FindBin::Bin/iprscan2gff3 $out.tmp $gff > $out.gff.tmp",
+			"$FindBin::Bin/gff3_merge $gff $out.gff.tmp > $gff.tmp\n",
+			"$FindBin::Bin/ipr_update_gff $gff.tmp $out.tmp\n",
+			"mv $gff $gff.bak",
+			"mv $gff.tmp $gff",
+			"mv $out.tmp $out");
+
+	foreach my $cmd (@commands){
+	    my $stat = system($cmd);
+
+	    if($stat){
+		system("mv $gff.bak $gff") if(-f "$gff.bak");
+	    }
+	}
+
+	unlink("$out.tmp") if (-f "$out.tmp");
+	unlink("$out.gff.tmp") if (-f "$out.gff.tmp");
+	unlink("$gff.tmp") if (-f "$gff.tmp");
+	unlink("$gff.bak") if(-f "$gff.bak");
+    }
+
+    if($f){
+	my ($prot) = <$dir/*.maker.proteins.fasta>;
+	my ($tran) = <$dir/*.maker.transcripts.fasta>;
+	my ($gff) = <$dir/*.gff>;
+	my $out = $prot;
+	$out =~ s/\.fasta$/\.iprscan.blastp/;
+
+	next if(! $prot || !$gff || ! $tran);
+	next if(-f $out);
+
+	my @commands = ("xdformat -p \$BLASTDB/uniprot_sprot.fasta",
+			"blastp \$BLASTDB/uniprot_sprot.fasta $prot mformat=2 hspmax=1 V=1 B=1 wordmask=seg maskextra=10 E=.000001 gi > $out.tmp",
+			"$FindBin::Bin/gff3_merge $gff $out.gff.tmp > $gff.tmp\n",
+			"cp $prot $prot.bak",
+			"cp $tran $tran.bak",
+			"cp $gff $gff.bak",
+			"$FindBin::Bin/maker_functional_fasta \$BLASTDB/uniprot_sprot.fasta $out.tmp $prot $tran",
+			"$FindBin::Bin/maker_functional_gff \$BLASTDB/uniprot_sprot.fasta $out.tmp $gff",
+			"mv $out.tmp $out");
+
+	foreach my $cmd (@commands){
+	    my $stat = system($cmd);
+
+	    if($stat){
+		system("mv $tran.bak $tran") if(-f "$tran.bak");
+		system("mv $prot.bak $prot") if(-f "$prot.bak");
+		system("mv $gff.bak $gff") if(-f "$gff.bak");
+	    }
+	}
+
+	unlink("$out.tmp") if (-f "$out.tmp");
+	unlink("$gff.tmp") if (-f "$gff.tmp");
+	unlink("$tran.bak") if (-f "$tran.bak");
+	unlink("$prot.bak") if (-f "$prot.bak");
+	unlink("$gff.bak") if(-f "$gff.bak");
+    }
+    
+    if($n){
+    }
+}
+
+exit(0);
