@@ -790,7 +790,7 @@ sub start_job {
     my $dbh = shift;
 
     #identify if the the user the job belongs to
-    my ($user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id});
+    my ($user_id, $type) = $dbh->selectrow_array(qq{SELECT user_id, type FROM jobs WHERE job_id=$job_id});
 
     ####===lock the database so no changes are made until the job is started
     my $lock = lockDB() || ((print STDERR lock_error()) & (return 0));
@@ -880,11 +880,18 @@ sub start_job {
 	    $dbh->commit;
 	    
 	    #run maker
-	    my $exe = "$FindBin::RealBin/../../bin/maker";
+	    my $command;
+	    if(! $type || $type eq 'maker'){
+		$command = "$FindBin::RealBin/../../bin/maker -qq -base $job_id &> $job_log";
+	    }
+	    elsif($type eq 'functional'){
+		my $args = "$job_id ".$job_log->{domain}." ".$job_log->{function}." ".$job_log->{short_name};
+		$command = "$FindBin::RealBin/../../bin/maker_functional $args &> $job_log";
+	    }
+
 	    my $job_log = "$job_dir/job.log";
 
 	    chdir($job_dir);
-	    my $command = "$exe -qq -base $job_id &> $job_log";
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
 
@@ -982,7 +989,7 @@ sub check_table_structure {
     
     #create jobs table
     $dbh->do(qq{CREATE TABLE jobs (job_id INTEGER PRIMARY KEY, user_id INTEGER, submit_id INTEGER, length $t_type, }.
-		    qq{is_queued INTEGER, is_started INTEGER, is_running INTEGER, is_finished INTEGER, }.
+		    qq{type $t_type, is_queued INTEGER, is_started INTEGER, is_running INTEGER, is_finished INTEGER, }.
 		    qq{is_error INTEGER, is_packaged INTEGER, is_saved INTEGER, admin_block INTEGER, is_tutorial INTEGER, }.
 		    qq{cpus INTEGER, start_time $t_type, finish_time $t_type, name $t_type, note $t_type)}
 	     ) if(! grep {/jobs/} @tables);

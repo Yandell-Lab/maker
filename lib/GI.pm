@@ -2278,6 +2278,9 @@ sub set_defaults {
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'other_gff'} = '';
+      $CTL_OPT{'domain'} = '0';
+      $CTL_OPT{'function'} = '0';
+      $CTL_OPT{'short_name'} = '';
       $CTL_OPT{'alt_peptide'} = 'C';
       $CTL_OPT{'cpus'} = 1;
       $CTL_OPT{'cpus'} .= '=DISABLED' if($main::server);
