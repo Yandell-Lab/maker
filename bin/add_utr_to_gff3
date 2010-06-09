@@ -1,74 +1,81 @@
 #!/usr/bin/env perl
 use warnings;
 use strict;
+use Getopt::Long;
 
 my $usage = "
 Usage:
-       add_utr_to_gff3 <maker_gff3_file>
+       add_utr_to_gff3 <gff3_file> <gff3_file> ...
 
-       Use this script to add UTR, start codon, and stop codon entries
-       explicitly to a maker produced gff3 file.
+       Use this script to add explicit UTR entries to a maker
+       produced gff3 file. You cn also add start and stop codons
+       using the -s option.
 
+Options:
+
+       -s         Add start and stop codon entries as well
+
+       -help|?    prints this usage statement
 
 ";
+
+GetOptions ("s" => \$s,
+	    "help|?" => sub{print $usage; exit(0)});
 
 my $COUNT = 1;
 my $NUM = 1;
 my %INDEX;
 
-my $file = shift;
-my $header;
-my $footer;
 
-if(! $file){
+if(! @files){
     print $usage;
     exit(1);
 }
 
-if(! -e $file){
-    warn "ERROR: File does not exist\n";
-    print $usage;
-    exit(1);
+my $error;
+foreach my $file (@files){
+    if(! -e $file){
+	$error .= "ERROR: The file $file does not exist\n";
+    }
 }
+die $error if($error);
 
-my @regions = ({chr => 'I',  b => '1000001',  e => '2000000'},
-	       {chr => 'I',  b => '14000001', e => '15000000'},
-	       {chr => 'II', b => '1',        e => '1000000'},
-	       {chr => 'IV', b => '1',        e => '1000000'},
-	       {chr => 'IV', b => '14000001', e => '15000000'},
-	       {chr => 'IV', b => '7000001',  e => '8000000'},
-	       {chr => 'V',  b => '12000001', e => '13000000'},
-	       {chr => 'V',  b => '16000001', e => '17000000'},
-	       {chr => 'X',  b => '4000001',  e => '5000000'},
-	       {chr => 'X',  b => '8000001',  e => '9000000'}
-	       );
+#parse files
+while(my $file = shift @files){
+    open (IN, "< $file");
+    open (ANN, "> $file.ann");
+    open (SEQ, "> $file.seq");
 
-#parse file
-open (IN, "< $file");
-my @genes;
-my @mRNAs;
-my @stuff;
-my @exons;
-while (defined(my $line = <IN>)){
-    #skip comments and fasta (add to header and footer)
-    if($line =~ /^\#/){
-	next if($line =~/\#\#\#/);
-	if($line =~ /\#\#FASTA/){
-	    $footer .= $line,
-	    $footer .= join('', <IN>);
+    my @genes;
+    my @mRNAs;
+    my @CDSs;
+    my @exons;
+    my @UTRs;
+
+
+    while (defined(my $line = <IN>)){
+	#skip comments and fasta (add to header and footer)
+	if($line =~ /\#\#\#/){
+	    handle_genes(\@genes,\@mRNAs,\@exons,\@CDSs,\@stuff,\@UTRs);
+	}
+	elsif($line =~ /\#\#FASTA/){
+	    print SEQ $line;
+	    print SEQ $line while(defined($line = <IN>));
 	    last;
 	}
-	$header .= $line;
-	next;
-    }
+	elsif($line =~ /^#/){
+	    print ANN $line;
+	    next;
+	}
+	
+	#add contig lines to header
+	my $f = parse($line);
 
-    #add contig lines to header
-    my $f = parse($line);
-    if($f->{type} eq 'contig'){
-	$header .= $line;
-	next;
-    }
-
+	if($f->{type} eq 'contig'){
+	    print ANN $line;
+	    next;
+	}
+	  
     push(@genes, $f) if($f->{type} eq 'gene');
     push(@mRNAs, $f) if($f->{type} eq 'mRNA');
     push(@exons, $f) if($f->{type} eq 'exon');
