@@ -1,0 +1,317 @@
+#!/usr/bin/env perl
+
+eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use strict "vars";
+use strict "refs";
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+use vars qw($RANK $LOG $EXE $TMP $LOCK);
+use Storable qw(freeze thaw);
+
+BEGIN{
+    #find iprscan
+    $EXE = `which iprscan 2> /dev/null`;
+    chomp $EXE;
+    if (! $EXE || $EXE =~ /^no iprscan/) {
+	die "ERROR: You must have iprscan installed and in you path to use mpi_iprscan\n";
+    }
+
+    #build temp directory
+    my $n = umask();
+    umask(0000);
+    $TMP = "/tmp/iprscanTMP";
+    mkdir($TMP, 07777) if(! -d $TMP);
+    mkdir("$TMP/tmp", 07777) if(! -d "$TMP/tmp");
+    umask($n);
+
+   #what to do on ^C
+    $SIG{'INT'} = sub {
+	print STDERR "\n\nmpi_iprscan aborted by user!!\n\n";
+	my @threads = threads->list;
+	foreach my $thr (@threads){
+	    $thr->detach;
+	}
+	exit (1);
+    };
+    
+    #supress warnings from storable module
+    $SIG{'__WARN__'} = sub {
+	warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+			$_[0] !~ /Can\'t store item CODE/ &&
+			$_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
+		       );
+    };
+    
+    #output to log file of seq that caused rank to die
+    $SIG{'__DIE__'} = sub {
+	if (defined ($LOG) && defined $_[0]) {
+	    my $die_count = $LOG->get_die_count();
+	    $die_count++;
+
+	    $LOG->add_entry("DIED","RANK",$RANK);
+	    $LOG->add_entry("DIED","COUNT",$die_count);
+	}
+	
+	die $_[0];
+    };
+}
+
+use Cwd;
+use Storable;
+use FileHandle;
+use File::Copy;
+use File::Path;
+use Getopt::Long qw(:config pass_through);
+use File::Temp qw(tempfile tempdir);
+use Iterator::Fasta;
+use Fasta;
+use ds_utility;
+use Error qw(:try);
+use Error::Simple;
+use Process::IPRchunk;
+use Process::MpiTiers;
+use Process::IPRchunk;
+use iprscan::runlog;
+
+unless($threads::VERSION >= 1.67){
+   die "mpi_iprscan requires threads version 1.67 or greater\n",
+   "You have version ". $threads::VERSION ."\n";
+}
+
+select((select(STDOUT), $|=1)[0]);  #make STDOUT buffer flush immediately
+
+#no usage, I just print the usage statement from iprscan
+#my $usage = '' 
+
+#------------------------------------------------------------------------------------                                               
+#-----------------------------------------MAIN---------------------------------------                                               
+#------------------------------------------------------------------------------------
+
+#--set object variables for serialization of data
+$Storable::forgive_me = 1; #allows serializaion of objects with code refs
+
+#------INITIATE MPI VARIABLES------
+my $rank = 0;
+my $size = 1;
+$RANK = $rank;
+
+#---global variables
+my %CTL_OPT;
+my @appl;
+my $root = 0; #define root node (only changed for debugging)
+$CTL_OPT{retry} = 2;
+$CTL_OPT{datastore} = 1;
+$CTL_OPT{always_try} = 1;
+$CTL_OPT{seqtype} = 'p'; #default
+
+#---Process options on the command line
+try{
+    GetOptions("i=s"       => \$CTL_OPT{infile},
+	       "o=s"       => \$CTL_OPT{outfile},
+	       "appl=s"    => \@appl,
+	       "nocrc"     => \$CTL_OPT{nocrc},
+	       "seqtype=s" => \$CTL_OPT{seqtype},
+	       "trtable=i" => \$CTL_OPT{trtable},
+	       "goterms"   => \$CTL_OPT{goterms},
+	       "iprlookup" => \$CTL_OPT{iprlookup},
+	       "format=s"  => \$CTL_OPT{format},
+	       "verbose"   => \$CTL_OPT{verbose},
+	       "retry"     => \$CTL_OPT{retry}, #hidden option for retrying
+	       "chpc"      => \$CTL_OPT{chpc}, #hidden option for local dbs
+	       "TMP"      => \$TMP,   #hidden option o specify TMP
+	       "cli"       => \$CTL_OPT{cli}, #just used to strip off the option
+	       );
+    
+    $main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages
+    
+    #collect app list from iprscan if not suplied by user
+    if(! @appl){
+	my $conf = Cwd::abs_path($EXE);
+	$conf =~ s/[^\/]+$//;
+	$conf .= "../conf/iprscan.conf";
+	die "ERROR: Cannot find iprscan.conf\n" if(! -e $conf);
+	
+	open(my $IN, "< $conf");
+	my @data = <$IN>;
+	close($IN);
+	
+	my ($apps) = grep {/^applications\=/} @data;
+	$apps =~ s/^applications\=//;
+	chomp($apps);
+	@appl = split(',', $apps);
+	die "ERROR: Cannot determine default applications\n" if(! @appl);
+    }
+    
+    $CTL_OPT{appl} = \@appl; #apply apps to CTL_OPT
+    
+    #get current working directory
+    $CTL_OPT{CWD} = Cwd::cwd();
+
+    #build out_base and out_name for datastore
+    $CTL_OPT{out_name} = $CTL_OPT{infile};
+    $CTL_OPT{out_name} =~ /([^\/]+)$/;
+    $CTL_OPT{out_name} = $1;
+    $CTL_OPT{out_name} =~ s/(.+)\.[^\.]+$/$1/;
+    $CTL_OPT{out_base} = Cwd::cwd()."/$CTL_OPT{out_name}.iprscan.output";
+    
+    #build localized iprscan database for each node
+    if($CTL_OPT{chpc} && ! -e "$TMP/iprscan/data/ok"){
+	my $lock = new File::NFSLock("$TMP/.iprscan_lock", 'EX', 1200, 1205);
+	
+	#build local db in /tmp
+	if(! -e "$TMP/iprscan/data/ok" && $lock){
+	    #remove old failed directories
+	    if(-d "$TMP/iprscan"){
+		move("$TMP/iprscan", "$TMP/old");
+		File::Path::rmtree("$TMP/old");
+	    }
+	    if(-d "$TMP/test"){
+		move("$TMP/test", "$TMP/old");
+		File::Path::rmtree("$TMP/old");
+	    }
+	    
+	    my $free = `df /tmp | grep -v \"Filesystem\" | awk \'{print \$4}\'`;
+	    if($free > 16000000){
+		my @tar_db = split (":", $ENV{'TAR_DB'});
+		@tar_db = grep {-d $_} @tar_db;
+		
+		if (@tar_db){
+		    my $db = $tar_db[int(rand(@tar_db))];
+		    
+		    my @files = ('latest_match.tar.gz',
+				 'latest_pthr.tar.gz',
+				 'latest_nopthr.tar.gz');
+		    
+		    if(-e "$db/$files[0]" &&
+		       -e "$db/$files[1]" &&
+		       -e "$db/$files[1]"
+		       ){
+			
+			my $fail;
+			foreach my $file (@files){
+			    last if($fail);
+			    mkdir("$TMP/test") unless(-d "$TMP/test");
+			    copy("$db/$file", "$TMP/test");
+			    system("cd $TMP/test\n".
+				   "tar -zxvmf $file"
+				   );
+			    
+			    $fail = $?;
+			    
+			    unlink("$TMP/test/$file");
+			}
+			
+			if($fail){
+			    File::Path::rmtree("$TMP/test");
+			}
+			else{
+			    move("$TMP/test/iprscan", "$TMP/iprscan");
+			    File::Path::rmtree("$TMP/test");
+			    system("index_data.pl -p $TMP/iprscan/data -inx -bin");
+			    system("touch $TMP/iprscan/data/ok");
+			}
+		    }
+		}
+	    }
+	}
+	
+	$lock->unlock if($lock);
+    }
+}
+catch Error::Simple with{
+    my $E = shift;
+
+    print STDERR $E->{-text};
+    die "\n\nmpi_iprscan failed parsing command line options!!\n\n";
+};
+
+#varibles that are persistent outside of try
+my $iterator;
+my $DS_CTL;
+
+try{
+    #---test command line  options here
+    #test input files existance
+    if($CTL_OPT{infile} && ! -e $CTL_OPT{infile}){
+	die "ERROR: The input file \'$CTL_OPT{infile}\' does not exist.\n";
+    }
+    
+    #let iprscan test all other options
+    my (undef, $tfile) = tempfile(); #empty dummy test file
+    my $exe = "$EXE -cli";
+    my $command = "$exe " . join(' ', @ARGV);
+    $command .= " -nocrc" if($CTL_OPT{nocrc});
+    $command .= " -seqtype $CTL_OPT{seqtype}" if(defined $CTL_OPT{seqtype});
+    $command .= " -trtable $CTL_OPT{trtable}" if(defined $CTL_OPT{trtable});
+    $command .= " -goterms" if($CTL_OPT{goterms});
+    $command .= " -iprlookup" if($CTL_OPT{iprlookup});
+    $command .= " -format $CTL_OPT{format}" if(defined $CTL_OPT{format});
+    $command .= " -verbose" if($CTL_OPT{verbose});
+    $command .= " -appl " . join(" -appl ", @{$CTL_OPT{appl}}) if(@{$CTL_OPT{appl}});
+    $command .= " -i $tfile" if($CTL_OPT{infile}); #test options on dummy file
+    open(my $PAR, "$command 2>&1 |");
+    my @err = <$PAR>;
+    close($PAR);
+    unlink($tfile); 
+    
+    #report errors from iprscan
+    if(! grep {/Error\: Unable to read sequence/} @err){
+	foreach (@err){
+	    $_ =~ s/\/.*iprscan\s+\-cli/mpi_iprscan/;
+	}
+	
+	die join('', @err);
+    }
+    
+    mkdir $CTL_OPT{out_base} if(! -d $CTL_OPT{out_base}); #make output directory
+    
+    if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.gi_lock", 'SH', 40, 40)){
+	$LOCK->maintain(30);
+	$CTL_OPT{_multi_chpc}++ if($LOCK->owners() > 1);
+	unlink($CTL_OPT{outfile}) if(-e $CTL_OPT{outfile}); #clear preexisting outfile
+    }
+    else{
+	die "ERROR: The directory is locked.  Perhaps by an instance of mpi_iprscan.\n\n";
+    }	
+
+    $DS_CTL = new ds_utility(\%CTL_OPT);
+    $iterator = new Iterator::Fasta($CTL_OPT{infile});
+}
+catch Error::Simple with{
+    my $E = shift;
+    print STDERR $E->{-text};
+    my $code = 2;
+    $code = $E->{-value} if (defined($E->{-value}));
+    
+    exit($code);
+};    
+
+my @failed;
+my $tier;
+my $f_count = @failed;
+
+while (my $fasta = $iterator->nextFasta() || shift @failed){
+    $tier = Process::MpiTiers->new({fasta     => $fasta,
+				    CTL_OPT   => \%CTL_OPT,
+				    DS_CTL    => $DS_CTL,
+				    params    => \@ARGV,
+				    iprscan   => "$EXE -cli"},
+				   0,
+				   'Process::IPRchunk'
+	);
+    
+    if($f_count != @failed){
+        sleep 1;
+    }
+    $f_count = @failed; #reset failure count                                                                                                                        
+    next if($tier->terminated);
+    $tier->run_all;
+    push(@failed, $tier->fasta) if ($tier->failed);
+}
+
+#reap all children
+Proc::Signal::reap_children_by_name(9, 'maintain.pl');
