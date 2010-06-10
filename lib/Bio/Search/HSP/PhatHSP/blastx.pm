@@ -495,8 +495,18 @@ sub cigar_string {
     my @q = $q_str =~ /(.)/g;
     my @h = $h_str =~ /(.)/g;
 
+    #hack to fix a bioperl bug where trailing '-' is not added
+    if(@q - @h == 1){
+	push(@h, '-');
+	$self->hit_string($self->hit_string().'-');
+    }
+    elsif(@h - @q == 1){
+	push(@q, '-');
+	$self->query_string($self->query_string().'-');
+    }
+
     die "ERROR: query and hit string lengths do not match correctly\n".
-        "in Bio::Search:HSP::PhatHSP::protein2genome\n" if(@q != @h);
+        "in Bio::Search:HSP::PhatHSP::blastx\n" if(@q != @h);
 
     my $cigr = '';
     my $type = ''; # M, I, D

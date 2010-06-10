@@ -13,6 +13,7 @@ my %GO;
 
 open(IN, "< $file");
 while(defined(my $line = <IN>)){
+    next unless($line =~ /\tIPR\d+\t/);
     chomp $line;
     my @F = split("\t", $line);
     
@@ -196,7 +197,7 @@ while(my $t = each %index){
 	    my $strand = $details{$t}{strand};
 	    my $phase = '.';
 	    my $p_id = "match:".$id++;
-	    my $attributes = "Name=$d $list{$d}\;ID=$p_id\;Target=$d $tB $tE +\;";
+	    my $attributes = "Name=$d $list{$d}\;ID=$p_id\;";
 	    $attributes .= "Ontology_term=$GO{$d}\;" if($GO{$d});
 
 	    print "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\t$attributes\n";

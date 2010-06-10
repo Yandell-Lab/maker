@@ -508,7 +508,7 @@ sub _go {
 		$line =~ s/^([^\s\t]+)//;
 		my $id = $1;
 		$id =~ s/x/\%/g;
-		$id =~ uri_unescape($id);
+		$id = uri_unescape($id);
 		$result .= $id . $line;
 	    }
 	    close($IN);
@@ -524,7 +524,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 3) {	#blastx repeat mask
+      elsif ($level == 3) {	#collecting iprscan results
 	 $level_status = 'collecting iprscan results';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER

@@ -31,11 +31,8 @@ BEGIN{
    #what to do on ^C
     $SIG{'INT'} = sub {
 	print STDERR "\n\nmpi_iprscan aborted by user!!\n\n";
-	my @threads = threads->list;
-	foreach my $thr (@threads){
-	    $thr->detach;
-	}
-	exit (1);
+	Proc::Signal::reap_children_by_name(9, 'iprscan');
+	exit(2);
     };
     
     #supress warnings from storable module
@@ -76,11 +73,6 @@ use Process::IPRchunk;
 use Process::MpiTiers;
 use Process::IPRchunk;
 use iprscan::runlog;
-
-unless($threads::VERSION >= 1.67){
-   die "mpi_iprscan requires threads version 1.67 or greater\n",
-   "You have version ". $threads::VERSION ."\n";
-}
 
 select((select(STDOUT), $|=1)[0]);  #make STDOUT buffer flush immediately
 
@@ -127,7 +119,8 @@ try{
 	       );
     
     $main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages
-    
+    $main::qq = 1 unless($CTL_OPT{verbose}); #suppress status messages
+
     #collect app list from iprscan if not suplied by user
     if(! @appl){
 	my $conf = Cwd::abs_path($EXE);
@@ -315,3 +308,5 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 
 #reap all children
 Proc::Signal::reap_children_by_name(9, 'maintain.pl');
+
+exit(0);

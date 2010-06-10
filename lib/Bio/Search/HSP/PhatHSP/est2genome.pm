@@ -92,7 +92,7 @@ sub cigar_string {
     my @h = $h_str =~ /(.)/g;
     
     die "ERROR: query and hit string lengths do not match correctly\n".
-	"in Bio::Search:HSP::PhatHSP::protein2genome\n" if(@q != @h);
+	"in Bio::Search:HSP::PhatHSP::est2genome\n" if(@q != @h);
     
     my $cigr = '';
     my $type = ''; # M, I, D
