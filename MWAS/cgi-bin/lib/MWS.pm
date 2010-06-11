@@ -379,16 +379,19 @@ sub launch {
 				 Content      => [ rm  => 'upload_files',
 						   gff_file   => [$gff_file]]
 	    );
-	
+	my ($name) = $gff_file =~ /([^\/]+)$/;
+
 	#fix the retunred content to remove relative URLs
-	my $content = $response->content;
-	my ($soba_base) = $serv_opt{soba_url} =~ /((http\:\/\/)?[^\/]+)/;
-	$content =~ s/\"\/([^\"])/\"$soba_base\/$1/g;
+	#my $content = $response->content;
+	#my ($soba_base) = $serv_opt{soba_url} =~ /((http\:\/\/)?[^\/]+)/;
+	#$content =~ s/\"\/([^\"])/\"$soba_base\/$1/g;
 	
 	#return the HTML content provided by SOBA
 	#SOBA server must have 'Access-Control-Allow-Origin: *' in the
 	#soba.cgi headers for cross site AJAX to work in FireFox
-	return $content;
+	#return $content;
+
+	return $self->redirect("$serv_opt{soba_url}/?rm=reload_files&gff_file=$name");
     }
     elsif($q->param('gbrowse')){
 	#show contig in GBrowse
