@@ -2550,6 +2550,7 @@ sub collect_hmms {
 	foreach my $file (grep {!/README/} <$exes{snap}/*>){
 	    my ($name) = $file =~ /([^\/]+)$/;
 	    $name =~ s/\.hmm$//;
+	    $name =~ s/\./\. /;
 	    my $value = Cwd::abs_path("$file");
 
 	    next if(!$name || !$value);
@@ -2566,6 +2567,8 @@ sub collect_hmms {
     if(-d $exes{gmhmme3}){
 	foreach my $file (<$exes{gmhmme3}/*.mod>){
 	    my ($name) = $file =~ /([^\/]+)\.mod$/;
+	    $name =~ s/_/\. /;
+	    $name = ucfirst($name);
 	    my $value = Cwd::abs_path("$file");
 
 	    next if(!$name || !$value);

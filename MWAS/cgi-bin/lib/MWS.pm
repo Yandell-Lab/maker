@@ -425,7 +425,7 @@ sub launch {
 					       twiki);
 
 	    #get MAKER specific configuration file
-	    my $conf = "$data_dir/maker/JBROWSE/genome.css";
+	    my $conf = "$data_dir/maker/JBrowse/genome.css";
 	    system("cp -R $conf ".join(' ', @to_copy)." $dir");
 	}
 
@@ -848,7 +848,7 @@ sub job_create {
    }
 
    #log the old job_id for submiting new functional jobs
-   my $old_id;
+   my $old_id = '';
    if($func && $job->{type} ne 'functional'){
        $old_id = $job_id;
        $job_id = undef;
@@ -1333,7 +1333,8 @@ sub get_user_info {
 
    my $username = $self->session->param('AUTH_USERNAME');
 
-   my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE login='$username'});
+   my $info = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE login='$username'})
+       if($username);
     
    return $info;
 }

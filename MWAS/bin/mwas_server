@@ -246,7 +246,7 @@ elsif($opt eq 'SETUP'){
 	"You may need to log in as 'root' for setup\n\n";
 #	unless(getgrgid((stat $html_dir)[5]) eq $CTL_OPT{apache_user});
 
-    system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
+    system("chown :$CTL_OPT{apache_user} $data_dir") &&
 	die "ERROR: Could not establish ownership for $data_dir\n".
 	"You may need to log in as 'root' for setup\n\n";
 #	unless(getgrgid((stat $data_dir)[5]) eq $CTL_OPT{apache_user});
@@ -295,7 +295,7 @@ elsif($opt eq 'SETUP'){
 	die "ERROR: Could not establish permissions for $html_dir\n".
 	    "You may need to log in as 'root' for setup\n\n";
 
-    system("chmod -R g+w $data_dir") &&
+    system("chmod -R g+w $data_dir/maker") &&
 	die "ERROR: Could not establish permissions for $data_dir\n".
 	    "You may need to log in as 'root' for setup\n\n";
 
@@ -351,9 +351,13 @@ elsif($opt eq 'SETUP'){
 	system("chown -R :$CTL_OPT{apache_user} $html_dir") &&
 	    die "ERROR: Could not establish ownership for $html_dir\n".
 	    "You may need to log in as 'root' for setup\n\n";
-	
-	system("chown -R :$CTL_OPT{apache_user} $data_dir") &&
-	    die "ERROR: Could not establish ownership for $data_dir\n".
+
+	system("chown -R :$CTL_OPT{apache_user} $data_dir/maker") &&
+	    die "ERROR: Could not establish ownership for $data_dir/maker\n".
+	    "You may need to log in as 'root' for setup\n\n";
+
+	system("chown -R :$CTL_OPT{apache_user} $data_dir/maker") &&
+	    die "ERROR: Could not establish ownership for $data_dir/maker\n".
 	    "You may need to log in as 'root' for setup\n\n";
     }
     else{
@@ -1058,17 +1062,19 @@ sub check_table_structure {
     #Most versions of SQL can do this automatically but not all, so I will handle it in perl
     #please note that job_ids 1-5 aare reserved for tutorial data and user_id 1 for administrator
     #$dbh->do(qq{DROP TABLE id_store}) if(grep {/id_store/} @tables);
+    $dsn = (qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER, last_submit_id INTEGER)});
     if(! grep {/id_store/} @tables){
-	$dsn = (qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER, last_submit_id INTEGER)});
-	$dbh->do($dsn) if(! grep {/id_store/} @tables);
-	add_missing_columns($dbh, $dsn, 'id_store');
-
+	$dbh->do($dsn);
+	
+	#fix value if null
 	my ($last_user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1}) || 1;
 	my ($last_job_id)  = $dbh->selectrow_array(qq{SELECT job_id FROM jobs ORDER BY job_id DESC LIMIT 1}) || 1;
 	my ($last_submit_id)  = $dbh->selectrow_array(qq{SELECT submit_id FROM jobs ORDER BY submit_id DESC LIMIT 1}) || 1;
 	$last_job_id = 6 if($last_job_id < 6);
+	$last_submit_id = $last_job_id if(! $last_submit_id);
 	$dbh->do(qq{INSERT INTO id_store (last_user_id, last_job_id, last_submit_id) VALUES ($last_user_id, $last_job_id, $last_submit_id)});
     }
+    add_missing_columns($dbh, $dsn, 'id_store');
 
     #add administrator to database
     my ($user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users WHERE user_id=1});
@@ -1412,6 +1418,7 @@ sub add_missing_columns {
     my $table = shift;
     
     #check that all columns are present
+    my $bak = $dsn;
     ($dsn) = $dsn =~ /\((.*)\)/;
     my %columns = map {/^([^\s]+)\s+(.*)/} split(/,\s*/, $dsn);
     
@@ -1421,6 +1428,13 @@ sub add_missing_columns {
     my @found = map {lc($_)} @{$sth->{NAME}}; #make all lower case for any DBI
     my %found;
     @found{@found} = (); #build indexing hash
+
+    #no columns were found to add, so delete table and rebuild
+    if(! @found){
+	$dbh->do("DROP TABLE $table");
+	$dbh->do($bak); #create new table
+    }
+
     foreach my $key (keys %columns){
 	push(@missing, $key) if(! exists $found{$key});
     }
