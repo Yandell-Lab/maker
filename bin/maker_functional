@@ -3,6 +3,13 @@ use strict;
 use FindBin;
 use Cwd;
 
+BEGIN{
+    if(! $ENV{BLASTDB}){
+	$ENV{BLASTDB} = "/usr/local/blastdb";
+	$ENV{BLASTDB} = "/data1/cholt/blastdb" if(! -d $ENV{BLASTDB});
+    }
+}
+
 my ($job, $d, $f, $n) = @ARGV;
 die "ERROR: Job ID is missing\n" if(!$job);
 
@@ -88,9 +95,9 @@ foreach my $dir (keys %to_do){
 			    "cp $tran $tran.bak",
 			    "cp $prot $prot.bak",
 			    "cp $gff $gff.bak",
-			    "$FindBin::Bin/maker_functional_fasta \$BLASTDB/uniprot_sprot.fasta $out.tmp $tran.bak > $tran",
-			    "$FindBin::Bin/maker_functional_fasta \$BLASTDB/uniprot_sprot.fasta $out.tmp $prot.bak > $prot",
-			    "$FindBin::Bin/maker_functional_gff \$BLASTDB/uniprot_sprot.fasta $out.tmp $gff.bak > $gff",
+			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $tran.bak > $tran",
+			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $prot.bak > $prot",
+			    "$FindBin::Bin/maker_functional_gff $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $gff.bak > $gff",
 			    "mv $out.tmp $out");
 
 	    #skip xdformat if not needed

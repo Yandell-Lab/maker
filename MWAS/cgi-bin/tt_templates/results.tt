@@ -2,6 +2,7 @@
 <input type="hidden" name="rm" value="launch">
 <input type="hidden" name="job_id" value="[% job_id %]">
 <input type="hidden" name="selected" value="">
+
 <table width= 100%>
 <tr>
   <td nowrap>
@@ -18,6 +19,7 @@
 	<a href="stream.cgi?type=tarball&job_id=[% job_id %]&user_id=[% user_id %]"><img src="http://www.famfamfam.com/lab/icons/silk/icons/disk.png" border="0px"><b>Download All Data</b></a>
 
 	<br>
+	[% IF type != 'functional' %]<a href="maker.cgi?rm=job_create&func=1&job_id=[% job_id %]"><font style="font-size : 10">Do post processing of annotations</font></a>[% END %]
 	<br>
 	<br>
 	View contigs individually.<br>

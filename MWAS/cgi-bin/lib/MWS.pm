@@ -336,13 +336,13 @@ sub launch {
     File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/");
     my $gff_url = ($serv_opt{html_web} =~ /http\:\/\//) ?
 	"$serv_opt{html_web}/users/$user_id/$safe_name.gff" :
-	"$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$safe_name.gff";
+	"$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$job_id/$safe_name.gff";
     
     #fix // in direcory structure
     $gff_url =~ s/([^\:])\/+/$1\//g;
     
     my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
-    my $slink = "$serv_opt{html_dir}/users/$user_id/$safe_name.gff";
+    my $slink = "$serv_opt{html_dir}/users/$user_id/$job_id/$safe_name.gff";
     symlink($gff_file, $slink) if(! -e $slink);
     
     if($q->param('apollo')){
@@ -490,6 +490,7 @@ sub results {
    }
 
    my ($genome) = $self->dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$job_id});
+   my ($type) = $self->dbh->selectrow_array(qq{SELECT type FROM jobs WHERE job_id=$job_id});
    my ($c_count) = $self->dbh->selectrow_array(qq{SELECT contig_count FROM files WHERE value='$genome'});
    ($c_count) = $self->dbh->selectrow_array(qq{SELECT contig_count FROM menus WHERE value='$genome'}) if(! $c_count);
    
@@ -498,6 +499,7 @@ sub results {
    return $self->tt_process('results.tt', {menus => \@menus,
 					   counts => \%counts,
 					   user_id => $user_id,
+					   type => $type,
 					   job_id => $job_id});   
 }
 #-----------------------------------------------------------------------------
@@ -822,6 +824,7 @@ sub job_create {
    my $job_id = $q->param('job_id');
    my $user = $self->get_user_info();
    my $job = $self->get_job_info($job_id);
+   my $func = $q->param('func');
 
    #load default values for all control files
    my %CTL_OPT = %{$self->get_server_default_options()};
@@ -834,6 +837,25 @@ sub job_create {
    if($job_id){
        my $ref = $self->dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$job_id});
        %LOG_OPT = (%CTL_OPT, %{$ref});
+   }
+
+   #the functional annotation option is only for finished jobs
+   if($func && (! $job || ! $job->{is_packaged})){
+       $func = 0;
+   }
+   elsif($job && $job->{type} eq 'functional'){
+       $func = 1;
+   }
+
+   #log the old job_id for submiting new functional jobs
+   my $old_id;
+   if($func && $job->{type} ne 'functional'){
+       $old_id = $job_id;
+       $job_id = undef;
+       $job = undef;
+   }
+   elsif($func){
+       ($old_id) = $self->dbh->selectrow_array(qq{SELECT old_id FROM jobs WHERE job_id=$job_id});
    }
 
    #build predictor hash
@@ -849,52 +871,57 @@ sub job_create {
        $self->dbh->do(qq{UPDATE id_store SET last_job_id=$job_id}); #record new value
        $self->dbh->commit();
    }
-
-   #decide on organism type
-   my $o_type = ($STAT{organism_type} !~ /STATIC|DISABLED/) ? $LOG_OPT{organism_type} : $CTL_OPT{organism_type};
-
-   #collect options for drop down menus
-   my %menus;
    
-   #server menu options (menu options follow control files)
-   $menus{alt_peptide}         = [qw(A C D E F G H I K L M N P Q R S T V W Y)];
-   $menus{model_org}{server}   = $self->get_menus('model_org', 'server');
-   $menus{snaphmm}{server}     = $self->get_menus('snaphmm', 'server');
-   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_e', 'server') if($o_type eq 'eukaryotic');
-   $menus{gmhmm}{server}     = $self->get_menus('gmhmm_p', 'server') if($o_type eq 'prokaryotic');
-   $menus{augustus_species}{server} = $self->get_menus('augustus_species', 'server');
-   $menus{fgenesh_par_file}{server} = $self->get_menus('fgenesh_par_file', 'server');
-   $menus{genome}{server}      = $self->get_menus('genome', 'server');
-   $menus{est}{server}         = $self->get_menus('est', 'server');
-   $menus{altest}{server}      = $self->get_menus('altest', 'server');
-   $menus{protein}{server}     = $self->get_menus('protein', 'server');
-   $menus{repeat_protein}{server} = $self->get_menus('repeat_protein', 'server');
-   $menus{rmlib}{server}       = $self->get_menus('rmlib', 'server');
-   $menus{model_gff}{server}   = $self->get_menus('model_gff', 'server');
-   $menus{pred_gff}{server}    = $self->get_menus('pred_gff', 'server');
-   $menus{est_gff}{server}     = $self->get_menus('est_gff', 'server');
-   $menus{altest_gff}{server}  = $self->get_menus('altest_gff', 'server');
-   $menus{protein_gff}{server} = $self->get_menus('protein_gff', 'server');
-   $menus{rm_gff}{server}  = $self->get_menus('rm_gff', 'server');
-   
-   #user supplied menu options
-   $menus{snaphmm}{user}  = $self->get_menus('snaphmm', 'user', $user->{user_id});
-   $menus{augustus_species}{user}  = $self->get_menus('augustus_species', 'user', $user->{user_id});
-   $menus{fgenesh_par_file}{user} = $self->get_menus('fgenesh_par_file', 'user', $user->{user_id});
-   $menus{gmhmm}{user}  = $self->get_menus('gmhmm', 'user', $user->{user_id});
-   $menus{fastas}{user}   = $self->get_menus('fasta', 'user', $user->{user_id});
-   $menus{gff3}{user}     = $self->get_menus('gff3', 'user', $user->{user_id});
+   my %menus;   #collect options for drop down menus
+   my $o_type; #organism type
 
-   #example/tutorial menu options
-   $menus{tutorials} = $self->get_tutorials();
+   if(! $func){
+       #decide on organism type
+       $o_type = ($STAT{organism_type} !~ /STATIC|DISABLED/) ? $LOG_OPT{organism_type} : $CTL_OPT{organism_type};
+       
+       #server menu options (menu options follow control files)
+       $menus{alt_peptide}         = [qw(A C D E F G H I K L M N P Q R S T V W Y)];
+       $menus{model_org}{server}   = $self->get_menus('model_org', 'server');
+       $menus{snaphmm}{server}     = $self->get_menus('snaphmm', 'server');
+       $menus{gmhmm}{server}     = $self->get_menus('gmhmm_e', 'server') if($o_type eq 'eukaryotic');
+       $menus{gmhmm}{server}     = $self->get_menus('gmhmm_p', 'server') if($o_type eq 'prokaryotic');
+       $menus{augustus_species}{server} = $self->get_menus('augustus_species', 'server');
+       $menus{fgenesh_par_file}{server} = $self->get_menus('fgenesh_par_file', 'server');
+       $menus{genome}{server}      = $self->get_menus('genome', 'server');
+       $menus{est}{server}         = $self->get_menus('est', 'server');
+       $menus{altest}{server}      = $self->get_menus('altest', 'server');
+       $menus{protein}{server}     = $self->get_menus('protein', 'server');
+       $menus{repeat_protein}{server} = $self->get_menus('repeat_protein', 'server');
+       $menus{rmlib}{server}       = $self->get_menus('rmlib', 'server');
+       $menus{model_gff}{server}   = $self->get_menus('model_gff', 'server');
+       $menus{pred_gff}{server}    = $self->get_menus('pred_gff', 'server');
+       $menus{est_gff}{server}     = $self->get_menus('est_gff', 'server');
+       $menus{altest_gff}{server}  = $self->get_menus('altest_gff', 'server');
+       $menus{protein_gff}{server} = $self->get_menus('protein_gff', 'server');
+       $menus{rm_gff}{server}  = $self->get_menus('rm_gff', 'server');
+       
+       #user supplied menu options
+       $menus{snaphmm}{user}  = $self->get_menus('snaphmm', 'user', $user->{user_id});
+       $menus{augustus_species}{user}  = $self->get_menus('augustus_species', 'user', $user->{user_id});
+       $menus{fgenesh_par_file}{user} = $self->get_menus('fgenesh_par_file', 'user', $user->{user_id});
+       $menus{gmhmm}{user}  = $self->get_menus('gmhmm', 'user', $user->{user_id});
+       $menus{fastas}{user}   = $self->get_menus('fasta', 'user', $user->{user_id});
+       $menus{gff3}{user}     = $self->get_menus('gff3', 'user', $user->{user_id});
+       
+       #example/tutorial menu options
+       $menus{tutorials} = $self->get_tutorials();
+   }
 
    return $self->tt_process('job_create.tt',{menus   => \%menus,
 					     ctl_opt => \%CTL_OPT, #default values
 					     log_opt => \%LOG_OPT, #logged values
 					     stat    => \%STAT, #opt status values
 					     o_type  => $o_type,
-					     message    => $message,
-					     job_id  => $job_id});
+					     message => $message,
+					     job_id  => $job_id,
+					     old_id  => $old_id,
+					     func    => $func,
+					     $job    => $job});
 }
 #------------------------------------------------------------------------------
 sub submit_to_db {
@@ -906,6 +933,11 @@ sub submit_to_db {
    my $later = $q->param('later') ? 1 : 0; #save and come back later
    my $job_id = $q->param('job_id');
    my $serv_opt = $self->param('server_opt');
+   my $func     = $q->param('func');
+   my $old_id   = $q->param('old_id');
+
+   #decide if this is a maker structural of functional job
+   my $type = ($func) ? 'functional' : 'maker';
 
    #decide if this is a temporary ctl_opt cache update or not
    my ($is_saved) = $self->dbh->selectrow_array(qq{SELECT is_saved FROM jobs WHERE job_id=$job_id});
@@ -920,6 +952,12 @@ sub submit_to_db {
    my %CTL_OPT = %{$self->get_server_default_options()};
    %CTL_OPT = (GI::set_defaults('opts', \%CTL_OPT),
 	       GI::set_defaults('bopts', \%CTL_OPT)); #filter to needed sub-set
+
+   if($func){
+       my $job_ctl = $self->dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$old_id});
+       %CTL_OPT = (%CTL_OPT, %$job_ctl);
+       delete($CTL_OPT{aed_threshold}) if(defined $CTL_OPT{aed_threshold}); #temp
+   }
 
    #join CTL_OPT in array to be seperated by comma
    while(my $key = each %CTL_OPT){
@@ -970,13 +1008,20 @@ sub submit_to_db {
 		      qq{name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
    }
    else{
+       if($type eq 'functional'){
+	   MWAS_util::copy_package($self->dbh, $old_id, $job_id);
+	   $j_name .= " - Post Processing" if ($j_name !~ /Post Processing$/); 
+       }
+
        #add job
-       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, is_queued, is_started, }.
-		      qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
-		      qq{is_tutorial, cpus, start_time, finish_time, name) }.
-		      qq{VALUES ($job_id, $user_id, $submit_id, '$length', $is_queued, 0, }.
-		      qq{0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
+       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, type, is_queued, }.
+	    qq{is_started, is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+	    qq{is_tutorial, cpus, start_time, finish_time, name) }.
+	    qq{VALUES ($job_id, $user_id, $submit_id, '$length', '$type', $is_queued, 0, }.
+	    qq{0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
 	   );
+
+       $self->dbh->do(qq{UPDATE jobs SET old_id = $old_id where job_id=$job_id}) if($type eq 'functional');
    }
 
    #if ctl_opt exists update else make new entry

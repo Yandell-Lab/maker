@@ -879,17 +879,17 @@ sub start_job {
 	    $dbh->do(qq{UPDATE jobs SET is_queued=0, is_running=1, cpus=$job_cpus WHERE job_id=$job_id});
 	    $dbh->commit;
 	    
+	    my $job_log = "$job_dir/job.log";
+
 	    #run maker
 	    my $command;
 	    if(! $type || $type eq 'maker'){
 		$command = "$FindBin::RealBin/../../bin/maker -qq -base $job_id &> $job_log";
 	    }
 	    elsif($type eq 'functional'){
-		my $args = "$job_id ".$job_log->{domain}." ".$job_log->{function}." ".$job_log->{short_name};
+		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{short_name}";
 		$command = "$FindBin::RealBin/../../bin/maker_functional $args &> $job_log";
 	    }
-
-	    my $job_log = "$job_dir/job.log";
 
 	    chdir($job_dir);
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
@@ -976,28 +976,32 @@ sub check_table_structure {
     @tables = grep {/^public\./} @tables if($dbh->{Driver}->{Name} =~ /^pg$/i);
 
     #create users table
-    $dbh->do(qq{CREATE TABLE users (user_id INTEGER PRIMARY KEY, login $t_type UNIQUE, }.
-		    qq{password $t_type, first $t_type, last $t_type, e_mail $t_type, }.
-		    qq{institution $t_type, is_guest INTEGER, is_admin INTEGER, }.
-		    qq{date_created $t_type, last_login $t_type)}
-	     ) if(! grep {/users/} @tables);
-        
+    my $dsn = (qq{CREATE TABLE users (user_id INTEGER PRIMARY KEY, login $t_type UNIQUE, }.
+	       qq{password $t_type, first $t_type, last $t_type, e_mail $t_type, }.
+	       qq{institution $t_type, is_guest INTEGER, is_admin INTEGER, }.
+	       qq{date_created $t_type, last_login $t_type)});
+    $dbh->do($dsn) if(! grep {/users/} @tables);
+    add_missing_columns($dbh, $dsn, 'users');
+
     #create files table
-    $dbh->do(qq{CREATE TABLE files (name $t_type, value $t_type UNIQUE, contig_count $t_type, }.
-		    qq{type $t_type, length $t_type, user_id INTEGER, description $t_type)}
-	     ) if(! grep {/files/} @tables);
-    
+    $dsn = (qq{CREATE TABLE files (name $t_type, value $t_type UNIQUE, contig_count $t_type, }.
+	    qq{type $t_type, length $t_type, user_id INTEGER, description $t_type)});
+    $dbh->do($dsn) if(! grep {/files/} @tables);
+    add_missing_columns($dbh, $dsn, 'files');
+
     #create jobs table
-    $dbh->do(qq{CREATE TABLE jobs (job_id INTEGER PRIMARY KEY, user_id INTEGER, submit_id INTEGER, length $t_type, }.
-		    qq{type $t_type, is_queued INTEGER, is_started INTEGER, is_running INTEGER, is_finished INTEGER, }.
-		    qq{is_error INTEGER, is_packaged INTEGER, is_saved INTEGER, admin_block INTEGER, is_tutorial INTEGER, }.
-		    qq{cpus INTEGER, start_time $t_type, finish_time $t_type, name $t_type, note $t_type)}
-	     ) if(! grep {/jobs/} @tables);
-    
+    $dsn = (qq{CREATE TABLE jobs (job_id INTEGER PRIMARY KEY, user_id INTEGER, submit_id INTEGER, length $t_type, }.
+	    qq{type $t_type, old_id INTEGER, is_queued INTEGER, is_started INTEGER, is_running INTEGER, }.
+	    qq{is_finished INTEGER, is_error INTEGER, is_packaged INTEGER, is_saved INTEGER, admin_block INTEGER, }.
+	    qq{is_tutorial INTEGER, cpus INTEGER, start_time $t_type, finish_time $t_type, name $t_type, note $t_type)});
+    $dbh->do($dsn) if(! grep {/jobs/} @tables);
+    add_missing_columns($dbh, $dsn, 'jobs');
+
     #create ctl_opt table
     my @defaults = map {lc($_)." $t_type"} keys %def_opt; #get table column names and datatype
-    my $do_string = 'CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, '.join(', ', @defaults).')';
-    $dbh->do($do_string) if(! grep {/ctl_opt/} @tables);
+    $dsn = 'CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, '.join(', ', @defaults).')';
+    $dbh->do($dsn) if(! grep {/ctl_opt/} @tables);
+    add_missing_columns($dbh, $dsn, 'ctl_opt');
 
     #create/re-create menus table (always)
     $dbh->do(qq{DROP TABLE menus}) if(grep {/menus/} @tables);
@@ -1055,7 +1059,10 @@ sub check_table_structure {
     #please note that job_ids 1-5 aare reserved for tutorial data and user_id 1 for administrator
     #$dbh->do(qq{DROP TABLE id_store}) if(grep {/id_store/} @tables);
     if(! grep {/id_store/} @tables){
-	$dbh->do(qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER, last_submit_id INTEGER)});
+	$dsn = (qq{CREATE TABLE id_store (last_user_id INTEGER, last_job_id INTEGER, last_submit_id INTEGER)});
+	$dbh->do($dsn) if(! grep {/id_store/} @tables);
+	add_missing_columns($dbh, $dsn, 'id_store');
+
 	my ($last_user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1}) || 1;
 	my ($last_job_id)  = $dbh->selectrow_array(qq{SELECT job_id FROM jobs ORDER BY job_id DESC LIMIT 1}) || 1;
 	my ($last_submit_id)  = $dbh->selectrow_array(qq{SELECT submit_id FROM jobs ORDER BY submit_id DESC LIMIT 1}) || 1;
@@ -1084,23 +1091,27 @@ sub check_table_structure {
     #create/re-create all_default_opt table
     $dbh->do(qq{DROP TABLE all_default_opt}) if(grep {/all_default_opt/} @tables); #drop table
     @defaults = map {lc($_)." $t_type"} grep {!/^menus$|^stat$/i} keys %CTL_OPT; #get table column names and datatype
-    $do_string = 'CREATE TABLE all_default_opt ('.join(', ', @defaults).')';
-    $dbh->do($do_string);
+    $dsn = 'CREATE TABLE all_default_opt ('.join(', ', @defaults).')';
+    $dbh->do($dsn);
     @defaults = grep {!/^menus$|^stat$/i} keys %CTL_OPT; #keys to add
     my @lc_defaults = map {lc($_)}  @defaults;
-    $do_string = "INSERT INTO all_default_opt (".join(", ", @lc_defaults).") VALUES ('".join("', '", @CTL_OPT{@defaults})."')";
-    $dbh->do($do_string); #add ctl_opt
+    $dsn = "INSERT INTO all_default_opt (".join(", ", @lc_defaults).") VALUES ('".join("', '", @CTL_OPT{@defaults})."')";
+    $dbh->do($dsn); #add ctl_opt
 
     #create/re-create stat table
     my %stat = %{$CTL_OPT{STAT}};
     $dbh->do(qq{DROP TABLE stat}) if(grep {/stat/} @tables); #drop table
     @defaults = map {lc($_)." $t_type"}  keys %stat; #get table column names and datatype
-    $do_string = 'CREATE TABLE stat ('.join(', ', @defaults).')';
-    $dbh->do($do_string);
+    $dsn = 'CREATE TABLE stat ('.join(', ', @defaults).')';
+    $dbh->do($dsn);
     @defaults = keys %stat; #keys to add
     @lc_defaults = map {lc($_)}  @defaults;
-    $do_string = "INSERT INTO stat (".join(", ", @lc_defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
-    $dbh->do($do_string); #add ctl_opt
+    $dsn = "INSERT INTO stat (".join(", ", @lc_defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
+    $dbh->do($dsn); #add ctl_opt
+
+    #update values for possible null columns
+    $dbh->do("UPDATE jobs SET type = 'maker' WHERE type IS NULL");
+    $dbh->do("UPDATE jobs SET submit_id = job_id WHERE submit_id IS NULL");
 
     #--add tutorial jobs (always adds/re-adds)
     if($CTL_OPT{tutorials}){
@@ -1135,8 +1146,8 @@ sub check_table_structure {
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
 	    my @lc_defaults = map {lc($_)}  @defaults;
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
-	    $dbh->do($do_string); #add ctl_opt
+	    $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($dsn); #add ctl_opt
 	}
 	
 	#add job but only if control file options were ok
@@ -1144,11 +1155,11 @@ sub check_table_structure {
 	if($job_id){
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
-	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, type, is_queued, is_started, }.
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     qq{\', 'maker', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
 		     MWAS_util::date_time . qq{', 'D. melanogaster : Dpp','$t_message')}
 		     ) if(! $job_id); #add job
 	}
@@ -1192,8 +1203,8 @@ sub check_table_structure {
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
 	    my @lc_defaults = map {lc($_)}  @defaults;
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
-	    $dbh->do($do_string); #add ctl_opt
+	    $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($dsn); #add ctl_opt
 	}
 	
 	#add job but only if control file options were ok
@@ -1201,11 +1212,11 @@ sub check_table_structure {
 	if($job_id){
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
-	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, type, is_queued, is_started, }.
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     qq{\', 'maker', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
 		     MWAS_util::date_time . qq{', 'P. ultimum : De Novo Annotation','$t_message')}
 		     ) if(! $job_id); #add job
 	}
@@ -1253,8 +1264,8 @@ sub check_table_structure {
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
 	    my @lc_defaults = map {lc($_)}  @defaults;
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
-	    $dbh->do($do_string); #add ctl_opt
+	    $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($dsn); #add ctl_opt
 	}
 	
 	#add job but only if control file options were ok
@@ -1262,11 +1273,11 @@ sub check_table_structure {
 	if($job_id){
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
-	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, type, is_queued, is_started, }.
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     qq{\', 'maker', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
 		     MWAS_util::date_time . qq{', 'P. ultimum : Data Pass-through','$t_message')}
 		     ) if(! $job_id); #add job
 	}
@@ -1317,8 +1328,8 @@ sub check_table_structure {
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
 	    my @lc_defaults = map {lc($_)}  @defaults;
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
-	    $dbh->do($do_string); #add ctl_opt
+	    $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($dsn); #add ctl_opt
 	}
 	
 	#add job but only if control file options were ok
@@ -1326,11 +1337,11 @@ sub check_table_structure {
 	if($job_id){
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
-	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, type, is_queued, is_started, }.
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     qq{\', 'maker', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
 		     MWAS_util::date_time . qq{', 'P. ultimum : Legacy Annotations','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
@@ -1369,8 +1380,8 @@ sub check_table_structure {
 	    #add to ctl_opt table
 	    @defaults = (keys %def_opt); #keys to add
 	    my @lc_defaults = map {lc($_)}  @defaults;
-	    my $do_string = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
-	    $dbh->do($do_string); #add ctl_opt
+	    $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+	    $dbh->do($dsn); #add ctl_opt
 	}
 	
 	#add job but only if control file options were ok
@@ -1378,11 +1389,11 @@ sub check_table_structure {
 	if($job_id){
 	    my $genome = $dbh->selectrow_array(qq{SELECT genome FROM ctl_opt WHERE job_id=$id});
 	    ($job_id) = $dbh->selectrow_array(qq{SELECT job_id FROM jobs WHERE job_id=$id});
-	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, is_queued, is_started, }.
+	    $dbh->do(qq{INSERT INTO jobs (job_id, user_id, length, type, is_queued, is_started, }.
 		     qq{is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
 		     qq{is_tutorial,  cpus, start_time, finish_time, name, note)}.
 		     qq{VALUES($id, 1, \'}.MWAS_util::get_length_for_value($dbh, $genome).
-		     qq{\', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
+		     qq{\', 'maker', 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, '}.MWAS_util::date_time.qq{', '}.
 		     MWAS_util::date_time . qq{', 'E. coli : De Novo Annotation','$t_message')}
 		     ) if(! $job_id); #add job
 	}    
@@ -1393,6 +1404,32 @@ sub check_table_structure {
     $dbh->commit;
     $lock->unlock;
     ####===unlock
+}
+#------------------------------------------------------------------------
+sub add_missing_columns {
+    my $dbh = shift;
+    my $dsn = shift; # must be the statement used to build table
+    my $table = shift;
+    
+    #check that all columns are present
+    ($dsn) = $dsn =~ /\((.*)\)/;
+    my %columns = map {/^([^\s]+)\s+(.*)/} split(/,\s*/, $dsn);
+    
+    my $sth = $dbh->prepare("SELECT * FROM $table LIMIT 1");
+    $sth->execute;
+    my @missing = ();
+    my @found = map {lc($_)} @{$sth->{NAME}}; #make all lower case for any DBI
+    my %found;
+    @found{@found} = (); #build indexing hash
+    foreach my $key (keys %columns){
+	push(@missing, $key) if(! exists $found{$key});
+    }
+    
+    #add missing columns
+    foreach my $key (@missing){
+	my $def = $columns{$key};
+	$dbh->do("ALTER TABLE $table ADD $key $def");
+    }
 }
 #------------------------------------------------------------------------
 #puts jobs back into queue on server restart
@@ -1416,10 +1453,10 @@ sub lock_error {
 #standard message for not getting the lock
 sub dbh_do_commit {
     my $dbh = shift || return;
-    my $do_string = shift || return;
+    my $dsn = shift || return;
 
     my $lock = lockDB() || ((print STDERR lock_error()) && (return));
-    $dbh->do($do_string);
+    $dbh->do($dsn);
     $dbh->commit;
 
     return 1;

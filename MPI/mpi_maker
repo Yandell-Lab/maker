@@ -276,6 +276,7 @@ try{
                "base=s" =>\$OPT{out_name},
                "datastore!" =>\$OPT{datastore},
 	       "fast" => \$main::fast,
+	       "dtmp" => \$main::dtmp,
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "no_thread" =>\$main::no_thread, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},

@@ -105,6 +105,7 @@ function viewFile(section) {
 <h3>[% message %]</h3>
 [% END %]
 
+[% IF ! func %]
 <table width=90% bgcolor=CACACA style="border-collapse: collapse">
   <tr bgcolor=white>
     <td colspan=2>
@@ -145,8 +146,8 @@ function viewFile(section) {
   </tr>
 [% END %]
 </table>
-
 <br>
+[% END %]
 
 <table width=90% bgcolor=CACACA >
   <tr bgcolor=white>
@@ -170,7 +171,11 @@ function viewFile(section) {
 <input type="hidden" name="rm" value="submit_to_db">
 <input type="hidden" name="job_id" value="[% job_id %]">
 <input type="hidden" name="just_update_opt" value="0">
+<input type="hidden" name="func" value="[% func %]">
+<input type="hidden" name="old_id" value="[% old_id %]">
 <br>
+
+[% IF ! func %]
 
 [% IF stat.genome != 'DISABLED' %]
 <table width=90% bgcolor=CACACA >
@@ -1228,6 +1233,80 @@ function viewFile(section) {
 [% END %]
 </table>
 
+[% ELSIF func %]
+
+<table width=90% bgcolor=CACACA >
+  <tr>
+    <td colspan=3>
+      <h2><span style="color: red; font-weight: bold"><img src="[% server_opt.html_web %]/images/brick.png">Annotation Post Processing</span></h2>
+    </td>
+  </tr>
+  <tr bgcolor=white>
+    <td colspan=3>
+      <p style="font-weight:bold">Indicate the post processing you would like to perform on the annotations.  You can add functional annotations such as putative gene functions, Gene Ontology terms, and protein domains to the gene models.  You can also change long MAKER asigned names into shorter NCBI friendly names.</p>
+    </td>  
+  </tr>
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox" name="function" value="1"
+      [% IF log_opt.function %]
+        checked
+      [% END %]
+      [% IF stat.function== 'STATIC' %]
+      disabled
+      [% END %]
+      />
+    </td>
+
+    <td>
+      <p style="font-weight:bold">Add putative gene functions via comparison to the UniProt/Swiss-Prot protein database
+      </p>
+    </td>
+
+    <td>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td align=right>
+      <input type="checkbox"  name="domain" value="1"
+      [% IF log_opt.domain %]
+        checked
+      [% END %]
+      [% IF stat.domain== 'STATIC' %]
+      disabled
+      [% END %]
+      />
+    </td>
+
+    <td>
+       <p style="font-weight:bold">Add protein domains and GO terms via InterProScan
+       </p>
+    </td>
+
+    <td>
+    </td>
+  </tr>
+
+  <tr bgcolor=white>
+    <td></td>
+
+    <td>
+       <p style="font-weight:bold">Choose a prefix for making NCBI friendly names (blank to ignore)
+       </p>
+    </td>
+
+    <td align=center>
+      <input type="text" size=10 maxlength=10 name="short_name" value="[% log_opt.short_name %]"
+      [% IF stat.short_name == 'STATIC' %]
+        disabled
+      [% END %]
+      >
+    </td>
+  </tr>
+</table>
+[% END %]
+
 <br>
 <br>
 
@@ -1243,5 +1322,3 @@ function viewFile(section) {
 </form>
 </center>
 [% END %]
-
-      

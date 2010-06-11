@@ -4,7 +4,7 @@ db_args       = -adaptor memory
 	      	-dir '[% contig_dir %]'
 
 # list of tracks to turn on by default
-default features = Genes Est2genome BLASTX Protein2genome TBLASTX RepeatMasker RepeatRunner
+default features = Genes Est2genome BLASTX
 
 # size of the region
 region segment         = 10000
@@ -79,13 +79,17 @@ category           = Genes
 key                = MAKER Gene Loci
 
 [Genes]
-feature		   = gene
-glyph              = gene
+feature		   = mRNA
+glyph              = processed_transcript
 bgcolor            = rgb(51,102,255)
 utr_color          = rgb(176,224,230)
+thin_utr           = 1
 label_transcripts  = 1
 draw_translation   = 1
 implied_utrs       = 1
+description        = 1
+link               = [% base_url_cgi %]/gene_page.cgi?seq_id=$ref&name=$name
+link_target        = _blank
 category           = Genes
 key                = MAKER Gene Annotations
 

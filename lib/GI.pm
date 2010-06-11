@@ -47,7 +47,7 @@ use Digest::MD5;
 	);
 
 $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
-print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n";
+print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dtmp);
 #------------------------------------------------------------------------
 #--------------------------- CLASS FUNCTIONS ----------------------------
 #------------------------------------------------------------------------
@@ -58,29 +58,29 @@ sub set_global_temp {
 
     #remove old tempdir if user supplied a new one
     if($TMP ne $dir){
-	print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n"; ##temp
+	print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n" if($main::dtmp); ##temp
 	my $base = $dir;
 	$base =~ s/[^\/]+$//;
 
 	if(! -d $base){
-	    print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n"; ##temp
+	    print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n" if($main::dtmp); ##temp
 	    return;
 	}
 
 	if(! -d $dir){
-	    print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n"; ##temp
+	    print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n" if($main::dtmp); ##temp
 	    mkdir($dir);
 	}
 
 	if(! -d $dir){
-	    print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n"; ##temp
+	    print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n" if($main::dtmp); ##temp
 	    return;
 	}
 
 	File::Path::rmtree($TMP);
 
 	$TMP = $dir;
-	print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n"; ##temp
+	print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n" if($main::dtmp); ##temp
     }
 }
 #------------------------------------------------------------------------
@@ -3208,7 +3208,7 @@ sub load_control_files {
    #--set up optional global TMP (If TMP is not accessible from other nodes
    #they will default back to /tmp)
    if($CTL_OPT{TMP}){
-       print STDERR "\nTMP_STAT: User specified TMP is $CTL_OPT{TMP}: PID=$$-root\n"; ##temp
+       print STDERR "\nTMP_STAT: User specified TMP is $CTL_OPT{TMP}: PID=$$-root\n" if($main::dtmp); ##temp
        $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
    }
    else{
