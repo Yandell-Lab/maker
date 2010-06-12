@@ -960,6 +960,7 @@ sub submit_to_db {
        my $job_ctl = $self->dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$old_id});
        %CTL_OPT = (%CTL_OPT, %$job_ctl);
        delete($CTL_OPT{aed_threshold}) if(defined $CTL_OPT{aed_threshold}); #temp
+       delete($CTL_OPT{job_id}) if(defined $CTL_OPT{job_id}); #temp
    }
 
    #join CTL_OPT in array to be seperated by comma
