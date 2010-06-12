@@ -1243,7 +1243,7 @@ function viewFile(section) {
   </tr>
   <tr bgcolor=white>
     <td colspan=3>
-      <p style="font-weight:bold">Indicate the post processing you would like to perform on the annotations.  You can add functional annotations such as putative gene functions, Gene Ontology terms, and protein domains to the gene models.  You can also change long MAKER asigned names into shorter NCBI friendly names.</p>
+      <p style="font-weight:bold">Indicate the post processing you would like to perform on the annotations.  You can add functional annotations such as putative gene functions, Gene Ontology terms, and protein domains to the gene models.  You can also change long MAKER asigned names into shorter gene names.</p>
     </td>  
   </tr>
   <tr bgcolor=white>
@@ -1292,7 +1292,7 @@ function viewFile(section) {
     <td></td>
 
     <td>
-       <p style="font-weight:bold">Choose a prefix for making NCBI friendly names (blank to ignore)
+       <p style="font-weight:bold">Choose a prefix for making shorter gene names (blank to ignore)
        </p>
     </td>
 
