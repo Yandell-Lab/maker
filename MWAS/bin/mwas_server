@@ -888,7 +888,9 @@ sub start_job {
 	    #run maker
 	    my $command;
 	    if(! $type || $type eq 'maker'){
-		$command = "$FindBin::RealBin/../../bin/maker -qq -base $job_id &> $job_log";
+		$command = "bash\n".
+		    "source /etc/profile\n".
+		    "$FindBin::RealBin/../../bin/maker -qq -base $job_id &> $job_log";
 	    }
 	    elsif($type eq 'functional'){
 		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{short_name}";

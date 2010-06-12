@@ -113,7 +113,8 @@ Options:
 my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header,
     $grep_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
     $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $length,
-    $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file);
+    $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file,
+    $mRNAseq, $EST);
 
 GetOptions('summary'        => \$summary,
 	   'chunks=i'       => \$chunks,
@@ -141,6 +142,8 @@ GetOptions('summary'        => \$summary,
 	   'select=s'       => \$select_file,
 	   'fix'            => \$fix,
 	   'length'         => \$length,
+	   'mRNAseq'         => \$mRNAseq,
+	   'EST'             => \$EST,
 	  );
 
 my $file = shift;
@@ -182,6 +185,8 @@ $print++ unless grep {$_} ($chunks,
 			   $shuffle_pick,
 			   $remove_file,
 			   $select_file,
+			   $mRNAseq,
+			   $EST
 			  );
 
 $nt_count++ if $summary;
@@ -220,7 +225,9 @@ shuffle_seq()               if $shuffle_seq;
 shuffle_codon()             if $shuffle_codon;
 shuffle_pick($shuffle_pick) if $shuffle_pick;
 remove($remove_file)        if $remove_file;
-_select($select_file)        if $select_file;
+_select($select_file)       if $select_file;
+mRNAseq()                   if $mRNAseq;
+EST()                       if $EST;
 fix()                       if $fix;
 
 #-----------------------------------------------------------------------------
@@ -330,6 +337,80 @@ sub grep_header {
 			print_this_seq($header, $seq);
 		}
 	}
+}
+#-----------------------------------------------------------------------------
+{my $i = 0;
+sub mRNAseq {
+    my $size = 50;
+
+    while (my $seq_obj = $seq_io->next_seq) {
+	my $seq = $seq_obj->seq;
+	
+	my $len = length($seq);
+	
+	for (my $j = 0; $j < $len/5; $j++){
+	    my $range = $len - $size;
+	    
+	    my $start; my $end;
+	    if($range < 0){
+		$start = 0 ;
+		$end = $len - 1;
+	    }
+	    else{
+		$start = int(rand($range));
+		$end = $start + $size - 1;
+	    }
+	    
+	    my $l = $end - $start + 1;
+
+		my $header = "sequence_".$i++;
+		print_this_seq($header, substr($seq, $start, $l));
+	    }	   
+	}
+}
+#-----------------------------------------------------------------------------
+sub EST {
+
+    while (my $seq_obj = $seq_io->next_seq) {
+	my $seq = $seq_obj->seq;
+	
+	my $len = length($seq);
+	
+
+	my $range = $len - 500;
+	my $min = 250;
+
+	if($range < 0 || $min < 0){
+	    my $header = "sequence_".$i++;
+	    print_this_seq($header, $seq);
+	    next;
+	}
+
+	my $A = int(rand($range) + $min);
+	my $start = int(rand($range) + $min);
+	my $end = int(rand($range));
+	my $B = int(rand($range) + $min);	    
+	
+	my $l = abs($end - $start + 1);
+	if($l > 250){
+	    my $header = "sequence_".$i++;
+	    print_this_seq($header, substr($seq, $start, $l));
+	}
+
+	$l = abs($A - 0 + 1);
+	if($l > 250){
+	    my $header = "sequence_".$i++;
+	    print_this_seq($header, substr($seq, 0, $l));
+	}
+
+	$l = abs($len - $B + 1);
+	if($l > 250){
+	    my $header = "sequence_".$i++;
+	    print_this_seq($header, substr($seq, $B, $l));
+	}
+
+    }
+}
 }
 #-----------------------------------------------------------------------------
 sub grep_seq {
