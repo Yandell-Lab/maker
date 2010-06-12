@@ -181,6 +181,7 @@ sub setup {
 			 PARTICLE_OPTIONS => [ 300 ]
 			);
 }
+
 #-----------------------------------------------------------------------------
 sub teardown {
    my $self = shift;
@@ -409,29 +410,27 @@ sub launch {
 	die "ERROR: JBROWSE_ROOT $j_dir does not exist\n" if(! -d $j_dir);
 	
 	#copy necessary JBrowse files if not yet copied
-	if(! -d $dir){
-	    File::Path::mkpath("$dir");
+	File::Path::mkpath("$dir") if(! -d $dir);
 	    
-	    #get all JBrowse contents
-	    my @to_copy = map {"$j_dir/$_"} qw(LICENSE
-		                               Makefile
-					       bin
-					       closedhand.cur
-					       docs
-					       img
-					       index.html
-					       js
-					       jslib
-					       lib
-					       openhand.cur
-					       src
-					       twiki);
+	#get all JBrowse contents
+	my @to_copy = map {"$j_dir/$_" if(! -e "$dir/$_")}  qw(LICENSE
+		                                               Makefile
+							       bin
+							       closedhand.cur
+							       docs
+							       img
+							       index.html
+							       js
+							       jslib
+							       lib
+							       openhand.cur
+							       src
+							       twiki);
 
-	    #get MAKER specific configuration file
-	    my $conf = "$data_dir/maker/JBrowse/genome.css";
-	    system("cp -R $conf ".join(' ', @to_copy)." $dir");
-	}
-
+	#get MAKER specific configuration file
+	my $conf = "$data_dir/maker/JBrowse/genome.css";
+	system("cp -R $conf ".join(' ', @to_copy)." $dir");
+    
 	#add tracks if not currently added
 	if(!-d "$dir/data"){
 	    my $dstore = "$data_dir/jobs/$job_id/$job_id.maker.output/$job_id\_master_datastore_index.log";

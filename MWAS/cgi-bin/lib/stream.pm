@@ -155,7 +155,7 @@ sub stream {
 
 	return if(! $job_info || ! $user_id || $user_id != $job_info->{user_id});
 
-	#create GBrowse configuration file for this Job
+	#create Gcd /vaBrowse configuration file for this Job
 	my $content = ${$self->tt_process('gbrowse.conf.tt', {contig_dir => "$data_dir/jobs/$job_id/$job_id.maker.output/",
 							      })};
 
