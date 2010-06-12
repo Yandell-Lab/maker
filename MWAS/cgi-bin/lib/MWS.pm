@@ -333,9 +333,9 @@ sub launch {
     $safe_name =~ s/\%/\_/g;
     
     #make path
-    File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/");
+    File::Path::mkpath("$serv_opt{html_dir}/users/$user_id/$job_id");
     my $gff_url = ($serv_opt{html_web} =~ /http\:\/\//) ?
-	"$serv_opt{html_web}/users/$user_id/$safe_name.gff" :
+	"$serv_opt{html_web}/users/$user_id/$job_id/$safe_name.gff" :
 	"$serv_opt{web_address}/$serv_opt{html_web}/users/$user_id/$job_id/$safe_name.gff";
     
     #fix // in direcory structure
