@@ -959,6 +959,7 @@ sub submit_to_db {
    if($func){
        my $job_ctl = $self->dbh->selectrow_hashref(qq{SELECT * FROM ctl_opt WHERE job_id=$old_id});
        %CTL_OPT = (%CTL_OPT, %$job_ctl);
+       delete($CTL_OPT{tmp}) if(defined $CTL_OPT{tmp}); #temp
        delete($CTL_OPT{aed_threshold}) if(defined $CTL_OPT{aed_threshold}); #temp
        delete($CTL_OPT{job_id}) if(defined $CTL_OPT{job_id}); #temp
    }
