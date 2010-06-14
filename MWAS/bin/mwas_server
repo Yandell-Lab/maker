@@ -894,7 +894,9 @@ sub start_job {
 	    }
 	    elsif($type eq 'functional'){
 		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{short_name}";
-		$command = "$FindBin::RealBin/../../bin/maker_functional $args &> $job_log";
+		$command = "bash\n".
+                    "source /etc/profile\n".
+		    "$FindBin::RealBin/../../bin/maker_functional $args &> $job_log";
 	    }
 
 	    chdir($job_dir);

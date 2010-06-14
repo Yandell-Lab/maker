@@ -4,7 +4,7 @@ use strict;
 
 my $usage = "
 Usage:
-     cegma2gff <cegma_gff> <genome_fasta>
+     cegma2zff <cegma_gff> <genome_fasta>
 
      This script converts the output GFF file from CEGMA into ZFF format
      for use in SNAP training.  Output files are always genome.ann and
