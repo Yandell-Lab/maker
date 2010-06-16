@@ -11,7 +11,7 @@ use warnings;
 use DBI;
 use Mail::Sender;
 use vars qw($LOG %CTL_OPT $EXE $DEBUG $CWD);
-use POSIX qw(:sys_wait_h setsid EAGAIN);
+use POSIX qw(:sys_wait_h setsid setuid setgid EAGAIN);
 use Template;
 use FindBin;
 use lib "$FindBin::RealBin/../../lib"; #/maker/lib?
@@ -498,12 +498,12 @@ elsif($opt eq 'START'){
 		    "apache is installed and the correct value is set for\n".
 		    "apache_user in the server_opt.ctl file.\n\n"
 	    }
-	    $) = $( = $grp_id;
-	    setpgrp($$, $grp_id) &&
+	    set_gid($grp_id);
+	    setpgrp(0, $grp_id) &&
 		die "ERROR: Could not attach the server to the apache user group.\n".
 		"You may need to add your current user to the apache user group\n".
 		"or start the server usginG sudo\n\n";
-	    $> = $< = $usr_id;
+	    set_uid($usr_id);
 
 	    #launch with new user_id from data_dir copy
 	    exec("$CTL_OPT{data_dir}/maker/MWAS/bin/$EXE", 'START');
@@ -1478,4 +1478,68 @@ sub dbh_do_commit {
     $dbh->commit;
 
     return 1;
+}
+#------------------------------------------------------------------------
+# from CPAN module Net::Server::Daemonize
+# uses posix to avoid issues related to changing $> $< $) and $( in perl
+sub set_uid {
+    my $uid = get_uid( shift() );
+    POSIX::setuid($uid);
+    if ($< != $uid || $> != $uid) { # check $> also (rt #21262)
+	$< = $> = $uid; # try again-needed by some 5.8.0 linux systems (rt #13450)
+	if ($< != $uid) {
+	    die "Couldn't become uid \"$uid\": $!\n";
+	}
+    }
+    return 1;
+}
+#------------------------------------------------------------------------
+# from CPAN module Net::Server::Daemonize
+# uses posix to avoid issues related to changing $> $< $) and $( in perl
+sub set_gid {
+    my $gids = get_gid( @_ );
+    my $gid  = (split /\s+/, $gids)[0];
+    eval { $) = $gids }; # store all the gids - this is really sort of optional
+    POSIX::setgid($gid);
+    if (! grep {$gid == $_} split /\s+/, $() { # look for any valid id in list
+	die "Couldn't become gid \"$gid\": $!\n";
+    }
+    return 1;
+}
+#------------------------------------------------------------------------
+# from CPAN module Net::Server::Daemonize
+# uses posix to avoid issues related to changing $> $< $) and $( in perl
+sub get_uid ($) {
+    my $user = shift;
+    my $uid  = undef;
+
+    if( $user =~ /^\d+$/ ){
+	$uid = $user;
+    }else{
+	$uid = getpwnam($user);
+    }
+
+    die "No such user \"$user\"\n" unless defined $uid;
+
+    return $uid;
+}
+#------------------------------------------------------------------------
+# from CPAN module Net::Server::Daemonize
+# uses posix to avoid issues related to changing $> $< $) and $( in perl
+sub get_gid {
+    my @gid  = ();
+
+    foreach my $group ( split( /[, ]+/, join(" ",@_) ) ){
+	if( $group =~ /^\d+$/ ){
+	    push @gid, $group;
+	}else{
+	    my $id = getgrnam($group);
+	    die "No such group \"$group\"\n" unless defined $id;
+	    push @gid, $id;
+	}
+    }
+
+    die "No group found in arguments.\n" unless @gid;
+
+    return join(" ",$gid[0],@gid);
 }
