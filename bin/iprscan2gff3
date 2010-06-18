@@ -4,14 +4,32 @@ use warnings;
 use strict;
 use URI::Escape;
 
+my $usage = "
+Usage:
+      iprscan2gff3 <iprscan.raw> <genome.all.gff>
+
+      This script takes an InterProScan raw format report with labeled
+      IPR domains and builds them into GFF3 formated features that can
+      be added as a track to GBrowse, JBrowse, and Apollo.
+
+";
+
+if(@ARGV < 2){
+    print $usage;
+    exit(1);
+}
+
 my $file = shift;
 my $gff3 = shift;
+
+die("ERROR: The file $file does not exist\n") if(! -f $file);
+die("ERROR: The file $gff3 does not exist\n") if(! -f $gff3);
 
 my %index;
 my %list;
 my %GO;
 
-open(IN, "< $file");
+open(IN, "< $file") or die "ERROR: Could not open the file $file\n";
 while(defined(my $line = <IN>)){
     next unless($line =~ /\tIPR\d+\t/);
     chomp $line;
@@ -57,6 +75,10 @@ while(my $t = each %index){
 		$B = $m->[0] if(!$B || $m->[0] < $B);
 		$E = $m->[1] if(!$E || $m->[1] > $E);
 	    }
+
+	    #fix for nucleotide space
+	    $B = ($B * 3) - 2;
+	    $E = $E * 3;
 	    $grp = [$B, $E];
 	}
     }
@@ -90,7 +112,7 @@ while(my $t = each %index){
 #parse gff3
 my %details;
 my %mRNAs;
-open(IN, "< $gff3");
+open(IN, "< $gff3") or die "ERROR: Could not open the file $gff3\n";
 while(defined(my $line = <IN>)){
     last if($line =~ /\#\#FASTA/);
     next if($line =~ /^\#/);
@@ -146,6 +168,15 @@ while(my $t = each %index){
 
         foreach my $hit (@$set){
 	    my @match;
+
+	    #correct for strand
+	    my $length = 0;
+	    grep {$length += abs($_->[1] - $_->[0]) + 1} @$CDSs;
+	    if($details{$t}{strand} eq '-'){
+		$hit->[0] = $length - $hit->[0] + 1;
+		$hit->[1] = $length - $hit->[1] + 1;
+		($hit->[0], $hit->[1]) = ($hit->[1], $hit->[0]); #flip order
+	    }
 
 	    my $leader = 0;
 	    my $started = 0;
