@@ -92,6 +92,8 @@ Option:
 
      -force|f            Delete old files before running again.
 
+     -again|a            Run again without deleting files.
+
      -quiet|q            Silences most status messages.
 
      -help|?             Prints this usage statement.
@@ -112,8 +114,10 @@ $RANK = $rank;
 #---Process options on the command line 
 try{
     GetOptions("cpus|c=i" => \$OPT{cpus},
+	       "protein|p=s" => \$OPT{protein},
 	       "force|f" => \$OPT{force},
 	       "retry=i" =>\$OPT{retry},
+	       "again|a" =>\$OPT{again},
 	       "quiet" =>\$main::quiet,
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
@@ -148,11 +152,16 @@ try{
     $OPT{predictor}      = 'est2genome';
     $OPT{est}            = $transcripts;
     $OPT{est_forward}    = 1;
+    $OPT{max_dna_len}    = 300000;
+    $OPT{split_hit}      = 40000;
     $OPT{single_exon}    = 1;
     $OPT{single_length}  = 1;
     $OPT{pcov_blastn}    = .90;
-    $OPT{pid_blastn}     = .95;
-    #$OPT{en_score_limit} = 95;
+    $OPT{pid_blastn}     = .90;
+    $OPT{pcov_blastx}    = .90;
+    $OPT{pid_blastx}     = .90;
+    $OPT{en_score_limit} = 50;
+    $OPT{ep_score_limit} = 50;
     $OPT{R}              = 1;
 
     #--Control file processing

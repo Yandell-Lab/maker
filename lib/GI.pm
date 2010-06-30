@@ -2789,6 +2789,7 @@ sub load_control_files {
 
    #--load command line options
    my @OK = qw(genome
+	       protein
 	       genome_gff
 	       model_gff
 	       force
