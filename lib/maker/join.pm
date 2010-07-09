@@ -386,6 +386,11 @@ sub join_f {
 	    $new_f->add_hsp($hsp);
 	}
 
+	#finish copying over posible object specific hash keys (only copies scalars)
+	while(my $key = each %$g){
+	    $new_f->{$key} = $g->{$key} if(!exists $new_f->{$key} && ref($g->{$key}) eq '');
+	}
+
 	return $new_f;
 }
 #------------------------------------------------------------------------

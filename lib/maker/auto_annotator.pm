@@ -1256,7 +1256,7 @@ sub run_it {
 	    next if(! defined $model);
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
-	    my $remove = 1;
+	    my $remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
 		#make sure the spliced EST evidence actually overlaps
 		if($remove && defined $mia){
@@ -1706,12 +1706,16 @@ sub group_transcripts {
 
    #cluster the transcripts to get genes
    my $careful_clusters = [];
-   if ($predictor eq 'model_gff' ) {
+   if ($predictor =~ /^model_gff$|^abinit$/) {
       my %index;
       my $i = 0;
       foreach my $t (@transcripts) {
 	 my $j;
-	 if (exists $index{$t->{gene_id}}) {
+	 if(! exists $t->{gene_id}){
+	     $j = $i;
+	     $i++;
+	 }
+	 elsif (exists $index{$t->{gene_id}}) {
 	    $j = $index{$t->{gene_id}};
 	 }
 	 else {
@@ -1722,27 +1726,23 @@ sub group_transcripts {
 	 push(@{$careful_clusters->[$j]}, $t);
       }
    }
-   elsif ($predictor eq 'abinit' ) {
-      foreach my $t (@transcripts) {
-	  push(@{$careful_clusters}, [$t]);
-      }
-   }
    else {
       $careful_clusters = cluster::careful_cluster_phat_hits(\@transcripts, $seq);
-   }
 
-   #remove redundant transcripts in gene
-   my @keepers;
-   foreach my $c (@{$careful_clusters}) {
-      my $best_alt_forms =
-      clean::remove_redundant_alt_splices($c, $seq, 10);
-      push(@keepers, $best_alt_forms);
+      #remove redundant transcripts in gene
+      my @keepers;
+      foreach my $c (@{$careful_clusters}) {
+	  my $best_alt_forms =
+	      clean::remove_redundant_alt_splices($c, $seq, 10);
+	  push(@keepers, $best_alt_forms);
+      }
+      $careful_clusters = \@keepers;
    }
 
    #process clusters into genes
    my $c_id = 0;
    my @annotations;
-   foreach my $c (@keepers) {
+   foreach my $c (@$careful_clusters) {
       my @t_structs;
 
       #build gene name here
@@ -1764,7 +1764,14 @@ sub group_transcripts {
       }
       elsif ($predictor eq 'abinit') {
 	  #now check for preexisting name
-	  if ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
+	  if ($c->[0]->{gene_name}){
+	      $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
+	      $SEEN->{$g_name}++;
+	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
+	  }
+	  elsif ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
 	      $SEEN->{$g_name}++;
@@ -2002,6 +2009,7 @@ sub map_forward {
 		$fg = $g_index[$cl]; #get annotation for that gene
 	    }
 	    $t->{is_changed} = ($AEDs[$id] == 0) ? 0 : 1; #not a true change if identical
+	    $t->{is_changed} = 1 if(defined $t->{-attrib}); #changed if new transcript has own attributes (pred_gff?)
 	    $g->{is_changed} = 1 if($t->{is_changed}); #gene changed only if trans changed
 	    $t->{t_name} = $f->{_tran_name}; #set transcript name
 

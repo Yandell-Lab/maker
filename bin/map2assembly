@@ -154,14 +154,15 @@ try{
     $OPT{est_forward}    = 1;
     $OPT{max_dna_len}    = 300000;
     $OPT{split_hit}      = 40000;
+    $OPT{pred_flank}     = 1000;
     $OPT{single_exon}    = 1;
     $OPT{single_length}  = 1;
     $OPT{pcov_blastn}    = .90;
     $OPT{pid_blastn}     = .90;
-    $OPT{pcov_blastx}    = .90;
-    $OPT{pid_blastx}     = .90;
+    $OPT{pcov_blastx}    = .30;
+    $OPT{pid_blastx}     = .80;
     $OPT{en_score_limit} = 50;
-    $OPT{ep_score_limit} = 50;
+    $OPT{ep_score_limit} = 10;
     $OPT{R}              = 1;
 
     #--Control file processing

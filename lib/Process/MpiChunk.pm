@@ -1346,6 +1346,7 @@ sub _go {
 							 $CTL_OPT{pid_blastx},
 							 $CTL_OPT{ep_score_limit},
 							 $CTL_OPT{ep_matrix},
+							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
 							 $LOG
 							);
@@ -1405,8 +1406,10 @@ sub _go {
 							 $CTL_OPT{exonerate},
 							 $CTL_OPT{pcov_blastn},
 							 $CTL_OPT{pid_blastn},
-							  $CTL_OPT{en_score_limit},
+							 $CTL_OPT{en_score_limit},
 							 $CTL_OPT{en_matrix},
+							 $CTL_OPT{pred_flank},
+							 $CTL_OPT{est_forward},
 							 $LOG
 							 );
 	    }

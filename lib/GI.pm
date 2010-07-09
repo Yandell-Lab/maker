@@ -1024,6 +1024,7 @@ sub polish_exonerate {
     my $pid         = shift;
     my $score_limit = shift;
     my $matrix      = shift;
+    my $pred_flank  = shift;
     my $est_forward = shift;
     my $LOG         = shift;
     
@@ -1041,7 +1042,7 @@ sub polish_exonerate {
 	my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
 	
 	my @coors = [$nB, $nE];
-	my $p = Shadower::getPieces($seq, \@coors, 50);
+	my $p = Shadower::getPieces($seq, \@coors, $pred_flank);
 	my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
 	my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
 	my $name =  Fasta::def2SeqID($p_def);
@@ -1094,17 +1095,22 @@ sub polish_exonerate {
 	    next if(! defined $exonerate_hit);
 
 	    #fix flipped hits when mapping ESTs to gene models as is
-	    if($est_forward && $exonerate_hit->num_hsps == 1 && $exonerate_hit->{_was_flipped}){
+	    if($type eq 'e' && $est_forward && $exonerate_hit->num_hsps == 1 && $exonerate_hit->{_was_flipped}){
 		$exonerate_hit = PhatHit_utils::copy($exonerate_hit, 'both');
 		$exonerate_hit->{_was_flipped} = 0;
 	    }
 
-	    if (exonerate_okay($exonerate_hit)) {
+	    #make sure hit overlaps blastn input (for large pred_flanks)
+	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($exonerate_hit,'query');
+	    ($nB, $nE) = ($nE, $nB) if($nB > $nE);
+	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
+
+	    if (exonerate_okay($exonerate_hit) && compare::compare($nB, $nE, $eB, $eE)) {
 		#tag the source blastn hit to let you know the counterpart
 		#exonerate hit was flipped to the other strand
 		$hit->{_exonerate_flipped} = 1 if($exonerate_hit->{_was_flipped});
 		$hit->type("exonerate:$type"); #set hit type (exonerate only)
-		
+
 		push(@exonerate_data, $exonerate_hit);	       
 	    }
 	}
@@ -2788,29 +2794,8 @@ sub load_control_files {
    }
 
    #--load command line options
-   my @OK = qw(genome
-	       protein
-	       genome_gff
-	       model_gff
-	       force
-	       predictor
-	       retry
-	       cpus
-	       clean_try
-	       again
-	       est
-	       est_forward
-	       single_exon
-	       single_length
-	       pcov_blastn
-	       pid_blastn
-	       en_score_limit
-	       out_name
-	       datastore
-	       );
-
-   foreach my $key (@OK){
-       $CTL_OPT{$key} = $OPT{$key} if (defined $OPT{$key});
+   while (my $key = each %OPT){
+       $CTL_OPT{$key} = $OPT{$key} if(defined $OPT{$key});
    }
 
    #check organism type values

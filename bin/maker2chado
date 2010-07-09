@@ -107,6 +107,8 @@ my $match;
 my $exclude;
 my $reindex;
 my $dropindex;
+my $addpermission;
+my @permissiontype;
 
 GetOptions("host|h=s" => \$host,
 	   "port|p=i" => \$port,
@@ -123,6 +125,8 @@ GetOptions("host|h=s" => \$host,
 	   "exclude=s" => \$exclude,
 	   "reindex" => \$reindex,
 	   "dropindex" => \$dropindex,
+	   "addpermission=s" => \$addpermission,
+	   "permissiontype=s" => \@permissiontype,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
@@ -186,6 +190,48 @@ $dsn .= "\;port=$port" if($port);
 
 
 $DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+
+#add permissions for indicated user
+if($addpermission){
+    die "ERROR: You must specify the permission type when adding permissions for a user\n".
+	"valid entries are SELECT, INSERT, UPDATE, DELETE, RULE, and ALL\n"
+	if(! @permissiontype);
+
+    foreach my $type (@permissiontype){
+	die "ERROR: You specified an invalid permission type: $type\n".
+	    "valid entries are SELECT, INSERT, UPDATE, DELETE, RULE, and ALL\n"
+	    if(! $type || $type !~ /^select$|^insert$|^update$|^delete$|^rule$|^all$/i);
+    }
+
+    #my $sth = $DBH->table_info('', 'public', undef, undef);
+    #for my $rel (@{$sth->fetchall_arrayref({})}) {
+    #    my $name = $rel->{TABLE_NAME};
+    #    my $privleges = join(',', @permissiontype);
+    #    my $user = $addpermission;
+    #    $DBH->do(qq{GRANT $privleges ON $name TO $user});
+    #}
+
+    my $tables = $DBH->selectall_arrayref(qq{SELECT n.nspname AS schemaname, c.relname AS name, pg_get_userbyid(c.relowner) }.
+					  qq{AS viewowner, c.relkind AS kind FROM (pg_class c LEFT JOIN pg_namespace n }.
+					  qq{ON ((n.oid = c.relnamespace))) WHERE ((c.relkind = 'r'::"char" OR c.relkind = }.
+					  qq{'S'::"char" OR c.relkind = 'v'::"char") AND n.nspname = 'public')},
+					  {Slice => {}});
+
+    foreach my $table (@$tables){
+	my $name = $table->{name};
+	my $kind = $table->{kind};
+	my $user = $addpermission;
+
+	my @perm = @permissiontype;
+	@perm = grep {/select|update|usage|all/i} @perm if($kind eq 'S');
+	my $privleges = join(',', @perm);
+
+	$DBH->do(qq{GRANT $privleges ON $name TO $user}) if($privleges);
+    }
+
+    $DBH->commit;
+}
+
 my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
 my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
 
