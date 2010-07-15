@@ -42,11 +42,13 @@ Options:
 
   --grep_header <pattern>
       Grep through a multi fasta file and print out only the fasta
-      sequences that have a match in the header.
+      sequences that have a match in the header. Use grepv_header for
+      negation.
 
   --grep_seq <pattern>
       Grep throught a multi fasta file and print out only the fasta
-      sequences that have a match in the sequence.
+      sequences that have a match in the sequence. Use grepv_seq for
+      negation.
 
   --wrap <integer>
       Wrap the sequence output to a given number of columns.
@@ -110,8 +112,8 @@ Options:
       to set a specific length target.
 ";
 
-my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header,
-    $grep_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
+my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header, $grepv_header,
+    $grep_seq, $grepv_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
     $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $length,
     $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file,
     $mRNAseq, $EST);
@@ -123,6 +125,8 @@ GetOptions('summary'        => \$summary,
 	   'eval_all=s'     => \$eval_all,
 	   'grep_header=s'  => \$grep_header,
 	   'grep_seq=s'     => \$grep_seq,
+	   'grepv_header=s' => \$grepv_header,
+	   'grepv_seq=s'    => \$grepv_seq,
 	   'wrap=i'         => \$wrap,
 	   'count'          => \$count,
 	   'translate=i'    => \$translate,
@@ -172,6 +176,8 @@ $print++ unless grep {$_} ($chunks,
 			   $eval_all,
 			   $grep_header,
 			   $grep_seq,
+			   $grepv_header,
+			   $grepv_seq,
 			   $count,
 			   $translate,
 			   $seq_only,
@@ -211,6 +217,8 @@ eval_code($eval_code)       if $eval_code;
 eval_all($eval_all)         if $eval_all;
 grep_header($grep_header)   if $grep_header;
 grep_seq($grep_seq)         if $grep_seq;
+grepv_header($grepv_header) if $grepv_header;
+grepv_seq($grepv_seq)       if $grepv_seq;
 translate()                 if $translate;
 seq_only()                  if $seq_only;
 nt_count()	            if $nt_count;
@@ -339,6 +347,20 @@ sub grep_header {
 	}
 }
 #-----------------------------------------------------------------------------
+sub grepv_header {
+	my ($pattern) = @_;
+
+	while (my $seq_obj = $seq_io->next_seq) {
+		my $header = get_header($seq_obj);
+		$header .= " " . $seq_obj->description;
+		my $seq = $seq_obj->seq;
+
+		if ($header !~ /$pattern/) {
+			print_this_seq($header, $seq);
+		}
+	}
+}
+#-----------------------------------------------------------------------------
 {my $i = 0;
 sub mRNAseq {
     my $size = 50;
@@ -422,6 +444,20 @@ sub grep_seq {
 		$seq =~ s/\s//g;
 
 		if ($seq =~ /$pattern/) {
+			print_this_seq($header, $seq);
+		}
+	}
+}
+#-----------------------------------------------------------------------------
+sub grepv_seq {
+	my ($pattern) = @_;
+
+	while (my $seq_obj = $seq_io->next_seq) {
+		my $header = get_header($seq_obj);
+		my $seq = $seq_obj->seq;
+		$seq =~ s/\s//g;
+
+		if ($seq !~ /$pattern/) {
 			print_this_seq($header, $seq);
 		}
 	}

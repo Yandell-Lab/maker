@@ -7,6 +7,8 @@ use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use Widget;
 use IPC::Open3;
+use File::Path;
+use Cwd;
 
 @ISA = qw(
 	Widget
@@ -43,7 +45,19 @@ sub run {
 	   waitpid $pid, 0;
 	   
 	   my $fail;
-	   if($err !~ /^SUBMITTED iprscan-\d+-\d+\n*$/){
+	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
+	       my $dir = "$1/iprscan-$1-$2";
+	       my ($exe) = $command =~ /^(.*\/iprscan)/;
+	       $exe = Cwd::abs_path($exe);
+	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
+	       if(-d "$base/tmp/$dir"){
+		   File::Path::rmtree("$base/tmp/$dir");
+	       }
+	       elsif(-d "/tmp/$dir"){
+		   File::Path::rmtree("/tmp/$dir");
+	       }
+	   }
+	   else{
 	       $fail = 1;
 	   }
 
