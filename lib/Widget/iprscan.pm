@@ -47,7 +47,7 @@ sub run {
 	   my $fail;
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
 	       my $dir = "$1/iprscan-$1-$2";
-	       my ($exe) = $command =~ /^(.*\/iprscan)/;
+	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;
 	       $exe = Cwd::abs_path($exe);
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
 	       if(-d "$base/tmp/$dir"){
