@@ -51,7 +51,7 @@ sub run {
 	       $exe = Cwd::abs_path($exe);
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
 	       if(-d "$base/tmp/$dir"){
-		   eval{{File::Path::rmtree("$base/tmp/$dir");} #ignore failure
+		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignore failure
 	       }
 	       elsif(-d "/tmp/$dir"){
 		   eval{File::Path::rmtree("/tmp/$dir");} #ignore failure
