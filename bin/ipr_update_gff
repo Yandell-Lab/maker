@@ -141,7 +141,7 @@ sub parse_ipr_scan {
 		    $start, $end, $e_val, $status, $date, $ipr_id,
 		    $ipr_desc, $go_text) = split /\t/, $_;
 
-		next if grep {$method eq $_} qw(Seg Coil SignalPHMM);
+		next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM);
 
 		$method = $db_map{$method} || $method;
 
