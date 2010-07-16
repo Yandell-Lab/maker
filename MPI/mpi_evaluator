@@ -10,12 +10,14 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG $CMD_ARGS);
+use vars qw($RANK $LOG $CMD_ARGS $VERSION);
 use Storable qw(freeze thaw);
 use threads;
 use threads::shared;
 
 BEGIN{
+   $VERSION = '2.09';
+
    $main::eva = 1; #signals that this is evaluator
 
    if (not ($ENV{CGL_SO_SOURCE})) {

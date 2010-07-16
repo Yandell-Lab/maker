@@ -10,9 +10,11 @@ use warnings;
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG $CMD_ARGS);
+use vars qw($RANK $LOG $CMD_ARGS $VERSION);
 
 BEGIN{
+   $VERSION = '2.09';
+
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
    }
@@ -21,7 +23,7 @@ BEGIN{
    }
    
    $CMD_ARGS = join(' ', @ARGV);
-   
+
    #what to do on ^C
    $SIG{'INT'} = sub {
       print STDERR "\n\nMaker aborted by user!!\n\n" unless($main::qq);
