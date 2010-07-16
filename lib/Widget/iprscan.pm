@@ -44,17 +44,17 @@ sub run {
 	   }
 	   waitpid $pid, 0;
 	   
-	   my $fail;
+	   my $fail = ($?) 1 ? 0;
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
 	       my $dir = "$1/iprscan-$1-$2";
 	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;
 	       $exe = Cwd::abs_path($exe);
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
 	       if(-d "$base/tmp/$dir"){
-		   File::Path::rmtree("$base/tmp/$dir");
+		   eval{{File::Path::rmtree("$base/tmp/$dir");} #ignore failure
 	       }
 	       elsif(-d "/tmp/$dir"){
-		   File::Path::rmtree("/tmp/$dir");
+		   eval{File::Path::rmtree("/tmp/$dir");} #ignore failure
 	       }
 	   }
 	   else{
@@ -62,7 +62,7 @@ sub run {
 	   }
 
 	   #stop if everything is ok
-	   return if ($? == 0 && ! $fail);
+	   return if (! $fail);
 
 	   #always try twice because iprscan is unstable
 	   $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
