@@ -13,7 +13,7 @@ use vars qw($RANK $LOG $EXE $TMP $LOCK $VERSION);
 use Storable qw(freeze thaw);
 
 BEGIN{
-    $VERSION = '2.09';
+    $VERSION = '2.10';
 
     #find iprscan
     $EXE = `which iprscan 2> /dev/null`;
