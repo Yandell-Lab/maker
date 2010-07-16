@@ -44,7 +44,7 @@ sub run {
 	   }
 	   waitpid $pid, 0;
 	   
-	   my $fail = ($?) 1 ? 0;
+	   my $fail = ($?) ? 1 : 0;
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
 	       my $dir = "$1/iprscan-$1-$2";
 	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;

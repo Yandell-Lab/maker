@@ -58,7 +58,7 @@ sub _initialize {
    $self->{CWD} = $self->{CTL_OPTIONS}->{CWD} || Cwd::cwd();
 
    #lock must be persitent in object or it is detroyed outside of block
-   unless($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
+   unless($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 90)){
        $self->{continue_flag} = -3;
        return 0;
    }
