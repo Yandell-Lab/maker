@@ -118,6 +118,7 @@ try{
 	       "chpc"      => \$CTL_OPT{chpc}, #hidden option for local dbs
 	       "TMP"      => \$TMP,   #hidden option o specify TMP
 	       "cli"       => \$CTL_OPT{cli}, #just used to strip off the option
+	       "version" => sub{print "$VERSION\n"; exit(0)},
 	       );
     
     $main::quiet = 1 unless($CTL_OPT{verbose}); #suppress status messages

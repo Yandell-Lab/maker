@@ -195,6 +195,7 @@ try{
 	       "dtmp" =>\$main::dtmp,
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
+	       "version" => sub{print "$VERSION\n"; exit(0)},
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
 

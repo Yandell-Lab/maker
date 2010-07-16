@@ -16,7 +16,7 @@ use threads;
 use threads::shared;
 
 BEGIN{
-    $VERSION = '2.10';
+   $VERSION = '2.10';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
@@ -282,6 +282,7 @@ try{
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "no_thread" =>\$main::no_thread, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
+	       "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
 
