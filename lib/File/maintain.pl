@@ -11,10 +11,6 @@ use Proc::Signal;
 use URI::Escape;
 
 BEGIN {
-#    foreach my $sig (keys %SIG){
-#	$SIG{$sig} = sub{$LOCK->unlock if($LOCK); exit(0)};
-#    }
-
     $SIG{QUIT} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{KILL} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{TERM} = sub{$LOCK->unlock if($LOCK); exit(0)};
@@ -41,10 +37,12 @@ die "ERROR: Could not retrieve lock" if(! $LOCK);
 while(-f $LOCK->{lock_file}){
     $LOCK->refresh;
     sleep $time;
-    my $stat = Proc::Signal::id_matches_pattern($pid, 'maker');
-    last if(! $stat);
 }
 
 $LOCK->unlock;
 
 exit(0);
+
+DESTROY {
+    $LOCK->unlock if($LOCK);
+}
