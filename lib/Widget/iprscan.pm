@@ -51,9 +51,12 @@ sub run {
 	       waitpid $pid, 0;
 	       $fail = 1 if($?);
 	       alarm 0;
-	   }
+	   };
 
-	   $fail = 1 if($@);
+	   if($@){
+	       warn $@;
+	       $fail = 1
+	   }
 
 	   #check for correct STDERR and cleanup tmpdir
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
@@ -63,10 +66,10 @@ sub run {
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
 	       my $tmpdir = File::Spec->tmpdir();
 	       if(-d "$base/tmp/$dir"){
-		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignores failure
+		   eval{File::Path::rmtree("$base/tmp/$dir");}; #ignores failure
 	       }
 	       elsif(-d "$tmpdir/$dir"){
-		   eval{File::Path::rmtree("$tmpdir/$dir");} #ignores failure
+		   eval{File::Path::rmtree("$tmpdir/$dir");}; #ignores failure
 	       }
 	   }
 	   else{
@@ -92,6 +95,11 @@ sub run {
 	       waitpid $pid, 0;
 	       $fail = 1 if($?);
 	       alarm 0;
+	   };
+
+	   if($@){
+	       warn $@;
+	       $fail = 1
 	   }
 
 	   $fail = 1 if($@);
@@ -104,10 +112,10 @@ sub run {
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
 	       my $tmpdir = File::Spec->tmpdir();
 	       if(-d "$base/tmp/$dir"){
-		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignores failure
+		   eval{File::Path::rmtree("$base/tmp/$dir");}; #ignores failure
 	       }
 	       elsif(-d "$tmpdir/$dir"){
-		   eval{File::Path::rmtree("$tmpdir/$dir");} #ignores failure
+		   eval{File::Path::rmtree("$tmpdir/$dir");}; #ignores failure
 	       }
 	   }
 	   else{
