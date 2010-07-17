@@ -7,6 +7,7 @@ use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use Widget;
 use IPC::Open3;
+use POSIX ":sys_wait_h";
 use File::Path;
 use Cwd;
 
@@ -48,8 +49,6 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
 	       }
-	       waitpid $pid, 0;
-	       $fail = 1 if($?);
 	       alarm 0;
 	   };
 
@@ -57,6 +56,22 @@ sub run {
 	       warn $@;
 	       $fail = 1
 	   }
+
+	   #reap process
+	   my $stat = waitpid $pid, WNOHANG;
+	   $fail = 1 if($?);
+
+	   #reap failed so kill
+	   if(! $stat){
+	       kill 9, $pid;
+	       waitpid $pid, 0;
+	       $fail = 1 if($?);
+	   }
+
+	   #close handles
+	   close(CHLD_IN);
+	   close(CHLD_OUT);
+	   close(CHLD_ERR);
 
 	   #check for correct STDERR and cleanup tmpdir
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
@@ -92,8 +107,6 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
 	       }
-	       waitpid $pid, 0;
-	       $fail = 1 if($?);
 	       alarm 0;
 	   };
 
@@ -102,7 +115,21 @@ sub run {
 	       $fail = 1
 	   }
 
-	   $fail = 1 if($@);
+	   #reap process
+	   $stat = waitpid $pid, WNOHANG;
+	   $fail = 1 if($?);
+
+	   #reap failed so kill
+	   if(! $stat){
+	       kill 9, $pid;
+	       waitpid $pid, 0;
+	       $fail = 1 if($?);
+	   }
+
+	   #close handles
+	   close(CHLD_IN);
+	   close(CHLD_OUT);
+	   close(CHLD_ERR);
 
 	   #check for correct STDERR and cleanup tmpdir
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
