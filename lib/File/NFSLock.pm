@@ -238,7 +238,7 @@ sub new {
 	### Assumes locks will be released in the reverse
 	###  order from how they were established.
 	if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
-	    return $self;
+	    return ($self->is_mine) ? $self : undef;
 	}
     }
 
@@ -267,7 +267,7 @@ sub new {
   ### Yes, the lock has been aquired.
   delete $self->{unlocked};
 
-  return $self;
+  return ($self->is_mine) ? $self : undef;
 }
 
 sub DESTROY {
@@ -584,6 +584,40 @@ sub refresh {
   print    _FH $content;
   truncate _FH, length($content);
   close    _FH;
+}
+
+sub is_mine {
+    my $self = shift;
+    my $lock_file = $self->{lock_file};
+    my $lock_line = $self->{lock_line};
+    my $pid = $self->{lock_pid};
+    my $id = $self->{id};
+
+    return 1 unless ($self->{lock_type} & LOCK_EX);
+
+    ### lock the parsing process
+    local $LOCK_EXTENSION = '.shared';
+    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    
+    ### get the handle on the lock file
+    local *_FH;
+    if( ! open (_FH,"< $lock_file") ){
+	if( ! -e $lock_file ){
+	    return 0;
+	}else{
+	    die "Could not open for reading the lock file $lock_file ($!)";
+	}
+    }
+
+    ### read existing file
+    my $mine = 0;
+    while(defined(my $line=<_FH>)){
+	$mine = 1 if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
+    }
+
+    $lock->unlock;
+
+    return $mine;
 }
 
 sub owners {

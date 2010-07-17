@@ -433,6 +433,7 @@ if ($rank == $root) {
 	    }
 	    else{
 		$t_need_flag = 2; #take tier or chunk
+		$active[$root] = 0;
 	    }
 	}
 	
@@ -473,6 +474,8 @@ if ($rank == $root) {
 		    if ($result->{-failed}){
 			push(@failed, $result->{-fasta});
 		    }
+
+		    $active[$who] = 0;
 		}
 		
 		#if a contig is available send tier

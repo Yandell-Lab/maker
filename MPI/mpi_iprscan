@@ -447,6 +447,7 @@ if ($rank == $root){
 	    }
 	    else{
 		$t_need_flag = 2; #take tier or chunk
+		$active[$root] = 0;
 	    }
 	}
 	
@@ -487,6 +488,8 @@ if ($rank == $root){
 		    if ($result->{-failed}){
 			push(@failed, $result->{-fasta});
 		    }
+
+		    $active[$who] = 0;
 		}
 		
 		#if a contig is available send tier
@@ -645,19 +648,17 @@ if ($rank == $root){
 	
 	#see if all contigs are finished
 	$go_mpi_status = 0;
-	foreach my $n (@active ){
+	foreach my $n (@active){
 	    if(@helper_stack < $size - 1){
 		$go_mpi_status = 1;
 		last;
 	    }
-	    if((defined($n) && $n == 1)){
+	    if((defined($n) && $n)){
 		$go_mpi_status = 1;
 		last;
 	    }
 	}
-	if($iterator->finished){
-	    print STDERR @active."\n";
-	}
+
 	if(! $iterator->finished || @failed > 0){
 	    $go_mpi_status = 1;
 	}
