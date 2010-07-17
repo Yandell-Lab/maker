@@ -655,6 +655,9 @@ if ($rank == $root){
 		last;
 	    }
 	}
+	if($iterator->finished){
+	    print STDERR @active."\n";
+	}
 	if(! $iterator->finished || @failed > 0){
 	    $go_mpi_status = 1;
 	}
