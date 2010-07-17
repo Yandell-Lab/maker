@@ -38,6 +38,8 @@ sub run {
 	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 	   local $/ = \1;
 	   my $err;
+	   my $fail;
+
 	   #run with alarm to correct for program hanging
 	   eval{
 	       local $SIG{ALRM} = sub { die "ERROR: Iprscan instance appears to be frozen\n" };
@@ -47,20 +49,24 @@ sub run {
 		   $err .= $line;
 	       }
 	       waitpid $pid, 0;
+	       $fail = 1 if($?);
 	       alarm 0;
 	   }
 
-	   my $fail = ($? || $@) ? 1 : 0;
+	   $fail = 1 if($@);
+
+	   #check for correct STDERR and cleanup tmpdir
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
 	       my $dir = "$1/iprscan-$1-$2";
 	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;
 	       $exe = Cwd::abs_path($exe);
 	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
+	       my $tmpdir = File::Spec->tmpdir();
 	       if(-d "$base/tmp/$dir"){
-		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignore failure
+		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignores failure
 	       }
-	       elsif(-d "/tmp/$dir"){
-		   eval{File::Path::rmtree("/tmp/$dir");} #ignore failure
+	       elsif(-d "$tmpdir/$dir"){
+		   eval{File::Path::rmtree("$tmpdir/$dir");} #ignores failure
 	       }
 	   }
 	   else{
@@ -72,20 +78,43 @@ sub run {
 
 	   #always try twice because iprscan is unstable
 	   $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
-	   local $/ = \1;
-	   $err = '';
-	   while (my $line = <CHLD_ERR>){
-	       print STDERR $line unless($main::quiet);
-	       $err .= $line;
+	   undef $err;
+	   undef $fail;
+
+	   #run with alarm to correct for program hanging
+	   eval{
+	       local $SIG{ALRM} = sub { die "ERROR: Iprscan instance appears to be frozen\n" };
+	       alarm 600;
+	       while (my $line = <CHLD_ERR>){
+		   print STDERR $line unless($main::quiet);
+		   $err .= $line;
+	       }
+	       waitpid $pid, 0;
+	       $fail = 1 if($?);
+	       alarm 0;
 	   }
-	   waitpid $pid, 0;
-	   
-	   $fail = 0;
-	   if($err !~ /^SUBMITTED iprscan-\d+-\d+\n*$/){
+
+	   $fail = 1 if($@);
+
+	   #check for correct STDERR and cleanup tmpdir
+	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
+	       my $dir = "$1/iprscan-$1-$2";
+	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;
+	       $exe = Cwd::abs_path($exe);
+	       my ($base) = $exe =~ /^(.*\/)bin\/iprscan/;
+	       my $tmpdir = File::Spec->tmpdir();
+	       if(-d "$base/tmp/$dir"){
+		   eval{File::Path::rmtree("$base/tmp/$dir");} #ignores failure
+	       }
+	       elsif(-d "$tmpdir/$dir"){
+		   eval{File::Path::rmtree("$tmpdir/$dir");} #ignores failure
+	       }
+	   }
+	   else{
 	       $fail = 1;
 	   }
 
-	   die "ERROR: Iprscan failed\n" if ($? != 0 || $fail);
+	   die "ERROR: Iprscan failed\n" if ($fail);
 	}
 	else {
 	   die "you must give Widget::iprscan a command to run!\n";
