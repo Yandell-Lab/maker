@@ -38,13 +38,19 @@ sub run {
 	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 	   local $/ = \1;
 	   my $err;
-	   while (my $line = <CHLD_ERR>){
-	      print STDERR $line unless($main::quiet);
-	      $err .= $line;
+	   #run with alarm to correct for program hanging
+	   eval{
+	       local $SIG{ALRM} = sub { die "ERROR: Iprscan instance appears to be frozen\n" };
+	       alarm 600;
+	       while (my $line = <CHLD_ERR>){
+		   print STDERR $line unless($main::quiet);
+		   $err .= $line;
+	       }
+	       waitpid $pid, 0;
+	       alarm 0;
 	   }
-	   waitpid $pid, 0;
-	   
-	   my $fail = ($?) ? 1 : 0;
+
+	   my $fail = ($? || $@) ? 1 : 0;
 	   if($err =~ /^SUBMITTED iprscan-(\d+)-(\d+)\n*$/){
 	       my $dir = "$1/iprscan-$1-$2";
 	       my ($exe) = $command =~ /^(.*iprscan) -cli .* -appl /;
