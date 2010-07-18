@@ -132,6 +132,7 @@ sub new {
   bless $self, $class;
 
   ### choose a random filename
+  unlink($self->{rand_file}) if($self->{rand_file});
   $self->{rand_file} = rand_file( $self->{file} );
 
   ### choose the lock filename
@@ -146,7 +147,7 @@ sub new {
     if( -e $self->{lock_file} &&
 	$self->{stale_lock_timeout} > 0 &&
 	time() - (stat _)[9] > $self->{stale_lock_timeout} ){
-	unlink $self->{lock_file};
+	unlink ($self->{lock_file});
     }
 
     ### open the temporary file
@@ -154,9 +155,9 @@ sub new {
       or return undef;
 
     if ( $self->{lock_type} & LOCK_EX ) {
-      last if $self->do_lock;
+      last if ($self->do_lock && $self->is_mine);
     } elsif ( $self->{lock_type} & LOCK_SH ) {
-      last if $self->do_lock_shared;
+      last if ($self->do_lock_shared && $self->is_mine);
     } else {
       $errstr = "Unknown lock_type [$self->{lock_type}]";
       return undef;
@@ -223,7 +224,7 @@ sub new {
 		close    _FH;
 	    }else{
 		close _FH;
-		unlink $self->{lock_file};
+		unlink ($self->{lock_file});
 	    }
 	    
 	    ### No "dead" or stale locks found.
@@ -237,8 +238,8 @@ sub new {
 	### Just kick out successfully without really locking.
 	### Assumes locks will be released in the reverse
 	###  order from how they were established.
-	if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
-	    return ($self->is_mine) ? $self : undef;
+	if ($try_lock_exclusive eq $has_lock_exclusive && @mine && $self->is_mine){
+	    return $self;
 	}
     }
 
@@ -267,7 +268,7 @@ sub new {
   ### Yes, the lock has been aquired.
   delete $self->{unlocked};
 
-  return ($self->is_mine) ? $self : undef;
+  return $self;
 }
 
 sub DESTROY {
@@ -276,6 +277,9 @@ sub DESTROY {
 
 sub unlock ($) {
   my $self = shift;
+
+  #remove any temporary files
+  unink($self->{rand_file}) if($self->{rand_file});
 
   #remove maintainer if running
   if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
@@ -303,7 +307,6 @@ sub unlock ($) {
   }
 
   if (!$self->{unlocked}) {
-    unlink( $self->{rand_file} ) if -e $self->{rand_file};
     if( $self->{lock_type} & LOCK_SH ){
       return $self->do_unlock_shared;
     }else{
@@ -369,7 +372,7 @@ sub do_lock {
   ### two files are pointing to $rand_file
   my $success = link( $rand_file, $lock_file )
     && -e $rand_file && (stat _)[3] == 2;
-  unlink $rand_file;
+  unlink ($rand_file);
 
   return $success;
 }
@@ -403,7 +406,7 @@ sub do_lock_shared {
   ### Try to create $lock_file from the special
   ### file with the magic $SHARE_BIT set.
   my $success = link( $rand_file, $lock_file);
-  unlink $rand_file;
+  unlink ($rand_file);
   if ( !$success &&
        -e $lock_file &&
        ((stat _)[2] & $SHARE_BIT) != $SHARE_BIT ){
@@ -421,7 +424,8 @@ sub do_lock_shared {
 }
 
 sub do_unlock ($) {
-  return unlink shift->{lock_file};
+  my $self = shift;
+  return unlink($self->{lock_file}) if($self->is_mine);
 }
 
 sub do_unlock_shared ($) {
@@ -467,7 +471,7 @@ sub do_unlock_shared ($) {
   ### only I exist
   }else{
     close _FH;
-    unlink $lock_file;
+    unlink($lock_file);
   }
 
 }
@@ -479,7 +483,7 @@ sub uncache ($;$) {
   my $rand_file = rand_file( $file );
 
   ### hard link to the actual file which will bring it up to date
-  return ( link( $file, $rand_file) && unlink($rand_file) );
+  return ( link( $file, $rand_file) & unlink($rand_file) );
 }
 
 sub maintain {
@@ -609,7 +613,7 @@ sub is_mine {
 
     ### read existing file
     my $mine = 0;
-    while(defined(my $line=<_FH>)){
+    while(defined(my $line = <_FH>)){
 	$mine = 1 if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
     }
 
@@ -670,7 +674,7 @@ sub newpid {
       if (rename("$self->{lock_file}.fork",$self->{rand_file})) {
         # Child finished its newpid call.
         # Wipe the signal file.
-        unlink $self->{rand_file};
+        unlink ($self->{rand_file});
         last;
       }
       # Brief pause before checking again
