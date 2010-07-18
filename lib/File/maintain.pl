@@ -44,7 +44,7 @@ while(-f $LOCK->{lock_file}){
     sleep $time;
 }
 
-$LOCK->unlock;
+$LOCK->unlock if($LOCK);
 
 exit(0);
 

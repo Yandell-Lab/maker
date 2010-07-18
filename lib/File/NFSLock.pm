@@ -593,11 +593,9 @@ sub is_mine {
     my $pid = $self->{lock_pid};
     my $id = $self->{id};
 
-    return 1 unless ($self->{lock_type} & LOCK_EX);
-
     ### lock the parsing process
-    local $LOCK_EXTENSION = '.shared';
-    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    #local $LOCK_EXTENSION = '.shared';
+    #my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
     
     ### get the handle on the lock file
     local *_FH;
@@ -615,7 +613,7 @@ sub is_mine {
 	$mine = 1 if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
     }
 
-    $lock->unlock;
+    #$lock->unlock;
 
     return $mine;
 }
