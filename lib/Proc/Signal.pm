@@ -65,8 +65,8 @@ sub killall {
 #checks to see if a process exists by id
 #essentially kill with a signal of 0
 sub exists_kill {
-    my $id = shift;
     my $signal = shift;
+    my $id = shift;
 
     return (0,0) if(! $id || $id == $$);
 

@@ -3191,9 +3191,6 @@ sub load_control_files {
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
 
-   #shared database for logging encounters of IDs or other values
-   $CTL_OPT{SEEN_file} = "$CTL_OPT{out_base}/seen.dbm";   
-   
    #--set up optional global TMP (If TMP is not accessible from other nodes
    #they will default back to /tmp)
    if($CTL_OPT{TMP}){
@@ -3210,9 +3207,11 @@ sub load_control_files {
    exit(0) if($OPT{check});
 
    #--set an initialization lock so steps are locked to a single process
+   #--take extra steps since lock is vulnerable to race conditions
    my $i_lock; #init lock, it is only a temporary blocking lock
-   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45)){
-       die "ERROR: Cannot get initialization lock.\n\n";
+   while(! $i_lock || ! $i_lock->still_mine){
+       die "ERROR: Cannot get initialization lock.\n\n"
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45);
    }
 
    #--check if another instance of maker is running, and lock the directory
@@ -3227,10 +3226,9 @@ sub load_control_files {
    #check who else is also sharing the lock and if running same settings
    my $app = ($main::eva) ? "eval" : "maker";
 
-   if($LOCK->owners() == 1){ #I am only holder of the lock
+   if($LOCK->owners() == 1){ #I am only/first holder of the lock
        #log the control files
        generate_control_files($CTL_OPT{out_base}, 'all', \%CTL_OPT, 1);
-       unlink($CTL_OPT{SEEN_file}) if (-f $CTL_OPT{SEEN_file});
    }
    else{
        #compare current control files to logged files
@@ -3274,7 +3272,7 @@ sub load_control_files {
 	   warn "WARNING: Multiple MAKER processes have been started in the\n".
 	        "same directory.\n\n";
 
-	   $CTL_OPT{_multi_chpc}++;
+	   $CTL_OPT{_multi_chpc}++; #multi process flag
        }
    }
 

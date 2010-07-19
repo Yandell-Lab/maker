@@ -95,7 +95,7 @@ sub new {
 
     if($self->_initialize(@args)){
        $self->_load_old_log();
-       $self->_clean_files();
+       $self->_compare_and_clean();
        $self->_write_new_log();
     }
 
@@ -109,26 +109,36 @@ sub _initialize {
    $self->{CTL_OPTIONS} = shift;
    $self->{params} = shift;
    $self->{file_name} = shift || "run.log";
+   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD};
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
-   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD};
-   my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
-   my $length = $self->{params}->{seq_length};
+   #make sure the log is only accesed by this process
+   if(my $lock = new File::NFSLock($self->{file_name}, 'NB', undef, 90)){
+       my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
+       my $length = $self->{params}->{seq_length};
+   
+       #log can be processed and compared
+       if($length >= $min_contig){
+	   $self->{continue_flag} = 1;
+	   $self->{LOCK} = $lock;
 
-   #lock must be persitent in object or it is detroyed outside of block
-   unless($self->{LOCK} = new File::NFSLock($self->{file_name}, 'NB', undef, 90)){
+	   return 1;
+       }
+       #skip if this is a short contig
+       else{
+	   $self->{continue_flag} = -2; # -2 is skip signal
+	   $lock->unlock;
+	       
+	   return 0;
+       }
+   }
+   #belongs to another process so skip
+   else{
        $self->{continue_flag} = -3;
+
        return 0;
    }
-
-   if($length < $min_contig){#skip if this is a short contig
-      $self->{continue_flag} = -2; #skipped signal is -2
-
-      return 0;
-   }
-   
-   return 1;
 }
 #-------------------------------------------------------------------------------
 sub _load_old_log {
@@ -156,73 +166,76 @@ sub _load_old_log {
    $self->{old_log} = \%logged_vals;
 }
 #-------------------------------------------------------------------------------
-sub _clean_files{
+sub _compare_and_clean {
     my $self = shift;
+
+    #make sure lock is till mine
+    if(! $self->{LOCK}->still_mine){
+	$self->{continue_flag} = -3;
+	return;
+    }
 
     my $CWD = $self->{CWD};
     my $the_void = $self->{params}->{the_void};
     my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
-    
+
     #get gff file name
     my $log_file = $self->{file_name};
     my $gff_file = $the_void;
     my $out_base = $the_void;
-    $gff_file =~ s/theVoid\.([^\/]+)$/$1.gff/;
     $out_base =~ s/theVoid\.[^\/]+$//;
-    
+    $gff_file =~ s/theVoid\.([^\/]+)$/$1.gff/;
+    my $name = $1;
+
     #===id files types that can not be re-used
-    my $continue_flag = 1; #signal whether to continue with this seq
+    my $continue_flag = $self->{continue_flag}; #signals whether to continue with this seq
     
     my %logged_vals = %{$self->{old_log}}; #values from existing log
     my %rm_key; #key to what type of old files to remove
     my @files; #list of files to remove
     my @dirs; #list of directories to remove
     
-    if (-e $log_file) {
+    if ($continue_flag > 0 && -e $log_file) {
 	die "ERROR: Database timed out in runlog::_clean_files\n\n"
 	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
 
+	#seen is set in ds_utility.pm
 	my %SEEN;
 	tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
 
 	if (exists $logged_vals{DIED}) {
-	    if($CTL_OPTIONS{force} && ! $SEEN{$log_file}){
+	    if($CTL_OPTIONS{force} && ! defined $SEEN{$name}){
 		$self->{die_count} = 0; #reset the die count
 		$continue_flag = 1; #re-run
 		$rm_key{force}++;
-		$SEEN{$log_file}++;
 	    }
-	    elsif($CTL_OPTIONS{always_try} && ! $SEEN{$log_file}){
+	    elsif($CTL_OPTIONS{always_try} && ! defined $SEEN{$name}){
 		$self->{die_count} = 0; #reset the die count
 		$continue_flag = 1; #re-run
-		$SEEN{$log_file}++;
 	    }
 	    else{
 		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
+		$continue_flag = -1 if($continue_flag == -1 &&);
 		$rm_key{retry}++ if ($continue_flag == 2);
-		$SEEN{$log_file}++;
 	    }
 	}
-	elsif ($CTL_OPTIONS{force} && ! $SEEN{$log_file}) {
+	elsif ($CTL_OPTIONS{force} && ! defined $SEEN{$name}) {
 	    $rm_key{force}++;
 	    $continue_flag = 1;	#run/re-run
-	    $SEEN{$log_file}++;
 	}
-	elsif ($CTL_OPTIONS{again} && ! $SEEN{$log_file}){
+	elsif ($CTL_OPTIONS{again} && ! defined $SEEN{$name}){
 	    $continue_flag = 1; #run/re-run
 	    $rm_key{gff}++;
-	    $SEEN{$log_file}++;
 	}
 	else {
 	    $continue_flag = 0 if (-e $gff_file); #don't re-run finished
-	    $SEEN{$log_file}++;
 	}
 
 	untie %SEEN;
 	$lock->unlock;
 	
-	if($continue_flag >= 0 || $continue_flag == -1){
+	if($continue_flag >= -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
@@ -292,7 +305,6 @@ sub _clean_files{
 		if($key eq 'softmask' && $log_val eq ''){
 		    $log_val = 1;
 		}
-
 
 		#AED_thrshold was always 1 before and not logged
 		if($key eq 'AED_threshold' && $log_val eq ''){
@@ -691,9 +703,9 @@ sub add_entry {
        $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
    }
 
-   open(LOG, ">> $log_file");
-   print LOG "$type\t$key\t$value\n";
-   close(LOG);
+   open(my $LOG, ">> $log_file");
+   print $LOG "$type\t$key\t$value\n";
+   close($LOG);
 }
 #-------------------------------------------------------------------------------
 sub get_die_count {

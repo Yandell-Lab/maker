@@ -3,6 +3,10 @@
 #------------------------------------------------------------------------
 package ds_utility;
 
+BEGIN {
+    @AnyDBM_File::ISA = qw(DB_File GDBM_File NDBM_File SDBM_File);
+}
+
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
@@ -11,6 +15,7 @@ use File::Path;
 use Cwd;
 use URI::Escape;
 use File::NFSLock;
+use AnyDBM_File;
 
 @ISA = qw(
        );
@@ -34,16 +39,17 @@ sub new {
 #------------------------------------------------------------------------
 sub _initialize {
    my $self = shift @_;
-   my %CTL_OPTIONS = %{shift @_};
+   my $CTL_OPT = shift @_;
 
-   $CWD = $CTL_OPTIONS{CWD} || $CWD;
+   $CWD = $CTL_OPT->{CWD} || $CWD;
 
-   my $out_base = $CTL_OPTIONS{out_base} || $CWD;
-   my $out_name = $CTL_OPTIONS{out_name} || "output";
-   my $ds_flag  = (exists($CTL_OPTIONS{datastore})) ? $CTL_OPTIONS{datastore} : 1;
+   my $out_base = $CTL_OPT->{out_base} || $CWD;
+   my $out_name = $CTL_OPT->{out_name} || "output";
+   my $ds_flag  = (exists($CTL_OPT->{datastore})) ? $CTL_OPT->{datastore} : 1;
 
    $self->{root} = "$out_base/$out_name\_datastore";
    $self->{log} = "$out_base/$out_name\_master_datastore_index.log";
+   $CTL_OPT->{SEEN_file} = $self->{SEEN_file} = "$out_base/seen.dbm";
    
    print STDERR "A data structure will be created for you at:\n".
    $self->{root}."\n\n".
@@ -62,9 +68,9 @@ sub _initialize {
    #initialize a new blank log,
    #except when using the hidden chpc option
    #then just append to the existing log
-   unless($CTL_OPTIONS{_multi_chpc}){
-       open(my $IN, ">", $self->{log});
-       close($IN);
+   if(! $CTL_OPT->{_multi_chpc}){
+       unlink($self->{log}) if(-f $self->{log});
+       unlink($self->{SEEN_file}) if(-f $self->{SEEN_file});
    }
 }
 #------------------------------------------------------------------------
@@ -145,17 +151,38 @@ sub add_entry {
        $entry =~ s/$cwd\/.*\.maker\.output\/*|$cwd\/.*\.iprscan\.output\/*//;
    }
 
+   #get seen file lock first as it may be the most vulnerable to race conditions
+   die "ERROR: Database timed out in ds_utility::add_entry\n\n"
+       unless (my $slock = new File::NFSLock($self->{SEEN_file}, 'EX', 60, 60));
+
+   my %SEEN; #seen is used in runlog.pm
+   tie (%SEEN, 'AnyDBM_File', $self->{SEEN_file});
+
    #lock file so no one else writes to it (MPI safe)
-   if(my $lock = new File::NFSLock($self->{log}, 'EX', 90, 120)){
+   if(my $lock = new File::NFSLock($self->{log}, 'EX', 90, 15)){
+       $entry =~ /^([^\t]+)\t[^\t]+\t([^\t]+)/;
        open(my $IN, ">>", $self->{log});
-       print $IN $entry . "\n";
+
+       #check if entry already exists, then decide whether to add
+       if($2){
+	   my $old = $SEEN{$1};
+	   $SEEN{$1} = $2;
+	   if(! defined $old || $old ne $2 || $2 =~ /FAILED|RETRY/){
+	       print $IN $entry . "\n";
+	   }
+       }
+       else{
+	   print $IN $entry . "\n";
+       }
+
        close($IN);
+       untie(%SEEN);
        $lock->unlock;
+       $slock->unlock;
    }
    else{
        die "ERROR: ds_utility::add_entry method timed out\n\n";
    }
-
 }
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------

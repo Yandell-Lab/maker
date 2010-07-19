@@ -557,17 +557,19 @@ sub _go {
 		open($FH, ">&STDOUT");
 	    }
 
+	    #write to the combined file using safe locked print
 	    my $CFH;
 	    open($CFH, "> $cfile");
-
+	    
 	    foreach my $key (@{$CTL_OPT{appl}}){
 		next if(! defined ($VARS->{$key}));
 		print $FH $VARS->{$key};
 		print $CFH $VARS->{$key};
 	    }
+	    
+	    close($CFH);
 
 	    close($FH);
-	    close($CFH);
 
 	    $lock->unlock;
 	    #-------------------------CODE
