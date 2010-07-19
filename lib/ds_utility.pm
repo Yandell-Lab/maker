@@ -151,34 +151,13 @@ sub add_entry {
        $entry =~ s/$cwd\/.*\.maker\.output\/*|$cwd\/.*\.iprscan\.output\/*//;
    }
 
-   #get seen file lock first as it may be the most vulnerable to race conditions
-   die "ERROR: Database timed out in ds_utility::add_entry\n\n"
-       unless (my $slock = new File::NFSLock($self->{SEEN_file}, 'EX', 60, 60));
-
-   my %SEEN; #seen is used in runlog.pm
-   tie (%SEEN, 'AnyDBM_File', $self->{SEEN_file});
-
    #lock file so no one else writes to it (MPI safe)
    if(my $lock = new File::NFSLock($self->{log}, 'EX', 90, 15)){
        $entry =~ /^([^\t]+)\t[^\t]+\t([^\t]+)/;
        open(my $IN, ">>", $self->{log});
-
-       #check if entry already exists, then decide whether to add
-       if($2){
-	   my $old = $SEEN{$1};
-	   $SEEN{$1} = $2;
-	   if(! defined $old || $old ne $2 || $2 =~ /FAILED|RETRY/){
-	       print $IN $entry . "\n";
-	   }
-       }
-       else{
-	   print $IN $entry . "\n";
-       }
-
+       print $IN $entry . "\n";
        close($IN);
-       untie(%SEEN);
        $lock->unlock;
-       $slock->unlock;
    }
    else{
        die "ERROR: ds_utility::add_entry method timed out\n\n";

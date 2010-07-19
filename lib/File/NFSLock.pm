@@ -147,10 +147,23 @@ sub new {
   
   while (1) {
       ### remove an old lockfile if it is older than the stale_timeout
-      if( -e $self->{lock_file} &&
+      if( -f $self->{lock_file} &&
 	  $self->{stale_lock_timeout} > 0 &&
-	  time() - (stat _)[9] > $self->{stale_lock_timeout} ){
-	  unlink ($self->{lock_file});
+	  time() - (stat _)[9] > $self->{stale_lock_timeout}
+	){
+	  unlink ($self->{lock_file}); 
+	  #lock the lock file
+#	  local $LOCK_EXTENSION = '.shared';
+#	  if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
+#	      #always check twice that this is still the file
+#	      if( -f $self->{lock_file} &&
+#		  $self->{stale_lock_timeout} > 0 &&
+#		  time() - (stat _)[9] > $self->{stale_lock_timeout}
+#		){
+#		  unlink ($self->{lock_file});
+#	      }
+#	      $share->unlock;
+#         }
       }
       
       ### open the temporary file
@@ -158,10 +171,10 @@ sub new {
 	  or return undef;
 
       if ( $self->{lock_type} & LOCK_EX ) {
-	  last if ($self->do_lock && $self->still_mine);
+	  last if ($self->do_lock);
       }
       elsif ( $self->{lock_type} & LOCK_SH ) {
-	  last if ($self->do_lock_shared && $self->still_mine);
+	  last if ($self->do_lock_shared);
       }
       else {
 	  $errstr = "Unknown lock_type [$self->{lock_type}]";
@@ -173,15 +186,14 @@ sub new {
       ### I know this may be a race condition, but it's okay.  It is just a
       ### stab in the dark to possibly find long dead processes.
       
-      ### If lock exists and is readable, see who is mooching on the lock
-      
-      if ( -e $self->{lock_file} && open (_FH,"+<$self->{lock_file}") ){
+      ### If lock exists and is readable, see who is mooching on the lock      
+      if ( -f $self->{lock_file} && open (_FH,"+<$self->{lock_file}") ){
 	  my @mine = ();
 	  my @them = ();
 	  my @dead = ();
 	  
-	  my $has_lock_exclusive = !((stat _)[2] & $SHARE_BIT);
-	  my $try_lock_exclusive = !($self->{lock_type} & LOCK_SH);
+	  my $has_lock_exclusive = !((stat _)[2] && $SHARE_BIT);
+	  my $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
 	  
 	  while(defined(my $line=<_FH>)){
 	      if ($line =~ /^$HOSTNAME (\d+) /) {
@@ -203,35 +215,56 @@ sub new {
 	  
 	  ### If there was at least one stale lock discovered...
 	  if (@dead) {
-	      # Lock lock_file to avoid a race condition.
-	      local $LOCK_EXTENSION = ".shared";
-	      my $lock = new File::NFSLock {file => $self->{lock_file},
-					    lock_type => LOCK_EX,
-					    blocking_timeout => 62,
-					    stale_lock_timeout => 60};
-	      
-	      ### Rescan in case lock contents were modified between time stale lock
-	      ###  was discovered and lockfile lock was acquired.
-	      seek (_FH, 0, 0);
-	      my $content = '';
-	      while(defined(my $line=<_FH>)){
-		  if ($line =~ /^$HOSTNAME (\d+) /) {
-		      my $pid = $1;
-		      next if (!kill 0, $pid);  # Skip dead locks from this host
-		  }
-		      $content .= $line;          # Save valid locks
-	      }
-	      
-	      ### Save any valid locks or wipe file.
-	      if( length($content) ){
+#	      # Lock lock_file to avoid a race condition.
+#	      local $LOCK_EXTENSION = ".shared";
+#	      if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
+#		  ### Rescan in case lock contents were modified between time stale lock
+#		  ###  was discovered and lockfile lock was acquired.
+#		  if(-f $self->{lock_file} && open (_FH,"+<$self->{lock_file}")){
+		      @mine = ();
+		      @them = ();
+		      @dead = ();
+		      
+		      $has_lock_exclusive = !((stat _)[2] && $SHARE_BIT);
+		      $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
+		      
+		      my $content = '';
 		      seek     _FH, 0, 0;
-		      print    _FH $content;
-		      truncate _FH, length($content);
-		      close    _FH;
-		  }else{
-		      close _FH;
-		      unlink ($self->{lock_file});
-		  }	     
+		      while(defined(my $line=<_FH>)){
+			  if ($line =~ /^$HOSTNAME (\d+) /) {
+			      my $pid = $1;
+			      if ($pid == $$) {       # This is me.
+				  push @mine, $line;
+				  $content .= $line;
+			      }
+			      elsif(kill 0, $pid) {  # Still running on this host.
+				  push @them, $line;
+				  $content .= $line;
+			      }
+			      else{                  # Finished running on this host.
+				  push @dead, $line;
+			      }
+			  }
+			  else {                  # Running on another host, so
+			      push @them, $line;      #  assume it is still running.
+			      $content .= $line;
+			  }
+		      }
+		      
+		      ### Save any valid locks or wipe file.
+		      if( length($content) ){
+			  seek     _FH, 0, 0;
+			  print    _FH $content;
+			  truncate _FH, length($content);
+			  close    _FH;
+		      }else{
+			  close _FH;
+			  unlink ($self->{lock_file});
+		      }
+#		  }
+#		  
+#		  $share->unlock;
+#	      }
 	  }
 	  else { ### No "dead" or stale locks found.
 	      close _FH;
@@ -243,11 +276,49 @@ sub new {
 	  ### Just kick out successfully without really locking.
 	  ### Assumes locks will be released in the reverse
 	  ###  order from how they were established.
-	  if ($try_lock_exclusive eq $has_lock_exclusive && @mine && $self->still_mine){
+	  if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
 	      last;
+	      # Lock lock_file to avoid a race condition.
+#	      local $LOCK_EXTENSION = ".shared";
+#	      if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
+#		  ### Rescan in case lock contents were modified between time stale lock
+#		  ###  was discovered and lockfile lock was acquired.
+#		  if(-f $self->{lock_file} && open (_FH,"+<$self->{lock_file}")){
+#		      @mine = ();
+#		      @them = ();
+#		      @dead = ();
+#		      
+#		      $has_lock_exclusive = !((stat _)[2] && $SHARE_BIT);
+#		      $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
+#		      
+#		      while(defined(my $line=<_FH>)){
+#			  if ($line =~ /^$HOSTNAME (\d+) /) {
+#			      my $pid = $1;
+#			      if ($pid == $$) {       # This is me.
+#				  push @mine, $line;
+#			      }
+#			      elsif(kill 0, $pid) {  # Still running on this host.
+#				  push @them, $line;
+#			      }
+#			      else{                  # Finished running on this host.
+#				  push @dead, $line;
+#			      }
+#			  }
+#			  else {                  # Running on another host, so
+#			      push @them, $line;      #  assume it is still running.
+#			  }
+#		      }
+#		      
+#		      #always check twice
+#		      if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
+#			  last;
+#		      }
+#		  }
+#		  
+#		  $share->unlock;
+#	      }
 	  }
       }
-      
       
       ### If non-blocking, then kick out now.
       ### ($errstr might already be set to the reason.)
@@ -362,6 +433,7 @@ sub create_magic ($;$) {
   open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
   print _FH $self->{lock_line};
   close _FH;
+  uncache($append_file);
   return 1;
 }
 
@@ -438,7 +510,23 @@ sub do_lock_shared {
 sub do_unlock ($) {
   my $self = shift;
   die "ERROR: This is not your lock" if(!$self->still_mine);
-  return unlink($self->{lock_file});
+
+  my $stat;
+#  if($LOCK_EXTENSION eq '.shared'){
+      $stat = unlink($self->{lock_file});
+#  }
+#  else{
+#      local $LOCK_EXTENSION = '.shared';
+#      if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
+#	  $stat = unlink($self->{lock_file});
+#	  $share->unlock;
+#      }
+#      else{
+#	  die "ERROR: Could not unlink the lock\n";
+#      }
+#  }
+
+  return $stat;
 }
 
 sub do_unlock_shared ($) {
@@ -484,7 +572,23 @@ sub do_unlock_shared ($) {
   ### only I exist
   }else{
     close _FH;
-    unlink($lock_file);
+
+    my $stat;
+#    if($LOCK_EXTENSION eq '.shared'){
+	$stat = unlink($self->{lock_file});
+#    }
+#    else{
+#	local $LOCK_EXTENSION = '.shared';
+#	if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
+#	    $stat = unlink($self->{lock_file});
+#	    $share->unlock;
+#	}
+#	else{
+#	    die "ERROR: Could not unlink the lock\n";
+#	}
+#    }
+    
+    return $stat;
   }
 
 }

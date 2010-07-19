@@ -30,6 +30,8 @@ my @ctl_to_log = ('infile',
 		  'format'
 		 );
 
+my %SEEN;
+
 #-------------------------------------------------------------------------------
 #------------------------------- Methods ---------------------------------------
 #-------------------------------------------------------------------------------
@@ -128,12 +130,12 @@ sub _compare_and_clean {
     my @dirs; #list of directories to remove
     
     if ($continue_flag > 0 && -e $log_file) {
-	die "ERROR: Database timed out in runlog::_clean_files\n\n"
-	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
+#	die "ERROR: Database timed out in runlog::_clean_files\n\n"
+#	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
 
         #seen is set in ds_utility.pm
-        my %SEEN;
-        tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
+#        my %SEEN;
+#        tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
 
 	if (exists $logged_vals{DIED}) {
 	    if($CTL_OPTIONS{force} && ! defined $SEEN{$name}){
@@ -151,11 +153,11 @@ sub _compare_and_clean {
 		$rm_key{retry}++ if ($continue_flag == 2);
 	    }
 	}
-	elsif ($CTL_OPTIONS{force} && ! $SEEN{$name}) {
+	elsif ($CTL_OPTIONS{force} && ! defined $SEEN{$name}) {
 	    $rm_key{force}++;
 	    $continue_flag = 1;	#run/re-run
 	}
-	elsif ($CTL_OPTIONS{again} && ! $SEEN{$name}){
+	elsif ($CTL_OPTIONS{again} && ! defined $SEEN{$name}){
 	    $continue_flag = 1; #run/re-run
 	    $rm_key{ipr}++;
 	}
@@ -163,8 +165,9 @@ sub _compare_and_clean {
 	    $continue_flag = 0 if (-e $ipr_file); #don't re-run finished
 	}
 
-        untie %SEEN;
-        $lock->unlock;	
+	$SEEN{$name} = $continue_flag;
+#        untie %SEEN;
+#        $lock->unlock;	
 
 	if($continue_flag >= 0 || $continue_flag == -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES

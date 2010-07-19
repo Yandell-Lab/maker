@@ -232,6 +232,7 @@ sub _compare_and_clean {
 	    $continue_flag = 0 if (-e $gff_file); #don't re-run finished
 	}
 
+	$SEEN{$name} = $continue_flag;
 	untie %SEEN;
 	$lock->unlock;
 	
