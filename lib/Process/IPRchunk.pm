@@ -547,7 +547,7 @@ sub _go {
 	    my $cfile = $VARS->{cfile}; #combined contig output file
 	    my $outfile = $CTL_OPT{outfile}; #combined every contig output file
 
-	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 40, 40);
+	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
 
 	    my $FH;
 	    if($outfile){
