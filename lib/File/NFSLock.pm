@@ -140,7 +140,8 @@ sub new {
   
   ### choose the lock filename
   $self->{lock_file} = $self->{file} . $LOCK_EXTENSION;
-  
+  $self->{lock_file} =~ s/([^\/]+)$/\.NFSLock\.$1/;
+
   my $quit_time = $self->{blocking_timeout} &&
       !($self->{lock_type} & LOCK_NB) ?
       time() + $self->{blocking_timeout} : 0;
@@ -374,7 +375,10 @@ sub unlock ($) {
 
 sub rand_file ($) {
   my $file = shift;
-  "$file.tmp.". time()%10000 .'.'. $$ .'.'. int(rand()*10000);
+  my $rand = "$file.tmp.". time()%10000 .'.'. $$ .'.'. int(rand()*10000);
+  $rand =~ s/([^\/]+)$/\.NFSLock\.$1/;
+  return(rand_file($file)) if(-f $rand);
+  return $rand;
 }
 
 sub create_magic ($;$) {
@@ -391,10 +395,28 @@ sub create_magic ($;$) {
 
   $self->{lock_line} ||= "$HOSTNAME $self->{lock_pid} ".time()." $id\n";
   local *_FH;
-  open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
-  print _FH $self->{lock_line};
-  close _FH;
-  uncache($append_file);
+
+  my $exists = -f $append_file;
+  if(($self->{lock_type} && $self->{lock_type} == LOCK_SH) || ! $exists){
+      open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
+      print _FH $self->{lock_line};
+      close _FH;
+
+      if(! $exists){
+	  my $chmod = 0600;
+	  $chmod |= $SHARE_BIT if($self->{lock_type} == LOCK_SH);
+	  chmod( $chmod, $append_file)
+	      || die "I need ability to chmod files to adequatetly perform locking";
+      }
+  }
+  else{
+      open (_FH,"$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
+      seek     _FH, 0, 0;
+      print    _FH $self->{lock_line};
+      truncate _FH, $self->{lock_line};
+      close    _FH;
+  }
+
   return 1;
 }
 
@@ -403,18 +425,12 @@ sub do_lock {
   my $self = shift;
   my $lock_file = $self->{lock_file};
   my $rand_file = $self->{rand_file};
-  my $chmod = 0600;
-  chmod( $chmod, $rand_file)
-    || die "I need ability to chmod files to adequatetly perform locking";
-  
-  #refresh the NFS cache
-  uncache($lock_file);
 
   ### try a hard link, if it worked
   ### two files are pointing to $rand_file
   my $success = link( $rand_file, $lock_file )
       && -e $rand_file && (stat _)[3] == 2;
-  unlink ($rand_file);
+  unlink ($rand_file) if($success);
 
   return $success;
 }
@@ -424,12 +440,6 @@ sub do_lock_shared {
   my $self = shift;
   my $lock_file  = $self->{lock_file};
   my $rand_file  = $self->{rand_file};
-
-  ### chmod local file to make sure we know before
-  my $chmod = 0600;
-  $chmod |= $SHARE_BIT;
-  chmod( $chmod, $rand_file)
-    || die "I need ability to chmod files to adequatetly perform locking";
 
   ### lock the locking process
   local $LOCK_EXTENSION = ".shared";
@@ -445,21 +455,20 @@ sub do_lock_shared {
   ### If I didn't have exclusive and the shared bit is not
   ### set, I have failed
 
-  #refresh NFS cache
-  uncache($lock_file);
-
   ### Try to create $lock_file from the special
   ### file with the magic $SHARE_BIT set.
   my $success = link( $rand_file, $lock_file);
   unlink ($rand_file);
   if ( !$success &&
        -e $lock_file &&
-       ((stat _)[2] & $SHARE_BIT) != $SHARE_BIT ){
+       ((stat _)[2] & $SHARE_BIT) != $SHARE_BIT
+     ){
 
     $errstr = 'Exclusive lock exists.';
     return undef;
 
-  } elsif ( !$success ) {
+  }
+  elsif ( !$success ) {
     ### Shared lock exists, append my lock
     $self->create_magic ($self->{lock_file});
   }
@@ -643,9 +652,6 @@ sub refresh {
   print    _FH $content;
   truncate _FH, length($content);
   close    _FH;
-
-  #refresh NFS cache
-  $self->uncache;
 }
 
 sub still_mine {

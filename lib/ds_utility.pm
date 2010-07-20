@@ -152,7 +152,7 @@ sub add_entry {
    }
 
    #lock file so no one else writes to it (MPI safe)
-   if(my $lock = new File::NFSLock($self->{log}, 'EX', 90, 15)){
+   if(my $lock = new File::NFSLock($self->{log}, 'EX', 120, 15)){
        $entry =~ /^([^\t]+)\t[^\t]+\t([^\t]+)/;
        open(my $IN, ">>", $self->{log});
        print $IN $entry . "\n";
