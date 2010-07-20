@@ -504,7 +504,7 @@ sub do_unlock_shared ($) {
   ### get the handle on the lock file
   local *_FH;
   if( ! open (_FH,"+<$lock_file") ){
-    if( ! -e $lock_file ){
+    if( ! -e $lock_file || $! =~ /No such file or directory/){
       return 1;
     }else{
       die "Could not open for writing shared lock file $lock_file ($!)";
@@ -629,7 +629,7 @@ sub refresh {
   ### get the handle on the lock file
   local *_FH;
   if( ! open (_FH,"+<$lock_file") ){
-    if( ! -e $lock_file ){
+    if( ! -e $lock_file || $! =~ /No such file or directory/){
       return 1;
     }else{
       die "Could not open for writing lock file $lock_file ($!)";
@@ -672,7 +672,7 @@ sub still_mine {
 
     ### get the handle on the lock file
     local *_FH;
-    if( ! open (_FH,"< $lock_file") ){
+    if( ! open (_FH,"+< $lock_file") ){
 	if( ! -e $lock_file || $! =~ /No such file or directory/){
 	    return 0;
 	}else{
@@ -725,8 +725,8 @@ sub owners {
 
     ### get the handle on the lock file
     local *_FH;
-    if( ! open (_FH,"< $lock_file") ){
-	if( ! -e $lock_file ){
+    if( ! open (_FH,"+< $lock_file") ){
+	if( ! -e $lock_file || $! =~ /No such file or directory){
 	    return 0;
 	}else{
 	    die "Could not open for reading the lock file $lock_file ($!)";
