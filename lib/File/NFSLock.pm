@@ -670,13 +670,6 @@ sub still_mine {
     #refresh NFS cache on the lock file
     $self->uncache($self->{lock_file});
 
-    ### lock the parsing process but only for shared locks
-    my $lock;
-    if($self->{lock_type} && $self->{lock_type} == LOCK_SH){
-	local $LOCK_EXTENSION = '.shared';
-	$lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
-    }
-
     ### get the handle on the lock file
     local *_FH;
     if( ! open (_FH,"+< $lock_file") ){
@@ -697,7 +690,6 @@ sub still_mine {
     }
 
     close(_FH);
-    $lock->unlock if($lock);
 
     return $mine;
 }
