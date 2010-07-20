@@ -471,7 +471,7 @@ sub do_lock_shared {
 sub do_unlock ($) {
   my $self = shift;
 
-  my $stat = unlink($self->{lock_file}) if(!$self->still_mine);
+  my $stat = unlink($self->{lock_file}) if($self->still_mine);
 
   return $stat;
 }
