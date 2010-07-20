@@ -169,7 +169,7 @@ sub new {
       
       ### open the temporary file
       $self->create_magic
-	  or return undef;
+	  or do{unlink($self->{rand_file}); return undef};
 
       if ( $self->{lock_type} & LOCK_EX ) {
 	  last if ($self->do_lock);
@@ -179,6 +179,7 @@ sub new {
       }
       else {
 	  $errstr = "Unknown lock_type [$self->{lock_type}]";
+	  unlink($self->{rand_file});
 	  return undef;
       }
       
@@ -278,6 +279,7 @@ sub new {
 	  ### Assumes locks will be released in the reverse
 	  ###  order from how they were established.
 	  if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
+	      unlink($self->{rand_file});
 	      last;
 	  }
       }
@@ -286,6 +288,7 @@ sub new {
       ### ($errstr might already be set to the reason.)
       if ($self->{lock_type} & LOCK_NB) {
 	  $errstr ||= "NONBLOCKING lock failed!";
+	  unlink($self->{rand_file});
 	  return undef;
       }
       
@@ -295,6 +298,7 @@ sub new {
       ### but don't wait past the time out
       if( $quit_time && (time > $quit_time) ){
 	  $errstr = "Timed out waiting for blocking lock";
+	  unlink($self->{rand_file});
 	  return undef;
       }
       
@@ -306,7 +310,7 @@ sub new {
   
   ### Yes, the lock has been aquired.
   delete $self->{unlocked};
-  
+
   return ($self->still_mine) ? $self : $self->new($self);
 }
 
@@ -669,7 +673,7 @@ sub still_mine {
     ### get the handle on the lock file
     local *_FH;
     if( ! open (_FH,"< $lock_file") ){
-	if( ! -e $lock_file ){
+	if( ! -e $lock_file || $! =~ /No such file or directory/){
 	    return 0;
 	}else{
 	    die "Could not open for reading the lock file $lock_file ($!)";
