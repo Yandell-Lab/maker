@@ -1384,6 +1384,11 @@ sub run_it {
 						  );
 
 	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
+	
+	#only keep multi-exon hint based predictions single exon prediction
+	#are more likely to be spurious if hint based, these are better
+	#derived from the ab initio predictions
+	@$on_right_strand = grep {$_->hsps > 1} @$on_right_strand if($CTL_OPT->{organism_type} eq 'eukaryotic');
 
 	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
 	my $remove = 1;

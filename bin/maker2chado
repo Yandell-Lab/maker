@@ -398,21 +398,20 @@ while(my $file = shift @files){
 	    #add sequence for features if external fasta provided
 	    if($index){
 		my ($name) = $line =~ /Target=([^\;\n\s]+)/;
-		if($name){
-		    my $fastaObj = $index->get_Seq_by_id($name);
-		    if(! $fastaObj){
-			$fastaObj = $index->get_Seq_by_alias($name);
-		    }
-		    if($fastaObj){
-			my $t_seq = $fastaObj->seq();
-			my $t_def = $index->header($name);
-			my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
-			$afasta .= $f;
-			print "\n\nWoo Hoo!!\n\n";
-		    }
+		if(defined $name && (my $fastaObj = $index->get_Seq_by_id($name))){
+		    my $t_def = $index->header($name);
+		    my $t_seq = $fastaObj->seq();
+		    my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
+		    $afasta .= $f;
+		}
+		elsif(defined $name && ($fastaObj = $index->get_Seq_by_alias($name))){
+		    my $t_def = $index->header_by_name($name);
+		    my $t_seq = $fastaObj->seq();
+		    my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
+		    $afasta .= $f;
 		}
 	    }
-
+	    
 	    $analysis .= $line;
 	    next;
 	}

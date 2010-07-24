@@ -68,6 +68,12 @@ if ($datastore){
     }
 
     foreach my $dir (@dirs){
+	if (! -d $dir){
+	    my $base = $datastore;
+	    $base =~ s/[^\/]+$/\./;
+	    $dir = "$base/$dir";
+	}
+
 	my @f_files = <$dir/*.transcripts.fasta>;
 	push(@files, @f_files);
 	@f_files = <$dir/*.proteins.fasta>;

@@ -218,6 +218,11 @@ while(my $t = each %index){
 	    my $tB = $mB - $match[0]->[2];
 	    my $tE = $mE - $match[-1]->[2];
 
+	    #debug
+	    if(!defined $mB || ! defined $match[0]->[2]){
+		print STDERR "ERROR: In $t\n";
+	    }
+
 	    #gff3 colums
 	    my $seqid = $details{$t}{seqid};
 	    my $source = 'iprscan';

@@ -141,7 +141,7 @@ sub parse_ipr_scan {
 		    $start, $end, $e_val, $status, $date, $ipr_id,
 		    $ipr_desc, $go_text) = split /\t/, $_;
 
-		next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM);
+		next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
 
 		$method = $db_map{$method} || $method;
 
@@ -149,7 +149,7 @@ sub parse_ipr_scan {
 							       desc => $db_desc};
 		push @{$ipr{$seq_id}{dbxref}{InterPro}}, {id   => $ipr_id,
 								desc => $ipr_desc};
-		my @go_ids = $go_text =~ /\((GO:\d+)\)/g;
+		my @go_ids = $go_text =~ /\((GO:\d+)\)/g unless(! $go_text);
 		map {$ipr{$seq_id}{go}{$_}++} @go_ids;
 
 

@@ -200,7 +200,7 @@ $nt_count++ if $summary;
 $translate ||= 0;
 
 my $IN;
-if (! -t STDIN) {
+if (! $file && ! -t STDIN) {
 	open ($IN, "<&=STDIN") or die "Can't open STDIN\n";
 }
 else {

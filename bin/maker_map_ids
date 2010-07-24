@@ -86,6 +86,8 @@ if (! $opt_success || ! $gff_file){
 if($apollo){
     $suffix = '-R%';
     $iterate = 'A';
+    $abrv_gene = '';
+    $abrv_tran = '';
 }
 
 if($suffix ne '' && $iterate eq ''){
@@ -100,7 +102,7 @@ $prefix .= '?' if($prefix !~ /\?/ && $suffix !~ /\?/);
 $suffix .= '%' if($suffix !~ /\%/ && $prefix !~ /\%/);
 $iterate = uc($iterate);
 $justify ||= 6;
-@initial = (0) if(! @initial);
+@initial = (1) if(! @initial);
 
 my $sort_map = parse_sort_order($sort_order, $gff_file);
 
@@ -171,7 +173,7 @@ while (<$IN>) {
 		if($iterate ne ''){
 		    if(!$gene_index{$parent}{iterate} ||
 		       ($iterate eq 'A' && $2 ge $gene_index{$parent}{iterate}) ||
-		       $2 >= $gene_index{$parent}{iterate}
+		       ($iterate ne 'A' && $2 >= $gene_index{$parent}{iterate})
 		       ){
 			$gene_index{$parent}{iterate} = $2;
 			$gene_index{$parent}{iterate}++; #make one above (next usable value)

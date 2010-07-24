@@ -3211,7 +3211,7 @@ sub load_control_files {
    my $i_lock; #init lock, it is only a temporary blocking lock
    while(! $i_lock || ! $i_lock->still_mine){
        die "ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45);
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45));
    }
 
    #--check if another instance of maker is running, and lock the directory

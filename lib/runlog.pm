@@ -216,7 +216,6 @@ sub _compare_and_clean {
 	    else{
 		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
-		$continue_flag = -1 if($continue_flag == -1 &&);
 		$rm_key{retry}++ if ($continue_flag == 2);
 	    }
 	}

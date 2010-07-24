@@ -37,6 +37,7 @@ my $g_flag;
 my $l_flag;
 my $s_flag;
 my $n_flag;
+my $b_flag;
 
 GetOptions ("datastor|d=s" => \$datastore,
 	    "o=s" => \$outfile,
@@ -44,6 +45,7 @@ GetOptions ("datastor|d=s" => \$datastore,
 	    "l" => \$l_flag,
 	    "s" => \$s_flag,
 	    "n" => \$n_flag,
+	    "break|b=s" => \$b_flag,
 	    "help|?" => sub{print $usage; exit();}
 	    );
 
@@ -124,10 +126,10 @@ foreach  my $file (@files){
 	elsif($line =~ /^\#\#genome-build/){
 	    next if exists $uniq{$line};
 	    $uniq{$line}++;
-	    print $GFF $line;
+	    #print $GFF $line; #don't print this anymore
 	    next;
 	}
-	elsif($line =~ /^\#\#sequence-region/){
+	elsif($line =~ /^\#\#sequence-region\s+(^[\s]+)/){
 	    if(exists $uniq{$line}){
 		die "ERROR: This contig has already been added\: $line\n"
 		    if (! $l_flag);
