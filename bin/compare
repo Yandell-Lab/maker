@@ -1,0 +1,334 @@
+#!/usr/bin/env perl
+use warnings;
+
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use DBI;
+use Getopt::Long;
+use File::Temp;
+use vars qw($DBH);
+
+BEGIN{
+    #what to do on ^C
+    $SIG{'INT'} = sub {
+	$DBH->disconnect;
+	exit (1);
+    };
+}
+
+use IO::Prompt;
+use DBD::Pg;
+use threads;
+use threads::shared;
+
+my $usage = '
+USAGE:
+     compare [OPTION] <database_name> <gff3_file>
+
+     This script compares the contents of a GFF3 fiel to te database to
+     look for merged, split and missing genes.
+
+
+OPTIONS:
+     host|h      <host>  Database host address
+
+     port|p      <port>  Database port
+
+     username|U  <user>  Username to access database
+
+     password|W          Promp for password to access database
+
+     organism|o  <name>  Organism in CHADO database to use
+
+     cpus|o      <int>   Number of cpus to use (parallelize)
+
+     help|?              Displays this usage statement
+
+
+';
+
+my $host = '';
+my $user = '';
+my $pass = '';
+my $organism;
+my $port;
+my $cpus = 1;
+my @for_threads :shared;
+
+GetOptions("host|h=s" => \$host,
+	   "port|p=i" => \$port,
+	   "username|U=s" => \$user,
+	   "password|W" => \$pass,
+	   "organism|o=s" => \$organism,
+	   "cpus=i" => \$cpus,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+my $dbname = shift;
+my $file = shift;
+
+@ARGV = undef; # must empty this or IO::Prompt throws a fit
+
+$pass = prompt("Please enter your password: ", -echo => '*') if($pass);
+$pass = $pass->{value} if($pass);
+
+if(!$file){
+    print $usage;
+    exit();
+}
+
+if(! -f $file){
+    die "ERROR: The file $file does not exist\n";
+}
+
+my $dsn .= "dbi:Pg:dbname=$dbname";
+$dsn .= "\;host=$host" if($host);
+$dsn .= "\;port=$port" if($port);
+
+$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+warn "WARNING: This does not seem to be a chado database\n\n" if(! @$o_list || ! @$c_list);
+
+#check user defined organism
+unless(! $organism || grep {$_ eq $organism} (@$o_list, @$c_list)){
+    warn "WARNING: The organism you specified \'$organism\' does not exist in the database\n\n";
+    undef $organism;
+}
+
+#promt user to select organism
+if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+    die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
+
+    for(my $i = 0; $i <= abs(@$c_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Quit>");
+
+	system("clear");
+	$organism = prompt ("Please select an organism from the database: ",
+			    -menu => \@menu
+			   );
+	
+	if($organism eq 'Show more organisms -->'){
+	    undef $organism;
+	}
+	elsif($organism eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $organism;
+	}
+	elsif($organism eq '<Quit>'){
+	    warn "\n\nWARNING: The user exited the program without doing anything\n\n";
+	    $DBH->disconnect;
+	    exit;
+	}
+	else{
+	    last;
+	}
+    }
+}
+
+
+my ($organism_id) = $DBH->selectrow_array("SELECT organism_id FROM organism WHERE common_name='$organism'");
+my $contigs = $DBH->selectall_arrayref("SELECT f.feature_id, f.uniquename ".
+				       "FROM feature f ".
+				       "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+				       "WHERE f.organism_id=$organism_id AND (c.name='contig' OR c.name='chromosome')");
+
+$DBH->disconnect;
+
+#exit if there are no contigs to work with
+if(! @$contigs){
+    print STDERR "Everything is missing as there are no contigs in database $dbname\n";
+    exit(0);
+}
+
+#load GFF3 into memory
+my %gff_data;
+
+open(IN, "<$file");
+while(my $line = <IN>){
+    last if($line =~ /^\#\#FASTA|^\>/);
+    next if($line =~ /^\s*\#|^\s*\n/);
+    chomp($line);
+    my @F = split("\t", $line);
+
+    if ($F[2] eq 'gene'){
+	$F[8] =~ /ID=([^\;\n]+)/;
+	push(@{$gff_data{$F[0]}{$F[6]}},[$F[3], $F[4], $1]);
+    }
+}
+close(IN);
+
+#evaluate contigs one at a time
+if($cpus <= 1){
+    foreach my $contig (@$contigs) {
+	my ($contig_id, $seqid) = @$contig;
+
+	#skip contigs not included in GFF3
+	next if(! defined $gff_data{$seqid});
+
+	push(@for_threads, $contig_id); #only send ID to threads
+    }
+
+    run_thread($dsn,$user,$pass,{AutoCommit => 0});
+}
+else{
+    foreach my $contig (@$contigs) {
+	my ($contig_id, $seqid) = @$contig;
+
+	#skip contigs not included in GFF3
+	next if(! defined $gff_data{$seqid});
+
+	push(@for_threads, $contig_id); #only send ID to threads
+    }
+
+    my @thrs;
+    while(@for_threads){
+	if(threads->list(threads::running) < $cpus){
+	    my $thr = threads->create(\&run_thread,$dsn,$user,$pass,{AutoCommit => 0});
+	    push (@thrs, $thr);
+	}
+	sleep 1;
+    }
+
+    foreach my $thr (@thrs){
+	$thr->join();
+    }
+}
+
+$DBH->disconnect;
+
+#------------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES ---------------------------------
+#------------------------------------------------------------------------------
+sub run_thread{
+    my $dsn = shift;
+    my $user = shift;
+    my $pass = shift;
+    my $args = shift;
+    
+    $DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+
+    while (my $contig_id = shift @for_threads) {
+	#get contig name
+	my ($seqid) = $DBH->selectrow_array("SELECT f.uniquename FROM feature f WHERE f.feature_id=$contig_id");
+	my %chado_data = %{get_feature_lines($contig_id, $seqid)};
+
+	foreach my $strand('+', '-'){
+	    #get genes on strand
+	    my $gff_p = $gff_data{$seqid}{$strand} || [];    
+	    my $cha_p = $chado_data{$seqid}{$strand} || [];
+	 
+	    #find overlaps 
+	    my %gmatrix;
+	    my %cmatrix;
+	    my %found;
+	    
+	    for(my $i = 0; $i < @$gff_p; $i++){
+		my $gB = $gff_p->[$i][0];
+		my $gE = $gff_p->[$i][1];
+		my $gI = $gff_p->[$i][2];
+		for(my $j = 0; $j < @$cha_p; $j++){
+		    my $cB = $cha_p->[$j][0];
+		    my $cE = $cha_p->[$j][1];
+		    my $cI = $cha_p->[$j][2];
+		    if(overlap($gB, $gE, $cB, $cE)){
+			$gmatrix{$gI}{$cI}++;
+			$cmatrix{$cI}{$gI}++;
+			$found{$gI}++;
+		    }
+		}
+	    }
+
+	    #identify merged genes
+	    while(my $key = each %cmatrix){
+		if (scalar keys %{$cmatrix{$key}} > 1){
+		    print "$key\tMERGE\n";
+		}
+	    }
+	    
+	    #identify split genes
+	    my %merge;
+	    while(my $key = each %gmatrix){
+		if (scalar keys %{$gmatrix{$key}} > 1){
+		    while(my $key2 = each %{$gmatrix{$key}}){
+			$merge{$key2}++;
+		    }
+		}
+	    }
+
+	    my $val = join("\tSPLIT\n", @{[keys %merge]});
+	    print $val ."\tSPLIT\n" if($val);
+
+	    foreach my $gene (@$gff_p){
+		my $name = $gene->[2];
+		print "$name\tMISSING\n" if(! defined $found{$name});
+	    }
+	}
+    }
+
+    $DBH->disconnect;
+}
+#------------------------------------------------------------------------------
+sub get_feature_lines {
+    my $contig_id = shift; #contig feature_id
+    my $seqid     = shift; #contig feature_name
+    my $get_dbxref   = shift || 0;
+    my $get_ontology = shift || 0;
+    my $get_alias    = shift || 0;
+    my $get_other    = shift || 0;
+
+    #get all features
+    my $features = $DBH->selectall_arrayref("SELECT l.fmin, l.fmax, l.strand, f.uniquename ".
+					    "FROM feature f ".
+					    "LEFT OUTER JOIN featureloc l ON f.feature_id=l.feature_id ".
+					    "LEFT OUTER JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					    "WHERE l.srcfeature_id = $contig_id AND c.name = 'gene' ORDER BY f.feature_id;");
+
+    my %chado_data;
+    foreach my $feature (@$features){
+	my ($start,
+	    $end,
+	    $strand,
+	    $ID) = @$feature;
+
+	#fix semantic differences
+	$start++;
+	#$end++; don't iterate end since it os already correct (coordinates are space based)
+
+	$strand = ($strand == 1) ? '+' : '-';
+
+	push(@{$chado_data{$seqid}{$strand}},[$start, $end, $ID]);
+    }
+    
+    return \%chado_data;
+}
+#------------------------------------------------------------------------------
+sub overlap {
+    my $aB = shift;
+    my $aE = shift;
+    my $bB = shift;
+    my $bE = shift;
+
+    ($aB, $aE) = ($aE, $aB) if($aB > $aE);
+    ($bB, $bE) = ($bE, $bB) if($bB > $bE);
+
+    if($bE < $aB || $bB > $aE){
+	# a        ----
+	# b  ----
+	return 0;
+    }
+    else{
+	return 1;
+    }
+}
