@@ -1014,7 +1014,7 @@ sub check_table_structure {
 
     #create/re-create menus table (always)
     $dbh->do(qq{DROP TABLE menus}) if(grep {/menus/} @tables);
-    $dbh->do(qq{CREATE TABLE menus (name $t_type, value $t_type UNIQUE, contig_count $t_type,}.
+    $dbh->do(qq{CREATE TABLE menus (name $t_type, value $t_type, contig_count $t_type,}.
 	     qq{type $t_type, length $t_type, is_tutorial INTEGER, description $t_type)});
 
     while(my $type = each %{$CTL_OPT{menus}}){
