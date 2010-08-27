@@ -57,7 +57,7 @@ foreach my $dir (keys %to_do){
 	$out =~ s/\.fasta$/\.iprscan.raw/;
 
 	unless(! $prot || !$gff || -f $out){
-	    my @commands = ("find . -name \"*.ipr\" -exec cat {} \\; > $out.tmp",
+	    my @commands = ("$FindBin::Bin/iprscan_wrap -i $prot -iprlookup -goterms -format raw -o $out.tmp",
 			    "$FindBin::Bin/iprscan2gff3 $out.tmp $gff > $out.gff.tmp",
 			    "$FindBin::Bin/gff3_merge $gff $out.gff.tmp -o $gff.tmp\n",
 			    "$FindBin::Bin/ipr_update_gff $gff.tmp $out.tmp\n",

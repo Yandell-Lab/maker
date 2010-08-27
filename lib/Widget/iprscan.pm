@@ -43,7 +43,7 @@ sub run {
 
 	   #run with alarm to correct for program hanging
 	   eval{
-	       local $SIG{ALRM} = sub { die "ERROR: Iprscan instance appears to be frozen\n" };
+	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
 	       alarm 600;
 	       while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
@@ -53,20 +53,22 @@ sub run {
 	   };
 
 	   if($@){
-	       warn $@;
+	       #warn $@; #removed - don't report first round errors
 	       $fail = 1
 	   }
 
 	   #reap process
-	   my $stat = waitpid $pid, WNOHANG;
+	   my $stat = waitpid($pid, WNOHANG);
 	   $fail = 1 if($?);
 
 	   #reap failed so kill
-	   if(! $stat){
-	       kill 9, $pid;
-	       waitpid $pid, 0;
+	   for(my $i = 0; $i < 10 && ! $stat; $i++){
+	       sleep 1;
+	       kill(9, $pid);
+	       $stat = waitpid($pid, WNOHANG);
 	       $fail = 1 if($?);
 	   }
+	   $fail = 1 if(! $stat);
 
 	   #close handles
 	   close(CHLD_IN);
@@ -101,7 +103,7 @@ sub run {
 
 	   #run with alarm to correct for program hanging
 	   eval{
-	       local $SIG{ALRM} = sub { die "ERROR: Iprscan instance appears to be frozen\n" };
+	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
 	       alarm 600;
 	       while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
@@ -116,15 +118,17 @@ sub run {
 	   }
 
 	   #reap process
-	   $stat = waitpid $pid, WNOHANG;
+	   $stat = waitpid($pid, WNOHANG);
 	   $fail = 1 if($?);
 
 	   #reap failed so kill
-	   if(! $stat){
-	       kill 9, $pid;
-	       waitpid $pid, 0;
+	   for(my $i = 0; $i < 10 && ! $stat; $i++){
+	       sleep 1;
+	       kill(9, $pid);
+	       $stat = waitpid($pid, WNOHANG);
 	       $fail = 1 if($?);
 	   }
+	   $fail = 1 if(! $stat);
 
 	   #close handles
 	   close(CHLD_IN);

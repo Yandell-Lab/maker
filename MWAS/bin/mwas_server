@@ -377,8 +377,8 @@ elsif($opt eq 'APOLLO'){
 
 	#create generate Apollo webstart
 	my $tt_xml = "$FindBin::RealBin/../cgi-bin/tt_templates/apollo_webstart.tt";
-	system("export APOLLO_ROOT=$CTL_OPT{APOLLO_ROOT}\n".
-	       "$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
+	$ENV{APOLLO_ROOT} = $CTL_OPT{APOLLO_ROOT};
+	system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
 	       "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp -D $html_dir/jars") &&
 	       die "ERROR: Generating Apollo webstart jars and jnlp file failed\n";
     }
@@ -635,7 +635,12 @@ sub run_server {
     system("cp -R $c_dir/* $w_dir/config/") && die("ERROR: Copying files to $w_dir failed\n");
 
     $dbh->disconnect; #database found successfully
-    
+
+    #load environmental variables needed to run dependancies
+    $ENV{APOLLO_ROOT} = $CTL_OPT{APOLLO_ROOT};
+    $ENV{ZOE} = $CTL_OPT{ZOE};
+    $ENV{AUGUSTUS_CONFIG_PATH} = $CTL_OPT{AUGUSTUS_CONFIG_PATH};
+
     #start continuous loop for constant server operation
     my %running; #holds ids of all forks associated with a job
 
@@ -888,15 +893,11 @@ sub start_job {
 	    #run maker
 	    my $command;
 	    if(! $type || $type eq 'maker'){
-		$command = "bash\n".
-		    "source /etc/profile\n".
-		    "$FindBin::RealBin/../../bin/maker -qq -base $job_id &> $job_log";
+		$command = "$FindBin::RealBin/../../bin/maker -qq -base $job_id";
 	    }
 	    elsif($type eq 'functional'){
 		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{short_name}";
-		$command = "bash\n".
-                    "source /etc/profile\n".
-		    "$FindBin::RealBin/../../bin/maker_functional $args &> $job_log";
+		$command = "$FindBin::RealBin/../../bin/maker_functional $args";
 	    }
 
 	    chdir($job_dir);
@@ -1055,7 +1056,7 @@ sub check_table_structure {
 		$c_count = `grep -c ">" $value`;
 	    }
 
-	    my ($check) = $dbh->selectrow_array(qq{SELECT value FROM menus WHERE value='$value'});
+	    my ($check) = $dbh->selectrow_array(qq{SELECT value FROM menus WHERE type='$type' AND value='$value'});
 
 	    $dbh->do(qq{INSERT INTO menus (name, value, type, length, contig_count, is_tutorial) }.
 		     qq{VALUES ('$name', '$value', '$type', '$length', '$c_count', $is_tutorial)}) unless($check);

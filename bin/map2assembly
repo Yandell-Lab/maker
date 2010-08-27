@@ -71,7 +71,7 @@ use ds_utility;
 use GFFDB;
 use Error qw(:try);
 use Error::Simple;
-use Process::MpiChunk;
+use Process::mapChunk;
 use Process::MpiTiers;
 
 $| = 1;
@@ -153,23 +153,26 @@ try{
     $OPT{est}            = $transcripts;
     $OPT{est_forward}    = 1;
     $OPT{max_dna_len}    = 300000;
-    $OPT{split_hit}      = 40000;
+    $OPT{split_hit}      = 10000;
     $OPT{pred_flank}     = 1000;
     $OPT{single_exon}    = 1;
     $OPT{single_length}  = 1;
-    $OPT{pcov_blastn}    = .90;
-    $OPT{pid_blastn}     = .90;
-    $OPT{pcov_blastx}    = .30;
-    $OPT{pid_blastx}     = .80;
-    $OPT{en_score_limit} = 50;
+    $OPT{pcov_blastn}    = .80;
+    $OPT{pid_blastn}     = .80;
+    $OPT{pcov_blastx}    = .50;
+    $OPT{pid_blastx}     = .60;
+    $OPT{en_score_limit} = 20;
     $OPT{ep_score_limit} = 10;
     $OPT{R}              = 1;
-
     #--Control file processing
    
     #set up control options from control files
     %CTL_OPT = GI::load_control_files([], \%OPT, $size);
-    
+    $CTL_OPT{_pcov_blastn}    = $CTL_OPT{pcov_blastn};
+    $CTL_OPT{_pid_blastn}     = $CTL_OPT{pid_blastn};
+    $CTL_OPT{_pcov_blastx}    = $CTL_OPT{pcov_blastx};
+    $CTL_OPT{_pid_blastx}     = $CTL_OPT{pid_blastx};
+
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
     
@@ -201,7 +204,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				    GFF_DB  => $GFF_DB,
 				    build   => $build},
 				   '0',
-				   'Process::MpiChunk'
+				   'Process::mapChunk'
 				   );
 
     next if($tier->terminated);

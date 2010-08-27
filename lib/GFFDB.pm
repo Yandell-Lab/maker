@@ -274,7 +274,6 @@ sub add_maker {
     else{
 	die "ERROR: Could not get lock in GFFDB\n\n";
     }
-
 }
 #-------------------------------------------------------------------------------
 sub add_repeat {
@@ -461,29 +460,23 @@ sub phathits_on_chunk {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
-	
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	
-	#get gff annotations
-	if (grep(/^$h_type\_gff$/, @{$tables})){
-	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-	}
-	
-	#get maker annotations
-	if (grep(/^$h_type\_maker$/, @{$tables})){
-	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-	}
 
-	$dbh->disconnect;
-	$lock->unlock;
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    
+    #get gff annotations
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
     }
-    else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
+    
+    #get maker annotations
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
     }
-	
+    
+    $dbh->disconnect;
+    
     my $features = _ary_to_features($ref1, $ref2);
     
     my $structs;
@@ -533,30 +526,24 @@ sub phathits_on_contig {
 
     my $ref1 = [];
     my $ref2 = [];
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbfile = $self->{dbfile};
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
-	
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	
-	#get gff annotations
-	if (grep(/^$h_type\_gff$/, @{$tables})){
-	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-	}
-	
-	#get maker annotations
-	if (grep(/^$h_type\_maker$/, @{$tables})){
-	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-	}
-	
-	$dbh->disconnect;
-	$lock->unlock;
-    }	
-    else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
-    }
 
+    my $dbfile = $self->{dbfile};
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    
+    #get gff annotations
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+    }
+    
+    #get maker annotations
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    }
+    
+    $dbh->disconnect;
+    
     my $features = _ary_to_features($ref1, $ref2);
     
     my $structs;
@@ -602,90 +589,84 @@ sub get_existing_gene_names {
     return {} unless($self->{go_gffdb});
 
     my %names;
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbfile = $self->{dbfile};
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
 
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-
-	#---get names for genes
-	my $h_type = 'model';
-	
-	#get gff annotations
-	my $ref1 = [];
-	if (grep(/^$h_type\_gff$/, @{$tables})){
-	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-	}
-	
-	#get maker annotations
-	my $ref2 = [];
-	if (grep(/^$h_type\_maker$/, @{$tables})){
-	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-	}
-	
-	my $features = _ary_to_features($ref1, $ref2);
-	foreach my $f (@$features){
-	    my $tag = $f->primary_tag();
-	    
-	    if ($tag eq 'gene') {    
-		my $id   = _get_annotation($f,'ID');
-		my $name = _get_annotation($f,'Name');
-		
-		$name = $id if($name eq '');
-		
-		#get old names
-		($name) = $name =~ /^([^\s\t\n]+)/;
-		$names{$name}++;
-		
-		#get old maker cluster ids
-		my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
-		$names{$c_id}++ if(defined $c_id);
-	    }
-	}
-	
-	#---get names for preds
-	$h_type = 'pred';
-	
-	#get gff annotations
-	$ref1 = [];
-	if (grep(/^$h_type\_gff$/, @{$tables})){
-	    $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-	}
-	
-	#get maker annotations
-	$ref2 = [];
-	if (grep(/^$h_type\_maker$/, @{$tables})){
-	    $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
-	}
-	
-	$features = _ary_to_features($ref1, $ref2);
-	foreach my $f (@$features){
-	    my $tag = $f->primary_tag();
-	    
-	    if ($tag eq 'match' || $tag eq 'gene') { 
-		my $id   = _get_annotation($f,'ID');   
-		my $name = _get_annotation($f,'Name');
-		
-		$name = $id if($name eq '');
-		
-		#get old names
-		($name) = $name =~ /^([^\s\t\n]+)/;
-		$name =~ s/\-mRNA\-\d+$//;
-		$names{$name}++;
-		
-		#get old maker cluster ids
-		my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
-		$names{$c_id}++ if(defined $c_id);
-	    }
-	}
-
-	$dbh->disconnect;
-	$lock->unlock;
+    my $dbfile = $self->{dbfile};
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    
+    #---get names for genes
+    my $h_type = 'model';
+    
+    #get gff annotations
+    my $ref1 = [];
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
     }
-    else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
+    
+    #get maker annotations
+    my $ref2 = [];
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
     }
+    
+    my $features = _ary_to_features($ref1, $ref2);
+    foreach my $f (@$features){
+	my $tag = $f->primary_tag();
+	
+	if ($tag eq 'gene') {    
+	    my $id   = _get_annotation($f,'ID');
+	    my $name = _get_annotation($f,'Name');
+	    
+	    $name = $id if($name eq '');
+	    
+	    #get old names
+	    ($name) = $name =~ /^([^\s\t\n]+)/;
+	    $names{$name}++;
+	    
+	    #get old maker cluster ids
+	    my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+	    $names{$c_id}++ if(defined $c_id);
+	}
+    }
+    
+    #---get names for preds
+    $h_type = 'pred';
+    
+    #get gff annotations
+    $ref1 = [];
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+    }
+    
+    #get maker annotations
+    $ref2 = [];
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+    }
+    
+    $features = _ary_to_features($ref1, $ref2);
+    foreach my $f (@$features){
+	my $tag = $f->primary_tag();
+	
+	if ($tag eq 'match' || $tag eq 'gene') { 
+	    my $id   = _get_annotation($f,'ID');   
+	    my $name = _get_annotation($f,'Name');
+	    
+	    $name = $id if($name eq '');
+	    
+	    #get old names
+	    ($name) = $name =~ /^([^\s\t\n]+)/;
+	    $name =~ s/\-mRNA\-\d+$//;
+	    $names{$name}++;
+	    
+	    #get old maker cluster ids
+	    my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+	    $names{$c_id}++ if(defined $c_id);
+	}
+    }
+    
+    $dbh->disconnect;
 
     return \%names;
 }

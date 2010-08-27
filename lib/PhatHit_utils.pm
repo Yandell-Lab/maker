@@ -1058,6 +1058,8 @@ sub merge_hits {
 		$b_hit->hsps(\@new_b_hsps);
 		$b_hit->{'_sequenceschanged'} = 1;
 		$b_hit->{'_sequences_was_merged'} = 1;
+		$b_hit->{'nB'} = undef; #force recompute of start
+		$b_hit->{'nE'} = undef; #force recompute of end
 		push(@merged, $b_hit)	
 	}
 

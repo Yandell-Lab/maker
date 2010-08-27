@@ -1093,6 +1093,7 @@ sub polish_exonerate {
 	
 	foreach my $exonerate_hit (@{$exonerate_hits}) {
 	    next if(! defined $exonerate_hit);
+	    next if $exonerate_hit->pAh < $pcov;
 
 	    #fix flipped hits when mapping ESTs to gene models as is
 	    if($type eq 'e' && $est_forward && $exonerate_hit->num_hsps == 1 && $exonerate_hit->{_was_flipped}){
@@ -1100,7 +1101,7 @@ sub polish_exonerate {
 		$exonerate_hit->{_was_flipped} = 0;
 	    }
 
-	    #make sure hit overlaps blastn input (for large pred_flanks)
+	    #make sure hit overlaps blast input (for large pred_flanks)
 	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($exonerate_hit,'query');
 	    ($nB, $nE) = ($nE, $nB) if($nB > $nE);
 	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
@@ -1418,23 +1419,25 @@ sub collect_blastn{
 			     $chunk->offset(),
 			    );
 
-   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-      my @keepers;
-      
-      foreach my $hit (@{$chunk_keepers}) {
-	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-	    push (@keepers, $hit)
-	 }
-	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-	    push (@keepers, $hit)
-	 }
-      }
-      
-      return \@keepers;
-   }
-   else {
-      return $chunk_keepers
-   }
+#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
+#      my @keepers;
+#      
+#      foreach my $hit (@{$chunk_keepers}) {
+#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#      }
+#      
+#      return \@keepers;
+#   }
+#   else {
+#      return $chunk_keepers
+#   }
+
+   return $chunk_keepers
 }
 #-----------------------------------------------------------------------------
 sub blastn {
@@ -1697,23 +1700,25 @@ sub collect_blastx{
 			     $chunk->offset()
 			    );
 
-   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-      my @keepers;
-      
-      foreach my $hit (@{$chunk_keepers}) {
-	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-	    push (@keepers, $hit)
-	 }
-	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-	    push (@keepers, $hit)
-	 }
-      }
-      
-      return \@keepers;
-   }
-   else {
-      return $chunk_keepers;
-   }
+#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
+#      my @keepers;
+#      
+#      foreach my $hit (@{$chunk_keepers}) {
+#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#      }
+#      
+#      return \@keepers;
+#   }
+#   else {
+#      return $chunk_keepers;
+#   }
+
+   return $chunk_keepers;
 }
 #-----------------------------------------------------------------------------
 sub blastx {
@@ -1988,23 +1993,25 @@ sub collect_tblastx{
 			     $chunk->offset(),
 			    );
 
-   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-      my @keepers;
-      
-      foreach my $hit (@{$chunk_keepers}) {
-	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-	    push (@keepers, $hit)
-	 }
-	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-	    push (@keepers, $hit)
-	 }
-      }
-      
-      return \@keepers;
-   }
-   else {
-      return $chunk_keepers
-   }
+#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
+#      my @keepers;
+#      
+#      foreach my $hit (@{$chunk_keepers}) {
+#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
+#	    push (@keepers, $hit)
+#	 }
+#      }
+#      
+#      return \@keepers;
+#   }
+#   else {
+#      return $chunk_keepers
+#   }
+
+   return $chunk_keepers
 }
 #-----------------------------------------------------------------------------
 sub tblastx {
@@ -2135,6 +2142,29 @@ sub runtBlastx {
       $w->run($command);
    }
 
+}
+#-----------------------------------------------------------------------------
+sub clean_blast_hits{
+    my $hits = shift;
+    my $pcov = shift || 0;
+    my $pid  = shift || 0;
+    my $sig  = shift || 1000;
+    my $con  = shift || 0; #contiguity flag
+
+    my @keepers;
+
+    foreach my $hit (@$hits){
+	my $significance = $hit->significance();
+	$significance = "1".$significance if($significance =~ /^e/);
+	$significance =~ s/\.$//; # 0.
+	next unless ($significance < $sig);
+	next unless ($hit->pAh > $pcov);
+	next unless ($hit->hsp('best')->frac_identical() > $pid);
+	next unless (!$con || PhatHit_utils::is_contigous($hit));
+	push(@keepers, $hit);
+    }
+    
+    return \@keepers;
 }
 #-----------------------------------------------------------------------------
 sub repeatmask {
@@ -2411,12 +2441,14 @@ sub set_defaults {
       $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin';
       $CTL_OPT{'cgi_dir'} = '/Library/WebServer/CGI-Executables' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_dir'} = '/data//var/www/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} .= '/maker' if(-d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
       $CTL_OPT{'html_dir'} = '/var/www/html';
       $CTL_OPT{'html_dir'} = '/Library/WebServer/Documents' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} = '/var/www' if(! -d $CTL_OPT{'html_dir'});
+      $CTL_OPT{'html_dir'} = '/data/var/www/html' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} = '' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} .= '/maker' if(-d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_web'} = '/maker';
@@ -2432,10 +2464,22 @@ sub set_defaults {
       $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'font_file'} = '' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
-      $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} || '';
-      $CTL_OPT{'JBROWSE_ROOT'} = '';
-      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf';
+      $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/html/jbrowse';
+      $CTL_OPT{'JBROWSE_ROOT'} = '/Library/WebServer/Documents/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
+      $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
+      $CTL_OPT{'JBROWSE_ROOT'} = '/usr/local/gmod/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
+      $CTL_OPT{'JBROWSE_ROOT'} = '/data/var/www/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
+      $CTL_OPT{'JBROWSE_ROOT'} = '' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
+      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf';
+      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
       $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
+      $CTL_OPT{'APOLLO_ROOT'} = `which apollo 2> /dev/null`;
+      $CTL_OPT{'APOLLO_ROOT'} = ($CTL_OPT{'APOLLO_ROOT'} =~ /^no apollo/) ? '' : $CTL_OPT{'APOLLO_ROOT'} =~ /^([^\n]+)\/bin\/apollo\n?$/;
+      $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if($ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
+      $CTL_OPT{'APOLLO_ROOT'} = '/usr/local/gmod/apollo' if(! $CTL_OPT{'APOLLO_ROOT'} || ! -d $CTL_OPT{'APOLLO_ROOT'});
+      $CTL_OPT{'APOLLO_ROOT'} = '' if(! -d $CTL_OPT{'APOLLO_ROOT'});
+      $CTL_OPT{'ZOE'} = $ENV{'ZOE'} || '';
+      $CTL_OPT{'AUGUSTUS_CONFIG_PATH'} = $ENV{'AUGUSTUS_CONFIG_PATH'} || '';
    }
 
    #server menus
@@ -3483,6 +3527,10 @@ sub generate_control_files {
        print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.\n";
        print OUT "JBROWSE_ROOT:$O{JBROWSE_ROOT} #base directory for JBrowse installation.\n";
        print OUT "GBROWSE_MASTER:$O{GBROWSE_MASTER} #path to GBrowse.conf file.\n";
+       print OUT "\n";
+       print OUT "#-----Environmental Variables for Dependencies\n";
+       print OUT "ZOE:$O{ZOE} #required by SNAP, see SNAP documentation.\n";
+       print OUT "AUGUSTUS_CONFIG_PATH:$O{AUGUSTUS_CONFIG_PATH} #required by AUGUSTUS, see AUGUSTUS documentation.\n";
        print OUT "\n";
        print OUT "#-----MAKER Server Specific Options\n";
        print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";

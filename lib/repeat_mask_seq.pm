@@ -89,8 +89,8 @@ sub mask_chunk {
 
 	my $chunk_offset = $chunk->offset();
 
-	my $tes_coors = get_coors($tes, $chunk_offset);
-	my $lcs_coors = get_coors($lcs, $chunk_offset);
+	my $tes_coors = get_hsp_coors($tes, $chunk_offset);
+	my $lcs_coors = get_hsp_coors($lcs, $chunk_offset);
 
 	my $seq = $chunk->seq();
 
@@ -100,6 +100,21 @@ sub mask_chunk {
 	$chunk->seq($seq);
 	
 	return $chunk;
+}
+#-----------------------------------------------------------------------------
+sub mask_seq {
+	my $seq = shift;
+	my $features = shift;
+
+	my ($tes, $lcs) = seperate_types($features);
+
+	my $tes_coors = get_hsp_coors($tes, 0);
+	my $lcs_coors = get_hsp_coors($lcs, 0);
+
+	_hard_mask_seq (\$seq, $tes_coors, 50, 'N');
+    	_soft_mask_seq(\$seq, $lcs_coors, 0);
+	
+	return $seq;
 }
 #-----------------------------------------------------------------------------
 sub _hard_mask_seq {
@@ -151,7 +166,7 @@ sub _soft_mask_seq {
    }
 }
 #-----------------------------------------------------------------------------
-sub get_coors {
+sub get_hsp_coors {
 	my $hits = shift;
 	my $offset = shift || 0;
 
@@ -195,6 +210,9 @@ sub seperate_types {
 		    else {
 			push(@tes, $f);
 		    }
+		}
+		else{
+		    push(@tes, $f);
 		}
 	}
 	return (\@tes, \@lcs);

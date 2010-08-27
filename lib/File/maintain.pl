@@ -17,7 +17,7 @@ BEGIN {
     $SIG{STOP} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{INT}  = sub{$LOCK->unlock if($LOCK); exit(0)};
 }
-
+exit(0);
 my $pid = shift;
 my $time = shift;
 my $serial = shift;

@@ -114,7 +114,7 @@ sub _initialize {
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
    #make sure the log is only accesed by this process
-   if(my $lock = new File::NFSLock($self->{file_name}, 'NB', undef, 90)){
+   if(my $lock = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
        my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
        my $length = $self->{params}->{seq_length};
    
@@ -196,8 +196,9 @@ sub _compare_and_clean {
     my @dirs; #list of directories to remove
     
     if ($continue_flag > 0 && -e $log_file) {
+
 	die "ERROR: Database timed out in runlog::_clean_files\n\n"
-	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
+	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 120, 30));
 
 	#seen is set in ds_utility.pm
 	my %SEEN;
@@ -234,7 +235,7 @@ sub _compare_and_clean {
 	$SEEN{$name} = $continue_flag;
 	untie %SEEN;
 	$lock->unlock;
-	
+
 	if($continue_flag >= -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();

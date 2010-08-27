@@ -152,7 +152,7 @@ sub new {
 	  $self->{stale_lock_timeout} > 0 &&
 	  time() - (stat _)[9] > $self->{stale_lock_timeout}
 	){
-	  unlink ($self->{lock_file}); 
+	  #unlink ($self->{lock_file}); 
 	  #lock the lock file
 	  local $LOCK_EXTENSION = '.shared';
 	  if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
@@ -350,11 +350,13 @@ sub unlock ($) {
   }
 
   if (!$self->{unlocked}) {
+    my $stat;
     if( $self->{lock_type} & LOCK_SH ){
-      return $self->do_unlock_shared;
+      $stat = $self->do_unlock_shared;
     }else{
-      return $self->do_unlock;
+      $stat = $self->do_unlock;
     }
+
     $self->{unlocked} = 1;
     foreach my $signal (@CATCH_SIGS) {
       if ($SIG{$signal} &&
@@ -367,6 +369,7 @@ sub unlock ($) {
         delete $SIG{$signal};
       }
     }
+    return $stat;
   }
   return 1;
 }
@@ -414,10 +417,10 @@ sub create_magic ($;$) {
       }
   }
   else{
-      open (_FH,"$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
+      open (_FH,"+<$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
       seek     _FH, 0, 0;
       print    _FH $self->{lock_line};
-      truncate _FH, $self->{lock_line};
+      truncate _FH, length($self->{lock_line});
       close    _FH;
   }
 
