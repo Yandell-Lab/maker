@@ -2441,7 +2441,7 @@ sub set_defaults {
       $CTL_OPT{'cgi_dir'} = '/var/www/cgi-bin';
       $CTL_OPT{'cgi_dir'} = '/Library/WebServer/CGI-Executables' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
-      $CTL_OPT{'cgi_dir'} = '/data//var/www/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_dir'} = '/data/var/www/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} .= '/maker' if(-d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
