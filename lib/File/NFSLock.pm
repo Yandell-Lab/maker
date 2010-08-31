@@ -150,7 +150,7 @@ sub new {
       ### remove an old lockfile if it is older than the stale_timeout
       if( -f $self->{lock_file} &&
 	  $self->{stale_lock_timeout} > 0 &&
-	  time() - (stat _)[9] > $self->{stale_lock_timeout}
+	  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 	){
 	  #unlink ($self->{lock_file}); 
 	  #lock the lock file
@@ -159,7 +159,7 @@ sub new {
 	      #always check twice that this is still the file
 	      if( -f $self->{lock_file} &&
 		  $self->{stale_lock_timeout} > 0 &&
-		  time() - (stat _)[9] > $self->{stale_lock_timeout}
+		  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 		){
 		  unlink ($self->{lock_file});
 	      }
@@ -194,7 +194,7 @@ sub new {
 	  my @them = ();
 	  my @dead = ();
 	  
-	  my $has_lock_exclusive = !((stat _)[2] && $SHARE_BIT);
+	  my $has_lock_exclusive = !((stat $self->{lock_file})[2] && $SHARE_BIT);
 	  my $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
 	  
 	  while(defined(my $line=<_FH>)){
@@ -227,7 +227,7 @@ sub new {
 		      @them = ();
 		      @dead = ();
 		      
-		      $has_lock_exclusive = !((stat _)[2] && $SHARE_BIT);
+		      $has_lock_exclusive = !((stat $self->{lock_file})[2] && $SHARE_BIT);
 		      $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
 		      
 		      my $content = '';
@@ -436,7 +436,7 @@ sub do_lock {
   ### try a hard link, if it worked
   ### two files are pointing to $rand_file
   my $success = link( $rand_file, $lock_file )
-      && -e $rand_file && (stat _)[3] == 2;
+      && -e $rand_file && (stat $self->{lock_file})[3] == 2;
   unlink ($rand_file) if($success);
 
   return $success;
@@ -468,7 +468,7 @@ sub do_lock_shared {
   unlink ($rand_file);
   if ( !$success &&
        -e $lock_file &&
-       ((stat _)[2] & $SHARE_BIT) != $SHARE_BIT
+       ((stat $self->{lock_file})[2] & $SHARE_BIT) != $SHARE_BIT
      ){
 
     $errstr = 'Exclusive lock exists.';
@@ -518,10 +518,13 @@ sub do_unlock_shared ($) {
   my $content = '';
   while(defined(my $line=<_FH>)){
     next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
-    #ginore  shared hosts where lock appears to be stale
+    #ignore shared hosts where lock appears to be stale
     next if ($self->{stale_lock_timeout} > 0 &&
-	     time() - (stat _)[9] > $self->{stale_lock_timeout}
+	     time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 	     );
+    #ignore processes that appear to be dead on this host
+    next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
+
     $content .= $line;
   }
 
@@ -646,7 +649,7 @@ sub refresh {
 	  next if $line eq $old_lock_line;
 	  #ignore re-adding shared line if they appear to be stale 
 	  next if($self->{stale_lock_timeout} > 0 &&
-		  time() - (stat _)[9] > $self->{stale_lock_timeout}
+		  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 		 );
 	  $content .= $line;
       }
@@ -742,13 +745,18 @@ sub owners {
     }
 
     ### read existing file
-    my $count = 1; #self is alway an owner
+    my $count = 0;
+    $count++ if($self->still_mine); #I am almost always an owner
+
     while(defined(my $line=<_FH>)){
 	next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
-	#ignore  shared hosts where lock appears to be stale
+	#ignore shared hosts where lock appears to be stale
 	next if ($self->{stale_lock_timeout} > 0 &&
-		 time() - (stat _)[9] > $self->{stale_lock_timeout}
+		 time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 		 );
+	#ignore processes that appear to be dead on this host
+	next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
+
 	$count++;
     }
 

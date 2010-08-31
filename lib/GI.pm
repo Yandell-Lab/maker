@@ -1036,7 +1036,7 @@ sub polish_exonerate {
     my @exonerate_data;
     
     foreach my $hit (@{$phat_hits}) {
-	next if $hit->pAh < $pcov;
+	next if $hit->pAh < $pcov/2;
 	next if $hit->hsp('best')->frac_identical < $pid;
 	
 	my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
@@ -2297,9 +2297,7 @@ sub set_defaults {
       $CTL_OPT{'protein'} = '';
       $CTL_OPT{'protein_gff'} = '';
       $CTL_OPT{'model_org'} = 'all';
-      $CTL_OPT{'model_org'} .= '=STATIC' if($main::server);
       $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta");
-      $CTL_OPT{'repeat_protein'} .= "=STATIC" if($main::server);
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
@@ -2954,7 +2952,7 @@ sub load_control_files {
    if ($CTL_OPT{blast_type} !~ /^wublast$|^ncbi$/) {
       warn "WARNING: blast_type must be set to \'wublast\' or \'ncbi\'.\n",
       "The value $CTL_OPT{blast_type} is invalid.\n",
-      "This will now be reset to the default 'wublast'.\n\n";
+      "This will now be reset to the default 'wublast'.\n\n" unless($main::qq);
       
       $CTL_OPT{blast_type} = 'wublast';
    }
@@ -2966,7 +2964,7 @@ sub load_control_files {
        -f $CTL_OPT{blastall}
       ) {
       warn "WARNING: blast_type is set to \'wublast\' but wublast executables\n",
-      "can not be located.  NCBI blast will be used instead.\n\n";
+      "can not be located.  NCBI blast will be used instead.\n\n" unless($main::qq);
 
       $CTL_OPT{blast_type} = 'ncbi';
    }
@@ -2978,7 +2976,7 @@ sub load_control_files {
        -f $CTL_OPT{tblastx}
       ) {
       warn "WARNING: blast_type is set to \'ncbi\' but ncbi executables\n",
-      "can not be located.  WUBLAST blast will be used instead.\n\n";
+      "can not be located.  WUBLAST blast will be used instead.\n\n" unless($main::qq);
 
       $CTL_OPT{blast_type} = 'wublast';
    }
@@ -3247,7 +3245,8 @@ sub load_control_files {
 
    set_global_temp($CTL_OPT{_TMP});
 
-   #--exit with status of 0 if just checking control files with -check flag
+   #--exit with status of 0 if just checking control files with -check fla
+   return %CTL_OPT if($OPT{parse});
    exit(0) if($OPT{check});
 
    #--set an initialization lock so steps are locked to a single process
@@ -3281,40 +3280,18 @@ sub load_control_files {
 		       $CTL_OPT{out_base}."/$app\_exe.log"
 		       );
 
-       my @ctl_news = ($TMP."/$app\_opts.log",
-		       $TMP."/$app\_bopts.log",
-		       $TMP."/$app\_exe.log"
-		       );
-
        unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
 	   die "ERROR: Could not query control option logs\n\n";
        }
 
-       #log the current control files for comparison
-       generate_control_files($TMP, 'all', \%CTL_OPT, 1);
-
-       my $log_data;
-       my $new_data;
-       foreach my $ctl (@ctl_logs){
-	   open(my $FH, "< $ctl");
-	   $log_data .= join('', <$FH>);
-	   close($FH);
-       }
-
-       foreach my $ctl (@ctl_news){
-	   open(my $FH, "< $ctl");
-	   $new_data .= join('', <$FH>);
-	   close($FH);
-       }
-
-       #should be exactly identical
-       if($log_data ne $new_data){
+       #should be same
+       if(! runlog::are_same_opts(\%CTL_OPT, \@ctl_logs)){
 	   die "ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
 	       "with different settings in this same directory.\n\n";
        }
        else{#start a second MAKER process, but give a warning
 	   warn "WARNING: Multiple MAKER processes have been started in the\n".
-	        "same directory.\n\n";
+	        "same directory.\n\n" unless($main::qq);
 
 	   $CTL_OPT{_multi_chpc}++; #multi process flag
        }

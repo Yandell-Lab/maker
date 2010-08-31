@@ -933,7 +933,6 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 
-
 	    my $blastn_keepers = [];
 	    if ($res_dir) {
 	       $blastn_keepers = GI::collect_blastn($chunk,
@@ -968,15 +967,6 @@ sub _go {
 										   [$blastn_keepers]
 										   );
 	    }
-
-	    #-clean the blastn hits
-	    print STDERR "cleaning blastn...\n" unless $main::quiet;
-	    $blastn_keepers = GI::clean_blast_hits($blastn_keepers,
-						   $CTL_OPT{pcov_blastn},
-						   $CTL_OPT{pid_blastn},
-						   $CTL_OPT{eval_blastn},
-						   1 #contiguity flag
-						   );
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -1117,15 +1107,6 @@ sub _go {
 										     [$tblastx_keepers]
 										     );
 	    }
-
-	    #-clean the tblastx hits
-	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
-	    my $tblastx_keepers = GI::clean_blast_hits($tblastx_keepers,
-						       $CTL_OPT{pcov_tblastx},
-						       $CTL_OPT{pid_tblastx},
-						       $CTL_OPT{eval_tblastx},
-						       1 #contiguity flag
-						       );
 	    #-------------------------CODE
 
 	    #------------------------RESULTS
@@ -1269,15 +1250,6 @@ sub _go {
 										   [$blastx_keepers]
 										   );
 	    }
-
-	    #-clean the blastx hits
-	    print STDERR "cleaning blastx...\n" unless $main::quiet;
-	    my $blastx_keepers = GI::clean_blast_hits($blastx_keepers,
-						      $CTL_OPT{pcov_blastx},
-						      $CTL_OPT{pid_blastx},
-						      $CTL_OPT{eval_blastx},
-						      0 #contiguity flag
-						      );
 	    #-------------------------CODE
 	    
 	    #------------------------RESULTS
@@ -1342,6 +1314,15 @@ sub _go {
 							 $LOG
 							 );
 	    }
+
+	    #-clean the blastn hits
+	    print STDERR "cleaning blastn...\n" unless $main::quiet;
+	    $blastn_keepers = GI::clean_blast_hits($blastn_keepers,
+						   $CTL_OPT{pcov_blastn},
+						   $CTL_OPT{pid_blastn},
+						   $CTL_OPT{eval_blastn},
+						   1 #contiguity flag
+						   );
 
 	    $blastn_keepers = GI::combine($blastn_keepers, $holdover_blastn);
 	    #-------------------------CODE
@@ -1408,6 +1389,15 @@ sub _go {
 		#					 $LOG
 		#					 );
 	    }
+	    
+	    #-clean the tblastx hits
+	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
+	    $tblastx_keepers = GI::clean_blast_hits($tblastx_keepers,
+						    $CTL_OPT{pcov_tblastx},
+						    $CTL_OPT{pid_tblastx},
+						    $CTL_OPT{eval_tblastx},
+						    1 #contiguity flag
+						    );
 
 	    $tblastx_keepers = GI::combine($tblastx_keepers, $holdover_tblastx);
 	    #-------------------------CODE
@@ -1475,6 +1465,15 @@ sub _go {
 							 $LOG
 							);
 	    }
+
+	    #-clean the blastx hits
+	    print STDERR "cleaning blastx...\n" unless $main::quiet;
+	    $blastx_keepers = GI::clean_blast_hits($blastx_keepers,
+						   $CTL_OPT{pcov_blastx},
+						   $CTL_OPT{pid_blastx},
+						   $CTL_OPT{eval_blastx},
+						   0 #contiguity flag
+						   );
 
 	    $blastx_keepers = GI::combine($blastx_keepers, $holdover_blastx);
 	    #-------------------------CODE

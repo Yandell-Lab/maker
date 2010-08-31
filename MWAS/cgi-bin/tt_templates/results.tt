@@ -6,7 +6,7 @@
 <table width= 100%>
 <tr>
   <td nowrap>
-    <h3 align=left>Annotation Status Summery:</h3>
+    <h3 align=left>Annotation Status Summary:</h3>
     <center>
     <p style="font-size : 12">
 	TOTAL Contigs: [% counts.TOTAL %]<br>

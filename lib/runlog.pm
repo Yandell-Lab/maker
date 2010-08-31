@@ -14,6 +14,7 @@ use IO::File;
 use Fasta;
 use File::NFSLock;
 use AnyDBM_File;
+use GI;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -848,6 +849,37 @@ sub unlock {
     my $self = shift;
     
     $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
+#-------------------------------------------------------------------------------
+sub are_same_opts {
+    shift @_ if(ref($_[0]) eq 'runlog'); #can be method or function
+    my %CTL_OPT = %{shift @_};
+    my @files = @_;
+
+    my %LOG_OPT;
+    if(ref($files[0]) eq 'HASH'){
+	%LOG_OPT = %{$files[0]};
+    }
+    elsif(ref($files[0]) eq 'ARRAY'){
+	%LOG_OPT = GI::load_control_files($files[0], {parse => 1})
+    }
+    else{
+	%LOG_OPT = GI::load_control_files(\@files, {parse => 1})
+    }
+
+    foreach my $key (@ctl_to_log){
+	my $ctl = (defined $CTL_OPT{$key}) ? $CTL_OPT{$key} : '';
+	my $log = (defined $LOG_OPT{$key}) ? $LOG_OPT{$key}: '';
+
+	$ctl = join(',', sort split(',', $ctl));
+	$log = join(',', sort split(',', $log));
+
+	if($ctl ne $log){
+	    return 0;
+	}
+    }
+
+    return 1;
 }
 #-------------------------------------------------------------------------------
 sub DESTROY {

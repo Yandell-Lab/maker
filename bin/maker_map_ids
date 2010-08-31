@@ -10,7 +10,7 @@ my $usage = "
 
 Synopsis:
 
-maker_map_ids --prefix PYU1_ --justify 6 genome.all.gff > genome.all.id.map
+maker_map_ids --prefix PYU1_ --justify 8 genome.all.gff > genome.all.id.map
 
 Description:
 
@@ -26,12 +26,12 @@ Options:
   --initial     The initial value to start with for ID count. If --initial
                 is supplied more than once than the first value will be used
                 for genes and the second for transcripts (default = 1)
-  --abrv_gene   Abreviation added to IDs for genes (default = 'G')
-  --abrv_tran   Abreviation added to IDs for transcripts (default = 'T')
-  --iterate     Optional transcript iteration to add to IDs. Value can be '0',
-                '1', or 'A', i.e. mRNA-0 or mRNA-1 or mRNA-A (default = off)
+  --abrv_gene   Optional abreviation added to IDs for genes (i.e. = 'G')
+  --abrv_tran   Optioanl abreviation added to IDs for transcripts (i.e. = 'T')
+  --iterate     Transcript iteration to add to IDs. Value can be '0', '1',
+                or 'A', i.e. mRNA-0 or mRNA-1 or mRNA-A (default = 'A')
   --justify     The unique integer portion of the ID will be right justified
-                with '0's to this length (default = 6)
+                with '0's to this length (default = 8)
   --sort_order  A tab delimited file containing two columns: contig_id
                 and sort_order.  Genes and transcripts will be named
                 in consecutive order along the contigs, and the
@@ -42,24 +42,22 @@ Options:
                 length.
 
 Formating:
-
-  The script limits ID mapping to gene and mRNA features, and it
-  includes 'G' and 'T' abbreviations within the IDs for genes and
-  mRNAs respectively.  By default, G and T are added after the prefix, but you
-  can specify an alternate location by placing a '?' character as part of the
-  prefix or the sufix. The iterator is placed after the suffix by default,
-  but you can specify an alternate location by adding a % character to the
+  By default gene and transcript abreviations will appear at the end of the
+  suffix and the iterate value will appear at the end of the prefix (only on
+  transcripts).  You can specify an alternate location for the abbreviation by
+  placing a '?' character as part of the prefix or the sufix. An alternate
+  location for the itterator can be given by adding a % character to the
   suffix or prefix.
 
 ";
 
 
 my $prefix = 'MAKER_';
-my $suffix = '';
-my $abrv_gene = 'G';
-my $abrv_tran = 'T';
-my $iterate = '';
-my $justify = 6;
+my $suffix = '-R%';
+my $abrv_gene = '';
+my $abrv_tran = '';
+my $iterate = 'A';
+my $justify = 8;
 my $sort_order;
 my $apollo;
 my @initial;
@@ -83,15 +81,8 @@ if (! $opt_success || ! $gff_file){
     exit(0);
 }
 
-if($apollo){
-    $suffix = '-R%';
-    $iterate = 'A';
-    $abrv_gene = '';
-    $abrv_tran = '';
-}
-
 if($suffix ne '' && $iterate eq ''){
-    $iterate = 1;
+    $iterate = 'A';
 }
 
 if($iterate ne '' && $iterate !~ /^0$|^1$|^A$/i){
@@ -101,7 +92,7 @@ if($iterate ne '' && $iterate !~ /^0$|^1$|^A$/i){
 $prefix .= '?' if($prefix !~ /\?/ && $suffix !~ /\?/);
 $suffix .= '%' if($suffix !~ /\%/ && $prefix !~ /\%/);
 $iterate = uc($iterate);
-$justify ||= 6;
+$justify ||= 8;
 @initial = (1) if(! @initial);
 
 my $sort_map = parse_sort_order($sort_order, $gff_file);

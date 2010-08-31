@@ -17,7 +17,7 @@ BEGIN {
     $SIG{STOP} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{INT}  = sub{$LOCK->unlock if($LOCK); exit(0)};
 }
-exit(0);
+
 my $pid = shift;
 my $time = shift;
 my $serial = shift;
@@ -38,6 +38,9 @@ while(-f $LOCK->{lock_file}){
     if(! Proc::Signal::exists_proc_by_id($pid)){
 	$LOCK->unlock if($LOCK);
 	exit(0);
+    }
+    if($LOCK && ! $LOCK->still_mine){
+	exit(1);
     }
     $LOCK->refresh;
     sleep $time;
