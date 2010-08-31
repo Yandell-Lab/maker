@@ -42,11 +42,30 @@ sub run {
 		$self->print_command($command);
 		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 		local $/ = \1;
+		my $err;
 		while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
+		   $err .= $line;
 		}
 		waitpid $pid, 0;
-		die "ERROR: RepeatMasker failed\n" if $? != 0;
+		
+		#try again because of error caused by RM algorithm
+		#I submitted a bug fix, they ignored it, so this is how I get arround it
+		if($? != 0 && $err =~ "refinelib) does not exist"){
+		    print STDERR "Reconfgiguring command and trying again.\n" unless($main::quiet);
+		    $command =~ /\-species\s+[^\s]+/-species vertibrate/;
+		    $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		    $err = ();
+		    while (my $line = <CHLD_ERR>){
+			print STDERR $line unless($main::quiet);
+			$err.= $line;
+		    }
+		    waitpid $pid, 0;
+		    die "ERROR: RepeatMasker failed\n" if $? != 0;
+		}
+		elsif($? != 0){
+		    die "ERROR: RepeatMasker failed\n";
+		}
 	}
 	else {
 		$self->print_command();
