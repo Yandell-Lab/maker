@@ -46,14 +46,15 @@ sub run {
 		while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
+		   kill (9, $pid) if ($err =~ /refinelib\) does not exist/); #kill rather than wait for failure
 		}
 		waitpid $pid, 0;
 		
 		#try again because of error caused by RM algorithm
 		#I submitted a bug fix, they ignored it, so this is how I get arround it
-		if($? != 0 && $err =~ "refinelib) does not exist"){
-		    print STDERR "Reconfgiguring command and trying again.\n" unless($main::quiet);
-		    $command =~ /\-species\s+[^\s]+/-species vertibrate/;
+		if($? != 0 && $err =~ /refinelib\) does not exist/){
+		    print STDERR "Reconfiguring command and trying again.\n" unless($main::quiet);
+		    $command =~ s/\-species\s+[^\s]+/-species mammalia/;
 		    $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
 		    $err = ();
 		    while (my $line = <CHLD_ERR>){
