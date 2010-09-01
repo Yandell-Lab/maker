@@ -88,7 +88,7 @@ label_transcripts  = 1
 draw_translation   = 1
 implied_utrs       = 1
 description        = 1
-link               = [% base_url_cgi %]/gene_page.cgi?seq_id=$ref&name=$name
+#link               = [% base_url_cgi %]/gene_page.cgi?seq_id=$ref&name=$name
 link_target        = _blank
 category           = Genes
 key                = MAKER Gene Annotations
