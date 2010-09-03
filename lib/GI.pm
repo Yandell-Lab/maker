@@ -9,11 +9,13 @@ use FindBin;
 use Exporter;
 use FileHandle;
 use File::Temp qw(tempfile tempdir);
+use File::Path;
+use File::Copy;
+use File::NFSLock;
+use File::Which;
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use URI::Escape;
-use File::Path;
-use File::Copy;
 use Data::Dumper;
 use Getopt::Long;
 use FileHandle;
@@ -39,7 +41,6 @@ use maker::auto_annotator;
 use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
-use File::NFSLock;
 use FastaDB;
 use Digest::MD5;
 
@@ -2401,14 +2402,11 @@ sub set_defaults {
 		 );
 
       foreach my $exe (@exes) {
-	 my $loc = `which $exe 2> /dev/null`;
-	 chomp $loc;
-	 if ($loc =~ /^no $exe/) {
-	    $CTL_OPT{$exe} = '';
-	 }
-	 else {
-	    $CTL_OPT{$exe} = $loc;
-	 }
+	  my $loc = which($exe) || '';
+	  if($exe =~ /^.?blast.$|/){
+	      $loc = (grep {Cwd::abs_path($_) =~ /blasta$/} which($exe))[0] || '';
+	  }
+	  $CTL_OPT{$exe} = $loc;
       }
    }
 
@@ -2471,8 +2469,8 @@ sub set_defaults {
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf';
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
       $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
-      $CTL_OPT{'APOLLO_ROOT'} = `which apollo 2> /dev/null`;
-      $CTL_OPT{'APOLLO_ROOT'} = ($CTL_OPT{'APOLLO_ROOT'} =~ /^no apollo/) ? '' : $CTL_OPT{'APOLLO_ROOT'} =~ /^([^\n]+)\/bin\/apollo\n?$/;
+      $CTL_OPT{'APOLLO_ROOT'} = which('apollo') || '';
+      $CTL_OPT{'APOLLO_ROOT'} = $CTL_OPT{'APOLLO_ROOT'} =~ /^([^\n]+)\/bin\/apollo\n?$/;
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if($ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
       $CTL_OPT{'APOLLO_ROOT'} = '/usr/local/gmod/apollo' if(! $CTL_OPT{'APOLLO_ROOT'} || ! -d $CTL_OPT{'APOLLO_ROOT'});
       $CTL_OPT{'APOLLO_ROOT'} = '' if(! -d $CTL_OPT{'APOLLO_ROOT'});

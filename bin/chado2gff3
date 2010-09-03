@@ -156,9 +156,11 @@ open(LOG, "> $outdir/chado2gff3.log");
 
 #make contig GFF3 files one at a time
 if($cpus <= 1){
+    my $count = 0;
     foreach my $contig (@$contigs) {
 	my ($contig_id, $seqid) = @$contig;
-	
+	$count++;
+
 	open(my $OUT, "> $outdir/$seqid.gff");
 	
 	print $OUT "##gff-version 3\n";
@@ -220,13 +222,18 @@ sub run_thread{
 
     $DBH->disconnect;
 }
+#------------------------------------------------------------------------------
 sub get_contig_line {
     my $contig_id = shift; #contig feature_id
-    my $get_dbxref   = shift || 0;
-    my $get_ontology = shift || 0;
-    my $get_alias    = shift || 0;
-    my $get_other    = shift || 0;
+    my $get_dbxref   = shift || 1;
+    my $get_ontology = shift || 1;
+    my $get_alias    = shift || 1;
+    my $get_other    = shift || 1;
 
+    #hack to get around max_stack_depth problem
+    $DBH->disconnect;
+    $DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+    
     #get contig line info
     my ($feature_id,
 	$ID,
@@ -243,20 +250,20 @@ sub get_contig_line {
 
     #add other attributes if specified
     if($get_dbxref){
-	my ($att) = get_dbxref_terms([$contig_id]);
-	$line .= $att if($att);
+	my $att = get_dbxref_terms([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
     }
     if($get_ontology){
-	my ($att) = get_ontology_terms([$contig_id]);
-	$line .= $att if($att);
+	my $att = get_ontology_terms([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
     }
     if($get_alias){
-	my ($att) = get_aliases([$contig_id]);
-	$line .= $att if($att);
+	my $att = get_aliases([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
     }
     if($get_other){
-	my ($att) = get_other_attributes([$contig_id]);
-	$line .= $att if($att);
+	my $att = get_other_attributes([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
     }
 
     return $line;
@@ -264,15 +271,15 @@ sub get_contig_line {
 #------------------------------------------------------------------------------
 sub get_feature_lines {
     my $contig_id = shift; #contig feature_id
-    my $get_dbxref   = shift || 0;
-    my $get_ontology = shift || 0;
-    my $get_alias    = shift || 0;
-    my $get_other    = shift || 0;
+    my $get_dbxref   = shift || 1;
+    my $get_ontology = shift || 1;
+    my $get_alias    = shift || 1;
+    my $get_other    = shift || 1;
 
     #get contig name
     my ($seqid) = $DBH->selectrow_array("SELECT f.uniquename FROM feature f WHERE f.feature_id=$contig_id");
 
-    #get all features
+    #get all features on contig
     my $features = $DBH->selectall_arrayref("SELECT f.feature_id, r.accession, c.name, l.fmin, l.fmax, ".
 					    "a.significance, l.strand, l.phase, f.uniquename, f.name, f2.uniquename, ".
 					    "f3.uniquename, f4.uniquename, l2.fmin, l2.fmax, l2.strand ".
@@ -297,17 +304,18 @@ sub get_feature_lines {
     my $alias    = {};
     my $other    = {};
 
+    my @ids = map {$_->[0]} @$features;
     if($get_dbxref){
-	
+	my $dbxref = get_dbxref_terms(\@ids);
     }
     if($get_ontology){
-
+	my $ontology = get_ontology_terms(\@ids);
     }
     if($get_alias){
-
+	my $alias = get_aliases(\@ids);
     }
     if($get_other){
-
+	my $other = get_other_attributes(\@ids);
     }
 
     #make GFF3 feature lines
@@ -334,6 +342,8 @@ sub get_feature_lines {
 	#fix semantic differences
 	$start++;
 	#$end++; don't iterate end since it os already correct (coordinates are space based)
+
+	die "ERROR: No strand ".join("\t", @$feature)."\n" if(!$strand);
 
 	$strand = ($strand == 1) ? '+' : '-';
 	$Target =~ s/_\d+$// if($Target);
@@ -365,19 +375,19 @@ sub get_feature_lines {
 
 	#add other attributes if specified
 	if($get_dbxref){
-	    my ($att) = $dbxref->{$feature_id};
+	    my $att = $dbxref->{$feature_id};
 	    $line .= $att if($att);
 	}
 	if($get_ontology){
-	    my ($att) = $ontology->{$feature_id};
+	    my $att = $ontology->{$feature_id};
 	    $line .= $att if($att);
 	}
 	if($get_alias){
-	    my ($att) = $alias->{$feature_id};
+	    my $att = $alias->{$feature_id};
 	    $line .= $att if($att);
 	}
 	if($get_other){
-	    my ($att) = $other->{$feature_id};
+	    my $att = $other->{$feature_id};
 	    $line .= $att if($att);
 	}
 
@@ -497,50 +507,119 @@ sub get_fasta {
 }
 #------------------------------------------------------------------------------
 sub get_dbxref_terms {
-    my @feature_ids = @_;
+    my $feature_ids = shift;
+
+    return {} if(! @$feature_ids);
 
     #get dbxref terms
     my $dbxrefs = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
 					   "FROM feature_dbxref f ".
 					   "JOIN dbxref d ON f.dbxref_id=d.dbxref_id ".
 					   "JOIN db ON d.db_id=db.db_id ".
-					   "WHERE db.name != 'GFF_source'");
+					   "WHERE db.name!='GFF_source' ".
+					   "AND (f.feature_id=".join(" OR f.feature_id=", @$feature_ids).")");
 
-#    my ($feature_id, $odb, $accession) = ;
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $dbxref(@$dbxrefs){
+	my ($id, $nam, $acc) = @$dbxref;
+	$results{$id} .= ($results{$id}) ? ',' : 'Dbxref=';
+	$results{$id} .= "$nam:$acc";
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
 }
 #------------------------------------------------------------------------------
 sub get_ontology_terms {
-    my @feature_ids = @_;
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
 
     #get ontology terms
-    my $ontologyies = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
-					       "FROM feature_cvterm f ".
-					       "JOIN cvterm c ON f.cvterm_id=c.cvterm_id ".
-					       "JOIN dbxref d ON c.dbxref_id=d.dbxref_id ".
-					       "JOIN db ON d.db_id=db.db_id");
+    my $ontologies = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
+					      "FROM feature_cvterm f ".
+					      "JOIN cvterm c ON f.cvterm_id=c.cvterm_id ".
+					      "JOIN dbxref d ON c.dbxref_id=d.dbxref_id ".
+					      "JOIN db ON d.db_id=db.db_id ".
+					      "WHERE (f.feature_id=".join(" OR f.feature_id=", @$feature_ids).")");
+    
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $term (@$ontologies){
+	my ($id, $nam, $acc) = @$term;
+	$results{$id} .= ($results{$id}) ? ',' : 'Ontology_term=';
+	$results{$id} .= "$nam:$acc";
+    }
 
-#    my ($feature_id, $db, $accession) = ;
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
 }
 #------------------------------------------------------------------------------
 sub get_aliases {
-    my @feature_ids = @_;
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
 
     #get Aliases
     my $aliases = $DBH->selectall_arrayref("SELECT f.feature_id, s.name ".
-					   "FROM feature_synonym f ".
-					   "JOIN synonym s ON f.synonym_id=s.synonym_id");
-#    my ($feature_id, $alias) = ;
+					   "FROM feature f ".
+					   "JOIN feature_synonym fs on f.feature_id=fs.feature_id ".
+					   "JOIN synonym s ON fs.synonym_id=s.synonym_id ".
+					   "WHERE f.uniquename!=s.name AND f.name!=s.name ".
+					   "AND f.uniquename!=(s.name||'-'||f.feature_id) ".
+					   "AND (f.feature_id = ".join(" OR f.feature_id = ", @$feature_ids).")");
+
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $alias (@$aliases){
+	my ($id, $nam) = @$alias;
+	$results{$id} .= ($results{$id}) ? ',' : 'Alias=';
+	$results{$id} .= $nam;
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
 }
 #------------------------------------------------------------------------------
 sub get_other_attributes {
-    my @feature_ids = @_;
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
 
     #get other attributes
     my $others = $DBH->selectall_arrayref("SELECT f.feature_id, c.name, f.value ".
 					  "FROM featureprop f ".
 					  "JOIN cvterm c ON f.type_id=c.cvterm_id ".
-					  "WHERE c.name!='date' AND c.name!='owner' AND c.name!='problem' AND c.name!='status'");
-#    my ($feature_id, $key, $value) = ;
+					  "WHERE c.name!='date' AND c.name!='owner' AND c.name!='problem' AND c.name!='status' ".
+					  "AND (f.feature_id = ".join(" OR f.feature_id = ", @$feature_ids).")");
+
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $other (@$others){
+	my ($id, $key, $val) = @$other;
+	$results{$id}{$key} .= ($results{$id}{$key}) ? ',' : "$key=";
+	$results{$id}{$key} .= $val;
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} = join(';', sort values %{$results{$id}}) . ';';
+    }
+
+    return \%results;
 }
 #------------------------------------------------------------------------------
 sub crit1 {

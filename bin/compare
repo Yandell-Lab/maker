@@ -175,7 +175,7 @@ if($cpus <= 1){
 	my ($contig_id, $seqid) = @$contig;
 
 	#skip contigs not included in GFF3
-	next if(! defined $gff_data{$seqid});
+	#next if(! defined $gff_data{$seqid});
 
 	push(@for_threads, $contig_id); #only send ID to threads
     }
@@ -187,7 +187,7 @@ else{
 	my ($contig_id, $seqid) = @$contig;
 
 	#skip contigs not included in GFF3
-	next if(! defined $gff_data{$seqid});
+	#next if(! defined $gff_data{$seqid});
 
 	push(@for_threads, $contig_id); #only send ID to threads
     }
@@ -233,6 +233,7 @@ sub run_thread{
 	    my %gmatrix;
 	    my %cmatrix;
 	    my %found;
+	    my %status;
 	    
 	    for(my $i = 0; $i < @$gff_p; $i++){
 		my $gB = $gff_p->[$i][0];
@@ -246,18 +247,27 @@ sub run_thread{
 			$gmatrix{$gI}{$cI}++;
 			$cmatrix{$cI}{$gI}++;
 			$found{$gI}++;
+			$status{$cI} = 'OVERLAP';
+		    }
+		    elsif(! defined $status{$cI}){
+			$status{$cI} = 'NEW';
 		    }
 		}
 	    }
 
-	    #identify merged genes
+	    #identify and print merged genes
 	    while(my $key = each %cmatrix){
 		if (scalar keys %{$cmatrix{$key}} > 1){
 		    print "$key\tMERGE\n";
+		    $status{$key} = 'MERGE';
+		    #print $aliases
+		    foreach my $gI (keys %{$cmatrix{$key}}){
+			print "$key\t$gI\tALIAS\n" if($key ne $gI);
+		    }
 		}
 	    }
 	    
-	    #identify split genes
+	    #identify and print split genes
 	    my %merge;
 	    while(my $key = each %gmatrix){
 		if (scalar keys %{$gmatrix{$key}} > 1){
@@ -266,13 +276,28 @@ sub run_thread{
 		    }
 		}
 	    }
-
-	    my $val = join("\tSPLIT\n", @{[keys %merge]});
-	    print $val ."\tSPLIT\n" if($val);
+	    while(my $key = each %merge){
+		print "$key\tSPLIT\n";
+		$status{$key} = 'SPLIT';
+		#print aliases
+		foreach my $gI (keys %{$cmatrix{$key}}){
+		    print "$key\t$gI\tALIAS\n" if($key ne $gI);
+		}
+	    }
 
 	    foreach my $gene (@$gff_p){
 		my $name = $gene->[2];
 		print "$name\tMISSING\n" if(! defined $found{$name});
+	    }
+
+	    while(my $key = each %status){
+		print "$key\tNEW\n" if($status{$key} eq 'NEW');
+
+		if($status{$key} eq 'OVERLAP'){
+		    foreach my $gI (keys %{$cmatrix{$key}}){
+			print "$key\t$gI\tREPLACE\n" if($key ne $gI);
+		    }
+		}
 	    }
 	}
     }
