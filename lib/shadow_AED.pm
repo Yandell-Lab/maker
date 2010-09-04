@@ -112,6 +112,13 @@ sub get_AED {
       $index{$i}++;
    }
 
+   #catch error caused by bad GFF3 input
+   die "ERROR: The feature being compared appears to be missing\n".
+       "some of it's structure.  This can happen when you use\n".
+       "a malformed GFF3 file as input to one of MAKER's evidence\n".
+       "passthrough options. (from shadow_AED)\n"
+       if($index{2} + $index{3} == 0 || $index{1} + $index{3} == 0);
+
    my $spec = $index{3}/($index{2} + $index{3}); #specificity
    my $sens = $index{3}/($index{1} + $index{3}); #sensitivity
    my $AED = 1 - ($spec + $sens)/2;

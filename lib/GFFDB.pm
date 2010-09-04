@@ -967,6 +967,12 @@ sub _load_hsps {
     ($hit_name) = $hit_name =~ /(^[^\s]+)/;
     $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
 
+    #catch error caused by malformed GFF3
+    if($t->{exons}->[0] || ! $t->{exons}->[0]->{f}){
+	die "ERROR: Failed on $hit_name\n".
+	    "Check your input GFF3 file for errors! (from GFFDB)\n";
+    }
+
     #added 3/19/2009
     #check for single and double base pair overhangs
     if($t->{exons}->[0]->{f}->source_tag =~ /^snap|^augustus|^fgenesh|^genemark/){

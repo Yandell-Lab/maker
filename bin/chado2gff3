@@ -20,6 +20,7 @@ BEGIN{
 }
 
 use IO::Prompt;
+use URI::Escape;
 use DBD::Pg;
 use Fasta;
 use threads;
@@ -302,16 +303,16 @@ sub get_feature_lines {
 
     my @ids = map {$_->[0]} @$features;
     if($get_dbxref){
-	my $dbxref = get_dbxref_terms(\@ids);
+	$dbxref = get_dbxref_terms(\@ids);
     }
     if($get_ontology){
-	my $ontology = get_ontology_terms(\@ids);
+	$ontology = get_ontology_terms(\@ids);
     }
     if($get_alias){
-	my $alias = get_aliases(\@ids);
+	$alias = get_aliases(\@ids);
     }
     if($get_other){
-	my $other = get_other_attributes(\@ids);
+	$other = get_other_attributes(\@ids);
     }
 
     #make GFF3 feature lines
@@ -581,7 +582,10 @@ sub get_aliases {
 					      "JOIN feature_synonym fs on f.feature_id=fs.feature_id ".
 					      "JOIN synonym s ON fs.synonym_id=s.synonym_id ".
 					      "WHERE f.uniquename!=s.name AND f.name!=s.name ".
-					      "AND f.uniquename!=(s.name||'-'||f.feature_id) ".
+					      "AND f.name!=(s.name||':'||f.uniquename) ".
+					      "AND f.uniquename!=(s.name||'-".$feature_id."') ".
+					      "AND f.uniquename!=(s.name||'-".($feature_id+1)."') ".
+					      "AND f.uniquename!=(s.name||'-".($feature_id-1)."') ".
 					      "AND f.feature_id=$feature_id");
 	push(@aliases, @$values);
     }
@@ -623,6 +627,21 @@ sub get_other_attributes {
     my %results;
     foreach my $other (@others){
 	my ($id, $key, $val) = @$other;
+	#comment in chado is Note in GFF3
+	if($key eq 'comment'){
+	    $key = 'Note';
+	}
+	#fix common non-ascii encoded characters
+	if($val =~ /([^[:ascii:]])/){
+	    $val =~ s/\xA0/\x20/g; #space
+	    $val =~ s/\x93|\x94/\x22/g; #double quotes
+	    $val =~ s/\x96/\x2D/g; #dash
+	    $val =~ s/\x92/\x27/g; #apostrophe
+	    $val =~ s/\xCA//g;
+	}
+	#escape invalid characters for GFF3 attributes
+	$val = uri_escape($val, "\t\r\n\;\=\%\&\,\'\x00-\x1f\x7f-\xff");
+	
 	$results{$id}{$key} .= ($results{$id}{$key}) ? ',' : "$key=";
 	$results{$id}{$key} .= $val;
     }
