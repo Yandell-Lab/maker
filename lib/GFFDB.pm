@@ -968,7 +968,7 @@ sub _load_hsps {
     $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
 
     #catch error caused by malformed GFF3
-    if($t->{exons}->[0] || ! $t->{exons}->[0]->{f}){
+    if(! $t->{exons}->[0] || ! $t->{exons}->[0]->{f}){
 	die "ERROR: Failed on $hit_name\n".
 	    "Check your input GFF3 file for errors! (from GFFDB)\n";
     }

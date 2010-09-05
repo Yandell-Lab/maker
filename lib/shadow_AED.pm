@@ -116,7 +116,7 @@ sub get_AED {
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
-       "passthrough options. (from shadow_AED)\n"
+       "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
        if($index{2} + $index{3} == 0 || $index{1} + $index{3} == 0);
 
    my $spec = $index{3}/($index{2} + $index{3}); #specificity

@@ -258,12 +258,8 @@ sub run_thread{
 	    #identify and print merged genes
 	    while(my $key = each %cmatrix){
 		if (scalar keys %{$cmatrix{$key}} > 1){
-		    print "$key\tMERGE\n";
+		    #print "$key\tMERGE\n";
 		    $status{$key} = 'MERGE';
-		    #print $aliases
-		    foreach my $gI (keys %{$cmatrix{$key}}){
-			print "$key\t$gI\tALIAS\n" if($key ne $gI);
-		    }
 		}
 	    }
 	    
@@ -277,11 +273,12 @@ sub run_thread{
 		}
 	    }
 	    while(my $key = each %merge){
-		print "$key\tSPLIT\n";
-		$status{$key} = 'SPLIT';
-		#print aliases
-		foreach my $gI (keys %{$cmatrix{$key}}){
-		    print "$key\t$gI\tALIAS\n" if($key ne $gI);
+		#print "$key\tSPLIT\n";
+		if($status{$key} eq 'merged'){
+		    $status{$key} = 'STACKED';
+		}
+		else{
+		    $status{$key} = 'SPLIT';
 		}
 	    }
 
@@ -291,11 +288,31 @@ sub run_thread{
 	    }
 
 	    while(my $key = each %status){
-		print "$key\tNEW\n" if($status{$key} eq 'NEW');
-
 		if($status{$key} eq 'OVERLAP'){
 		    foreach my $gI (keys %{$cmatrix{$key}}){
-			print "$key\t$gI\tREPLACE\n" if($key ne $gI);
+			if($key ne $gI){
+			    print "$key\t$gI\tREPLACE\n";
+			}
+			else{
+			    print "$key\t$status{$key}\n";
+			}
+		    }
+		    next;
+		}
+
+		print "$key\t$status{$key}\n";
+
+		if($status{$key} eq 'SPLIT'){
+		    #print aliases
+		    foreach my $gI (keys %{$cmatrix{$key}}){
+			print "$key\t$gI\tALIAS\n" if($key ne $gI);
+		    }
+		}
+
+		if($status{$key} eq 'MERGE'){
+		    #print aliases
+		    foreach my $gI (keys %{$cmatrix{$key}}){
+			print "$key\t$gI\tALIAS\n" if($key ne $gI);
 		    }
 		}
 	    }

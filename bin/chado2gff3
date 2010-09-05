@@ -361,6 +361,13 @@ sub get_feature_lines {
 	    $e = '.' if (! defined $e || $e eq '');
 	}
 
+	#some values exit more than once in DB with multiple parents
+	my $count;
+	if($order{$ID}{line}){
+	    $count++;
+	    $ID = "$ID:$count" while(defined $order{$ID});
+	}
+
 	#make basic GFF3 line
 	my $line = "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\tID=$ID\;Name=$Name\;";
 	$line .= "Parent=$Parent\;" if($Parent);
@@ -404,8 +411,7 @@ sub get_feature_lines {
 	push(@{$order{$Parent}{children}}, $order{$ID}) if($Parent);
 	$order{$ID}{parent} = ($Parent) ? $order{$Parent} : undef;
 
-
-	if($type eq 'polypeptide' || $type eq 'CDS'){
+	if(($type eq 'polypeptide' || $type eq 'CDS') && $Derives_from){
 	    if(! $order{$Derives_from}){
 		$order{$Derives_from} = {};
 	    }
@@ -418,6 +424,10 @@ sub get_feature_lines {
     #get top level features and work down heirarchy
     foreach my $key (grep {!$order{$_}{parent}} keys %order){
 	my $f = $order{$key};
+
+	next if($order{$key}{type} eq 'mRNA'); #skip orphan transcripts
+	next if($order{$key}{type} eq 'exon'); #skip orphan exons
+	next if($order{$key}{type} eq 'CDS'); #skip orphan CDSs
 
 	push(@lines, $f->{line});
 	handle_children($f, \@lines) if($f->{children});
