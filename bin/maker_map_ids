@@ -130,7 +130,9 @@ while (<$IN>) {
 	$phase, $attrb_text) = split /\t/, $_;
     
     # Here we explicity limit the mapping to genes and mRNAs
-    if ($type && $type =~ /^(gene|mRNA)$/) {
+    if ($type && $type =~ /^(gene|mRNA|pseudogene)$/) {
+	$type = 'gene' if($type eq 'pseudogene');
+
 	my ($id) = $attrb_text =~ /ID=([^\;\n]*)/;
 	my ($name) = $attrb_text =~ /Name=([^\;\n]*)/;
 	my ($parent) = $attrb_text =~ /Parent=([^\;\n]*)/;

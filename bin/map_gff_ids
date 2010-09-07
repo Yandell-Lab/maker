@@ -74,7 +74,7 @@ while (my $line = <$IN>) {
 			    @{$attrb{Alias}} = grep {$_ ne $attrb{ID}[0]} @{$attrb{Alias}};  
 			}
 			#don't make aliases to Apollo's temporary ID's
-			$alias = undef if($alias =~ /^[^\:]+\:temp\d+\:/);
+			$alias = undef if($alias =~ /^[^\:]+\:temp\d+\:|^CG\:/);
 		}
 
 		# Collect all IDs that should be mapped for this feature
@@ -104,7 +104,7 @@ while (my $line = <$IN>) {
 					# Only if the value (or the portion preceding
 					# the first colon) is equal to the map key.
 					next unless ($value eq $id || $value =~ /^$id:/);
-					$value =~ s/$id/$map{$id}/;
+					$value =~ s/$id/$map{$id}/ unless($tag eq 'Name' && $id !~ /\-gene\-\d+\.\d+|^CG\:|^....\:|^[^\:]+\:temp\d+\:/);
 				}
 			}
 		}

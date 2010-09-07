@@ -313,14 +313,12 @@ sub gene_data {
     my $seq_id = shift;
     
     my $g_name     = $g->{g_name};
+    my $g_id       = $g->{g_id} || $g_name;
     my $g_s        = $g->{g_start};
     my $g_e        = $g->{g_end};
     my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
     my $t_structs  = $g->{t_structs};
     
-    #my $g_id = get_id_gene();
-    my $g_id = $g_name;
-
     my @g_data;
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
     my $attributes = 'ID='.$g_id.';Name='.$g_name.';';
@@ -335,9 +333,7 @@ sub gene_data {
     my %epl;
     my %cdss;
     foreach my $t (@transcripts){
-	#my $t_id = get_id_mRNA();
-	my $t_id = (split(/\s+/, $t->{t_name}))[0];
-	my $t_l = get_transcript_data($t, $t_id, $seq_id, $g_id, $g_name);
+	my $t_l = get_transcript_data($t, $seq_id, $g_id);
 	$g_l .= $t_l."\n";
 	
 	grow_exon_data_lookup($t->{hit}, $t_id, \%epl);
@@ -745,10 +741,8 @@ sub grow_cds_data_lookup {
 #------------------------------------------------------------------------
 sub get_transcript_data {
 	my $t      = shift;
-	my $t_id   = shift;
 	my $seq_id = shift;
 	my $g_id   = shift;
-	my $g_n    = shift;
 
 	my $t_hit   = $t->{hit};
 	my $t_seq   = $t->{t_seq};
@@ -756,6 +750,7 @@ sub get_transcript_data {
 	my $t_off   = $t->{t_offset};
 	my $t_end   = $t->{end};
 	my $t_name  = $t->{t_name};
+	my $t_id    = $t->{t_id};
 	my $t_qi    = $t->{t_qi};
 	my $AED     = $t->{AED};
 	my $score   = $t->{score};

@@ -223,6 +223,7 @@ sub run_thread{
 	#get contig name
 	my ($seqid) = $DBH->selectrow_array("SELECT f.uniquename FROM feature f WHERE f.feature_id=$contig_id");
 	my %chado_data = %{get_feature_lines($contig_id, $seqid)};
+	my $stack_done;
 
 	foreach my $strand('+', '-'){
 	    #get genes on strand
@@ -234,7 +235,24 @@ sub run_thread{
 	    my %cmatrix;
 	    my %found;
 	    my %status;
-	    
+	    my %stacked;
+
+	    #check official set for stacks
+	    for(my $i = 0; $i < @$gff_p; $i++){
+		my $gB = $gff_p->[$i][0];
+		my $gE = $gff_p->[$i][1];
+		my $gI = $gff_p->[$i][2];
+		for(my $j = $i+1; $j < @$gff_p; $j++){
+		    my $cB = $gff_p->[$j][0];
+		    my $cE = $gff_p->[$j][1];
+		    my $cI = $gff_p->[$j][2];
+		    if(overlap($gB, $gE, $cB, $cE)){
+			$stacked{$cI} = 'STACKED';
+			$stacked{$gI} = 'STACKED';
+		    }
+		}
+	    }
+
 	    for(my $i = 0; $i < @$gff_p; $i++){
 		my $gB = $gff_p->[$i][0];
 		my $gE = $gff_p->[$i][1];
@@ -247,18 +265,34 @@ sub run_thread{
 			$gmatrix{$gI}{$cI}++;
 			$cmatrix{$cI}{$gI}++;
 			$found{$gI}++;
-			$status{$cI} = 'OVERLAP';
+			if(! defined $status{$cI} || $status{$cI} ne 'STACKED'){
+			    $status{$cI} = 'OVERLAP';
+			    $status{$cI} = 'STACKED' if($stacked{$gI});
+			}
+			    
 		    }
 		    elsif(! defined $status{$cI}){
 			$status{$cI} = 'NEW';
+		    }
+
+		    if(! $stack_done){
+			$stack_done++;
+			for(my $g = $j+1; $g < @$cha_p; $g++){
+			    my $kB = $cha_p->[$g][0];
+			    my $kE = $cha_p->[$g][1];
+			    my $kI = $cha_p->[$g][2];
+			    if(overlap($cB, $cE, $kB, $kE)){
+				$status{$cI} = 'STACKED';
+				$status{$kI} = 'STACKED';
+			    }
+			}
 		    }
 		}
 	    }
 
 	    #identify and print merged genes
 	    while(my $key = each %cmatrix){
-		if (scalar keys %{$cmatrix{$key}} > 1){
-		    #print "$key\tMERGE\n";
+		if ($status{$key} ne 'STACKED' && (scalar keys %{$cmatrix{$key}}) > 1){
 		    $status{$key} = 'MERGE';
 		}
 	    }
@@ -274,11 +308,8 @@ sub run_thread{
 	    }
 	    while(my $key = each %merge){
 		#print "$key\tSPLIT\n";
-		if($status{$key} eq 'merged'){
-		    $status{$key} = 'STACKED';
-		}
-		else{
-		    $status{$key} = 'SPLIT';
+		if($status{$key} ne 'STACKED'){
+		    $status{$key} = ($status{$key} ne 'MERGE') ? 'SPLIT' : 'COMPLEX';
 		}
 	    }
 

@@ -1556,6 +1556,7 @@ sub load_transcript_struct {
 	my $l_trans =  length($translation_seq);
 
 	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
+	my $t_id = ($f->{_tran_id}) ? $f->{_tran_id} : $t_name; #affects GFFV3.pm
 
 	my $pol_p_hits  = get_selected_types($evi->{gomiph}, 'protein2genome');
 	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
@@ -1585,6 +1586,7 @@ sub load_transcript_struct {
 			't_offset' => $offset,
 			't_end'    => $end,
 			't_name'   => $t_name,
+			't_id'     => $t_id,
 			't_qi'     => $qi,
 			'AED'      => $AED,
 			'has_stop' => $has_stop,
@@ -1760,10 +1762,16 @@ sub group_transcripts {
       my $sources = join ('-', keys %pred_sources);
 
       my $g_name;
+      my $g_id;
       if ($predictor eq 'model_gff') {
 	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
+	 $g_id = $c->[0]->{gene_id}; #affects GFFV3.pm
 	 $SEEN->{$g_name}++;
+	 $SEEN->{$g_id}++;
 	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	     $SEEN->{$1}++;
+	 }
+	 if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
 	     $SEEN->{$1}++;
 	 }
       }
@@ -1771,14 +1779,20 @@ sub group_transcripts {
 	  #now check for preexisting name
 	  if ($c->[0]->{gene_name}){
 	      $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
+	      $g_id = $c->[0]->{gene_id}; #affects GFFV3.pm
 	      $SEEN->{$g_name}++;
+	      $SEEN->{$g_id}++;
 	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
+	      if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
 		  $SEEN->{$1}++;
 	      }
 	  }
 	  elsif ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
+	      $g_id = $g_name;
 	      $SEEN->{$g_name}++;
 	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
 		  $SEEN->{$1}++;
@@ -1788,6 +1802,7 @@ sub group_transcripts {
 	      $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm
 	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
+	      $g_id = $g_name;
 	      $SEEN->{$g_name}++;
 	      $SEEN->{"$chunk_number\.$c_id"}++;
 	  }
@@ -1796,6 +1811,7 @@ sub group_transcripts {
 	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm
 	 $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	 $g_name = "$g_name.$c_id";
+	 $g_id = $g_name;
 	 $SEEN->{$g_name}++;
 	 $SEEN->{"$chunk_number\.$c_id"}++;
       }
@@ -1834,6 +1850,7 @@ sub group_transcripts {
 
       my $annotation = { 't_structs'  => \@t_structs,
 			 'g_name'     => $g_name,
+			 'g_id'       => $g_id,
 			 'g_start'    => $g_start,
 			 'g_end'      => $g_end,
 			 'g_strand'   => $g_strand,
@@ -1995,6 +2012,7 @@ sub map_forward {
     #map names forward
     foreach my $g (@$ann_set){
 	my $new; #new gene name
+	my $nid; #new gene name
 	my $AED = 1; #for comparing which isoform is closest
 	my $fg;
 	foreach my $t (@{$g->{t_structs}}){
@@ -2011,12 +2029,14 @@ sub map_forward {
 	    if($AEDs[$id] < $AED){
 		$AED = $AEDs[$id];
 		$new = $f->{gene_name}; #get new gene name
+		$nid = $f->{gene_id}; #get new gene name
 		$fg = $g_index[$cl]; #get annotation for that gene
 	    }
 	    $t->{is_changed} = ($AEDs[$id] == 0) ? 0 : 1; #not a true change if identical
 	    $t->{is_changed} = 1 if(defined $t->{-attrib}); #changed if new transcript has own attributes (pred_gff?)
 	    $g->{is_changed} = 1 if($t->{is_changed}); #gene changed only if trans changed
 	    $t->{t_name} = $f->{_tran_name}; #set transcript name
+	    $t->{t_id} = $f->{_tran_id}; #set transcript id
 
 	    #this helps with attribute passthrough
 	    $t->{hit} = $f if(! $t->{is_changed}); #use gff hit if they are identical
@@ -2027,6 +2047,7 @@ sub map_forward {
 	next if(! $new); #no change so skip
 
 	$g->{g_name} = $new; #set new gene name
+	$g->{g_id}   = $nid; #set new gene name
 
 	#see if gene changed by altered transcript content
 	if(@{$g->{t_structs}} == @{$fg->{t_structs}} && ! $g->{is_changed}){
