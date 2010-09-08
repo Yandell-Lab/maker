@@ -1,15 +1,65 @@
 #! /bin/env perl
-use Module::Build;
-use File::Which;
-use POSIX;
+use strict;
+use warnings;
 use FindBin;
-use LWP::Simple;
-use Archive::Tar;
+
+#prepare correct version of Module Build for building everything
+my $Bundled_MB = 0.3607;  #version included in my distribution
+
+# Find out what version of Module::Build is installed or fail quietly.
+# This should be cross-platform.
+my $Installed_MB =`$^X -e "eval q{require Module::Build; print Module::Build->VERSION} or exit 1"`;
+chomp $Installed_MB;
+$Installed_MB = 0 if $?;
+
+# Use the bundled copy of Module::Build if it's newer than the installed.
+unshift @INC, "inc/Module-Build/lib/perl5" if $Bundled_MB > $Installed_MB;
+
+require Module::Build;
 
 #find MAKER version
 my $VERSION = version();
 
-my $build = Module::Build->new
+#define custom actions for Build
+my $class = Module::Build->subclass(class => "Module::Build::Custom",
+				    code => <<'SUBCLASS' );
+
+sub ACTION_commit {
+    my $self = shift;
+    
+    #$self->depends_on("test");
+    #$self->do_system(qw(svn commit));
+}
+
+sub ACTION_repeatmasker{
+    my $self = shift;
+}
+
+sub ACTION_blast{
+    my $self = shift;
+}
+
+sub ACTION_exonerate{
+    my $self = shift;
+}
+
+sub ACTION_snap{
+    my $self = shift;
+}
+
+sub ACTION_augustus
+{
+    my $self = shift;
+}
+
+sub ACTION_prereqs{
+    my $self = shift;
+}
+
+SUBCLASS
+
+#configure Build
+my $build = $class->new
     (
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
@@ -38,8 +88,14 @@ my $build = Module::Build->new
      recommends => {
 	 'threads'  => '1.67',
      },
+     configure_requires => {
+	 'File::Which' => '0',
+	 'LWP::Simple' => '0',
+	 'Test::Shjhh' => '0',
+	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
+     },
      auto_features => {
-	 mpi_support => {
+	 mpi => {
 	     description => 'Optimize for parrallelization using MICH2',
 	     requires => {
 		 'threads' => '1.67',
@@ -53,6 +109,7 @@ if($build->prereq_failures()){
     $build->dispatch('installdeps')
 	if($build->y_n("\nDo you want to let MAKER install these dependecies for you now?", 'y'));
 }
+
 
 #check external program dependencies
 print STDERR "Checking external program dependencies.\n";
@@ -113,18 +170,18 @@ sub version {
     return $ver;
 }
 
-sub install {
+sub _dependency {
     my $exe  = shift; #prerequisite
     
     #get OS and architecture
     my ($OS, $ARC) = (POSIX::uname())[0,4];
     
     #get urls of exectuables to be installed
-    my $locations;
+    my $data;
     open(LOC, "< $FindBin::Bin/lib/location.conf") || die "ERROR: Could not open locations to download dependencies\n";
     my $line = <LOC>;
     if($line =~ /^\#\! \/bin\/env perl/){
-	my $data = join('', <LOC>);
+	$data = join('', <LOC>);
 	eval $data;
     }
     close(LOC);
@@ -146,7 +203,6 @@ sub install {
         chdir($path);
 	$file = 'rmblast.tar.gz'; #file to save to
         $url = $data->{rmblast}{"$OS\_$ARC"}; #url to rmblast for OS
-        ($url, $file) = @{$src}{"$OS\_$ARC", 'file'} ;
         getstore($url, $file) or fail('RMBlast', $path);
         Archive::Tar->extract_archive($file) or fail('RMBlast', $path);
         unlink($file);

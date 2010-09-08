@@ -663,7 +663,7 @@ sub split_db {
        }
        
        #move finished files into place
-       system("mv $t_dir $f_dir");
+       File::Copy::move($t_dir, $f_dir);
        
        #check if everything is ok
        if (-e $f_dir) { #multi processor
