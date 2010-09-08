@@ -333,6 +333,7 @@ sub gene_data {
     my %epl;
     my %cdss;
     foreach my $t (@transcripts){
+	my $t_id = (split(/\s+/, $t->{t_id}))[0] || (split(/\s+/, $t->{t_name}))[0];
 	my $t_l = get_transcript_data($t, $seq_id, $g_id);
 	$g_l .= $t_l."\n";
 	
