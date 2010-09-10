@@ -1,0 +1,17 @@
+#! /bin/env perl
+$locs = {
+    'RepeatMasker' => {'Linux_x86_64' => 'http://www.repeatmasker.org/RepeatMasker-open-3-2-9.tar.gz',
+		   },
+    'rmblast'      => {'Linux_x86_64' => 'http://www.repeatmasker.org/rmblast-1.2-ncbi-blast-2.2.23+-x64-linux.tar.gz',
+		   },
+    'trf'          => {'Linux_x86_64' => 'http://tandem.bu.edu/trf/downloads/trf404.linux64.exe',
+		   },
+    'blast'        => {'Linux_x86_64' => 'ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.2.24+-x64-linux.tar.gz',
+		   },
+    'exonerate'    => {'Linux_x86_64' => '',
+		   },
+    'snap'         => {'Linux_x86_64' => '',
+		   },
+    'augustus'     => {'Linux_x86_64' => '',
+		   },
+};

@@ -2,68 +2,16 @@
 use strict;
 use warnings;
 use FindBin;
-
-#prepare correct version of Module Build for building everything
-my $Bundled_MB = 0.3607;  #version included in my distribution
-
-# Find out what version of Module::Build is installed or fail quietly.
-# This should be cross-platform.
-my $Installed_MB =`$^X -e "eval q{require Module::Build; print Module::Build->VERSION} or exit 1"`;
-chomp $Installed_MB;
-$Installed_MB = 0 if $?;
-
-# Use the bundled copy of Module::Build if it's newer than the installed.
-unshift @INC, "inc/Module-Build/lib/perl5" if $Bundled_MB > $Installed_MB;
-
-require Module::Build;
-
-#find MAKER version
-my $VERSION = version();
-
-#define custom actions for Build
-my $class = Module::Build->subclass(class => "Module::Build::Custom",
-				    code => <<'SUBCLASS' );
-
-sub ACTION_commit {
-    my $self = shift;
-    
-    #$self->depends_on("test");
-    #$self->do_system(qw(svn commit));
-}
-
-sub ACTION_repeatmasker{
-    my $self = shift;
-}
-
-sub ACTION_blast{
-    my $self = shift;
-}
-
-sub ACTION_exonerate{
-    my $self = shift;
-}
-
-sub ACTION_snap{
-    my $self = shift;
-}
-
-sub ACTION_augustus
-{
-    my $self = shift;
-}
-
-sub ACTION_prereqs{
-    my $self = shift;
-}
-
-SUBCLASS
+use lib "$FindBin::Bin/inc/"; #libary just needed for configuration
+use MAKER::Build;
+eval 'require File::Which; 1;';
 
 #configure Build
-my $build = $class->new
+my $build = MAKER::Build->new
     (
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
-     dist_version  => $VERSION,
+     dist_version_from  => 'version',
      dist_abstract => ('MAKER is a portable and easily configurable genome annotation pipeline. '.
 		       'It\'s purpose is to allow smaller eukaryotic and prokaryotic genome '.
 		       'projects to independently annotate their genomes and to create genome '.
@@ -75,165 +23,94 @@ my $build = $class->new
      dynamic_config => 1,
      license  => 'artistic_2',
      requires => {
-	 'perl'          => '5.8.0',
-	 'DBI'  => '0',
-	 'DBD::SQLite'  => '0',
-	 'Proc::ProcessTable'  => '0',
-	 'IO::All'  => '0',
-	 'IO::Prompt'  => '0',
-	 'Bio::Root::Version'  => '1.006',
-	 'File::Which' => '0',
+	 'perl'               => '5.8.0',
+	 'DBI'                => '0',
+	 'DBD::SQLite'        => '0',
+	 'Proc::ProcessTable' => '0',
+	 'IO::All'            => '0',
+	 'IO::Prompt'         => '0',
+	 'File::Which'        => '0',
+	 'Bio::Root::Version' => '1.006',
+	 'Module::Build::Functions'        => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
+     },
+     build_requires => {
+	 'File::Which'        => '0',
+	 'ExtUtils::CBuilder' => '0',
      },
      recommends => {
 	 'threads'  => '1.67',
      },
-     configure_requires => {
-	 'File::Which' => '0',
-	 'LWP::Simple' => '0',
-	 'Test::Shjhh' => '0',
-	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
-     },
-     auto_features => {
-	 mpi => {
-	     description => 'Optimize for parrallelization using MICH2',
-	     requires => {
-		 'threads' => '1.67',
-	     },
-	 },
+     install_base => "$FindBin::Bin/../perl",
+     install_base_relpaths => {
+	 arch   => [qw(lib)],
+	 lib    => [qw(lib)],
+	 bindoc => [qw(man)],
+	 libdoc => [qw(man)],
      },
     );
 
 #install missing perl dependencies
 if($build->prereq_failures()){
-    $build->dispatch('installdeps')
-	if($build->y_n("\nDo you want to let MAKER install these dependecies for you now?", 'y'));
-}
+    if($build->y_n("WARNING: You cannot continue without these dependencies\n".
+		   "Do you want to let MAKER install these for you now?", 'Y')
+       ){
+	$build->dispatch('installdeps');
 
-
-#check external program dependencies
-print STDERR "Checking external program dependencies.\n";
-my @exes =qw(RepeatMasker
-	     BLAST
-	     exonerate
-	     snap
-	     augustus
-	     );
-
-foreach my $exe (@exes){
-    print STDERR "Checking if you have $exe.\n";
-    
-    if($exe eq 'BLAST'){
-	if(which('xdformat') || which('formatdb') || -f "$FindBin::Bin/prereqs/blast/bin/formatdb"){
-	    print "\tSuccess: $exe found!\n\n";
-	}
-	else{
-	    print "\tFailure: $exe does not appear to be installed!\n";
-	    install($exe)if($build->y_n("Do you want MAKER to install $exe for you now?", 'y'));
+	print "\nRechecking dependencies to see if installation was successful\n";
+	$build->check_prereq;
+	if($build->prereq_failures()){
+	    print "MAKER could not install these dependencies.  You will\n".
+		"have to install them yourself befeore you can continue.\n";
+	    exit(1);
 	}
     }
     else{
-	if(which($exe) || -f "$FindBin::Bin/$exe/bin/$exe" || -f "$FindBin::Bin/$exe/$exe"){
-	    print "\tSuccess: $exe found!\n\n";
-	}
-	else{
-	    print "\tFailure: $exe does not appear to be installed!\n";
-	    install($exe)if($build->y_n("Do you want MAKER to install $exe for you now?", 'y'));
-	}
+	print "\nFAILURE: You will have to install these dependencies before you can continue.\n\n";
+	exit(1);
     }
 }
 
-#set up MPI support
-if(which('mpdboot')){
-    $build->dispatch('mpi')
-	if($build->y_n("\nYou appear to have MPICH2 installed on your system, do you".
-		       " want to install MPI MAKER and accessory scripts?", 'y'));
+#install missing external program dependencies
+$build->dispatch('checkprereqs');
+
+#install maker MPI
+if(my $dir = File::Which::which('mpicc')){
+    $dir =~ s/[^\/]+\/mpicc$/include/;
+    my ($MPIDIR) = grep {-f "$_/mpi.h"} (</usr/mpi*/include>,
+					 </usr/local/mpi*/include>,
+					 </usr/include/mpi*>,
+					 </usr/local/include/mpi*>,
+					 </usr/lib/mpi*/include>,
+					 </usr/local/lib/mpi*/include>,
+					 $dir);
+
+    my $go = $build->y_n("Your system appears to be configured for MPI. Would\n".
+			 "you like to install the MPI version of MAKER?", 'Y') if($MPIDIR);
+    if($go){
+	$build->config(cc => 'mpicc');
+	$build->config(ld => 'mpicc');
+	$build->extra_compiler_flags("-I$MPIDIR -DFLOAT_HACK");
+
+	#Hack to force Build to use new config flags
+	#This is needed because of a bug in Module::Build::Base::cbuilder
+	$build->{stash}->{_cbuilder} = undef;
+	
+	my $ok = $build->check_installed_status('threads', '1.67')->{ok};
+	
+	if(! $ok){
+	    $build->install_prereqs('threads');
+	    $ok = $build->check_installed_status('threads', '1.67')->{ok};
+	}
+	
+	if(! $ok){
+	    print "\nCannot install MPI MAKER without threads\n\n";
+	}
+	else{
+	    $build->dispatch('mpi');
+	}
+    }
 }
 
 $build->create_build_script;
-
-sub version {
-    my $ver;
-
-    if(open(IN, "< $FindBin::Bin/lib/version")){
-	$ver = <IN>;
-	close(IN);
-    }
-    else{
-	$ver = '2'; # will be MAKER 2.X or greater
-    }
-
-    chomp($ver);
-    ($ver) = $ver =~ /VERSION=(.*)/;
-    $ver = '2' if(! $ver || ! $ver =~ /^\d+\.\d+$/ || $ver < 2); #must be at least 2
-
-    return $ver;
-}
-
-sub _dependency {
-    my $exe  = shift; #prerequisite
-    
-    #get OS and architecture
-    my ($OS, $ARC) = (POSIX::uname())[0,4];
-    
-    #get urls of exectuables to be installed
-    my $data;
-    open(LOC, "< $FindBin::Bin/lib/location.conf") || die "ERROR: Could not open locations to download dependencies\n";
-    my $line = <LOC>;
-    if($line =~ /^\#\! \/bin\/env perl/){
-	$data = join('', <LOC>);
-	eval $data;
-    }
-    close(LOC);
-
-    chdir($FindBin::Bin);
-    if($exe eq 'RepeatMasker'){
-        my $path = "$FindBin::Bin/RepeatMasker"; #path for installation
-
-	#RepeatMasker
-	my $file = 'RepeatMasker.tar.gz'; #file to save to
-        my $url = $data->{$exe}{"$OS\_$ARC"}; #url to RepeatMasker for OS
-        getstore($url, $file) or fail($exe, $path);
-        Archive::Tar->extract_archive($file) or fail($exe, $path);
-        unlink($file);
-        chdir($path);
-	fail($exe, $path) if(! -f $exe);
-
-	#RMBlast
-        chdir($path);
-	$file = 'rmblast.tar.gz'; #file to save to
-        $url = $data->{rmblast}{"$OS\_$ARC"}; #url to rmblast for OS
-        getstore($url, $file) or fail('RMBlast', $path);
-        Archive::Tar->extract_archive($file) or fail('RMBlast', $path);
-        unlink($file);
-        my ($dir) = grep {-d $_} <rmblast-*-ncbi-blast*>;
-        chdir($dir);
-	fail('RMBlast', $path) if(! -f 'rmblastn');
-
-	#TRF
-        chdir($path);
-	$file = 'trf'; #file to save to
-        $url = $data->{trf}{"$OS\_$ARC"}; #url to rmblast for OS
-        getstore($url, $file) or fail('TRF', $path);
-        chmod(0755, $file) or fail('TRF', $path);
-	fail('TRF', $path) if(! -f 'trf');
-    }
-    elsif($exe eq 'blast'){
-        my $path = "$FindBin::Bin/blast"; #path for installation
-
-	#BLAST+
-	my $file = 'blast.tar.gz'; #file to save to
-        my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
-        getstore($url, $file) or fail($exe, $path);
-        Archive::Tar->extract_archive($file) or fail($exe, $path);
-        unlink($file);
-        chdir($path);
-	fail($exe, $path) if(! -f 'bin/blastn');
-    }
-
-    chdir($FindBin::Bin);
-}
-
-sub fail {
-    chdir($FindBin::Bin);
-}
+#$build->dispatch('realclean');
