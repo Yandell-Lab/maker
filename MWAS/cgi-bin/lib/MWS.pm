@@ -108,40 +108,57 @@ sub cgiapp_init {
 }
 #-----------------------------------------------------------------------------
 sub cgiapp_prerun {
-        my $self = shift;
+    my $self = shift;
+    my $q = $self->query;
+    my $in_id = $q->param('guest_id');
+    my $use_login = $self->param('server_opt')->{use_login};
+    
+    #authentication values
+    my $is_authen = $self->authen->is_authenticated;
+    my $user = $self->get_user_info;
+    
+    #false authentication, there is no user
+    if($is_authen && ! $user){
+	$self->authen->logout();
+	$is_authen =$self->authen->is_authenticated;
+    }
 
-	my $is_authen = $self->authen->is_authenticated;
-	my $user = $self->get_user_info;
+    #if no login is used then just use the administrator account
+    if(! $use_login && (! $self->authen->is_authenticated || $self->get_user_id != 1)){
+        my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id = 1});
 
-	#false authentication / invalid user, logout
-	if($is_authen && ! $user){
-	    $self->authen->logout();
-	    $is_authen =$self->authen->is_authenticated;
-	}
+        #authenticate user
+        $q->param(authen_username => $user->{login});
+        $q->param(authen_password => $user->{password});
+        $self->authen->{initialized} = 0; #force reauthentication
+        $self->authen->initialize();
 
-	my $web_address = $self->param('server_opt')->{web_address};
-	my $html_web    = $self->param('server_opt')->{html_web};
-	my $cgi_web     = $self->param('server_opt')->{cgi_web};
-
-	my $base_url_html = ($html_web =~ /http\:\/\//) ?
-	    "$html_web" : "$web_address/$html_web";
-	$base_url_html =~ s/([^\:])\/+/$1\//g;
-
-	my $base_url_cgi = ($cgi_web =~ /http\:\/\//) ?
-	    "$cgi_web" : "$web_address/$cgi_web";
-	$base_url_cgi =~ s/([^\:])\/+/$1\//g;
+        #return requested runmode as an authenticated user
+        my $rm = $q->param('rm');
+        $self->prerun_mode($rm) if($rm);
+    }
+    #if given guest_id for auto-login
+    elsif($in_id && (! $self->authen->is_authenticated || $in_id != $self->get_user_id)){
+        my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id=$in_id})
+            if($in_id =~ /^\d+$/);
 	
-	$self->param(base_url_html => $base_url_html);
-	$self->param(base_url_cgi => $base_url_cgi);
-	
-        $self->tt_params({logged_in     => $is_authen,
-                          server_opt    => $self->param('server_opt'), #server options file
-                          session       => $self->session,
-                          user          => $user,
-			  base_url_html => $base_url_html,
-			  base_url_cgi  => $base_url_cgi,
-                          #authen       => Dumper($self->authen),
-		      });
+        #if not a valid guest make sure to reset authentication rather than returning active account
+        if(! $user || !$user->{is_guest}){
+            $self->authen->logout();
+        }
+        else{ #authenticate guest user
+            $q->param(authen_username => $user->{login});
+            $q->param(authen_password => $user->{password});
+            $self->authen->{initialized} = 0; #force reauthentication
+            $self->authen->initialize();
+
+            #return requested runmode as an autheniticated user
+            my $rm = $q->param('rm');
+            $self->prerun_mode($rm) if($rm);
+        }
+    }
+
+    $self->set_global_tt_params();
 }
 #-----------------------------------------------------------------------------
 sub setup {
@@ -189,44 +206,43 @@ sub teardown {
    $self->dbh->disconnect if($self->dbh);
 }
 #-----------------------------------------------------------------------------
+sub set_global_tt_params{
+    my $self = shift;
+
+    #set template values
+    my $is_authen =$self->authen->is_authenticated;
+    my $user = $self->get_user_info;
+
+    #now get url information
+    my $web_address = $self->param('server_opt')->{web_address};
+    my $html_web    = $self->param('server_opt')->{html_web};
+    my $cgi_web     = $self->param('server_opt')->{cgi_web};
+
+    my $base_url_html = ($html_web =~ /http\:\/\//) ?
+	"$html_web" : "$web_address/$html_web";
+    $base_url_html =~ s/([^\:])\/+/$1\//g;
+    
+    my $base_url_cgi = ($cgi_web =~ /http\:\/\//) ?
+	"$cgi_web" : "$web_address/$cgi_web";
+    $base_url_cgi =~ s/([^\:])\/+/$1\//g;
+    
+    $self->param(base_url_html => $base_url_html);
+    $self->param(base_url_cgi => $base_url_cgi);
+    
+    $self->tt_params({logged_in     => $is_authen,
+		      server_opt    => $self->param('server_opt'), #server options file
+		      session       => $self->session,
+		      user          => $user,
+		      base_url_html => $base_url_html,
+		      base_url_cgi  => $base_url_cgi,
+		      #authen       => Dumper($self->authen),
+		  });
+}
+
+#-----------------------------------------------------------------------------
 sub login {
    my $self = shift;
    my $add_text= shift;
-
-   my %serv_opt = %{$self->param('server_opt')};
-
-   #if no login is used then just use the administrator account
-   if(! $serv_opt{use_login}){
-       my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id = 1});
-
-       #authenticate user
-       $self->query->param(authen_username => $user->{login});
-       $self->query->param(authen_password => $user->{password});
-       $self->authen->{initialized} = 0; #force reauthentication
-       $self->authen->initialize();
-       $self->cgiapp_prerun; #reload tt_template options because of changes
-   }
-
-   #if given guest_id auto-login
-   my $q = $self->query;
-   my $in_id = $q->param('guest_id');
-   if(defined $in_id){
-       my $user = $self->dbh->selectrow_hashref(qq{SELECT * FROM users WHERE user_id=$in_id})
-	   if($in_id =~ /^\d+$/);
-       
-       #if not a valid guest make sure to reset authentication rather than returning active account
-       if(! $user || !$user->{is_guest}){
-	   $self->authen->logout();
-	   $self->cgiapp_prerun; #reload tt_template options because of changes
-       }
-       else{ #authenticate guest user
-	   $q->param(authen_username => $user->{login});
-	   $q->param(authen_password => $user->{password});
-	   $self->authen->{initialized} = 0; #force reauthentication
-	   $self->authen->initialize();
-	   $self->cgiapp_prerun; #reload tt_template options because of changes
-       }
-   }
 
    #already authenticated
    if($self->authen->is_authenticated){
@@ -575,7 +591,7 @@ sub register {
 						}); #was general_add.tt
    }
    else{ #everything is fine, add user to database
-#       my $lock = MWAS_util::lockDB($serv_opt->{data_dir});
+
        my ($new_id) = $self->dbh->selectrow_array(qq{SELECT last_user_id FROM id_store}); #get last new user_id
        $new_id++; #iterate the value
        $self->dbh->do(qq{UPDATE id_store SET last_user_id=$new_id}); #record new value
@@ -584,16 +600,14 @@ sub register {
 		      qq{'$login', '$password', '$first', '$last', '$e_mail', '$institution', 0, 0, \'}.
 		      MWAS_util::date_time().qq{\', '')});
        $self->dbh->commit();
-#       $lock->unlock;
+
 
        #authenticate user for auto-login
        $q->param(authen_username => $login);
        $q->param(authen_password => $password);
        $self->authen->{initialized} = 0; #force reauthentication
        $self->authen->initialize();
-       $self->cgiapp_prerun; #reload tt_template options because of changes
 
-       my $user_id = $self->get_user_id();
        #forward user to account frontpage
        return $self->redirect("maker.cgi");
    }
@@ -669,23 +683,20 @@ sub edit_account {
        return $self->tt_process('edit_account.tt', {errors => \%errors});
    }
    else{ #everything is fine, update user in database
-#      my $lock = MWAS_util::lockDB($serv_opt->{data_dir});
        my $password = ($new_password) ? $new_password : $old_password; #select password to use
        $self->dbh->do(qq{UPDATE users SET login='$login', first='$first', last='$last', e_mail='$e_mail', }.
 		      qq{password='$password', institution='$institution', is_guest=0 WHERE user_id=}.
 		      $user->{user_id});
        $self->dbh->commit();
-#       $lock->unlock;
 
        #force reauthentication since login may have changed
        $q->param(authen_username => $login);
        $q->param(authen_password => $password);
        $self->authen->{initialized} = 0; #force reauthentication
        $self->authen->initialize();
-       $self->cgiapp_prerun; #reload tt_template options because of changes
+       $self->set_global_tt_params; #reload tt_template options because of changes
 
        #update user info
-       $user = $self->get_user_info();
        return $self->tt_process('edit_account.tt', {message => 'Account updated successfully',});
    }
 }
@@ -717,7 +728,6 @@ sub guest_login {
     $self->query->param(authen_password => $password);
     $self->authen->{initialized} = 0; #force reauthentication
     $self->authen->initialize();
-    $self->cgiapp_prerun; #reload tt_template options because of changes
 
     my $user_id = $self->get_user_id();    
     #forward user to account frontpage
