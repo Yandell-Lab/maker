@@ -2,10 +2,10 @@ bin/mpi_evaluator
 bin/mpi_iprscan
 bin/mpi_maker
 Build.PL
-docs/MPI-C-Bindings.txt
-docs/paper.tex
-docs/README
-docs/TODO
+docs/MPI/MPI-C-Bindings.txt
+docs/MPI/paper.tex
+docs/MPI/README
+docs/MPI/TODO
 inc/MAKER/Build.pm
 inc/Module-Build/bin/config_data
 inc/Module-Build/lib/perl5/inc/latest.pm

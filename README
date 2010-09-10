@@ -12,6 +12,14 @@ many steps and programs to produce final annotations.  For this
 reason, you must first install a number of programs that MAKER depends
 on.  MAKER works on both eukaryotic and prokaryotic genomes.
 
+Installing MAKER may be as easy as running MAKER's Build.PL script.
+    cd maker/src/
+    perl ./Build.PL
+
+
+If that fails you will need to follow the detailed instructions
+bellow or in the bundled INSTALL file.
+
 
 To install MAKER, you will first need to install the following
 prerequisites:

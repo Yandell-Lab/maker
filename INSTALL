@@ -7,6 +7,19 @@ administrator with sudo privleges or be logged in as root on the terminal for
 some parts of the installation.
 
 
+
+EASY INSTALL
+
+1.  Go to the .../maker/src/ directory and run perl Build.PL. That's it.
+
+2.  If anything fails, either use the ./Build file commands to retry the
+    failed section or follow the detailed install instructions below to
+    manually install missing module or programs.
+
+
+
+DETAILED INSTALL
+
 1.  You need to have perl 5.8.0 or higher installed.  You can verify this by
     typing perl -v on the command line in a terminal.
 
