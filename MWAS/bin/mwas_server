@@ -886,7 +886,6 @@ sub start_job {
 	    my ($job_cpus) = $dbh->selectrow_array(qq{SELECT cpus FROM jobs WHERE job_id=$job_id});
 	    $job_cpus++;
 	    $dbh->do(qq{UPDATE jobs SET is_queued=0, is_running=1, cpus=$job_cpus WHERE job_id=$job_id});
-	    $dbh->commit;
 	    
 	    my $job_log = "$job_dir/job.log";
 
@@ -904,6 +903,8 @@ sub start_job {
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
 
+	    $dbh->commit;
+	    $dbh->disconnect; #disconnect from DB while job runs
 	    $lock->unlock;
     	    ####===unlock
 
@@ -915,6 +916,10 @@ sub start_job {
 	    waitpid $pid, 0;
 	    my $err = $?;
 	    chdir($CWD);
+
+	    #job is finished reconnect to DB to set values
+	    $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+		or die "<br>Got error $DBI::errstr when connecting to database\n";
 
 	    ####===lock the database so no changes are made while I'm writing
 	    $lock = lockDB() || ((print STDERR lock_error()) & (exit(0)));
@@ -934,6 +939,7 @@ sub start_job {
 	    }
 
 	    $dbh->commit;
+	    $dbh->disconnect;
 	    $lock->unlock;
 	    ####===unlock
 

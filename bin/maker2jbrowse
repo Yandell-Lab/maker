@@ -133,6 +133,7 @@ $commands{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --g
 $commands{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part6"}\' --type expressed_sequence_match:tblastx';
 $commands{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part3"}\' --type expressed_sequence_match:est2genome';
 $commands{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part2"}\' --type protein_match:protein2genome';
+$commands{iprscan} = ' --tracklabel "InterPro" --key "InterPro" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part7"}\' --type match:iprscan';
 
 #repeats
 $commands{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part7"}\' --type match:repeatmasker';

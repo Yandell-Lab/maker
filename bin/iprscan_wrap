@@ -11,14 +11,15 @@ use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG $EXE $TMP $LOCK $VERSION);
 use Storable qw(freeze thaw);
+use File::Which qw(which);
 
 BEGIN{
     $VERSION = '2.10';
 
     #find iprscan
-    $EXE = `which iprscan 2> /dev/null`;
-    chomp $EXE;
-    if (! $EXE || $EXE =~ /^no iprscan/) {
+    $EXE = which('iprscan') || '/usr/local/iprscan/bin/iprscan';
+    $EXE = '' if(! -f $EXE);
+    if (! $EXE) {
 	die "ERROR: You must have iprscan installed and in you path to use mpi_iprscan\n";
     }
 

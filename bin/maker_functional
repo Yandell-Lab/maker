@@ -5,8 +5,9 @@ use Cwd;
 
 BEGIN{
     if(! $ENV{BLASTDB}){
-	$ENV{BLASTDB} = "/usr/local/blastdb";
-	$ENV{BLASTDB} = "/data1/cholt/blastdb" if(! -d $ENV{BLASTDB});
+	$ENV{BLASTDB} = '/usr/local/blastdb';
+	$ENV{BLASTDB} = '/data/blastdb' if(! -d $ENV{BLASTDB});
+	$ENV{BLASTDB} = '' if(! -d $ENV{BLASTDB});
     }
 }
 
@@ -91,7 +92,7 @@ foreach my $dir (keys %to_do){
 
 	unless(! $prot || !$gff || ! $tran || -f $out){
 	    my @commands = ("xdformat -p $ENV{BLASTDB}/uniprot_sprot.fasta &> /dev/null",
-			    "blastp $ENV{BLASTDB}/uniprot_sprot.fasta $prot mformat=2 hspmax=1 V=1 B=1 wordmask=seg maskextra=10 E=.000001 gi 2> /dev/null > $out.tmp",
+			    "/usr/local/wublast/blastp $ENV{BLASTDB}/uniprot_sprot.fasta $prot mformat=2 hspmax=1 V=1 B=1 wordmask=seg maskextra=10 E=.000001 gi 2> /dev/null > $out.tmp",
 			    "cp $tran $tran.bak",
 			    "cp $prot $prot.bak",
 			    "cp $gff $gff.bak",

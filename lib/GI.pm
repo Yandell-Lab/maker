@@ -2403,7 +2403,7 @@ sub set_defaults {
 
       foreach my $exe (@exes) {
 	  my $loc = which($exe) || '';
-	  if($exe =~ /^.?blast.$|/){
+	  if($exe =~ /^.?blast.$/){
 	      $loc = (grep {Cwd::abs_path($_) =~ /blasta$/} which($exe))[0] || '';
 	  }
 	  $CTL_OPT{$exe} = $loc;
