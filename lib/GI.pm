@@ -663,12 +663,7 @@ sub split_db {
        }
        
        #move finished file directory into place
-       my $stat = File::Copy::move($t_dir, $f_dir);
-       if(! $stat){ #try copying to holding directory rather than name
-	   my $todir = $f_dir;
-	   $todir =~ s/[^\/]+$//;
-	   File::Copy::move($t_dir, $f_dir);
-       }
+       system("mv $t_dir $f_dir"); #File::Copy cannot move directories
        
        #check if everything is ok
        if (-e $f_dir) { #multi processor
