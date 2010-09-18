@@ -1,8 +1,0 @@
-Contents of the 'docs' directory
---------------------------------
-
-TODO      - A list of things yet to be done, which probably should get done.
-paper.tex - The paper that we handed in for our Parallel Programming class,
-            which this was all written for.
-MPI-C-Bindings.txt - The prototypes for all the C versions of the MPI 
-            functions.

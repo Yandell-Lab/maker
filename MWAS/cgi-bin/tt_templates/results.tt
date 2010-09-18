@@ -16,7 +16,7 @@
 	SKIPPED: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[% counts.SKIPPED %]
     </p>
 	<br>
-	<a href="stream.cgi?type=tarball&job_id=[% job_id %]&user_id=[% user_id %]"><img src="http://www.famfamfam.com/lab/icons/silk/icons/disk.png" border="0px"><b>Download All Data</b></a>
+	<a href="stream.cgi?type=tarball&job_id=[% job_id %]&user_id=[% user_id %]"><img src="[% server_opt.html_web %]/images/disk.png" border="0px"><b>Download All Data</b></a>
 
 	<br>
 	[% IF type != 'functional' %]<a href="maker.cgi?rm=job_create&func=1&job_id=[% job_id %]"><font style="font-size : 10">Do post processing of annotations</font></a>[% END %]

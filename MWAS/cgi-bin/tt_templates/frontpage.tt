@@ -82,7 +82,7 @@ For more infomation on using the MAKER Web Annotation Service, click on "Help" a
     <td align=center>[% job.finish_time %]</td>
     <td align=center>
       [% IF job.status != 'waiting in queue' && job.status != 'edit' %]
-        <a href="javascript:toggleLog(1, 'stream.cgi?type=log&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="http://www.famfamfam.com/lab/icons/silk/icons/report.png"></a>
+        <a href="javascript:toggleLog(1, 'stream.cgi?type=log&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="[% server_opt.html_web %]/images/report.png"></a>
       [% END %]
     </td>
     <td align=center>
