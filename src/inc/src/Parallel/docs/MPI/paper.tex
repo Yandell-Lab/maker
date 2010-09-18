@@ -1,0 +1,549 @@
+% See sections marked XXX for things to fix.
+\documentclass{report}
+\usepackage{latexsym}
+\usepackage{fullpage}
+\usepackage[dvips]{graphicx}
+\pagestyle{headings}
+
+\title{Parallel::MPIcar - An MPI Binding for Perl}
+\author{Josh Wilmes, \textit{wilmesj@rpi.edu}\\
+	Chris Stevens, \textit{stevens@rpi.edu}
+}
+\begin{document}
+\maketitle
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Introduction}
+
+MPI \footnote{The MPI standard is described in
+http://www-unix.mcs.anl.gov/mpi/standard.html.  This module was
+developed using the freely available MPICH library, which can be found 
+at http://www-unix.mcs.anl.gov/mpi/mpich/} is a standard message
+passing library for parallel applications.  Perl is a scripting
+language, and not generally used in scientific computation.   However,
+the two go together quite well.
+
+Perl, as a scripting language, is excellent for prototyping new
+algorithms.  It lacks a separate compilation step, is nearly
+impossible to crash, and has simple datatypes that are easy to
+work with.   It supports nearly all modern language features,
+including function closures, flexible data scoping, object-oriented
+programming, namespaces, and exceptions.
+
+Perl's main weakness is that its high-level nature can 
+adversely affect its performance.   In general, Perl scripts use more
+memory and are slower than carefully constructed C versions.   However 
+they take a fraction of the time to write and are a fraction of the
+size, in lines of code.
+
+In some cases, Perl can be as fast as, or faster than C equivalents.
+It contains a very efficient hash data structure and regular
+expression engine as part of the language, which can give it an
+advantage, especially for text-processing applications.
+
+Kernighan and Pike, in their recent book, "The Practice of
+Programming", compared implementations of the Markov Chain Algorithm
+(a text processing algorithm that builds random	sentences by
+assembling sentence parts from input text files) in several languages
+and on several platforms:
+
+\begin{center}
+\begin{tabular}{|l|l|l|l|}	
+        \hline
+     \bf{Language}     & \bf{250mhz Irix} & \bf{400mhz pII NT} & \bf{line count}\\ \hline
+	C              & 0.36 sec      &  0.30 sec      & 150\\ \hline
+	Java           & 4.9 sec       &  9.2 sec       & 105\\ \hline
+	C++/STL/list   & 1.7 sec       &  1.5 sec       & 70\\ \hline
+	Awk            & 2.2 sec       &  2.1 sec       & 20\\ \hline
+\textit{Perl}        &\textit{1.8 sec} &\textit{1.0 sec} & \textit{18} \\ \hline
+\end{tabular}
+\end{center}
+
+As you can see, Perl offered the shortest program, with performance
+comparable to a C++ version, and significantly better than Java's.
+
+Although Perl lacks the raw performance of languages such as fortran
+and C, its flexibility and efficient code structure makes it an
+excellent choice for designing and debugging complex parallel
+algorithms, without having to worry about memory allocation or pointer 
+arithmetic errors which can make C programs with MPI difficult to debug.
+
+For \verb|Parallel::MPIcar|, the simplified data types and exception
+handling are used to simplify the invocation of the standard MPI
+calls, while still providing the programming interface to MPI that C
+programmers are used to.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{The Perl interface to MPI}
+
+Perl provides an interface language called \verb|XS|, which is used
+for building the interfaces for calling C/C++ code from perl scripts.
+The challenge with building any new \verb|XS| module is to define the
+mappings between the C datatypes used by the library and the perl
+native datatypes.
+
+For MPI, this means two broad classes of C datatypes:
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection*{Constants} %XXX What are these called?
+     \begin{itemize}
+     \item \verb|MPI_Datatype|:  This type is used for a number of
+constants such as \verb|MPI_INT| or \verb|MPI_FLOAT|, and is
+represented in perl as a blessed scalar reference\footnote{The concept of
+``blessing'' in perl is somewhat complex.  Essentially, blessing a
+reference associates it with a particular namespace or ``type''.   For
+our purposes, it can be thought of as a ``tag'', identifying the
+constant being of a particular type.  The Perl XS interface is then
+able to use this ``tag'' to perform type checking on the arguments to the
+MPI functions. }. 
+  
+     \item \verb|MPI_Comm|: This is used for the MPI communicator
+constants, such as \verb|MPI_COMM_WORLD|.  Type checking is performed
+by implementing the constants as blessed scalar references.
+
+     \item \verb|MPI_Op|: The constant of this type represent
+``operations'', such as \verb|MPI_SUM|, which can be applied to
+certain MPI functions, such as \verb|MPI_Reduce|.
+     \end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection*{Message Passing Datatypes}
+
+	Perl has a single datatype called a ``SV'', or ``scalar
+value'', which contains representations of a datum as an integer,
+double precision floating point, and character string.  Other
+containers such as arrays hold multiple scalars.
+
+	In MPI's C bindings, messages are passed as pointers to a
+memory area, an accompanying \verb|MPI_Datatype| constant (such as
+\verb|MPI_FLOAT|), and a length.  To interface Perl scalars and arrays 
+with the MPI C binding, \verb|Parallel::MPIcar| contains functions which
+take these scalars (or arrays of scalars) and packs them into memory buffers
+appropriate to the C representation of the specified data types.  They then
+call the underlying C MPI functions and free this memory.  This extra memory
+allocation and copying is doubtless a source of additional
+inefficiency in \verb|Parallel::MPIcar|.  We may be able to optimize this 
+better at a later date.
+
+	Since a Perl scalar only contains \verb|int|, \verb|double|, and
+\verb|char *| representations of the datum in them, the only
+\verb|MPI_Datatype|s that we support are \verb|MPI_INT|,
+\verb|MPI_FLOAT|, \verb|MPI_DOUBLE|, and \verb|MPI_CHAR|.   These basic
+data types should be sufficient for most programs. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Supported MPI Functions}
+
+The following MPI functions are supported under \verb|Parallel::MPIcar|:
+
+\begin{verbatim}
+Environment Setup/Cleanup
+  MPI_Init / MPI_Finalize / MPI_Initialized / MPI_Abort
+
+Process Structure
+  MPI_Comm_size / MPI_Comm_rank
+
+Performance Timing
+  MPI_Wtime / MPI_Wtick
+
+Synchronization
+  MPI_Barrier
+
+Data Transmission
+  MPI_Send / MPI_Recv / MPI_Sendrecv
+  MPI_Bcast
+  MPI_Reduce / MPI_Allreduce
+  MPI_Scatter / MPI_Gather		  
+\end{verbatim}
+
+A more complete listing of the entire MPI C binding and the status of
+Perl support for all functions can be found in Appendix A.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Unimplemented Functionality}
+
+\begin{itemize}
+\item MPI\_Request struct\\
+	This complex C structure (actually a union) is used by all of
+MPI's asynchronous functions to track message requests.  To fully
+support its functionality in perl, a perl
+\verb|Parallel::MPIcar::Request| object will need to be created and
+mapped onto the C structure.  For the initial version of
+\verb|Parallel::MPIcar|, we did not feel that it was necessary to
+implement at this time.  In future versions, the addition of this
+object would allow the use of the async versions of the MPI message
+passing functions.
+
+\item Process Topologies and Groups\\
+	Implementation of these MPI features was beyond the scope of
+the initial version of this module.
+
+\item Customization of Error Handlers and Profiling\\
+	These functions were too tightly tied to the C language to be
+of use in perl.  Perl's exception handling facilities eliminate the
+need for custom error handlers completely.  Profiling, in order to be
+effective, would need to take into account perl's concept of program
+flow, and would thus be very complex to implement well for this 
+initial version of the module.
+	
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Testing}
+	Currently there are 22 tests, testing the various functions
+and datatypes.
+\begin{itemize}
+	\item \verb|00_use_mpi.t               | - Tests loading of the
+\verb|Parallel::MPIcar| module.
+	\item \verb|01_mpi_init.t              | - Tests the \verb|MPI_Init|
+function.
+	\item \verb|02_mpi_finalize.t          | - Tests the
+\verb|MPI_Finalize| function.
+	\item \verb|03_mpi_comm_rank.t         | - Tests the
+\verb|MPI_Comm_rank| function.
+	\item \verb|04_mpi_comm_size.t         | - Tests the
+\verb|MPI_Comm_size| function.
+	\item \verb|05_mpi_initialized.t       | - Tests the
+\verb|MPI_Initialized| function.
+	\item \verb|06_mpi_sendrecv.t          | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using a scalar
+containing a character string.
+	\item \verb|06_mpi_sendrecv_dbl.t      | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using a scalar
+containing a double precision floating point number.
+	\item \verb|06_mpi_sendrecv_dblarray.t | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using an array of double
+precision floating point numbers.
+	\item \verb|06_mpi_sendrecv_flt.t      | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using a scalar
+containing a floating point number.
+	\item \verb|06_mpi_sendrecv_fltarray.t | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using an array of
+floating point numbers.
+	\item \verb|06_mpi_sendrecv_int.t      | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using a scalar
+containing an integer.
+	\item \verb|06_mpi_sendrecv_intarray.t | - Tests the
+\verb|MPI_Send| and \verb|MPI_Recv| functions using an array of
+integers.
+	\item \verb|07_mpi_bcast.t             | - Tests the \verb|MPI_Bcast|
+function using an integer..
+	\item \verb|07_mpi_bcastarray.t        | - Tests the \verb|MPI_Bcast|
+function using an array of floating point numbers..
+	\item \verb|08_mpi_reduce.t            | - Tests the \verb|MPI_Reduce|
+function using integers and a sum operation.
+	\item \verb|09_mpi_barrier.t           | - Tests the
+\verb|MPI_Barrier| function.
+	\item \verb|10_mpi_wtime.t             | - Tests the
+\verb|MPI_Wtime| function.
+	\item \verb|11_mpi_scattergather.t     | - Tests the
+\verb|MPI_Scatter| and \verb|MPI_Gather| functions using a scalar
+containing a character string.
+	\item \verb|11_mpi_scattergatherarray.t| - Tests the
+\verb|MPI_Scatter| and \verb|MPI_Gather| functions using an array of
+floating point numbers.
+	\item \verb|12_allreduce.t             | - Tests the
+\verb|MPI_Allreduce| function with integers and a sum operation.
+	\item \verb|13_sendrecv.t	       | - Tests the
+\verb|MPI_Sendrecv| function with an array of integers.
+\end{itemize}	
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Performance}
+
+   (evaluated on a dual processor linux machine, with np=2)
+
+\begin{itemize}
+   \item \verb|contrib/perf| - Raw send/recv of small packets of char
+data is on order of half the speed of the C version. 
+   \item \verb|contrib/cpi | - Performance is about 10\% of the C version.
+   \item \verb|contrib/heat| - Unable to test due to rsh problem on
+\verb|momentum.cs.rpi.edu|.  We expect performance to be about 10\% of
+the Fortran version.
+   
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Conclusions}
+	This perl binding for MPI has poorer performance than the C
+implementation of the same program.  Some of this slowdown
+is insurmountable; Perl's runtime compilation step incurs a startup time
+penalty.  The other main source of slowdown, the buffer copying, could 
+be marginally reduced through efficient algorithms for packing and
+unpacking the buffers.  Despite its slowness however, a program using
+Perl and \verb|Parallel::MPIcar| will probably be shorter and quicker to write
+than the corresponding C version.
+  
+	There is a lot of room for future expansion of this Perl module.
+Using this simpler interface which is very similar to the C binding, a
+more complex object-oriented set of modules can be built on top of it, 
+giving a more Perl-like interface to MPI for programmers to use.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter*{Appendix A: MPI Binding Summary}
+
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Supported} & \bf{Status}       & \bf{Function} \\ \hline
+
+\hline
+\multicolumn{3}{|c|}{ Point-to-Point Communication } \\ \hline
+
+Yes            & Done               & \verb|MPI_Send| \\ \hline
+Yes            & Done               & \verb|MPI_Recv| \\ \hline
+No             & Future Release     & \verb|MPI_Get_count| \\ \hline
+No             & Not Planned        & \verb|MPI_Bsend| \\ \hline
+No             & Not Planned        & \verb|MPI_Ssend| \\ \hline
+No             & Future Release     & \verb|MPI_Rsend| \\ \hline
+No             & Not Planned        & \verb|MPI_Buffer_attach| \\ \hline
+No             & Not Planned        & \verb|MPI_Buffer_detach| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Isend| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Ibsend| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Issend| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Irsend| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Irecv| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Wait| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Test| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Request_free| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Waitany| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Testany| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Waitall| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Testall| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Waitsome| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Testsome| \\ \hline
+No             & Future Release     & \verb|MPI_Iprobe| \\ \hline
+No             & Future Release     & \verb|MPI_Probe| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Cancel| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Test_cancelled| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Send_init| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Bsend_init| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Ssend_init| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Rsend_init| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Recv_init| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Start| \\ \hline
+No             & Needs MPI\_Request & \verb|MPI_Startall| \\ \hline
+Yes            & Done               & \verb|MPI_Sendrecv| \\ \hline
+No             & Future Release     & \verb|MPI_Sendrecv_replace| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_contiguous| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_vector| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_hvector| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_indexed| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_hindexed| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_struct| \\ \hline
+No             & Not Planned        & \verb|MPI_Address| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_extent| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_size| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_lb| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_ub| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_commit| \\ \hline
+No             & Not Planned        & \verb|MPI_Type_free| \\ \hline
+No             & Not Planned        & \verb|MPI_Get_elements| \\ \hline
+No             & Not Planned        & \verb|MPI_Pack| \\ \hline
+No             & Not Planned        & \verb|MPI_Unpack| \\ \hline
+No             & Not Planned        & \verb|MPI_Pack_size| \\ \hline
+\end{tabular}
+
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Supported} & \bf{Status}       & \bf{Function} \\ \hline
+
+\hline
+\multicolumn{3}{|c|}{ Collective Communication } \\ \hline 
+
+Yes            & Done               & \verb|MPI_Barrier| \\ \hline
+Yes            & Done               & \verb|MPI_Bcast| \\ \hline
+Yes            & Done               & \verb|MPI_Gather| \\ \hline
+No             & Future Release     & \verb|MPI_Gatherv| \\ \hline
+Yes            & Done               & \verb|MPI_Scatter| \\ \hline
+No             & Future Release     & \verb|MPI_Scatterv| \\ \hline
+No             & Future Release     & \verb|MPI_Allgather| \\ \hline
+No             & Future Release     & \verb|MPI_Allgatherv| \\ \hline
+No             & Future Release     & \verb|MPI_Alltoall| \\ \hline
+No             & Future Release     & \verb|MPI_Alltoallv| \\ \hline
+Yes            & Done               & \verb|MPI_Reduce| \\ \hline
+No             & Not Planned        & \verb|MPI_Op_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Op_free| \\ \hline
+Yes            & Done               & \verb|MPI_Allreduce| \\ \hline
+No             & Future Release     & \verb|MPI_Reduce_scatter| \\ \hline
+No             & Future Release     & \verb|MPI_Scan| \\ \hline
+
+
+\hline
+\multicolumn{3}{|c|}{ Groups, Contexts, and Communicators } \\ \hline
+
+No             & Not Planned        & \verb|MPI_Group_size| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_rank| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_translate_ranks | \\ \hline
+No             & Not Planned        & \verb|MPI_Group_compare| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_group| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_union| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_intersection| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_difference| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_incl| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_excl| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_range_incl| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_range_excl| \\ \hline
+No             & Not Planned        & \verb|MPI_Group_free| \\ \hline
+Yes            & Done               & \verb|MPI_Comm_size| \\ \hline
+Yes            & Done               & \verb|MPI_Comm_rank| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_compare| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_dup| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_split| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_free| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_test_inter| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_remote_size| \\ \hline
+No             & Not Planned        & \verb|MPI_Comm_remote_group| \\ \hline
+No             & Not Planned        & \verb|MPI_Intercomm_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Intercomm_merge| \\ \hline
+No             & Not Planned        & \verb|MPI_Keyval_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Keyval_free| \\ \hline
+No             & Not Planned        & \verb|MPI_Attr_put| \\ \hline
+No             & Not Planned        & \verb|MPI_Attr_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Attr_delete| \\ \hline
+
+\end{tabular}
+
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Supported} & \bf{Status}       & \bf{Function} \\ \hline
+
+\multicolumn{3}{|c|}{ Process Topologies } \\ \hline
+
+No             & Not Planned        & \verb|MPI_Cart_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Dims_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Graph_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Topo_test| \\ \hline
+No             & Not Planned        & \verb|MPI_Graphdims_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Graph_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Cartdim_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_rank| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_coords| \\ \hline
+No             & Not Planned        & \verb|MPI_Graph_neighbors_count| \\ \hline
+No             & Not Planned        & \verb|MPI_Graph_neighbors| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_shift| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_sub| \\ \hline
+No             & Not Planned        & \verb|MPI_Cart_map| \\ \hline
+No             & Not Planned        & \verb|MPI_Graph_map| \\ \hline
+
+\hline
+\multicolumn{3}{|c|}{ Environmental Inquiry } \\ \hline
+
+No             & Future Release     & \verb|MPI_Get_processor_name| \\ \hline
+No             & Not Planned        & \verb|MPI_Errhandler_create| \\ \hline
+No             & Not Planned        & \verb|MPI_Errhandler_set| \\ \hline
+No             & Not Planned        & \verb|MPI_Errhandler_get| \\ \hline
+No             & Not Planned        & \verb|MPI_Errhandler_free| \\ \hline
+No             & Not Planned        & \verb|MPI_Error_string| \\ \hline
+No             & Not Planned        & \verb|MPI_Error_class| \\ \hline
+Yes            & Done               & \verb|MPI_Wtime| \\ \hline
+Yes            & Done               & \verb|MPI_Wtick| \\ \hline
+Yes            & Done               & \verb|MPI_Init| \\ \hline
+Yes            & Done               & \verb|MPI_Finalize| \\ \hline
+Yes            & Done               & \verb|MPI_Initialized| \\ \hline
+Yes            & Done               & \verb|MPI_Abort| \\ \hline
+
+\hline
+\multicolumn{3}{|c|}{ Profiling } \\ \hline
+
+No             & Not Planned        & \verb|MPI_Pcontrol| \\ \hline
+
+\end{tabular}
+
+\chapter*{Appendix B: Sample Code}
+
+To see the \verb|Parallel::MPIcar| API in action, this simple example is
+included.  This example is fairly trivial, but it should show the
+similarity of the C and perl versions.   Notice that variable
+declaration and initialization is unnecessary, and that error handling 
+is made implicit by the use of perl exceptions.  This allows functions 
+such as \verb|MPI_Comm_rank| to use their return values for more
+meaninful purposes.
+
+\begin{center} \bf{greetings.c} (C Version)\end{center}
+\begin{verbatim}
+#include <stdio.h>
+#include <string.h>
+#include "mpi.h"
+
+main(int argc, char* argv[]) {
+    int         my_rank;       /* rank of process      */
+    int         p;             /* number of processes  */
+    int         source;        /* rank of sender       */
+    int         dest;          /* rank of receiver     */
+    int         tag = 0;       /* tag for messages     */
+    char        message[100];  /* storage for message  */
+    MPI_Status  status;        /* return status for    */
+                               /* receive              */
+   
+    /* Start up MPI */
+    MPI_Init(&argc, &argv);
+
+    /* Find out process rank  */
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    /* Find out number of processes */
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+
+    if (my_rank != 0) {
+        /* Create message */
+        sprintf(message, "Greetings from process %d!",
+            my_rank);
+        dest = 0;
+        /* Use strlen+1 so that '\0' gets transmitted */
+        MPI_Send(message, strlen(message)+1, MPI_CHAR, 
+            dest, tag, MPI_COMM_WORLD);
+    } else { /* my_rank == 0 */
+        for (source = 1; source < p; source++) {
+            MPI_Recv(message, 100, MPI_CHAR, source, tag, 
+                MPI_COMM_WORLD, &status);
+            printf("Recieved: %s from %d\n", message, source);
+        }
+    }
+
+    /* Shut down MPI */
+    MPI_Finalize();
+} /* main */
+\end{verbatim}
+
+\begin{center} \bf{greetings.pl} (perl version) \end{center}
+\begin{verbatim}
+#!/usr/bin/perl 
+
+use Parallel::MPIcar qw(:all);
+my $tag = 0;
+
+# Start up MPI
+MPI_Init();
+
+# Find out process rank
+$my_rank = MPI_Comm_rank(MPI_COMM_WORLD);
+
+# find out number of processes
+$p = MPI_Comm_size(MPI_COMM_WORLD);
+
+if ($my_rank != 0) {
+    $message = sprintf("Greetings from process %d!", $my_rank);
+    $dest = 0;
+    
+    MPI_Send(\$message, length($message), MPI_CHAR, $dest, $tag,
+	     MPI_COMM_WORLD);
+} else { 
+    # my_rank == 0
+    for $source (1..$p-1) {
+        $s = 0;
+        @status = MPI_Recv(\$message, 100, MPI_CHAR, $source, $tag, 
+                           MPI_COMM_WORLD);	
+	
+        printf("Recieved: \"%s\" from $source\n", $message);
+    }
+}
+
+# Shut down MPI 
+MPI_Finalize();
+\end{verbatim}
+
+
+
+\end{document}

@@ -1,0 +1,301 @@
+#! /usr/bin/perl
+eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use strict "vars";
+use strict "refs";
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+use vars qw($RANK $LOG $CMD_ARGS $VERSION);
+
+BEGIN{
+   $VERSION = '2.10';
+
+   if (not ($ENV{CGL_SO_SOURCE})) {
+      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+   }
+   if (not ($ENV{CGL_GO_SOURCE})) {
+      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
+   }
+   
+   $CMD_ARGS = join(' ', @ARGV);
+
+   #what to do on ^C
+   $SIG{'INT'} = sub {
+      print STDERR "\n\nMaker aborted by user!!\n\n" unless($main::qq);
+      exit (1);
+   };    
+   
+   #supress warnings from storable module
+   $SIG{'__WARN__'} = sub {
+      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+		      $_[0] !~ /Can\'t store item / &&
+		      $_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
+		    );
+   };
+
+   #output to log file of seq that caused rank to die
+   $SIG{'__DIE__'} =
+   sub {
+      if (defined ($LOG) && defined $_[0]) {
+	 my $die_count = $LOG->get_die_count();
+	 $die_count++;
+	 
+	 $LOG->add_entry("DIED","RANK",$RANK);
+	 $LOG->add_entry("DIED","COUNT",$die_count);
+      }
+
+      die $_[0]."\n".
+	  "FATAL ERROR\n";
+   };
+}
+
+use Cwd;
+use FileHandle;
+use File::Path;
+use Getopt::Long qw(:config no_ignore_case);
+use File::Temp qw(tempfile tempdir);
+#use Bio::DB::Fasta;
+use GI;
+use Dumper::GFF::GFFV3;
+use Iterator::Any;
+use Iterator::Fasta;
+use Iterator::GFF3;
+use Fasta;
+use FastaChunker;
+use maker::auto_annotator;
+use cluster;
+use repeat_mask_seq;
+use runlog;
+use ds_utility;
+use GFFDB;
+use Error qw(:try);
+use Error::Simple;
+use Process::MpiChunk;
+use Process::MpiTiers;
+use Proc::Signal;
+
+$| = 1;
+
+my $usage = "
+Usage:
+
+     maker [options] <maker_opts> <maker_bopts> <maker_exe>
+
+     Maker is a program that produces gene annotations in GFF3 file format using
+     evidence such as EST alignments and protein homology.  Maker can be used to
+     produce gene annotations for new genomes as well as update annoations from
+     existing genome databases.
+
+     The three input arguments are user control files that specify how maker
+     should behave. All options for maker should be set in the control files,
+     but a few can also be set on the command line. Command line options provide
+     a convenient machanism to override commonly altered control file values.
+
+     Input files listed in the control options files must be in fasta format.
+     unless otherwise specified. Please see maker documentation to learn more
+     about control file  configuration.  Maker will automatically try and locate
+     the user control files in the current working directory if these arguments
+     are not supplied when initializing maker.
+
+     It is important to note that maker does not try and recalculated data that
+     it has already calculated.  For example, if you run an analysis twice on
+     the same dataset file you will notice that maker does not rerun any of the
+     blast analyses, but instead uses the blast analyses stored from the
+     previous run.  To force maker to rerun all analyses, use the -f flag.
+
+
+Options:
+
+     -genome|g <filename> Specify the genome file.
+
+     -predictor|p <type>  Selects the predictor(s) to use when building
+                          annotations.  Defines a pool of gene models for
+                          annotation selection.
+
+                          types: snap
+                                 augustus
+                                 fgenesh
+                                 genemark
+                                 est2genome (Uses EST's directly)
+                                 protein2genome (For Prokaryotic annotation only)
+                                 model_gff (Pass through GFF3 annotations)
+                                 pred_gff (Uses passed through GFF3 predictions)
+
+                          Use a ',' to seperate types (nospaces)
+                          i.e. -predictor=snap,augustus,fgenesh
+
+     -RM_off|R           Turns all repeat masking off.
+
+     -datastore/         Forcably turn on/off MAKER's use of a two deep datastore
+      nodatastore        directory structure for output.  By default this option
+                         turns on whenever there are more the 1,000 contigs in
+                         the input genome fasta file.
+
+     -base    <string>   Set the base name MAKER uses to save output files.
+                         MAKER uses the input genome file name by default.
+
+     -retry|r <integer>  Rerun failed contigs up to the specified count.
+
+     -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
+
+     -force|f            Forces maker to delete old files before running again.
+                         This will require all blast analyses to be re-run.
+
+     -again|a            Caculate all annotations and output files again even if
+                         no settings have changed. Does not delete old analyses.
+
+     -evaluate|e         Run Evaluator on final annotations (under development).
+
+     -fast               Causes MAKER to skip most clustering and analysis.
+                         A quick way to align evidence.  You then must re-run
+                         MAKER to produce full GFF3 output and annotations.
+
+     -quiet|q            Silences most of maker's status messages.
+
+     -qq                 Really quit. Silences everything but major errors.
+
+     -CTL                Generate empty control files in the current directory.
+
+     -help|?             Prints this usage statement.
+
+
+";
+
+#-------------------------------------------------------------------------------
+#------------------------------------ MAIN -------------------------------------
+#-------------------------------------------------------------------------------
+
+#---global variables
+my %OPT;
+my $rank = 0;
+my $size = 1;
+$RANK = $rank;
+
+#---Process options on the command line 
+try{
+    GetOptions("RM_off|R" => \$OPT{R},
+	       "force|f" => \$OPT{force},
+	       "genome|g=s" => \$OPT{genome},
+	       "cpus|c=i" => \$OPT{cpus},
+	       "predictor=s" =>\$OPT{predictor},
+	       "retry=i" =>\$OPT{retry},
+	       "evaluate" =>\$OPT{evaluate},
+	       "again|a" =>\$OPT{again},
+	       "quiet|q" =>\$main::quiet,
+	       "qq"    =>\$main::qq,
+	       "check" =>\$OPT{check},
+	       "base=s" =>\$OPT{out_name},
+	       "datastore!" =>\$OPT{datastore},
+	       "fast" =>\$main::fast,
+	       "dtmp" =>\$main::dtmp,
+	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
+	       "CTL" => sub {GI::generate_control_files(); exit(0);},
+	       "version" => sub{print "$VERSION\n"; exit(0)},
+	       "help|?" => sub {print $usage; exit(0)}
+	       );
+
+    $main::quiet = 1 if($main::qq);
+}
+catch Error::Simple with{
+    my $E = shift;
+    
+    print STDERR $E->{-text};
+    die "\n\nMaker failed parsing command line options!!\n\n" if();
+};
+
+#varibles that are persistent outside of try
+my %CTL_OPT;
+my $iterator;
+my $DS_CTL;
+my $GFF_DB;
+my $build;
+my @failed;
+
+try{
+    #get arguments off the command line
+    my @ctlfiles = @ARGV;
+    
+    if (not @ctlfiles) {
+	if (-e "maker_opts.ctl" &&
+	    -e "maker_bopts.ctl" &&
+	    -e "maker_exe.ctl"
+	    ) {
+	    
+	    @ctlfiles = ("maker_opts.ctl",
+			 "maker_bopts.ctl",
+			 "maker_exe.ctl"
+			 );
+	}
+	else {
+	    print STDERR  "ERROR: Control files not found\n";
+	    print $usage;
+	    exit(0);
+	}
+    }
+    
+    #--Control file processing
+    
+    #set up control options from control files
+    %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
+    
+    #--open datastructure controller
+    $DS_CTL = ds_utility->new(\%CTL_OPT);
+    
+    #--set up gff database
+    $GFF_DB = new GFFDB(\%CTL_OPT);
+    $build = $GFF_DB->next_build;
+    
+    #---load genome multifasta/GFF3 file
+    $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
+				   -gff => $CTL_OPT{'genome_gff'},
+				   );
+}
+catch Error::Simple with{
+    my $E = shift;
+    print STDERR $E->{-text};
+    #print STDERR "\n\nMaker failed while examining startup data\n",
+    #"(control files and input fasta files)!!\n\n";
+    my $code = 2;
+    $code = $E->{-value} if (defined($E->{-value}));
+    
+    exit($code);
+};
+
+my $tier;
+my $f_count = @failed;
+while (my $fasta = $iterator->nextFasta() || shift @failed){
+    $tier = Process::MpiTiers->new({fasta =>$fasta,
+				    CTL_OPT => \%CTL_OPT,
+				    DS_CTL  => $DS_CTL,
+				    GFF_DB  => $GFF_DB,
+				    build   => $build},
+				   '0',
+				   'Process::MpiChunk'
+				   );
+
+    #take a short break before processing previously failed contigs
+    #this handles heavy processor usage when failure is related
+    #to maker process overlap
+    if($f_count != @failed){
+	sleep 1;
+    }
+    $f_count = @failed; #reset failure count
+
+    next if($tier->terminated);
+    $tier->run_all;
+    push(@failed, $tier->fasta) if ($tier->failed);
+}
+
+print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
+
+#clean up all chilren processes
+Proc::Signal::reap_children_by_name(9, 'maintain.pl');
+
+exit(0);
+#-----------------------------------------------------------------------------
+#----------------------------------- SUBS ------------------------------------
+#-----------------------------------------------------------------------------

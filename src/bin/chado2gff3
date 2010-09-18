@@ -1,0 +1,703 @@
+#! /usr/bin/perl
+eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use warnings;
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use DBI;
+use Getopt::Long;
+use File::Temp;
+use vars qw($DBH);
+
+BEGIN{
+    #what to do on ^C
+    $SIG{'INT'} = sub {
+	$DBH->disconnect;
+	exit (1);
+    };
+}
+
+use IO::Prompt;
+use URI::Escape;
+use DBD::Pg;
+use Fasta;
+use threads;
+use threads::shared;
+
+my $usage = '
+USAGE:
+     chado2gff3 [OPTION] <database_name>
+
+     This script takes default CHADO database content and produces
+     GFF3 files for each contig/chromosome.
+
+
+OPTIONS:
+     host|h      <host>  Database host address
+
+     port|p      <port>  Database port
+
+     username|U  <user>  Username to access database
+
+     password|W          Promp for password to access database
+
+     organism|o  <name>  Organism in CHADO database to use
+
+     cpus|o      <int>   Number of cpus to use (parallelize)
+
+     help|?              Displays this usage statement
+
+
+';
+
+my $host = '';
+my $user = '';
+my $pass = '';
+my $organism;
+my $port;
+my $cpus = 1;
+my @for_threads :shared;
+
+GetOptions("host|h=s" => \$host,
+	   "port|p=i" => \$port,
+	   "username|U=s" => \$user,
+	   "password|W" => \$pass,
+	   "organism|o=s" => \$organism,
+	   "cpus=i" => \$cpus,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+my $dbname = shift;
+@ARGV = undef; # must empty this or IO::Prompt throws a fit
+
+$pass = prompt("Please enter your password: ", -echo => '*') if($pass);
+$pass = $pass->{value} if($pass);
+
+if(!$dbname){
+    print $usage;
+    exit();
+}
+
+my $dsn .= "dbi:Pg:dbname=$dbname";
+$dsn .= "\;host=$host" if($host);
+$dsn .= "\;port=$port" if($port);
+
+$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+warn "WARNING: This does not seem to be a chado database\n\n" if(! @$o_list || ! @$c_list);
+
+#check user defined organism
+unless(! $organism || grep {$_ eq $organism} (@$o_list, @$c_list)){
+    warn "WARNING: The organism you specified \'$organism\' does not exist in the database\n\n";
+    undef $organism;
+}
+
+#promt user to select organism
+if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+    die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
+
+    for(my $i = 0; $i <= abs(@$c_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Quit>");
+
+	system("clear");
+	$organism = prompt ("Please select an organism from the database: ",
+			    -menu => \@menu
+			   );
+	
+	if($organism eq 'Show more organisms -->'){
+	    undef $organism;
+	}
+	elsif($organism eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $organism;
+	}
+	elsif($organism eq '<Quit>'){
+	    warn "\n\nWARNING: The user exited the program without doing anything\n\n";
+	    $DBH->disconnect;
+	    exit;
+	}
+	else{
+	    last;
+	}
+    }
+}
+
+
+my ($organism_id) = $DBH->selectrow_array("SELECT organism_id FROM organism WHERE common_name='$organism'");
+my $contigs = $DBH->selectall_arrayref("SELECT f.feature_id, f.uniquename ".
+				       "FROM feature f ".
+				       "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+				       "WHERE f.organism_id=$organism_id AND (c.name='contig' OR c.name='chromosome')");
+
+#exit if there are no contigs to work with
+if(! @$contigs){
+    print STDERR "There is nothing to be done. There are no contigs in database $dbname\n";
+    exit(0);
+}
+
+#output directory
+my $outdir = "$dbname\_chado2gff3";
+if(! -d $outdir){
+    mkdir ($outdir) || die "ERROR: Could not make output directory\n";
+}
+
+#log file
+open(LOG, "> $outdir/chado2gff3.log");
+
+#make contig GFF3 files one at a time
+if($cpus <= 1){
+    my $count = 0;
+    foreach my $contig (@$contigs) {
+	my ($contig_id, $seqid) = @$contig;
+	$count++;
+
+	open(my $OUT, "> $outdir/$seqid.gff");
+	
+	print $OUT "##gff-version 3\n";
+	print $OUT get_contig_line($contig_id) . "\n";
+	print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
+	print $OUT "##FASTA\n";
+	print $OUT get_fasta($contig_id) . "\n";
+	
+	close($OUT);
+    }
+}
+else{
+    foreach my $contig (@$contigs) {
+	push(@for_threads, $contig->[0]); #only send ID to threads
+    }
+    $DBH->disconnect;
+
+    my @thrs;
+    while(@for_threads){
+	if(threads->list(threads::running) < $cpus){
+	    my $thr = threads->create(\&run_thread,$dsn,$user,$pass,{AutoCommit => 0});
+	    push (@thrs, $thr);
+	}
+	sleep 1;
+    }
+
+    foreach my $thr (@thrs){
+	$thr->join();
+    }
+}
+
+close(LOG);
+$DBH->disconnect;
+
+#------------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES ---------------------------------
+#------------------------------------------------------------------------------
+sub run_thread{
+    my $dsn = shift;
+    my $user = shift;
+    my $pass = shift;
+    my $args = shift;
+    
+    $DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+
+    while (my $contig_id = shift @for_threads) {
+	my ($seqid) = $DBH->selectrow_array("SELECT uniquename FROM feature WHERE feature_id=$contig_id");
+	
+        open(my $OUT, "> $outdir/$seqid.gff");
+	
+        print $OUT "##gff-version 3\n";
+        print $OUT get_contig_line($contig_id) . "\n";
+        print $OUT join("\n", @{get_feature_lines($contig_id)}) . "\n";
+        print $OUT "##FASTA\n";
+        print $OUT get_fasta($contig_id) . "\n";
+	
+        close($OUT);
+    }
+
+    $DBH->disconnect;
+}
+#------------------------------------------------------------------------------
+sub get_contig_line {
+    my $contig_id = shift; #contig feature_id
+    my $get_dbxref   = shift || 1;
+    my $get_ontology = shift || 1;
+    my $get_alias    = shift || 1;
+    my $get_other    = shift || 1;
+
+    #get contig line info
+    my ($feature_id,
+	$ID,
+	$type,
+	$end,
+	$Name) = $DBH->selectrow_array("SELECT f.feature_id, f.uniquename, c.name, f.seqlen, f.name ".
+				       "FROM feature f ".
+				       "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+				       "WHERE f.feature_id=$contig_id");
+    $Name = $ID if(! $Name); #add Name feature if needed
+
+    #build standard contig line
+    my $line =  "$ID\t.\t$type\t1\t$end\t.\t.\t.\tID=$ID\;Name=$Name\;";
+
+    #add other attributes if specified
+    if($get_dbxref){
+	my $att = get_dbxref_terms([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
+    }
+    if($get_ontology){
+	my $att = get_ontology_terms([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
+    }
+    if($get_alias){
+	my $att = get_aliases([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
+    }
+    if($get_other){
+	my $att = get_other_attributes([$contig_id]);
+	$line .= $att->{$contig_id} if($att->{$contig_id});
+    }
+
+    return $line;
+}
+#------------------------------------------------------------------------------
+sub get_feature_lines {
+    my $contig_id = shift; #contig feature_id
+    my $get_dbxref   = shift || 1;
+    my $get_ontology = shift || 1;
+    my $get_alias    = shift || 1;
+    my $get_other    = shift || 1;
+
+    #get contig name
+    my ($seqid) = $DBH->selectrow_array("SELECT f.uniquename FROM feature f WHERE f.feature_id=$contig_id");
+
+    #get all features on contig
+    my $features = $DBH->selectall_arrayref("SELECT f.feature_id, r.accession, c.name, l.fmin, l.fmax, ".
+					    "a.significance, l.strand, l.phase, f.uniquename, f.name, f2.uniquename, ".
+					    "f3.uniquename, f4.uniquename, l2.fmin, l2.fmax, l2.strand ".
+					    "FROM feature f ".
+					    "LEFT OUTER JOIN featureloc l ON f.feature_id=l.feature_id ".
+					    "LEFT OUTER JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					    "LEFT OUTER JOIN feature_dbxref d ON d.feature_id=f.feature_id ".
+					    "LEFT OUTER JOIN dbxref r ON r.dbxref_id=d.dbxref_id ".
+					    "LEFT OUTER JOIN analysisfeature a ON a.feature_id=f.feature_id ".
+					    "LEFT OUTER JOIN feature_relationship pt ON pt.subject_id=f.feature_id ".
+					    "LEFT OUTER JOIN cvterm c2 ON pt.type_id=c2.cvterm_id ".
+					    "LEFT OUTER JOIN dbxref d2 ON d2.dbxref_id=c2.dbxref_id ".
+					    "LEFT OUTER JOIN feature f2 ON f2.feature_id=pt.object_id AND c2.name='part_of' ".
+					    "LEFT OUTER JOIN feature f3 ON f3.feature_id=pt.object_id AND c2.name='derives_from' ".
+					    "LEFT OUTER JOIN featureloc l2 ON f.feature_id=l2.feature_id AND l2.srcfeature_id != l.srcfeature_id ".
+					    "LEFT OUTER JOIN feature f4 ON l2.srcfeature_id=f4.feature_id ".
+					    "WHERE l.srcfeature_id = $contig_id ORDER BY f.feature_id;");
+
+    #add other attributes if specified
+    my $dbxref   = {};
+    my $ontology = {};
+    my $alias    = {};
+    my $other    = {};
+
+    my @ids = map {$_->[0]} @$features;
+    if($get_dbxref){
+	$dbxref = get_dbxref_terms(\@ids);
+    }
+    if($get_ontology){
+	$ontology = get_ontology_terms(\@ids);
+    }
+    if($get_alias){
+	$alias = get_aliases(\@ids);
+    }
+    if($get_other){
+	$other = get_other_attributes(\@ids);
+    }
+
+    #make GFF3 feature lines
+    my %order;
+    my @lines;
+    foreach my $feature (@$features){
+	my ($feature_id,
+	    $source,
+	    $type,
+	    $start,
+	    $end,
+	    $score,
+	    $strand,
+	    $phase,
+	    $ID,
+	    $Name,
+	    $Parent,
+	    $Derives_from,
+	    $Target,
+	    $t_start,
+	    $t_end,
+	    $t_strand) = @$feature;
+
+	#fix semantic differences
+	$start++;
+	#$end++; don't iterate end since it os already correct (coordinates are space based)
+
+	die "ERROR: No strand ".join("\t", @$feature)."\n" if(!$strand);
+
+	$strand = ($strand == 1) ? '+' : '-';
+	$Target =~ s/_\d+$// if($Target);
+	if($t_strand){
+	    $t_strand= ($t_strand == 1) ? '+' : '-';
+	}
+
+	if($type eq 'transcript'){
+	    $type = 'mRNA';
+	}
+
+	if($type eq 'mRNA' && !$Parent && $Derives_from){
+	    $Parent = $Derives_from;
+	}
+
+	#fix empty values as '.'
+	foreach my $e ($source, $score, $strand, $phase){
+	    $e = '.' if (! defined $e || $e eq '');
+	}
+
+	#some values exit more than once in DB with multiple parents
+	my $count;
+	if($order{$ID}{line}){
+	    $count++;
+	    $ID = "$ID:$count" while(defined $order{$ID});
+	}
+
+	#make basic GFF3 line
+	my $line = "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\tID=$ID\;Name=$Name\;";
+	$line .= "Parent=$Parent\;" if($Parent);
+	$line .= "Derives_from=$Derives_from\;" if($Derives_from && $type ne 'mRNA');
+	if($Target){
+	    $line .= "Target=$Target $t_start $t_end";
+	    $line .= ($t_strand) ? " $t_strand\;" : "\;";
+	}
+
+	#add other attributes if specified
+	if($get_dbxref){
+	    my $att = $dbxref->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_ontology){
+	    my $att = $ontology->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_alias){
+	    my $att = $alias->{$feature_id};
+	    $line .= $att if($att);
+	}
+	if($get_other){
+	    my $att = $other->{$feature_id};
+	    $line .= $att if($att);
+	}
+
+	$order{$ID}{line} = $line;
+	$order{$ID}{parent_id} = $Parent;
+	$order{$ID}{seqid} = $seqid;
+	$order{$ID}{strand} = $strand;
+	$order{$ID}{source} = $source;
+	$order{$ID}{type} = $type;
+	$order{$ID}{start} = $start;
+	$order{$ID}{end} = $end;
+
+	if($Parent && ! $order{$Parent}){
+	    $order{$Parent} = {};
+	}
+
+	push(@{$order{$Parent}{children}}, $order{$ID}) if($Parent);
+	$order{$ID}{parent} = ($Parent) ? $order{$Parent} : undef;
+
+	if(($type eq 'polypeptide' || $type eq 'CDS') && $Derives_from){
+	    if(! $order{$Derives_from}){
+		$order{$Derives_from} = {};
+	    }
+	    push(@{$order{$Derives_from}{children}}, $order{$ID});
+	    $order{$ID}{parent} = $order{$Derives_from};
+	    $Parent = $Derives_from;
+	}
+    }
+
+    #get top level features and work down heirarchy
+    foreach my $key (grep {!$order{$_}{parent}} keys %order){
+	my $f = $order{$key};
+
+	next if($order{$key}{type} eq 'mRNA'); #skip orphan transcripts
+	next if($order{$key}{type} eq 'exon'); #skip orphan exons
+	next if($order{$key}{type} eq 'CDS'); #skip orphan CDSs
+
+	push(@lines, $f->{line});
+	handle_children($f, \@lines) if($f->{children});
+    }
+    
+    return \@lines;
+}
+#------------------------------------------------------------------------------
+my $COUNT;
+sub handle_children {
+    my $f = shift;
+    my $lines = shift;
+
+    #if a gene feature, sort the exons on the RNA
+    if ($f->{parent} && $f->{parent}{type} eq 'gene'){
+	my %sort;
+	foreach my $c (@{$f->{children}}){
+	    push(@{$sort{$c->{type}}}, $c); 
+	}
+
+	#arrange based on position
+	while(my $key = each %sort){
+	    if($f->{strand} eq '-'){
+		@{$sort{$key}} = sort {$b->{end} <=> $a->{end}} @{$sort{$key}};
+	    }
+	    else{
+		@{$sort{$key}} = sort {$a->{start} <=> $b->{start}} @{$sort{$key}};
+	    }
+	}
+
+	my @keepers;
+	foreach my $key (@{[grep {/^exon$/} keys %sort]}, @{[grep {/^CDS$|^polypeptide$/} keys %sort]}, @{[grep {!/^CDS$|^exon$|^polypeptide$/} keys %sort]}){
+	    push(@keepers, @{$sort{$key}});
+	}
+
+	@{$f->{children}} = @keepers;
+    }
+
+    foreach my $c (@{$f->{children}}){
+	if($c->{type} eq 'polypeptide' || $c->{type} eq 'CDS'){
+	    my $p = $c->{parent};
+	    my @exons = grep {$_->{type} eq 'exon'} @{$p->{children}};
+	    my $B = $c->{start};
+	    my $E = $c->{end};
+
+	    foreach my $e (@exons){
+		my $cB = $e->{start};
+		my $cE = $e->{end};
+
+		if( $cE < $B || $cB > $E){
+		    next;
+		}
+		
+		if($cB < $B){
+		    $cB = $B;
+		}
+		
+		if($cE > $E){
+		    $cE = $E;
+		}
+
+		my $ID = $e->{seqid}.":CDS:".$COUNT++;
+
+		my $line = $e->{seqid}."\t".$e->{source}."\tCDS\t$cB\t$cE\t.\t".$e->{strand}."\t.\tID=$ID\;Name=$ID\;";
+		$line .= "Parent=".$e->{parent_id}."\;";
+		push(@$lines, $line);
+	    }
+	}
+	else{
+	    push(@$lines, $c->{line});
+	    handle_children($c, $lines) if($c->{children});
+	}
+    }
+}
+#------------------------------------------------------------------------------
+sub get_fasta {
+    my $contig_id = shift; #contig feature_id
+
+    my ($seqid, $seq) = $DBH->selectrow_array("SELECT uniquename, residues ".
+					      "FROM feature ".
+					      "WHERE feature_id=$contig_id");
+
+    return Fasta::toFasta(">$seqid", \$seq);
+}
+#------------------------------------------------------------------------------
+sub get_dbxref_terms {
+    my $feature_ids = shift;
+
+    return {} if(! @$feature_ids);
+
+    my @dbxrefs;
+    foreach my $feature_id (@$feature_ids){
+	#get dbxref terms
+	my $values = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
+					      "FROM feature_dbxref f ".
+					      "JOIN dbxref d ON f.dbxref_id=d.dbxref_id ".
+					      "JOIN db ON d.db_id=db.db_id ".
+					      "WHERE db.name!='GFF_source' ".
+					      "AND f.feature_id=$feature_id");
+	push(@dbxrefs, @$values);
+    }
+
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $dbxref(@dbxrefs){
+	my ($id, $nam, $acc) = @$dbxref;
+	$results{$id} .= ($results{$id}) ? ',' : 'Dbxref=';
+	$results{$id} .= "$nam:$acc";
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
+}
+#------------------------------------------------------------------------------
+sub get_ontology_terms {
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
+
+    my @ontologies;
+    foreach my $feature_id (@$feature_ids){
+	#get ontology terms
+	my $values = $DBH->selectall_arrayref("SELECT f.feature_id, db.name, d.accession ".
+					      "FROM feature_cvterm f ".
+					      "JOIN cvterm c ON f.cvterm_id=c.cvterm_id ".
+					      "JOIN dbxref d ON c.dbxref_id=d.dbxref_id ".
+					      "JOIN db ON d.db_id=db.db_id ".
+					      "WHERE f.feature_id=$feature_id");
+	push(@ontologies, @$values);
+    }
+    
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $term (@ontologies){
+	my ($id, $nam, $acc) = @$term;
+	$results{$id} .= ($results{$id}) ? ',' : 'Ontology_term=';
+	$results{$id} .= "$nam:$acc";
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
+}
+#------------------------------------------------------------------------------
+sub get_aliases {
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
+
+    my @aliases;
+    foreach my $feature_id (@$feature_ids){
+	#get Aliases
+	my $values = $DBH->selectall_arrayref("SELECT f.feature_id, s.name ".
+					      "FROM feature f ".
+					      "JOIN feature_synonym fs on f.feature_id=fs.feature_id ".
+					      "JOIN synonym s ON fs.synonym_id=s.synonym_id ".
+					      "WHERE f.uniquename!=s.name AND f.name!=s.name ".
+					      "AND f.name!=(s.name||':'||f.uniquename) ".
+					      "AND f.uniquename!=(s.name||'-".$feature_id."') ".
+					      "AND f.uniquename!=(s.name||'-".($feature_id+1)."') ".
+					      "AND f.uniquename!=(s.name||'-".($feature_id-1)."') ".
+					      "AND f.feature_id=$feature_id");
+	push(@aliases, @$values);
+    }
+
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $alias (@aliases){
+	my ($id, $nam) = @$alias;
+	$results{$id} .= ($results{$id}) ? ',' : 'Alias=';
+	$results{$id} .= $nam;
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} .= ';';
+    }
+
+    return \%results;
+}
+#------------------------------------------------------------------------------
+sub get_other_attributes {
+    my $feature_ids = shift;
+
+    return {} if(!@$feature_ids);
+
+    my @others;
+    foreach my $feature_id (@$feature_ids){
+	#get other attributes
+	my $values = $DBH->selectall_arrayref("SELECT f.feature_id, c.name, f.value ".
+					      "FROM featureprop f ".
+					      "JOIN cvterm c ON f.type_id=c.cvterm_id ".
+					      "WHERE c.name!='date' AND c.name!='owner' ".
+					      "AND c.name!='problem' AND c.name!='status' ".
+					      "AND f.feature_id=$feature_id");
+	push(@others, @$values);
+    }
+
+    #build proper GFF3 attriute lines
+    my %results;
+    foreach my $other (@others){
+	my ($id, $key, $val) = @$other;
+	#comment in chado is Note in GFF3
+	if($key eq 'comment'){
+	    $key = 'Note';
+	}
+	#fix common non-ascii encoded characters
+	if($val =~ /([^[:ascii:]])/){
+	    $val =~ s/\xA0/\x20/g; #space
+	    $val =~ s/\x93|\x94/\x22/g; #double quotes
+	    $val =~ s/\x96/\x2D/g; #dash
+	    $val =~ s/\x92/\x27/g; #apostrophe
+	    $val =~ s/\xCA//g;
+	}
+	#escape invalid characters for GFF3 attributes
+	$val = uri_escape($val, "\t\r\n\;\=\%\&\,\'\x00-\x1f\x7f-\xff");
+	
+	$results{$id}{$key} .= ($results{$id}{$key}) ? ',' : "$key=";
+	$results{$id}{$key} .= $val;
+    }
+
+    #add ';' to the end of each
+    while(my $id = each %results){
+	$results{$id} = join(';', sort values %{$results{$id}}) . ';';
+    }
+
+    return \%results;
+}
+#------------------------------------------------------------------------------
+sub crit1 {
+    my $line = shift;
+
+    return 0 if($line =~ /\tcontig\t|\tchromosome\t/);
+
+    return 1; 
+}
+#-----------------------------------------------------------------------------
+sub crit2 {
+    my $line = shift;
+
+    my @F = split(/\t/, $line);
+    
+    return $F[1];
+}
+#------------------------------------------------------------------------------
+sub crit3 {
+    my $line = shift;
+
+    my @F = split(/\t/, $line);
+    
+    if($F[8] !~ /Parent=/){
+	return 0;
+    }
+    elsif($F[2] =~ /_part/){
+	return 2 ;
+    }
+    elsif($F[2] =~ /exon|CDS/){
+	return 3;
+    }
+    else{
+	return 1;
+    }
+}
+#------------------------------------------------------------------------------

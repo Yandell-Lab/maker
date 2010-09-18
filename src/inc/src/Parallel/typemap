@@ -1,0 +1,3 @@
+MPI_Datatype					T_PTROBJ
+MPI_Comm					T_PTROBJ
+MPI_Op						T_PTROBJ
