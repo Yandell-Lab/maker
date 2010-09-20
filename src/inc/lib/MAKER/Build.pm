@@ -8,7 +8,7 @@ use POSIX;
 use Archive::Tar;
 use File::Copy;
 use File::Path;
-use File::Which;
+use File::Which; #bundled with MAKER
 
 BEGIN{
     #prepare correct version of Module Build for building everything
@@ -40,18 +40,13 @@ sub new {
     $self->install_base_relpaths('exe' => 'exe');
     bless($self, $class);
 
-    my $ok = $self->check_installed_status('File::Which', '0')->{ok};
-    if($ok){
-	$self->check_exes;
-    }
-    else{
-	die "ERROR: File::Which is required by MAKER::Build. Please install.\n";
-    }
+    #performs a check for eternal algorithm dependencies
+    $self->check_exes;
 
     return $self;
 }
 
-#returns MPI compiler and includes directroy if availblae
+#returns MPI compiler and includes directory (undef when one not found)
 sub mpi_support {
     my $self = shift;
 
@@ -79,12 +74,15 @@ sub mpi_support {
     return ($cc, $MPIDIR);
 }
 
+#add a Module to the requires list
 sub add_requires {
     my $self = shift;
     return unless(@_);
 
     if (@_ > 1 && @_ % 2 == 0){
-	while(@_){$self->{properties}{requires}{shift @_} = shift @_}
+	for (my $i = 0; $i < @_; $i += 2){
+	    $self->{properties}{requires}{$_[$i]} = $_[$i+1]
+	}
     }
     elsif(ref $_[0] eq 'HASH'){
 	map {$self->{properties}{requires}{$_} = $_[0]->{$_} } keys %{$_[0]}
@@ -95,6 +93,7 @@ sub add_requires {
     
 }
 
+#replaces Module::Build's config method
 sub config {
     my $self = shift;
     
@@ -105,6 +104,7 @@ sub config {
     return $self->SUPER::config(@_);
 }
 
+#for building a release version of MAKER, updates MAKER version part of the commit
 sub ACTION_commit {
     my $self = shift;
     
@@ -112,12 +112,8 @@ sub ACTION_commit {
     #$self->do_system(qw(svn commit));
 }
 
-sub ACTION_repeatmasker{ shift->_exe_action('RepeatMasker'); }
-sub ACTION_blast{ shift->_exe_action('blast'); }
-sub ACTION_exonerate{ shift->_exe_action('exonerate'); }
-sub ACTION_snap{ shift->_exe_action('snap'); }
-sub ACTION_augustus{ shift->_exe_action('augustus'); }
-
+#will install MAKER, but first installs the dependencies
+#replaces Module::Build's ACTION_install
 sub ACTION_install{
     my $self = shift;
 
@@ -125,6 +121,8 @@ sub ACTION_install{
     $self->depends_on('installprereqs');
 }
 
+#replaces Module::Build's ACTION_installdeps
+#so MAKER prereqs install locally inside of maker/perl/lib
 sub ACTION_installdeps{
     my $self = shift;
 
@@ -150,42 +148,34 @@ sub ACTION_installdeps{
     }
 }
 
-sub ACTION_mpi{
+#these install individual external algorithms
+sub ACTION_repeatmasker{ shift->_exe_action('RepeatMasker'); }
+sub ACTION_blast{ shift->_exe_action('blast'); }
+sub ACTION_exonerate{ shift->_exe_action('exonerate'); }
+sub ACTION_snap{ shift->_exe_action('snap'); }
+sub ACTION_augustus{ shift->_exe_action('augustus'); }
+
+#runs all the algorithm installs that are missing
+sub ACTION_installexes{
     my $self = shift;
 
-    $self->depends_on('installdeps');
-
-    my $ccdir = $self->config('cc') || '';
-    $ccdir =~ s/[^\/]+\/mpicc$/include/;
-    my $dir = File::Which::which('mpicc') || '';
-    $dir =~ s/[^\/]+\/mpicc$/include/;
-
-    my ($MPIDIR) = grep {-f "$_/mpi.h"} (</usr/mpi*/include>,
-                                         </usr/local/mpi*/include>,
-                                         </usr/include/mpi*>,
-                                         </usr/local/include/mpi*>,
-                                         </usr/lib/mpi*/include>,
-                                         </usr/local/lib/mpi*/include>,
-					 $ccdir,
-                                         $dir);
-
-    die "ERROR: Can't find mpi.h\n" if(! $MPIDIR);
+    $self->dispatch("repeatmasker") if(! $self->_found_exe('RepeatMasker'));
+    $self->dispatch("blast")  if(! $self->_found_exe('blast'));
+    $self->dispatch("exonerate") if(! $self->_found_exe('exonerate'));
+    $self->dispatch("snap") if(! $self->_found_exe('snap'));
+    $self->dispatch("augustus") if(! $self->_found_exe('augustus'));
     
-    $self->extra_compiler_flags("-I$MPIDIR -DFLOAT_HACK");
-    
-    $self->SUPER::ACTION_install;
+    $self->check_exes;
 }
 
-sub ACTION_installprereqs{
+#prints out a simle configuration status message
+sub ACTION_status {
     my $self = shift;
-
-    $self->depends_on("repeatmasker") if(! $self->_found_exe('RepeatMasker'));
-    $self->depends_on("blast")  if(! $self->_found_exe('blast'));
-    $self->depends_on("exonerate") if(! $self->_found_exe('exonerate'));
-    $self->depends_on("snap") if(! $self->_found_exe('snap'));
-    $self->depends_on("augustus") if(! $self->_found_exe('augustus'));
+    
+    $self->maker_status;
 }
 
+#checks external algorithms to see if they're present. Anologous to check_prereqs
 sub check_exes{
     my $self = shift;
 
@@ -208,6 +198,7 @@ sub check_exes{
 	"\nRun 'Build installexes' to install missing prerequisites.\n";
 }
 
+#returns missing exes, anologous to prereq_failures
 sub exe_failures {
     my $self = shift;
     my %exes = %{$self->exe_requires};
@@ -233,6 +224,8 @@ sub exe_failures {
     return (keys %exe_failures) ? \%exe_failures : undef;
 }
 
+#hidden connection entry between ACTION_??? algorithm install
+#checks to see if already installed and then run the install method
 sub _exe_action{
     my $self = shift;
     my $exe = shift;
@@ -247,6 +240,7 @@ sub _exe_action{
     }
 }
 
+#does actual installation of all external algorithms
 sub _install_exe {
     my $self = shift;
     my $exe  = shift;
@@ -438,7 +432,7 @@ sub _install_exe {
 }
 
 # install an external module using CPAN prior to testing and installation
-# borrowed and modified from BioPerl
+# borrowed and modified from BioPerl, has flag for local install
 sub cpan_install {
     my ($self, $desired, $local) = @_;
     
@@ -483,6 +477,7 @@ sub cpan_install {
     }
 }
 
+#untars a package. Tries to use tar first then moves to the perl package untar Module.
 sub extract_archive {
     my $self = shift;
     my $file = shift;
@@ -497,17 +492,66 @@ sub extract_archive {
     }
 }
 
+#downloads files from the internet.  Tries to use wget, then curl,
+#and finally LWP::Simple
 sub getstore {
     my $self = shift;
     my $url = shift;
     my $file = shift;
     
-    if(File::Which::which('wget')){
+    if(File::Which::which('wget')){#Linux
 	return $self->do_system("wget $url -c -O $file"); #gives status and can continue partial
+    }
+    elsif(File::Which::which('curl')){#Mac
+	return $self->do_system("curl $url -C - -o $file"); #gives status and can continue partial
     }
     else{
 	return LWP::Simple::getstore($url, $file); #just gets the file with no features
     }
+}
+
+#prints a nice status message for package configuration and install
+sub maker_status {
+    my $self = shift;
+
+    my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
+    my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
+    my $mpi = $self->feature('mpi_support');
+
+    $self->create_build_script;
+
+    print "\n\nThe file 'Build' has been created for you to finish installing MAKER.\n";
+
+    print "\n\n";
+    print "================================================================\n";
+    print "STATUS\n";
+    print "================================================================\n";
+    print "PERL Dependencies:\t";
+    print ((@perl) ? 'MISSING' : 'INSTALLED');
+    print"\n";
+    print "\t\t  !  ". join("\n\t\t  !  ", @perl) ."\n\n" if(@perl);
+    print "External Dependencies:\t";
+    print ((@exes) ? 'MISSING' : 'INSTALLED');
+    print "\n";
+    print "\t\t  !  ". join("\n\t\t  !  ", @exes) ."\n\n" if(@exes);
+    print "MPI SUPPORT:\t\t";
+    print (($mpi) ? 'CONFIGURED' : 'NOT CONFIGURED');
+    print "\n";
+    print "MAKER:\t\t\t";
+    print ((@perl || @exes) ? 'MISSING PREREQUISITES' : 'READY TO INSTALL');
+    print "\n";
+
+    print "\n\nImportant Commands:\n".
+        "\t./Build installdeps\t\#installs missing perl dependencies\n".
+        "\t./Build installexes\t\#installs missing external program dependencies\n".
+        "\t./Build install\t\t\#installs MAKER\n".
+        "\t./Build status\t\t\#Shows this status menu\n\n".
+        "Other Commands:\n".
+        "\t./Build repeatmasker\t\#installs just RepeatMasker\n".
+        "\t./Build blast\t\t\#installs just BLAST\n".
+        "\t./Build exonerate\t\#installs just Exonerate\n".
+        "\t./Build snap\t\t\#installs just SNAP\n".
+        "\t./Build augustus\t\#installs just Augustus\n";
 }
 
 1;

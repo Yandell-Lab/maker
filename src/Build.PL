@@ -1,4 +1,7 @@
-#! /usr/bin/perl
+#!/usr/bin/perl
+eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
 use strict;
 use warnings;
 use FindBin;
@@ -107,53 +110,4 @@ else{
 
 $build->create_build_script;
 
-#term($build, 0);
-
-
-sub term {
-    my $build = shift;
-    my $stat = shift;
-
-    my @perl = map {keys %{$_->{requires}}} $build->prereq_failures();
-    my @exes = $build->missing_exes();
-    my $mpi = $build->check_installed_status('Parallel::MPIcar', '0')->{ok};
-
-    $build->create_build_script;
-
-    print "\n\nThe file 'Build' has been created for you to finish or rerun any\n".
-	"steps that did not complete or failed during initial setup.\n\n";
-
-    print "\n\n";
-    print "================================================================\n";
-    print "STATUS\n";
-    print "================================================================\n";
-    print "PERL Dependencies:\t";
-    print ((@perl) ? 'MISSING' : 'INSTALLED');
-    print"\n";
-    print "\t!\t". join("\n\t!\t", @perl) ."\n\n" if(@perl);
-    print "External Dependencies:\t";
-    print ((@exes) ? 'MISSING' : 'INSTALLED');
-    print "\n";
-    print "\t!\t". join("\n\t!\t", @exes) ."\n\n" if(@exes);
-    print "MPI MAKER (optional):\t";
-    print (($mpi) ? 'INSTALLED' : 'NOT CONFIGURED');
-    print "\n";
-    print "MAKER:\t\t\t";
-    print ((@perl || @exes) ? 'MISSING PREREQUISITES' : 'READY TO USE');
-    print "\n";
-
-    print "\n\nImportant Commands:\n".
-	"\t./Build installdeps\t\#installs missing perl dependencies\n".
-	"\t./Build installprereqs\t\#installs missing external program dependencies\n".
-	"\t./Build mpi\t\t\#installs MPI MAKER and accessory scripts\n\n".
-	"Other Commands:\n".
-	"\t./Build repeatmasker\t\#installs just RepeatMasker\n".
-	"\t./Build blast\t\t\#installs just BLAST\n".
-	"\t./Build exonerate\t\#installs just Exonerate\n".
-	"\t./Build snap\t\t\#installs just SNAP\n".
-	"\t./Build augustus\t\#installs just Augustus\n";
-
-    
-
-    exit($stat);
-}
+$build->maker_status;
