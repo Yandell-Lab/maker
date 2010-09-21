@@ -5,8 +5,8 @@ eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
 use strict;
 use warnings;
 use FindBin;
-use lib "$FindBin::Bin/../lib/"; #libary just needed for configuration
-use lib "$FindBin::Bin/../perl/lib/"; #libary just needed for configuration
+use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
+use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
 use MAKER::Build;
 

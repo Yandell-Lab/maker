@@ -462,7 +462,7 @@ sub cpan_install {
 
     #set up PERL5LIB environmental varable since CPAN doesn't see my 'use lib'
     my $PERL5LIB = $ENV{PERL5LIB} || '';
-    $PERL5LIB = $self->base_dir."/../perl/lib/:$PERL5LIB";
+    $PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
     $ENV{PERL5LIB} = $PERL5LIB;
 
     # Here we use CPAN to actually install the desired module
@@ -476,9 +476,9 @@ sub cpan_install {
     if(! $global){
 	my $base = $self->base_dir;
 	CPAN::HandleConfig->load;
-	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
-	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin";
-	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --install_base_relpaths libdoc=man".
+	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl INSTALLDIRS=perl INSTALLMAN1DIR=man".
+	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin INSTALLSCRIPT=bin";
+	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl --install_base_relpaths libdoc=man".
 	    " --install_base_relpaths bindoc=man --install_base_relpaths lib=lib --install_base_relpaths arch=bin".
 	    " --install_base_relpaths bin=bin  --install_base_relpaths script=bin ";
 	CPAN::Shell::setup_output();
