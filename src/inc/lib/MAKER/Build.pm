@@ -575,7 +575,7 @@ sub maker_status {
     print $mpi;
     print "\n";
     print "MAKER:\t\t\t";
-    print ((@perl || @exes) ? 'MISSING PREREQUISITES' : 'READY TO INSTALL');
+    print $maker;
     print "\n";
 
     print "\n\nImportant Commands:\n".
