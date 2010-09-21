@@ -82,7 +82,7 @@ DETAILED INSTALL
     BLAST instead.  See NCBI BLAST documentation for installation instructions.
     It is important to note that WuBlast is a prerequisite for RepeatMasker
     installation, so if you do not have WuBlast, then you will have to install
-    Cross_match to get RepeatMasker to work.  See RepeatMasker documentation.)
+    RMBlast to get RepeatMasker to work.  See RepeatMasker documentation.)
 
   a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
   b.  Add the following in your .bash_profile (value depend on where you chose
@@ -128,8 +128,8 @@ DETAILED INSTALL
       wherever you want.  I just put it in the /RepeatMasker directory.
   d.  Unpack RepeatMasker to the directory of your choice (i.e. /usr/local).
   e.  If you do not have WuBlast installed, you will need to install the program
-      cross_match.  You must request cross_match via e-mail, so this is usually
-      the longest step.  Install according to cross_match documentations.
+      RMBlast.  We do not recomend using cross_match, as RepeatMasker
+      performance will suffer.
   f.  Now in the RepeatMasker directory type perl ./configure in the command
       line. You will be asked to identify the location of perl, wublast, and
       trf.  The script expects the paths to the folders containing the

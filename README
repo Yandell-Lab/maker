@@ -65,12 +65,16 @@ Also see the mpi_maker installation instructions found further bellow.
 Notes:
 
 1) Wu-BLAST has become AB-BLAST.  We have not tested AB-BLAST for
-   compatibiliy with MAKER, and currenlty have no plans on supporting
-   it. So if you have an existing copy of Wu-BLAST great, if not
-   use NCBI BLAST.
-2) RepeatMasker requires Wu-BLAST or Cross_Match and a single file
+   compatibiliy with MAKER, although we do have reports from users
+   who said it works for them.  However we do not have plans to
+   activly support and debug use of AB-BLAST in MAKER, so if you
+   have an existing copy of Wu-BLAST great, if not, we recommend
+   using NCBI BLAST.
+2) RepeatMasker requires Wu-BLAST or RMBlast and a single file
    executable called TRF (see RepeatMasker website for details), so
    please install these before installing RepeatMasker.
+   Note: We do not recommend using cross_match as RepeatMasker
+   performance will suffer.
 3) Exonerate Binaries can be downloaded from the website.  If you use
    Mac OSX, however, binaries are only available for version 1.0.
    This verion will work too.  If you would like to compile exonerate,
