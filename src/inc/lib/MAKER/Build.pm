@@ -127,13 +127,15 @@ sub ACTION_installdeps{
     my $self = shift;
 
     my $global = $self->y_n("By default MAKER will install these dependencies locally (i.e. only\n".
-			     "for MAKER), would you rather install these globally (usually requires\n".
-			     "that you be logged in as 'root' or run with sudo)?", 'N');
+			    "for MAKER), would you rather install these globally (usually requires\n".
+			    "that you be logged in as 'root' or run with sudo)?", 'N');
     
-    my @prereq = $self->prereq_failures();
-
-    foreach my $m (@prereq){
-	
+    my $prereq = $self->prereq_failures();
+    
+    if($prereq && $prereq->{requires}){
+	foreach my $m (keys %{$prereq->{requires}}){    
+	    $self->cpan_install($m, $global);
+	}
     }
 
     print "\nRechecking dependencies to see if installation was successful\n";
@@ -261,7 +263,7 @@ sub _install_exe {
     open(LOC, '<', $self->base_dir()."/locations")
 	or die "ERROR: Could not open locations to download dependencies\n";
     my $line = <LOC>;
-    if($line =~ /^\#\! \/bin\/env perl/){
+    if($line =~ /^\#\#MAKER/){
 	$data = join('', <LOC>);
 	eval $data;
     }
@@ -434,47 +436,38 @@ sub _install_exe {
 # install an external module using CPAN prior to testing and installation
 # borrowed and modified from BioPerl, has flag for local install
 sub cpan_install {
-    my ($self, $desired, $local) = @_;
+    my ($self, $desired, $global) = @_;
     
-    my $do_install = $self->y_n("The module $desired is must be installed to continue for\n".
-				"the selected options. Shall I install via CPAN?", 'Y');
+    # Here we use CPAN to actually install the desired module
+    require Cwd;
+    require CPAN;
     
-    if ($do_install) {
-	# Here we use CPAN to actually install the desired module
-	require Cwd;
-	require CPAN;
-	
-	# Save this because CPAN will chdir all over the place.
-	my $cwd = Cwd::cwd();
-	
-	if($local){
-	    my $base = $self->base_dir;
-	    CPAN::HandleConfig->load;
-	    $CPAN::Config->{make_install_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
-		" INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin";
-	    CPAN::Shell::setup_output();
-	    CPAN::Index->reload;
-	}
-	CPAN::Shell->install($desired);
-
-	my $ok;
-	my $expanded = CPAN::Shell->expand("Module", $desired);
-	if ($expanded && $expanded->uptodate) {
-	    print "$desired installed successfully\n";
-	    $ok = 1;
-	}
-	else {
-	    print "$desired failed to install\n";
-	    $ok = 0;
-	}
-	
-	chdir $cwd or die "Cannot chdir() back to $cwd: $!";
-	return $ok;
+    # Save this because CPAN will chdir all over the place.
+    my $cwd = Cwd::cwd();
+    
+    if(! $global){
+	my $base = $self->base_dir;
+	CPAN::HandleConfig->load;
+	$CPAN::Config->{make_install_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
+	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin";
+	CPAN::Shell::setup_output();
+	CPAN::Index->reload;
+    }
+    CPAN::Shell->install($desired);
+    
+    my $ok;
+    my $expanded = CPAN::Shell->expand("Module", $desired);
+    if ($expanded && $expanded->uptodate) {
+	print "$desired installed successfully\n";
+	$ok = 1;
     }
     else {
-	print "You chose not to install $desired.\n";
-	return 0;
+	print "$desired failed to install\n";
+	$ok = 0;
     }
+    
+    chdir $cwd or die "Cannot chdir() back to $cwd: $!";
+    return $ok;
 }
 
 #untars a package. Tries to use tar first then moves to the perl package untar Module.

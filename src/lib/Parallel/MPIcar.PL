@@ -1,6 +1,4 @@
-#!/usr/bin/perl
-eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#! /usr/bin/perl
 
 use warnings;
 use strict;
