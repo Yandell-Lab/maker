@@ -5,7 +5,7 @@ package MAKER::Build;
 use strict;
 use warnings;
 use POSIX;
-use Archive::Tar;
+
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
@@ -29,6 +29,7 @@ use base qw(Module::Build);
 __PACKAGE__->add_property( 'exe_requires' );
 
 eval 'require LWP::Simple';
+eval 'require Archive::Tar';
 
 #------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------
@@ -50,8 +51,12 @@ sub new {
 sub mpi_support {
     my $self = shift;
 
+    return if(! $self->thread_support );
+
     my $cc = File::Which::which('mpicc') || $self->config('cc');
+
     return unless($cc =~ /mpicc$/);
+
     my $ccdir = $cc;
     $cc =~ s/[^\/]+\/[^\/]+$/include/;
 
@@ -112,13 +117,12 @@ sub ACTION_commit {
     #$self->do_system(qw(svn commit));
 }
 
-#will install MAKER, but first installs the dependencies
-#replaces Module::Build's ACTION_install
-sub ACTION_install{
+#replacement for Module::Build's ACTION_install
+sub ACTION_install {
     my $self = shift;
-
-    $self->depends_on('installdeps');
-    $self->depends_on('installprereqs');
+    
+    $self->SUPER::ACTION_install();
+    $self->maker_status();
 }
 
 #replaces Module::Build's ACTION_installdeps
@@ -126,13 +130,15 @@ sub ACTION_install{
 sub ACTION_installdeps{
     my $self = shift;
 
-    my $global = $self->y_n("By default MAKER will install these dependencies locally (i.e. only\n".
-			    "for MAKER), would you rather install these globally (usually requires\n".
-			    "that you be logged in as 'root' or run with sudo)?", 'N');
-    
     my $prereq = $self->prereq_failures();
-    
     if($prereq && $prereq->{requires}){
+	my $global = $self->y_n("\nBy default MAKER installs dependencies locally (i.e. only for MAKER).\n".
+				"Would you rather install these dependencies globally? (usually requires\n".
+				"that you be logged in as 'root' or run with sudo)", 'N');
+
+	foreach my $m (keys %{$prereq->{build_requires}}){    
+	    $self->cpan_install($m, $global);
+	}
 	foreach my $m (keys %{$prereq->{requires}}){    
 	    $self->cpan_install($m, $global);
 	}
@@ -161,11 +167,13 @@ sub ACTION_augustus{ shift->_exe_action('augustus'); }
 sub ACTION_installexes{
     my $self = shift;
 
-    $self->dispatch("repeatmasker") if(! $self->_found_exe('RepeatMasker'));
-    $self->dispatch("blast")  if(! $self->_found_exe('blast'));
-    $self->dispatch("exonerate") if(! $self->_found_exe('exonerate'));
-    $self->dispatch("snap") if(! $self->_found_exe('snap'));
-    $self->dispatch("augustus") if(! $self->_found_exe('augustus'));
+    my $exe_failures = $self->exe_failures();
+
+    return if(! $exe_failures || ! $exe_failures->{exe_requires});
+    foreach my $name (keys %{$exe_failures->{exe_requires}}){
+	$name = lc($name); #all dispatch parameters are lower case
+	$self->dispatch($name);
+    }
     
     $self->check_exes;
 }
@@ -232,13 +240,15 @@ sub _exe_action{
     my $self = shift;
     my $exe = shift;
 
-    if($self->_found_exe($exe)){
+    my $fail = $self->exe_failures();
+    my @list = keys %{$fail->{exe_requires}} if($fail->{exe_requires});
+    if(grep {/^$exe$/i} @list){
+	$self->_install_exe($exe);
+    }
+    else{
 	my $go = $self->y_n("WARNING: $exe was already found on this system.\n".
 			    "Do you still want MAKER to install $exe for you?", 'N');
 	$self->_install_exe($exe) if($go);
-    }
-    else{
-	$self->_install_exe($exe);
     }
 }
 
@@ -246,7 +256,7 @@ sub _exe_action{
 sub _install_exe {
     my $self = shift;
     my $exe  = shift;
-    my $base = $self->base_dir()."/../external/";
+    my $base = $self->install_destination('exe');
     my $path = "$base/$exe";
 
     #get OS and architecture
@@ -272,7 +282,7 @@ sub _install_exe {
     #maker prerequisite installation directory
     if(! -d $base){
 	mkdir($base) ||
-	    die "ERROR could not create directory $base for installing external dependencies\n";
+	    die "ERROR could not create directory $base for installing external program dependencies\n";
     }
 
     #install
@@ -433,11 +443,28 @@ sub _install_exe {
     chdir($self->base_dir());
 }
 
+#fail/cleanup method for installing exes
+sub _fail {
+    my $self = shift;
+    my $exe = shift;
+    my $path = shift;
+
+    print "\n\nERROR: Failed installing $exe, now cleaning installation path...\n".
+	"You may need to install $exe manually.\n\n";
+
+    File::Path::rmtree($path);
+}
+
 # install an external module using CPAN prior to testing and installation
 # borrowed and modified from BioPerl, has flag for local install
 sub cpan_install {
     my ($self, $desired, $global) = @_;
-    
+
+    #set up PERL5LIB environmental varable since CPAN doesn't see my 'use lib'
+    my $PERL5LIB = $ENV{PERL5LIB} || '';
+    $PERL5LIB = $self->base_dir."/../perl/lib/:$PERL5LIB";
+    $ENV{PERL5LIB} = $PERL5LIB;
+
     # Here we use CPAN to actually install the desired module
     require Cwd;
     require CPAN;
@@ -445,11 +472,15 @@ sub cpan_install {
     # Save this because CPAN will chdir all over the place.
     my $cwd = Cwd::cwd();
     
+    #set up a non-global local module library for MAKER
     if(! $global){
 	my $base = $self->base_dir;
 	CPAN::HandleConfig->load;
-	$CPAN::Config->{make_install_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
+	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
 	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin";
+	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --install_base_relpaths libdoc=man".
+	    " --install_base_relpaths bindoc=man --install_base_relpaths lib=lib --install_base_relpaths arch=bin".
+	    " --install_base_relpaths bin=bin  --install_base_relpaths script=bin ";
 	CPAN::Shell::setup_output();
 	CPAN::Index->reload;
     }
@@ -478,9 +509,13 @@ sub extract_archive {
     return 0 if(! $file);
     
     if(File::Which::which('tar')){
-	return $self->do_system("tar -xf $file"); #fast
+	return $self->do_system("tar -xmof $file"); #fast
     }
     else{
+	die "ERROR: Archive::Tar required to unpack missing executables.\n".
+	    "Try running ./Build installdeps first.\n"
+	    if(!$self->check_installed_status('Archive::Tar')->{ok});
+
 	return (Archive::Tar->extract_archive($file)) ? 1 : 0; #slow
     }
 }
@@ -496,9 +531,15 @@ sub getstore {
 	return $self->do_system("wget $url -c -O $file"); #gives status and can continue partial
     }
     elsif(File::Which::which('curl')){#Mac
-	return $self->do_system("curl $url -C - -o $file"); #gives status and can continue partial
+	my $stat = $self->do_system("curl $url -C - -o $file"); #gives status and can continue partial
+	$stat = $self->do_system("curl $url -o $file") if(! $stat); #just redo if continue fails
+	return $stat;
     }
     else{
+	die "ERROR: LWP::Simple required to download missing executables\n".
+	    "Try running ./Build installdeps first.\n"
+	    if(!$self->check_installed_status('LWP::Simple')->{ok});
+
 	return LWP::Simple::getstore($url, $file); #just gets the file with no features
     }
 }
@@ -509,9 +550,12 @@ sub maker_status {
 
     my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
     my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
-    my $mpi = $self->feature('mpi_support');
 
-    $self->create_build_script;
+    my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
+    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar')->{ok});
+    $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
+    my $maker = (-f $self->base_dir."/../bin/maker") ? 'INSTALLED' : 'READY TO INSTALL';
+    $maker =  'MISSING PREREQUISITES' if(@perl || @exes);
 
     print "\n\nThe file 'Build' has been created for you to finish installing MAKER.\n";
 
@@ -523,12 +567,12 @@ sub maker_status {
     print ((@perl) ? 'MISSING' : 'INSTALLED');
     print"\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @perl) ."\n\n" if(@perl);
-    print "External Dependencies:\t";
+    print "External Programs:\t";
     print ((@exes) ? 'MISSING' : 'INSTALLED');
     print "\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @exes) ."\n\n" if(@exes);
     print "MPI SUPPORT:\t\t";
-    print (($mpi) ? 'CONFIGURED' : 'NOT CONFIGURED');
+    print $mpi;
     print "\n";
     print "MAKER:\t\t\t";
     print ((@perl || @exes) ? 'MISSING PREREQUISITES' : 'READY TO INSTALL');
@@ -540,11 +584,18 @@ sub maker_status {
         "\t./Build install\t\t\#installs MAKER\n".
         "\t./Build status\t\t\#Shows this status menu\n\n".
         "Other Commands:\n".
-        "\t./Build repeatmasker\t\#installs just RepeatMasker\n".
-        "\t./Build blast\t\t\#installs just BLAST\n".
-        "\t./Build exonerate\t\#installs just Exonerate\n".
+        "\t./Build repeatmasker\t\#installs just RepeatMasker (no RepBase)\n".
+        "\t./Build blast\t\t\#installs just BLAST (NCBI BLAST+)\n".
+        "\t./Build exonerate\t\#installs just Exonerate (v2 on UNIX or v1 on Mac)\n".
         "\t./Build snap\t\t\#installs just SNAP\n".
         "\t./Build augustus\t\#installs just Augustus\n";
+}
+
+sub thread_support {
+    my $self = shift;
+    require Config;
+
+    return $Config::Config{useithreads};
 }
 
 1;

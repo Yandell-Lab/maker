@@ -2401,10 +2401,13 @@ sub set_defaults {
 		  'probuild'
 		 );
 
+      #get MAKER override exes
+      my @all_alts = grep {-f $_ && -x $_} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>);
       foreach my $exe (@exes) {
-	  my $loc = which($exe) || '';
-	  if($exe =~ /^.?blast.$/){
-	      $loc = (grep {Cwd::abs_path($_) =~ /blasta$/} which($exe))[0] || '';
+	  my @alts = grep {/\/$exe$/} @all_alts;
+	  my $loc = shift @alts || File::Which::which($exe) || '';
+	  if($loc && $exe =~ /^.?blast.$/ && Cwd::abs_path($loc) !~ /blasta$/){
+	      $loc = (grep {Cwd::abs_path($_) =~ /blasta$/} (@alts, File::Which::where($exe))) || '';
 	  }
 	  $CTL_OPT{$exe} = $loc;
       }
@@ -2469,7 +2472,7 @@ sub set_defaults {
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf';
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
       $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
-      $CTL_OPT{'APOLLO_ROOT'} = which('apollo') || '';
+      $CTL_OPT{'APOLLO_ROOT'} = File::Which::which('apollo') || '';
       $CTL_OPT{'APOLLO_ROOT'} = $CTL_OPT{'APOLLO_ROOT'} =~ /^([^\n]+)\/bin\/apollo\n?$/;
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if($ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
       $CTL_OPT{'APOLLO_ROOT'} = '/usr/local/gmod/apollo' if(! $CTL_OPT{'APOLLO_ROOT'} || ! -d $CTL_OPT{'APOLLO_ROOT'});

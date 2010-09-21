@@ -29,25 +29,26 @@ my $build = MAKER::Build->new
      auto_configure_requires => 1,
      requires => {
 	 'perl'               => '5.8.0',
-	 'DBI'                => '0',
-	 'DBD::SQLite'        => '0',
 	 'Proc::ProcessTable' => '0',
-	 'IO::All'            => '0',
-	 'IO::Prompt'         => '0',
 	 'File::Which'        => '0',
 	 'Bio::Root::Version' => '1.006',
-	 'Other::Module' => '>= 1.2, != 1.5, < 2.0',
+	 'IO::All'            => '0',
+	 'IO::Prompt'         => '0',
+	 'DBD::SQLite'        => '0',
+	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {
-	 'BLAST' => 'xdformat, formatdb',
+	 'BLAST' => 'xdformat, formatdb, makeblastdb',
 	 'RepeatMasker' => 'RepeatMasker',
 	 'Exonerate' => 'exonerate',
 	 'SNAP'  => 'snap',
 	 'Augustus' => 'augustus',
      },
      build_requires => {
-	 'File::Which'        => '0',
+	 'Test::More'         => '0',
 	 'ExtUtils::CBuilder' => '0',
+	 'DBI'                => '1.57',
+	 'File::Which'        => '0',
 	 'LWP::Simple'        => '0',
      },
      config_requires => {
@@ -74,19 +75,15 @@ my $build = MAKER::Build->new
      },
     );
 
-#see if threaded
-my $threaded = 1;
-eval "require threads";
-if($@){
-    print "WARNING:  Your version of perl does not seem to have been compiled\n".
+#see if threaded and supports MPI
+if(! $build->thread_support){
+    print "\nWARNING:  Your version of perl does not seem to have been compiled\n".
 	  "for threads; certain MAKER accessory scripts and features (such as\n".
-	  "MPI support) will be not be available to you\n";
-    $threaded = 0;
+	  "MPI support) will be not be available to you.\n\n";
+
+    $build->feature(mpi_support => 0); #set mpi flag for Build
 }
-
-
-#decide whether to configure maker MPI support
-if($threaded && (my @mpi = $build->mpi_support)){
+elsif(my @mpi = $build->mpi_support){
     my $go = $build->y_n("\nYour system appears to be configured for MPI. Would\n".
 			 "you like to install the MPI version of MAKER?", 'Y');
 
