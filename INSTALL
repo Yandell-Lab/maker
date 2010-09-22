@@ -2,20 +2,14 @@
 
 How to Install Standard MAKER
 
-Note:  When using Mac OS-X and installing MAKER you must either be a system
-administrator with sudo privleges or be logged in as root on the terminal for
-some parts of the installation.
-
-
-
 EASY INSTALL
 
-1.  Go to the .../maker/src/ directory and run perl Build.PL. That's it.
+1.  Go to the .../maker/src/ directory and run 'perl Build.PL' to configure
+    the install and then './Build install' to complete the installation.
 
-2.  If anything fails, either use the ./Build file commands to retry the
+5.  If anything fails, either use the ./Build file commands to retry the
     failed section or follow the detailed install instructions below to
-    manually install missing module or programs.
-
+    manually install missing modules or programs.
 
 
 DETAILED INSTALL
@@ -28,12 +22,14 @@ DETAILED INSTALL
       *DBD::SQLite
       *Proc::ProcessTable
       *threads (Optional for MPI scripts)
-      *IO::All (Optional for accessory scripts)
-      *IO::Prompt (Optional for accessory scripts)
+      *IO::All (Required by accessory scripts)
+      *IO::Prompt (Required by accessory scripts)
 
     a. Type 'perl -MCPAN -e shell' to access the CPAN shell.  You may
        have to answer some configuration questions if this is your first time
        starting CPAN.  You can normally just hit enter to accept defaults.
+       Also you may have to be logged in as 'root' or use sudo to install
+       modules via CPAN.
 
     b. Type 'install DBI' to install the first module, then type
       'install DBD::SQLite' to install the next, and so on.
@@ -146,12 +142,14 @@ DETAILED INSTALL
 6.  Install Exonerate 1.4 or higher.  Download from
     http://www.ebi.ac.uk/~guy/exonerate
 
-  a.  Exonerate has pre-comiled binaries for many systems; however; for Mac OS-X
+  a.  Exonerate has pre-comiled binaries for many systems; however, for Mac OS-X
       you will have to download the source code and complile it yourself by
       following steps b though d.
   b.  You need to have Glib and Glib 2.0 installed.  The easiest way to do this
-      is to install fink and then type fink install glib and fink install
-      glib2-dev.
+      on a Mac is to install fink and then type fink install glib and fink
+      install glib2-dev. For 64 bit processor Macs set the environmental
+      variables CC and GCC to 'gcc -m32' before installing anything.
+      i.e. export CC='gcc -m32'
   c.  Change to the directory containing the Exonerate package to be compiled.
   d.  To install exonerate in the directory /usr/local/exonerate, type:
       ./configure -prefix=/usr/local/exonerate -> then type make -> then type
