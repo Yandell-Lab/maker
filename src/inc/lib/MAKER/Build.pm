@@ -148,8 +148,10 @@ sub ACTION_installdeps{
     $self->check_prereq;
 
     if($self->prereq_failures()){
+	$self->module_overide_test(); 
+
 	my ($usr_id) = (getpwnam('root'))[2];
-	print "WARNING: ";
+	print "WARNING: Installation failed (please review any previous errors).\n";
 	print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
 	print "You may need to configure and install these packages manually.\n";
 	return 0;
@@ -484,6 +486,13 @@ sub cpan_install {
 	CPAN::Shell::setup_output();
 	CPAN::Index->reload;
     }
+    else{
+	CPAN::HandleConfig->load;
+	$CPAN::Config->{makepl_arg} = "INSTALLDIRS=site";
+	$CPAN::Config->{mbuildpl_arg} = "--installdirs site";
+	CPAN::Shell::setup_output();
+	CPAN::Index->reload;
+    }
     CPAN::Shell->install($desired);
     
     my $ok;
@@ -514,7 +523,7 @@ sub extract_archive {
     else{
 	die "ERROR: Archive::Tar required to unpack missing executables.\n".
 	    "Try running ./Build installdeps first.\n"
-	    if(!$self->check_installed_status('Archive::Tar')->{ok});
+	    if(!$self->check_installed_status('Archive::Tar', '0')->{ok});
 
 	return (Archive::Tar->extract_archive($file)) ? 1 : 0; #slow
     }
@@ -538,7 +547,7 @@ sub getstore {
     else{
 	die "ERROR: LWP::Simple required to download missing executables\n".
 	    "Try running ./Build installdeps first.\n"
-	    if(!$self->check_installed_status('LWP::Simple')->{ok});
+	    if(!$self->check_installed_status('LWP::Simple', '0')->{ok});
 
 	return LWP::Simple::getstore($url, $file); #just gets the file with no features
     }
@@ -552,7 +561,7 @@ sub maker_status {
     my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
 
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar')->{ok});
+    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
     my $maker = (-f $self->base_dir."/../bin/maker") ? 'INSTALLED' : 'READY TO INSTALL';
     $maker =  'MISSING PREREQUISITES' if(@perl || @exes);
@@ -589,6 +598,42 @@ sub maker_status {
         "\t./Build exonerate\t\#installs just Exonerate (v2 on UNIX or v1 on Mac)\n".
         "\t./Build snap\t\t\#installs just SNAP\n".
         "\t./Build augustus\t\#installs just Augustus\n";
+}
+
+sub module_overide_test {
+    my $self = shift;
+
+    my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
+
+    return if(! @perl);
+
+    require CPAN;
+    require Config;
+    foreach my $desired (@perl){
+	my $expanded = CPAN::Shell->expand("Module", $desired);
+	my $ok = 1 if ($expanded && $expanded->uptodate);
+	my $loc = $self->module_loc($desired) if($ok);
+
+	print "\n\nWARNING: There is more than one version of the module $desired\n".
+	    "installed on this machine. This may be superceding the required version.\n\n".
+	    "Please remove the other module at: $loc\n\n"
+	    if($loc);
+    }
+}
+
+#gets the location of a module
+sub module_loc {
+    my $self = shift;
+    my $desired = shift;
+
+    return if(! $desired);
+
+    eval "require $desired"; #loads module into \%INC    
+
+    $desired =~ s/\:\:/\//g;
+    $desired .= ".pm";
+
+    return $INC{$desired};
 }
 
 sub thread_support {

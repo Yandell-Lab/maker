@@ -520,8 +520,24 @@ sub refactor {
 	    my $CDS = $g->{CDS};
 	    my $start_codon = $g->{start_codon} || undef;
 	    my $stop_codon  = $g->{stop_codon}  || undef;
+
+	    next if(! $stop_codon);
+
 	    my ($last) = @{[sort sort_cdss @{$CDS}]}[-1];
-	    
+
+	    #stop codon may be it's own exon for weird predictions
+	    if(abs($last->{e} - $stop_codon->{b}) != 1 && abs($last->{b} - $stop_codon->{e}) != 1){
+		my %CDS = ( 'b' => $stop_codon->{b},
+			    'e' => $stop_codon->{e},
+			    'frame' => $stop_codon->{frame},
+			    'score' => $stop_codon->{score},
+			    'strand' => $stop_codon->{strand},
+			    'type' => 'CDS',
+			  );
+		push (@{$g->{CDS}}, \%CDS);
+		$last = \%CDS;
+	    }
+
 	    if ($last->{strand} == 1){
 		$last->{e} = $stop_codon->{e} if($stop_codon);
 	    }
