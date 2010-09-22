@@ -476,9 +476,9 @@ sub cpan_install {
     if(! $global){
 	my $base = $self->base_dir;
 	CPAN::HandleConfig->load;
-	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl INSTALLDIRS=perl INSTALLMAN1DIR=man".
+	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
 	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin INSTALLSCRIPT=bin";
-	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl --install_base_relpaths libdoc=man".
+	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --install_base_relpaths libdoc=man".
 	    " --install_base_relpaths bindoc=man --install_base_relpaths lib=lib --install_base_relpaths arch=bin".
 	    " --install_base_relpaths bin=bin  --install_base_relpaths script=bin ";
 	CPAN::Shell::setup_output();
