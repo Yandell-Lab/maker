@@ -5,6 +5,8 @@ package MAKER::Build;
 use strict;
 use warnings;
 use POSIX;
+use Config;
+use FindBin;
 
 use File::Copy;
 use File::Path;
@@ -12,7 +14,8 @@ use File::Which; #bundled with MAKER
 
 BEGIN{
     #prepare correct version of Module Build for building everything
-    my $Bundled_MB = 0.3607;  #version included in my distribution                                                                 
+    my $Bundled_MB = 0.3607;  #version included in my distribution
+
     # Find out what version of Module::Build is installed or fail quietly.
     # This should be cross-platform.
     my $Installed_MB =`$^X -e "eval q{require Module::Build; print Module::Build->VERSION} or exit 1"`;
@@ -20,7 +23,12 @@ BEGIN{
     $Installed_MB = 0 if $?;
 
     # Use the bundled copy of Module::Build if it's newer than the installed.
-    unshift @INC, "inc/bundle/" if $Bundled_MB > $Installed_MB;
+    if ($Bundled_MB > $Installed_MB){
+	unshift @INC, "$FindBin::Bin/inc/bundle" unless($INC[0] eq "$FindBin::Bin/inc/bundle");
+	my $PERL5LIB = $ENV{PERL5LIB} || '';
+	$PERL5LIB = "$FindBin::Bin/inc/bundle:$PERL5LIB";
+	$ENV{PERL5LIB} = $PERL5LIB;
+    }
 
     require Module::Build;
 }
@@ -478,11 +486,12 @@ sub cpan_install {
     if(! $global){
 	my $base = $self->base_dir;
 	CPAN::HandleConfig->load;
-	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=perl INSTALLMAN1DIR=man".
-	    " INSTALLMAN3DIR=man INSTALLARCHLIB=lib INSTALLPRIVLIB=lib INSTALLBIN=bin INSTALLSCRIPT=bin";
-	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --install_base_relpaths libdoc=man".
-	    " --install_base_relpaths bindoc=man --install_base_relpaths lib=lib --install_base_relpaths arch=bin".
-	    " --install_base_relpaths bin=bin  --install_base_relpaths script=bin ";
+	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=site INSTALLSITEMAN1DIR=man INSTALLSITEMAN3DIR=man".
+	    " INSTALLSITEARCH=lib INSTALLSITELIB=lib INSTALLSITEBIN=lib/bin INSTALLSITESCRIPT=lib/bin";
+	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --installdirs site".
+	    " --install_path libdoc=$base/../perl/man --install_path bindoc=$base/../perl/man".
+	    " --install_path lib=$base/../perl/lib --install_path  arch=$base/../perl/lib".
+	    " --install_path bin=$base/../perl/lib/bin --install_path script=$base/../perl/lib/bin ";
 	CPAN::Shell::setup_output();
 	CPAN::Index->reload;
     }
@@ -600,6 +609,7 @@ sub maker_status {
         "\t./Build augustus\t\#installs just Augustus\n";
 }
 
+#test if there is anotehr version of the module overriding the CPAN install
 sub module_overide_test {
     my $self = shift;
 
@@ -607,17 +617,28 @@ sub module_overide_test {
 
     return if(! @perl);
 
-    require CPAN;
-    require Config;
     foreach my $desired (@perl){
-	my $expanded = CPAN::Shell->expand("Module", $desired);
-	my $ok = 1 if ($expanded && $expanded->uptodate);
+	my $mod = $desired; #holds expected .pm file name
+	$mod =~ s/\:\:/\//g;
+	$mod .= '.pm';
+
+	my $test=  qq(\@INC = qw($Config{installsitelib}
+				 $Config{installsitearch}
+				 $Config{installvendorlib}
+				 $Config{installvendorarch}
+				 $Config{installprivlib}
+				 $Config{installarchlib});
+		      require $desired;
+		      print \$INC{\"$mod\"};
+		      );
+	
+	my $ok = `$^X -e 'eval q{$test} or exit 1'`;
 	my $loc = $self->module_loc($desired) if($ok);
 
 	print "\n\nWARNING: There is more than one version of the module $desired\n".
 	    "installed on this machine. This may be superceding the required version.\n\n".
 	    "Please remove the other module at: $loc\n\n"
-	    if($loc);
+	    if($loc && $loc ne $ok);
     }
 }
 
