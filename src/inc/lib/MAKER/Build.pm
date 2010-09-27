@@ -68,19 +68,22 @@ sub mpi_support {
     my $ccdir = $cc;
     $cc =~ s/[^\/]+\/[^\/]+$/include/;
 
-    my ($MPIDIR) = grep {-f "$_/mpi.h"} (</usr/include>,
-                                         </usr/include/mpi*>,
-					 </usr/mpi*/include>,
-                                         </usr/local/include>,
-                                         </usr/local/include/mpi*>,
-                                         </usr/local/mpi*/include>,
-                                         </usr/lib/>,
-                                         </usr/lib/include/mpi*>,
-                                         </usr/lib/mpi*/include>,
-					 </usr/local/lib>,
-                                         </usr/local/lib/include/mpi*>,
-                                         </usr/local/lib/mpi*/include>,
-					 $ccdir);
+    #directories to search for mpi.h
+    my @includes = (</usr/include>,
+		    </usr/include/mpi*>,
+		    </usr/mpi*/include>,
+		    </usr/local/include>,
+		    </usr/local/include/mpi*>,
+		    </usr/local/mpi*/include>,
+		    </usr/lib/>,
+		    </usr/lib/include/mpi*>,
+		    </usr/lib/mpi*/include>,
+		    </usr/local/lib>,
+		    </usr/local/lib/include/mpi*>,
+		    </usr/local/lib/mpi*/include>,
+		    $ccdir);
+
+    my ($MPIDIR) = grep {-f "$_/mpi.h" && is_mpich2("$_/mpi.h")} @includes;
 
     return if(! $MPIDIR);
 
@@ -670,6 +673,24 @@ sub thread_support {
     require Config;
 
     return $Config::Config{useithreads};
+}
+
+sub is_mpich2 {
+    my $file = shift;
+    
+    $file = shift if(ref($file) eq 'MAKER::Build');
+
+    my $ok;
+    open(IN, "< $file");
+    while(my $line = <IN>){
+	if($line =~ /^\#define\s+MPICH2_VERSION/){
+	    $ok = 1;
+	    last;
+	}
+    }
+    close(IN);
+    
+    return $ok;
 }
 
 1;
