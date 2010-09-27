@@ -1,5 +1,5 @@
 ***MAKER Documentation***
-
+ALSO SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
 #---------------------------------------------------------------------
 
 INSTALLATION INSTUCTIONS FOR MAKER
@@ -168,6 +168,10 @@ mpiexec -n 4 mpi_maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
 
 Please see the documentation of the MPI environment you use for
 instructions on how to initiate an MPI process.
+
+#---------------------------------------------------------------------
+
+SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
 
 #---------------------------------------------------------------------
 
