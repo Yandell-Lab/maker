@@ -31,7 +31,7 @@ sub process {
 	   push(@features, @{$f});
 	}
 
-	my ($tes, $lcs) = seperate_types(\@features);
+	my ($tes, $lcs) = separate_types(\@features);
 
 	my $shattered_lcs = shatter_hits($lcs);
 	my $tes_keepers   = clean_tes($query_seq, $tes);
@@ -85,7 +85,7 @@ sub mask_chunk {
 	my $chunk = shift;
 	my $features = shift;
 
-	my ($tes, $lcs) = seperate_types($features);
+	my ($tes, $lcs) = separate_types($features);
 
 	my $chunk_offset = $chunk->offset();
 
@@ -106,7 +106,7 @@ sub mask_seq {
 	my $seq = shift;
 	my $features = shift;
 
-	my ($tes, $lcs) = seperate_types($features);
+	my ($tes, $lcs) = separate_types($features);
 
 	my $tes_coors = get_hsp_coors($tes, 0);
 	my $lcs_coors = get_hsp_coors($lcs, 0);
@@ -180,7 +180,7 @@ sub get_hsp_coors {
 	return \@coors;
 }
 #-----------------------------------------------------------------------------
-sub seperate_types {
+sub separate_types {
 	my $features = shift;
 
 	my @tes;

@@ -957,7 +957,7 @@ sub _go {
 							 );
 	    }
 	    
-	    #seperate out hits too close to chunk divide to be run with exonerate
+	    #separate out hits too close to chunk divide to be run with exonerate
 	    $holdover_blastn = [];
 	    if (not $chunk->is_last) {
 		($blastn_keepers, $holdover_blastn) = GI::process_the_chunk_divide($chunk,
@@ -1097,7 +1097,7 @@ sub _go {
 							  );
 	    }
 	    
-	    #seperate out hits too close to chunk divide to be run with exonerate
+	    #separate out hits too close to chunk divide to be run with exonerate
 	    $holdover_tblastx = [];
 	    if (not $chunk->is_last) {
 		($tblastx_keepers, $holdover_tblastx) = GI::process_the_chunk_divide($chunk,
@@ -1240,7 +1240,7 @@ sub _go {
 							 );
 	    }
 	    
-	    #seperate out hits too close to chunk divide to be run with exonerate
+	    #separate out hits too close to chunk divide to be run with exonerate
 	    $holdover_blastx = [];
 	    if (not $chunk->is_last) {
 		($blastx_keepers, $holdover_blastx) = GI::process_the_chunk_divide($chunk,

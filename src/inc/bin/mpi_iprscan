@@ -570,7 +570,7 @@ if ($rank == $root){
 			
 			#secondary node helpers
 			if($sec_node_avail > 0){
-			    #seperate the helpers
+			    #separate the helpers
 			    while(@{$helpers} < $num_helpers_req && @helper_stack > 0){
 				my $helper = shift @helper_stack;
 				push(@{$helpers}, $helper);

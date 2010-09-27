@@ -153,7 +153,7 @@ Options:
                                  model_gff (Pass through GFF3 annotations)
                                  pred_gff (Uses passed through GFF3 predictions)
 
-                          Use a ',' to seperate types (nospaces)
+                          Use a ',' to separate types (nospaces)
                           i.e. -predictor=snap,augustus,fgenesh
 
      -RM_off|R           Turns all repeat masking off.

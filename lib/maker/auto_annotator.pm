@@ -81,7 +81,7 @@ sub prep_hits {
 			    $clean_altest
 			   );
 
-	my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $c_bag);
+	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
 	my $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
 	my $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
@@ -126,7 +126,7 @@ sub prep_hits {
 				$clean_altest
 				);
 
-	    ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $m_bag);
+	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $m_bag);
 	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
 	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
@@ -717,7 +717,7 @@ sub annotate {
 
     #add abinits to their predictor type after they have been proccessed
     #remeber they get treated differently so you want to add them as a
-    #seperate step from hint based predictions.
+    #separate step from hint based predictions.
     foreach my $g (@$all_ab){
 	my $al = lc($g->{algorithm});
 	$al =~ s/_masked$//;
@@ -931,11 +931,11 @@ sub best_annotations {
 					  );
 		}
 		elsif($g->{g_strand} == 1){
-		    #seperate est2genome and protein2genome genes
+		    #separate est2genome and protein2genome genes
 		    push(@p_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
 		}
 		elsif($g->{g_strand} == -1){
-		    #seperate est2genome and protein2genome genes
+		    #separate est2genome and protein2genome genes
 		    push(@m_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
 		}
 		else{
@@ -1914,7 +1914,7 @@ sub map_forward {
     my @index;
     my @g_index;
 
-    #seperate annotations by strand
+    #separate annotations by strand
     my @p_ann;
     my @m_ann;
     foreach my $g (@$ann_set){
@@ -2090,7 +2090,7 @@ sub get_non_overlaping_abinits {
    my @overlap;
    my @none;
 
-   #seperate annotations by strand
+   #separate annotations by strand
    my @p_ann;
    my @m_ann;
    foreach my $g (@$ann_set){
@@ -2216,7 +2216,7 @@ sub get_start_and_end_on_seq {
 }
 #------------------------------------------------------------------------
 #takes an array of phathits and returns only those of a given algorithm
-#i.e. used to seperate est2genome or blastx hits from a mixed array
+#i.e. used to separate est2genome or blastx hits from a mixed array
 sub get_selected_types {
 	my $c = shift;
 

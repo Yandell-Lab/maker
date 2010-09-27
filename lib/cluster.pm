@@ -27,7 +27,7 @@ sub clean_and_cluster {
 
 	$depth = 0 if (! defined($depth) || $depth < 0);
 
-	my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $keepers);
+	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $keepers);
 
 	my $p_clusters = shadow_cluster($depth, $seq, $p);
         my $m_clusters = shadow_cluster($depth, $seq, $m);
@@ -76,7 +76,7 @@ sub special_cluster_phat_hits {
 	my $seq       = shift;        
 	my $flank     = shift || 10;
 
-        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
+        my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $phat_hits);
 
         my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
         my $m_clusters = shadow_cluster(20, $seq, $m, $flank);
@@ -147,7 +147,7 @@ sub careful_cluster_phat_hits {
         my $phat_hits = shift;
 	my $seq       = shift;
 	my $flank     = shift || 10;
-        my ($p, $m, $x, $z) = PhatHit_utils::seperate_by_strand('query', $phat_hits);
+        my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $phat_hits);
 
         my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
         my $m_clusters = shadow_cluster(20, $seq, $m, $flank);

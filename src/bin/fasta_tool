@@ -77,7 +77,7 @@ Options:
       Print the length of each sequence.
 
   --tab
-      Print the header and sequence on the same line seperated by a tab.
+      Print the header and sequence on the same line separated by a tab.
 
   --print
       Print the sequence.  Use in conjuction with 'wrap' or other formatting

@@ -259,7 +259,7 @@ foreach my $file ( @lst_files ){
 
 	if($1 > $last){ #last gene_id in file
 	    $last = $1;
-	    print $OUT "\n" unless($header_flag); #seperate genes with blank line
+	    print $OUT "\n" unless($header_flag); #separate genes with blank line
 	}
 
 	#fix each feature line with a regular expression substitution

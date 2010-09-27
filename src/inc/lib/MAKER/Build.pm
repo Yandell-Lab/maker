@@ -156,8 +156,6 @@ sub ACTION_installdeps{
     $self->check_prereq;
 
     if($self->prereq_failures()){
-	$self->module_overide_test(); 
-
 	my ($usr_id) = (getpwnam('root'))[2];
 	print "WARNING: Installation failed (please review any previous errors).\n";
 	print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
@@ -470,6 +468,24 @@ sub _fail {
 sub cpan_install {
     my ($self, $desired, $global) = @_;
 
+    if($global){
+	my $loc = $self->module_overide($desired);
+
+	if($loc){
+	    print "\n\nWARNING: There is another version of the module $desired\n".
+		  "installed on this machine that will supercede a globally installed version.\n".
+		  "I can only continue by installing a local MAKER-only version. If you want a\n".
+		  "global installation of the module, you will have to quit and delete the\n".
+		  "offending module.\n".
+                  "Location: $loc\n";
+
+	    $global = 0
+		if($self->y_n("Do you want to continue with a local installation?", 'Y'));
+
+	    die "\nWARNING: You will need delete $loc before continuing.\n"if($global);
+	}
+    }
+
     #set up PERL5LIB environmental varable since CPAN doesn't see my 'use lib'
     my $PERL5LIB = $ENV{PERL5LIB} || '';
     $PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
@@ -610,36 +626,28 @@ sub maker_status {
 }
 
 #test if there is anotehr version of the module overriding the CPAN install
-sub module_overide_test {
+sub module_overide {
     my $self = shift;
+    my $desired = shift;
 
-    my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
-
-    return if(! @perl);
-
-    foreach my $desired (@perl){
-	my $mod = $desired; #holds expected .pm file name
-	$mod =~ s/\:\:/\//g;
-	$mod .= '.pm';
-
-	my $test=  qq(\@INC = qw($Config{installsitelib}
-				 $Config{installsitearch}
-				 $Config{installvendorlib}
-				 $Config{installvendorarch}
-				 $Config{installprivlib}
-				 $Config{installarchlib});
-		      require $desired;
-		      print \$INC{\"$mod\"};
-		      );
-	
-	my $ok = `$^X -e 'eval q{$test} or exit 1'`;
-	my $loc = $self->module_loc($desired) if($ok);
-
-	print "\n\nWARNING: There is more than one version of the module $desired\n".
-	    "installed on this machine. This may be superceding the required version.\n\n".
-	    "Please remove the other module at: $loc\n\n"
-	    if($loc && $loc ne $ok);
-    }
+    my $mod = $desired; #holds expected .pm file name
+    $mod =~ s/\:\:/\//g;
+    $mod .= '.pm';
+    
+    my $test=  qq(\@INC = qw($Config{installsitelib}
+			     $Config{installsitearch}
+			     $Config{installvendorlib}
+			     $Config{installvendorarch}
+			     $Config{installprivlib}
+			     $Config{installarchlib});
+		  require $desired;
+		  print \$INC{\"$mod\"};
+		  );
+    
+    my $ok = `$^X -e 'eval q{$test} or exit 1'`;
+    my $loc = $self->module_loc($desired) if($ok);
+    
+    return ($loc && $loc ne $ok) ? $loc : undef;
 }
 
 #gets the location of a module

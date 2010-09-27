@@ -193,10 +193,10 @@ CONTROL FILE EDITING
 MAKER uses control files to guide each run.  Generic control files can
 be built using the -CTL flag in maker.  These control files can then
 be edited by the user to identify the location of all required input
-data and statistics.  Control files are run specific and seperate
+data and statistics.  Control files are run specific and separate
 control files will need to be built for each genome given to MAKER.
 MAKER will look for control files in the current working directory, so
-it is recomended that MAKER should be ran in a seperate directory
+it is recomended that MAKER should be ran in a separate directory
 containing unique control files for each genome.
 
 Control files:

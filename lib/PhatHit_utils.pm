@@ -38,7 +38,7 @@ sub sort_hits {
 	return $sorted;
 }
 #------------------------------------------------------------------------
-sub seperate_by_strand {
+sub separate_by_strand {
 	my $what = shift;
 	my $hits = shift;
 	my $exonerate_flag = shift || 0;

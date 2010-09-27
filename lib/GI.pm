@@ -43,6 +43,7 @@ use repeat_mask_seq;
 use maker::sens_spec;
 use FastaDB;
 use Digest::MD5;
+use Bio::Root::Version 1.006; #force correct version of BioPerl
 
 @ISA = qw(
 	);
@@ -300,9 +301,9 @@ sub process_the_chunk_divide{
     my $p_hits = [];
     my $m_hits = [];
     
-    #seperate by strand or not (this makes chunk cutoffs strand independant)
+    #separate by strand or not (this makes chunk cutoffs strand independant)
     if($s_flag){
-	($p_hits, $m_hits) = PhatHit_utils::seperate_by_strand('query', $phat_hits, 1); #exonerate flag set
+	($p_hits, $m_hits) = PhatHit_utils::separate_by_strand('query', $phat_hits, 1); #exonerate flag set
     }
     else{
 	$p_hits = $phat_hits;
@@ -369,7 +370,7 @@ sub process_the_chunk_divide{
 	return @keepers, @holdovers;
     }
     
-    #seperate holdovers and keepers
+    #separate holdovers and keepers
     foreach my $group (@{$groups_cfh}) {
 	my $group_keepers = [];
 	my $group_holdovers = [];
@@ -3051,7 +3052,7 @@ sub load_control_files {
 	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files.\n\n";
 	 next;
       }
-      elsif ((my @files = split(/\,/, $CTL_OPT{$in})) > 1){#handle comma seperated list
+      elsif ((my @files = split(/\,/, $CTL_OPT{$in})) > 1){#handle comma separated list
 	  my %uniq; #make files uniq
 	  @files = grep {! $uniq{$_}++} @files;
 	  my @non = grep {! -f $_} @files;
@@ -3350,7 +3351,7 @@ sub generate_control_files {
        print OUT "est_reads:$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
        print OUT "altest:$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
        print OUT "est_gff:$O{est_gff} #EST evidence from an external gff3 file\n";
-       print OUT "altest_gff:$O{altest_gff} #Alternate organism EST evidence from a seperate gff3 file\n";
+       print OUT "altest_gff:$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";
        print OUT "\n";
        print OUT "#-----Protein Homology Evidence (you should provide a value for at least one)\n";
        print OUT "protein:$O{protein}  #protein sequence file in fasta format\n";
@@ -3365,8 +3366,8 @@ sub generate_control_files {
        print OUT "#-----Gene Prediction Options\n" if(!$ev);
        print OUT "#-----EVALUATOR Ab-Initio Comparison Options\n" if($ev);
        print OUT "organism_type:$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
-       print OUT "run:$O{run} #ab-initio methods to run (seperate multiple values by ',')\n" if($ev);
-       print OUT "predictor:$O{predictor} #prediction methods for annotations (seperate multiple values by ',')\n" if(!$ev);
+       print OUT "run:$O{run} #ab-initio methods to run (separate multiple values by ',')\n" if($ev);
+       print OUT "predictor:$O{predictor} #prediction methods for annotations (separate multiple values by ',')\n" if(!$ev);
        print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
        print OUT "gmhmm:$O{gmhmm} #GeneMark HMM model\n";
