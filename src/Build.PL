@@ -84,7 +84,7 @@ if(! $build->thread_support){
     $build->feature(mpi_support => 0); #set mpi flag for Build
 }
 elsif(my @mpi = $build->mpi_support){
-    my $go = $build->y_n("\nYour system appears to be configured for MPI. Would\n".
+    my $go = $build->y_n("\nYour system appears to be configured for MPICH2. Would\n".
 			 "you like to install the MPI version of MAKER?", 'Y');
 
     if($go){
