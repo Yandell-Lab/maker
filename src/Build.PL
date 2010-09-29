@@ -105,6 +105,38 @@ else{
     $build->feature(mpi_support => 0); #set mpi flag for Build
 }
 
+if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
+    my $go = $build->y_n("\nWould you like to install the web interfact to MAKER (MWAS) on this machine\n".
+			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'Y');
+
+    if($go){
+	$build->feature(mwas_support => 1); #set mpi flag for Build
+
+	#add required CGI dependencies
+	$build->add_build_requires('Test::WWW::Mechanize' => '0');
+	$build->add_build_requires('Data::Random' => '0');
+	$build->add_build_requires('Date::Parse' => '0');
+	$build->add_build_requires('Net::OpenID::Consumer' => '0');
+	$build->add_build_requires('Archive::Zip' => '0');
+	$build->add_requires('CGI::Application' => '0');
+	$build->add_requires('CGI::Application::Plugin::Session' => '0');
+	$build->add_requires('CGI::Application::Plugin::Authentication' => '0');
+	$build->add_requires('CGI::Application::Plugin::CAPTCHA' => '0');
+	$build->add_requires('CGI::Application::Plugin::DBH' => '0');
+	$build->add_requires('CGI::Application::Plugin::TT' => '0');
+	$build->add_requires('CGI::Application::Plugin::Redirect' => '0');
+	$build->add_requires('Mail::Sender' => '0');
+	$build->add_requires('Bio::Graphics::Browser2' => '2.15');
+	$build->add_exe_requires('Apollo' => 'apollo');
+	$build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');
+    }
+    else{
+	$build->feature(mwas_support => 0); #set mpi flag for Build
+    }
+}
+
 $build->create_build_script;
+
+print "\n\nThe file 'Build' has been created for you to finish installing MAKER.\n";
 
 $build->maker_status;

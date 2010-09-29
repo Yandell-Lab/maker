@@ -106,7 +106,42 @@ sub add_requires {
     else{
 	map {$self->{properties}{requires}{$_} = 0} @_;
     }
-    
+}
+
+#add a Module to the build_requires list
+sub add_build_requires {
+    my $self = shift;
+    return unless(@_);
+
+    if (@_ > 1 && @_ % 2 == 0){
+	for (my $i = 0; $i < @_; $i += 2){
+	    $self->{properties}{build_requires}{$_[$i]} = $_[$i+1]
+	}
+    }
+    elsif(ref $_[0] eq 'HASH'){
+	map {$self->{properties}{build_requires}{$_} = $_[0]->{$_} } keys %{$_[0]}
+    }
+    else{
+	map {$self->{properties}{build_requires}{$_} = 0} @_;
+    }
+}
+
+#add a Module to the exe_requires list
+sub add_exe_requires {
+    my $self = shift;
+    return unless(@_);
+
+    if (@_ > 1 && @_ % 2 == 0){
+	for (my $i = 0; $i < @_; $i += 2){
+	    $self->{properties}{exe_requires}{$_[$i]} = $_[$i+1]
+	}
+    }
+    elsif(ref $_[0] eq 'HASH'){
+	map {$self->{properties}{exe_requires}{$_} = $_[0]->{$_} } keys %{$_[0]}
+    }
+    else{
+	map {$self->{properties}{exe_requires}{$_} = 0} @_;
+    }
 }
 
 #replaces Module::Build's config method
@@ -143,27 +178,42 @@ sub ACTION_installdeps{
 
     my $prereq = $self->prereq_failures();
     if($prereq && $prereq->{requires}){
-	my $global = $self->y_n("\nBy default MAKER installs dependencies locally (i.e. only for MAKER).\n".
-				"Would you rather install these dependencies globally? (usually requires\n".
-				"that you be logged in as 'root' or run with sudo)", 'N');
+	my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
 
+	my $global = 0;
+	if(@perl == 1 && $perl[0] eq 'Bio::Graphics::Browser2'){
+	    $global = 1;
+	    #print and ask nothing
+	}
+	else{
+	    $global = $self->y_n("\nBy default MAKER installs dependencies locally (i.e. only for MAKER).\n".
+				 "Would you rather install these dependencies globally? (usually requires\n".
+				 "that you be logged in as 'root' or run with sudo)", 'N');
+	    
+	    print "Note: Bio::Graphics::Browser2 is the one dependecy will still\n".
+		"have to be installed globally.\n\n"
+		if( grep{/Bio\:\:Graphics\:\:Browser2/} @perl && $global);
+	}
+	
 	foreach my $m (keys %{$prereq->{build_requires}}){    
 	    $self->cpan_install($m, $global);
 	}
 	foreach my $m (keys %{$prereq->{requires}}){    
 	    $self->cpan_install($m, $global);
 	}
-    }
+	
+	print "\nRechecking dependencies to see if installation was successful\n";
+	$self->check_prereq;
 
-    print "\nRechecking dependencies to see if installation was successful\n";
-    $self->check_prereq;
-
-    if($self->prereq_failures()){
-	my ($usr_id) = (getpwnam('root'))[2];
-	print "WARNING: Installation failed (please review any previous errors).\n";
-	print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
-	print "You may need to configure and install these packages manually.\n";
-	return 0;
+	$self->maker_status;
+	
+	if($self->prereq_failures()){
+	    my ($usr_id) = (getpwnam('root'))[2];
+	    print "WARNING: Installation failed (please review any previous errors).\n";
+	    print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
+	    print "You may need to configure and install these packages manually.\n";
+	    return 0;
+	}
     }
 }
 
@@ -471,10 +521,27 @@ sub _fail {
 sub cpan_install {
     my ($self, $desired, $global) = @_;
 
+    if($desired eq 'Bio::Graphics::Browser2'){
+	print "\nWARNING: Bio::Graphics::Browser2 can only be installed globally so\n".
+	    "you may need to be logged in as root or use sudo, otherwise this\n".
+	    "installation will probably fail.\n\n";
+
+	    $global = 1;
+    }
+
     if($global){
 	my $loc = $self->module_overide($desired);
 
-	if($loc){
+	if($loc && $desired eq 'Bio::Graphics::Browser2'){
+	    print "\n\nWARNING: There is another version of the module Bio::Graphics::Browser2\n".
+		"installed on this machine that will supercede a globally installed version.\n".
+		"If you want to install the MWAS interface to MAKER, you will have to dlete the\n".
+		"offending module before continuing.\n".
+		"Location: $loc\n";
+	    
+	    die "\nWARNING: You will need to delete $loc before continuing.\n"if($global);
+	}
+	elsif($loc){
 	    print "\n\nWARNING: There is another version of the module $desired\n".
 		  "installed on this machine that will supercede a globally installed version.\n".
 		  "I can only continue by installing a local MAKER-only version. If you want a\n".
@@ -485,14 +552,16 @@ sub cpan_install {
 	    $global = 0
 		if($self->y_n("Do you want to continue with a local installation?", 'Y'));
 
-	    die "\nWARNING: You will need delete $loc before continuing.\n"if($global);
+	    die "\nWARNING: You will need to delete $loc before continuing.\n"if($global);
 	}
     }
 
     #set up PERL5LIB environmental varable since CPAN doesn't see my 'use lib'
-    my $PERL5LIB = $ENV{PERL5LIB} || '';
-    $PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
-    $ENV{PERL5LIB} = $PERL5LIB;
+    if(! $global){
+	my $PERL5LIB = $ENV{PERL5LIB} || '';
+	$PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
+	$ENV{PERL5LIB} = $PERL5LIB;
+    }
 
     # Here we use CPAN to actually install the desired module
     require Cwd;
@@ -521,8 +590,14 @@ sub cpan_install {
 	CPAN::Shell::setup_output();
 	CPAN::Index->reload;
     }
-    CPAN::Shell->install($desired);
-    
+
+    if($desired eq 'Bio::Graphics::Browser2' &&  CPAN::Shell->expand(Module, $desired)->cpan_version <= 2.16){
+	CPAN::Shell->force('insall', $desired); #tests fail for CPAN in RedHat on versions <= 2.16
+    }
+    else{
+	CPAN::Shell->install($desired);
+    }
+
     my $ok;
     my $expanded = CPAN::Shell->expand("Module", $desired);
     if ($expanded && $expanded->uptodate) {
@@ -591,10 +666,10 @@ sub maker_status {
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
+    my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
+#    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     my $maker = (-f $self->base_dir."/../bin/maker") ? 'INSTALLED' : 'READY TO INSTALL';
     $maker =  'MISSING PREREQUISITES' if(@perl || @exes);
-
-    print "\n\nThe file 'Build' has been created for you to finish installing MAKER.\n";
 
     print "\n\n";
     print "================================================================\n";
@@ -610,6 +685,9 @@ sub maker_status {
     print "\t\t  !  ". join("\n\t\t  !  ", @exes) ."\n\n" if(@exes);
     print "MPI SUPPORT:\t\t";
     print $mpi;
+    print "\n";
+    print "MWAS Web Interface:\t";
+    print $mwas;
     print "\n";
     print "MAKER:\t\t\t";
     print $maker;
