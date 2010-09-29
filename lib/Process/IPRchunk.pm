@@ -440,7 +440,6 @@ sub _go {
       elsif ($level == 2) {	#running iprscan
 	 $level_status = 'running iprscan';
 	 if ($flag eq 'load') {
-	     $level_status .= "\tLOAD"; #temp
 	    #-------------------------CHUNKER
 	     foreach my $app (@{$VARS->{CTL_OPT}{appl}}) {
 		 $VARS->{app} = $app;
@@ -450,7 +449,6 @@ sub _go {
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
-	     $level_status .= "\tINIT"; #temp
 	    #------------------------ARGS_IN
 	    @args = (qw{CTL_OPT
 			safe_id
@@ -465,7 +463,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	     $level_status .= "\tRUN"; #temp
 	    #-------------------------CODE
 	    my %CTL_OPT    = %{$VARS->{CTL_OPT}};
 	    my $fasta_file = $VARS->{fasta_file};
@@ -523,7 +520,6 @@ sub _go {
 	    #------------------------RESULTS
 	 }
 	 elsif ($flag eq 'flow') {
-	     $level_status .= "\tFLOW"; #temp
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
 	 }
@@ -601,7 +597,6 @@ sub _go {
       $self->_handler($E, $level_status, $tag);
    };
 
-   print STDERR $level_status."\n"; #temp
 
    #return args list for initializing
    return \@args if($flag eq 'init');

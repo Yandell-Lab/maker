@@ -209,8 +209,8 @@ function viewFile(section) {
    [% ELSE %]
    <td>
      <p style="font-weight:bold">Choose a genome fasta file:<br>
-     [% SET max_submit = (user.type == 'guest') ? ctl_opt.max_submit_guest : ctl_opt.max_submit_user %]
-     [% max_submit = 0 IF user.is_admin %]
+     [% SET max_submit = (user.is_guest == 1) ? ctl_opt.max_submit_guest : ctl_opt.max_submit_user %]
+     [% SET max_submit = 0 IF user.is_admin %]
      [% IF max_submit > 0 %]
      [% PERL %]
        my $u_max = $stash->get('max_submit');

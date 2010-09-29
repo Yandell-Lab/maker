@@ -561,6 +561,7 @@ sub split_db {
 
    my ($f_name) = $file =~ /([^\/]+)$/;
    $f_name =~ s/\.fasta$//;
+   $f_name =~ s/ /\%20/g; #fix spaces in name
     
    my $d_name = "$f_name\.mpi\.$mpi_size";
    my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
@@ -1324,11 +1325,13 @@ sub blastn_as_chunks {
    #build names for files to use and copy
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
-	
+
    my $chunk_number = $chunk->number();
  
    my ($db_old_n) = $old_db =~ /([^\/]+)$/;
    $db_old_n  =~ s/\.fasta$//;
+   $db_old_n =~ s/ /\%20/g; #fix spaces in name
+
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastn";
 
    my $t_dir = $TMP."/rank".$rank;
@@ -1463,6 +1466,7 @@ sub blastn {
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
+   $db_n =~ s/ /\%20/g; #fix spaces in name
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
@@ -1610,6 +1614,8 @@ sub blastx_as_chunks {
     
    my ($db_old_n) = $old_db =~ /([^\/]+)$/;
    $db_old_n  =~ s/\.fasta$//;
+   $db_old_n =~ s/ /\%20/g; #fix spaces in name
+
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastx";
     
    my $t_dir = $TMP."/rank".$rank;
@@ -1746,6 +1752,7 @@ sub blastx {
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
+   $db_n =~ s/ /\%20/g; #fix spaces in name
 
    my $q_length = $chunk->parent_seq_length();
    my $chunk_number = $chunk->number();
@@ -1903,6 +1910,8 @@ sub tblastx_as_chunks {
  
    my ($db_old_n) = $old_db =~ /([^\/]+)$/;
    $db_old_n  =~ s/\.fasta$//;
+   $db_old_n =~ s/ /\%20/g; #fix spaces in name
+
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
 
    my $t_dir = $TMP."/rank".$rank;
@@ -2037,6 +2046,7 @@ sub tblastx {
 
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n  =~ s/\.fasta$//;
+   $db_n =~ s/ /\%20/g; #fix spaces in name
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
