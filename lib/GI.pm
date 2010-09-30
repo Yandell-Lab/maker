@@ -3121,9 +3121,22 @@ sub load_control_files {
    if ((grep {/^augustus$/} @infiles) &&
        (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg")
       ) {
-      $error .= "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set\n".
-      "or is not set correctly Please set this in your profile per Augustus\n".
-      "installation instructions then try again.\n\n";
+       #try and find it
+       my ($path) = Cwd::abs_path($CTL_OPT{augustus});
+       $path =~ s/bin/augustus$/config/;
+       $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+
+       if(! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg"){
+	   $error .= "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set\n".
+	       "or is not set correctly. Please set this in your profile per Augustus\n".
+	       "installation instructions then try again.\n\n";
+       }
+   }
+   if((grep {/^snaps$|^fathom$/} @infiles) && ! -d $ENV{ZOE}){
+       #try and find it
+       my ($path) = Cwd::abs_path($CTL_OPT{snap});
+       $path =~ s/snap$//;
+       $ENV{ZOE} = $path;
    }
    if ((grep {/^snaps$|^fathom$/} @infiles) && not $CTL_OPT{snaphmm}) {
        $error .= "ERROR: There is no HMM specified for for SNAP/Fathom (snaphmm).\n\n";

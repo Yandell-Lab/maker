@@ -179,27 +179,22 @@ sub ACTION_installdeps{
     my $prereq = $self->prereq_failures();
     if($prereq && $prereq->{requires}){
 	my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
+	my $access = (-w $Config{installsitelib} && -w $Config{installsitearch});
 
-	my $global = 0;
-	if(@perl == 1 && $perl[0] eq 'Bio::Graphics::Browser2'){
-	    $global = 1;
-	    #print and ask nothing
-	}
-	else{
-	    $global = $self->y_n("\nBy default MAKER installs dependencies locally (i.e. only for MAKER).\n".
-				 "Would you rather install these dependencies globally? (usually requires\n".
-				 "that you be logged in as 'root' or run with sudo)", 'N');
-	    
-	    print "Note: Bio::Graphics::Browser2 is the one dependecy will still\n".
-		"have to be installed globally.\n\n"
-		if( grep{/Bio\:\:Graphics\:\:Browser2/} @perl && $global);
+	my $local;
+	if(! grep {/Bio\:\:Graphics\:\:Browser2/} @perl){
+	    $local = $self->y_n("You do not have write access to install missing Modules.\n".
+				"I can try and install these locally (i.e. only for MAKER)\n".
+				"in the .../maker/perl/lib directory, or you can run\n".
+				"./Build installdeps as root or using sudo and try again.\n".
+				"Do want MAKER to try and build a local installation?", 'N');
 	}
 	
 	foreach my $m (keys %{$prereq->{build_requires}}){    
-	    $self->cpan_install($m, $global);
+	    $self->cpan_install($m, $local);
 	}
 	foreach my $m (keys %{$prereq->{requires}}){    
-	    $self->cpan_install($m, $global);
+	    $self->cpan_install($m, $local);
 	}
 	
 	print "\nRechecking dependencies to see if installation was successful\n";
@@ -519,17 +514,16 @@ sub _fail {
 # install an external module using CPAN prior to testing and installation
 # borrowed and modified from BioPerl, has flag for local install
 sub cpan_install {
-    my ($self, $desired, $global) = @_;
+    my ($self, $desired, $local) = @_;
 
-    if($desired eq 'Bio::Graphics::Browser2'){
+    if($desired eq 'Bio::Graphics::Browser2' && $local){
 	print "\nWARNING: Bio::Graphics::Browser2 can only be installed globally so\n".
 	    "you may need to be logged in as root or use sudo, otherwise this\n".
 	    "installation will probably fail.\n\n";
-
-	    $global = 1;
+	$local = 0;
     }
 
-    if($global){
+    if(! $local){
 	my $loc = $self->module_overide($desired);
 
 	if($loc && $desired eq 'Bio::Graphics::Browser2'){
@@ -539,7 +533,7 @@ sub cpan_install {
 		"offending module before continuing.\n".
 		"Location: $loc\n";
 	    
-	    die "\nWARNING: You will need to delete $loc before continuing.\n"if($global);
+	    die "\nWARNING: You will need to delete $loc before continuing.\n";
 	}
 	elsif($loc){
 	    print "\n\nWARNING: There is another version of the module $desired\n".
@@ -549,15 +543,14 @@ sub cpan_install {
 		  "offending module.\n".
                   "Location: $loc\n";
 
-	    $global = 0
-		if($self->y_n("Do you want to continue with a local installation?", 'Y'));
+	    $local = $self->y_n("Do you want to continue with a local installation?", 'N');
 
-	    die "\nWARNING: You will need to delete $loc before continuing.\n"if($global);
+	    die "\nWARNING: You will need to delete $loc before continuing.\n"if(! $local);
 	}
     }
 
     #set up PERL5LIB environmental varable since CPAN doesn't see my 'use lib'
-    if(! $global){
+    if($local){
 	my $PERL5LIB = $ENV{PERL5LIB} || '';
 	$PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
 	$ENV{PERL5LIB} = $PERL5LIB;
@@ -571,7 +564,7 @@ sub cpan_install {
     my $cwd = Cwd::cwd();
     
     #set up a non-global local module library for MAKER
-    if(! $global){
+    if($local){
 	my $base = $self->base_dir;
 	CPAN::HandleConfig->load;
 	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=site INSTALLSITEMAN1DIR=man INSTALLSITEMAN3DIR=man".
@@ -591,7 +584,7 @@ sub cpan_install {
 	CPAN::Index->reload;
     }
 
-    if($desired eq 'Bio::Graphics::Browser2' &&  CPAN::Shell->expand(Module, $desired)->cpan_version <= 2.16){
+    if($desired eq 'Bio::Graphics::Browser2' &&  CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16){
 	CPAN::Shell->force('insall', $desired); #tests fail for CPAN in RedHat on versions <= 2.16
     }
     else{
