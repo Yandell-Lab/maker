@@ -106,7 +106,7 @@ else{
 }
 
 if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
-    my $go = $build->y_n("\nWould you like to install the web interfact to MAKER (MWAS) on this machine\n".
+    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
 			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'Y');
 
     if($go){
