@@ -15,6 +15,7 @@ sub get_abAED{
     return 1 if(! @$hits);
     return $sum/@$hits;
 }
+=head1
 
 sub get_eAED {
    my $hits = shift;
@@ -34,11 +35,11 @@ sub get_eAED {
    #build array in memory
    my $length = $end - $start + 1;
    my $offset = $start; # do not - 1 so as to give array space coors
-   my @b_seq = map {0} (1..$length);
+   my @b_seq = map {0} (1..$length); 
 
    #map out hit space
    foreach my $hit (@{$hits}){
-      my @hsps = $hit->hsps() if defined $hit->hsps();      
+      my @hsps = $hit->hsps() if defined $hit->hsps();
       
       foreach my $hsp (@hsps){
 	 my $s = $hsp->start('query') - $offset;
@@ -52,9 +53,22 @@ sub get_eAED {
       }
    }
 
+   #==calculate bp in evidence
+   my %index = (0 => 0,
+		1 => 0,
+		2 => 0,
+		3 => 0,
+	       );
+
+   foreach my $i (@b_seq){
+      $index{$i}++;
+   }
+
    #map out transcript space
-   my @hsps = $tran->hsps() if defined $tran->hsps();
-   
+   my @hsps = $tran->sortedHSPs() if defined $tran->hsps();
+   my @talign; #for aligning transcript to protein
+   my $buf = 0;
+
    foreach my $hsp (@hsps){
       my $s = $hsp->start('query') - $offset;
       my $e = $hsp->end('query') - $offset;
@@ -64,6 +78,19 @@ sub get_eAED {
       die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
       @b_seq[$s..$e] = map {2} ($s..$e); #replaces hit
+
+      if($hsp->strand() eq '-1'){
+	  @talign[$s..$e] = map {($buf++ % 3) + 1} ($s..$e);
+      }
+      else{
+	  @talign[$s..$e] = map {($buf++ % 3) + 1} reverse($s..$e);
+      }
+   }
+
+   #==calculate bp in hit
+   foreach my $i (@b_seq){
+       next if($i != 2)
+      $index{$i}++;
    }
    
    #seperate out hit types
@@ -149,7 +176,6 @@ sub get_eAED {
        }
    }
 
-
    #map keeper ESTs
    foreach my $hsp (@keepers){
       my $s = $hsp->start('query') - $offset;
@@ -166,17 +192,48 @@ sub get_eAED {
    }
 
    #==filter proteins hits
+   foreach my $p (@prots){
+       my @phsps = $p->hsps;
 
+       foreach(my $i = 0; $i < @hsps, $i++){
+	   my $pos = $ehsp->start - $offset;
+	   my $cigar = $hsp->cigar_string();
+	   if(! $cigar){ #if no gap attribute than we assume translation begins at first bp
+	       my $length = abs(($ehsp->end - $offset) - $pos) + 1;
+	       $cigar = ($hsp->strand == -1) ? 'F'.($length % 3) : '';
+	       $cigar . = 'M'.int($length/3);
+	   }
 
+	   my @gap = $cigar =~ /([A-Z]\d+)/g;
+	   foreach my $g (@gap){
+	       $g =~ /([A-Z])(\d+)/;
+	       if($1 eq 'F'){
+		   $pos += $2;
+	       }
+	       elsif($1 eq 'R'){
+		   $pos -= $2;
+	       }
+	       if($1 eq 'D'){
+		   $pos += ($2 * 3);
+	       }
+	       elsif($1 eq 'M'){
+		   $go = $2;
+		   while($go--){
+		       if($talign[$pos+1] && $talign[$pos+1] == 2){ #middle of codon
+			   $b_seq[$pos]   = 3 if($b_seq[$pos]   == 1);
+			   $b_seq[$pos+1] = 3 if($b_seq[$pos+1] == 1);
+			   $b_seq[$pos+2] = 3 if($b_seq[$pos+2] == 1);
+		       }
+		       $pos += 3;
+		   }
+	       }
+	   }
+       }
+   }
 
-   #==calculate AED
-   my %index = (0 => 0,
-		1 => 0,
-		2 => 0,
-		3 => 0,
-	       );
-
+   #==calculate overlap
    foreach my $i (@b_seq){
+       next if($i != 3);
       $index{$i}++;
    }
 
@@ -187,12 +244,13 @@ sub get_eAED {
        "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
        if($index{2} + $index{3} == 0 || $index{1} + $index{3} == 0);
 
-   my $spec = $index{3}/($index{2} + $index{3}); #specificity
-   my $sens = $index{3}/($index{1} + $index{3}); #sensitivity
-   my $AED = 1 - ($spec + $sens)/2;
+   my $spec = $index{3}/($index{2}); #specificity
+   my $sens = $index{3}/($index{1}); #sensitivity
+   my $eAED = 1 - ($spec + $sens)/2;
 
-   return $AED;
+   return $eAED;
 }
+=cut
 
 sub get_AED {
    my $hits = shift;

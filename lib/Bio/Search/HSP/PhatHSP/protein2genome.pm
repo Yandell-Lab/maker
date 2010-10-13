@@ -82,8 +82,6 @@ sub nE {
 }
 #-------------------------------------------------------------------------------
 sub cigar_string {
-    return '';  #temporarilly just return empty until Apollo supports R and F in cigar
-    
     my $self = shift;
     
     my $cigar = '';

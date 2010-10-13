@@ -3123,7 +3123,7 @@ sub load_control_files {
       ) {
        #try and find it
        my ($path) = Cwd::abs_path($CTL_OPT{augustus});
-       $path =~ s/bin/augustus$/config/;
+       $path =~ s/bin\/augustus$/config/;
        $ENV{AUGUSTUS_CONFIG_PATH} = $path;
 
        if(! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg"){

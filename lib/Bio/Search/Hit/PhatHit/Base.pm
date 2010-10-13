@@ -844,6 +844,49 @@ sub sortFeatures
 
 ################################################ subroutine header begin ##
 
+=head1 sortedHSPs
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $hsps = $hit->sortedHSPs();
+
+=for example end
+
+=for example_testing
+
+ Purpose   : Sorts HSPs to be in order od transcription/translation.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub sortedHSPs
+{
+   my $self = shift;
+   my $who  = 'query';
+
+   my @subfeatures = ($self->strand eq '+') ? sort {$a->start($who) <=> $b->start($who)} $self->hsps :
+       sort {$b->end($who) <=> $a->end($who)} $self->hsps;
+
+   return \@subfeatures;
+}
+
+################################################ subroutine header begin ##
+
 =head1 queryLength
 
  Usage     : How to use this function/method
