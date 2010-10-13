@@ -276,6 +276,9 @@ sub join_f {
 	my $new_total_score = 0;
 	my $length = 0;
 
+	my $gB = $g->nB;
+	my $gE = $g->nE;
+
 	if(defined($b_5) || defined($b_3)){
 	    my $sorted_g = PhatHit_utils::sort_hits($g, 'query');
 	    
@@ -390,6 +393,15 @@ sub join_f {
 	while(my $key = each %$g){
 	    $new_f->{$key} = $g->{$key} if(!exists $new_f->{$key} && ref($g->{$key}) eq '');
 	}
+
+	#fix translation start and end if needed
+	my $nB = $new_f->nB;
+	my $nE = $new_f->nE;
+
+	$new_f->{translation_offset} = $g->{translation_offset} + abs($gB - $nB)
+	    if($g->{translation_offset}); #change in beginning
+	$new_f->{translation_end} = $g->{translation_end} + abs($gE - $nE)
+	    if($g->{translation_end}); #change in end
 
 	return $new_f;
 }

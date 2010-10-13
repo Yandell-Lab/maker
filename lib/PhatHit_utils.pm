@@ -446,17 +446,63 @@ sub make_flat_hits {
 	return \@new_hits;
 }
 #------------------------------------------------------------------------
-#this will also walk out 3 base pairs looking for the stop codon 
-sub trim_to_CDS{
+sub clip_5_utr {return _clip(shift,shift,1,0);}
+#------------------------------------------------------------------------
+sub clip_3_utr {return _clip(shift,shift,0,1);}
+#------------------------------------------------------------------------
+sub clip_utr {return _clip(shift,shift,1,1);}
+#------------------------------------------------------------------------
+sub _clip {
     my $hit = shift;
     my $seq = shift;
+    my $trim5 = shift;
+    my $trim3 = shift;
+
+    my $offset = $hit->{translation_offet};
+    my $end = $hit->{translation_end};
+
+    if(!$end || !defined($offset)){
+	die "ERROR: Need seq to determine translation in PhatHit_utils::_clip\n" if(!$seq);
+	my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
+	(undef, $offset, $end, undef, undef) = maker::auto_annotator::get_translation_seq($transcript_seq, $hit);
+    }
+
+    return undef if(!$end); #no CDS
+
+    my @hsps = ($strand == 1) ? sort {$a->nB <=> $b->nB} $hit->hsps : sort {$b->nB <=> $a->nB};
+
+    my $coorB;
+    my $coorE;
+    foreach $hsp (@hsps){
+	my $l = abs($hsp->nE - $hsp->nB) + 1;
+	#find first bp coordinate
+	if($offset && $l <= $offset){
+	    $offset -= $l;
+	    $end -= $l;
+	    next;
+	}
+	elsif(!$coorB){
+	    $coorB = ($hsp->strand == 1) ? $hsp->nB + $offset : $hsp->nB - $offset;
+	    $end -= $offset;
+	    $l -= $offset;
+	    $offset = 0;	    
+	}
+	else{
+	    $end -= $1;
+	}
+
+	#find last bp coordinate
+	if($end <= 1){ #end is always bp after last translated bp
+	    $coorE = ($hsp->strand == 1) ? $hsp->nE + $end - 1 : $hsp->nE - $end + 1;
+	    last;
+	}
+    }
+
+    my $tB = ($trim5) ? $coorB : $hit->nB();
+    my $tE = ($trim3) ? $coorE : $hit->nE();
 
     my $ref = ref($hit);
     my $hsp_ref = ref($hit->{_hsps}->[0]);
-
-    my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
-    my ($translation_seq, $offset, $end, $has_stop)
-	= maker::auto_annotator::get_translation_seq($transcript_seq);
 
     my $new_hit = new $ref('-name'         => $hit->name,
 			   '-description'  => $hit->description,
@@ -467,78 +513,29 @@ sub trim_to_CDS{
 			   '-significance' => $hit->significance
 			   );
 
-
-
-    my $tB;
-    my $tE;
-
-    my $strand = $hit->strand('query');
-    if($strand == 1){
-	$tB = $hit->start('query') + $offset;
-	#translation end is always one base pair after stop -- why??
-	$tE = $hit->start('query') + ($end - 1) - 1;
-    }
-    else{
-	$tE = $hit->end('query') - $offset;
-	$tB = $hit->end('query') - ($end - 1) + 1;
-    }
-
-    #walk out a little and look for the stop codon
-    my $new_stop;
-    if(!$has_stop){
-	my $codon;
-	if($strand == 1){
-	    $codon = substr($$seq, $tE, 3);
-	    if($codon =~ /TAA|TAG|TGA/){
-		$new_stop = 1;
-		$has_stop = 1;
-		$tE = $tE + 3;
-	    }
-	}
-	elsif($tB - 4 >= 0){
-	    $codon = Fasta::revComp(substr($$seq, $tB - 4, 3));
-	    if($codon =~ /TAA|TAG|TGA/){
-		$new_stop = 1;
-		$has_stop = 1;
-		$tB = $tB - 3;
-	    }
-	}
-    }
-
     my $hit_start = 1;
+    ($tB, $tE) = ($tE, $tB) if($tB > $tE); #sort by value
     foreach my $hsp ($hit->hsps){
-	#this is not the natural end and beginning!!
-	my $B = $hsp->start('query');
-	my $E = $hsp->end('query');
+	my $B = $hsp->start();
+	my $E = $hsp->end();
 
 	#see if hsp even overlaps the current CDS
 	my $class = compare::compare($B, $E, $tB, $tE);
 
 	next if($class eq '0');
 
-	#extend hsp for new stop found
-	if($new_stop){
-	    if($strand == 1){
-		$E = $tE if($tE - $E == 3); 
-	    }
-	    elsif($strand == -1){
-		$B = $tB if(abs$B - $tB == 3); 
-	    }
-	}
+	#figure out change to trim off seq string
+        my $change = 0; #only change from start of translation needed
+        if($B < $tB){
+            $change = abs($tB - $B) if($strand == 1);
+            $B = $tB;
+        }
+        if($E > $tE){
+            $change = abs($tE - $E) if($strand == -1);
+            $E = $tE;
+        }
 
-	#figure out change to trim off seq sring
-	my $change = 0;
-	if($B < $tB){
-	    $change = abs($tB - $B) if($strand == 1);
-	    $B = $tB;
-	}
-	
-	if($E > $tE){
-	    $E = $tE;
-	    $change = abs($tE - $E) if($strand == -1);
-	}
-
-	my $length = abs($E-$B)+1;
+	my $length = abs($E-$B)+1; #new length
 
 	#set natural begining (important for correct strandedness)
 	my ($nB, $nE) = ($strand == 1) ? ($B, $E) : ($E, $B) ;
@@ -639,6 +636,14 @@ sub trim_to_CDS{
     }    
 
     return $new_hit;
+}
+#------------------------------------------------------------------------
+sub adjust_start {
+    die;
+}
+#------------------------------------------------------------------------
+sub adjust_stop {
+    die;
 }
 #------------------------------------------------------------------------
 sub add_splice_data {
@@ -783,6 +788,7 @@ sub copy {
 
         $new_hit->queryLength($hit->queryLength);
 	$new_hit->database_name($hit->database_name);
+	$new_hit->{_label} = $hit->{_label};
 
 	my @new_hsps;
 	foreach my $hsp ($hit->hsps){
@@ -813,9 +819,10 @@ sub copy {
 
                $new_hsp->{_strand_hack}->{query} = $n_q_s;
                $new_hsp->{_strand_hack}->{hit}   = $n_h_s;
-               $new_hsp->{_identical_hack}      = $hsp->frac_identical();
+               $new_hsp->{_identical_hack}       = $hsp->frac_identical();
+	       $new_hsp->{_label}                = $hit->{_label};
 
-		push(@new_hsps, $new_hsp);
+	       push(@new_hsps, $new_hsp);
 	}
 
 	my @sorted;

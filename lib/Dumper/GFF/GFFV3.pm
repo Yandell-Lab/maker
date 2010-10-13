@@ -318,7 +318,9 @@ sub gene_data {
     my $g_e        = $g->{g_end};
     my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
     my $t_structs  = $g->{t_structs};
-    
+
+    $g_name = uri_escape($g_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+
     my @g_data;
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
     my $attributes = 'ID='.$g_id.';Name='.$g_name.';';
@@ -369,10 +371,8 @@ sub hit_data {
    
    my ($class, $type) = get_class_and_type($h, 'hit');
    
-   my $h_n = $h->name();
-   
-   my $name = $h_n;
-   $name =~ s/\s/_/g;
+   my $name = $h->name();
+   $name = uri_escape($name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
    my $AED .= sprintf '%.2f', $h->{_AED} if($h->{_AED});
    my $QI .= $h->{_QI} if($h->{_QI});
@@ -384,7 +384,7 @@ sub hit_data {
    
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
-   my $attributes = 'ID='.$h_id.';Name='.$name.';';#.'Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand.';';
+   my $attributes = 'ID='.$h_id.';Name='.$name.';';
    $attributes .= '_AED='.$AED.';' if(defined($AED));
    $attributes .= '_QI='.$QI.';' if(defined($QI));
    $attributes .= $h->{-attrib} if($h->{-attrib});
@@ -398,7 +398,7 @@ sub hit_data {
       $hsp_id = join(":", $seq_id, $hsp_id);
       $hsp_id =~ s/\s/_/g;
       my $hsp_l =
-      get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);
+      get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $name);
       
       $h_l .= $hsp_l."\n";
       
@@ -430,7 +430,7 @@ sub repeat_data {
    $class = "repeatrunner" if ($class eq 'blastx');
    
    my $h_n = $h->name();
-   $h_n   =~ s/\s/_/g;
+   $h_n = uri_escape($h_n, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id);
@@ -465,64 +465,65 @@ sub get_class_and_type {
     my $k = shift;
     
     my ($class) = lc($h->algorithm);
-    $class =~ s/^exonerate\:*\_*//;
+    $class =~ s/^exonerate\:*\_*est2genome$/est2genome/;
+    $class =~ s/^exonerate\:*\_*protein2genome$/protein2genome/;
 
     my $type;
-    if    ($class =~ /^blastx$/i){
+    if($class =~ /^blastx$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
-    elsif ($class =~ /^protein2genome$/i){
+    elsif($class =~ /^protein2genome$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part'; 
     }
     elsif($class =~ /^protein_gff\:/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
-    elsif    ($class =~ /^tblastx$/i){
+    elsif($class =~ /^tblastx$/i){
 	$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
     }
-    elsif    ($class =~ /^altest_gff/i){
+    elsif($class =~ /^altest_gff/i){
 	$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
     }
-    elsif ($class =~ /^est2genome$/i){
+    elsif($class =~ /^est2genome$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
-    elsif ($class =~ /^blastn$/i){
+    elsif($class =~ /^blastn$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
     }
-    elsif ($class =~ /^est_gff\:/i){
+    elsif($class =~ /^est_gff\:/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
-    elsif ($class =~ /^snap_*/i){
+    elsif($class =~ /^snap_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^genemark_*/i){
+    elsif($class =~ /^genemark_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^augustus_*/i){
+    elsif($class =~ /^augustus_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^fgenesh_*/i){
+    elsif($class =~ /^fgenesh_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^twinscan_*/i){
+    elsif($class =~ /^twinscan_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^jigsaw_*/i){
+    elsif($class =~ /^jigsaw_*/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^pred_gff\:/i){
+    elsif($class =~ /^pred_gff\:/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif ($class =~ /^repeat_gff\:/i){
+    elsif($class =~ /^repeat_gff\:/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
-    elsif ($class =~ /^blastx\:repeat/i){
+    elsif($class =~ /^blastx\:repeat/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
     elsif ($class =~ /^repeatmasker$/i){
@@ -535,6 +536,8 @@ sub get_class_and_type {
 	die "unknown class in GFFV3::get_class_and_type $class ".ref($h)."\n";
     }
     
+    $class .= ':'.$h->{_label} if($h->{_label});
+
     return ($class, $type);
 }
 #------------------------------------------------------------------------
@@ -755,7 +758,9 @@ sub get_transcript_data {
 	my $t_qi    = $t->{t_qi};
 	my $AED     = $t->{AED};
 	my $score   = $t->{score};
-
+	
+	$t_name = uri_escape($t_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	
 	#format informative name for GFF3
 	$AED = sprintf '%.2f', $AED; # two decimal places
 
@@ -828,9 +833,8 @@ sub get_hsp_data {
 
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 
-	  my $hsp_name = $hit_n;
-             $hsp_name =~ s/\s/_/g;
-
+	my $hsp_name = $hit_n;
+	$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
@@ -875,8 +879,7 @@ sub get_repeat_hsp_data {
 	$class = "repeatrunner" if ($class eq 'blastx');
 	
 	my $hsp_name = $hit_n;
-	   $hsp_name =~ s/\s/_/g;
-
+	$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');

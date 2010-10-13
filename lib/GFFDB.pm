@@ -839,7 +839,7 @@ sub _get_t_offset_and_end {
                 
     my $t_offset = index($t_seq, $c_seq);
                 
-    my $t_end = $t_offset + length($c_seq) -1;
+    my $t_end = $t_offset + length($c_seq) +1;
                 
     warn "WARNING: Problem in GFFDB::_get_t_offset_and_end\n" if $t_offset == -1;
 

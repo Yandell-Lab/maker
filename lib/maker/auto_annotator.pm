@@ -1256,8 +1256,9 @@ sub run_it {
 	    next if(! defined $model);
 
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
-	    my $remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
+	    my $remove;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+	    $remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
 		#make sure the spliced EST evidence actually overlaps
 		if($remove && defined $mia){
 		    my $mAED = shadow_AED::get_AED([$mia],$model);
@@ -1319,7 +1320,7 @@ sub run_it {
 
 	    if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 		my $transcript_seq  = get_transcript_seq($transcript, $seq);
-		my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
+		my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
 		#at least 60% of EST must be CDS to make a gene prediction
 		next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
 	    }
@@ -1347,14 +1348,16 @@ sub run_it {
 	    my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
 
 	    foreach my $miph (@$miphs){
-		if($CTL_OPT->{organism_type} eq 'prokaryotic'){
-		    my $transcript_seq  = get_transcript_seq($miph, $seq);
-		    my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
-		    #at least 80% of protein must be CDS to make a gene prediction
-		    next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
-		}
+		my $transcript_seq  = get_transcript_seq($miph, $seq);
+		my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $miph);
 
+		#at least 80% of protein must be CDS to make a gene prediction
+		next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
+
+		$miph = PhatHit_utils::adjust_for_stop($miph, $seq);
+		$miph = PhatHit_utils::adjust_for_start($miph, $seq);
 		$miph = PhatHit_utils::trim_to_CDS($miph, $seq);
+
 		my $transcript = pneu($utr, $miph, $seq);
 
 		next if(! $transcript);
@@ -1474,64 +1477,83 @@ sub get_pred_shot {
    my $the_void    = shift;
    my $set         = shift;
    my $predictor   = shift;
-   my $CTL_OPTS = shift;
+   my $CTL_OPTS    = shift;
    my $LOG         = shift;
 
+   my $strand;
+   my @all_preds;
+
    if($predictor eq 'snap'){
-      my $pred_command = $CTL_OPTS->{snap}.' '.$CTL_OPTS->{snaphmm};
-      return Widget::snap::get_pred_shot($seq,
-					 $def,
-					 $set_id,
-					 $the_void,
-					 $set,
-					 $CTL_OPTS->{pred_flank},
-					 $pred_command,
-					 $CTL_OPTS->{force},
-					 $LOG
-					);
+       foreach my $entry (@{$CTL_OPTS->{_snaphmm}}){
+	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+	   my $pred_command = $CTL_OPTS->{snap}.' '.$hmm;
+	   (my $preds, $strand) = Widget::snap::get_pred_shot($seq,
+							      $def,
+							      $set_id,
+							      $the_void,
+							      $set,
+							      $CTL_OPTS->{pred_flank},
+							      $pred_command,
+							      $CTL_OPTS->{force},
+							      $LOG
+							      );
+	   foreach my $p (@$preds){
+	       $p->{_HMM} = $hmm;
+	       $p->{_label} = $label if($label);
+	   }
+
+	   push(@all_preds, $preds);
+       }
    }
    elsif($predictor eq 'augustus'){
-      my $pred_command = $CTL_OPTS->{augustus}.' --species='.$CTL_OPTS->{augustus_species};
-      return Widget::augustus::get_pred_shot($seq,
-					     $def,
-					     $set_id,
-					     $the_void,
-					     $set,
-					     $CTL_OPTS->{pred_flank},
-					     $pred_command,
-					     $CTL_OPTS->{force},
-					     $LOG
-					    );
+       foreach my $entry (@{$CTL_OPTS->{_augustus_species}}){
+	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+	   my $pred_command = $CTL_OPTS->{augustus}.' --species='.$hmm;
+	   (my $preds, $strand) = Widget::augustus::get_pred_shot($seq,
+								  $def,
+								  $set_id,
+								  $the_void,
+								  $set,
+								  $CTL_OPTS->{pred_flank},
+								  $pred_command,
+								  $CTL_OPTS->{force},
+								  $LOG
+								  );
+	   foreach my $p (@$preds){
+	       $p->{_HMM} = $hmm;
+	       $p->{_label} = $label if($label);
+	   }
+
+	   push(@all_preds, $preds);
+       }
    }
    elsif($predictor eq 'fgenesh'){
-      my $pred_command = $CTL_OPTS->{fgenesh}.' '.$CTL_OPTS->{fgenesh_par_file};
-      return Widget::fgenesh::get_pred_shot($seq,
-					    $def,
-					    $set_id,
-					    $the_void,
-					    $set,
-					    $CTL_OPTS->{pred_flank},
-					    $pred_command,
-					    $CTL_OPTS->{force},
-					    $LOG
-					   );
-   }
-   elsif($predictor eq 'twinscan'){
-      my $pred_command = $CTL_OPTS->{twinscan};
-      return Widget::twinscan::get_pred_shot($seq,
-					     $def,
-					     $set_id,
-					     $the_void,
-					     $set,
-					     $CTL_OPTS->{pred_flank},
-					     $pred_command,
-					     $CTL_OPTS->{force},
-					     $LOG
-					    );
+       foreach my $entry (@{$CTL_OPTS->{_fgenesh_par_file}}){
+	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+	   my $pred_command = $CTL_OPTS->{fgenesh}.' '.$hmm;
+	   (my $preds, $strand) = Widget::fgenesh::get_pred_shot($seq,
+								 $def,
+								 $set_id,
+								 $the_void,
+								 $set,
+								 $CTL_OPTS->{pred_flank},
+								 $pred_command,
+								 $CTL_OPTS->{force},
+								 $LOG
+								 );
+	   foreach my $p (@$preds){
+	       $p->{_HMM} = $hmm;
+	       $p->{_label} = $label if($label);
+	   }
+
+	   push(@all_preds, $preds);
+       }
    }
    else{
       die "ERROR: Not a valid predictor in auto_annoator::get_pred_shot\n";
    }
+
+   return (\@all_preds, $strand);
 }
 #------------------------------------------------------------------------
 #takes the gene predictions and evidence and builds transcript name,
@@ -1549,8 +1571,40 @@ sub load_transcript_struct {
 	my $CTL_OPTS  = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
+	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	my ($translation_seq, $offset, $end, $has_stop) = get_translation_seq($transcript_seq);
+	#walk out edges to force completion
+	if($CTL_OPTS->{always_complete}){
+	    my $stat = PhatHit_utils::adjust_for_start($f, $seq) if(!$has_start);
+	    $stat = PhatHit_utils::adjust_for_stop($f, $seq) if(!$has_stop);
+
+	    if($stat){
+		$transcript_seq  = get_transcript_seq($f, $seq);
+		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	    }
+	}
+
+	#fix for bad 5' and 3' UTR
+	my $stat = PhatHit_utils::clip_5_utr($f) if(! $has_start && $offset > 0);
+	$stat = PhatHit_utils::clip_3_utr($f) if(! $has_stop && $end > length($transcript_seq) + 1);
+
+	if($stat){
+	    $transcript_seq  = get_transcript_seq($f, $seq);
+	    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	}
+
+	#fix for bad 3' UTR
+	my $change;
+	if(! $has_stop && $end > length($transcript_seq) + 1){
+
+	    $change++;
+	}
+
+	#rebuild translation data for change
+	if($change){
+	    $transcript_seq  = get_transcript_seq($f, $seq);
+	    
+	}
 
 	my $len_3_utr = length($transcript_seq) - $end + 1;
 	my $l_trans =  length($translation_seq);
@@ -1580,19 +1634,20 @@ sub load_transcript_struct {
 	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
 	}
 
-	my $t_struct = {'hit'      => $f,
-			't_seq'    => $transcript_seq,
-			'p_seq'    => $translation_seq,
-			't_offset' => $offset,
-			't_end'    => $end,
-			't_name'   => $t_name,
-			't_id'     => $t_id,
-			't_qi'     => $qi,
-			'AED'      => $AED,
-			'has_stop' => $has_stop,
-			'evi'      => $evi,
-			'p_base'   => $p_base,
-			'p_length' => length($translation_seq)
+	my $t_struct = {'hit'       => $f,
+			't_seq'     => $transcript_seq,
+			'p_seq'     => $translation_seq,
+			't_offset'  => $offset,
+			't_end'     => $end,
+			't_name'    => $t_name,
+			't_id'      => $t_id,
+			't_qi'      => $qi,
+			'AED'       => $AED,
+			'has_start' => $has_start,
+			'has_stop'  => $has_stop,
+			'evi'       => $evi,
+			'p_base'    => $p_base,
+			'p_length'  => length($translation_seq)
 		    };
 
 	return $t_struct;
@@ -1734,16 +1789,23 @@ sub group_transcripts {
       }
    }
    else {
-      $careful_clusters = cluster::careful_cluster_phat_hits(\@transcripts, $seq);
-
-      #remove redundant transcripts in gene
-      my @keepers;
-      foreach my $c (@{$careful_clusters}) {
-	  my $best_alt_forms =
-	      clean::remove_redundant_alt_splices($c, $seq, 10);
-	  push(@keepers, $best_alt_forms);
+      #seperate out when multiple HMM's are provided (comma seperated list)
+      my %sources;
+      foreach my $t (@transcripts){
+	  push(@{$sources{$t->{_HMM}}}, $t);
       }
-      $careful_clusters = \@keepers;
+     
+      #now cluster each list seperately
+      foreach my $set (values %sources){
+	  my $clusters = cluster::careful_cluster_phat_hits($set, $seq);
+	  
+	  #remove redundant transcripts in gene
+	  foreach my $c (@{$careful_clusters}) {
+	      my $best_alt_forms =
+		  clean::remove_redundant_alt_splices($c, $seq, 10);
+	      push(@$careful_clusters, $best_alt_forms);
+	  }
+      }
    }
 
    #process clusters into genes
@@ -2349,64 +2411,84 @@ sub get_off_and_str {
 #------------------------------------------------------------------------
 #returns what maker believes to be the best translation seq and offset
 sub get_translation_seq {
-	my $seq    = shift;
+    my $seq    = shift;
+    my $f      = shift;
+    
+    my $tM = new CGL::TranslationMachine();
+    my $p_seq;
+    my $offset;
 
-	my $has_stop = 0;
+    #use offset and end already in model to guide seq selection
+    if(defined($f->{translation_offset}) || $f->{translation_end}){
+	$offset = (defined($f->{translation_offset})) ? $f->{translation_offset}: $f->{translation_end} - 4;
+	my $has_start = 1 if($tM->is_start_codon(substr($offset, 3, $seq)));
 
-	my $tM = new CGL::TranslationMachine();
-	my ($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
-	my $end = length($p_seq)*3 + $offset + 1;
+	#step upstream to find longer ORF
+	for(my $i = $offset - 3; $i >= 0; $i -= 3){
+	    my $codon = substr($i, 3, $seq);
+	    last if($tM->is_ter_codon($codon));
 
-	#see if there is a stop and simultaneoulsy remove it
-	$has_stop = 1 if($p_seq =~ s/\*$//);
-
-	if ($p_seq =~ /^M/){
-	    # easy  it begins with an M....
-	    return ($p_seq , $offset, $end, $has_stop);
+	    $has_start = 0 if($i < 3 && $offset - $i > 90); #resest start for long upstream ORF
+	    if(my $s = $tM->is_start_codon($codon) || !$has_start){
+		$has_start = 1 if($s);
+		$offset = $i;
+	    }
 	}
-	else{
-	    my $has_stop_new = 0;
 
-	    # get the longest internal prot that begins with an M....
+	#translate to stop
+        $p_seq = $tM->translate_from_offset($seq, $offset);
+        $p_seq =~ s/(^[^\*]+\*?).*/$1/;
+    }
+    
+    #build a new translation
+    if(! defined($offset) || ($p_seq !~ /^M/ && $offset >= 3)){
+	($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
+
+	# does not begin with M....
+	if ($p_seq !~ /^M/){
 	    my ($off_new, $p_seq_new) = get_longest_m_seq($seq);
-	    my $n_end;
-	    if(defined $p_seq_new){
-		$n_end = length($p_seq_new)*3 + $off_new + 1;
-		$has_stop_new = 1 if($p_seq_new =~ s/\*$//);
-	    }
 
-	    if (!defined($p_seq_new)){
-		return ($p_seq , $offset, $end, $has_stop);
-	    }
-	    elsif ($offset < 3 && length($p_seq) - length($p_seq_new) > 30){
-		return ($p_seq , $offset, $end, $has_stop);
-	    }
-	    else {
-		return ($p_seq_new, $off_new, $n_end, $has_stop_new);
-	    }
+	    #take M start sequence in most cases
+            unless(!$p_seq_new || ($offset < 3 && $off_new - $offset > 90)){
+		$offset = $off_new;
+		$p_seq = $p_seq_new;
+            }
 	}
+    }
+
+    #get end, and see if there is a stop, and remove it
+    my $end = length($p_seq)*3 + $offset + 1;
+    my $has_start = 1 if($p_seq =~ /^M/);
+    my $has_stop = 1 if($p_seq =~ s/\*$//);
+
+    #set CDS internally in hit
+    $f->{translation_offset} = $offset;
+    $f->{translation_end} = $end;
+
+    #return
+    return ($p_seq , $offset, $end, $has_start, $has_stop);
 }
 #------------------------------------------------------------------------
 #takes the gene predictions produce by get_pred_shot and finds the one
 #with the higest score.  Called by run_it
-sub get_best_pred_shot {
-   my $wanted_strand = shift;
-   my $gene_preds    = shift;
-
-   my @gs;
-   foreach my $g (@{$gene_preds}){
-      next unless defined($g);
-      next unless defined($g->strand('query'));
-      next unless $g->strand('query') == $wanted_strand;
-      my $total_score = PhatHit_utils::get_total_score_of_hit($g);
-      push(@gs, [$total_score, $g]);
-   }
-   my @sorted = sort {$b->[0] <=> $a->[0]} @gs;
-
-   my $best  = $sorted[0]->[1];
-
-   return $best;
-}
+#sub get_best_pred_shot {
+#   my $wanted_strand = shift;
+#   my $gene_preds    = shift;
+#
+#   my @gs;
+#   foreach my $g (@{$gene_preds}){
+#      next unless defined($g);
+#      next unless defined($g->strand('query'));
+#      next unless $g->strand('query') == $wanted_strand;
+#      my $total_score = PhatHit_utils::get_total_score_of_hit($g);
+#      push(@gs, [$total_score, $g]);
+#   }
+#   my @sorted = sort {$b->[0] <=> $a->[0]} @gs;
+#
+#   my $best  = $sorted[0]->[1];
+#
+#   return $best;
+#}
 #------------------------------------------------------------------------
 #returns all pred shots on the right strand, so best_pred_shots might be
 #a misnomer.  Called by run_it

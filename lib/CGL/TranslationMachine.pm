@@ -97,7 +97,7 @@ use constant FRAMES => 3;
  Returns   : Returns the new CGL::TranslationMachine object.
  Arguments : See Bio::Tools::CodonTable discussion of codon table
              identifiers.
- Throws    : None, but Bioperl's CodonTable may throw errors.
+ Throws    : None, but Bioperl\'s CodonTable may throw errors.
  Comments  :
            :
  See Also  : Bio::Tools::CodonTable

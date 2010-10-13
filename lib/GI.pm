@@ -60,29 +60,34 @@ sub set_global_temp {
 
     #remove old tempdir if user supplied a new one
     if($TMP ne $dir){
-	print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n" if($main::dtmp); ##temp
+	print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n"
+	    if($main::dtmp); ##debug
 	my $base = $dir;
 	$base =~ s/[^\/]+$//;
 
 	if(! -d $base){
-	    print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n" if($main::dtmp); ##temp
+	    print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n"
+		if($main::dtmp); ##debug
 	    return;
 	}
 
 	if(! -d $dir){
-	    print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n" if($main::dtmp); ##temp
+	    print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n"
+		if($main::dtmp); ##debug
 	    mkdir($dir);
 	}
 
 	if(! -d $dir){
-	    print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n" if($main::dtmp); ##temp
+	    print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n"
+		if($main::dtmp); ##debug
 	    return;
 	}
 
 	File::Path::rmtree($TMP);
 
 	$TMP = $dir;
-	print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n" if($main::dtmp); ##temp
+	print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n"
+	    if($main::dtmp); ##debug
     }
 }
 #------------------------------------------------------------------------
@@ -150,23 +155,17 @@ sub reblast_merged_hits {
    #parent fasta get def and seq
    my $par_def = Fasta::getDef($$g_fasta);
    my $par_seq = Fasta::getSeqRef($$g_fasta);
-
-   #get seq id off def line
-   my ($p_id)  = $par_def =~ /^([^\s\t\n]+)/;
-   $p_id =~ s/^\>//g;		#just in case
-   $p_id =~ s/\|/_/g;
+   my $p_id  = Fasta::def2SeqID($par_def);
 
    #build a safe name for file names from the sequence identifier
-   my $p_safe_id = uri_escape($p_id, 
-			      '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-			     );
+   my $p_safe_id = Fasta::seqID2SafeID($p_id);
 
    my @blast_keepers;
 
    #==check whether to re-blast each hit
    foreach my $hit (@{$hits}) {
       #if not a merged hit take as is
-      if (not $hit->{'_sequences_was_merged'}) {
+      if (! $hit->{'_sequences_was_merged'}) {
 	 push (@blast_keepers, $hit);
 	 next;
       }
@@ -197,14 +196,9 @@ sub reblast_merged_hits {
 
       #==build new fasta and db for blast search from hit name and db index
       
-      #get name
-      my $t_id  = $hit->name();
-      $t_id =~ s/\|/_/g;
-
       #build a safe name for file names from the sequence identifier
-      my $t_safe_id = uri_escape($t_id, 
-				 '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
-				);
+      my $t_safe_id = Fasta::seqID2SafeID($hit->name());
+
       #search db index
       my $fastaObj = $db_index->get_Seq_for_hit($hit);
       
@@ -233,7 +227,6 @@ sub reblast_merged_hits {
       
       #==run the blast search
       if ($type eq 'blastx') {
-	  
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
 			      $t_file,
@@ -247,7 +240,6 @@ sub reblast_merged_hits {
 	 print STDERR "...finished\n" unless $main::quiet;
       }
       elsif ($type eq 'blastn') {
-	  
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastn($chunk, 
 			      $t_file,
@@ -261,7 +253,6 @@ sub reblast_merged_hits {
 	 print STDERR "...finished\n" unless $main::quiet;
       }
       elsif ($type eq 'tblastx') {
-
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = tblastx($chunk,
 			       $t_file,
@@ -408,26 +399,6 @@ sub process_the_chunk_divide{
     return @keepers, @holdovers;
 }
 #-----------------------------------------------------------------------------
-
-# sub write_quality_data {
-#    my $quality_indices = shift;
-#    my $seq_id          = shift;
-
-#    my $out_file = $seq_id.'.maker.transcripts.qi';
-#    my $fh = new FileHandle();
-#    $fh->open(">$out_file");
-
-#    print $fh "genomic_seq\ttranscript\tquality_index\n";
-
-#    while (my $d = shift(@{$quality_indices})) {
-#       my $t_name = $d->[0];
-#       my $t_qi   = $d->[1];
-	
-#       print $fh "$seq_id\t$t_name\t$t_qi\n";
-#    }
-#    $fh->close();
-# }
-#-----------------------------------------------------------------------------
 sub maker_p_and_t_fastas {
    my $maker    = shift @_;
    my $non_over = shift @_;
@@ -471,10 +442,11 @@ sub get_p_and_t_fastas {
    my $t_off  = $t_struct->{t_offset};
    my $t_name = $t_struct->{t_name};
    my $AED    = $t_struct->{AED};
+   my $eAED   = $t_struct->{eAED};
    my $QI     = $t_struct->{t_qi};
 	
-   my $p_def = '>'.$t_name.' protein AED:'.$AED.' QI:'.$QI; 
-   my $t_def = '>'.$t_name.' transcript offset:'.$t_off.' AED:'.$AED.' QI:'.$QI;
+   my $p_def = ">$t_name protein AED:$AED eAED:$eAED QI:$QI"; 
+   my $t_def = ">$t_name transcript offset:$t_off AED:$AED eAED:$eAED QI:$QI";
 	
    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
@@ -517,11 +489,10 @@ sub create_blastdb {
    File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if ($CTL_OPT->{force} &&
 							       ! $CTL_OPT->{_multi_chpc});
    
-   ($CTL_OPT->{_protein}, $CTL_OPT->{p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
-   ($CTL_OPT->{_est}, $CTL_OPT->{e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
-   ($CTL_OPT->{_est_reads},  $CTL_OPT->{d_db}) = split_db($CTL_OPT, 'est_reads', $mpi_size);
-   ($CTL_OPT->{_altest},  $CTL_OPT->{a_db}) = split_db($CTL_OPT, 'altest', $mpi_size);
-   ($CTL_OPT->{_repeat_protein}, $CTL_OPT->{r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
+   ($CTL_OPT->{_p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
+   ($CTL_OPT->{_e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
+   ($CTL_OPT->{_a_db}) = split_db($CTL_OPT, 'altest', $mpi_size);
+   ($CTL_OPT->{_r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
 }
 #----------------------------------------------------------------------------
 sub concatenate_files {
@@ -548,194 +519,146 @@ sub split_db {
    #always set to at least 10 for faster fasta indexing
    $mpi_size = 10 if($mpi_size < 10);
 
-   my $file = $CTL_OPT->{$key};
+   my @entries = split(',', $CTL_OPT->{$key});
    my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
    
-   return ('', []) if (not $file);
-   
-   #set up names and variables
-   my $fasta_iterator = new Iterator::Fasta($file);
-   my $db_size = $fasta_iterator->number_of_entries();
-   my $bins = $mpi_size;
-   $bins = $db_size if ($db_size < $bins);
+   return ([]) if (! @entries);
 
-   my ($f_name) = $file =~ /([^\/]+)$/;
-   $f_name =~ s/\.fasta$//;
-   $f_name =~ s/ /\%20/g; #fix spaces in name
+   my @db_files;
+   foreach my $entry (@entries){
+       my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+
+       #set up names and variables
+       my $fasta_iterator = new Iterator::Fasta($file);
+       my $db_size = $fasta_iterator->number_of_entries();
+       my $bins = $mpi_size;
+       $bins = $db_size if ($db_size < $bins);
+       
+       my ($f_name) = $file =~ /([^\/]+)$/;
+       $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
     
-   my $d_name = "$f_name\.mpi\.$mpi_size";
-   my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
-   my $f_dir = "$b_dir/$d_name";
-   my $t_dir = $TMP."/$d_name";
+       my $d_name = "$f_name\.mpi\.$mpi_size";
+       my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
+       my $f_dir = "$b_dir/$d_name";
+       my $t_dir = $TMP."/$d_name";
 
-   #make needed output directories
-   mkdir($t_dir);
-   mkdir($b_dir) unless (-e $b_dir);
-
-   if(my $lock = new File::NFSLock($f_dir, 'EX', 600, 40)){
-       $lock->maintain(30);
+       #make needed output directories
+       mkdir($t_dir);
+       mkdir($b_dir) unless (-e $b_dir);
        
-       if(-e "$f_dir"){ #on multi processors check if finished
-	   my @t_db = <$f_dir/*$d_name*\.fasta>;
-	   
-	   my @existing_db;
-	   foreach my $f (@t_db) {
-	       push (@existing_db, $f) if (! -d $f);
-	   }
-	   
-	   if(@existing_db == $bins){ #use existing if right count
-	       $lock->unlock;
-	       return $f_dir, \@existing_db;
-	   }
-	   else{ #remove if there is an error
-	       File::Path::rmtree($f_dir);
-	     }
-       }
+       if(my $lock = new File::NFSLock($f_dir, 'EX', 600, 40)){
+	   $lock->maintain(30);
        
-       #open filehandles for  pieces on multi processors
-       my @fhs;
-
-       for (my $i = 0; $i < $bins; $i++) {
-	   my $name = "$t_dir/$d_name\.$i\.fasta";
-	   my $fh;
-	   open ($fh, "> $name");
-	   
-	   push (@fhs, $fh);
-       }
-       
-       #write fastas here
-       my %alias;
-       
-       my $wflag = 1; #flag set so warnings gets printed only once 
-       while (my $fasta = $fasta_iterator->nextEntry()) {
-	   my $def = Fasta::getDef(\$fasta);
-	   my $seq_id = Fasta::def2SeqID($def);
-	   my $seq_ref = Fasta::getSeqRef(\$fasta);
-	   
-	   #fix non standard peptides
-	   if (defined $alt) {
-	       $$seq_ref =~ s/[\*\-]//g;
-	       $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
-	   }
-	   #fix nucleotide sequences
-	   elsif($key !~ /protein/){
-	       #most programs use N for masking but for some reason the NCBI decided to
-	       #use X to mask their sequence, which causes many many programs to fail
-	       $$seq_ref =~ s/\-//g;
-	       $$seq_ref =~ s/X/N/g;
-	       die "ERROR: The nucleotide sequence file \'$file\'\n".
-		   "appears to contain protein sequence or unrecognized characters.\n".
-		   "Please check/fix the file before continuing.\n".
-		   "Invalid Character: $1\n\n"
-		   if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
-	   }
-	   
-	   #Skip empty fasta entries
-	   next if($$seq_ref eq '');
-	   
-	   #fix weird blast trimming error for long seq IDs by replacing them
-	   if(length($seq_id) > 78){
-	       warn "WARNING: The fasta file contains sequences with names longer\n".
-		   "than 78 characters.  Long names get trimmed by BLAST, making\n".
-		   "it harder to identify the source of an alignmnet. You might\n".
-		   "want to reformat the fasta file with shorter IDs.\n".
-		   "File_name:$file\n\n" if($wflag-- > 0);
+	   if(-e "$f_dir"){ #on multi processors check if finished
+	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
 	       
-	       my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
-
-	       die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
-		   if($alias{$new_id});
-
-	       $alias{$new_id}++;
-	       $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+	       if(@t_db == $bins){ #use existing if right count
+		   $lock->unlock;
+		   push(@db_files, @t_db);
+		   next;
+	       }
+	       else{ #remove if there is an error
+		   File::Path::rmtree($f_dir);
+	       }
 	   }
 	   
-	   #reformat fasta, just incase
-	   my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+	   #open filehandles for  pieces on multi processors
+	   my @fhs;
 	   
-	   #build part files only on multi processor
-	   my $fh = shift @fhs;
-	   print $fh $$fasta_ref;
-	   push (@fhs, $fh);
-       }
-       
-       #close part file handles
-       foreach my $fh (@fhs) {
-	   close ($fh);
-       }
-       
-       #move finished file directory into place
-       system("mv $t_dir $f_dir"); #File::Copy cannot move directories
-       
-       #check if everything is ok
-       if (-e $f_dir) { #multi processor
-	   my @t_db = <$f_dir/*$d_name*\.fasta>;
-	   
-	   my @db_files;
-	   foreach my $f (@t_db) {
-	       push (@db_files, $f) if (! -d $f);
+	   for (my $i = 0; $i < $bins; $i++) {
+	       my $name = "$t_dir/$d_name\.$i";
+	       my $fh;
+	       open ($fh, "> $name");
+	       
+	       push (@fhs, $fh);
 	   }
 	   
-	   die "ERROR: SplitDB not created correctly\n\n" if(@db_files != $bins); #not o
+	   #write fastas here
+	   my %alias;
+	   
+	   my $wflag = 1; #flag set so warnings gets printed only once 
+	   while (my $fasta = $fasta_iterator->nextEntry()) {
+	       my $def = Fasta::getDef(\$fasta);
+	       my $seq_id = Fasta::def2SeqID($def);
+	       my $seq_ref = Fasta::getSeqRef(\$fasta);
 
-	   $lock->unlock;
-	   return $f_dir, \@db_files;
+	       #fix non standard peptides
+	       if (defined $alt) {
+		   $$seq_ref =~ s/[\*\-]//g;
+		   $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
+	       }
+	       #fix nucleotide sequences
+	       elsif($key !~ /protein/){
+		   #most programs use N for masking but for some reason the NCBI decided to
+		   #use X to mask their sequence, which causes many many programs to fail
+		   $$seq_ref =~ s/\-//g;
+		   $$seq_ref =~ s/X/N/g;
+		   die "ERROR: The nucleotide sequence file \'$file\'\n".
+		       "appears to contain protein sequence or unrecognized characters.\n".
+		       "Please check/fix the file before continuing.\n".
+		       "Invalid Character: $1\n\n"
+		       if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
+	       }
+	       
+	       #Skip empty fasta entries
+	       next if($$seq_ref eq '');
+	       
+	       #fix weird blast trimming error for long seq IDs by replacing them
+	       if(length($seq_id) > 78){
+		   warn "WARNING: The fasta file contains sequences with names longer\n".
+		       "than 78 characters.  Long names get trimmed by BLAST, making\n".
+		       "it harder to identify the source of an alignmnet. You might\n".
+		       "want to reformat the fasta file with shorter IDs.\n".
+		       "File_name:$file\n\n" if($wflag-- > 0);
+		   
+		   my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
+		   
+		   die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+		       if($alias{$new_id});
+		   
+		   $alias{$new_id}++;
+		   $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+	       }
+	       
+	       #reformat fasta, just incase
+	       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+	       
+	       #build part files only on multi processor
+	       my $fh = shift @fhs;
+	       print $fh $$fasta_ref;
+	       push (@fhs, $fh);
+	   }
+	   
+	   #close part file handles
+	   foreach my $fh (@fhs) {
+	       close ($fh);
+	   }
+	   
+	   #move finished file directory into place
+	   system("mv $t_dir $f_dir"); #File::Copy cannot move directories
+	   
+	   #check if everything is ok
+	   if (-e $f_dir) { #multi processor
+	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
+	       	       
+	       die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
+
+	       push(@db_files, @t_db);
+
+	       $lock->unlock;
+	       next;
+	   }
+	   else {
+	       die "ERROR: Could not split db\n"; #not ok
+	   }
        }
-       else {
-	   die "ERROR: Could not split db\n"; #not ok
+       else{
+	   die "ERROR: Could not get lock to process fasta\n\n";
        }
    }
-   else{
-       die "ERROR: Could not get lock to process fasta\n\n";
-   }
+
+   return \@db_files;
 }
-#----------------------------------------------------------------------------
-# sub load_anno_hsps {
-#    my $annotations = shift;
-#    my @coors;
-#    my $i = @{$annotations};
-#    foreach my $an (@$annotations) {
-#       foreach my $a (@{$an->[0]}) {
-# 	 my $hit = $a->{hit};
-# 	 foreach my $hsp ($hit->hsps()) {
-# 	    push(@coors, [$hsp->nB('query'),
-# 			  $hsp->nE('query'),
-# 			 ]);
-# 	 }
-#       }
-#    }
-#    return` (\@coors, $i);;
-# }
-#-----------------------------------------------------------------------------
-# sub load_clust_hsps {
-#    my $clusters = shift;
-#    my @coors;
-#    my $i = @{$clusters};
-#    foreach my $c (@$clusters) {
-#       foreach my $hit (@{$c}) {
-# 	 foreach my $hsp ($hit->hsps()) {
-# 	    push(@coors, [$hsp->nB('query'),
-# 			  $hsp->nE('query'),
-# 			 ]);
-# 	 }
-#       }
-#    }
-#    return (\@coors, $i);
-# }
-#-----------------------------------------------------------------------------
-# sub load_snap_hsps {
-#    my $snaps = shift;
-#    my @coors;
-#    my $i = @{$snaps};
-#    foreach my $hit (@{$snaps}) {
-#       foreach my $hsp ($hit->hsps()) {
-# 	 push(@coors, [$hsp->nB('query'),
-# 		       $hsp->nE('query'),
-# 		      ]);
-#       }
-#    }
-#    return (\@coors, $i);
-# }
 #-----------------------------------------------------------------------------
 sub flatten {
    my $clusters = shift;
@@ -762,12 +685,12 @@ sub combine {
 #-----------------------------------------------------------------------------
 sub abinits {
    my @preds;
+   my $CTL_OPT = $_[3];
 
-   push(@preds, @{snap(@_)});
-   push(@preds, @{augustus(@_)});
-   push(@preds, @{fgenesh(@_)});
-   push(@preds, @{genemark(@_)});
-   push(@preds, @{twinscan(@_)});
+   push(@preds, @{snap(@_)})     if(grep {/snap/} @{$CTL_OPT->{_run}});
+   push(@preds, @{augustus(@_)}) if(grep {/augustus/} @{$CTL_OPT->{_run}});
+   push(@preds, @{fgenesh(@_)})  if(grep {/fgenesh/} @{$CTL_OPT->{_run}});
+   push(@preds, @{genemark(@_)}) if(grep {/genemark/} @{$CTL_OPT->{_run}});
 
    return \@preds;
 }
@@ -776,46 +699,59 @@ sub snap {
    my $in_file     = shift;
    my $the_void    = shift;
    my $seq_id      = shift;
-   my $CTL_OPT = shift;
+   my $CTL_OPT     = shift;
    my $LOG         = shift;
-   
-   my $exe    = $CTL_OPT->{snap};
-   my $snaphmm = $CTL_OPT->{snaphmm};
-   
-   return [] if(! grep {/snap/} @{$CTL_OPT->{_run}});
-   
-   my %params;
-   my $out_file = "$the_void/$seq_id\.all\.snap";
-   
-   $LOG->add_entry("STARTED", $out_file, "");   
 
-   my $command  = $exe;
-   $command .= " $snaphmm";
-   $command .= " $in_file";
-   $command .= " > $out_file";
-	
-   my $w = new Widget::snap();
-	
-   if (-e $out_file) {
-      print STDERR "re reading snap report.\n" unless $main::quiet;
-      print STDERR "$out_file\n" unless $main::quiet;
-   }
-   else {
-      print STDERR "running  snap.\n" unless $main::quiet;
-      $w->run($command);
-   }
-	
-   $params{min_exon_score}  = -100000; #-10000;
-   $params{min_gene_score}  = -100000; #0;
-		
-   my $keepers = Widget::snap::parse($out_file,
+   my $exe    = $CTL_OPT->{snap};
+
+   my @entries = split(',', $CTL_OPT->{snaphmm});
+
+   my @keepers;
+   foreach my $entry (@entries){
+       my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+       my ($hmm_n) = $hmm =~ /([^\/]+)$/;
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+
+       my %params;
+       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.snap";
+
+       $LOG->add_entry("STARTED", $out_file, "");   
+       
+       my $command  = $exe;
+       $command .= " $hmm";
+       $command .= " $in_file";
+       $command .= " > $out_file";
+       
+       my $w = new Widget::snap();
+       
+       if (-e $out_file) {
+	   print STDERR "re reading snap report.\n" unless $main::quiet;
+	   print STDERR "$out_file\n" unless $main::quiet;
+       }
+       else {
+	   print STDERR "running  snap.\n" unless $main::quiet;
+	   $w->run($command);
+       }
+       
+       $params{min_exon_score}  = -100000; #-10000;
+       $params{min_gene_score}  = -100000; #0;
+       
+       my $set = Widget::snap::parse($out_file,
 				     \%params,
 				     $in_file,
-				    );
+				     );
+       foreach my $h (@$set){
+	   $h->{_HMM}   = $hmm;
+	   $h->{_label} = $label if($label);
+	   map{$_->{_label} = $label} $h->hsps if($label);
+       }
 
-   $LOG->add_entry("FINISHED", $out_file, "");
+       push(@keepers, @$set);
 
-   return $keepers;
+       $LOG->add_entry("FINISHED", $out_file, "");
+   }
+
+   return \@keepers;
 }
 #-----------------------------------------------------------------------------
 sub genemark {
@@ -825,53 +761,63 @@ sub genemark {
    my $CTL_OPT     = shift;
    my $LOG         = shift;
 
-   $in_file        = shift; #temp
-   return []      if(! $in_file); #temp
-
    #genemark sometimes fails if called directly so I built a wrapper
    my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
    my $exe  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
    my $pro = $CTL_OPT->{probuild}; #helper exe
-   my $hmm = $CTL_OPT->{gmhmm};
-   
-   return [] if(! grep {/genemark/} @{$CTL_OPT->{_run}});
-   
-   my %params;
-   my $out_file = "$the_void/$seq_id\.all\.genemark";
-   
-   $LOG->add_entry("STARTED", $out_file, "");   
+
+   my @entries = split(',', $CTL_OPT->{gmhmm});
+
+   my @keepers;
+   foreach my $entry (@entries){
+       my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+       my ($hmm_n) = $hmm =~ /([^\/]+)$/;
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+
+       my %params;
+       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.genemark";
+
+       $LOG->add_entry("STARTED", $out_file, "");   
 
 
-   my $command  = $wrap;
-   $command .= " -m $hmm";
-   $command .= " -g $exe";
-   $command .= " -p $pro";
-   $command .= " -o $out_file";
-   #$command .= " -t $TMP";
-   $command .= " $in_file";
+       my $command  = $wrap;
+       $command .= " -m $hmm";
+       $command .= " -g $exe";
+       $command .= " -p $pro";
+       $command .= " -o $out_file";
+       #$command .= " -t $TMP";
+       $command .= " $in_file";
+       
+       my $w = new Widget::genemark();
+       
+       if (-e $out_file) {
+	   print STDERR "re reading genemark report.\n" unless $main::quiet;
+	   print STDERR "$out_file\n" unless $main::quiet;
+       }
+       else {
+	   print STDERR "running  genemark.\n" unless $main::quiet;
+	   $w->run($command);
+       }
+       
+       $params{min_exon_score}  = -100000; #-10000;
+       $params{min_gene_score}  = -100000; #0;
+       
+       my $set = Widget::genemark::parse($out_file,
+					 \%params,
+					 $in_file,
+					 );
+       foreach my $h (@$set){
+	   $h->{_HMM} = $hmm;
+	   $h->{_label} = $label if($label);
+	   map{$_->{_label} = $label} $h->hsps if($label);
+       }
 
-   my $w = new Widget::genemark();
-	
-   if (-e $out_file) {
-      print STDERR "re reading genemark report.\n" unless $main::quiet;
-      print STDERR "$out_file\n" unless $main::quiet;
+       push(@keepers, @$set);
+       
+       $LOG->add_entry("FINISHED", $out_file, "");
    }
-   else {
-      print STDERR "running  genemark.\n" unless $main::quiet;
-      $w->run($command);
-   }
-	
-   $params{min_exon_score}  = -100000; #-10000;
-   $params{min_gene_score}  = -100000; #0;
-		
-   my $keepers = Widget::genemark::parse($out_file,
-				     \%params,
-				     $in_file,
-				    );
 
-   $LOG->add_entry("FINISHED", $out_file, "");
-
-   return $keepers;
+   return \@keepers;
 }
 #-----------------------------------------------------------------------------
 sub augustus {
@@ -882,43 +828,57 @@ sub augustus {
    my $LOG         = shift;
 
    my $exe = $CTL_OPT->{augustus};
-   my $org = $CTL_OPT->{augustus_species};
 
-   return [] if(! grep {/augustus/} @{$CTL_OPT->{_run}});
+   my @entries = split(',', $CTL_OPT->{augustus_species});
 
-   my %params;
-   my $out_file    = "$the_void/$seq_id\.all\.augustus";
+   my @keepers;
+   foreach my $entry (@entries){
+       my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+       my ($hmm_n) = $hmm =~ /([^\/]+)$/;
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
 
-   $LOG->add_entry("STARTED", $out_file, ""); 
+       my %params;
+       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.augustus";
 
-   my $command  = $exe;
-   $command .= " --species=$org";
-   $command .= " --UTR=off"; #added 3/19/2009
-   $command .= " $in_file";
-   $command .= " > $out_file";
+       $LOG->add_entry("STARTED", $out_file, ""); 
+       
+       my $command  = $exe;
+       $command .= " --species=$hmm";
+       $command .= " --UTR=off"; #added 3/19/2009
+       $command .= " $in_file";
+       $command .= " > $out_file";
+       
+       my $w = new Widget::augustus();
+       
+       if (-e $out_file) {
+	   print STDERR "re reading augustus report.\n" unless $main::quiet;
+	   print STDERR "$out_file\n" unless $main::quiet;
+       }
+       else {
+	   print STDERR "running  augustus.\n" unless $main::quiet;
+	   $w->run($command);
+       }
+       
+       $params{min_exon_score}  = -100000; #-10000;
+       $params{min_gene_score}  = -100000; #0;
+       
+       my $set = Widget::augustus::parse($out_file,
+					 \%params,
+					 $in_file
+					 );
+       
+       foreach my $h (@$set){
+	   $h->{_HMM} = $hmm;
+	   $h->{_label} = $label if($label);
+	   map{$_->{_label} = $label} $h->hsps if($label);
+       }
 
-   my $w = new Widget::augustus();
+       push(@keepers, @$set);
 
-   if (-e $out_file) {
-      print STDERR "re reading augustus report.\n" unless $main::quiet;
-      print STDERR "$out_file\n" unless $main::quiet;
+       $LOG->add_entry("FINISHED", $out_file, "");
    }
-   else {
-      print STDERR "running  augustus.\n" unless $main::quiet;
-      $w->run($command);
-   }
 
-   $params{min_exon_score}  = -100000; #-10000;
-   $params{min_gene_score}  = -100000; #0;
-
-   my $chunk_keepers = Widget::augustus::parse($out_file,
-					       \%params,
-					       $in_file
-					      );
-
-   $LOG->add_entry("FINISHED", $out_file, "");
-
-   return $chunk_keepers;
+   return \@keepers;
 }
 #-----------------------------------------------------------------------------
 sub fgenesh {
@@ -930,91 +890,58 @@ sub fgenesh {
 
    my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
    my $exe = $CTL_OPT->{fgenesh};
-   my $org = $CTL_OPT->{fgenesh_par_file};
 
-   return [] if(! grep {/fgenesh/} @{$CTL_OPT->{_run}});
+   my @entries = split(',', $CTL_OPT->{fgenesh_par_file});
 
-   my %params;
-   my $out_file    = "$the_void/$seq_id\.all\.fgenesh";
+   my @keepers;
+   foreach my $entry (@entries){
+       my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+       my ($hmm_n) = $hmm =~ /([^\/]+)$/;
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
 
-   $LOG->add_entry("STARTED", $out_file, ""); 
+       my %params;
+       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.fgenesh";
+       
+       $LOG->add_entry("STARTED", $out_file, ""); 
+       
+       my $command  = "$wrap $exe";
+       #$command .= " -tmp $TMP";
+       $command .= " $hmm";
+       $command .= " $in_file";
+       $command .= " > $out_file";
+       
+       my $w = new Widget::fgenesh();
+       
+       if (-e $out_file) {
+	   print STDERR "re reading fgenesh report.\n" unless $main::quiet;
+	   print STDERR "$out_file\n" unless $main::quiet;
+       }
+       else {
+	   print STDERR "running  fgenesh.\n" unless $main::quiet;
+	   $w->run($command);
+       }
+       
+       $params{min_exon_score}  = -100000; #-10000;
+       $params{min_gene_score}  = -100000; #0;
+       
+       my $set = Widget::fgenesh::parse($out_file,
+					\%params,
+					$in_file
+					);
+       
+       foreach my $h (@$set){
+	   $h->{_HMM} = $hmm;
+	   $h->{_label} = $label if($label);
+	   map{$_->{_label} = $label} $h->hsps if($label);
+       }
 
-   my $command  = "$wrap $exe";
-   #$command .= " -tmp $TMP";
-   $command .= " $org";
-   $command .= " $in_file";
-   $command .= " > $out_file";
+       push(@keepers, @$set);
 
-   my $w = new Widget::fgenesh();
-
-   if (-e $out_file) {
-      print STDERR "re reading fgenesh report.\n" unless $main::quiet;
-      print STDERR "$out_file\n" unless $main::quiet;
+       $LOG->add_entry("FINISHED", $out_file, "");
    }
-   else {
-      print STDERR "running  fgenesh.\n" unless $main::quiet;
-      $w->run($command);
-   }
 
-   $params{min_exon_score}  = -100000; #-10000;
-   $params{min_gene_score}  = -100000; #0;
-
-   my $chunk_keepers = Widget::fgenesh::parse($out_file,
-					      \%params,
-					      $in_file
-					     );
-
-   $LOG->add_entry("FINISHED", $out_file, "");
-
-   return $chunk_keepers;
+   return \@keepers;
 }
-#-----------------------------------------------------------------------------
-sub twinscan {
-   my $in_file     = shift;
-   my $the_void    = shift;
-   my $seq_id      = shift;
-   my $CTL_OPT = shift;
-   my $LOG         = shift;
-
-   my $exe = $CTL_OPT->{twinscan};
-   my $org = $CTL_OPT->{twinscan_species};
-
-   return [] if(! grep {/twinscan/} @{$CTL_OPT->{_run}});
-
-   my %params;
-   my $out_file    = "$the_void/$seq_id\.all\.twinscan";
-
-   $LOG->add_entry("STARTED", $out_file, ""); 
-
-   my $command  = $exe;
-   $command .= ' --species='."$org";
-   $command .= " $in_file";
-   $command .= " > $out_file";
-
-   my $w = new Widget::twinscan();
-
-   if (-e $out_file) {
-      print STDERR "re reading twinscan report.\n" unless $main::quiet;
-      print STDERR "$out_file\n" unless $main::quiet;
-   }
-   else {
-      print STDERR "running  twinscan.\n" unless $main::quiet;
-      $w->run($command);
-   }
-
-   $params{min_exon_score}  = -100000; #-10000;
-   $params{min_gene_score}  = -100000; #0;
-
-   my $chunk_keepers = Widget::twinscan::parse($out_file,
-					       \%params,
-					       $in_file
-					      );
-
-   $LOG->add_entry("FINISHED", $out_file, "");
-
-   return $chunk_keepers;
-}
-
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
     my $g_fasta     = shift;
@@ -1051,7 +978,7 @@ sub polish_exonerate {
 	my $name =  Fasta::def2SeqID($p_def);
 	my $safe_name = Fasta::seqID2SafeID($name);
 	
-	my $d_file = $the_void."/".$safe_name.'.'.$p->[0]->{b}.'.'.$p->[0]->{e}.".fasta";
+	my $d_file = $the_void."/".$safe_name.'.'.$p->[0]->{b}.'-'.$p->[0]->{e}.".fasta";
 	
 	FastaFile::writeFile($p_fasta, $d_file);
 	
@@ -1113,8 +1040,10 @@ sub polish_exonerate {
 		#tag the source blastn hit to let you know the counterpart
 		#exonerate hit was flipped to the other strand
 		$hit->{_exonerate_flipped} = 1 if($exonerate_hit->{_was_flipped});
+		$hit->{_keep} = 1;
 		$hit->type("exonerate:$type"); #set hit type (exonerate only)
-
+		$exonerate_hit->{_label} = $hit->{_label} if($hit->{_label});
+		map{$_->{_label} = $hit->{_label}} $exonerate_hit->hsps if($hit->{_label});
 		push(@exonerate_data, $exonerate_hit);	       
 	    }
 	}
@@ -1225,9 +1154,16 @@ sub make_multi_fasta {
 }
 #-----------------------------------------------------------------------------
 sub build_fasta_index {
-   my $db = shift;
+   my $dbs = shift;
+   $dbs = [$dbs] if(! ref($dbs));
 
-   my $index = new FastaDB($db);
+   my @files;
+   foreach my $db (@$dbs){
+       my ($file) = split(':', $db);
+       push(@files, $file);
+   }
+
+   my $index = new FastaDB(\@files);
 
    return $index;
 }
@@ -1235,15 +1171,14 @@ sub build_fasta_index {
 sub build_all_indexes {
    my $CTL_OPT = shift;
 
-   my @dbs = ($CTL_OPT->{_est},
-	      $CTL_OPT->{_protein},
-	      $CTL_OPT->{_repeat_protein},
-	      $CTL_OPT->{_est_reads},
-	      $CTL_OPT->{_altest}
+   my @dbs = ($CTL_OPT->{_e_db},
+	      $CTL_OPT->{_p_db},
+	      $CTL_OPT->{_r_db},
+	      $CTL_OPT->{_a_db}
 	     );
 
    foreach my $db (@dbs){
-       next if(! $db);
+       next if(! $db || !$db->[0]);
        my $index = build_fasta_index($db);
        $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
    }
@@ -1253,6 +1188,8 @@ sub dbformat {
    my $command = shift;
    my $file = shift;
    my $type = shift;
+
+   my ($file) = $file =~ /^([^\:]+)\:?(.*)/; #peal off label
 
    die "ERROR: Can not find xdformat or formatdb executable\n" if(! -e $command);
    die "ERROR: Can not find the db file $file\n" if(! -e $file);
@@ -1302,35 +1239,33 @@ sub dbformat {
 #-----------------------------------------------------------------------------
 sub blastn_as_chunks {
    my $chunk      = shift;
-   my $db         = shift;
-   my $old_db     = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $rank       = shift;
    my $LOG        = shift;
-   my $LOG_FLAG   = shift;
-
-   my $blastn      = $CTL_OPT->{_blastn};
-   my $bit_blastn  = $CTL_OPT->{bit_blastn};
-   my $eval_blastn = $CTL_OPT->{eval_blastn};
-   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
-   my $pid_blastn  = $CTL_OPT->{pid_blastn};
+   my $LOG_FLAG   = shift;   
+   
+   my $blast      = $CTL_OPT->{_blastn};
+   my $bit_blast  = $CTL_OPT->{bit_blastn};
+   my $eval_blast = $CTL_OPT->{eval_blastn};
+   my $pcov_blast = $CTL_OPT->{pcov_blastn};
+   my $pid_blast  = $CTL_OPT->{pid_blastn};
    my $split_hit   = $CTL_OPT->{split_hit};
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
-   #build names for files to use and copy
+   #peal off label and build names for files to use and copy
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   my $db_old_n = $db_n;
+   $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
 
    my $chunk_number = $chunk->number();
- 
-   my ($db_old_n) = $old_db =~ /([^\/]+)$/;
-   $db_old_n  =~ s/\.fasta$//;
-   $db_old_n =~ s/ /\%20/g; #fix spaces in name
 
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastn";
 
@@ -1341,132 +1276,108 @@ sub blastn_as_chunks {
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.blastn";
 
-   $db =~ /([^\/]+)$/;
-   my $tmp_db = "$TMP/$1";
+   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-        (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
-       (! -e $blast_finished)
-      ){
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+       open(my $L,"$tmp_db.copy");
+       flock($L, 2); #try regular file lock for extra safety
+       
+       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	   (! -e $blast_finished)
+	   ){
 	   $lock->maintain(30);
 	   copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastn');
-	   $lock->unlock;
        }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
-       }
+
+       flock($L, 8);
+       $lock->unlock;
    }
-   elsif (-e $blast_finished) {
+   else{
+       die "ERROR: Could not get lock.\n\n";
+   }
+
+   #parse blast
+   if (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
       print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
-      return $blast_dir;
+      
+      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
+      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
+	  $o_file = $blast_finished;
+      }
+      else{
+	  return ([], $blast_dir);
+      }
    }
-	
-   #call blast executable
-   $chunk->write_file($t_file_name);  
-
-   runBlastn($t_file_name,
-	     $tmp_db,
-	     $o_file,
-	     $blastn,
-	     $eval_blastn,
-	     $split_hit,
-	     $cpus,
-	     $org_type,
-	     $softmask
-	    );
-
-   $chunk->erase_fasta_file();
-
-   return $blast_dir;
-}
-#-----------------------------------------------------------------------------
-sub collect_blastn{
-   my $chunk     = shift;
-   my $blast_dir = shift;
-   my $CTL_OPT   = shift;
-   my $LOG       = shift;
-
-   my $eval_blastn = $CTL_OPT->{eval_blastn};
-   my $bit_blastn  = $CTL_OPT->{bit_blastn},
-   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
-   my $pid_blastn  = $CTL_OPT->{pid_blastn};
-   my $split_hit   = $CTL_OPT->{split_hit};
-
-   my $blast_finished = $blast_dir;
-   $blast_finished =~ s/\.temp_dir$//;
-
-   #merge blast reports
-   if (! -e $blast_finished) {
-      system ("cat $blast_dir/*blast* > $blast_finished");
-      File::Path::rmtree ("$blast_dir");
+   else{
+       #call blast executable
+       $chunk->write_file($t_file_name);  
+       
+       runBlastn($t_file_name,
+		 $tmp_db,
+		 $o_file,
+		 $blast,
+		 $eval_blast,
+		 $split_hit,
+		 $cpus,
+		 $org_type,
+		 $softmask
+		 );
+       
+       $chunk->erase_fasta_file();
    }
 
    my %params;
-   $params{significance}  = $eval_blastn;
-   $params{hsp_bit_min}   = $bit_blastn;
-   $params{percov}        = $pcov_blastn;
-   $params{percid}        = $pid_blastn;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
 
-   $LOG->add_entry("FINISHED", $blast_finished, "");
-
-   my $chunk_keepers = Widget::blastn::parse($blast_finished,
+   my $chunk_keepers = Widget::blastn::parse($o_file,
 					     \%params,
-					    );
+					     );
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
 			    );
 
-#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-#      my @keepers;
-#      
-#      foreach my $hit (@{$chunk_keepers}) {
-#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#      }
-#      
-#      return \@keepers;
-#   }
-#   else {
-#      return $chunk_keepers
-#   }
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
 
-   return $chunk_keepers
+   return ($chunk_keepers, $blast_dir);
 }
 #-----------------------------------------------------------------------------
 sub blastn {
    my $chunk      = shift;
-   my $db         = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
 
-   my $blastn      = $CTL_OPT->{_blastn};
-   my $bit_blastn  = $CTL_OPT->{bit_blastn};
-   my $eval_blastn = $CTL_OPT->{eval_blastn};
-   my $pcov_blastn = $CTL_OPT->{pcov_blastn};
-   my $pid_blastn  = $CTL_OPT->{pid_blastn};
+   my $blast      = $CTL_OPT->{_blastn};
+   my $bit_blast  = $CTL_OPT->{bit_blastn};
+   my $eval_blast = $CTL_OPT->{eval_blastn};
+   my $pcov_blast = $CTL_OPT->{pcov_blastn};
+   my $pid_blast  = $CTL_OPT->{pid_blastn};
    my $split_hit   = $CTL_OPT->{split_hit};
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
-   $db_n =~ s/ /\%20/g; #fix spaces in name
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
@@ -1479,8 +1390,8 @@ sub blastn {
    runBlastn($file_name,
 	     $db,
 	     $o_file,
-	     $blastn,
-	     $eval_blastn,
+	     $blast,
+	     $eval_blast,
 	     $split_hit,
 	     $cpus,
 	     $org_type,
@@ -1488,10 +1399,10 @@ sub blastn {
 	     );
 
    my %params;
-   $params{significance}  = $eval_blastn;
-   $params{hsp_bit_min}   = $bit_blastn;
-   $params{percov}        = $pcov_blastn;
-   $params{percid}        = $pid_blastn;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
 
    my $chunk_keepers = Widget::blastn::parse($o_file,
@@ -1506,7 +1417,13 @@ sub blastn {
 
    $chunk->erase_fasta_file();
 
-   return $chunk_keepers
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
+
+   return $chunk_keepers;
 }
 #-----------------------------------------------------------------------------
 sub runBlastn {
@@ -1582,183 +1499,188 @@ sub runBlastn {
    }
 }
 #-----------------------------------------------------------------------------
+sub repeatrunner_as_chunks {
+    blastx_as_chunks(@_, 1); #run blastx_as_chunks but with repeat flag
+}
+#-----------------------------------------------------------------------------
 sub blastx_as_chunks {
    my $chunk      = shift;
-   my $db         = shift;
-   my $old_db     = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
+   my $rflag      = shift; #am I running repeatrunner?
 
-   my $rflag = 1 if($old_db && $CTL_OPT->{repeat_protein} eq $old_db); #am I running repeat data?
-
-   my $blastx      = $CTL_OPT->{_blastx};
-   my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
-   my $eval_blastx = ($rflag) ? $CTL_OPT->{eval_rm_blastx} : $CTL_OPT->{eval_blastx};
-   my $pcov_blastx = ($rflag) ? $CTL_OPT->{pcov_rm_blastx} : $CTL_OPT->{pcov_blastx};
-   my $pid_blastx  = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $blast      = $CTL_OPT->{_blastx};
+   my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
+   my $eval_blast = ($rflag) ? $CTL_OPT->{eval_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blast = ($rflag) ? $CTL_OPT->{pcov_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blast  = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
    my $org_type    = $CTL_OPT->{organism_type};
 
-   #build names for files to use and copy	
+   #peal off label and build names for files to use and copy
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   my $db_old_n = $db_n;
+   $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
 
    my $chunk_number = $chunk->number();
     
-   my ($db_old_n) = $old_db =~ /([^\/]+)$/;
-   $db_old_n  =~ s/\.fasta$//;
-   $db_old_n =~ s/ /\%20/g; #fix spaces in name
+   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.";
+   $blast_finished .= ($rflag) ? 'repeatrunner': 'blastx';
 
-   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastx";
-    
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
-   my $o_file    = "$blast_dir/$db_n\.blastx";
+   my $o_file    = "$blast_dir/$db_n\.";
+   $o_file .= ($rflag) ? 'repeatrunner' : 'blastx';
     
-   $db =~ /([^\/]+)$/;
-   my $tmp_db = "$TMP/$1";
+   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
-   #copy db to local tmp dir and run xdformat or format db 
-   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
-       (! -e $blast_finished)
-      ){
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+   #copy db to local tmp dir and run xdformat or formatdb
+   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+       open(my $L,"$tmp_db.copy");
+       flock($L, 2); #try regular file lock for extra safety
+       
+       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	   (! -e $blast_finished)
+	   ){
 	   $lock->maintain(30);
-           copy($db, $tmp_db) if(! -e $tmp_db);
+	   copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'blastx');
-           $lock->unlock;
        }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
-       }
+
+       flock($L, 8);
+       $lock->unlock;
    }
-   elsif (-e $blast_finished) {
+   else{
+       die "ERROR: Could not get lock.\n\n";
+   }
+
+   #parse blast
+   if (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
       print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
-      return $blast_dir;
+
+      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
+      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
+	  $o_file = $blast_finished;
+      }
+      else{
+	  return ([], $blast_dir);
+      }
    }
-
-   #call blast executable	     
-   $chunk->write_file($t_file_name);
-
-   runBlastx($t_file_name,
-	     $tmp_db,
-	     $o_file,
-	     $blastx,
-	     $eval_blastx,
-	     $split_hit,
-	     $cpus,
-	     $org_type,
-	     $softmask
-	    );
-
-   $chunk->erase_fasta_file();
-
-   return $blast_dir;
-}
-#-----------------------------------------------------------------------------
-sub collect_blastx{
-   my $chunk     = shift;
-   my $blast_dir = shift;
-   my $CTL_OPT   = shift;
-   my $LOG       = shift;
-
-   my $eval_blastx = $CTL_OPT->{eval_blastx};
-   my $bit_blastx  = $CTL_OPT->{bit_blastx},
-   my $pcov_blastx = $CTL_OPT->{pcov_blastx};
-   my $pid_blastx  = $CTL_OPT->{pid_blastx};
-   my $split_hit   = $CTL_OPT->{split_hit};
-
-   my $blast_finished = $blast_dir;
-   $blast_finished =~ s/\.temp_dir$//;
-
-   #merge blast reports
-   if (! -e $blast_finished) {
-      system ("cat $blast_dir/*blast* > $blast_finished");
-      rmtree ("$blast_dir");
+   else{
+       #call blast executable
+       $chunk->write_file($t_file_name);  
+       
+       runBlastx($t_file_name,
+		 $tmp_db,
+		 $o_file,
+		 $blast,
+		 $eval_blast,
+		 $split_hit,
+		 $cpus,
+		 $org_type,
+		 $softmask
+		 );
+       
+       $chunk->erase_fasta_file();
    }
 
    my %params;
-   $params{significance}  = $eval_blastx;
-   $params{hsp_bit_min}   = $bit_blastx;
-   $params{percov}        = $pcov_blastx;
-   $params{percid}        = $pid_blastx;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
 
-   $LOG->add_entry("FINISHED", $blast_finished, "");
-   
-   my $chunk_keepers = Widget::blastx::parse($blast_finished,
+   my $chunk_keepers = Widget::blastx::parse($o_file,
 					     \%params,
-					    );
-
+					     );
+   
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset()
+			     $chunk->offset(),
 			    );
 
-#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-#      my @keepers;
-#      
-#      foreach my $hit (@{$chunk_keepers}) {
-#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#      }
-#      
-#      return \@keepers;
-#   }
-#   else {
-#      return $chunk_keepers;
-#   }
+   return ($chunk_keepers, $blast_dir);
+}
+#-----------------------------------------------------------------------------
+sub collect_blast{
+   my $chunk     = shift;
+   my $hits      = shift;
+   my $blast_dir = shift;
+   my $LOG       = shift;
 
-   return $chunk_keepers;
+   my %uniq;
+   @uniq{@$blast_dir} = map {1} (1..@$blast_dir);
+   foreach my $dir (keys %uniq){
+       my $blast_finished = $dir;
+       $blast_finished =~ s/\.temp_dir$//;
+       
+       #merge blast reports
+       if ( -e $dir && ! -e $blast_finished) {
+	   system ("cat $dir/*blast* > $blast_finished");
+	   rmtree ("$dir");
+       }
+       $LOG->add_entry("FINISHED", $blast_finished, ""); 
+   }
+
+   my @flat;
+   foreach my $set (@$hits){
+       push(@flat, @$set);
+   }
+
+   return \@flat;
+}
+#-----------------------------------------------------------------------------
+sub repeatrunner {
+    blastx(@_, 1); #run with repeat flag
 }
 #-----------------------------------------------------------------------------
 sub blastx {
    my $chunk      = shift;
-   my $db         = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
+   my $rflag      = shift;
 
-   my $rflag = 1 if($db && $CTL_OPT->{repeat_protein} eq $db); #am I running repeat data?
-
-   my $blastx      = $CTL_OPT->{_blastx};
-   my $bit_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
-   my $eval_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
-   my $pcov_blastx = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
-   my $pid_blastx  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $blast      = $CTL_OPT->{_blastx};
+   my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
+   my $eval_blast = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blast = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
-   $db_n =~ s/ /\%20/g; #fix spaces in name
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
 
    my $q_length = $chunk->parent_seq_length();
    my $chunk_number = $chunk->number();
 		
    my $file_name = "$the_void/$seq_id\.$chunk_number";
-   my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastx";
+   my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.";
+   $o_file .= ($rflag) ? 'repeatrunner': 'blastx';
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
@@ -1766,8 +1688,8 @@ sub blastx {
    runBlastx($file_name,
 	     $db,
 	     $o_file,
-	     $blastx,
-	     $eval_blastx,
+	     $blast,
+	     $eval_blast,
 	     $split_hit,
 	     $cpus,
 	     $org_type,
@@ -1775,10 +1697,10 @@ sub blastx {
 	    );
 
    my %params;
-   $params{significance}  = $eval_blastx;
-   $params{hsp_bit_min}   = $bit_blastx;
-   $params{percov}        = $pcov_blastx;
-   $params{percid}        = $pid_blastx;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
    
    my $chunk_keepers = Widget::blastx::parse($o_file,
@@ -1791,25 +1713,15 @@ sub blastx {
 			     $chunk->offset(),
 			    );
    
-   $chunk->erase_fasta_file();
-   
-   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-      my @keepers;
-      
-      foreach my $hit (@{$chunk_keepers}) {
-	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-	    push (@keepers, $hit)
-	 }
-	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-	    push (@keepers, $hit)
-	 }
-      }
-      
-      return \@keepers;
+   $chunk->erase_fasta_file();   
+
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
    }
-   else {
-      return $chunk_keepers
-   }
+
+   return $chunk_keepers
 }
 
 #-----------------------------------------------------------------------------
@@ -1882,8 +1794,7 @@ sub runBlastx {
 #-----------------------------------------------------------------------------
 sub tblastx_as_chunks {
    my $chunk      = shift;
-   my $db         = shift;
-   my $old_db     = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
@@ -1891,27 +1802,26 @@ sub tblastx_as_chunks {
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
 
-   my $tblastx      = $CTL_OPT->{_tblastx};
-   my $bit_tblastx  = $CTL_OPT->{bit_tblastx};
-   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
-   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
-   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
+   my $blast      = $CTL_OPT->{_tblastx};
+   my $bit_blast  = $CTL_OPT->{bit_tblastx};
+   my $eval_blast = $CTL_OPT->{eval_tblastx};
+   my $pcov_blast = $CTL_OPT->{pcov_tblastx};
+   my $pid_blast  = $CTL_OPT->{pid_tblastx};
    my $split_hit    = $CTL_OPT->{split_hit};
    my $cpus         = $CTL_OPT->{cpus};
    my $formater     = $CTL_OPT->{_formater};
    my $softmask     = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
-   #build names for files to use and copy
+   #peal off label and build names for files to use and copy
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   my $db_old_n = $db_n;
+   $db_old_n =~ s/([^\/]+)\.mpi\.\d+.\d+$/$1/;
 	
    my $chunk_number = $chunk->number();
  
-   my ($db_old_n) = $old_db =~ /([^\/]+)$/;
-   $db_old_n  =~ s/\.fasta$//;
-   $db_old_n =~ s/ /\%20/g; #fix spaces in name
-
    my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
 
    my $t_dir = $TMP."/rank".$rank;
@@ -1921,132 +1831,108 @@ sub tblastx_as_chunks {
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.tblastx";
 
-   $db =~ /([^\/]+)$/;
-   my $tmp_db = "$TMP/$1";
+   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
    #copy db to local tmp dir and run xdformat or formatdb
-   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-        (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
-       (! -e $blast_finished)
-      ){
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+       open(my $L,"$tmp_db.copy");
+       flock($L, 2); #try regular file lock for extra safety
+       
+       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	   (! -e $blast_finished)
+	   ){
 	   $lock->maintain(30);
-           copy($db, $tmp_db) if(! -e $tmp_db);
+	   copy($db, $tmp_db) if(! -e $tmp_db);
 	   dbformat($formater, $tmp_db, 'tblastx');
-           $lock->unlock;
        }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
-       }
+
+       flock($L, 8);
+       $lock->unlock;
    }
-   elsif (-e $blast_finished) {
+   else{
+       die "ERROR: Could not get lock.\n\n";
+   }
+
+   #parse blast
+   if (-e $blast_finished) {
       print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
       print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
-      return $blast_dir;
+
+      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
+      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
+	  $o_file = $blast_finished;
+      }
+      else{
+	  return ([], $blast_dir);
+      }
    }
-	
-   #call blast executable
-   $chunk->write_file($t_file_name);  
-
-   runtBlastx($t_file_name,
-	      $tmp_db,
-	      $o_file,
-	      $tblastx,
-	      $eval_tblastx,
-	      $split_hit,
-	      $cpus,
-	      $org_type,
-	      $softmask
-	     );
-
-   $chunk->erase_fasta_file();
-
-   return $blast_dir;
-}
-#-----------------------------------------------------------------------------
-sub collect_tblastx{
-   my $chunk     = shift;
-   my $blast_dir = shift;
-   my $CTL_OPT   = shift;
-   my $LOG       = shift;
-
-   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
-   my $bit_tblastx  = $CTL_OPT->{bit_tblastx},
-   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
-   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
-   my $split_hit   = $CTL_OPT->{split_hit};
-
-   my $blast_finished = $blast_dir;
-   $blast_finished =~ s/\.temp_dir$//;
-
-   #merge blast reports
-   if (! -e $blast_finished) {
-      system ("cat $blast_dir/*blast* > $blast_finished");
-      File::Path::rmtree ("$blast_dir");
+   else{
+       #call blast executable
+       $chunk->write_file($t_file_name);  
+       
+       runtBlastx($t_file_name,
+		 $tmp_db,
+		 $o_file,
+		 $blast,
+		 $eval_blast,
+		 $split_hit,
+		 $cpus,
+		 $org_type,
+		 $softmask
+		 );
+       
+       $chunk->erase_fasta_file();
    }
 
    my %params;
-   $params{significance}  = $eval_tblastx;
-   $params{hsp_bit_min}   = $bit_tblastx;
-   $params{percov}        = $pcov_tblastx;
-   $params{percid}        = $pid_tblastx;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
 
-   $LOG->add_entry("FINISHED", $blast_finished, "");
-
-   my $chunk_keepers = Widget::tblastx::parse($blast_finished,
+   my $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
-					     );
+					      );
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
 			    );
 
-#   if ($chunk->p_cutoff || $chunk->m_cutoff) {
-#      my @keepers;
-#      
-#      foreach my $hit (@{$chunk_keepers}) {
-#	 if ($hit->strand('query') eq '1' && $hit->start('query') >= $chunk->p_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#	 elsif ($hit->strand('query') eq '-1' && $hit->start('query') >= $chunk->m_cutoff) {
-#	    push (@keepers, $hit)
-#	 }
-#      }
-#      
-#      return \@keepers;
-#   }
-#   else {
-#      return $chunk_keepers
-#   }
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
 
-   return $chunk_keepers
+   return ($chunk_keepers, $blast_dir);
 }
 #-----------------------------------------------------------------------------
 sub tblastx {
    my $chunk      = shift;
-   my $db         = shift;
+   my $entry      = shift;
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
 
-   my $tblastx      = $CTL_OPT->{_tblastx};
-   my $bit_tblastx  = $CTL_OPT->{bit_tblastx};
-   my $eval_tblastx = $CTL_OPT->{eval_tblastx};
-   my $pcov_tblastx = $CTL_OPT->{pcov_tblastx};
-   my $pid_tblastx  = $CTL_OPT->{pid_tblastx};
+   my $blast      = $CTL_OPT->{_tblastx};
+   my $bit_blast  = $CTL_OPT->{bit_tblastx};
+   my $eval_blast = $CTL_OPT->{eval_tblastx};
+   my $pcov_blast = $CTL_OPT->{pcov_tblastx};
+   my $pid_blast  = $CTL_OPT->{pid_tblastx};
    my $split_hit    = $CTL_OPT->{split_hit};
    my $cpus         = $CTL_OPT->{cpus};
    my $formater     = $CTL_OPT->{_formater};
    my $softmask     = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
+   my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n  =~ s/\.fasta$//;
-   $db_n =~ s/ /\%20/g; #fix spaces in name
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
@@ -2059,8 +1945,8 @@ sub tblastx {
    runtBlastx($file_name,
 	      $db,
 	      $o_file,
-	      $tblastx,
-	      $eval_tblastx,
+	      $blast,
+	      $eval_blast,
 	      $split_hit,
 	      $cpus,
 	      $org_type,
@@ -2068,10 +1954,10 @@ sub tblastx {
 	     );
 
    my %params;
-   $params{significance}  = $eval_tblastx;
-   $params{hsp_bit_min}   = $bit_tblastx;
-   $params{percov}        = $pcov_tblastx;
-   $params{percid}        = $pid_tblastx;
+   $params{significance}  = $eval_blast;
+   $params{hsp_bit_min}   = $bit_blast;
+   $params{percov}        = $pcov_blast;
+   $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
 
    my $chunk_keepers = Widget::tblastx::parse($o_file,
@@ -2085,6 +1971,12 @@ sub tblastx {
 			    );
 
    $chunk->erase_fasta_file();
+
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
 
    return $chunk_keepers;
 }
@@ -2169,6 +2061,14 @@ sub clean_blast_hits{
 	my $significance = $hit->significance();
 	$significance = "1".$significance if($significance =~ /^e/);
 	$significance =~ s/\.$//; # 0.
+
+	#exonerate runs before clean because there may be a good exonerate hit
+	#after extending.  So we want to keep the hit if there is an exonerate pair
+	if($hit->{_keep}){ #set in polisher
+	    push(@keepers, $hit);
+	    next;
+	}
+
 	next unless ($significance < $sig);
 	next unless ($hit->pAh > $pcov);
 	next unless ($hit->hsp('best')->frac_identical() > $pid);
@@ -2185,15 +2085,21 @@ sub repeatmask {
    my $seq_id       = shift;
    my $model_org    = shift;
    my $RepeatMasker = shift;
-   my $rmlib        = shift;
+   my $entry        = shift; #rmlib
    my $cpus         = shift;
    my $LOG = shift;
 
+   #peal off label and build names for files to use and copy
+   my ($rmlib, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+   my ($db_n) = $rmlib =~ /([^\/]+)$/;
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+
    my $chunk_number = $chunk->number();
    my $file_name = "$the_void/$seq_id\.$chunk_number";
-   $file_name .= ".specific" if($rmlib);
+   $file_name   .= ($rmlib) ? "\.$db_n\.specific" : "\.$model_org\.rb";
    my $o_file    = "$file_name\.out";
-   my $q_length = $chunk->parent_seq_length();
+
+   my $q_length  = $chunk->parent_seq_length();
    my $query_def = $chunk->parent_def();
    my $query_seq = $chunk->seq();
    
@@ -2220,10 +2126,6 @@ sub repeatmask {
    PhatHit_utils::add_offset($rm_chunk_keepers, 
 			     $chunk->offset(),
 			    );
-   #     PhatHit_utils::merge_hits($rm_keepers,  
-   # 			      $rm_chunk_keepers, 
-   # 			      20,
-   # 			     );
    
    $chunk->erase_fasta_file();
 	
@@ -2405,11 +2307,11 @@ sub set_defaults {
 		  'gmhmmp',
 		  'augustus',
 		  'fgenesh',
-		  'twinscan',
-		  'jigsaw',
-		  'qrna',
 		  'fathom',
-		  'probuild'
+		  'probuild',
+		  'twinscan',
+		  'qrna',
+		  'jigsaw'
 		 );
 
       #get MAKER override exes
@@ -2671,7 +2573,7 @@ sub parse_ctl_files {
 	while (my $line = <CTL>) {
 	    chomp($line);
 	   
-	    if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\n\#]*)/) {
+	    if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:\=]+)[\:\=]([^\n\#]*)/) {
 		my $key = $1;
 		my $value = $2;
 		my $stat;
@@ -2729,7 +2631,7 @@ sub load_server_files {
 	while (my $line = <CTL>) {
 	    chomp($line);
 	   
-	    if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\n\#]*)/) {
+	    if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:\=]+)[\:\=]([^\n\#]*)/) {
 		my $key = $1;
 		my $value = $2;
 		my $stat;
@@ -2816,7 +2718,7 @@ sub load_control_files {
       while (my $line = <CTL>) {
 	 chomp($line);
 	    
-	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:]+)\:([^\n\#]*)/) {
+	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:\=]+)[\:\=]([^\n\#]*)/) {
 	    my $key = $1;
 	    my $value = $2;
 
@@ -2912,7 +2814,7 @@ sub load_control_files {
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^jigsaw$|^model_gff$|^pred_gff$/
+	   $p !~ /^genemark$|^model_gff$|^pred_gff$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -2920,7 +2822,7 @@ sub load_control_files {
 	   next;
        }
        if($CTL_OPT{organism_type} eq 'prokaryotic' &&
-	  $p =~ /^snap$|^augustus$|^fgenesh$|^jigsaw$/
+	  $p =~ /^snap$|^augustus$|^fgenesh$/
 	  ){
 	   warn "WARNING: the predictor $p does not support prokaryotic organisms\n".
 	       "and will be ignored.\n\n";
@@ -2943,13 +2845,13 @@ sub load_control_files {
    my @run = split(',', $CTL_OPT{run});
 
    foreach my $p (@run) {
-      if ($p !~ /^snap$|^augustus$|^fgenesh$|^genemark$|^jigsaw$/) {
+      if ($p !~ /^snap$|^augustus$|^fgenesh$|^genemark$/) {
 	 $error .= "ERROR: Invalid value defined for run: $p\n".
 	 "Valid entries are: snap, augustus, genemark, or fgenesh\n\n";
 	 next;
       }
       if($CTL_OPT{organism_type} eq 'prokaryotic' &&
-          $p =~ /^snap$|^augustus$|^fgenesh$|^jigsaw$/
+          $p =~ /^snap$|^augustus$|^fgenesh$/
 	 ){
            warn "WARNING: the predictor $p does not support prokaryotic organisms\n".
                "and will be ignored in option 'run'.\n\n";
@@ -3034,8 +2936,6 @@ sub load_control_files {
    push (@infiles, 'snap') if (grep {/snap/} @{$CTL_OPT{_run}});
    push (@infiles, 'augustus') if (grep {/augustus/} @{$CTL_OPT{_run}}); 
    push (@infiles, 'fgenesh') if (grep {/fgenesh/} @{$CTL_OPT{_run}});
-   push (@infiles, 'twinscan') if (grep {/twinscan/} @{$CTL_OPT{_run}});
-   push (@infiles, 'jigsaw') if (grep {/jigsaw/} @{$CTL_OPT{_run}});
    push (@infiles, 'repeat_protein') if ($CTL_OPT{repeat_protein});
    push (@infiles, 'RepeatMasker') if($CTL_OPT{rmlib});
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
@@ -3065,7 +2965,7 @@ sub load_control_files {
       elsif ((my @files = split(/\,/, $CTL_OPT{$in})) > 1){#handle comma separated list
 	  my %uniq; #make files uniq
 	  @files = grep {! $uniq{$_}++} @files;
-	  my @non = grep {! -f $_} @files;
+	  my @non = grep {/^([^\:]+)/ && ! -f $1} @files;
 	  $error .= "ERROR: The \'$in\' files ".join(', ', @files)." do not exist.\n".
 	      "Please check settings in the control files.\n\n"if(@non);
 
@@ -3352,85 +3252,85 @@ sub generate_control_files {
        open (OUT, "> $dir/$app\_opts.$ext");
        print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
        print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
-       print OUT "genome:$O{genome} #genome sequence file in fasta format\n";
+       print OUT "genome=$O{genome} #genome sequence file in fasta format\n";
        print OUT "\n";
        print OUT "#-----Re-annotation Options (Only MAKER derived GFF3)\n" if(!$ev);
        print OUT "#-----MAKER Derived GFF3 Annotations to Evaluate (genome fasta is internal to GFF3)\n" if($ev);
-       print OUT "genome_gff:$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
-       print OUT "genome_gff:$O{genome_gff} #MAKER derived gff3 file\n" if($ev);
-       print OUT "est_pass:$O{est_pass} #use ests in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "altest_pass:$O{altest_pass} #use alternate organism ests in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "protein_pass:$O{protein_pass} #use proteins in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "rm_pass:$O{rm_pass} #use repeats in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "model_pass:$O{model_pass} #use gene models in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "pred_pass:$O{pred_pass} #use ab-initio predictions in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "other_pass:$O{other_pass} #passthrough everything else in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "genome_gff=$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
+       print OUT "genome_gff=$O{genome_gff} #MAKER derived gff3 file\n" if($ev);
+       print OUT "est_pass=$O{est_pass} #use ests in genome_gff: 1 = yes, 0 = no\n";
+       print OUT "altest_pass=$O{altest_pass} #use alternate organism ests in genome_gff: 1 = yes, 0 = no\n";
+       print OUT "protein_pass=$O{protein_pass} #use proteins in genome_gff: 1 = yes, 0 = no\n";
+       print OUT "rm_pass=$O{rm_pass} #use repeats in genome_gff: 1 = yes, 0 = no\n";
+       print OUT "model_pass=$O{model_pass} #use gene models in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "pred_pass=$O{pred_pass} #use ab-initio predictions in genome_gff: 1 = yes, 0 = no\n";
+       print OUT "other_pass=$O{other_pass} #passthrough everything else in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
-       print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file\n" if($ev);
+       print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file\n" if($ev);
        print OUT "\n"if($ev);
        print OUT "#-----EST Evidence (you should provide a value for at least one)\n";
-       print OUT "est:$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
-       print OUT "est_reads:$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
-       print OUT "altest:$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
-       print OUT "est_gff:$O{est_gff} #EST evidence from an external gff3 file\n";
-       print OUT "altest_gff:$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";
+       print OUT "est=$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
+       print OUT "est_reads=$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
+       print OUT "altest=$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
+       print OUT "est_gff=$O{est_gff} #EST evidence from an external gff3 file\n";
+       print OUT "altest_gff=$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";
        print OUT "\n";
        print OUT "#-----Protein Homology Evidence (you should provide a value for at least one)\n";
-       print OUT "protein:$O{protein}  #protein sequence file in fasta format\n";
-       print OUT "protein_gff:$O{protein_gff}  #protein homology evidence from an external gff3 file\n";
+       print OUT "protein=$O{protein}  #protein sequence file in fasta format\n";
+       print OUT "protein_gff=$O{protein_gff}  #protein homology evidence from an external gff3 file\n";
        print OUT "\n";
        print OUT "#-----Repeat Masking (leave values blank to skip)\n";
-       print OUT "model_org:$O{model_org} #model organism for RepBase masking in RepeatMasker\n";
-       print OUT "repeat_protein:$O{repeat_protein} #a database of transposable element proteins in fasta format\n";
-       print OUT "rmlib:$O{rmlib} #an organism specific repeat library in fasta format\n";
-       print OUT "rm_gff:$O{rm_gff} #repeat elements from an external gff3 file\n";
+       print OUT "model_org=$O{model_org} #model organism for RepBase masking in RepeatMasker\n";
+       print OUT "repeat_protein=$O{repeat_protein} #a database of transposable element proteins in fasta format\n";
+       print OUT "rmlib=$O{rmlib} #an organism specific repeat library in fasta format\n";
+       print OUT "rm_gff=$O{rm_gff} #repeat elements from an external gff3 file\n";
        print OUT "\n";
        print OUT "#-----Gene Prediction Options\n" if(!$ev);
        print OUT "#-----EVALUATOR Ab-Initio Comparison Options\n" if($ev);
-       print OUT "organism_type:$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
-       print OUT "run:$O{run} #ab-initio methods to run (separate multiple values by ',')\n" if($ev);
-       print OUT "predictor:$O{predictor} #prediction methods for annotations (separate multiple values by ',')\n" if(!$ev);
-       print OUT "unmask:$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
-       print OUT "snaphmm:$O{snaphmm} #SNAP HMM model\n";
-       print OUT "gmhmm:$O{gmhmm} #GeneMark HMM model\n";
-       print OUT "augustus_species:$O{augustus_species} #Augustus gene prediction model\n";
-       print OUT "fgenesh_par_file:$O{fgenesh_par_file} #Fgenesh parameter file\n";
-       print OUT "model_gff:$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
-       print OUT "pred_gff:$O{pred_gff} #ab-initio predictions from an external gff3 file\n";
+       print OUT "organism_type=$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
+       print OUT "run=$O{run} #ab-initio methods to run (separate multiple values by ',')\n" if($ev);
+       print OUT "predictor=$O{predictor} #prediction methods for annotations (separate multiple values by ',')\n" if(!$ev);
+       print OUT "unmask=$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
+       print OUT "snaphmm=$O{snaphmm} #SNAP HMM model\n";
+       print OUT "gmhmm=$O{gmhmm} #GeneMark HMM model\n";
+       print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction model\n";
+       print OUT "fgenesh_par_file=$O{fgenesh_par_file} #Fgenesh parameter file\n";
+       print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
+       print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external gff3 file\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Type Options (features maker doesn't recognize)\n" if(!$ev);
-       print OUT "other_gff:$O{other_gff} #features to pass-through to final output from an extenal gff3 file\n" if(!$ev);
+       print OUT "other_gff=$O{other_gff} #features to pass-through to final output from an extenal gff3 file\n" if(!$ev);
        print OUT "\n" if(!$ev);
        print OUT "#-----External Application Specific Options\n";
-       print OUT "alt_peptide:$O{alt_peptide} #amino acid used to replace non standard amino acids in blast databases\n";
-       print OUT "cpus:$O{cpus} #max number of cpus to use in BLAST and RepeatMasker\n";
+       print OUT "alt_peptide=$O{alt_peptide} #amino acid used to replace non standard amino acids in blast databases\n";
+       print OUT "cpus=$O{cpus} #max number of cpus to use in BLAST and RepeatMasker\n";
        print OUT "\n";
        print OUT "#-----MAKER Specific Options\n";
-       print OUT "evaluate:$O{evaluate} #run EVALUATOR on all annotations, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "max_dna_len:$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
-       print OUT "min_contig:$O{min_contig} #all contigs from the input genome file below this size will be skipped\n" if(!$ev);
-       print OUT "min_protein:$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
-       print OUT "AED_threshold:$O{AED_threshold} #Maximum Annotation Edit Distance allowed for annotations (bound by 0 and 1)\n" if(!$ev);
-       print OUT "softmask:$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
-       print OUT "split_hit:$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
-       print OUT "pred_flank:$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
-       print OUT "single_exon:$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
-       print OUT "single_length:$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
-       print OUT "keep_preds:$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "map_forward:$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "retry:$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
-       print OUT "clean_try:$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
-       print OUT "clean_up:$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
-       print OUT "TMP:$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
+       print OUT "evaluate=$O{evaluate} #run EVALUATOR on all annotations, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "max_dna_len=$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
+       print OUT "min_contig=$O{min_contig} #all contigs from the input genome file below this size will be skipped\n" if(!$ev);
+       print OUT "min_protein=$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
+       print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed for annotations (bound by 0 and 1)\n" if(!$ev);
+       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
+       print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
+       print OUT "pred_flank=$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
+       print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
+       print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
+       print OUT "keep_preds=$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "map_forward=$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "retry=$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
+       print OUT "clean_try=$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
+       print OUT "clean_up=$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
+       print OUT "TMP=$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
        print OUT "\n";
        print OUT "#-----EVALUATOR Control Options\n";
-       print OUT "side_thre:$O{side_thre}\n";
-       print OUT "eva_window_size:$O{eva_window_size}\n";
-       print OUT "eva_split_hit:$O{eva_split_hit}\n";
-       print OUT "eva_hspmax:$O{eva_hspmax}\n";
-       print OUT "eva_gspmax:$O{eva_gspmax}\n";
-       print OUT "enable_fathom:$O{enable_fathom}\n";
+       print OUT "side_thre=$O{side_thre}\n";
+       print OUT "eva_window_size=$O{eva_window_size}\n";
+       print OUT "eva_split_hit=$O{eva_split_hit}\n";
+       print OUT "eva_hspmax=$O{eva_hspmax}\n";
+       print OUT "eva_gspmax=$O{eva_gspmax}\n";
+       print OUT "enable_fathom=$O{enable_fathom}\n";
        close (OUT);
    }
     
@@ -3438,35 +3338,35 @@ sub generate_control_files {
    if($type eq 'all' || $type eq 'bopts'){
        open (OUT, "> $dir/$app\_bopts.$ext");
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
-       print OUT "blast_type:$O{blast_type} #set to 'wublast' or 'ncbi'\n";
+       print OUT "blast_type=$O{blast_type} #set to 'wublast' or 'ncbi'\n";
        print OUT "\n";
-       print OUT "pcov_blastn:$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
-       print OUT "pid_blastn:$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
-       print OUT "eval_blastn:$O{eval_blastn} #Blastn eval cutoff\n";
-       print OUT "bit_blastn:$O{bit_blastn} #Blastn bit cutoff\n";
+       print OUT "pcov_blastn=$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
+       print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
+       print OUT "eval_blastn=$O{eval_blastn} #Blastn eval cutoff\n";
+       print OUT "bit_blastn=$O{bit_blastn} #Blastn bit cutoff\n";
        print OUT "\n";
-       print OUT "pcov_blastx:$O{pcov_blastx} #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
-       print OUT "pid_blastx:$O{pid_blastx} #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
-       print OUT "eval_blastx:$O{eval_blastx} #Blastx eval cutoff\n";
-       print OUT "bit_blastx:$O{bit_blastx} #Blastx bit cutoff\n";
+       print OUT "pcov_blastx=$O{pcov_blastx} #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
+       print OUT "pid_blastx=$O{pid_blastx} #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
+       print OUT "eval_blastx=$O{eval_blastx} #Blastx eval cutoff\n";
+       print OUT "bit_blastx=$O{bit_blastx} #Blastx bit cutoff\n";
        print OUT "\n";
-       print OUT "pcov_rm_blastx:$O{pcov_rm_blastx} #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
-       print OUT "pid_rm_blastx:$O{pid_rm_blastx} #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
-       print OUT "eval_rm_blastx:$O{eval_rm_blastx} #Blastx eval cutoff for transposable element masking\n";
-       print OUT "bit_rm_blastx:$O{bit_rm_blastx} #Blastx bit cutoff for transposable element masking\n";
+       print OUT "pcov_rm_blastx=$O{pcov_rm_blastx} #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
+       print OUT "pid_rm_blastx=$O{pid_rm_blastx} #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
+       print OUT "eval_rm_blastx=$O{eval_rm_blastx} #Blastx eval cutoff for transposable element masking\n";
+       print OUT "bit_rm_blastx=$O{bit_rm_blastx} #Blastx bit cutoff for transposable element masking\n";
        print OUT "\n";
-       print OUT "pcov_tblastx:$O{pcov_tblastx} #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
-       print OUT "pid_tblastx:$O{pid_tblastx} #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
-       print OUT "eval_tblastx:$O{eval_tblastx} #tBlastx eval cutoff\n";
-       print OUT "bit_tblastx:$O{bit_tblastx} #tBlastx bit cutoff\n";
+       print OUT "pcov_tblastx=$O{pcov_tblastx} #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
+       print OUT "pid_tblastx=$O{pid_tblastx} #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
+       print OUT "eval_tblastx=$O{eval_tblastx} #tBlastx eval cutoff\n";
+       print OUT "bit_tblastx=$O{bit_tblastx} #tBlastx bit cutoff\n";
        print OUT "\n";
-       print OUT "eva_pcov_blastn:$O{eva_pcov_blastn} #EVALUATOR Blastn Percent Coverage Threshold EST-Genome Alignments\n";
-       print OUT "eva_pid_blastn:$O{eva_pid_blastn} #EVALUATOR Blastn Percent Identity Threshold EST-Genome Alignments\n";
-       print OUT "eva_eval_blastn:$O{eva_eval_blastn} #EVALUATOR Blastn eval cutoff\n";
-       print OUT "eva_bit_blastn:$O{eva_bit_blastn} #EVALUATOR Blastn bit cutoff\n";
+       print OUT "eva_pcov_blastn=$O{eva_pcov_blastn} #EVALUATOR Blastn Percent Coverage Threshold EST-Genome Alignments\n";
+       print OUT "eva_pid_blastn=$O{eva_pid_blastn} #EVALUATOR Blastn Percent Identity Threshold EST-Genome Alignments\n";
+       print OUT "eva_eval_blastn=$O{eva_eval_blastn} #EVALUATOR Blastn eval cutoff\n";
+       print OUT "eva_bit_blastn=$O{eva_bit_blastn} #EVALUATOR Blastn bit cutoff\n";
        print OUT "\n";
-       print OUT "ep_score_limit:$O{ep_score_limit} #Exonerate protein percent of maximal score threshold\n";
-       print OUT "en_score_limit:$O{en_score_limit} #Exonerate nucleotide percent of maximal score threshold\n";
+       print OUT "ep_score_limit=$O{ep_score_limit} #Exonerate protein percent of maximal score threshold\n";
+       print OUT "en_score_limit=$O{en_score_limit} #Exonerate nucleotide percent of maximal score threshold\n";
        close(OUT);
    }
 
@@ -3474,81 +3374,78 @@ sub generate_control_files {
    if($type eq 'all' || $type eq 'exe'){
        open (OUT, "> $dir/$app\_exe.$ext");
        print OUT "#-----Location of Executables Used by MAKER/EVALUATOR\n";
-       print OUT "formatdb:$O{formatdb} #location of NCBI formatdb executable\n";
-       print OUT "blastall:$O{blastall} #location of NCBI blastall executable\n";
-       print OUT "xdformat:$O{xdformat} #location of WUBLAST xdformat executable\n";
-       print OUT "blastn:$O{blastn} #location of WUBLAST blastn executable\n";
-       print OUT "blastx:$O{blastx} #location of WUBLAST blastx executable\n";
-       print OUT "tblastx:$O{tblastx} #location of WUBLAST tblastx executable\n";
-       print OUT "RepeatMasker:$O{RepeatMasker} #location of RepeatMasker executable\n";
-       print OUT "exonerate:$O{exonerate} #location of exonerate executable\n";
+       print OUT "formatdb=$O{formatdb} #location of NCBI formatdb executable\n";
+       print OUT "blastall=$O{blastall} #location of NCBI blastall executable\n";
+       print OUT "xdformat=$O{xdformat} #location of WUBLAST xdformat executable\n";
+       print OUT "blastn=$O{blastn} #location of WUBLAST blastn executable\n";
+       print OUT "blastx=$O{blastx} #location of WUBLAST blastx executable\n";
+       print OUT "tblastx=$O{tblastx} #location of WUBLAST tblastx executable\n";
+       print OUT "RepeatMasker=$O{RepeatMasker} #location of RepeatMasker executable\n";
+       print OUT "exonerate=$O{exonerate} #location of exonerate executable\n";
        print OUT "\n";
        print OUT "#-----Ab-initio Gene Prediction Algorithms\n";
-       print OUT "snap:$O{snap} #location of snap executable\n";
-       print OUT "gmhmme3:$O{gmhmme3} #location of eukaryotic genemark executable\n";
-       print OUT "gmhmmp:$O{gmhmmp} #location of prokaryotic genemark executable\n";
-       print OUT "augustus:$O{augustus} #location of augustus executable\n";
-       print OUT "fgenesh:$O{fgenesh} #location of fgenesh executable\n";
-       print OUT "twinscan:$O{twinscan} #location of twinscan executable (not yet implemented)\n";
+       print OUT "snap=$O{snap} #location of snap executable\n";
+       print OUT "gmhmme3=$O{gmhmme3} #location of eukaryotic genemark executable\n";
+       print OUT "gmhmmp=$O{gmhmmp} #location of prokaryotic genemark executable\n";
+       print OUT "augustus=$O{augustus} #location of augustus executable\n";
+       print OUT "fgenesh=$O{fgenesh} #location of fgenesh executable\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
-       print OUT "jigsaw:$O{jigsaw} #location of jigsaw executable (not yet implemented)\n";
-       print OUT "qrna:$O{qrna} #location of qrna executable (not yet implemented)\n";
-       print OUT "fathom:$O{fathom} #location of fathom executable (not yet implemented)\n";
-       print OUT "probuild:$O{probuild} #location of probuild executable (required for genemark)\n";
-       close(OUT);    
+       print OUT "fathom=$O{fathom} #location of fathom executable (experimental)\n";
+       print OUT "probuild=$O{probuild} #location of probuild executable (required for genemark)\n";
+       close(OUT);
    }
 
    #--build server.ctl file
    if($type eq 'server'){
        open (OUT, "> $dir/server.$ext");
        print OUT "#-----Database Setup\n";
-       print OUT "DBI:$O{DBI} #interface type to database\n";
-       print OUT "dbname:$O{dbname} #database name\n";
-       print OUT "host:$O{host} #host on which database is found\n";
-       print OUT "port:$O{port} #port on host to access database\n";
-       print OUT "username:$O{username} #username to connect to database\n";
-       print OUT "password:$O{password} #password to connect to database\n";
+       print OUT "DBI=$O{DBI} #interface type to database\n";
+       print OUT "dbname=$O{dbname} #database name\n";
+       print OUT "host=$O{host} #host on which database is found\n";
+       print OUT "port=$O{port} #port on host to access database\n";
+       print OUT "username=$O{username} #username to connect to database\n";
+       print OUT "password=$O{password} #password to connect to database\n";
        print OUT "\n";
        print OUT "#-----Communication Options\n";
-       print OUT "admin_email:$O{admin_email} #Address for sending error and status information\n";
-       print OUT "smtp_server:$O{smtp_server} #Outgoing e-mail server\n";
+       print OUT "admin_email=$O{admin_email} #Address for sending error and status information\n";
+       print OUT "smtp_server=$O{smtp_server} #Outgoing e-mail server\n";
        print OUT "\n";
        print OUT "#-----Web Setup\n";
-       print OUT "apache_user:$O{apache_user} #username apache runs as\n";
-       print OUT "web_address:$O{web_address} #base web address to server hosting MWAS\n";
-       print OUT "cgi_dir:$O{cgi_dir} #web accesible directory to house MWAS CGI content\n";
-       print OUT "cgi_web:$O{cgi_web} #url to cgi_dir above (can be relative)\n";
-       print OUT "html_dir:$O{html_dir} #web accesible directory to house MWAS HTML conent\n";
-       print OUT "html_web:$O{html_web} #url to html_dir (can be relative)\n";
-       print OUT "data_dir:$O{data_dir} #directory for saving user uploaded files, running jobs, and storing results\n";
-       print OUT "font_file:$O{font_file} #font file for webpage CAPTCHA\n";
+       print OUT "apache_user=$O{apache_user} #username apache runs as\n";
+       print OUT "web_address=$O{web_address} #base web address to server hosting MWAS\n";
+       print OUT "cgi_dir=$O{cgi_dir} #web accesible directory to house MWAS CGI content\n";
+       print OUT "cgi_web=$O{cgi_web} #url to cgi_dir above (can be relative)\n";
+       print OUT "html_dir=$O{html_dir} #web accesible directory to house MWAS HTML conent\n";
+       print OUT "html_web=$O{html_web} #url to html_dir (can be relative)\n";
+       print OUT "data_dir=$O{data_dir} #directory for saving user uploaded files, running jobs, and storing results\n";
+       print OUT "font_file=$O{font_file} #font file for webpage CAPTCHA\n";
        print OUT "\n";
        print OUT "#-----External Viewer Setup\n";
-       print OUT "soba_url:$O{soba_url} #url to Sequence Ontology SOBA CGI script\n";
-       print OUT "APOLLO_ROOT:$O{APOLLO_ROOT} #base directory for Apollo installation.\n";
-       print OUT "JBROWSE_ROOT:$O{JBROWSE_ROOT} #base directory for JBrowse installation.\n";
-       print OUT "GBROWSE_MASTER:$O{GBROWSE_MASTER} #path to GBrowse.conf file.\n";
+       print OUT "soba_url=$O{soba_url} #url to Sequence Ontology SOBA CGI script\n";
+       print OUT "APOLLO_ROOT=$O{APOLLO_ROOT} #base directory for Apollo installation.\n";
+       print OUT "JBROWSE_ROOT=$O{JBROWSE_ROOT} #base directory for JBrowse installation.\n";
+       print OUT "GBROWSE_MASTER=$O{GBROWSE_MASTER} #path to GBrowse.conf file.\n";
        print OUT "\n";
        print OUT "#-----Environmental Variables for Dependencies\n";
-       print OUT "ZOE:$O{ZOE} #required by SNAP, see SNAP documentation.\n";
-       print OUT "AUGUSTUS_CONFIG_PATH:$O{AUGUSTUS_CONFIG_PATH} #required by AUGUSTUS, see AUGUSTUS documentation.\n";
+       print OUT "ZOE=$O{ZOE} #required by SNAP, see SNAP documentation.\n";
+       print OUT "AUGUSTUS_CONFIG_PATH=$O{AUGUSTUS_CONFIG_PATH} #required by AUGUSTUS, see AUGUSTUS documentation.\n";
        print OUT "\n";
        print OUT "#-----MAKER Server Specific Options\n";
-       print OUT "use_login:$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";
-       print OUT "allow_guest:$O{allow_guest} #enable guest accounts on the server, 1 = yes, 0 = no\n";
-       print OUT "allow_register:$O{allow_register} #allow users to register themselves, 1 = yes, 0 = no\n";
-       print OUT "tutorials:$O{tutorials} #show example data on \"New Job\" screen, 1 = yes, 0 = no\n";
-       print OUT "max_cpus:$O{max_cpus} #maximum number of cpus that can be dedicated to all MAKER jobs\n";
-       print OUT "job_cpus:$O{job_cpus} #maximum number of cpus that can be used by a single MAKER job\n";
-       print OUT "max_submit_user:$O{max_submit_user} #maximum submission size for registered users (0 = no limit)\n";
-       print OUT "max_submit_guest:$O{max_submit_guest} #maximum submission size for guest users (0 = no limit)\n";
-       print OUT "persist_user:$O{persist_user} #time results persist for registered users, in hours (0 = no limit)\n";
-       print OUT "persist_guest:$O{persist_guest} #time results persist for guest users, in hours (0 = no limit)\n";
-       print OUT "inactive_user:$O{inactive_user} #time user account can be inactive, in days (0 = no limit)\n";
-       print OUT "inactive_guest:$O{inactive_guest} #time guest account can be inactive, in days (0 = no limit)\n";
-       print OUT "MPI:$O{MPI} #use mpi_maker instead of maker\n";
-       print OUT "mpiexec:$O{mpiexec} #mpiexec command line for running MPI\n";
+       print OUT "use_login=$O{use_login} #whether to require login to access the web interface, 1 = yes, 0 = no\n";
+       print OUT "allow_guest=$O{allow_guest} #enable guest accounts on the server, 1 = yes, 0 = no\n";
+       print OUT "allow_register=$O{allow_register} #allow users to register themselves, 1 = yes, 0 = no\n";
+       print OUT "tutorials=$O{tutorials} #show example data on \"New Job\" screen, 1 = yes, 0 = no\n";
+       print OUT "max_cpus=$O{max_cpus} #maximum number of cpus that can be dedicated to all MAKER jobs\n";
+       print OUT "job_cpus=$O{job_cpus} #maximum number of cpus that can be used by a single MAKER job\n";
+       print OUT "max_submit_user=$O{max_submit_user} #maximum submission size for registered users (0 = no limit)\n";
+       print OUT "max_submit_guest=$O{max_submit_guest} #maximum submission size for guest users (0 = no limit)\n";
+       print OUT "persist_user=$O{persist_user} #time results persist for registered users, in hours (0 = no limit)\n";
+       print OUT "persist_guest=$O{persist_guest} #time results persist for guest users, in hours (0 = no limit)\n";
+       print OUT "inactive_user=$O{inactive_user} #time user account can be inactive, in days (0 = no limit)\n";
+       print OUT "inactive_guest=$O{inactive_guest} #time guest account can be inactive, in days (0 = no limit)\n";
+       print OUT "MPI=$O{MPI} #use mpi_maker instead of maker\n";
+       print OUT "mpiexec=$O{mpiexec} #mpiexec command line for running MPI\n";
 
        close(OUT);    
    }

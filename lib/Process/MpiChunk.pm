@@ -293,6 +293,7 @@ sub _go {
    my $VARS = shift @_;
 
    my $next_level = $level + 1;
+   my $result_stat = 1;
    my @chunks;
    my @args;
    my %results;
@@ -348,7 +349,7 @@ sub _go {
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
 	    #-------------------------CODE
 	 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (fasta => $fasta,
 			q_def => $q_def,
 			q_seq_ref => $q_seq_ref,
@@ -360,7 +361,14 @@ sub _go {
 			LOG => $LOG,
 			LOCK => $LOCK
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -414,9 +422,9 @@ sub _go {
 	    $fasta_chunker->load_chunks();
 
 	    #--build an index of the databases
-	    my $proteins = $VARS->{CTL_OPT}{_protein};
-	    my $trans    = $VARS->{CTL_OPT}{_est};
-	    my $altests  = $VARS->{CTL_OPT}{_altest};
+	    my $proteins = $VARS->{CTL_OPT}{_p_db};
+	    my $trans    = $VARS->{CTL_OPT}{_e_db};
+	    my $altests  = $VARS->{CTL_OPT}{_a_db};
 	    my $fasta_t_index = GI::build_fasta_index($trans) if($trans); 
 	    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
 	    my $fasta_a_index = GI::build_fasta_index($altests) if($altests); 	 
@@ -424,7 +432,7 @@ sub _go {
 	    my $chunk = $fasta_chunker->next_chunk();
 	    #-------------------------CODE
 	 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (GFF3 => $GFF3,
 			fasta_chunker => $fasta_chunker,
 			chunk => $chunk,
@@ -432,7 +440,14 @@ sub _go {
 			fasta_p_index => $fasta_p_index,
 			fasta_a_index => $fasta_a_index
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -513,13 +528,20 @@ sub _go {
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (rm_gff_keepers => $rm_gff_keepers,
 			rm_rb_keepers => $rm_rb_keepers,
 			rm_sp_keepers => $rm_sp_keepers,
 			chunk => $chunk
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -530,10 +552,15 @@ sub _go {
 	 $level_status = 'doing blastx repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    foreach my $db (@{$VARS->{CTL_OPT}{r_db}}) {
-	       $VARS->{db} = $db;
-	       my $chunk = new Process::MpiChunk($level, $VARS);
-	       push(@chunks, $chunk);
+	    $VARS->{rm_blastx_keepers} = []; #reset
+	    $VARS->{res_dir} = []; #reset
+
+	    foreach my $db (@{$VARS->{CTL_OPT}{_r_db}}){
+		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+                $VARS->{db} = $db;
+                $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		my $chunk = new Process::MpiChunk($level, $VARS);
+		push(@chunks, $chunk);
 	    }
 	    #-------------------------CHUNKER
 	 }
@@ -544,6 +571,7 @@ sub _go {
 			the_void
 			safe_seq_id
 			LOG
+			LOG_FLAG
 			CTL_OPT}
 		    );
 	    #------------------------ARGS_IN
@@ -556,27 +584,44 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $LOG_FLAG = ($self->id =~ /^\d+\:\d+\:0$/) ? 1 : 0;
+	    my $last = $CTL_OPT{_r_db}->[-1];
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    my $res_dir;
-	    if ($CTL_OPT{_repeat_protein}) {
+	    my $rm_blastx_keepers = [];
+	    if ($db) {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
-	       $res_dir = GI::blastx_as_chunks($chunk,
-					       $db,
-					       $CTL_OPT{repeat_protein},
-					       $the_void,
-					       $safe_seq_id,
-					       \%CTL_OPT,
-					       $self->{RANK},
-					       $LOG,
-					       $LOG_FLAG
-					      );
+	       ($rm_blastx_keepers, $res_dir) = GI::repeatrunner_as_chunks($chunk,
+									   $db,
+									   $the_void,
+									   $safe_seq_id,
+									   \%CTL_OPT,
+									   $self->{RANK},
+									   $LOG,
+									   $LOG_FLAG
+									   );
+		 
+	       $rm_blastx_keepers = GI::clean_blast_hits($rm_blastx_keepers,
+							 $CTL_OPT{pcov_rm_blastx},
+							 $CTL_OPT{pid_rm_blastx},
+							 $CTL_OPT{eval_rm_blastx},
+							 0 #contiguity flag
+							 );
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
-	    %results = (res_dir => $res_dir);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	    %results = ( rm_blastx_keepers => $rm_blastx_keepers,
+			 res_dir => $res_dir
+		       );
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -595,6 +640,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+		        rm_blastx_keepers
 			LOG
 			CTL_OPT}
 		    );
@@ -605,35 +651,34 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
 	    my $res_dir = $VARS->{res_dir};
+	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
 	    my $LOG = $VARS->{LOG};
 
-	    my $rm_blastx_keepers = [];
-	    if ($res_dir) {
-	       $rm_blastx_keepers = GI::collect_blastx($chunk,
-						       $res_dir,
-						       \%CTL_OPT,
-						       $LOG
-						      );
+	    $rm_blastx_keepers = GI::collect_blast($chunk,
+						   $rm_blastx_keepers,
+						   $res_dir,
+						   $LOG
+						   );
+	    
+	    #mask the chunk
+	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers);
 
-	       $rm_blastx_keepers = GI::clean_blast_hits($rm_blastx_keepers,
-							 $CTL_OPT{pcov_rm_blastx},
-							 $CTL_OPT{pid_rm_blastx},
-							 $CTL_OPT{eval_rm_blastx},
-							 0 #contiguity flag
-							 );
-	 
-	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers);
-	    }
 	    $res_dir = undef;
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
-	    %results = ( rm_blastx_keepers=> $rm_blastx_keepers,
-			 chunk => $chunk,
-			 res_dir => $res_dir
+	    #------------------------RETURN
+	    %results = ( chunk => $chunk,
+			 res_dir => $res_dir,
+			 rm_blastx_keepers => $rm_blastx_keepers
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -688,7 +733,7 @@ sub _go {
 	    $masked_total_seq .= $chunk->seq();
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (rm_keepers => $rm_keepers,
 			masked_total_seq => $masked_total_seq,
 			rm_gff_keepers => [], #clear memory
@@ -696,7 +741,14 @@ sub _go {
 			rm_sp_keepers => [],  #clear memory
 			rm_blastx_keepers => [] #clear memory
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -782,12 +834,19 @@ sub _go {
 	    my $qra_preds = [];
 	    #-------------------------CODE
 	 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (masked_fasta => $masked_fasta,
 			preds => $preds,
 			qra_preds => $qra_preds
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -826,12 +885,19 @@ sub _go {
 	    my $chunk = $fasta_chunker->next_chunk();
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (fasta_chunker => $fasta_chunker,
 			masked_fasta => $masked_fasta,
 			chunk => $chunk
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -842,10 +908,15 @@ sub _go {
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    foreach my $db (@{$VARS->{CTL_OPT}{e_db}}) {
-	       $VARS->{db} = $db;
-	       my $chunk = new Process::MpiChunk($level, $VARS);
-	       push(@chunks, $chunk);
+	    $VARS->{blastn_keepers} = []; #reset
+	    $VARS->{res_dir} = []; #reset
+	    
+            foreach my $db (@{$VARS->{CTL_OPT}{_e_db}}){
+                $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+		$VARS->{db} = $db;
+		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		my $chunk = new Process::MpiChunk($level, $VARS);
+		push(@chunks, $chunk);
 	    }
 	    #-------------------------CHUNKER
 	 }
@@ -856,6 +927,7 @@ sub _go {
 			the_void
 			safe_seq_id
 			LOG
+			LOG_FLAG
 			CTL_OPT}
 		    );
 	    #------------------------ARGS_IN
@@ -868,31 +940,39 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $LOG_FLAG = ($self->id =~ /^\d+\:\d+\:0$/) ? 1 : 0;
+	    my $last = $CTL_OPT{_e_db}->[-1];
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    #==BLAST ANALYSIS HERE
 	    #-blastn search the file against ESTs
 	    my $res_dir;
-	    if ($CTL_OPT{_est}) {
+	    my $blastn_keepers = [];
+	    if ($db) {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
-	       $res_dir = GI::blastn_as_chunks($chunk,
-					       $db,
-					       $CTL_OPT{est},					       
-					       $the_void,
-					       $safe_seq_id,
-					       \%CTL_OPT,
-					       $self->{RANK},
-					       $LOG,
-					       $LOG_FLAG
-					      );
+	       ($blastn_keepers, $res_dir) = GI::blastn_as_chunks($chunk,
+								  $db,
+								  $the_void,
+								  $safe_seq_id,
+								  \%CTL_OPT,
+								  $self->{RANK},
+								  $LOG,
+								  $LOG_FLAG
+								  );
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (res_dir => $res_dir,
-			chunk => $chunk
+			blastn_keepers => $blastn_keepers
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -911,6 +991,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+			blastn_keepers
 			masked_fasta
 			fasta_t_index
 			holdover_blastn
@@ -925,6 +1006,7 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $masked_fasta = $VARS->{masked_fasta};
 	    my $fasta_t_index = $VARS->{fasta_t_index};
 	    my $holdover_blastn = $VARS->{holdover_blastn};
@@ -933,14 +1015,11 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 
-	    my $blastn_keepers = [];
-	    if ($res_dir) {
-	       $blastn_keepers = GI::collect_blastn($chunk,
-						    $res_dir,
-						    \%CTL_OPT,
-						    $LOG
-						   );
-	    }
+	    $blastn_keepers = GI::collect_blast($chunk,
+						$blastn_keepers,
+						$res_dir,
+						$LOG
+						);
 
 	    #==merge in heldover Phathits from last round
 	    if ($chunk->number != 0) { #if not first chunk
@@ -969,12 +1048,19 @@ sub _go {
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (holdover_blastn => $holdover_blastn,
 			blastn_keepers => $blastn_keepers,
 			res_dir => undef
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -985,11 +1071,16 @@ sub _go {
 	 $level_status = 'doing tblastx of alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    foreach my $db (@{$VARS->{CTL_OPT}{a_db}}) {
-	       $VARS->{db} = $db;
-	       my $chunk = new Process::MpiChunk($level, $VARS);
-	       push(@chunks, $chunk);
-	    }
+	    $VARS->{tblastx_keepers} = []; #reset
+	    $VARS->{res_dir} = []; #reset
+
+            foreach my $db (@{$VARS->{CTL_OPT}{_a_db}}){
+                $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+		$VARS->{db} = $db;
+		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		my $chunk = new Process::MpiChunk($level, $VARS);
+		push(@chunks, $chunk);
+            }
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -999,6 +1090,7 @@ sub _go {
 			the_void
 			safe_seq_id
 			LOG
+			LOG_FLAG
 			CTL_OPT}
 		    );
 	    #------------------------ARGS_IN
@@ -1011,28 +1103,37 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $LOG_FLAG = ($self->id =~ /^\d+\:\d+\:0$/) ? 1 : 0;
-
+	    my $last = $CTL_OPT{_a_db}->[-1];
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    my $res_dir;
-	    if ($CTL_OPT{_altest}) {
+	    my $tblastx_keepers = [];
+	    if ($db) {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
-	       $res_dir = GI::tblastx_as_chunks($chunk,
-						$db,
-						$CTL_OPT{altest},
-						$the_void,
-						$safe_seq_id,
-						\%CTL_OPT,
-						$self->{RANK},
-						$LOG,
-						$LOG_FLAG
-					       );
+	       ($tblastx_keepers, $res_dir) = GI::tblastx_as_chunks($chunk,
+								    $db,
+								    $the_void,
+								    $safe_seq_id,
+								    \%CTL_OPT,
+								    $self->{RANK},
+								    $LOG,
+								    $LOG_FLAG
+								    );
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
-	    %results = (res_dir => $res_dir);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	    %results = (res_dir => $res_dir,
+			tblastx_keepers => $tblastx_keepers
+		       );
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1065,6 +1166,7 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $masked_fasta = $VARS->{masked_fasta};
 	    my $fasta_a_index = $VARS->{fasta_a_index};
 	    my $holdover_tblastx = $VARS->{holdover_tblastx};
@@ -1073,15 +1175,12 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 
-	    my $tblastx_keepers = [];
-	    if ($res_dir) {
-	       $tblastx_keepers = GI::collect_tblastx($chunk,
-						      $res_dir,
-						      \%CTL_OPT,
-						      $LOG
-						     );
-	    }
-
+	    $tblastx_keepers = GI::collect_blast($chunk,
+						 $tblastx_keepers,
+						 $res_dir,
+						 $LOG
+						 );
+	    
 	    #==merge in heldover Phathits from last round
 	    if ($chunk->number != 0) { #if not first chunk
 		#reviews heldover blast hits,
@@ -1109,12 +1208,19 @@ sub _go {
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (holdover_tblastx => $holdover_tblastx,
 			tblastx_keepers => $tblastx_keepers,
 			res_dir => undef
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1125,11 +1231,16 @@ sub _go {
 	 $level_status = 'doing blastx of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    foreach my $db (@{$VARS->{CTL_OPT}{p_db}}) {
-	       $VARS->{db} = $db;
-	       my $chunk = new Process::MpiChunk($level, $VARS);
-	       push(@chunks, $chunk);
-	    }
+	    $VARS->{blastx_keepers} = []; #reset
+	    $VARS->{res_dir} = []; #reset
+
+	    foreach my $db (@{$VARS->{CTL_OPT}{_p_db}}){
+		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+                $VARS->{db} = $db;
+                $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		my $chunk = new Process::MpiChunk($level, $VARS);
+		push(@chunks, $chunk);
+            }
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -1139,6 +1250,7 @@ sub _go {
 			the_void
 			safe_seq_id
 			LOG
+			LOG_FLAG
 			CTL_OPT}
 		    );
 	    #------------------------ARGS_IN
@@ -1151,31 +1263,39 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $LOG_FLAG = ($self->id =~ /^\d+\:\d+\:0$/) ? 1 : 0;
+	    my $last = $CTL_OPT{_p_db}->[-1];
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    #==BLAST ANALYSIS HERE
 	    #-blastx search the file against proteins
 	    my $res_dir;
-	    if ($CTL_OPT{_protein}) {
+	    my $blastx_keepers = [];
+	    if ($db) {
 		GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
-		$res_dir = GI::blastx_as_chunks($chunk,
-						$db,
-						$CTL_OPT{protein},					       
-						$the_void,
-						$safe_seq_id,
-						\%CTL_OPT,
-						$self->{RANK},
-						$LOG,
-						$LOG_FLAG
-						);
+		($blastx_keepers, $res_dir) = GI::blastx_as_chunks($chunk,
+								   $db,
+								   $the_void,
+								   $safe_seq_id,
+								   \%CTL_OPT,
+								   $self->{RANK},
+								   $LOG,
+								   $LOG_FLAG
+								   );
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (res_dir => $res_dir,
-			chunk => $chunk
+			blastx_keepers => $blastx_keepers
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1208,6 +1328,7 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
+	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $masked_fasta = $VARS->{masked_fasta};
 	    my $fasta_p_index = $VARS->{fasta_p_index};
 	    my $holdover_blastx = $VARS->{holdover_blastx};
@@ -1216,14 +1337,11 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 
-	    my $blastx_keepers = [];
-	    if ($res_dir) {
-	       $blastx_keepers = GI::collect_blastx($chunk,
-						    $res_dir,
-						    \%CTL_OPT,
-						    $LOG
-						   );
-	    }
+	    $blastx_keepers = GI::collect_blast($chunk,
+						$blastx_keepers,
+						$res_dir,
+						$LOG
+						);
 
 	    #==merge in heldover Phathits from last round
 	    if ($chunk->number != 0) { #if not first chunk
@@ -1252,12 +1370,19 @@ sub _go {
 	    }
 	    #-------------------------CODE
 	    
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (holdover_blastx => $holdover_blastx,
 			blastx_keepers => $blastx_keepers,
 			res_dir => undef
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1316,6 +1441,7 @@ sub _go {
 	    }
 
 	    #-clean the blastn hits
+	    #this must happen after exonerate (otherwise I filter out good hits)
 	    print STDERR "cleaning blastn...\n" unless $main::quiet;
 	    $blastn_keepers = GI::clean_blast_hits($blastn_keepers,
 						   $CTL_OPT{pcov_blastn},
@@ -1327,12 +1453,19 @@ sub _go {
 	    $blastn_keepers = GI::combine($blastn_keepers, $holdover_blastn);
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (exonerate_e_data => $exonerate_e_data,
 			blastn_keepers => $blastn_keepers,
 			holdover_blastn => $holdover_blastn,
 			);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1391,6 +1524,7 @@ sub _go {
 	    }
 	    
 	    #-clean the tblastx hits
+	    #this must happen after exonerate (otherwise I filter out good hits)
 	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
 	    $tblastx_keepers = GI::clean_blast_hits($tblastx_keepers,
 						    $CTL_OPT{pcov_tblastx},
@@ -1402,12 +1536,19 @@ sub _go {
 	    $tblastx_keepers = GI::combine($tblastx_keepers, $holdover_tblastx);
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (exonerate_a_data => $exonerate_a_data,
 			tblastx_keepers => $tblastx_keepers,
 			holdover_tblastx => $holdover_tblastx,
 			);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1467,6 +1608,7 @@ sub _go {
 	    }
 
 	    #-clean the blastx hits
+	    #this must happen after exonerate (otherwise I filter out good hits)
 	    print STDERR "cleaning blastx...\n" unless $main::quiet;
 	    $blastx_keepers = GI::clean_blast_hits($blastx_keepers,
 						   $CTL_OPT{pcov_blastx},
@@ -1478,12 +1620,19 @@ sub _go {
 	    $blastx_keepers = GI::combine($blastx_keepers, $holdover_blastx);
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (exonerate_p_data => $exonerate_p_data,
 			blastx_keepers => $blastx_keepers,
 			holdover_blastx => [],
 			);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1673,7 +1822,7 @@ sub _go {
 	    }
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (prot_gff_keepers => $prot_gff_keepers,
 			est_gff_keepers => $est_gff_keepers,
 			altest_gff_keepers => $altest_gff_keepers,
@@ -1696,7 +1845,14 @@ sub _go {
 			holdover_blastx => $holdover_blastx,
 			holdover_tblastx => $holdover_tblastx
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1840,9 +1996,16 @@ sub _go {
 	    
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (maker_anno => $maker_anno, annotations => $annotations, non_over => $non_over);
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1927,11 +2090,18 @@ sub _go {
 				   );
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (p_fastas => $p_fastas,
 			t_fastas => $t_fastas
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -1993,9 +2163,16 @@ sub _go {
 	    File::Path::rmtree ($the_void) if $CTL_OPT{clean_up}; #rm temp directory
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = ();
-	    #------------------------RESULTS
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
@@ -2022,8 +2199,11 @@ sub _go {
    return \%results if($flag eq 'run');
    #return chunks for loader
    return \@chunks if($flag eq 'load');
+   #return result_stat for result
+   return $result_stat if($flag eq 'result');
    #return next_level for flow
    return $next_level if($flag eq 'flow');
+
 
    #should never reach this line
    die "FATAL: \'$flag\' is not a valid flag in MpiChunk _go!!\n";
@@ -2040,16 +2220,13 @@ sub _go {
 sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
-   my $RESULTS = $self->{RESULTS};	#this ia a hash reference
+   my $level = $self->{LEVEL};
 
    #only return results for finished/succesful chunks
    return if (! $self->finished || $self->failed);
 
-   while (my $key = each %{$RESULTS}) {
-      $VARS->{$key} = $RESULTS->{$key};
-   }
-
-   return 1;
+   #do level specific result processing
+   return $self->_go('result', $level, $VARS);
 }
 #--------------------------------------------------------------
 #returns true if failed

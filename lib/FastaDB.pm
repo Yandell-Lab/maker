@@ -18,30 +18,23 @@ use File::NFSLock;
 #-------------------------------------------------------------------------------
 sub new {
     my $class = shift;
-    my $dir   = shift;
+    my $locs  = shift;
 
     my $self = {};
 
     bless ($self, $class);
 
-    die "ERROR: Directory $dir does not exist or is not a directory.\n" if(! -d $dir);
-
-    $self->{dirname} = $dir;
+    $self->{locs} = $locs;
     my @args = @_;
     push (@args, ('-makeid' => \&makeid));
 
-    my @files = <$dir/*>;
-
-    #identify fastas
-    my @keep;
-    foreach my $file (@files){
-	next if (! -f $file);
-	next unless ($file =~ /\.(fa|fasta|fast|FA|FASTA|FAST|dna)$/);
-	push(@keep, $file);
+    my @files = grep {-f $_} @$locs;
+    foreach my $dir (grep {-d $_} @$locs){
+	push(@files, grep {-f $_ && /\.(fa|fasta|fast|FA|FASTA|FAST|dna|\.mpi\.\d+\.\d+)$/} <$dir/*>);
     }
 
     #build indexes
-    foreach my $file (@keep){
+    foreach my $file (@files){
 	if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){
 	    if(! -e "$file.index"){ #maintain lock because I must build index
 		$lock->maintain(30);
@@ -69,29 +62,23 @@ sub new {
 #-------------------------------------------------------------------------------
 sub reindex {
     my $self = shift;
-    my $dir = $self->{dirname};
 
-    die "ERROR: Directory $dir does not exist or is not a directory.\n" if(! -d $dir);
-
+    my $locs = $self->{locs};
     my @args = ('-reindex' => 1,
 		'-makeid' => \&makeid
 		);
 
-    my @files = <$dir/*>;
-    
-    #identify fastas
-    my @keep;
-    foreach my $file (@files){
-	next if (! -f $file);
-	next unless ($file =~ /\.(fa|fasta|fast|FA|FASTA|FAST|dna)$/);
-	push(@keep, $file);
+    my @files = grep {-f $_} @$locs;
+    foreach my $dir (grep {-d $_} @$locs){
+	push(@files, grep {-f $_ && /\.(fa|fasta|fast|FA|FASTA|FAST|dna|\.mpi\.\d+\.\d+)$/} <$dir/*>);
     }
 
     #clear old index array
     $self->{index} = [];
+    $self->{file2index} = {};
 
     #rebuilt build indexes
-    foreach my $file (@keep){
+    foreach my $file (@files){
 	if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){
 	    $lock->maintain(30);
 	    
@@ -116,6 +103,7 @@ sub get_Seq_for_hit {
 
     my $r_ind = $self->{file2index}; #reverse index
     my $id = $hit->name;
+    my $source = $hit->{_file};
 
     if($hit->description =~ /MD5_alias=(\S+)/){
 	$id = $1;
@@ -123,7 +111,7 @@ sub get_Seq_for_hit {
 
     my $dbf = $hit->database_name;
 
-    return $self->get_Seq_by_id($id) if(! defined $dbf);    
+    return $self->get_Seq_by_id($id, $source) if(! defined $dbf);
 
     ($dbf) = $dbf =~ /([^\/]+)$/;
 
@@ -152,6 +140,7 @@ sub header_for_hit {
 
     my $r_ind = $self->{file2index}; #reverse index
     my $id = $hit->name;
+    my $source = $hit->{_file};
 
     if($hit->description =~ /MD5_alias=(\S+)/){
 	$id = $1;
@@ -159,7 +148,7 @@ sub header_for_hit {
 
     my $dbf = $hit->database_name;
 
-    return $self->header($id) if(! defined $dbf);
+    return $self->header($id, $source) if(! defined $dbf);
 
     ($dbf) = $dbf =~ /([^\/]+)$/;
 
@@ -190,9 +179,18 @@ sub header_for_hit {
 sub get_Seq_by_id {
     my $self = shift;
     my $id = shift;
+    my $source = shift;
+
+    my @index = @{$self->{index}};
+    if($source){
+	my @keys = keys %{$self->{file2index}}; #all file names
+	$source =~ s/.*\/([^\/]+)$/$1/;
+	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
+	@index =  $self->{file2index}{@keys};
+    }
 
     my $fastaObj;
-    foreach my $db (@{$self->{index}}){
+    foreach my $db (@index){
 	$fastaObj = $db->get_Seq_by_id($id);
 	last if($fastaObj);
     }
@@ -203,14 +201,23 @@ sub get_Seq_by_id {
 sub get_Seq_by_alias {
     my $self = shift;
     my $alias = shift;
+    my $source = shift;
 
     $alias =~ /MD5_alias=(\S+)/;
     $alias = $1;
 
     return undef if(! defined $alias);
 
+    my @index = @{$self->{index}};
+    if($source){
+	my @keys = keys %{$self->{file2index}}; #all file names
+	$source =~ s/.*\/([^\/]+)$/$1/;
+	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
+	@index =  $self->{file2index}{@keys};
+    }
+
     my $fastaObj;
-    foreach my $db (@{$self->{index}}){
+    foreach my $db (@index){
 	$fastaObj = $db->get_Seq_by_id($alias);
 	last if($fastaObj);
     }
@@ -221,9 +228,18 @@ sub get_Seq_by_alias {
 sub header {
     my $self = shift;
     my $id = shift;
+    my $source = shift;
+
+    my @index = @{$self->{index}};
+    if($source){
+	my @keys = keys %{$self->{file2index}}; #all file names
+	$source =~ s/.*\/([^\/]+)$/$1/;
+	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
+	@index =  $self->{file2index}{@keys};
+    }
 
     my $h;
-    foreach my $db (@{$self->{index}}){
+    foreach my $db (@index){
 	#do it this way first to avoid warnings
 	my $fastaObj = $db->get_Seq_by_id($id);
 	next if (!$fastaObj);
@@ -237,14 +253,23 @@ sub header {
 sub header_by_alias {
     my $self = shift;
     my $alias = shift;
+    my $source = shift;
 
     $alias =~ /MD5_alias=(\S+)/;
     $alias = $1;
 
     return undef if(! defined $alias);
 
+    my @index = @{$self->{index}};
+    if($source){
+	my @keys = keys %{$self->{file2index}}; #all file names
+	$source =~ s/.*\/([^\/]+)$/$1/;
+	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
+	@index =  $self->{file2index}{@keys};
+    }
+
     my $h;
-    foreach my $db (@{$self->{index}}){
+    foreach my $db (@index){
 	#do it this way first to avoid warnings
 	my $fastaObj = $db->get_Seq_by_id($alias);
 	next if (!$fastaObj);

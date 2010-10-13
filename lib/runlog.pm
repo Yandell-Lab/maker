@@ -50,6 +50,7 @@ my @ctl_to_log = ('genome_gff',
 		  'single_length',
 		  'keep_preds',
 		  'map_forward',
+		  'always_complete',
 		  'alt_peptide',
 		  'evaluate',
 		  'blast_type',
@@ -197,7 +198,6 @@ sub _compare_and_clean {
     my @dirs; #list of directories to remove
     
     if ($continue_flag > 0 && -e $log_file) {
-
 	die "ERROR: Database timed out in runlog::_clean_files\n\n"
 	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 120, 30));
 
@@ -218,7 +218,7 @@ sub _compare_and_clean {
 	    else{
 		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
 		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
-		$rm_key{retry}++ if ($continue_flag == 2);
+		$rm_key{cleantry}++ if ($continue_flag == 2);
 	    }
 	}
 	elsif ($CTL_OPTIONS{force} && ! defined $SEEN{$name}) {
@@ -273,11 +273,12 @@ sub _compare_and_clean {
 		    $log_val = $logged_vals{CTL_OPTIONS}{$key};
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$log_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+			$log_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 		    }
-		    elsif($key eq 'run'){
+
+		    if($log_val =~ /\,/){
 			#don't care about order
-			my @set = split(',', $logged_vals{CTL_OPTIONS}{run});
+			my @set = split(',', $logged_vals{CTL_OPTIONS}{$key});
 			@set = sort @set;
 			$log_val = join(',', @set);
 		    }
@@ -289,13 +290,20 @@ sub _compare_and_clean {
 		    $ctl_val =~ s/^$cwd\/*//;
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+			$ctl_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 		    }
-		    elsif($key eq 'run'){
+
+		    if($ctl_val =~ /\,/){
 			#don't care about order
-			my @set = sort @{$CTL_OPTIONS{_run}};
+			my @set = split(',', $logged_vals{CTL_OPTIONS}{$key});
+			@set = sort @set;
 			$ctl_val = join(',', @set);
 		    }
+		}
+
+		#always_complete was off before and not logged
+		if($key eq 'always_complete' && ! $log_val){
+		    $log_val = 0;
 		}
 
 		#organism_type was always eukaryotic before and not logged
@@ -315,21 +323,24 @@ sub _compare_and_clean {
 
 		#if previous log options are not the same as current control file options
 		if ($log_val ne $ctl_val) {
-		    
 		    print STDERR "MAKER WARNING: Control file option \'$key\' has changed\n".
 			"Old:$log_val\tNew:$ctl_val\n\n" unless($main::qq);
 		    
 		    $continue_flag = 1; #re-run because ctlopts changed
 		    
 		    $rm_key{gff}++; #always rebuild gff when some option has changed
-		    
+
+		    #find changed list members
+		    my ($change, $keep) = compare_comma_lists($ctl_val, $log_val);
+
 		    #certain keys that don't affect preds
 		    if($key ne 'evaluate' &&
 		       $key ne 'enable_fathom' &&
 		       $key ne 'keep_preds' &&
 		       $key ne 'other_pass' &&
 		       $key ne 'other_gff' &&
-		       $key ne 'map_forward'
+		       $key ne 'map_forward' &&
+		       @$change
 		      ){
 			$rm_key{preds}++; #almost all changes affect final predictions
 		    }
@@ -342,15 +353,11 @@ sub _compare_and_clean {
 			$rm_key{all}++;
 		    }
 		    
-		    if ($key eq 'rm_gff' ||
-			$key eq 'model_org' ||
-			$key eq 'rmlib'		   
-			) {
+		    if ($key eq 'model_org') {
 			$rm_key{all}++;
 		    }
 		    
-		    if ($key eq 'repeat_protein' ||
-			$key eq 'pcov_rm_blastx' ||
+		    if(	$key eq 'pcov_rm_blastx' ||
 			$key eq 'pcid_rm_blastx' ||
 			$key eq 'eval_rm_blastx' ||
 			$key eq 'bit_rm_blastx' ||
@@ -358,23 +365,7 @@ sub _compare_and_clean {
 			) {
 			$rm_key{all_but}++;
 		    }
-		    
-		    if ($key eq 'snaphmm') {
-			$rm_key{snap}++;
-		    }
-		    
-		    if ($key eq 'augustus_species') {
-			$rm_key{augustus}++;
-		    }
-		    
-		    if ($key eq 'fgenesh_par_file') {
-			$rm_key{fgenesh}++;
-		    }
-		    
-		    if ($key eq 'gmhmm') {
-			$rm_key{genemark}++;
-		    }
-		    
+
 		    if ($key eq 'split_hit' ||
 			$key eq'ep_score_limit' ||
 			$key eq'en_score_limit'
@@ -382,38 +373,78 @@ sub _compare_and_clean {
 			$rm_key{e_exonerate}++;
 			$rm_key{p_exonerate}++;
 		    }
-		    
-		    if ($key eq 'protein' ||
-			$key eq 'alt_peptide' ||
+
+		    if ($key eq 'alt_peptide' ||
 			$key eq 'eval_blastx' ||
 			$key eq 'softmask'
 			) {
 			$rm_key{blastx}++;
 			$rm_key{p_exonerate}++;
 		    }
-		    
-		    if ($key eq 'est') {
-			$rm_key{est_blastn}++;
-			$rm_key{e_exonerate}++;
+
+		    if ($key eq 'eval_tblastx' ||
+			$key eq 'split_hit' ||
+			$key eq 'softmask'
+			) {
+			$rm_key{tblastx}++;
 		    }
-		    
-		    if ($key eq 'est_reads') {
-			$rm_key{read_blastn}++;
-		    }
-		    
+
 		    if ($key eq 'eval_blastn' ||
 			$key eq 'split_hit'
 			) {
 			$rm_key{blastn}++;
 			$rm_key{e_exonerate}++;
 		    }
+
+		    if ($key eq 'rm_gff') {
+			$rm_key{all}++;
+		    }
+
+		    if ($key eq 'rmlib') {
+			$rm_key{all_but_rb}++;
+			$skip{'specific.out'} = $keep;
+		    }
+
+		    if ($key eq 'repeat_protein') {
+			$rm_key{all_but}++;
+			$skip{repeatrunner} = $keep;
+		    }
 		    
-		    if ($key eq 'altest' ||
-			$key eq 'eval_tblastx' ||
-			$key eq 'split_hit' ||
-			$key eq 'softmask'
-			) {
+		    if ($key eq 'snaphmm') {
+			$rm_key{snap}++;
+			$skip{snap} = $keep;
+		    }
+		    
+		    if ($key eq 'augustus_species') {
+			$rm_key{augustus}++;
+			$skip{augustus} = $keep;
+		    }
+		    
+		    if ($key eq 'fgenesh_par_file') {
+			$rm_key{fgenesh}++;
+			$skip{fgenesh} = $keep;
+		    }
+		    
+		    if ($key eq 'gmhmm') {
+			$rm_key{genemark}++;
+			$skip{genemark} = $keep;
+		    }
+
+		    if ($key eq 'protein') {
+			$rm_key{blastx}++;
+			$rm_key{p_exonerate}++ if(@$change);
+			$skip{blastx} = $keep;
+		    }		    		   
+
+		    if ($key eq 'est') {
+			$rm_key{est_blastn}++;
+			$rm_key{e_exonerate}++ if(@$change);
+			$skip{blastn} = $keep;
+		    }
+		    
+		    if ($key eq 'altest') {
 			$rm_key{tblastx}++;
+			$skip{tblastx} = $keep;
 		    }
 		}
 	    }
@@ -462,7 +493,7 @@ sub _compare_and_clean {
 	    my @f = <$out_base/*.fasta>;
 	    push (@files, @f);
 	}
-	elsif (exists $rm_key{retry}) {
+	elsif (exists $rm_key{cleantry}) {
 	    print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n" unless($main::qq);
 	    
 	    #delete everything in the void
@@ -485,6 +516,24 @@ sub _compare_and_clean {
 	    #remove evaluator output
 	    File::Path::rmtree("$out_base/evaluator");
 	}
+	elsif (exists $rm_key{all_but_rb}) { #all but repbase reports
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but some RepeatMasker data impossible\n".
+		"All old non-RepeatMasker and some RepeatMaswker files will be erased before continuing\n" unless($main::qq);
+	    
+	    #delete everything in the void
+	    my @f = <$the_void/*>;
+	    @f = grep {!/(\.rb\.out|\.rb\.cat|\.rb\.tbl)$/} @f;
+
+	    foreach my $e (@$skip{'specific.out'}){
+		@f = grep {!/\.$e\.specific\.(out|cat|tbl)$/} @f;
+	    }
+
+	    #delete files in the void
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+	    }
+	}
 	elsif (exists $rm_key{all_but}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
 		"All old non-RepeatMasker files will be erased before continuing\n" unless($main::qq);
@@ -494,9 +543,9 @@ sub _compare_and_clean {
 	    @f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
 	    
 	    #delete files in the void
-	    foreach my $f (@f) {
-		unlink($f) if(-f $f);
-		File::Path::rmtree($f) if(-d $f);
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
 	    }
 	}
 	else {
@@ -504,94 +553,100 @@ sub _compare_and_clean {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
 		    "Old hint based prediction files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*auto_annotator*>;
+		my @f = <$the_void/*.auto_annotator.*>;
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{snap}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
 		    "Old SNAP files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*snap*>;
+		my @f = <$the_void/*.snap>;
+		foreach my $e (@$skip{snap}){
+		    @f = grep {!/\.$e\.snap$/} @f;
+		}
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{augustus}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
 		    "Old Augustus files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*augustus*>;
-		push (@files, @f);
+		my @f = <$the_void/*.augustus>;
+		foreach my $e (@$skip{augustus}){
+		    @f = grep {!/\.$e\.augustus$/} @f;
+		}
+		push (@files, @f); 
 	    }
 	    if (exists $rm_key{fgenesh}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
 		    "Old FGENESH files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*fgenesh*>;
+		my @f = <$the_void/*.fgenesh>;
+		foreach my $e (@$skip{fgenesh}){
+		    @f = grep {!/\.$e\.fgenesh$/} @f;
+		}
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{genemark}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
 		    "Old GeneMark files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*genemark*>;
+		my @f = <$the_void/*.genemark>;
+		foreach my $e (@$skip{genemark}){
+		    @f = grep {!/\.$e\.genemark$/} @f;
+		}
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{blastn}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
 		    "Old EST Blastn files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*blastn*>;
+		my @f = <$the_void/*.blastn>;
+		foreach my $e (@$skip{blastn}){
+		    @f = grep {!/\.$e\.blastn$/} @f;
+		}
 		foreach my $f (@f){
 		    push (@files, $f) if (-f $f);
 		    push (@dirs, $f) if (-d $f);
 		}
-	    }
-	    else{
-		if (exists $rm_key{est_blastn}) {
-		    print STDERR "MAKER WARNING: Changes in control files make re-use of assembled EST Blastn data impossible\n".
-			"Old EST Blastn files will be erased before continuing\n" unless($main::qq);
-		    
-		    my @f = <$the_void/*est_blastn*>;
-		    foreach my $f (@f){
-			push (@files, $f) if (-f $f);
-			push (@dirs, $f) if (-d $f);
-		    }
-		}
-		elsif (exists $rm_key{read_blastn}) {
-		    print STDERR "MAKER WARNING: Changes in control files make re-use of unassembled EST Blastn data impossible\n".
-			"Old EST reads Blastn files will be erased before continuing\n" unless($main::qq);
-		    
-		    my @f = <$the_void/*read_blastn*>;
-		    foreach my $f (@f){
-			push (@files, $f) if (-f $f);
-			push (@dirs, $f) if (-d $f);
-		    }
-		}
-	    }
-	    
+	    }	    
 	    if (exists $rm_key{tblastx}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
 		    "Old tBlastx files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*tblastx*>;
+		my @f = <$the_void/*.tblastx>;
+		foreach my $e (@$skip{tblastx}){
+		    @f = grep {!/\.$e\.tblastx$/} @f;
+		}
 		foreach my $f (@f){
 		    push (@files, $f) if (-f $f);
 		    push (@dirs, $f) if (-d $f);
 		}
 	    }
-	    
 	    if (exists $rm_key{blastx}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
 		    "Old Blastx files will be erased before continuing\n" unless($main::qq);
 	 
-		my @f = <$the_void/*blastx*>;
+		my @f = <$the_void/*.blastx>;
 
-		my ($te) = $CTL_OPTIONS{repeat_protein} =~ /([^\/]+)$/;
-
-		if($te){
-		    $te =~ s/\.fasta$//;    
-		    @f = grep { ! /$te\.blastx$/} @f;
+		foreach my $e (@$skip{blastx}){
+		    @f = grep {!/\.$e\.blastx$/} @f;
 		}
-		    
+		foreach my $f (@f){
+		    push (@files, $f) if (-f $f);
+		    push (@dirs, $f) if (-d $f);
+		}
+
+	    }
+
+	    if (exists $rm_key{repeatrunner}) {
+		print STDERR "MAKER WARNING: Changes in control files make re-use of old repeatrunner data impossible\n".
+		    "Old repeatrunner files will be erased before continuing\n" unless($main::qq);
+	 
+		my @f = <$the_void/*.repeatrunner>;
+
+		foreach my $e (@$skip{repeatrunner}){
+		    @f = grep {!/\.$e\.repeatrunner$/} @f;
+		}
 		foreach my $f (@f){
 		    push (@files, $f) if (-f $f);
 		    push (@dirs, $f) if (-d $f);
@@ -603,7 +658,7 @@ sub _compare_and_clean {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
 		    "Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*est_exonerate*>;
+		my @f = <$the_void/*.est_exonerate>;
 		push (@files, @f);
 	    }
 	    
@@ -611,7 +666,7 @@ sub _compare_and_clean {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
 		    "Old protein Exonerate files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*p_exonerate*>;
+		my @f = <$the_void/*.p_exonerate>;
 		push (@files, @f);
 	    }
 	    
@@ -675,11 +730,6 @@ sub _write_new_log {
 	 if($key eq 'repeat_protein'){
 	    #don't care about absolute location
 	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
-	 }
-	 elsif($key eq 'run'){
-	     #don't care about order
-	     my @set = sort @{$CTL_OPTIONS{_run}};
-	     $ctl_val = join(',', @set);
 	 }
       }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
@@ -880,6 +930,25 @@ sub are_same_opts {
     }
 
     return 1;
+}
+#-------------------------------------------------------------------------------
+sub compare_comma_lists{
+    my $val1 = shift;
+    my $val2 = shift;
+
+    my @set1 = map {$_ =~ /^([^\:]+)/; $1} split(',', $val1);
+    my @set2 = map {$_ =~ /^([^\:]+)/; $1} split(',', $val2);
+
+    my %count;
+
+    foreach my $v (@set1, @set2){
+	$count{$v}++;
+    }
+
+    my @change = map {/([^\/]+)$/; $1} grep {$count{$_} == 1} keys %count;
+    my @keep = map {/([^\/]+)$/; $1} grep {$count{$_} != 1} keys %count;
+
+    return (\@change, \@keep);
 }
 #-------------------------------------------------------------------------------
 sub DESTROY {
