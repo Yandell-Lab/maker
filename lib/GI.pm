@@ -535,7 +535,7 @@ sub split_db {
        $bins = $db_size if ($db_size < $bins);
        
        my ($f_name) = $file =~ /([^\/]+)$/;
-       $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
     
        my $d_name = "$f_name\.mpi\.$mpi_size";
        my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
@@ -2236,15 +2236,16 @@ sub set_defaults {
       $CTL_OPT{'evaluate'} = 1 if($main::eva);
       $CTL_OPT{'max_dna_len'} = 100000;
       $CTL_OPT{'min_contig'} = 1;
-      $CTL_OPT{'split_hit'} = 10000;
-      $CTL_OPT{'softmask'} = 1;
-      $CTL_OPT{'pred_flank'} = 200;
-      $CTL_OPT{'single_exon'} = 0;
-      $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'min_protein'} = 0;
       $CTL_OPT{'AED_threshold'} = 1;
-      $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'map_forward'} = 0;
+      $CTL_OPT{'always_complete'} = 0;
+      $CTL_OPT{'pred_flank'} = 200;
+      $CTL_OPT{'keep_preds'} = 0;
+      $CTL_OPT{'split_hit'} = 10000;
+      $CTL_OPT{'softmask'} = 1;
+      $CTL_OPT{'single_exon'} = 0;
+      $CTL_OPT{'single_length'} = 250;
       $CTL_OPT{'retry'} = 1;
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
@@ -2958,24 +2959,19 @@ sub load_control_files {
 
    #verify existence of required values
    foreach my $in (@infiles) {
-      if (not $CTL_OPT{$in}) {
+      if (! $CTL_OPT{$in}) {
 	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files.\n\n";
 	 next;
       }
-      elsif ((my @files = split(/\,/, $CTL_OPT{$in})) > 1){#handle comma separated list
+      elsif ((my @files = split(/\,/, $CTL_OPT{$in}))){#handle comma separated list
 	  my %uniq; #make files uniq
 	  @files = grep {! $uniq{$_}++} @files;
 	  my @non = grep {/^([^\:]+)/ && ! -f $1} @files;
-	  $error .= "ERROR: The \'$in\' files ".join(', ', @files)." do not exist.\n".
+	  $error .= "ERROR: The \'$in\' file[s] ".join(', ', @files)." do not exist.\n".
 	      "Please check settings in the control files.\n\n"if(@non);
 
 	  @files = map {Cwd::abs_path($_)} @files unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
 	  $CTL_OPT{$in} = join(',', @files); #order entries for logging (lets run log work as is)
-      }
-      elsif (! -f $CTL_OPT{$in}) {
-	 $error .= "ERROR: The \'$in\' file $CTL_OPT{$in} does not exist.\n".
-	 "Please check settings in the control files.\n\n";
-	 next;
       }
       else{
 	  #set the absolute path to the file to reduce ambiguity
@@ -3015,49 +3011,71 @@ sub load_control_files {
    }
 			       
    #--error check that values are meaningful
-   if ((grep {/^augustus$/} @infiles) && not $CTL_OPT{augustus_species}) {
-       $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
-   }
-   if ((grep {/^augustus$/} @infiles) &&
-       (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg")
-      ) {
-       #try and find it
-       my ($path) = Cwd::abs_path($CTL_OPT{augustus});
-       $path =~ s/bin\/augustus$/config/;
-       $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+   if (grep {/augustus/} @{$CTL_OPT{_run}}){
+       if (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg") {
+	   #try and find it
+	   my ($path) = Cwd::abs_path($CTL_OPT{augustus});
+	   $path =~ s/bin\/augustus$/config/;
+	   $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+	   
+	   if(! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg"){
+	       $error .= "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set\n".
+		   "or is not set correctly. Please set this in your profile per Augustus\n".
+		   "installation instructions then try running MAKER again.\n\n";
+	   }
+       }
 
-       if(! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg"){
-	   $error .= "ERROR: The environmental variable AUGUSTUS_CONFIG_PATH has not been set\n".
-	       "or is not set correctly. Please set this in your profile per Augustus\n".
-	       "installation instructions then try again.\n\n";
+       if(!$CTL_OPT{augustus_species}) {
+	   $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
+       }
+       else{
+	   #nothing to do
        }
    }
-   if((grep {/^snaps$|^fathom$/} @infiles) && ! -d $ENV{ZOE}){
-       #try and find it
-       my ($path) = Cwd::abs_path($CTL_OPT{snap});
-       $path =~ s/snap$//;
-       $ENV{ZOE} = $path;
+   if (grep {/^snaps$|^fathom$/} @{$CTL_OPT{_run}}){
+       if(! -d $ENV{ZOE}){
+	   #try and find it
+	   my ($path) = Cwd::abs_path($CTL_OPT{snap});
+	   $path =~ s/snap$//;
+	   $ENV{ZOE} = $path;
+       }
+
+       if(! $CTL_OPT{snaphmm}) {
+	   $error .= "ERROR: There is no HMM specified for for SNAP/Fathom (snaphmm).\n\n";
+       }
+       else{
+	   my @files = split(/\,/, $CTL_OPT{snaphmm});
+	   my %uniq;
+	   @files = grep {! $uniq{$_}++} @files;
+	   my @non = grep {/^([^\:]+)/ && ! -f $1 && ! -f $ENV{ZOE}."/HMM/".$1} @files;
+	   $error .= "ERROR: The HMM file[s] provided for snaphmm do not exist:\n".
+	       "\t".join("\n\t", @non)."\n\n" if(@non);
+       }
    }
-   if ((grep {/^snaps$|^fathom$/} @infiles) && not $CTL_OPT{snaphmm}) {
-       $error .= "ERROR: There is no HMM specified for for SNAP/Fathom (snaphmm).\n\n";
+   if (grep {/^genemark$/} @{$CTL_OPT{_run}}) {
+       if(! $CTL_OPT{gmhmm}) {
+	   $error .= "ERROR: There is no HMM specified for for GeneMark (gmhmm).\n\n";
+       }
+       else{
+	   my @files = split(/\,/, $CTL_OPT{gmhmm});
+	   my %uniq;
+	   @files = grep {! $uniq{$_}++} @files;
+	   my @non = grep {/^([^\:]+)/ && ! -f $1} @files;
+	   $error .= "ERROR: The HMM file[s] provided for gmhmm do not exist:\n".
+	       "\t".join("\n\t", @non)."\n\n" if(@non);
+       }
    }
-   elsif ((grep {/^snap$|^fathom$/} @infiles) && ! -f $CTL_OPT{snaphmm} &&
-       (! exists $ENV{ZOE} || ! -f $ENV{ZOE}."/HMM/".$CTL_OPT{snaphmm})
-      ) {
-      $error .= "ERROR: The snaphmm specified for SNAP/Fathom does not exist.\n\n";
-   }
-   if ((grep {/^gmhmme3$/} @infiles) && not $CTL_OPT{gmhmm}) {
-      $ error .=  "ERROR: There is no HMM specified for for GeneMark (gmhmm).\n\n";
-   }
-   elsif ((grep {/^gmhmme3$/} @infiles) && ! -f $CTL_OPT{gmhmm}) {
-      $error .= "ERROR: The HMM specified for GeneMark does not exist.\n\n";
-   }
-   if (grep {/^fgenesh$/} @infiles) {
+   if (grep {/^fgenesh$/} @{$CTL_OPT{_run}}) {
       if (! $CTL_OPT{fgenesh_par_file}) {
 	  $error .= "ERROR: There is no parameter file secified for FgenesH (fgenesh_par_file)\n\n";
       }
-      elsif (! -f $CTL_OPT{fgenesh_par_file}) {
-	 $error .= "ERROR: The parameter file specified for fgenesh does not exist.\n\n";
+      else {
+	  my @files = split(/\,/, $CTL_OPT{gmhmm});
+	  my %uniq;
+	  @files = grep {! $uniq{$_}++} @files;
+	  my @non = grep {/^([^\:]+)/ && ! -f $1 && ! -f $ENV{ZOE}."/HMM/".$1} @files;
+           $error .= "ERROR: The parameter file[s] provided for fgenesh_par_file do not exist:\n".
+               "\t".join("\n\t", @non)."\n\n" if(@non);
       }
    }
    if ($CTL_OPT{max_dna_len} < 50000) {
@@ -3312,13 +3330,14 @@ sub generate_control_files {
        print OUT "min_contig=$O{min_contig} #all contigs from the input genome file below this size will be skipped\n" if(!$ev);
        print OUT "min_protein=$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
        print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed for annotations (bound by 0 and 1)\n" if(!$ev);
-       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
-       print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
+       print OUT "map_forward=$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "always_complete=$O{always_complete} #force start and stop codon into every model, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "keep_preds=$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "pred_flank=$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
+       print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
+       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
-       print OUT "keep_preds=$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "map_forward=$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "retry=$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
        print OUT "clean_try=$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
        print OUT "clean_up=$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";

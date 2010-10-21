@@ -195,7 +195,10 @@ sub split_hit_on_intron {
 	 foreach my  $hsp (@{$splits{$key}}){
 	    $new_hit->add_hsp($hsp);
 	 }
-	 
+
+	 $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+	 $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+
 	 push(@new_hits, $new_hit);
 	 
 	 $num++;
@@ -254,6 +257,9 @@ sub split_hit_by_strand {
 	 foreach my  $hsp (@{$pm_splits{$k}}){
 	    $new_hit->add_hsp($hsp);
 	 }
+
+	 $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+	 $new_hit->{_label} = $hit->{_label} if($hit->{_label});
 	 
 	 push(@new_hits, $new_hit);
       }
@@ -279,13 +285,16 @@ sub shatter_hit {
 				   '-significance' => $hsp->significance
                                    );
 
-		$new_hit->queryLength($hit->queryLength);
-	        $new_hit->database_name($hit->database_name);
-		$new_hit->{is_shattered} = 1;
+	    $new_hit->queryLength($hit->queryLength);
+	    $new_hit->database_name($hit->database_name);
+	    $new_hit->{is_shattered} = 1;
+	    
+	    $new_hit->add_hsp($hsp);
 
-		$new_hit->add_hsp($hsp);
+	    $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+	    $new_hit->{_label} = $hit->{_label} if($hit->{_label});
 
-		push(@new_hits, $new_hit);
+	    push(@new_hits, $new_hit);
 	}
 
 	return \@new_hits;
@@ -314,6 +323,9 @@ sub shatter_all_hits {
 		$new_hit->{is_shattered} = 1;
 		
 		$new_hit->add_hsp($hsp);
+
+		$new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+		$new_hit->{_label} = $hit->{_label} if($hit->{_label});
 		
 		push(@new_hits, $new_hit);
 	    }
@@ -438,6 +450,7 @@ sub make_flat_hits {
 		$hsp->{_strand_hack}->{query} = -1;
 		$hsp->{_strand_hack}->{hit}   =  1;
 	    }
+
 	    $new_hit->add_hsp($hsp);
 	    
 	    push(@new_hits, $new_hit);
@@ -458,8 +471,9 @@ sub _clip {
     my $trim5 = shift;
     my $trim3 = shift;
 
-    my $offset = $hit->{translation_offet};
+    my $offset = $hit->{translation_offset};
     my $end = $hit->{translation_end};
+    my $strand = $hit->strand('query');
 
     if(!$end || !defined($offset)){
 	die "ERROR: Need seq to determine translation in PhatHit_utils::_clip\n" if(!$seq);
@@ -469,37 +483,13 @@ sub _clip {
 
     return undef if(!$end); #no CDS
 
-    my @hsps = ($strand == 1) ? sort {$a->nB <=> $b->nB} $hit->hsps : sort {$b->nB <=> $a->nB};
+    my @hsps = @{sort_hits($hit, 'query')};
 
-    my $coorB;
-    my $coorE;
-    foreach $hsp (@hsps){
-	my $l = abs($hsp->nE - $hsp->nB) + 1;
-	#find first bp coordinate
-	if($offset && $l <= $offset){
-	    $offset -= $l;
-	    $end -= $l;
-	    next;
-	}
-	elsif(!$coorB){
-	    $coorB = ($hsp->strand == 1) ? $hsp->nB + $offset : $hsp->nB - $offset;
-	    $end -= $offset;
-	    $l -= $offset;
-	    $offset = 0;	    
-	}
-	else{
-	    $end -= $1;
-	}
+    my $coorB = $hit->{_TSTART}{query};
+    my $coorE = $hit->{_TEND}{query};
 
-	#find last bp coordinate
-	if($end <= 1){ #end is always bp after last translated bp
-	    $coorE = ($hsp->strand == 1) ? $hsp->nE + $end - 1 : $hsp->nE - $end + 1;
-	    last;
-	}
-    }
-
-    my $tB = ($trim5) ? $coorB : $hit->nB();
-    my $tE = ($trim3) ? $coorE : $hit->nE();
+    my $tB = ($trim5) ? $coorB : $hit->nB('query');
+    my $tE = ($trim3) ? $coorE : $hit->nE('query');
 
     my $ref = ref($hit);
     my $hsp_ref = ref($hit->{_hsps}->[0]);
@@ -616,34 +606,302 @@ sub _clip {
 	push(@args, '-hit_gaps');
 	push(@args, 0);
 	
-	my $hsp = new $hsp_ref(@args);
-	$hsp->queryName($hsp->query_name);
+	my $new_hsp = new $hsp_ref(@args);
+	$new_hsp->queryName($hsp->query_name);
 	#-------------------------------------------------
 	# setting strand because bioperl is all messed up!
 	#------------------------------------------------
 	if ($strand == 1 ){
-	    $hsp->{_strand_hack}->{query} = 1;
-	    $hsp->{_strand_hack}->{hit}   = 1;
+	    $new_hsp->{_strand_hack}->{query} = 1;
+	    $new_hsp->{_strand_hack}->{hit}   = 1;
 	}
 	else {
-	    $hsp->{_strand_hack}->{query} = -1;
-	    $hsp->{_strand_hack}->{hit}   =  1;
+	    $new_hsp->{_strand_hack}->{query} = -1;
+	    $new_hsp->{_strand_hack}->{hit}   =  1;
 	}
+	$new_hsp->{_label} = $hsp->{_label} if($hsp->{_label});
 
-	$new_hit->add_hsp($hsp);
+	$new_hit->add_hsp($new_hsp);
 	
 	$hit_start = $hit_start + $length;
-    }    
+    }
+
+    $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+    $new_hit->{_label} = $hit->{_label} if($hit->{_label});
 
     return $new_hit;
 }
 #------------------------------------------------------------------------
-sub adjust_start {
-    die;
-}
+sub adjust_start {return _adjust(shift,shift,1,0)}
 #------------------------------------------------------------------------
-sub adjust_stop {
-    die;
+sub adjust_stop {return _adjust(shift,shift,0,1)}
+#------------------------------------------------------------------------
+sub adjust_start_stop {return _adjust(shift,shift,1,1)}
+#------------------------------------------------------------------------
+sub _adjust {
+    my $hit = shift;
+    my $seq = shift;
+    my $fixstart = shift;
+    my $fixstop = shift;
+	
+    my $offset = $hit->{translation_offset};
+    my $end = $hit->{translation_end};
+    my $strand = $hit->strand('query');
+    my $B = $hit->start;
+    my $E = $hit->end;
+
+    die "ERROR: Need seq to determine translation adjustments in PhatHit_utils::_adjust\n" if(!$seq);
+
+    my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
+    my $slength = length($$seq);
+    my $tlength = length($transcript_seq); #edge
+
+    if(!$end || !defined($offset)){
+        (undef, $offset, $end, undef, undef) = maker::auto_annotator::get_translation_seq($transcript_seq, $hit);
+    }
+
+    my $tM = new CGL::TranslationMachine();
+
+    #fix stop codon by walking downstream
+    my $has_stop = 1 if($tM->is_ter_codon(substr($transcript_seq, $end-1-3, 3)));
+    my $repeat = 0; #count X codons
+    if($fixstop && !$has_stop){
+	my $z = $end;
+	my $zseq = $transcript_seq;
+	my $zlength = $tlength;
+	my $edge = $hit->nE('query'); #edge of transcript in contig space
+	while(!$has_stop){
+	    $z += 3;
+	    if($z > $zlength+1){
+		my $last = $edge;
+		$edge = ($strand == 1) ? $edge + 100 : $edge - 100;
+		$edge = $slength if($edge > $slength); #cannot walk past end of contig
+		$edge = 1 if($edge < 1); #can't walk apst start of contig 
+		my $l = abs($last - $edge);
+		my $add_seq = ($strand == 1) ? substr($$seq, $last, $l) : Fasta::revComp(substr($$seq, $last-$l-1, $l));
+		$zseq .= $add_seq;
+		$zlength += $l;
+	    }
+            last if($z > $zlength + 1); #can't go off edge of translatable seq (contig)
+            my $codon = substr($zseq, $z-1-3, 3);
+	    
+	    #don't try and extend through string of N's beyond edge of existing transcript
+	    if($tM->translate($codon) eq 'X'){
+		$repeat++;
+		last if($repeat > 5 && $z-$tlength+1 > 0);
+	    }
+	    else{
+		$repeat = 0;
+	    }
+	    
+	    if($tM->is_ter_codon($codon)){
+                $has_stop = 1;
+                $end = $z;
+            }
+	}
+	
+	if($has_stop){
+	    my $diff = $end-$tlength+1;
+	    if($strand == 1){
+		$E += $diff if($diff > 0);
+	    }
+	    else{
+		$B -= $diff if($diff > 0);
+	    }    
+	}
+    }
+
+    #fix start codon by first walking upsream and then walking into CDS
+    my $has_start = 1 if($tM->is_start_codon(substr($transcript_seq, $offset, 3)));
+    $repeat = 0;
+    if($fixstart && !$has_start){
+        #step upstream to find longer ORF
+	my $i = $offset;
+	my $iseq = $transcript_seq;
+	my $edge = $hit->nB('query');
+	while(!$has_start){ # must be within contig seq
+	    $i -= 3;
+	    if($i < 0){
+		my $last = $edge;
+		$edge = ($strand == 1) ? $edge - 100 : $edge + 100;
+		$edge = $slength if($edge > $slength); #cannot walk past contig end 
+		$edge = 1 if($edge < 1);  #cannot walk past contig start
+		my $l = abs($last - $edge) + 1;
+		my $add_seq = ($strand == 1) ? substr($$seq, $last-$l-1 , $l) : Fasta::revComp(substr($$seq, $last, $l));
+		$iseq = $add_seq . $iseq;
+		$i += $l;
+	    }
+	    last if($i < 0);
+	    my $codon = substr($iseq, $i, 3);
+	    last if($tM->is_ter_codon($codon));
+	    if($tM->is_start_codon($codon)){
+		$has_start = 1;
+		$offset = $i;
+	    }
+
+	    #don't try and extend through string of N's beyond edge of existing transcript
+	    if($tM->translate($codon) eq 'X'){
+		$repeat++;
+		my $diff = (length($iseq) - $tlength) - $offset;
+		last if($repeat > 5 &&  $diff > 0);
+	    }
+	    else{
+		$repeat = 0;
+	    }
+	}
+
+	#step downstream if no good upstream start
+	my $j = $offset;
+	while(!$has_start){
+	    $j += 3;
+	    last if($j > $tlength-3); #can't wlk downstream of contig end
+	    my $codon = substr($transcript_seq, $j, 3);
+	    last if($tM->is_ter_codon($codon));
+	    if($tM->is_start_codon($codon)){
+		$has_start = 1;
+		$offset = $j;
+	    }
+	}
+
+	if($has_start){
+	    my $diff = (length($iseq) - $tlength) - $offset;
+	    if($strand == 1){
+		$B -= $diff if($diff > 0);
+	    }
+	    else{
+		$E += $diff if($diff > 0);
+	    }	    
+	}
+    }
+
+    my $ref = ref($hit);
+    my $hsp_ref = ref($hit->{_hsps}->[0]);
+
+    my $new_hit = new $ref('-name'         => $hit->name,
+			   '-description'  => $hit->description,
+			   '-algorithm'    => $hit->algorithm,
+			   '-length'       => $hit->length,
+			   '-score'        => $hit->score,
+			   '-bits'         => $hit->bits,
+			   '-significance' => $hit->significance
+			   );
+
+    my @hsps = sort {$a->start('hit') <=> $b->start('hit')} $hit->hsps;
+    my $hit_start = 1;
+    for (my $i=0; $i < @hsps; $i++){
+	my $hsp = $hsps[$i];
+
+	my $hB = $hsp->start('query');
+	my $hE = $hsp->end('query');
+
+	#fix first and last hsps
+	if(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
+	    $hB = $B;
+	}
+	elsif(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
+	    $hE = $E;
+	}
+
+	my $length = abs($hE-$hB)+1; #new length
+
+	#set natural begining (important for correct strandedness)
+	my ($nB, $nE) = ($strand == 1) ? ($hB, $hE) : ($hE, $hB) ;
+
+	my $qrSeq = substr($$seq,
+			  $hB-1,
+			  $length);
+	$qrSeq = Fasta::revComp($qrSeq) if($strand == -1);
+	my $htSeq = $qrSeq;
+	my $hoSeq = '|'x$length;
+
+	my @args;
+	
+	push(@args, '-query_start');
+	push(@args, $nB);
+	
+	push(@args, '-query_seq');
+	push(@args, $qrSeq);
+	
+	push(@args, '-score');
+	push(@args, $hsp->score);
+	push(@args, '-homology_seq');
+	push(@args, $hoSeq);
+	
+	push(@args, '-hit_start');
+	push(@args, $hit_start);
+	
+	push(@args, '-hit_seq');
+	push(@args, $htSeq);
+	
+	push(@args, '-hsp_length');
+	push(@args, $length);
+	
+	push(@args, '-identical');
+	push(@args, $hsp->identical);
+	    
+	push(@args, '-hit_length');
+	push(@args, $length);
+	
+	push(@args, '-query_name');
+	push(@args, $hsp->query_name);
+	
+	push(@args, '-algorithm');
+	push(@args, $hsp->algorithm);
+	
+	push(@args, '-bits');
+	push(@args, $hsp->bits);
+	
+	push(@args, '-evalue');
+	push(@args, $hsp->evalue);
+	
+	push(@args, '-pvalue');
+	push(@args, $hsp->pvalue);
+	
+	push(@args, '-query_length');
+	push(@args, $length);
+	
+	push(@args, '-query_end');
+	push(@args, $nE);
+	
+	push(@args, '-conserved');
+	push(@args, $length);
+	
+	push(@args, '-hit_name');
+	push(@args, $hsp->name);
+	
+	push(@args, '-hit_end');
+	push(@args, $hit_start + $length - 1);
+	
+	push(@args, '-query_gaps');
+	push(@args, 0);
+	
+	push(@args, '-hit_gaps');
+	push(@args, 0);
+	
+	my $new_hsp = new $hsp_ref(@args);
+	$new_hsp->queryName($hsp->query_name);
+	#-------------------------------------------------
+	# setting strand because bioperl is all messed up!
+	#------------------------------------------------
+	if ($strand == 1 ){
+	    $new_hsp->{_strand_hack}->{query} = 1;
+	    $new_hsp->{_strand_hack}->{hit}   = 1;
+	}
+	else {
+	    $new_hsp->{_strand_hack}->{query} = -1;
+	    $new_hsp->{_strand_hack}->{hit}   =  1;
+	}
+	$new_hsp->{_label} = $hsp->{_label} if($hsp->{_label});
+
+	$new_hit->add_hsp($new_hsp);
+	
+	$hit_start = $hit_start + $length;
+    }    
+
+    $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+    $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+
+    return $new_hit;
 }
 #------------------------------------------------------------------------
 sub add_splice_data {
@@ -820,7 +1078,7 @@ sub copy {
                $new_hsp->{_strand_hack}->{query} = $n_q_s;
                $new_hsp->{_strand_hack}->{hit}   = $n_h_s;
                $new_hsp->{_identical_hack}       = $hsp->frac_identical();
-	       $new_hsp->{_label}                = $hit->{_label};
+	       $new_hsp->{_label}                = $hsp->{_label};
 
 	       push(@new_hsps, $new_hsp);
 	}
@@ -835,8 +1093,11 @@ sub copy {
 	}
 
 	foreach my $hsp (@sorted){
-		$new_hit->add_hsp($hsp);
+	    $new_hit->add_hsp($hsp);
 	}
+
+	$new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+	$new_hit->{_label} = $hit->{_label} if($hit->{_label});
 
 	return $new_hit;
 }
@@ -902,7 +1163,9 @@ sub normalize {
 	$new_hit->queryLength($hit->queryLength);
 	$new_hit->database_name($hit->database_name);
 	$new_hit->{is_normalized} = 1;
-	
+	$new_hit->{_label} = $hit->{_label} if($hit->{_label});
+	$new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+
 	my %crap;
 	foreach my $hsp (@keepers){
 	    $crap{$hsp->nB('hit')}{$hsp->nE('hit')}++;

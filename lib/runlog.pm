@@ -237,6 +237,7 @@ sub _compare_and_clean {
 	untie %SEEN;
 	$lock->unlock;
 
+	my %skip;
 	if($continue_flag >= -1){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
@@ -524,7 +525,7 @@ sub _compare_and_clean {
 	    my @f = <$the_void/*>;
 	    @f = grep {!/(\.rb\.out|\.rb\.cat|\.rb\.tbl)$/} @f;
 
-	    foreach my $e (@$skip{'specific.out'}){
+	    foreach my $e (@{$skip{'specific.out'}}){
 		@f = grep {!/\.$e\.specific\.(out|cat|tbl)$/} @f;
 	    }
 
@@ -561,7 +562,7 @@ sub _compare_and_clean {
 		    "Old SNAP files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.snap>;
-		foreach my $e (@$skip{snap}){
+		foreach my $e (@{$skip{snap}}){
 		    @f = grep {!/\.$e\.snap$/} @f;
 		}
 		push (@files, @f);
@@ -571,7 +572,7 @@ sub _compare_and_clean {
 		    "Old Augustus files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.augustus>;
-		foreach my $e (@$skip{augustus}){
+		foreach my $e (@{$skip{augustus}}){
 		    @f = grep {!/\.$e\.augustus$/} @f;
 		}
 		push (@files, @f); 
@@ -581,7 +582,7 @@ sub _compare_and_clean {
 		    "Old FGENESH files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.fgenesh>;
-		foreach my $e (@$skip{fgenesh}){
+		foreach my $e (@{$skip{fgenesh}}){
 		    @f = grep {!/\.$e\.fgenesh$/} @f;
 		}
 		push (@files, @f);
@@ -591,7 +592,7 @@ sub _compare_and_clean {
 		    "Old GeneMark files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.genemark>;
-		foreach my $e (@$skip{genemark}){
+		foreach my $e (@{$skip{genemark}}){
 		    @f = grep {!/\.$e\.genemark$/} @f;
 		}
 		push (@files, @f);
@@ -601,7 +602,7 @@ sub _compare_and_clean {
 		    "Old EST Blastn files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.blastn>;
-		foreach my $e (@$skip{blastn}){
+		foreach my $e (@{$skip{blastn}}){
 		    @f = grep {!/\.$e\.blastn$/} @f;
 		}
 		foreach my $f (@f){
@@ -614,7 +615,7 @@ sub _compare_and_clean {
 		    "Old tBlastx files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = <$the_void/*.tblastx>;
-		foreach my $e (@$skip{tblastx}){
+		foreach my $e (@{$skip{tblastx}}){
 		    @f = grep {!/\.$e\.tblastx$/} @f;
 		}
 		foreach my $f (@f){
@@ -628,7 +629,7 @@ sub _compare_and_clean {
 	 
 		my @f = <$the_void/*.blastx>;
 
-		foreach my $e (@$skip{blastx}){
+		foreach my $e (@{$skip{blastx}}){
 		    @f = grep {!/\.$e\.blastx$/} @f;
 		}
 		foreach my $f (@f){
@@ -644,7 +645,7 @@ sub _compare_and_clean {
 	 
 		my @f = <$the_void/*.repeatrunner>;
 
-		foreach my $e (@$skip{repeatrunner}){
+		foreach my $e (@{$skip{repeatrunner}}){
 		    @f = grep {!/\.$e\.repeatrunner$/} @f;
 		}
 		foreach my $f (@f){

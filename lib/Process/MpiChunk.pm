@@ -1150,8 +1150,9 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw{chunk			    
 			res_dir
+			tblastx_keepers
 			masked_fasta
 			fasta_a_index
 			holdover_tblastx
@@ -1314,6 +1315,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{chunk
 			res_dir
+			blastx_keepers
 			masked_fasta
 			fasta_p_index
 			holdover_blastx

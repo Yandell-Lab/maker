@@ -15,7 +15,7 @@ sub get_abAED{
     return 1 if(! @$hits);
     return $sum/@$hits;
 }
-=head1
+
 
 sub get_eAED {
    my $hits = shift;
@@ -61,12 +61,11 @@ sub get_eAED {
 	       );
 
    foreach my $i (@b_seq){
-      $index{$i}++;
+       $index{$i}++ if($i == 1);
    }
 
    #map out transcript space
-   my @hsps = $tran->sortedHSPs() if defined $tran->hsps();
-   my @talign; #for aligning transcript to protein
+   my @hsps = @{$tran->sortedHSPs()} if defined $tran->hsps();
    my $buf = 0;
 
    foreach my $hsp (@hsps){
@@ -78,19 +77,11 @@ sub get_eAED {
       die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
       @b_seq[$s..$e] = map {2} ($s..$e); #replaces hit
-
-      if($hsp->strand() eq '-1'){
-	  @talign[$s..$e] = map {($buf++ % 3) + 1} ($s..$e);
-      }
-      else{
-	  @talign[$s..$e] = map {($buf++ % 3) + 1} reverse($s..$e);
-      }
    }
 
    #==calculate bp in hit
    foreach my $i (@b_seq){
-       next if($i != 2)
-      $index{$i}++;
+       $index{$i}++ if($i == 2);
    }
    
    #seperate out hit types
@@ -118,7 +109,7 @@ sub get_eAED {
 	   #are ESTs fully contained or hanging off ends of gene
 	   my $aB = $ehsp->start;
 	   my $aE = $ehsp->end;
-	   foreach(my $i = 0; $i < @hsps, $i++){
+	   for(my $i = 0; $i < @hsps; $i++){
 	       my $hsp = $hsps[$i];
 	       my $bB = $hsp->start;
 	       my $bE = $hsp->end;
@@ -142,15 +133,15 @@ sub get_eAED {
 	   }
        }
        elsif(@hsps == 1){ #how to handle multi-exon ESTs and single exon gene model
-	   my $hsp = $hsps[0];
+	   my $ehsp = $hsps[0];
 
 	   #is the model fully contained in EST HSP or hanging off ends of EST
 	   my $bB = $ehsp->start;
 	   my $bE = $ehsp->end;
-	   foreach(my $i = 0; $i < @ehsps, $i++){
+	   for(my $i = 0; $i < @ehsps; $i++){
 	       my $ehsp = $ehsps[$i];
-	       my $aB = $hsp->start;
-	       my $aE = $hsp->end;
+	       my $aB = $ehsp->start;
+	       my $aE = $ehsp->end;
 
 	       my $class = compare::compare($aB, $aE, $bB, $bE);
 	       if($class =~ /[iaA1]/ ){ #single exon gene fully contained in EST HSP
@@ -166,10 +157,11 @@ sub get_eAED {
        }
        else{ #handle multi-exon ESTs and multi-exon gene model
 	   for(my $i = 0; $i < @ehsps; $i++){
-	       if($i != 0 && splices{start}{$ehsp->start}){ #a first splice site in EST also first splice site in gene
+	       my $ehsp = $ehsps[$i];
+	       if($i != 0 && $splices{start}{$ehsp->start}){ #a first splice site in EST also first splice site in gene
 		   push(@keepers, $ehsp);
 	       }
-	       elsif($i != @hsps - 1 && splices{end}{$ehsp->end}){ #a last splice site in EST also last splice site in gene
+	       elsif($i != @hsps - 1 && $splices{end}{$ehsp->end}){ #a last splice site in EST also last splice site in gene
 		   push(@keepers, $ehsp);
 	       }
 	   }
@@ -187,21 +179,22 @@ sub get_eAED {
 
       #only add to transcript overlap
       foreach my $i ($s..$e){
-	  $b_seq[$i] += 2 if($b_seq[$i] == 1);
+	  $b_seq[$i] += 1 if($b_seq[$i] == 2);
       }
    }
 
    #==filter proteins hits
+   my @ok_frames;
    foreach my $p (@prots){
-       my @phsps = $p->hsps;
+       foreach my $phsp ($p->hsps){
+	   my $start = $phsp->start('query') - $offset;
+	   my $end = $phsp->end('query') - $offset;
 
-       foreach(my $i = 0; $i < @hsps, $i++){
-	   my $pos = $ehsp->start - $offset;
-	   my $cigar = $hsp->cigar_string();
+	   my $pos = $start; #array position
+	   my $cigar = $phsp->cigar_string();
 	   if(! $cigar){ #if no gap attribute than we assume translation begins at first bp
-	       my $length = abs(($ehsp->end - $offset) - $pos) + 1;
-	       $cigar = ($hsp->strand == -1) ? 'F'.($length % 3) : '';
-	       $cigar . = 'M'.int($length/3);
+	       my $length = abs($end - $start) + 1;
+	       $cigar .= 'M'.int($length/3);
 	   }
 
 	   my @gap = $cigar =~ /([A-Z]\d+)/g;
@@ -213,16 +206,21 @@ sub get_eAED {
 	       elsif($1 eq 'R'){
 		   $pos -= $2;
 	       }
-	       if($1 eq 'D'){
+	       elsif($1 eq 'D'){
 		   $pos += ($2 * 3);
 	       }
 	       elsif($1 eq 'M'){
-		   $go = $2;
+		   my $go = $2;
 		   while($go--){
-		       if($talign[$pos+1] && $talign[$pos+1] == 2){ #middle of codon
-			   $b_seq[$pos]   = 3 if($b_seq[$pos]   == 1);
-			   $b_seq[$pos+1] = 3 if($b_seq[$pos+1] == 1);
-			   $b_seq[$pos+2] = 3 if($b_seq[$pos+2] == 1);
+		       if($p->strand('query') == 1){
+			   $ok_frames[$pos+0]->{0}++;
+			   $ok_frames[$pos+1]->{1}++;
+			   $ok_frames[$pos+2]->{2}++;
+		       }
+		       else{
+			   $ok_frames[$pos+2]->{0}++;
+			   $ok_frames[$pos+1]->{1}++;
+			   $ok_frames[$pos+0]->{2}++;
 		       }
 		       $pos += 3;
 		   }
@@ -231,10 +229,30 @@ sub get_eAED {
        }
    }
 
+   my $aB = $tran->{_TSTART}{query} - $offset;
+   my $aE = $tran->{_TEND}{query} - $offset;
+   my $phase = 0;
+   ($aB, $aE) = ($aE, $aB) if($aB > $aE);
+   foreach my $hsp (@{PhatHit_utils::sort_hits($tran, 'query')}){
+       my $bB = $hsp->start('query') - $offset;
+       my $bE = $hsp->end('query') - $offset;
+       my $class = compare::compare($aB, $aE, $bB, $bE);
+       next if ($class eq '0');
+
+       $bB = $aB if($aB > $bB);
+       $bE = $aE if($aE < $bE);
+       
+
+       my @select =  ($tran->strand('query') == 1) ? ($bB..$bE) : reverse($bB..$bE);
+       foreach my $i (@select){
+	   $b_seq[$i] += 1 if($b_seq[$i] == 2 && $ok_frames[$i]->{$phase});
+	   $phase = ($phase + 1) % 3
+       }
+   }
+
    #==calculate overlap
    foreach my $i (@b_seq){
-       next if($i != 3);
-      $index{$i}++;
+       $index{$i}++ if($i == 3);
    }
 
    #catch error caused by bad GFF3 input
@@ -250,7 +268,7 @@ sub get_eAED {
 
    return $eAED;
 }
-=cut
+
 
 sub get_AED {
    my $hits = shift;

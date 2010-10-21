@@ -717,11 +717,9 @@ sub load_phat_hits {
 			$i++;
 		}
 
-		my $seq = maker::auto_annotator::get_transcript_seq($f);
-                my $tm = CGL::TranslationMachine->new();
-                $f->{translation_offset} = 0 if($seq =~ /^(...)/ && $tm->is_start_codon($1));
-		$f->{translation_end} = abs($f->end() - $f->start) + 1 if($seq =~ /(...)$/ && $tm->is_stop_codon($1));
-
+		my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
+		maker::auto_annotator::get_translation_seq($seq, $f);
+		
               	push(@keepers, $f);
 
         }

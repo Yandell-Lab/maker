@@ -1354,11 +1354,11 @@ sub run_it {
 		#at least 80% of protein must be CDS to make a gene prediction
 		next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
 
-		$miph = PhatHit_utils::adjust_for_stop($miph, $seq);
-		$miph = PhatHit_utils::adjust_for_start($miph, $seq);
-		$miph = PhatHit_utils::trim_to_CDS($miph, $seq);
-
-		my $transcript = pneu($utr, $miph, $seq);
+		#adjust CDS pre-UTR identification
+		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
+		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
+		
+		my $transcript = pneu($utr, $copy, $seq);
 
 		next if(! $transcript);
 
@@ -1559,7 +1559,7 @@ sub get_pred_shot {
 #takes the gene predictions and evidence and builds transcript name,
 #QI, AED and gets protein and mRNA sequence then puts it al into a
 #HASH.  Called by group transcripts. Transcript name is set here, as
-#well as UTR boudaries
+#well as final UTR boudaries
 sub load_transcript_struct {
 	my $f            = shift;
 	my $g_name       = shift;
@@ -1573,37 +1573,22 @@ sub load_transcript_struct {
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	#walk out edges to force completion
-	if($CTL_OPTS->{always_complete}){
-	    my $stat = PhatHit_utils::adjust_for_start($f, $seq) if(!$has_start);
-	    $stat = PhatHit_utils::adjust_for_stop($f, $seq) if(!$has_stop);
-
-	    if($stat){
+	if($p_base->algorithm !~ /model_gff/){
+	    #walk out edges to force completion
+	    if($CTL_OPTS->{always_complete} && (!$has_start || !$has_stop)){
+		$f = PhatHit_utils::adjust_start_stop($f, $seq);
 		$transcript_seq  = get_transcript_seq($f, $seq);
 		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 	    }
-	}
-
-	#fix for bad 5' and 3' UTR
-	my $stat = PhatHit_utils::clip_5_utr($f) if(! $has_start && $offset > 0);
-	$stat = PhatHit_utils::clip_3_utr($f) if(! $has_stop && $end > length($transcript_seq) + 1);
-
-	if($stat){
-	    $transcript_seq  = get_transcript_seq($f, $seq);
-	    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
-	}
-
-	#fix for bad 3' UTR
-	my $change;
-	if(! $has_stop && $end > length($transcript_seq) + 1){
-
-	    $change++;
-	}
-
-	#rebuild translation data for change
-	if($change){
-	    $transcript_seq  = get_transcript_seq($f, $seq);
 	    
+	    #fix for non-canonical (almost certainly bad) 5' and 3' UTR
+	    my $trim5 = (!$has_stop && $end > length($transcript_seq) + 1);
+	    my $trim3 = (!$has_start && $offset > 0);
+	    if($trim5 || $trim3){
+		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3);
+		$transcript_seq  = get_transcript_seq($f, $seq);
+		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	    }
 	}
 
 	my $len_3_utr = length($transcript_seq) - $end + 1;
@@ -1626,12 +1611,14 @@ sub load_transcript_struct {
 
 	#evidence AED
 	my $AED = shadow_AED::get_AED(\@bag, $f);
+	my $eAED = shadow_AED::get_eAED(\@bag, $f);
 	my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 	$f->name($t_name);
 
 	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
 	    $p_base->name($t_name);
 	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
+	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base);
 	}
 
 	my $t_struct = {'hit'       => $f,
@@ -1643,6 +1630,7 @@ sub load_transcript_struct {
 			't_id'      => $t_id,
 			't_qi'      => $qi,
 			'AED'       => $AED,
+			'eAED'      => $eAED,
 			'has_start' => $has_start,
 			'has_stop'  => $has_stop,
 			'evi'       => $evi,
@@ -2314,7 +2302,12 @@ sub get_transcript_seq {
 
 	my $sorted = PhatHit_utils::sort_hits($anno, 'query');
 
+	if(!$seq){
+	    return join('', map {$_->hit_string()} @{$sorted});
+	}
+
 	my $transcript = '';
+
 	foreach my $hsp (@{$sorted}){
 		my $e_b = $hsp->nB('query');
 		my $e_e = $hsp->nE('query');
@@ -2371,7 +2364,7 @@ sub get_overlapping_hits {
     return \@keepers;
 }
 #------------------------------------------------------------------------
-#returns longest translation starting with M and the offet for a
+#returns longest translation starting with M and the offset for a
 #given reading frame. called by get_longest_m_seq
 sub get_off_and_str {
 	my $seq  = shift;
@@ -2421,11 +2414,11 @@ sub get_translation_seq {
     #use offset and end already in model to guide seq selection
     if(defined($f->{translation_offset}) || $f->{translation_end}){
 	$offset = (defined($f->{translation_offset})) ? $f->{translation_offset}: $f->{translation_end} - 4;
-	my $has_start = 1 if($tM->is_start_codon(substr($offset, 3, $seq)));
+	my $has_start = 1 if($tM->is_start_codon(substr($seq, $offset, 3)));
 
 	#step upstream to find longer ORF
 	for(my $i = $offset - 3; $i >= 0; $i -= 3){
-	    my $codon = substr($i, 3, $seq);
+	    my $codon = substr($seq, $i, 3);
 	    last if($tM->is_ter_codon($codon));
 
 	    $has_start = 0 if($i < 3 && $offset - $i > 90); #resest start for long upstream ORF
@@ -2464,6 +2457,39 @@ sub get_translation_seq {
     #set CDS internally in hit
     $f->{translation_offset} = $offset;
     $f->{translation_end} = $end;
+
+    #find correct spacial coordinates
+    my $coorB;
+    my $coorE;
+    my ($toffset, $tend) = ($offset, $end);
+    foreach my $hsp (@{PhatHit_utils::sort_hits($f, 'query')}){
+	my $l = abs($hsp->nE('query') - $hsp->nB('query')) + 1;
+        #find first bp coordinate
+	if($toffset && $l <= $toffset){
+	    $toffset -= $l;
+	    $tend -= $l;
+	    next;
+	}
+	elsif(!$coorB){
+	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nB('query') - $toffset;
+	    $tend -= $l;
+	    $toffset = 0;
+	}
+	else{
+	    $tend -= $l;
+	}
+
+        #find last bp coordinate
+	if($tend <= 1){ #end is always bp after last translated bp
+	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + $tend - 1 : $hsp->nE('query') - $tend + 1;
+	    last;
+	}
+    }
+
+    $f->{_TSTART}{query} = $coorB;
+    $f->{_TSTART}{hit} = $offset + 1;
+    $f->{_TEND}{query} = $coorE;
+    $f->{_TEND}{hit} = $end - 1;
 
     #return
     return ($p_seq , $offset, $end, $has_start, $has_stop);

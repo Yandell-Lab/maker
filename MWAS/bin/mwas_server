@@ -489,7 +489,7 @@ elsif($opt eq 'START'){
     }
     else{
 	#set user id to be apache
-	my ($usr_id, $grp_id) = (getpwnam($CTL_OPT{apache_user}))[2..3];
+	($ENV{USER}, my $usr_id, my $grp_id, $ENV{HOME}) = (getpwnam($CTL_OPT{apache_user}))[0,2,3,7];
 
 	if($usr_id != $> && ! $DEBUG){
 	    chdir("//"); #change directory just incase
@@ -504,6 +504,7 @@ elsif($opt eq 'START'){
 		"You may need to add your current user to the apache user group\n".
 		"or start the server usginG sudo\n\n";
 	    set_uid($usr_id);
+	    chdir($ENV{HOME}); #change directory to apache home just incase
 
 	    #launch with new user_id from data_dir copy
 	    exec("$CTL_OPT{data_dir}/maker/MWAS/bin/$EXE", 'START');
