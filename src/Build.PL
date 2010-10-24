@@ -15,7 +15,7 @@ my $build = MAKER::Build->new
     (
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
-     dist_version_from  => 'lib/version',
+     dist_version_from  => 'version',
      dist_abstract => ('MAKER is a portable and easily configurable genome annotation pipeline. '.
 		       'It\'s purpose is to allow smaller eukaryotic and prokaryotic genome '.
 		       'projects to independently annotate their genomes and to create genome '.
