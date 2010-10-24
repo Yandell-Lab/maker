@@ -573,6 +573,7 @@ sub cpan_install {
 	    " --install_path libdoc=$base/../perl/man --install_path bindoc=$base/../perl/man".
 	    " --install_path lib=$base/../perl/lib --install_path  arch=$base/../perl/lib".
 	    " --install_path bin=$base/../perl/lib/bin --install_path script=$base/../perl/lib/bin ";
+	$CPAN::Config->{prefs_dir} = "$ENV{HOME}/.cpan/prefs" if(! -w $CPAN::Config->{prefs_dir});
 	CPAN::Shell::setup_output();
 	CPAN::Index->reload;
     }
@@ -584,9 +585,12 @@ sub cpan_install {
 	CPAN::Index->reload;
     }
 
+    #install YAML if needed to avoid other installation issues with prereqs
+    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});
+
     #CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16;
     #CPAN::Shell->install($desired);
-    CPAN::Shell->force('insall', $desired); #tests fail for CPAN in RedHat on versions <= 2.16
+    CPAN::Shell->force('install', $desired);
 
     my $ok;
     my $expanded = CPAN::Shell->expand("Module", $desired);
@@ -696,7 +700,7 @@ sub maker_status {
         "\t./Build augustus\t\#installs just Augustus\n";
 }
 
-#test if there is anotehr version of the module overriding the CPAN install
+#test if there is another version of the module overriding the CPAN install
 sub module_overide {
     my $self = shift;
     my $desired = shift;
