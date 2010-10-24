@@ -106,11 +106,12 @@ else{
 }
 
 if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
-    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
-			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'Y');
-
+    my $go = 0;
+#    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
+#			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'Y');
+    
     if($go){
-	$build->feature(mwas_support => 1); #set mpi flag for Build
+	$build->feature(mwas_support => 1); #set mwas flag for Build
 
 	#add required CGI dependencies
 	$build->add_build_requires('Test::WWW::Mechanize' => '0');
