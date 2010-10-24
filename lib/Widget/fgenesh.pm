@@ -246,6 +246,7 @@ sub get_pred_shot {
         my $set           = shift;
         my $pred_flank    = shift;
         my $pred_command  = shift;
+        my $hmm           = shift;
            $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -263,6 +264,7 @@ sub get_pred_shot {
                                   $offset,
                                   $xdef,
                                   $pred_command,
+				  $hmm
                                  );
 
 
@@ -278,14 +280,17 @@ sub fgenesh {
         my $offset     = shift;
         my $xdef       = shift;
         my $command    = shift;
+        my $hmm        = shift;
 
-	
+	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
+
 	my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
 
-	my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.fgenesh.fasta";
-        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.fgenesh";
+	my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.fgenesh.fasta";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.fgenesh";
+        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.fgenesh";
+
+        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.fgenesh";
                             
         write_xdef_file($xdef, $xdef_file) if defined $xdef;
                             

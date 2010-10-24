@@ -44,6 +44,7 @@ sub get_pred_shot {
         my $set           = shift;
         my $pred_flank    = shift;
         my $pred_command  = shift;
+        my $hmm           = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -72,6 +73,7 @@ sub get_pred_shot {
                                   $offset,
                                   $xdef,
                                   $alt_aug_command,
+				  $hmm
                                  );
 
 
@@ -181,14 +183,16 @@ sub augustus {
         my $offset     = shift;
         my $xdef       = shift;
         my $command    = shift;
+        my $hmm        = shift;
 
         my $aug_keepers = [];
+	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
 
-        my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.augustus.fasta";
+        my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.augustus.fasta";
 
-        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.augustus";
+        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.augustus";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.augustus";
+        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.augustus";
 
         my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
 
@@ -200,8 +204,8 @@ sub augustus {
         $command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
         $command .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
 
-            $command .= " $file_name";
-            $command .= " > $o_file";
+	$command .= " $file_name";
+	$command .= " > $o_file";
 
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
@@ -526,18 +530,19 @@ sub refactor {
 	    my ($last) = @{[sort sort_cdss @{$CDS}]}[-1];
 
 	    #stop codon may be it's own exon for weird predictions
-	    if(abs($last->{e} - $stop_codon->{b}) != 1 && abs($last->{b} - $stop_codon->{e}) != 1){
+	    my $class= compare::compare($stop_codon->{b}, $stop_codon->{e}, $last->{b}, $last->{e});
+            if($class eq '0' && abs($last->{e} - $stop_codon->{b}) != 1 && abs($last->{b} - $stop_codon->{e}) != 1){
 		my %CDS = ( 'b' => $stop_codon->{b},
 			    'e' => $stop_codon->{e},
 			    'frame' => $stop_codon->{frame},
 			    'score' => $stop_codon->{score},
 			    'strand' => $stop_codon->{strand},
 			    'type' => 'CDS',
-			  );
+			    );
 		push (@{$g->{CDS}}, \%CDS);
 		$last = \%CDS;
 	    }
-
+	    
 	    if ($last->{strand} == 1){
 		$last->{e} = $stop_codon->{e} if($stop_codon);
 	    }

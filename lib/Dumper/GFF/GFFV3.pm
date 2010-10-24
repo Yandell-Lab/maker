@@ -375,6 +375,7 @@ sub hit_data {
    $name = uri_escape($name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
    my $AED .= sprintf '%.2f', $h->{_AED} if($h->{_AED});
+   my $eAED .= sprintf '%.2f', $h->{_eAED} if($h->{_eAED});
    my $QI .= $h->{_QI} if($h->{_QI});
 
    my $h_id = get_id_hit();
@@ -386,6 +387,7 @@ sub hit_data {
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
    my $attributes = 'ID='.$h_id.';Name='.$name.';';
    $attributes .= '_AED='.$AED.';' if(defined($AED));
+   $attributes .= '_eAED='.$eAED.';' if(defined($eAED));
    $attributes .= '_QI='.$QI.';' if(defined($QI));
    $attributes .= $h->{-attrib} if($h->{-attrib});
    $attributes .= ';' if($attributes !~ /\;$/);
@@ -757,12 +759,14 @@ sub get_transcript_data {
 	my $t_id    = $t->{t_id};
 	my $t_qi    = $t->{t_qi};
 	my $AED     = $t->{AED};
+	my $eAED    = $t->{eAED};
 	my $score   = $t->{score};
 	
 	$t_name = uri_escape($t_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 	
 	#format informative name for GFF3
 	$AED = sprintf '%.2f', $AED; # two decimal places
+	$eAED = sprintf '%.2f', $eAED; # two decimal places
 
 	my $t_s = $t_hit->strand('query') == 1 ? '+' : '-';
 
@@ -774,6 +778,7 @@ sub get_transcript_data {
 	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, '.', $t_s, '.');
 	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name.';';
 	   $nine .= '_AED='.$AED.';' if(defined($AED));
+	   $nine .= '_eAED='.$eAED.';' if(defined($eAED));
 	   $nine .= '_QI='.$t_qi.';' if(defined($t_qi));
 	   $nine .= $t_hit->{-attrib} if($t_hit->{-attrib});
 	   $nine .= ';' if($nine !~ /\;$/);

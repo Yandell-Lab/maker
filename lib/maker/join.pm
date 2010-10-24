@@ -279,6 +279,7 @@ sub join_f {
 	my $gB = $g->nB;
 	my $gE = $g->nE;
 
+	my $d_offset = 0; #change in offset (only sequence added 5 prime does this)
 	if(defined($b_5) || defined($b_3)){
 	    my $sorted_g = PhatHit_utils::sort_hits($g, 'query');
 	    
@@ -297,6 +298,7 @@ sub join_f {
 		last if $i ==  $b_5->{five_j};
 		push(@anno_hsps, clone_hsp($hsp));	
 		$i++;
+		$d_offset += abs($hsp->end - $hsp->start) + 1;
 	    }
 	    #-- merge the 5-prime overlaping features
 	    if ( !defined($join_offset_5) || $join_offset_5 == -1){
@@ -308,7 +310,7 @@ sub join_f {
 			                   $q_seq,
 		                           5,
 					   );
-		
+		$d_offset += abs($sorted_g->[0]->nB('query') - $merged_hsp->nB('query'));
 		push(@anno_hsps, $merged_hsp);
 	    }
 	    
@@ -374,7 +376,7 @@ sub join_f {
 				   '-description'  => $g->description,
 				   '-algorithm'    => $g->algorithm,
 				   '-length'       => $length,
-				   '-score'        => $new_total_score, 
+				   '-score'        => $new_total_score,
 				   );
 
 	my @evidence;
@@ -384,6 +386,10 @@ sub join_f {
 
 	$new_f->evidence(\@evidence);
 	$new_f->queryLength(length($$q_seq));
+	$new_f->{_HMM} = $g->{_HMM} if($g->{_HMM});
+	$new_f->{_label} = $g->{_label} if($g->{_label});
+	$new_f->{translation_offset} += $d_offset if(defined $g->{translation_offset});
+	$new_f->{translation_end} += $d_offset if($g->{translation_end});
 
 	foreach my $hsp (@anno_hsps){
 	    $new_f->add_hsp($hsp);
@@ -393,15 +399,6 @@ sub join_f {
 	while(my $key = each %$g){
 	    $new_f->{$key} = $g->{$key} if(!exists $new_f->{$key} && ref($g->{$key}) eq '');
 	}
-
-	#fix translation start and end if needed
-	my $nB = $new_f->nB;
-	my $nE = $new_f->nE;
-
-	$new_f->{translation_offset} = $g->{translation_offset} + abs($gB - $nB)
-	    if($g->{translation_offset}); #change in beginning
-	$new_f->{translation_end} = $g->{translation_end} + abs($gE - $nE)
-	    if($g->{translation_end}); #change in end
 
 	return $new_f;
 }

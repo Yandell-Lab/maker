@@ -663,7 +663,7 @@ sub _adjust {
     my $tM = new CGL::TranslationMachine();
 
     #fix stop codon by walking downstream
-    my $has_stop = 1 if($tM->is_ter_codon(substr($transcript_seq, $end-1-3, 3)));
+    my $has_stop = $tM->is_ter_codon(substr($transcript_seq, $end-1-3, 3));
     my $repeat = 0; #count X codons
     if($fixstop && !$has_stop){
 	my $z = $end;
@@ -712,7 +712,7 @@ sub _adjust {
     }
 
     #fix start codon by first walking upsream and then walking into CDS
-    my $has_start = 1 if($tM->is_start_codon(substr($transcript_seq, $offset, 3)));
+    my $has_start = $tM->is_start_codon(substr($transcript_seq, $offset, 3));
     $repeat = 0;
     if($fixstart && !$has_start){
         #step upstream to find longer ORF

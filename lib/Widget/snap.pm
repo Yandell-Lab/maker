@@ -119,6 +119,7 @@ sub get_pred_shot {
         my $set           = shift;
         my $snap_flank    = shift;
         my $snap_command  = shift;
+        my $hmm           = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -130,7 +131,7 @@ sub get_pred_shot {
                                          );
 
 
-        my ($exe, $hmm) = $snap_command =~ /(\S+)\s+(\S+)/;
+        my ($exe, $param) = $snap_command =~ /(\S+)\s+(\S+)/;
 
         my $alt_snap_command;
         if ($strand == 1){
@@ -140,7 +141,7 @@ sub get_pred_shot {
                  $alt_snap_command = $exe.' -minus ';
         }
 
-        $alt_snap_command .= $hmm;
+        $alt_snap_command .= $param;
 
         my $gene_preds = snap($shadow_fasta,
 			      $the_void,
@@ -149,6 +150,7 @@ sub get_pred_shot {
 			      $offset,
 			      $xdef,
 			      $alt_snap_command,
+			      $hmm
 			     );
 
 
@@ -164,14 +166,16 @@ sub snap {
         my $offset     = shift;
         my $xdef       = shift;
         my $command    = shift;
+        my $hmm        = shift;
 
         my $snap_keepers = [];
+	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
 
-        my $file_name = "$the_void/$seq_id\.auto_annotator\.$offset\.snap.fasta";
+        my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.snap.fasta";
 
-        my $o_file    = "$the_void/$seq_id\.$offset\.auto_annotator\.snap";
+        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.snap";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.auto_annotator\.xdef\.snap";
+        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.snap";
 
         write_xdef_file($xdef, $xdef_file);
 

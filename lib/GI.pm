@@ -223,7 +223,7 @@ sub reblast_merged_hits {
       FastaFile::writeFile($fasta, $t_file);
       
       #build db for blast using xdformat or formatdb
-      dbformat($CTL_OPT{_formater}, $t_file, $type);
+      #dbformat($CTL_OPT{_formater}, $t_file, $type);
       
       #==run the blast search
       if ($type eq 'blastx') {
@@ -1386,6 +1386,13 @@ sub blastn {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
+   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
+           (! -e $o_file)
+       ){
+       dbformat($formater, $db, 'blastn');
+   }
+
    $chunk->write_file($file_name);
    runBlastn($file_name,
 	     $db,
@@ -1684,6 +1691,13 @@ sub blastx {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
+   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
+           (! -e $o_file)
+       ){
+       dbformat($formater, $db, 'blastx');
+   }
+
    $chunk->write_file($file_name);
    runBlastx($file_name,
 	     $db,
@@ -1940,6 +1954,13 @@ sub tblastx {
    my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.tblastx";
 
    $LOG->add_entry("STARTED", $o_file, ""); 
+
+   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
+           (! -e $o_file)
+       ){
+       dbformat($formater, $db, 'tblastx');
+   }
 
    $chunk->write_file($file_name);
    runtBlastx($file_name,

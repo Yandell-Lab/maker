@@ -105,8 +105,6 @@ sub prep_hits {
 	#join the clusters on the models
 	my $model_clusters = join_clusters_on_pred($models, $careful_clusters, $c_index);
 
-
-
 	#--abinit input
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
 								   $careful_clusters,
@@ -596,7 +594,7 @@ sub prep_polest_data {
 	return \@data;
 }
 #------------------------------------------------------------------------
-#this subrutine returns finished annotations for all predictors.
+#this subroutine returns finished annotations for all predictors.
 #called outside of package by maker
 sub annotate {
     my $virgin_fasta     = shift;
@@ -609,7 +607,7 @@ sub annotate {
     my $models           = shift;
     my $the_void         = shift;
     my $build            = shift;
-    my $CTL_OPTS         = shift;
+    my $CTL_OPT          = shift;
     $LOG                 = shift;
 
     #process fasta files
@@ -619,7 +617,7 @@ sub annotate {
     my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
 
     #reset gene names
-    #my $GFF_DB = new GFFDB($CTL_OPTS);
+    #my $GFF_DB = new GFFDB($CTL_OPT);
     $SEEN = {};#$GFF_DB->get_existing_gene_names($seq_id);
 
     #group evidence and predictions
@@ -629,11 +627,11 @@ sub annotate {
 						  $predictions,
 						  $models,
 						  $v_seq_ref,
-						  $CTL_OPTS->{single_exon},
-						  $CTL_OPTS->{single_length},
-						  $CTL_OPTS->{pred_flank},
-						  $CTL_OPTS->{organism_type},
-						  $CTL_OPTS->{est_forward}
+						  $CTL_OPT->{single_exon},
+						  $CTL_OPT->{single_length},
+						  $CTL_OPT->{pred_flank},
+						  $CTL_OPT->{organism_type},
+						  $CTL_OPT->{est_forward}
 						  );
 
     my %annotations;
@@ -648,7 +646,7 @@ sub annotate {
 				 $def,
 				 'model_gff',
 				 $predictions,
-				 $CTL_OPTS
+				 $CTL_OPT
 				 );
 
 	$annotations{'model_gff'} = group_transcripts($model_trans,
@@ -658,12 +656,12 @@ sub annotate {
 						      $build,
 						      'model_gff',
 						      $the_void,
-						      $CTL_OPTS
+						      $CTL_OPT
 						      );
     }
 
     #---hint based gene prediction here (includes est2genome)
-    foreach my $prdr (@{$CTL_OPTS->{_predictor}}){
+    foreach my $prdr (@{$CTL_OPT->{_predictor}}){
 	next if($prdr eq 'model_gff' || $prdr eq 'pred_gff');
 	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
 
@@ -674,7 +672,7 @@ sub annotate {
 				 $def,
 				 $prdr,
 				 $predictions,
-				 $CTL_OPTS
+				 $CTL_OPT
 				 );
 
 	my $annot = group_transcripts($transcripts,
@@ -684,7 +682,7 @@ sub annotate {
 				      $build,
 				      $prdr,
 				      $the_void,
-				      $CTL_OPTS
+				      $CTL_OPT
 				      );
 
 	$annotations{$prdr} =  $annot;
@@ -700,7 +698,7 @@ sub annotate {
 			    $def,
 			    'abinit', #all abinits not just pref_gff
 			    $predictions,
-			    $CTL_OPTS
+			    $CTL_OPT
 			    );
 
     my $all_ab = group_transcripts($pred_trans,
@@ -710,7 +708,7 @@ sub annotate {
 				   $build,
 				   'abinit', #all abinits not_just pred_gff
 				   $the_void,
-				   $CTL_OPTS
+				   $CTL_OPT
 				   );
 
     $annotations{'abinit'} = $all_ab; #all abinit
@@ -871,7 +869,7 @@ sub add_abAED{
 sub best_annotations {
     my $annotations = shift;
     my $out_base = shift;
-    my $CTL_OPTS = shift;
+    my $CTL_OPT = shift;
 
     print STDERR "Choosing best annotations\n" unless($main::quiet);
 
@@ -879,7 +877,7 @@ sub best_annotations {
     my @m_keepers;
 
     #keep all gff3 passthrough if there's nothing else
-    if(@{$CTL_OPTS->{_predictor}} == 1 && $CTL_OPTS->{_predictor}->[0] eq 'model_gff'){
+    if(@{$CTL_OPT->{_predictor}} == 1 && $CTL_OPT->{_predictor}->[0] eq 'model_gff'){
 	my @final;
 	foreach my $g (@{$annotations->{'model_gff'}}){
 	    if($g->{g_strand} == 1){
@@ -893,9 +891,9 @@ sub best_annotations {
 	return \@final;
     }
     #keep all est2genome genes if mapping forward onto a new assembly
-    elsif($CTL_OPTS->{est_forward} &&
-	  @{$CTL_OPTS->{_predictor}} == 1 &&
-	  $CTL_OPTS->{_predictor}->[0] eq 'est2genome'
+    elsif($CTL_OPT->{est_forward} &&
+	  @{$CTL_OPT->{_predictor}} == 1 &&
+	  $CTL_OPT->{_predictor}->[0] eq 'est2genome'
 	  ){
 	my @final;
 	foreach my $g (@{$annotations->{'est2genome'}}){
@@ -909,34 +907,34 @@ sub best_annotations {
 
 	return \@final;
     }
-    elsif(@{$CTL_OPTS->{_predictor}}){
+    elsif(@{$CTL_OPT->{_predictor}}){
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
 	my $p_list = [];
 	my $m_list = [];
 	my @p_est2g;
 	my @m_est2g;
-	foreach my $p (@{$CTL_OPTS->{_predictor}}){
+	foreach my $p (@{$CTL_OPT->{_predictor}}){
 	    foreach my $g (@{$annotations->{$p}}){
 		next if($g->{t_structs}->[0]->{hit}->{_REMOVE}); #added to filter low support abinits
 
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
-		    push(@$p_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold})
+		    push(@$p_list, $g) if(($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold})
 					  || $p eq 'model_gff'
 					  );
 		}
 		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
-		    push(@$m_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold})
+		    push(@$m_list, $g) if(($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold})
 					  || $p eq 'model_gff'
 					  );
 		}
 		elsif($g->{g_strand} == 1){
 		    #separate est2genome and protein2genome genes
-		    push(@p_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
+		    push(@p_est2g, $g) if($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold});
 		}
 		elsif($g->{g_strand} == -1){
 		    #separate est2genome and protein2genome genes
-		    push(@m_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPTS->{AED_threshold});
+		    push(@m_est2g, $g) if($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold});
 		}
 		else{
 		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -1181,7 +1179,7 @@ sub _best{
 sub crit1 {
    my $g = shift;
 
-   return $g->{AED} + ($g->{abAED} * 1/3);
+   return $g->{eAED} + ($g->{abAED} * 1/3);
 }
 #------------------------------------------------------------------------
 #sort by evidence AED score
@@ -1278,7 +1276,7 @@ sub run_it {
 		    $remove = 0 if ($aAED < 1);
 		}
 
-		#make sure blastx evidence is sufficient and 
+		#make sure blastx evidence is sufficient
 		if($remove && @$blastx){
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 		    my $pieces = Shadower::getPieces($seq, $coors, 0);
@@ -1477,76 +1475,82 @@ sub get_pred_shot {
    my $the_void    = shift;
    my $set         = shift;
    my $predictor   = shift;
-   my $CTL_OPTS    = shift;
+   my $CTL_OPT    = shift;
    my $LOG         = shift;
 
    my $strand;
    my @all_preds;
 
    if($predictor eq 'snap'){
-       foreach my $entry (@{$CTL_OPTS->{_snaphmm}}){
+       foreach my $entry (split(',', $CTL_OPT->{snaphmm})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPTS->{snap}.' '.$hmm;
+	   my $pred_command = $CTL_OPT->{snap}.' '.$hmm;
 	   (my $preds, $strand) = Widget::snap::get_pred_shot($seq,
 							      $def,
 							      $set_id,
 							      $the_void,
 							      $set,
-							      $CTL_OPTS->{pred_flank},
+							      $CTL_OPT->{pred_flank},
 							      $pred_command,
-							      $CTL_OPTS->{force},
+							      $hmm,
+							      $CTL_OPT->{force},
 							      $LOG
 							      );
 	   foreach my $p (@$preds){
 	       $p->{_HMM} = $hmm;
 	       $p->{_label} = $label if($label);
+	       map {$_->{_label} = $label} $p->hsps if($label);
 	   }
 
-	   push(@all_preds, $preds);
+	   push(@all_preds, @$preds);
        }
    }
    elsif($predictor eq 'augustus'){
-       foreach my $entry (@{$CTL_OPTS->{_augustus_species}}){
+       foreach my $entry (split(',', $CTL_OPT->{augustus_species})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPTS->{augustus}.' --species='.$hmm;
+	   my $pred_command = $CTL_OPT->{augustus}.' --species='.$hmm;
 	   (my $preds, $strand) = Widget::augustus::get_pred_shot($seq,
 								  $def,
 								  $set_id,
 								  $the_void,
 								  $set,
-								  $CTL_OPTS->{pred_flank},
+								  $CTL_OPT->{pred_flank},
 								  $pred_command,
-								  $CTL_OPTS->{force},
+								  $hmm,
+								  $CTL_OPT->{force},
 								  $LOG
 								  );
 	   foreach my $p (@$preds){
 	       $p->{_HMM} = $hmm;
 	       $p->{_label} = $label if($label);
+	       map {$_->{_label} = $label} $p->hsps if($label);
 	   }
 
-	   push(@all_preds, $preds);
+	   push(@all_preds, @$preds);
        }
    }
    elsif($predictor eq 'fgenesh'){
-       foreach my $entry (@{$CTL_OPTS->{_fgenesh_par_file}}){
+       foreach my $entry (split(',', $CTL_OPT->{fgenesh_par_file})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPTS->{fgenesh}.' '.$hmm;
+	   my $pred_command = $CTL_OPT->{fgenesh}.' '.$hmm;
 	   (my $preds, $strand) = Widget::fgenesh::get_pred_shot($seq,
 								 $def,
 								 $set_id,
 								 $the_void,
 								 $set,
-								 $CTL_OPTS->{pred_flank},
+								 $CTL_OPT->{pred_flank},
 								 $pred_command,
-								 $CTL_OPTS->{force},
+								 $hmm,
+								 $CTL_OPT->{force},
 								 $LOG
 								 );
 	   foreach my $p (@$preds){
 	       $p->{_HMM} = $hmm;
 	       $p->{_label} = $label if($label);
+	       map {$_->{_label} = $label} $p->hsps if($label);
 	   }
 
-	   push(@all_preds, $preds);
+	   push(@all_preds, @$preds);
        }
    }
    else{
@@ -1568,14 +1572,14 @@ sub load_transcript_struct {
 	my $evi          = shift;
 	my $p_base       = shift;
 	my $the_void     = shift;
-	my $CTL_OPTS  = shift;
+	my $CTL_OPT  = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
 	if($p_base->algorithm !~ /model_gff/){
 	    #walk out edges to force completion
-	    if($CTL_OPTS->{always_complete} && (!$has_start || !$has_stop)){
+	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
 		$f = PhatHit_utils::adjust_start_stop($f, $seq);
 		$transcript_seq  = get_transcript_seq($f, $seq);
 		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
@@ -1729,7 +1733,7 @@ sub group_transcripts {
    my $build        = shift;
    my $predictor    = shift;
    my $the_void     = shift;
-   my $CTL_OPTS  = shift;
+   my $CTL_OPT  = shift;
 
    #fix weird sequence names
    $seq_id = Fasta::seqID2SafeID($seq_id);
@@ -1875,18 +1879,20 @@ sub group_transcripts {
 
       #load transcript structs
       my $AED = 1;
+      my $eAED = 1;
       my $p_length = 0;
       my $i = 1;
       foreach my $f (@{$c}) {
 	 my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
 
-	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPTS);
+	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPT);
 
-	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} < $CTL_OPTS->{min_protein} ||
-					     $t_struct->{AED} > $CTL_OPTS->{AED_threshold}
+	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} <= $CTL_OPT->{min_protein} ||
+					     $t_struct->{eAED} > $CTL_OPT->{AED_threshold}
 					     );
 
 	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
+	 $eAED = $t_struct->{eAED} if($t_struct->{eAED} < $eAED);
 	 $i++;
       }
 
@@ -1906,6 +1912,7 @@ sub group_transcripts {
 			 'g_strand'   => $g_strand,
 			 'g_evidence' => $evidence,
 			 'AED'        => $AED,
+			 'eAED'       => $eAED,
 			 'predictor'  => $predictor,
 			 'algorithm'  => $sources,
 			 'g_attrib'   => $g_attrib
@@ -2412,19 +2419,18 @@ sub get_translation_seq {
     my $offset;
 
     #use offset and end already in model to guide seq selection
-    if(defined($f->{translation_offset}) || $f->{translation_end}){
-	$offset = (defined($f->{translation_offset})) ? $f->{translation_offset}: $f->{translation_end} - 4;
-	my $has_start = 1 if($tM->is_start_codon(substr($seq, $offset, 3)));
+    if(defined($f->{translation_offset}) && $f->{translation_end}){
+	$offset = $f->{translation_offset};
+	my $has_start = $tM->is_start_codon(substr($seq, $offset, 3));
 
 	#step upstream to find longer ORF
 	for(my $i = $offset - 3; $i >= 0; $i -= 3){
 	    my $codon = substr($seq, $i, 3);
 	    last if($tM->is_ter_codon($codon));
-
-	    $has_start = 0 if($i < 3 && $offset - $i > 90); #resest start for long upstream ORF
+	    
 	    if(my $s = $tM->is_start_codon($codon) || !$has_start){
-		$has_start = 1 if($s);
 		$offset = $i;
+		$has_start = $s;
 	    }
 	}
 

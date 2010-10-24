@@ -65,7 +65,7 @@ sub get_eAED {
    }
 
    #map out transcript space
-   my @hsps = @{$tran->sortedHSPs()} if defined $tran->hsps();
+   my @hsps = sort {$a->start <=> $b->start} $tran->hsps() if defined $tran->hsps();
    my $buf = 0;
 
    foreach my $hsp (@hsps){
@@ -101,74 +101,52 @@ sub get_eAED {
 
    #filter out hsps that don't have a matching splice site
    foreach my $e (@ests){
-       my @ehsps = $e->hsps;
-
-       if(@ehsps == 1){ #how to handel single exon ESTs
-	   my $ehsp = $ehsps[0];
-
-	   #are ESTs fully contained or hanging off ends of gene
+       my @ehsps = sort {$a->start <=> $b->start} $e->hsps;
+       
+       EHSP: for (my $i = 0; $i < @ehsps; $i++){
+	   my $ehsp = $ehsps[$i];
 	   my $aB = $ehsp->start;
 	   my $aE = $ehsp->end;
-	   for(my $i = 0; $i < @hsps; $i++){
-	       my $hsp = $hsps[$i];
+	   my $aL = abs($aE - $aB) + 1;
+	   
+	   #splice site matches so keep EST HSP
+	   if($i != 0 && $splices{start}{$aB}){ #a first splice site in EST also first splice site in gene
+	       push(@keepers, $ehsp);
+	       next EHSP;
+	   }
+	   elsif($i != @hsps - 1 && $splices{end}{$aE}){ #a last splice site in EST also last splice site in gene
+	       push(@keepers, $ehsp);
+	       next EHSP;
+	   }
+	   
+	   #no splice site match so check overlap of EST HSP with exon
+	   for(my $j = 0; $j < @hsps; $j++){
+	       my $hsp = $hsps[$j]; 
 	       my $bB = $hsp->start;
 	       my $bE = $hsp->end;
-
+	       my $bL = abs($bE - $bB) + 1;
+	       
 	       my $class = compare::compare($aB, $aE, $bB, $bE);
-	       if($class =~ /[IbB1]/ ){ #single HSP EST fully contained in exon of gene
+	       next if($class eq '0');
+	       
+	       my $oB = ($aB > $bB) ? $aB : $bB; #overlap begin
+	       my $oE = ($aE < $bE) ? $aE : $bE; #overlap end
+	       my $oL = abs($oE - $oB) + 1;
+	       
+	       if(@hsps == 1 && @ehsps == 1 && $oL/$bL >= .9){ #at least 90% of single exon gene overlapped by single HSP EST
 		   push(@keepers, $ehsp);
+		   next EHSP;
 	       }
-	       elsif(@hsps == 1 && $class =~ /[i]/){ #single exon gene fully contained in single HSP EST
+	       
+	       if($oL/$bL >= .9 && $oL/$aL >= .9){ #at least 90% of exon and 90% of single HSP EST overlap
 		   push(@keepers, $ehsp);
-	       }
-	       elsif(@hsps == 1 && $class =~ /[aAzZ]/){ #single exon gene overlapped by single HSP EST
-		   push(@keepers, $ehsp);
-	       }
-	       #elsif($i == 0 && $class =~ /[AZ]/){ #single HPS EST hanging off first exon of multi-exon transcript
-	       #    push(@keepers, $ehsp);
-	       #}
-	       #elsif($i == @hsps - 1 && $class =~ /[az]/){ #single HPS EST hanging off last exon of multi-exon transcript
-	       #    push(@keepers, $ehsp);
-	       #}
-	   }
-       }
-       elsif(@hsps == 1){ #how to handle multi-exon ESTs and single exon gene model
-	   my $ehsp = $hsps[0];
-
-	   #is the model fully contained in EST HSP or hanging off ends of EST
-	   my $bB = $ehsp->start;
-	   my $bE = $ehsp->end;
-	   for(my $i = 0; $i < @ehsps; $i++){
-	       my $ehsp = $ehsps[$i];
-	       my $aB = $ehsp->start;
-	       my $aE = $ehsp->end;
-
-	       my $class = compare::compare($aB, $aE, $bB, $bE);
-	       if($class =~ /[iaA1]/ ){ #single exon gene fully contained in EST HSP
-		   push(@keepers, $ehsp);
-	       }
-	       #elsif($i == 0 && $class =~ /[Bz]/){ #single exon gene hanging off first HSP of EST
-	       #    push(@keepers, $ehsp);
-	       #}
-	       #elsif($i == @hsps - 1 && $class =~ /[bZ]/){ #single exon gene hanging off last HSP of EST
-	       #    push(@keepers, $ehsp);
-	       #}
-	   }
-       }
-       else{ #handle multi-exon ESTs and multi-exon gene model
-	   for(my $i = 0; $i < @ehsps; $i++){
-	       my $ehsp = $ehsps[$i];
-	       if($i != 0 && $splices{start}{$ehsp->start}){ #a first splice site in EST also first splice site in gene
-		   push(@keepers, $ehsp);
-	       }
-	       elsif($i != @hsps - 1 && $splices{end}{$ehsp->end}){ #a last splice site in EST also last splice site in gene
-		   push(@keepers, $ehsp);
+		   next EHSP;
 	       }
 	   }
        }
    }
 
-   #map keeper ESTs
+   #map keeper EST HSPs
    foreach my $hsp (@keepers){
       my $s = $hsp->start('query') - $offset;
       my $e = $hsp->end('query') - $offset;
@@ -183,7 +161,7 @@ sub get_eAED {
       }
    }
 
-   #==filter proteins hits
+   #==map protein hits by phase
    my @ok_frames;
    foreach my $p (@prots){
        foreach my $phsp ($p->hsps){
@@ -229,6 +207,7 @@ sub get_eAED {
        }
    }
 
+   #compare phase to transcript
    my $aB = $tran->{_TSTART}{query} - $offset;
    my $aE = $tran->{_TEND}{query} - $offset;
    my $phase = 0;
@@ -255,7 +234,7 @@ sub get_eAED {
        $index{$i}++ if($i == 3);
    }
 
-   #catch error caused by bad GFF3 input
+   #catch error caused by bad GFF3 input (i.e. hits with no HSPs)
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".

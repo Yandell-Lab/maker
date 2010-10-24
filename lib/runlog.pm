@@ -15,6 +15,7 @@ use Fasta;
 use File::NFSLock;
 use AnyDBM_File;
 use GI;
+use URI::Escape;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -186,7 +187,8 @@ sub _compare_and_clean {
     my $gff_file = $the_void;
     my $out_base = $the_void;
     $out_base =~ s/theVoid\.[^\/]+$//;
-    $gff_file =~ s/theVoid\.([^\/]+)$/$1.gff/;
+    $gff_file =~ s/theVoid\.([^\/]+)$//;
+    $gff_file .= uri_escape($1, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.') .".gff";
     my $name = $1;
 
     #===id files types that can not be re-used
