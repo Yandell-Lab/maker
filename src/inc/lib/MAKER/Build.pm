@@ -584,12 +584,9 @@ sub cpan_install {
 	CPAN::Index->reload;
     }
 
-    if($desired eq 'Bio::Graphics::Browser2' &&  CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16){
-	CPAN::Shell->force('insall', $desired); #tests fail for CPAN in RedHat on versions <= 2.16
-    }
-    else{
-	CPAN::Shell->install($desired);
-    }
+    #CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16;
+    #CPAN::Shell->install($desired);
+    CPAN::Shell->force('insall', $desired); #tests fail for CPAN in RedHat on versions <= 2.16
 
     my $ok;
     my $expanded = CPAN::Shell->expand("Module", $desired);
