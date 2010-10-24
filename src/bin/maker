@@ -110,22 +110,6 @@ Options:
 
      -genome|g <filename> Specify the genome file.
 
-     -predictor|p <type>  Selects the predictor(s) to use when building
-                          annotations.  Defines a pool of gene models for
-                          annotation selection.
-
-                          types: snap
-                                 augustus
-                                 fgenesh
-                                 genemark
-                                 est2genome (Uses EST's directly)
-                                 protein2genome (For Prokaryotic annotation only)
-                                 model_gff (Pass through GFF3 annotations)
-                                 pred_gff (Uses passed through GFF3 predictions)
-
-                          Use a ',' to separate types (nospaces)
-                          i.e. -predictor=snap,augustus,fgenesh
-
      -RM_off|R           Turns all repeat masking off.
 
      -datastore/         Forcably turn on/off MAKER's use of a two deep datastore

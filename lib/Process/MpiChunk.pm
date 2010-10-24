@@ -492,7 +492,7 @@ sub _go {
 							    'repeat'
 							   );
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers);
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
       
 	    #-- repeatmask with RepeatMasker	 
@@ -509,7 +509,7 @@ sub _go {
 					      );
 	 
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers);
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 	    my $rm_sp_keepers = []; #repeat masker species
 	    if ($CTL_OPT{rmlib}) {  #species specific repeats;
@@ -524,7 +524,7 @@ sub _go {
 					      );
 	 
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers);
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 	    #-------------------------CODE
 
@@ -661,7 +661,7 @@ sub _go {
 						   );
 	    
 	    #mask the chunk
-	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers);
+	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
 
 	    $res_dir = undef;
 	    #-------------------------CODE

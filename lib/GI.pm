@@ -2236,6 +2236,7 @@ sub set_defaults {
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
+      $CTL_OPT{'prok_rm'} = 0;
       $CTL_OPT{'predictor'} = '';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
       $CTL_OPT{'snaphmm'} = '';
@@ -2246,6 +2247,8 @@ sub set_defaults {
       $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
+      $CTL_OPT{'est2genome'} = 0;
+      $CTL_OPT{'protein2genome'} = 0;
       $CTL_OPT{'other_gff'} = '';
       $CTL_OPT{'domain'} = '0';
       $CTL_OPT{'function'} = '0';
@@ -2786,17 +2789,26 @@ sub load_control_files {
    }
 
    #skip repeat masking command line option
-   if ($OPT{R} || $CTL_OPT{organism_type} eq 'prokaryotic') {
+   if ($OPT{R}) {
       $CTL_OPT{model_org} = '';
       $CTL_OPT{repeat_protein} = '';
       $CTL_OPT{rmlib} = '';
       $CTL_OPT{rm_gff} = '';
       $CTL_OPT{rm_pass} = 0;
 
-      print STDERR "INFO: " unless($main::qq);
-      print STDERR "No repeats expected in prokaryotic organisms.\n"
-	  if($CTL_OPT{organism_type} eq 'prokaryotic' && !$main::qq);
-      print STDERR "All repeat masking options will be skipped.\n\n" unless($main::qq);
+      print STDERR "INFO: All repeat masking options will be skipped.\n\n" unless($main::qq);
+   }
+
+   if ($CTL_OPT{organism_type} eq 'prokaryotic' && ! $CTL_OPT{prok_rm}) {
+      $CTL_OPT{model_org} = '';
+      $CTL_OPT{repeat_protein} = '';
+      $CTL_OPT{rmlib} = '';
+      $CTL_OPT{rm_gff} = '';
+      $CTL_OPT{rm_pass} = 0;
+
+      print STDERR "WARNING: No repeats are expected in prokaryotic organisms. All repeat\n".
+	           "masking options will be skipped. You can override this behavior by\n".
+		   "setting prok_rm to 1 in the control files.\n\n" unless($main::qq);
    }
 
    #if no repeat masking options are set don't run masking dependent methods
@@ -2808,10 +2820,6 @@ sub load_control_files {
        ($CTL_OPT{rm_pass} == 0 ||
 	$CTL_OPT{genome_gff} eq '')
       ) {
-       warn "WARNING: There are no masking options set, yet unmask is set to 1.\n".
-	   "This is not valid. The value for unmask will be set to 0.\n\n"
-	   if($CTL_OPT{unmask} == 1);
-
        $CTL_OPT{unmask} = 0;
        $CTL_OPT{_no_mask} = 1; #no masking options found
    }
@@ -2831,6 +2839,20 @@ sub load_control_files {
    #parse predictor and error check
    $CTL_OPT{predictor} =~ s/\s+//g;
    my @predictors = split(',', $CTL_OPT{predictor});
+   my @run;
+
+   push(@run, 'snap') if($CTL_OPT{snaphmm});
+   push(@run, 'genemark') if($CTL_OPT{gmhmm});
+   push(@run, 'augustus') if($CTL_OPT{augustus_species});
+   push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
+   
+   if(! @predictors){ #build predictors if not provided
+       push(@predictors, @run);
+       push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff} || ($CTL_OPT{genome_gff} && $CTL_OPT{pred_pass}));
+       push(@predictors, 'model_gff') if($CTL_OPT{model_gff} || ($CTL_OPT{genome_gff} && $CTL_OPT{model_pass}));
+   }
+   push(@predictors, 'est2genome') if($CTL_OPT{est2genome} && ! $main::eva);
+   push(@predictors, 'protein2genome') if($CTL_OPT{protein2genome} && ! $main::eva);
 
    $CTL_OPT{_predictor} = {}; #temporary hash
    $CTL_OPT{_run} = {}; #temporary hash
@@ -2861,26 +2883,6 @@ sub load_control_files {
    }
    $CTL_OPT{_predictor} = [keys %{$CTL_OPT{_predictor}}]; #convert to array
    $CTL_OPT{predictor} = join(",", @{$CTL_OPT{_predictor}}); #reset value for log
-
-   #parse run and error check
-   $CTL_OPT{run} =~ s/\s+//g;
-   my @run = split(',', $CTL_OPT{run});
-
-   foreach my $p (@run) {
-      if ($p !~ /^snap$|^augustus$|^fgenesh$|^genemark$/) {
-	 $error .= "ERROR: Invalid value defined for run: $p\n".
-	 "Valid entries are: snap, augustus, genemark, or fgenesh\n\n";
-	 next;
-      }
-      if($CTL_OPT{organism_type} eq 'prokaryotic' &&
-          $p =~ /^snap$|^augustus$|^fgenesh$/
-	 ){
-           warn "WARNING: the predictor $p does not support prokaryotic organisms\n".
-               "and will be ignored in option 'run'.\n\n";
-           next;
-      }
-      $CTL_OPT{_run}{$p}++;
-   }
    $CTL_OPT{_run} = [keys %{$CTL_OPT{_run}}]; #convert to array
    $CTL_OPT{run} = join(",", @{$CTL_OPT{_run}}); #reset value for log
 
@@ -3292,8 +3294,9 @@ sub generate_control_files {
        print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
        print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
        print OUT "genome=$O{genome} #genome sequence file in fasta format\n";
+       print OUT "organism_type=$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
        print OUT "\n";
-       print OUT "#-----Re-annotation Options (Only MAKER derived GFF3)\n" if(!$ev);
+       print OUT "#-----Re-annotation Using MAKER Derived GFF3\n" if(!$ev);
        print OUT "#-----MAKER Derived GFF3 Annotations to Evaluate (genome fasta is internal to GFF3)\n" if($ev);
        print OUT "genome_gff=$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
        print OUT "genome_gff=$O{genome_gff} #MAKER derived gff3 file\n" if($ev);
@@ -3308,63 +3311,66 @@ sub generate_control_files {
        print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
        print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file\n" if($ev);
        print OUT "\n"if($ev);
-       print OUT "#-----EST Evidence (you should provide a value for at least one)\n";
+       print OUT "#-----EST Evidence (for best results provide a file for at least one)\n";
        print OUT "est=$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
        print OUT "est_reads=$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
        print OUT "altest=$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
        print OUT "est_gff=$O{est_gff} #EST evidence from an external gff3 file\n";
        print OUT "altest_gff=$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";
        print OUT "\n";
-       print OUT "#-----Protein Homology Evidence (you should provide a value for at least one)\n";
+       print OUT "#-----Protein Homology Evidence (for best results provide a file for at least one)\n";
        print OUT "protein=$O{protein}  #protein sequence file in fasta format\n";
        print OUT "protein_gff=$O{protein_gff}  #protein homology evidence from an external gff3 file\n";
        print OUT "\n";
-       print OUT "#-----Repeat Masking (leave values blank to skip)\n";
-       print OUT "model_org=$O{model_org} #model organism for RepBase masking in RepeatMasker\n";
-       print OUT "repeat_protein=$O{repeat_protein} #a database of transposable element proteins in fasta format\n";
-       print OUT "rmlib=$O{rmlib} #an organism specific repeat library in fasta format\n";
-       print OUT "rm_gff=$O{rm_gff} #repeat elements from an external gff3 file\n";
+       print OUT "#-----Repeat Masking (leave values blank to skip repeat masking)\n";
+       print OUT "model_org=$O{model_org} #select a model organism for RepBase masking in RepeatMasker\n";
+       print OUT "rmlib=$O{rmlib} #provide an organism specific repeat library in fasta format for RepeatMasker\n";
+       print OUT "repeat_protein=$O{repeat_protein} #provide a fasta file of transposable element proteins for RepeatRunner\n";
+       print OUT "rm_gff=$O{rm_gff} #repeat elements from an external GFF3 file\n";
+       print OUT "prok_rm=$O{prok_rm} #forces MAKER to run repeat masking on prokaryotes (don't change this), 1 = yes, 0 = no\n";
        print OUT "\n";
-       print OUT "#-----Gene Prediction Options\n" if(!$ev);
+       print OUT "#-----Gene Prediction\n" if(!$ev);
        print OUT "#-----EVALUATOR Ab-Initio Comparison Options\n" if($ev);
-       print OUT "organism_type=$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
-       print OUT "run=$O{run} #ab-initio methods to run (separate multiple values by ',')\n" if($ev);
-       print OUT "predictor=$O{predictor} #prediction methods for annotations (separate multiple values by ',')\n" if(!$ev);
-       print OUT "unmask=$O{unmask} #Also run ab-initio methods on unmasked sequence, 1 = yes, 0 = no\n";
-       print OUT "snaphmm=$O{snaphmm} #SNAP HMM model\n";
-       print OUT "gmhmm=$O{gmhmm} #GeneMark HMM model\n";
-       print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction model\n";
+       print OUT "snaphmm=$O{snaphmm} #SNAP HMM file\n";
+       print OUT "gmhmm=$O{gmhmm} #GeneMark HMM file\n";
+       print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction species model\n";
        print OUT "fgenesh_par_file=$O{fgenesh_par_file} #Fgenesh parameter file\n";
-       print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file (annotation pass-through)\n" if(!$ev);
-       print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external gff3 file\n";
+       print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external GFF3 file\n";
+       print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
+       print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "protein2genome=$O{protein2genome} #gene prediction from protein homology (prokaryotes only), 1 = yes, 0 = no\n"  if(!$ev);
+       print OUT "unmask=$O{unmask} #Also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "\n";
-       print OUT "#-----Other Annotation Type Options (features maker doesn't recognize)\n" if(!$ev);
-       print OUT "other_gff=$O{other_gff} #features to pass-through to final output from an extenal gff3 file\n" if(!$ev);
+       print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);
+       print OUT "other_gff=$O{other_gff} #features to pass-through to final output from an extenal GFF3 file\n" if(!$ev);
        print OUT "\n" if(!$ev);
-       print OUT "#-----External Application Specific Options\n";
-       print OUT "alt_peptide=$O{alt_peptide} #amino acid used to replace non standard amino acids in blast databases\n";
-       print OUT "cpus=$O{cpus} #max number of cpus to use in BLAST and RepeatMasker\n";
+       print OUT "#-----External Application Behavior Options\n";
+       print OUT "alt_peptide=$O{alt_peptide} #amino acid used to replace non standard amino acids in BLAST databases\n";
+       print OUT "cpus=$O{cpus} #max number of cpus to use in BLAST and RepeatMasker (not for MPI, leave 1 when using MPI)\n";
        print OUT "\n";
-       print OUT "#-----MAKER Specific Options\n";
-       print OUT "evaluate=$O{evaluate} #run EVALUATOR on all annotations, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "max_dna_len=$O{max_dna_len} #length for dividing up contigs into chunks (larger values increase memory usage)\n";
-       print OUT "min_contig=$O{min_contig} #all contigs from the input genome file below this size will be skipped\n" if(!$ev);
-       print OUT "min_protein=$O{min_protein} #all gene annotations must produce a protein of at least this many amino acids in length\n" if(!$ev);
-       print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed for annotations (bound by 0 and 1)\n" if(!$ev);
-       print OUT "map_forward=$O{map_forward} #try to map names and attributes forward from gff3 annotations, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "always_complete=$O{always_complete} #force start and stop codon into every model, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "keep_preds=$O{keep_preds} #Add non-overlapping ab-inito gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "pred_flank=$O{pred_flank} #length of sequence surrounding EST and protein evidence used to extend gene predictions\n";
+       print OUT "#-----MAKER Behavior Options\n";
+       print OUT "max_dna_len=$O{max_dna_len} #length for dividing up contigs into chunks (increases/decreases  memory usage)\n";
+       print OUT "min_contig=$O{min_contig} #skip genome contigs below this length (under 10kb are often useless)\n" if(!$ev);
+       print OUT "\n";
+       print OUT "pred_flank=$O{pred_flank} #flank for extending evidence clusters sent to gene predictors\n";
+       print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed (bound by 0 and 1)\n" if(!$ev);
+       print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
+       print OUT "always_complete=$O{always_complete} #force start and stop codon into every gene, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "map_forward=$O{map_forward} #map names and attributes forward from old GFF3 genes, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "keep_preds=$O{keep_preds} #Add unsupported gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
-       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked seg filtering for wublast\n";
+       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked (seg filtering for wublast)\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
+       print OUT "\n";
        print OUT "retry=$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
-       print OUT "clean_try=$O{clean_try} #removeall data from previous run before retrying, 1 = yes, 0 = no\n";
+       print OUT "clean_try=$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
        print OUT "clean_up=$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
        print OUT "TMP=$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
        print OUT "\n";
        print OUT "#-----EVALUATOR Control Options\n";
+       print OUT "evaluate=$O{evaluate} #run EVALUATOR on all annotations (very experimental), 1 = yes, 0 = no\n" if(!$ev);
        print OUT "side_thre=$O{side_thre}\n";
        print OUT "eva_window_size=$O{eva_window_size}\n";
        print OUT "eva_split_hit=$O{eva_split_hit}\n";
