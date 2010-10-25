@@ -1637,10 +1637,12 @@ sub collect_blast{
    foreach my $dir (keys %uniq){
        my $blast_finished = $dir;
        $blast_finished =~ s/\.temp_dir$//;
-       
+       my ($ext) = $blast_finished =~ /([^\.]+)$/;
+
        #merge blast reports
        if ( -e $dir && ! -e $blast_finished) {
-	   system ("cat $dir/*blast* > $blast_finished");
+	   system ("cat $dir/\*\.$ext > $blast_finished")
+	       && die "ERROR: Could not colapse BLAST reports\n";
 	   rmtree ("$dir");
        }
        $LOG->add_entry("FINISHED", $blast_finished, ""); 
