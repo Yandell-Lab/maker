@@ -480,7 +480,7 @@ sub clone_hsp{
     #------------------------------------------------
 
     $clone->{_strand_hack}->{query} = $hsp->{_strand_hack}->{query};
-    $clone->{_strand_hack}->{hit}   = $hsp->{_strand_hack}->{query};
+    $clone->{_strand_hack}->{hit}   = $hsp->{_strand_hack}->{hit};
 
     return $clone;
 }

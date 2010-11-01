@@ -19,7 +19,7 @@ sub sort_hits {
 	my $hit  = shift;
 	my $what = shift;
 
-        my $sorted;
+        my $sorted = [];
         if    ($hit->strand($what) == 1 || $hit->strand($what) == 0) {
                 $sorted = $hit->sortFeatures($what);
         }
@@ -786,7 +786,7 @@ sub _adjust {
 			   '-significance' => $hit->significance
 			   );
 
-    my @hsps = sort {$a->start('hit') <=> $b->start('hit')} $hit->hsps;
+    my @hsps = @{sort_hits($hit, 'query')};
     my $hit_start = 1;
     for (my $i=0; $i < @hsps; $i++){
 	my $hsp = $hsps[$i];
