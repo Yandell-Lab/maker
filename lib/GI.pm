@@ -780,7 +780,7 @@ sub genemark {
        $LOG->add_entry("STARTED", $out_file, "");   
 
 
-       my $command  = $wrap;
+       my $command  = "$^X $wrap";
        $command .= " -m $hmm";
        $command .= " -g $exe";
        $command .= " -p $pro";
@@ -2922,13 +2922,13 @@ sub load_control_files {
    }
    
    #use standard value to refer to both NCBI and WUBLAST
-   if ($CTL_OPT{blast_type} =~ /^wublast$/) {
+   if ($CTL_OPT{blast_type} =~ /^wublast$/i) {
       $CTL_OPT{_formater} = $CTL_OPT{xdformat};
       $CTL_OPT{_blastn} = $CTL_OPT{blastn};
       $CTL_OPT{_blastx} = $CTL_OPT{blastx};
       $CTL_OPT{_tblastx} = $CTL_OPT{tblastx};
    }
-   elsif ($CTL_OPT{blast_type} =~ /^ncbi$/) {
+   elsif ($CTL_OPT{blast_type} =~ /^ncbi$/i) {
       $CTL_OPT{_formater} = $CTL_OPT{formatdb};
       $CTL_OPT{_blastn} = $CTL_OPT{blastall};
       $CTL_OPT{_blastx} = $CTL_OPT{blastall};
@@ -2940,12 +2940,21 @@ sub load_control_files {
    #required files in here
    my @infiles;
 
-   #decide if required
-   push (@infiles, '_blastn', '_formater') if($CTL_OPT{est});
-   push (@infiles, '_blastn', '_formater') if($CTL_OPT{est_reads}); 
-   push (@infiles, '_blastx', '_formater') if($CTL_OPT{protein}); 
-   push (@infiles, '_blastx', '_formater') if($CTL_OPT{repeat_protein}); 
-   push (@infiles, '_tblastx', '_formater') if($CTL_OPT{altest});
+   #decide if require
+   if($CTL_OPT{blast_type} =~ /^wublast$/i){
+       push (@infiles, 'blastn', 'xdformat') if($CTL_OPT{est});
+       push (@infiles, 'blastn', 'xdformat') if($CTL_OPT{est_reads}); 
+       push (@infiles, 'blastx', 'xdformat') if($CTL_OPT{protein}); 
+       push (@infiles, 'blastx', 'xdformat') if($CTL_OPT{repeat_protein}); 
+       push (@infiles, 'tblastx', 'xdformat') if($CTL_OPT{altest});
+   }
+   if($CTL_OPT{blast_type} =~ /^ncbi$/i){
+       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est});
+       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est_reads}); 
+       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{protein}); 
+       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{repeat_protein}); 
+       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{altest});
+   }
    push (@infiles, 'genome') if($CTL_OPT{genome});
    push (@infiles, 'genome') if(!$CTL_OPT{genome_gff});
    push (@infiles, 'est') if($CTL_OPT{est}); 
