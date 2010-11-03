@@ -904,7 +904,7 @@ sub fgenesh {
        
        $LOG->add_entry("STARTED", $out_file, ""); 
        
-       my $command  = "$wrap $exe";
+       my $command  = "$^X $wrap $exe";
        #$command .= " -tmp $TMP";
        $command .= " $hmm";
        $command .= " $in_file";
