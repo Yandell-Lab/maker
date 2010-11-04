@@ -37,7 +37,7 @@ my $SEEN;
 sub prep_hits {
 	my $prot_hits        = shift;
 	my $est_hits         = shift;
-	my $alt_est_hits     = shift;
+	my $altest_hits     = shift;
 	my $predictions      = shift;
 	my $models           = shift;
 	my $seq              = shift;
@@ -47,29 +47,6 @@ sub prep_hits {
 	my $organism_type    = shift;
 	my $est_forward      = shift;
 
-	my $clean_est = [];
-	my $clean_altest = [];
-	#only ESTs from splice concious algorithms for euaryotes i.e. no blastn
-	if($organism_type eq 'eukaryotic'){
-	    $clean_est = get_selected_types($est_hits,'est2genome', 'est_gff');
-	    $clean_altest = $alt_est_hits;
-	    if ($single_exon == 1) {
-		#do nothing
-	    }else {
-		# don't use unpliced single exon ESTs-- may be genomic contamination
-		$clean_est = clean::purge_single_exon_hits($clean_est);
-		$clean_altest = clean::purge_single_exon_hits($clean_altest);
-	    }
-
-	    # throw out the exonerate est hits with weird splice sites
-	    $clean_est = clean::throw_out_bad_splicers($clean_est, $seq) unless($est_forward);
-	}
-	#include blastn and don't filter for splicing
-	else{
-	    $clean_est = get_selected_types($est_hits,'blastn', 'est_gff');
-	    $clean_altest = $alt_est_hits;
-	}
-
 	#---build clusters for basic evidence
 
 	# combine puts type in order they are given
@@ -77,23 +54,37 @@ sub prep_hits {
 	# first arg more likey to make in into to cluster
 	# than second arg, etc
 	my $c_bag = combine($prot_hits,
-			    $clean_est,
-			    $clean_altest
+			    $est_hits,
+			    $altest_hits
 			   );
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
 	my $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
 	my $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
-	#purge after clustering so as to still have the effect of evidence joining ESTs
-	$p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
-	$m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
+	#this method will cause clusters that are near each other and are connected by an orf to merge.
+	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
+	$p_clusters = join_clusters_around_orf($p_clusters, $seq);
+	$m_clusters = join_clusters_around_orf($m_clusters, $seq);
 
 	my $careful_clusters = [];
-	push(@{$careful_clusters}, @{$p_clusters});
-	push(@{$careful_clusters}, @{$m_clusters});
+	push(@{$careful_clusters}, @{$p_clusters}, @{$m_clusters});
 
-	#---now start preparing data for different types of input
+	#===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	# don't use unpliced single exon ESTs-- may be genomic contamination
+	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+	    $careful_clusters = purge_single_exon_hits_in_cluster($careful_clusters);
+	}
+	# throw out the exonerate est hits with weird splice sites
+	if(!$est_forward){
+	    $careful_clusters = throw_out_bad_splicers_in_cluster($careful_clusters, $seq);
+	}
+	#throw out short ESTs
+	if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+	    $careful_clusters = purge_short_ESTs_in_clusters($careful_clusters, $single_length);
+	}
+
+	#===now start preparing data for different types of input
 
 	#--model_gff3 input
 	# identify the models that fall within and between basic clusters
@@ -120,21 +111,34 @@ sub prep_hits {
 	if(@$models){
 	    my $m_bag = combine($models,
 				$prot_hits,
-				$clean_est,
-				$clean_altest
+				$est_hits,
+				$altest_hits
 				);
 
 	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $m_bag);
 	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
 	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
 
-	    #purge after clustering so as to still have the effect of evidence joining ESTs
-	    $p_clusters = purge_short_ESTs_in_clusters($p_clusters, $single_length);
-	    $m_clusters = purge_short_ESTs_in_clusters($m_clusters, $single_length);
+	    #this method will cause clusters that are near each other and are connected by an orf to merge.
+	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
+	    $p_clusters = join_clusters_around_orf($p_clusters, $seq);
+	    $m_clusters = join_clusters_around_orf($m_clusters, $seq);
+	    
+	    push(@{$hint_clusters}, @{$p_clusters}, @{$m_clusters});
 
-
-	    push(@{$hint_clusters}, @{$p_clusters});
-	    push(@{$hint_clusters}, @{$m_clusters});
+	    #===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	    # don't use unpliced single exon ESTs-- may be genomic contamination
+	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+		$hint_clusters = purge_single_exon_hits_in_cluster($hint_clusters);
+	    }
+	    # throw out the exonerate est hits with weird splice sites
+	    if(!$est_forward){
+		$hint_clusters = throw_out_bad_splicers_in_cluster($hint_clusters, $seq);
+	    }
+	    #throw out short ESTs
+	    if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+		$hint_clusters = purge_short_ESTs_in_clusters($hint_clusters, $single_length);
+	    }
 	}
 	else{
 	    $hint_clusters = $careful_clusters;
@@ -342,6 +346,117 @@ sub join_clusters_on_pred {
    return \@p_clusters;
 }
 #------------------------------------------------------------------------
+#this method will cause clusters that are near each other and are connected by an orf
+#to merge. this solves issues with mRNAseq splice site crossing reads and other ESTs,
+#where reads on both extremes of the exon cluster, but there is no joining overage
+sub join_clusters_around_orf {
+    my $clusters = shift;
+    my $seq = shift;
+
+    my @cs = sort {$a->[0]->start('query') <=> $b->[0]->start('query')} @$clusters;
+    for(my $i = 0; $i < @cs - 1; $i++){
+	#get cluster end
+	my $iS = $cs[$i][0]->end('query'); #already will be array space equivilent
+	foreach my $h (@{$cs[$i]}){
+	    $iS = $h->end('query') if($h->end('query') > $iS);
+	}
+
+	#get neighbor cluster start
+	my $iE = $cs[$i+1][0]->start('query') - 2;
+	foreach my $h (@{$cs[$i+1]}){
+	    $iE = $h->start('query') if($h->start('query') < $iE);
+	}
+	$iE -= 2; #fix for array space
+
+	my $iL = abs($iE - $iS) + 1; #space-in-between length
+
+	my $piece = ($cs[$i][0]->strand('query') == 1) ? substr($$seq, $iS, $iL) : Fasta::revComp(substr($$seq, $iS, $iL));
+	my $tM = new CGL::TranslationMachine();
+	my ($p_seq , $offset) = $tM->longest_translation($piece);
+
+	#all orf, so merge clusters (merges forward onto next cluster)
+	if($iL - (3 * length($p_seq) + $offset) < 3 && $p_seq !~ /X{10}/){
+	    $cs[$i+1] = [@{$cs[$i]}, @{$cs[$i+1]}];
+	    $cs[$i] = [];
+	}
+    }
+
+    @cs = grep {scalar @{$_}} @cs; #remove empty clusters
+    
+    return \@cs;
+}
+#------------------------------------------------------------------------
+#used to identify hits related to ESTs in a cluster and then remove those
+#that are single exon
+sub purge_single_exon_hits_in_cluster{
+    my $clusters = shift;
+
+    my @c_keepers;
+    foreach my $c (@$clusters){
+	my @new_c;
+	my $ests = [];
+	my $preds = [];
+	foreach my $h (@$c){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+		push(@$ests, $h);
+	    }
+	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
+		push(@$preds, $h);
+	    }
+	    else{
+		push(@new_c, $h);
+	    }
+	}
+
+	$ests = clean::purge_single_exon_hits($ests);
+
+	push(@new_c, @$ests);
+
+	if(@new_c){
+	    push(@new_c, @$preds);
+	    push(@c_keepers, \@new_c);
+	}
+    }
+
+    return \@c_keepers;
+}
+#------------------------------------------------------------------------
+#used to identify hits related to ESTs in a cluster and then remove those
+#that have weird splice sites
+sub throw_out_bad_splicers_in_cluster{
+    my $clusters = shift;
+    my $seq = shift;
+
+    my @c_keepers;
+    foreach my $c (@$clusters){
+	my @new_c;
+	my $ests = [];
+	my $preds = [];
+	foreach my $h (@$c){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+		push(@$ests, $h);
+	    }
+	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
+		push(@$preds, $h);
+	    }
+	    else{
+		push(@new_c, $h);
+	    }
+	}
+
+	$ests = clean::throw_out_bad_splicers($ests, $seq);
+
+	push(@new_c, @$ests);
+
+	if(@new_c){
+	    push(@new_c, @$preds);
+	    push(@c_keepers, \@new_c);
+	}
+    }
+
+    return \@c_keepers;
+}
+#------------------------------------------------------------------------
 #used to identify hits related to ESTs in a cluster and then remove those
 #below a certain threshold, returns the revised cluster
 sub purge_short_ESTs_in_clusters{
@@ -350,26 +465,27 @@ sub purge_short_ESTs_in_clusters{
 
     my @c_keepers;
     foreach my $c (@$clusters){
-	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
-	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
-	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
-	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
-	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark', 'pred_gff');
-
-	$ests_in_cluster = clean::purge_short_single_exons($ests_in_cluster, $min);
-	$alt_ests_in_cluster = clean::purge_short_single_exons($alt_ests_in_cluster, $min);
-
 	my @new_c;
-	push(@new_c, @$ests_in_cluster);
-	push(@new_c, @$alt_ests_in_cluster);
-	push(@new_c, @$ps_in_cluster);
-	push(@new_c, @$bx_in_cluster);
-	push(@new_c, @$models_in_cluster);
+	my $ests = [];
+	my $preds = [];
+	foreach my $h (@$c){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+		push(@$ests, $h);
+	    }
+	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
+		push(@$preds, $h);
+	    }
+	    else{
+		push(@new_c, $h);
+	    }
+	}
+
+	$ests = clean::purge_short_single_exons($ests, $min);
+
+	push(@new_c, @$ests);
 
 	if(@new_c){
-	    push(@new_c, @$preds_in_cluster);
+	    push(@new_c, @$preds);
 	    push(@c_keepers, \@new_c);
 	}
     }
@@ -996,7 +1112,7 @@ sub remove_CDS_competitors {
 
 	    #then check abinits (slow)
 	    my $preds = $g->{g_evidence}->{all_preds};
-	    my $pAED = shadow_AED::get_AED($preds, $t->{hit});
+	    my $pAED = shadow_AED::get_eAED($preds, $t->{hit});
 	    if($pAED < 1){
 		push(@p_final,$g);
 		$add_flag = 1;
@@ -1007,7 +1123,7 @@ sub remove_CDS_competitors {
 	    my $gomiph = $g->{g_evidence}->{gomiph};
 	    my $p_ex = [];
 	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit});
+	    my $eAED = shadow_AED::get_eAED($p_ex, $t->{hit});
 	    if($eAED < 1){
 		push(@p_final,$g);
 		$add_flag = 1;
@@ -1042,7 +1158,7 @@ sub remove_CDS_competitors {
 
 	    #then check abinits (slow)
 	    my $preds = $g->{g_evidence}->{all_preds};
-	    my $pAED = shadow_AED::get_AED($preds, $t->{hit});
+	    my $pAED = shadow_AED::get_eAED($preds, $t->{hit});
 	    if($pAED < 1){
 		push(@m_final,$g);
 		$add_flag = 1;
@@ -1053,7 +1169,7 @@ sub remove_CDS_competitors {
 	    my $gomiph = $g->{g_evidence}->{gomiph};
 	    my $p_ex = [];
 	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_AED($p_ex, $t->{hit});
+	    my $eAED = shadow_AED::get_eAED($p_ex, $t->{hit});
 	    if($eAED < 1){
 		push(@m_final,$g);
 		$add_flag = 1;
@@ -1256,23 +1372,29 @@ sub run_it {
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
 	    my $remove;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
-	    $remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
+		$remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
 		#make sure the spliced EST evidence actually overlaps
 		if($remove && defined $mia){
-		    my $mAED = shadow_AED::get_AED([$mia],$model);
+		    my $mAED = shadow_AED::get_eAED([$mia],$model); #verifies at least a splice
+		    $remove = 0 if($mAED < 1);
+		}
+
+		#check all ESTs for splice support if $mia does not exist
+		if($remove && @$ests){
+		    my $mAED = shadow_AED::get_eAED($ests, $model);
 		    $remove = 0 if($mAED < 1);
 		}
 
 		#make sure the polished protein evidence actually overlaps
 		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
-		    my $pAED = shadow_AED::get_AED($pol_p, $model);
+		    my $pAED = shadow_AED::get_eAED($pol_p, $model); #veifies reading frame
 		    $remove = 0 if($pAED < 1);
 		}
 
 		#make sure the alt est evidence is not single exon and actually overlaps
 		if($remove && @$alt_ests){
 		    my $clean  = clean::purge_single_exon_hits($alt_ests);
-		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_AED($clean,$model);
+		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$model); #splice site and overlap check
 		    $remove = 0 if ($aAED < 1);
 		}
 
@@ -1286,7 +1408,7 @@ sub run_it {
 			my $abAED = shadow_AED::get_abAED($set, $model);
 
 			if($abAED <= 0.25){
-			    my $bAED = shadow_AED::get_AED($blastx,$model);
+			    my $bAED = shadow_AED::get_eAED($blastx,$model); #also verifies reading frame
 			    $remove = 0 if($bAED <= 0.25);
 			}
 		    }
@@ -1392,29 +1514,36 @@ sub run_it {
 	@$on_right_strand = grep {$_->hsps > 1} @$on_right_strand if($CTL_OPT->{organism_type} eq 'eukaryotic');
 
 	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
-	my $remove = 1;
 	if($CTL_OPT->{organism_type} eq 'eukaryotic' && @$on_right_strand){
 	    my @keepers;
 	    
 	    my $clean;
 	    my $pieces;
 	    foreach my $h (@$on_right_strand){
+		my $remove = 1;
+
 		#make sure the spliced EST evidence actually overlaps
 		if($remove && defined $mia){
-		    my $mAED = shadow_AED::get_AED([$mia],$h);
+		    my $mAED = shadow_AED::get_eAED([$mia],$h);
+		    $remove = 0 if($mAED < 1);
+		}
+
+		#check all ESTs for splice support if $mia does not exist
+		if($remove && @$ests){
+		    my $mAED = shadow_AED::get_eAED($ests,$h);
 		    $remove = 0 if($mAED < 1);
 		}
 		
 		#make sure the polished protein evidence actually overlaps
 		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
-		    my $pAED = shadow_AED::get_AED($pol_p, $h);
+		    my $pAED = shadow_AED::get_eAED($pol_p, $h);
 		    $remove = 0 if($pAED < 1);
 		}
 		
 		#make sure the alt est evidence is not single exon and actually overlaps
 		if($remove && @$alt_ests){
 		    $clean  = clean::purge_single_exon_hits($alt_ests) if(! $clean); #only calculate once
-		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_AED($clean,$h);
+		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$h);
 		    $remove = 0 if ($aAED < 1);
 		}
 		
@@ -1433,7 +1562,7 @@ sub run_it {
 			    my $abAED = shadow_AED::get_abAED($set, $h);
 			    
 			    if($abAED <= 0.25){
-				my $bAED = shadow_AED::get_AED($blastx, $h);
+				my $bAED = shadow_AED::get_eAED($blastx, $h);
 				$remove = 0 if($bAED <= 0.25);
 			    }
 			}
@@ -1443,7 +1572,6 @@ sub run_it {
 		    }
 		}
 		push(@keepers, $h) if(! $remove);
-		$remove = 1; #reset for next itteration of loop
 	    }
 
 	    @$on_right_strand = @keepers;
@@ -1615,14 +1743,14 @@ sub load_transcript_struct {
 
 	#evidence AED
 	my $AED = shadow_AED::get_AED(\@bag, $f);
-	my $eAED = shadow_AED::get_eAED(\@bag, $f);
+	my $eAED = shadow_AED::get_eAED(\@bag, $f, $seq);
 	my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 	$f->name($t_name);
 
 	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
 	    $p_base->name($t_name);
 	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
-	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base);
+	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
 	}
 
 	my $t_struct = {'hit'       => $f,

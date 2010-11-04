@@ -20,12 +20,30 @@ sub get_abAED{
 sub get_eAED {
    my $hits = shift;
    my $tran = shift;
+   my $seq = shift;
 
    return 1 if(! @{$hits} || ! $tran);
 
+   #seperate out hit types
+   my @prots;
+   my @ests;
+   my @others;
+
+   foreach my $h (@$hits){
+       if($h->algorithm =~ /protein2genome|^protein_gff|^blastx/){
+	   push(@prots, $h);
+       }
+       elsif($h->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/){
+   	   push(@ests, $h);
+       }
+       else{
+	   push(@others, $h);
+       }
+   }
+
    #get coordinates to build array in memory
    my ($start, $end) = ($tran->start('query'), $tran->end('query'));
-   foreach my $hit (@{$hits}){
+   foreach my $hit (@{$hits}, $tran){
        my ($hs, $he) = ($hit->start('query'), $hit->end('query'));
 
        $start = $hs if($hs < $start);
@@ -39,18 +57,69 @@ sub get_eAED {
 
    #map out hit space
    foreach my $hit (@{$hits}){
-      my @hsps = $hit->hsps() if defined $hit->hsps();
-      
-      foreach my $hsp (@hsps){
-	 my $s = $hsp->start('query') - $offset;
-	 my $e = $hsp->end('query') - $offset;
+       my @hsps = $hit->hsps();
 
-	 #array space coors
-	 die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	 die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+       foreach my $hsp (@hsps){
+	   my $s = $hsp->start('query') - $offset;
+	   my $e = $hsp->end('query') - $offset;
+	   
+	   #array space coors
+	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	   
+	   @b_seq[$s..$e] = map {1} ($s..$e);
+       }
+   }
 
-	 @b_seq[$s..$e] = map {1} ($s..$e);
-      }
+   #map extra likely space based on filling in space between splice site crossing reads
+   if($seq){
+       my $tM = new CGL::TranslationMachine();
+       my @sorted;
+       foreach my $est (@ests){
+	   next if($est->num_hsps() <= 1);
+
+	   my $S = $est->start('query');
+	   my $E = $est->end('query');
+	   my $first;
+	   my $last;
+	   
+	   foreach my $hsp ($est->hsps){
+	       $first = $hsp if($hsp->start('query') == $S);
+	       $last = $hsp if($hsp->end('query') == $E);
+	       last if($first && $last);
+	   }
+	   push(@sorted, [$first, $last]);
+       }
+       
+       for(my $i = 0; $i < @sorted-1; $i++){
+	   my $iB = $sorted[$i]->[0]->start;
+	   my $iE = $sorted[$i]->[1]->end;
+	   
+	   for(my $j = $i+1; $j < @sorted; $j++){
+	       my $jB = $sorted[$j]->[0]->start;
+	       my $jE = $sorted[$j]->[1]->end;
+	       
+	       my $class = compare::compare($iB, $iE, $jB, $jE);
+	       next unless($class eq '0');
+	       
+	       my ($B, $E) = ($iB < $jB) ? ($sorted[$i]->[1]->start, $sorted[$j]->[0]->end) : ($sorted[$j]->[1]->start, $sorted[$i]->[0]->end); 
+	       my $L = abs($E - $B) + 1;
+	       
+	       my $piece = ($sorted[$j]->[0]->strand('query') == 1) ? substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
+
+	       my ($p_seq , $poffset) = $tM->longest_translation($piece);
+	       if($L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+		   my $s = $B - $offset;
+		   my $e = $E - $offset;
+		   
+		   #array space coors
+		   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+		   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+		   
+		   @b_seq[$s..$e] = map {1} ($s..$e); #replaces hit
+	       }
+	   }
+       }
    }
 
    #==calculate bp in evidence
@@ -64,30 +133,9 @@ sub get_eAED {
        $index{$i}++ if($i == 1);
    }
 
-   #map out transcript space
-   my @hsps = sort {$a->start <=> $b->start} $tran->hsps() if defined $tran->hsps();
-   my $buf = 0;
-
-   foreach my $hsp (@hsps){
-      my $s = $hsp->start('query') - $offset;
-      my $e = $hsp->end('query') - $offset;
-      
-      #array space coors
-      die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-      die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
-
-      @b_seq[$s..$e] = map {2} ($s..$e); #replaces hit
-   }
-
-   #==calculate bp in hit
-   foreach my $i (@b_seq){
-       $index{$i}++ if($i == 2);
-   }
+   #trans hsps
+   my @hsps = sort {$a->start <=> $b->start} $tran->hsps();
    
-   #seperate out hit types
-   my @ests = grep {$_->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/} @$hits;
-   my @prots = grep {$_->algorithm =~ /protein2genome|^protein_gff|^blastx/} @$hits;
-
    #==do EST filtering
    my @keepers;
 
@@ -95,12 +143,12 @@ sub get_eAED {
    my %splices;
    for( my $i = 0; $i < @hsps; $i++){
        my $hsp = $hsps[$i];
-       $splices{start}{$hsp->start}++ unless($i == 0);
-       $splices{end}{$hsp->end}++ unless($i == @hsps - 1);
+       $splices{start}{$hsp->start} = 1 unless($i == 0);
+       $splices{end}{$hsp->end} = 1 unless($i == @hsps - 1);
    }      
 
-   #filter out hsps that don't have a matching splice site
-   foreach my $e (@ests){
+   #filter out EST hsps that don't have a matching splice site
+   foreach my $e (@ests, @others){
        my @ehsps = sort {$a->start <=> $b->start} $e->hsps;
        
        EHSP: for (my $i = 0; $i < @ehsps; $i++){
@@ -111,10 +159,12 @@ sub get_eAED {
 	   
 	   #splice site matches so keep EST HSP
 	   if($i != 0 && $splices{start}{$aB}){ #a first splice site in EST also first splice site in gene
+	       $splices{start}{$aB} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/); #flag for verified
 	       push(@keepers, $ehsp);
 	       next EHSP;
 	   }
 	   elsif($i != @hsps - 1 && $splices{end}{$aE}){ #a last splice site in EST also last splice site in gene
+	       $splices{end}{$aE} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/); #flag for verified
 	       push(@keepers, $ehsp);
 	       next EHSP;
 	   }
@@ -146,6 +196,47 @@ sub get_eAED {
        }
    }
 
+   #confirm CDS by filling in middle between confirmed splice sites
+   #this fixes a bug where long exons are punished because only
+   #the extremes overlap evidence (splice site crossing reads).
+   #so the center of the exon is punished for specificity.
+   foreach my $hsp (@hsps){
+       #both splice sites are confirmed, so consider everything in the middle as verified
+       if($splices{start}{$hsp->start('query')} == 2 && $splices{end}{$hsp->end('query')} == 2){
+	   my $s = $hsp->start('query') - $offset;
+	   my $e = $hsp->end('query') - $offset;
+	   
+	   #array space coors
+	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+
+	   foreach my $i ($s..$e){
+	       $index{1}++ if($b_seq[$i] == 0); #fix evidence count
+	       $b_seq[$i] = 3; #make as verified overlap
+	   }
+       }
+   }
+
+   #map out transcript space
+   #done after CDS bug fix so as to properly acount for missing evidence
+   foreach my $hsp (@hsps){
+      my $s = $hsp->start('query') - $offset;
+      my $e = $hsp->end('query') - $offset;
+      
+      #array space coors
+      die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+      die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+
+      foreach my $i ($s..$e){
+	  $b_seq[$i] = 2 if($b_seq[$i] != 3); #make transcript (replaces evidence)
+      }
+   }
+
+   #==calculate bp in hit
+   foreach my $i (@b_seq){
+       $index{2}++ if($i == 2 || $i == 3); #must account for 3 because of CDS overlap coorrection
+   }
+
    #map keeper EST HSPs
    foreach my $hsp (@keepers){
       my $s = $hsp->start('query') - $offset;
@@ -162,76 +253,78 @@ sub get_eAED {
    }
 
    #==map protein hits by phase
-   my @ok_frames;
-   foreach my $p (@prots){
-       foreach my $phsp ($p->hsps){
-	   my $start = $phsp->start('query') - $offset;
-	   my $end = $phsp->end('query') - $offset;
-
-	   my $pos = $start; #array position
-	   my $cigar = $phsp->cigar_string();
-	   if(! $cigar){ #if no gap attribute than we assume translation begins at first bp
-	       my $length = abs($end - $start) + 1;
-	       $cigar .= 'M'.int($length/3);
-	   }
-
-	   my @gap = $cigar =~ /([A-Z]\d+)/g;
-	   foreach my $g (@gap){
-	       $g =~ /([A-Z])(\d+)/;
-	       if($1 eq 'F'){
-		   $pos += $2;
+   if(@prots){
+       my @ok_frames;
+       foreach my $p (@prots){
+	   foreach my $phsp ($p->hsps){
+	       my $start = $phsp->start('query') - $offset;
+	       my $end = $phsp->end('query') - $offset;
+	       
+	       my $pos = $start; #array position
+	       my $cigar = $phsp->cigar_string();
+	       if(! $cigar){ #if no gap attribute than we assume translation begins at first bp
+		   my $length = abs($end - $start) + 1;
+		   $cigar .= 'M'.int($length/3);
 	       }
-	       elsif($1 eq 'R'){
-		   $pos -= $2;
-	       }
-	       elsif($1 eq 'D'){
-		   $pos += ($2 * 3);
-	       }
-	       elsif($1 eq 'M'){
-		   my $go = $2;
-		   while($go--){
-		       if($p->strand('query') == 1){
-			   $ok_frames[$pos+0]->{0}++;
-			   $ok_frames[$pos+1]->{1}++;
-			   $ok_frames[$pos+2]->{2}++;
+	       
+	       my @gap = $cigar =~ /([A-Z]\d+)/g;
+	       foreach my $g (@gap){
+		   $g =~ /([A-Z])(\d+)/;
+		   if($1 eq 'F'){
+		       $pos += $2;
+		   }
+		   elsif($1 eq 'R'){
+		       $pos -= $2;
+		   }
+		   elsif($1 eq 'D'){
+		       $pos += ($2 * 3);
+		   }
+		   elsif($1 eq 'M'){
+		       my $go = $2;
+		       while($go--){
+			   if($p->strand('query') == 1){
+			       $ok_frames[$pos+0]->{0}++;
+			       $ok_frames[$pos+1]->{1}++;
+			       $ok_frames[$pos+2]->{2}++;
+			   }
+			   else{
+			       $ok_frames[$pos+2]->{0}++;
+			       $ok_frames[$pos+1]->{1}++;
+			       $ok_frames[$pos+0]->{2}++;
+			   }
+			   $pos += 3;
 		       }
-		       else{
-			   $ok_frames[$pos+2]->{0}++;
-			   $ok_frames[$pos+1]->{1}++;
-			   $ok_frames[$pos+0]->{2}++;
-		       }
-		       $pos += 3;
 		   }
 	       }
 	   }
        }
-   }
-
-   #compare phase to transcript
-   my $aB = $tran->{_TSTART}{query} - $offset;
-   my $aE = $tran->{_TEND}{query} - $offset;
-   my $phase = 0;
-   ($aB, $aE) = ($aE, $aB) if($aB > $aE);
-   foreach my $hsp (@{PhatHit_utils::sort_hits($tran, 'query')}){
-       my $bB = $hsp->start('query') - $offset;
-       my $bE = $hsp->end('query') - $offset;
-       my $class = compare::compare($aB, $aE, $bB, $bE);
-       next if ($class eq '0');
-
-       $bB = $aB if($aB > $bB);
-       $bE = $aE if($aE < $bE);
        
-
-       my @select =  ($tran->strand('query') == 1) ? ($bB..$bE) : reverse($bB..$bE);
-       foreach my $i (@select){
-	   $b_seq[$i] += 1 if($b_seq[$i] == 2 && $ok_frames[$i]->{$phase});
-	   $phase = ($phase + 1) % 3
+       #compare phase to transcript
+       my $aB = $tran->{_TSTART}{query} - $offset;
+       my $aE = $tran->{_TEND}{query} - $offset;
+       my $phase = 0;
+       ($aB, $aE) = ($aE, $aB) if($aB > $aE);
+       foreach my $hsp (@{PhatHit_utils::sort_hits($tran, 'query')}){
+	   my $bB = $hsp->start('query') - $offset;
+	   my $bE = $hsp->end('query') - $offset;
+	   my $class = compare::compare($aB, $aE, $bB, $bE);
+	   next if ($class eq '0');
+	   
+	   $bB = $aB if($aB > $bB);
+	   $bE = $aE if($aE < $bE);
+	   
+	   
+	   my @select =  ($tran->strand('query') == 1) ? ($bB..$bE) : reverse($bB..$bE);
+	   foreach my $i (@select){
+	       $b_seq[$i] += 1 if($b_seq[$i] == 2 && $ok_frames[$i]->{$phase});
+	       $phase = ($phase + 1) % 3
+	       }
        }
    }
 
    #==calculate overlap
    foreach my $i (@b_seq){
-       $index{$i}++ if($i == 3);
+       $index{3}++ if($i == 3);
    }
 
    #catch error caused by bad GFF3 input (i.e. hits with no HSPs)
@@ -239,7 +332,7 @@ sub get_eAED {
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
        "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
-       if($index{2} + $index{3} == 0 || $index{1} + $index{3} == 0);
+       if($index{2} == 0 || $index{1} == 0);
 
    my $spec = $index{3}/($index{2}); #specificity
    my $sens = $index{3}/($index{1}); #sensitivity
