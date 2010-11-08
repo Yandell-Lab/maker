@@ -1,4 +1,7 @@
-#! /usr/bin/perl
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
@@ -159,10 +162,8 @@ open(LOG, "> $outdir/chado2gff3.log");
 
 #make contig GFF3 files one at a time
 if($cpus <= 1){
-    my $count = 0;
     foreach my $contig (@$contigs) {
 	my ($contig_id, $seqid) = @$contig;
-	$count++;
 
 	open(my $OUT, "> $outdir/$seqid.gff");
 	
@@ -221,6 +222,7 @@ sub run_thread{
         print $OUT get_fasta($contig_id) . "\n";
 	
         close($OUT);
+
     }
 
     $DBH->disconnect;
@@ -434,7 +436,10 @@ sub get_feature_lines {
 	push(@lines, $f->{line});
 	handle_children($f, \@lines) if($f->{children});
     }
-    
+
+    #break references in %order to remove memory leak
+    break_references([values %order]);
+   
     return \@lines;
 }
 #------------------------------------------------------------------------------
@@ -502,6 +507,21 @@ sub handle_children {
 	    push(@$lines, $c->{line});
 	    handle_children($c, $lines) if($c->{children});
 	}
+    }
+}
+#------------------------------------------------------------------------------
+#breaks references to fix memory leak
+sub break_references{
+    my $feat = shift;
+    
+    foreach my $f (@$feat){
+	$f->{parent} = undef;
+
+	#strip off reference and then undef to avoid circular recursion
+	my $ref = $f->{children};
+	$f->{children} = undef;
+
+	break_references($ref) if($ref);
     }
 }
 #------------------------------------------------------------------------------
