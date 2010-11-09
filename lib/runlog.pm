@@ -480,7 +480,12 @@ sub _compare_and_clean {
 	}
 
 	#===Remove files that can no longer be re-used
-	
+	if(! $self->{LOCK}->still_mine){
+            warn "ERROR: Lock broken in runlog\n";
+            $self->{continue_flag} = -3;
+            return;
+        }
+
 	#-print file type specific warnings and delete files
 	if (exists $rm_key{force}) {
 	    print STDERR "MAKER WARNING: All old files will be erased before continuing\n" unless($main::qq);

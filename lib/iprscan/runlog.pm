@@ -237,7 +237,12 @@ sub _compare_and_clean {
 	}
 
 	#===Remove files that can no longer be re-used
-	
+	if(! $self->{LOCK}->still_mine){
+	    warn "ERROR: Lock broken in runlog\n";
+	    $self->{continue_flag} = -3;
+	    return;
+	}
+
 	#-print file type specific warnings and delete files
 	if (exists $rm_key{force}) {
 	    print STDERR "WARNING: All old files will be erased before continuing\n" unless($main::quiet);
@@ -274,7 +279,7 @@ sub _compare_and_clean {
 	    push (@files, $ipr_file);
 	    push (@files, @{[<$out_base/*.fasta>]});
 	}
-	    
+
 	#delete files in the void
 	foreach my $file (@files) {
 	    unlink($file) if(-e $file);

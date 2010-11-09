@@ -44,7 +44,7 @@ sub run {
 	   #run with alarm to correct for program hanging
 	   eval{
 	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
-	       alarm 600;
+	       alarm 1800;
 	       while (my $line = <CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
