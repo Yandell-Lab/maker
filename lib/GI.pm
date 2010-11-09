@@ -3376,7 +3376,7 @@ sub generate_control_files {
        print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
        print OUT "always_complete=$O{always_complete} #force start and stop codon into every gene, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "map_forward=$O{map_forward} #map names and attributes forward from old GFF3 genes, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "est_forward=$O{est_forward} #reserve flag for map2assembly\n" if(!$O{est_forward});
+       print OUT "est_forward=$O{est_forward} #reserve flag for map2assembly\n" if($O{est_forward});
        print OUT "keep_preds=$O{keep_preds} #Add unsupported gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";

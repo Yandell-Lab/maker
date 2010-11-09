@@ -1,9 +1,10 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
 
 use warnings;
 use strict;
 use Getopt::Long;
 use File::Temp qw(tempfile);
+use URI::Escape;
 
 my $usage = "
 
@@ -83,7 +84,7 @@ if ($datastore){
 
     foreach my $file (@files){
 	$file =~ /([^\/]+)$/;
-	$file = "$file/$1.gff";
+	$file = "$file/".uri_escape($1, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.').".gff";
     }
 }
 

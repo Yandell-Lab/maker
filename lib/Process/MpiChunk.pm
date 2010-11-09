@@ -584,7 +584,6 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $last = $CTL_OPT{_r_db}->[-1];
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    my $res_dir;
@@ -940,7 +939,6 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $last = $CTL_OPT{_e_db}->[-1];
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    #==BLAST ANALYSIS HERE
@@ -1103,7 +1101,6 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $last = $CTL_OPT{_a_db}->[-1];
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    my $res_dir;
@@ -1264,7 +1261,6 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
-	    my $last = $CTL_OPT{_p_db}->[-1];
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    #==BLAST ANALYSIS HERE

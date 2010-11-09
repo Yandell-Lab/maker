@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
 
 use warnings;
 use strict "vars";
@@ -68,7 +68,7 @@ use ds_utility;
 use GFFDB;
 use Error qw(:try);
 use Error::Simple;
-use Process::mapChunk;
+use Process::MpiChunk;
 use Process::MpiTiers;
 
 $| = 1;
@@ -146,7 +146,7 @@ try{
 
     #--load special options for CTL_OPT integration
     $OPT{genome}         = $genome;
-    $OPT{predictor}      = 'est2genome';
+    $OPT{est2genome}     = 1;
     $OPT{est}            = $transcripts;
     $OPT{est_forward}    = 1;
     $OPT{max_dna_len}    = 300000;
@@ -165,10 +165,6 @@ try{
    
     #set up control options from control files
     %CTL_OPT = GI::load_control_files([], \%OPT, $size);
-    $CTL_OPT{_pcov_blastn}    = $CTL_OPT{pcov_blastn};
-    $CTL_OPT{_pid_blastn}     = $CTL_OPT{pid_blastn};
-    $CTL_OPT{_pcov_blastx}    = $CTL_OPT{pcov_blastx};
-    $CTL_OPT{_pid_blastx}     = $CTL_OPT{pid_blastx};
 
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
@@ -201,7 +197,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 				    GFF_DB  => $GFF_DB,
 				    build   => $build},
 				   '0',
-				   'Process::mapChunk'
+				   'Process::MpiChunk'
 				   );
 
     next if($tier->terminated);
