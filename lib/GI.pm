@@ -1020,6 +1020,9 @@ sub polish_exonerate {
 					 $matrix,
 					 $LOG
 					 );
+
+	#delete fastas
+	unlink($d_file, $t_file);
 	
 	foreach my $exonerate_hit (@{$exonerate_hits}) {
 	    next if(! defined $exonerate_hit);
@@ -2143,7 +2146,11 @@ sub repeatmask {
 						      $seq_id, 
 						      $q_length
 						     );
-   
+
+   #delete other unneeded output files
+   my @files = map {<$file_name.$_>} qw(ref tbl cat masked);
+   unlink(@files);
+
    $LOG->add_entry("FINISHED", $o_file, ""); 
    
    PhatHit_utils::add_offset($rm_chunk_keepers, 
@@ -2265,6 +2272,7 @@ sub set_defaults {
       $CTL_OPT{'min_protein'} = 0;
       $CTL_OPT{'AED_threshold'} = 1;
       $CTL_OPT{'map_forward'} = 0;
+      $CTL_OPT{'est_forward'} = 0; #only used to map old annotations to new assembly
       $CTL_OPT{'always_complete'} = 0;
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'keep_preds'} = 0;
@@ -3368,6 +3376,7 @@ sub generate_control_files {
        print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
        print OUT "always_complete=$O{always_complete} #force start and stop codon into every gene, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "map_forward=$O{map_forward} #map names and attributes forward from old GFF3 genes, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "est_forward=$O{est_forward} #reserve flag for map2assembly\n" if(!$O{est_forward});
        print OUT "keep_preds=$O{keep_preds} #Add unsupported gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
