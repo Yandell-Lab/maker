@@ -2350,7 +2350,7 @@ sub set_defaults {
 		  'jigsaw'
 		 );
 
-      #get MAKER override exes
+      #get MAKER overriden exe locations
       my @all_alts = grep {-f $_ && -x $_} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>);
       foreach my $exe (@exes) {
 	  my @alts = grep {/\/$exe$/} @all_alts;
