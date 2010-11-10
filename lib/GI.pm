@@ -2175,7 +2175,8 @@ sub runRepeatMasker {
    my $command  = $RepeatMasker;
 
    if ($rmlib) {
-      $command .= " $q_file -lib $rmlib -dir $dir -pa $cpus";    
+      $command .= " $q_file -dir $dir -pa $cpus";
+      $command .= " -lib $rmlib" if($rmlib ne 'simple'); #skip organism for simple masking tag
    }
    else {
       $command .= " $q_file -species $species -dir $dir -pa $cpus";
@@ -3229,6 +3230,34 @@ sub load_control_files {
    }
 
    set_global_temp($CTL_OPT{_TMP});
+
+   #--make sure repbase is installed
+   if($CTL_OPT{model_org}){
+       my ($lib) = $CTL_OPT{RepeatMasker} =~ /(.*\/)RepeatMasker$/;
+       die "ERROR: Could not determine if RepBase is installed\n" if(! $lib);
+
+       $lib .= "Libraries/RepeatMaskerLib.embl";
+       die "ERROR: Could not determine if RepBase is installed\n" if(! -f $lib);
+
+       open(my $IN, "< $lib");
+       my $rb_flag;
+       for(my $i = 0; $i < 20; $i++){
+           my $line = <$IN>;
+           if($line =~ /RELEASE \d+(\-min)?\;/){
+	       $rb_flag = ($1 && $1 eq '-min') ? 0 : 1;
+	       last;
+           }
+       }
+       close($IN);
+
+       if(! $rb_flag){
+	   warn "WARNING: RepBase is not installed for RepeatMasker. This limits\n".
+	       "RepeatMasker's functionality and makes the model_org option in the\n".
+	       "control files virtually meaningless. MAKER will now reconfigure\n".
+	       "for simple repeat masking only.\n";
+	   $CTL_OPT{model_org} = 'simple';
+       }
+   }
 
    #--exit with status of 0 if just checking control files with -check fla
    return %CTL_OPT if($OPT{parse});
