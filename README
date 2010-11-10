@@ -31,9 +31,9 @@ Perl modules (available from CPAN):
     *DBI
     *DBD::SQLite
     *Proc::ProcessTable
-    *threads (Optional for MPI scripts)
-    *IO::All (Optional for accessory scripts)
-    *IO::Prompt (Optional for accessory scripts)
+    *threads (Required for MPI scripts)
+    *IO::All (Required for accessory scripts)
+    *IO::Prompt (Required for accessory scripts)
 
 Required external programs:
     *PERL 5.8.0 or higher
@@ -103,15 +103,13 @@ This will create a directory called MAKER with many sub directories:
 
     bin     - contains the MAKER executables.
     lib     - contains necessary perl libaries for MAKER.
-    MPI     - contains MPI specific data to configure MAKER for a
-              cluster that supports MPI.
-    Apollo  - contains gff3.tiers file (See section titled APOLLO
-              below)
-    JBrowse - contains JBrowse configuration files. (See section
-              titled JBrowse)
-    data    - contains some sample data used to make sure everything
-              works.
-    NCBI    - contains adapter scripts for compatability with BLAST+
+    src     - installation folder for configuring and installing MAKER.
+              Contains the Build.PL script.
+    exe     - MAKER installed external execuatables are stored here.
+    perl    - MAKER compiled and localized CPAN libs are stored here.
+    data    - contains sample data for use by MAKER.
+    GMOD    - contains files to assist in configuring other GMOD tools
+              (See sections titled APOLLO and JBrowse below)
     MWAS    - contains optional MAKER web based GUI
 
 Now you can run MAKER!!
@@ -142,18 +140,20 @@ MPI MAKER INSTALL
 
 You will need to have perl compiled for threads with an updated
 version of the perl threads module installed from CPAN before
-installing MPI MAKER.
+installing MPI MAKER. Note MAKER is only compatible with MPICH2.
 
 If you are running MAKER on an MPI capable cluster, you can install an
 MPI version of MAKER by doing the following:
-
-    1. Install standard MAKER and verify that it runs.
-    2. Install MPICH2 with the --enable-sharedlibs flag set to the
-       appropriate value for your OS (See MPICH2 documentation)
-    3. Use cd to change to the MPI subdirectory in the MAKER
-       instalation folder (i.e. maker/MPI/)
-    4. Run Install.PL by typing: perl Install.PL
-
+  a. Install standard MAKER and verify that it runs.
+  b. Install MPICH2 with the --enable-sharedlibs flag set to the
+     appropriate value for your OS (See MPICH2 documentation)
+  c. Use cd to change to the maker/src subdirectory in the MAKER
+     instalation folder.
+  d. Run Build.PL by typing: perl Build.PL
+  e. If	MPICH2 is installed and	configured correctly, it will be
+     detected by MAKER and Build.PL will ask if you want to intall
+     MPI MAKER.  Select 'yes'.
+  f. run ./Build install
 
 A new version of MAKER called mpi_maker should now be installed under
 maker/bin.
@@ -218,15 +218,25 @@ Control files:
 Remember to examine the control files before each run of MAKER on your
 specific data.
 
-Lines in the MAKER control files have the format key:value whith no
-spaces before or after the colon(:).  If the value is a file name, you
+Lines in the MAKER control files have the format key=value with no
+spaces before or after the equals(=).  If the value is a file name, you
 can use relative paths and environmental variables,
-i.e. genome:$HOME/my_genome.fasta
+i.e. genome=$HOME/my_genome.fasta
+
+For most options that take a file name, you can supply multiple files
+using comma seperated lists.
+i.e. est=dmel.fasta,cele.fasta
+
+You can also add optional labels to the output using a colon(:) to
+seperate a file name from the label.  Labels  will be passed on the
+the output GFF3.  This is convenient for seperating out tiers for
+GBrowse or JBrowse.
+i.e. est=dmel.fasta:fly,cele.fasta:nematode
 
 Note that for all control files the comments written to help users
-begin with a pound sign(#).  In addition, options before the colon(:)
+begin with a pound sign(#).  In addition, options before the equals(=)
 can not be changed, nor should there be a space before or after the
-colon.
+equals.
 
 A. maker_exe.ctl - includes information about programs executed by
 MAKER.
@@ -234,29 +244,29 @@ MAKER.
 Here is an example of sections of the maker_opts.ctl file:
 
 #-----Genome
-genome:/fastas/genome.fasta
+genome=/fastas/genome.fasta
 
 #-----EST Evidence
-est:/fastas/est.fasta
-altest:/fastas/alt_est.fasta
+est=/fastas/est.fasta
+altest=/fastas/alt_est.fasta
 
 #-----Protein Homology Evidence
-protein:protein.fasta
+protein=protein.fasta
 
 #-----MAKER Specific Options
-evaluate:0
-max_dna_len:100000
-min_contig:1
-min_protein:0
-split_hit:10000
-pred_flank:200
-single_exon:0
-single_length:250
-keep_preds:0
-map_forward:0
-retry:1
-clean_try:0
-clean_up:0
+evaluate=0
+max_dna_len=100000
+min_contig=1
+min_protein=0
+split_hit=10000
+pred_flank=200
+single_exon=0
+single_length=250
+keep_preds=0
+map_forward=0
+retry=1
+clean_try=0
+clean_up=0
 
 
 #---------------------------------------------------------------------
@@ -409,7 +419,7 @@ APOLLO
 MAKER is bundled with a configuration file that improves the color and
 display of MAKER annotations and evidence in the Apollo genome
 browser.  The configuration file is called "gff3.tiers" and is located
-in the maker/Apollo/ directory.  The file should be copied to the
+in the maker/GMOD/Apollo/ directory.  The file should be copied to the
 ~/.apollo sub_directory in your home directory. You may have to create
 ths directory if it doesn't exist.
 
@@ -420,6 +430,9 @@ CHADO
 MAKER is bundled with a script to make it easy to load MAKER results
 into a chado database.  The script is maker2chado.  You will also want
 to review CHADO documentation at http://www.gmod.org/.
+
+You can also use the chado2gff3 script bndled with MAKER to dump from
+Chado to GFF3.
 
 #---------------------------------------------------------------------
 

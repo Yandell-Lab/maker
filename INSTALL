@@ -21,7 +21,7 @@ DETAILED INSTALL
       *DBI
       *DBD::SQLite
       *Proc::ProcessTable
-      *threads (Optional for MPI scripts)
+      *threads (Required by MPI and accessory scripts)
       *IO::All (Required by accessory scripts)
       *IO::Prompt (Required by accessory scripts)
 
@@ -170,13 +170,24 @@ DETAILED INSTALL
   d.  You can now run a test of MAKER by following the instructions in the MAKER
       README file.
 
-
-See the README file for details on installing mpi_maker
-
-
 (OPTIONAL COMPONENTS)
 
-1. Augustus 2.0 or higher.  Download from http://augustus.gobics.de
+1.  If you want to install the MPI version of MAKER, you need to have Perl
+    compiled for threads.
+
+  a. Install standard MAKER and verify that it runs.
+  b. Install MPICH2 with the --enable-sharedlibs flag set to the
+     appropriate value for your OS (See MPICH2 documentation)
+  c. Use cd to change to the maker/src subdirectory in the MAKER
+     instalation folder.
+  d. Run Build.PL by typing: perl Build.PL
+  e. If MPICH2 is installed and configured correctly, it will be
+     detected by MAKER and Build.PL will ask if you want to intall
+     MPI MAKER.  Select 'yes'.
+  f. run ./Build install
+
+
+2. Augustus 2.0 or higher.  Download from http://augustus.gobics.de
 
   a.  Change to the directory containing the Augustus package to be compiled.
   b.  Unpack Augustus to the directory of your choice (i.e. /usr/local).
@@ -188,15 +199,15 @@ See the README file for details on installing mpi_maker
       .bash_profile (i.e. export PATH=/usr/local/augustus/bin:$PATH).
 
 
-2. GeneMark-ES.  Download from http://exon.biology.gatech.edu
+3. GeneMark-ES.  Download from http://exon.biology.gatech.edu
 
   a.  See GeneMark-ES installation documentation.
 
-3. FGENESH 2.4 or higher.  Purchase from http://www.softberry.com
+4. FGENESH 2.4 or higher.  Purchase from http://www.softberry.com
 
   a.  See FGENESH installation documentation.
 
-4. GeneMarkS.  Used for prokaryotic genomes only.
+5. GeneMarkS.  Used for prokaryotic genomes only.
    Download from http://exon.biology.gatech.edu
 
   a.  See GeneMarkS installation documentation.
