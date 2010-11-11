@@ -31,27 +31,10 @@ sub nextEntry {
         my $fh = $self->fileHandle();
 	my $line;
         while($line = <$fh>){
-                $self->offsetInFile(1);
-                return $line;
+	    return $line;
         }
         $fh->close();
         return undef;
-}
-#-------------------------------------------------------------------------------
-sub offsetInFile {
-	my $self      = shift;
-	my $increment = shift;
-
-	if (defined($increment) && defined($self->{offsetInFile})){
-		$self->{offsetInFile} += $increment;
-	}
-	elsif (defined($increment) && !defined($self->{offsetInFile})) {
-		$self->{offsetInFile} = $increment -1;
-		
-	}
-	else {
-		return $self->{offsetInFile};
-	}
 }
 #-------------------------------------------------------------------------------
 sub fileHandle {
@@ -60,13 +43,14 @@ sub fileHandle {
 	
 
 	if    (defined($arg) && ref($arg) eq 'FileHandle'){
-		 $self->{fileHandle} = $arg;
+	    die "ERROR: You must provide a file name and not a file handle Iterator::fileHandle\n";
 	}
 	elsif (defined($arg) && -e $arg){
 		my $fh = new FileHandle();
 		   $fh->open("$arg");
 
 		$self->{fileHandle} = $fh;
+		$self->startPos($self->fileHandle()->getpos());
 	}
 	elsif (!defined($arg) && defined($self->{fileHandle})){
 		return $self->{fileHandle};

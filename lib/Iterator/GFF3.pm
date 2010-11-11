@@ -14,9 +14,7 @@ use Fasta;
 use File::Temp qw(tempfile);
 use Scalar::Util qw(openhandle);
 
-@ISA = qw(
-	  Iterator::Fasta
-          );
+@ISA = qw(Iterator::Fasta);
 
 #-------------------------------------------------------------------------------
 #------------------------------- FUNCTIONS -------------------------------------
@@ -30,7 +28,6 @@ sub new {
         bless ($self, $class);
 
 	$fasta_file = $gff_file if (! $fasta_file);
-	$self->_set_number_of_entries($fasta_file);
 	$self->fileHandle($fasta_file);
 	$self->{gff_file} = $gff_file;
 
@@ -42,7 +39,10 @@ sub new {
 	if($gff_file eq $fasta_file){
 	    my $line;
 	    while($line = <$fh>){
-		last if ($line =~ /^\#\#FASTA/);
+		if ($line =~ /^\#\#FASTA/){
+		    $self->startPos($self->fileHandle()->getpos());
+		    last;
+		}
 	    }
 	}
 

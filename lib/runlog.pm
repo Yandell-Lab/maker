@@ -52,6 +52,7 @@ my @ctl_to_log = ('genome_gff',
 		  'single_length',
 		  'keep_preds',
 		  'map_forward',
+		  'est_forward',
 		  'always_complete',
 		  'alt_peptide',
 		  'evaluate',
@@ -98,7 +99,6 @@ sub new {
     bless ($self, $class);    
 
     if($self->_initialize(@args)){
-       $self->_load_old_log();
        $self->_compare_and_clean();
        $self->_write_new_log();
     }
@@ -110,32 +110,18 @@ sub new {
 #-------------------------------------------------------------------------------
 sub _initialize {
    my $self = shift;
-   $self->{CTL_OPTIONS} = shift;
+   $self->{CTL_OPT} = shift;
    $self->{params} = shift;
    $self->{file_name} = shift || "run.log";
-   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD};
+   $self->{CWD} = $self->{CTL_OPT}->{CWD};
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
    #make sure the log is only accesed by this process
    if(my $lock = new File::NFSLock($self->{file_name}, 'NB', undef, 40)){
-       my $min_contig = $self->{CTL_OPTIONS}->{min_contig};
-       my $length = $self->{params}->{seq_length};
-   
-       #log can be processed and compared
-       if($length >= $min_contig){
 	   $self->{continue_flag} = 1;
 	   $self->{LOCK} = $lock;
-
 	   return 1;
-       }
-       #skip if this is a short contig
-       else{
-	   $self->{continue_flag} = -2; # -2 is skip signal
-	   $lock->unlock;
-	       
-	   return 0;
-       }
    }
    #belongs to another process so skip
    else{
@@ -179,9 +165,11 @@ sub _compare_and_clean {
 	return;
     }
 
+    $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
     my $CWD = $self->{CWD};
+
     my $the_void = $self->{params}->{the_void};
-    my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
+    my %CTL_OPT = %{$self->{CTL_OPT}};
 
     #get gff file name
     my $log_file = $self->{file_name};
@@ -194,59 +182,64 @@ sub _compare_and_clean {
 
     #===id files types that can not be re-used
     my $continue_flag = $self->{continue_flag}; #signals whether to continue with this seq
-    
-    my %logged_vals = %{$self->{old_log}}; #values from existing log
     my %rm_key; #key to what type of old files to remove
     my @files; #list of files to remove
     my @dirs; #list of directories to remove
-    
-    if ($continue_flag > 0 && -e $log_file) {
-	die "ERROR: Database timed out in runlog::_clean_files\n\n"
-	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 120, 30));
 
-	#seen is set in ds_utility.pm
-	my %SEEN;
-	tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
+    #evaluated if this contig was already seen by this or another process
+    #for certain types of flags which must be interpreted only once
+    my $was_seen; 
+    if($CTL_OPT{force} || $CTL_OPT{again}){
+	my $lock = new File::NFSLock($CTL_OPT{SEEN_file}, 'EX', 120, 30);
+	die "ERROR: Database timed out in runlog::_clean_files\n\n" if(! $lock);
+	my %SEEN; #seen is set in ds_utility.pm
+	tie (%SEEN, 'AnyDBM_File', $CTL_OPT{SEEN_file});
 
-	if (exists $logged_vals{DIED}) {
-	    if($CTL_OPTIONS{force} && ! defined $SEEN{$name}){
-		$self->{die_count} = 0; #reset the die count
-		$continue_flag = 1; #re-run
-		$rm_key{force}++;
-	    }
-	    elsif($CTL_OPTIONS{always_try} && ! defined $SEEN{$name}){
-		$self->{die_count} = 0; #reset the die count
-		$continue_flag = 1; #re-run
-	    }
-	    else{
-		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
-		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
-		$rm_key{cleantry}++ if ($continue_flag == 2);
-	    }
-	}
-	elsif ($CTL_OPTIONS{force} && ! defined $SEEN{$name}) {
-	    $rm_key{force}++;
-	    $continue_flag = 1;	#run/re-run
-	}
-	elsif ($CTL_OPTIONS{again} && ! defined $SEEN{$name}){
-	    $continue_flag = 1; #run/re-run
-	    $rm_key{gff}++;
-	}
-	else {
-	    $continue_flag = 0 if (-e $gff_file); #don't re-run finished
-	}
+	$was_seen = $SEEN{$name};
 
-	$SEEN{$name} = $continue_flag;
+	$SEEN{$name} = 1 if(! $was_seen);
 	untie %SEEN;
 	$lock->unlock;
+    }
 
+    #tag contig files for destruction if force is in effect
+    if ($CTL_OPT{force} && !$was_seen) {
+	$rm_key{force}++;
+	$self->{die_count} = 0; #reset the die count
+	$continue_flag = 1;	#run/re-run
+    }
+    #contig is too short so skip
+    elsif($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig}){
+	$continue_flag = -2; #skip
+	$rm_key{force}++; #will destroy analyses for this contig
+    }
+    #evaluate existing runlog for contig
+    elsif (-e $log_file) {
+	my %logged_vals = %{$self->_load_old_log}; #values from existing log
+
+	if ($CTL_OPT{again} && !$was_seen){
+	    $rm_key{gff}++;
+	    $self->{die_count} = 0; #reset the die count
+	    $continue_flag = 1; #run/re-run
+	}
+	elsif ($CTL_OPT{always_try}){
+	    $self->{die_count} = 0; #reset the die count
+	    $continue_flag = 1; #re-run	    
+	}
+	elsif ($logged_vals{DIED}) {
+	    $continue_flag = ($CTL_OPT{clean_try}) ? 2 : 3;	#rerun died
+	    $continue_flag = -1 if($self->{die_count} > $CTL_OPT{retry}); #only let die up to count
+	    $rm_key{force}++ if ($continue_flag == 2);
+	}
+	else{
+	    $continue_flag = 0; #don't re-run finished
+	}
+    
 	my %skip;
-	if($continue_flag >= -1){
+	if(!$rm_key{force}){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	    my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
-
 	    foreach my $key (@ctl_to_log) {
-		#changes to hidden key only important when nothing else changed
+		#ignore hidden key if something else already changed
 		if($key eq 'run'){
 		    next if(exists $rm_key{gff});
 		}
@@ -255,12 +248,12 @@ sub _compare_and_clean {
 		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$|^rm_pass$/ ||
 		   $key =~ /^pred_pass$|^model_pass$|^other_pass$/
 		   ){
-		    next unless($CTL_OPTIONS{genome_gff});
+		    next unless($CTL_OPT{genome_gff});
 		    my $old = (exists $logged_vals{CTL_OPTIONS}{genome_gff}) ? 
 			$logged_vals{CTL_OPTIONS}{genome_gff} : '';
-		    $old =~ s/^$cwd\/*//;
-		    my $new = $CTL_OPTIONS{genome_gff};
-		    $new =~ s/^$cwd\/*//;
+		    $old =~ s/^$CWD\/*//;
+		    my $new = $CTL_OPT{genome_gff};
+		    $new =~ s/^$CWD\/*//;
 
 		    #only continue if change not already happening
 		    #because of a new gff3 file
@@ -269,7 +262,7 @@ sub _compare_and_clean {
 
                 #these are only sometimes important
                 if($key =~ /^map_forward$/){
-                    next unless($CTL_OPTIONS{genome_gff} || $CTL_OPTIONS{model_gff});
+                    next unless($CTL_OPT{genome_gff} || $CTL_OPT{model_gff});
                 }
 		
 		my $log_val = '';
@@ -279,7 +272,7 @@ sub _compare_and_clean {
 			#don't care about absolute location
 			$log_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 		    }
-
+			
 		    if($log_val =~ /\,/){
 			#don't care about order
 			my @set = split(',', $logged_vals{CTL_OPTIONS}{$key});
@@ -287,11 +280,11 @@ sub _compare_and_clean {
 			$log_val = join(',', @set);
 		    }
 		}
-		
+	    
 		my $ctl_val = '';
-		if(defined $CTL_OPTIONS{$key}){
-		    $ctl_val = $CTL_OPTIONS{$key};
-		    $ctl_val =~ s/^$cwd\/*//;
+		if(defined $CTL_OPT{$key}){
+		    $ctl_val = $CTL_OPT{$key};
+		    $ctl_val =~ s/^$CWD\/*//;
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
 			$ctl_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
@@ -305,7 +298,7 @@ sub _compare_and_clean {
 		    }
 		}
 
-		#always_complete was off before and not logged
+	        #always_complete was off before and not logged
 		if($key eq 'always_complete' && ! $log_val){
 		    $log_val = 0;
 		}
@@ -323,6 +316,22 @@ sub _compare_and_clean {
 		#AED_thrshold was always 1 before and not logged
 		if($key eq 'AED_threshold' && $log_val eq ''){
 		    $log_val = 1;
+		}
+
+		#est_forward was always 0 before and not logged (is is also sometimes hidden)
+		if($key eq 'est_forward'){
+		    $ctl_val = 0 if($ctl_val eq '');
+		    $log_val = 0 if($log_val eq '');
+		}
+
+	        #est2genome was previously part of predictor
+		if($key eq 'est2genome' && $log_val eq ''){
+		    $log_val = (grep {/est2genome/} $logged_vals{predictor}) ? 1 : 0;
+		}
+
+	        #protein2genome was previously part of predictor
+		if($key eq 'protein2genome' && $log_val eq ''){
+		    $log_val = (grep {/protein2genome/} $logged_vals{predictor}) ? 1 : 0;
 		}
 
 		#if previous log options are not the same as current control file options
@@ -344,6 +353,8 @@ sub _compare_and_clean {
 		       $key ne 'other_pass' &&
 		       $key ne 'other_gff' &&
 		       $key ne 'map_forward' &&
+		       $key ne 'est2genome' &&
+		       $key ne 'protein2genome' &&
 		       @$change
 		      ){
 			$rm_key{preds}++; #almost all changes affect final predictions
@@ -452,7 +463,7 @@ sub _compare_and_clean {
 		    }
 		}
 	    }
-	    
+	     
 	    #CHECK FOR FILES THAT DID NOT FINISH
 	    while (my $key = each %{$logged_vals{STARTED}}) {
 		if (! exists $logged_vals{FINISHED}{$key}) {
@@ -478,7 +489,7 @@ sub _compare_and_clean {
 		}
 	    }
 	}
-
+	   
 	#===Remove files that can no longer be re-used
 	if(! $self->{LOCK}->still_mine){
             warn "ERROR: Lock broken in runlog\n";
@@ -487,47 +498,34 @@ sub _compare_and_clean {
         }
 
 	#-print file type specific warnings and delete files
-	if (exists $rm_key{force}) {
+	if (exists $rm_key{force} || $rm_key{cleantry}) {
 	    print STDERR "MAKER WARNING: All old files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
 	    File::Path::mkpath($the_void);
 	    
-	    #remove evaluator output
-	    File::Path::rmtree("$out_base/evaluator");
-	    
 	    #remove all other files
-	    unlink($gff_file) if(-e $gff_file);
-	    my @f = <$out_base/*.fasta>;
-	    push (@files, @f);
-	}
-	elsif (exists $rm_key{cleantry}) {
-	    print STDERR "MAKER WARNING: Old data must be removed before re-running this sequence\n" unless($main::qq);
-	    
-	    #delete everything in the void
-	    File::Path::rmtree($the_void);
-	    File::Path::mkpath($the_void);
-	    unlink($gff_file) if(-e $gff_file);
-	    
-	    #remove evaluator output
-	    File::Path::rmtree("$out_base/evaluator");
+	    push (@files, $gff_file) if(-e $gff_file);
+	    push (@files, @{[<$out_base/*.fasta>]});
+	    push (@dirs, "$out_base/evaluator");
 	}
 	elsif (exists $rm_key{all}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
-		"All old files will be erased before continuing\n" unless($main::qq);
+		         "All old files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
 	    File::Path::mkpath($the_void);
-	    unlink($gff_file) if(-e $gff_file);
-	    
-	    #remove evaluator output
-	    File::Path::rmtree("$out_base/evaluator");
+
+	    #remove all other files	    
+	    push (@files, $gff_file) if(-e $gff_file);
+	    push (@files, @{[<$out_base/*.fasta>]});
+	    push (@dirs, "$out_base/evaluator");
 	}
 	elsif (exists $rm_key{all_but_rb}) { #all but repbase reports
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but some RepeatMasker data impossible\n".
-		"All old non-RepeatMasker and some RepeatMaswker files will be erased before continuing\n" unless($main::qq);
+		         "All old non-RepeatMasker and some RepeatMasker files will be erased before continuing\n" unless($main::qq);
 	    
 	    #delete everything in the void
 	    my @f = <$the_void/*>;
@@ -542,6 +540,11 @@ sub _compare_and_clean {
 		push (@files, $f) if (-f $f);
 		push (@dirs, $f) if (-d $f);
 	    }
+
+	    #remove all other files
+	    push (@files, $gff_file) if(-e $gff_file);
+	    push (@files, @{[<$out_base/*.fasta>]});
+	    push (@dirs, "$out_base/evaluator");
 	}
 	elsif (exists $rm_key{all_but}) {
 	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
@@ -556,6 +559,11 @@ sub _compare_and_clean {
 		push (@files, $f) if (-f $f);
 		push (@dirs, $f) if (-d $f);
 	    }
+
+	    #remove all other files	    
+	    push (@files, $gff_file) if(-e $gff_file);
+	    push (@files, @{[<$out_base/*.fasta>]});
+	    push (@dirs, "$out_base/evaluator");
 	}
 	else {
 	    if (exists $rm_key{preds}) {
@@ -683,16 +691,17 @@ sub _compare_and_clean {
 		print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n"
 		    unless($main::qq);
 		push (@files, $gff_file);
-		push (@files, @{[<$out_base/evaluator/*.eva>]});
-		push (@files, @{[<$out_base/*maker*.fasta>]});
+		push (@files, @{[<$out_base/*.fasta>]});
+		push (@dirs, "$out_base/evaluator");
 	    }
-
-	    #see if died fasta exists
-	    my $d_fasta = $gff_file;
-	    $d_fasta =~ s/\.gff$/.died.fasta/;
-	    if(-e $d_fasta){
-                push (@files, $d_fasta);
-            }
+	    else{
+		#see if died fasta exists
+		my $d_fasta = $gff_file;
+		$d_fasta =~ s/\.gff$/.died.fasta/;
+		if(-e $d_fasta){
+		    push (@files, $d_fasta);
+		}
+	    }
 
 	    #delete files in the void
 	    foreach my $file (@files) {
@@ -719,23 +728,22 @@ sub _compare_and_clean {
 sub _write_new_log {
    my $self = shift;
 
+   $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
-   my $log_file = $self->{file_name};
-   
-   my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
+
+   my $log_file = $self->{file_name};   
+   my %CTL_OPT = %{$self->{CTL_OPT}};
 
    return if ($self->{continue_flag} <= 0);
 
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = ($CWD) ? $CWD : Cwd::getcwd();
- 
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
-      if(defined $CTL_OPTIONS{$key}){
-	 $ctl_val = $CTL_OPTIONS{$key} ;
-	 $ctl_val =~ s/^$cwd\/*//;
+      if(defined $CTL_OPT{$key}){
+	 $ctl_val = $CTL_OPT{$key} ;
+	 $ctl_val =~ s/^$CWD\/*//;
 	 if($key eq 'repeat_protein'){
 	    #don't care about absolute location
 	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
@@ -753,15 +761,16 @@ sub add_entry {
    my $key   = shift;
    my $value = shift;
 
+   $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
+
    my $log_file = $self->{file_name};
-   my $cwd = ($CWD) ?$CWD : Cwd::getcwd();
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security
    #also important when moving work directory around
    if(defined $key && defined $type){
-       $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
+       $key =~ s/^$CWD\/*// if($type =~ /^STARTED$|^FINISHED$/);
    }
 
    open(my $LOG, ">> $log_file");

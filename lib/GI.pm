@@ -3268,12 +3268,12 @@ sub load_control_files {
    my $i_lock; #init lock, it is only a temporary blocking lock
    while(! $i_lock || ! $i_lock->still_mine){
        die "ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 40, 45));
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 90, 95));
    }
 
-   #--check if another instance of maker is running, and lock the directory
+   #--check if MAKER is already running and lock the directory
    #lock must be global or it will be destroyed outside of block
-   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/.gi_lock", 'SH', 40, 40)){
+   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/gi_lock", 'SH', 40, 40)){
        $LOCK->maintain(30);
    }
    else{
@@ -3281,14 +3281,18 @@ sub load_control_files {
    }
 
    #check who else is also sharing the lock and if running same settings
-   my $app = ($main::eva) ? "eval" : "maker";
-
-   if($LOCK->owners() == 1){ #I am only/first holder of the lock
+   $CTL_OPT{_step} = $LOCK->owners() || 1;
+   if($CTL_OPT{_step} == 1){ #I am only/first holder of the lock
        #log the control files
        generate_control_files($CTL_OPT{out_base}, 'all', \%CTL_OPT, 1);
+
+       $i_lock->unlock; #release init lock
    }
    else{
+       $i_lock->unlock; #release init lock
+
        #compare current control files to logged files
+       my $app = ($main::eva) ? "eval" : "maker";
        my @ctl_logs = ($CTL_OPT{out_base}."/$app\_opts.log",
 		       $CTL_OPT{out_base}."/$app\_bopts.log",
 		       $CTL_OPT{out_base}."/$app\_exe.log"
@@ -3310,8 +3314,6 @@ sub load_control_files {
 	   $CTL_OPT{_multi_chpc}++; #multi process flag
        }
    }
-
-   $i_lock->unlock; #release init lock
 
    #---set up blast databases and indexes for analyisis
    create_blastdb(\%CTL_OPT, $mpi_size);

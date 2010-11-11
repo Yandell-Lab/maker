@@ -177,6 +177,7 @@ try{
     $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
 				   -gff => $CTL_OPT{'genome_gff'},
 				   );
+    $iterator->step($CTL_OPT{'_step'}); 
 }
 catch Error::Simple with{
     my $E = shift;
@@ -202,7 +203,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 
     next if($tier->terminated);
     $tier->run_all;
-    push(@failed, $tier->fasta) if ($tier->failed);
+    push(@failed, $tier->fasta) if ($tier->failed || $tier->interupt);
 }
 
 #merge gff3 files into big file

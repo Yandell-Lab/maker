@@ -1437,6 +1437,7 @@ sub run_it {
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
 	    my $transcript = ($CTL_OPT->{est_forward}) ? $mia : pneu($ests, $mia, $seq);
+	    $transcript->{_HMM} = 'est2genome';
 
 	    if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 		my $transcript_seq  = get_transcript_seq($transcript, $seq);
@@ -1479,6 +1480,7 @@ sub run_it {
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
 		
 		my $transcript = pneu($utr, $copy, $seq);
+		$transcript->{_HMM} = 'protein2genome';
 
 		next if(! $transcript);
 
@@ -1700,12 +1702,12 @@ sub load_transcript_struct {
 	my $evi          = shift;
 	my $p_base       = shift;
 	my $the_void     = shift;
-	my $CTL_OPT  = shift;
+	my $CTL_OPT      = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	if($p_base->algorithm !~ /model_gff/){
+	if($p_base->algorithm !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
 	    #walk out edges to force completion
 	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
 		$f = PhatHit_utils::adjust_start_stop($f, $seq);
@@ -1717,7 +1719,7 @@ sub load_transcript_struct {
 	    my $trim5 = (!$has_stop && $end > length($transcript_seq) + 1);
 	    my $trim3 = (!$has_start && $offset > 0);
 	    if($trim5 || $trim3){
-		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3);
+		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
 		$transcript_seq  = get_transcript_seq($f, $seq);
 		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 	    }
@@ -1861,7 +1863,7 @@ sub group_transcripts {
    my $build        = shift;
    my $predictor    = shift;
    my $the_void     = shift;
-   my $CTL_OPT  = shift;
+   my $CTL_OPT      = shift;
 
    #fix weird sequence names
    $seq_id = Fasta::seqID2SafeID($seq_id);
@@ -1913,6 +1915,7 @@ sub group_transcripts {
       my %sources;
       foreach my $t (@transcripts){
 	  push(@{$sources{$t->{_HMM}}}, $t);
+	  die "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
       }
      
       #now cluster each list seperately
@@ -1920,9 +1923,9 @@ sub group_transcripts {
 	  my $clusters = cluster::careful_cluster_phat_hits($set, $seq);
 	  
 	  #remove redundant transcripts in gene
-	  foreach my $c (@{$careful_clusters}) {
-	      my $best_alt_forms =
-		  clean::remove_redundant_alt_splices($c, $seq, 10);
+	  foreach my $c (@{$clusters}) {
+	      my $best_alt_forms = ($CTL_OPT->{est_forward}) ?
+		  $c : clean::remove_redundant_alt_splices($c, $seq, 10);
 	      push(@$careful_clusters, $best_alt_forms);
 	  }
       }

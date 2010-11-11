@@ -42,6 +42,7 @@ sub new {
 	  $self->{TIER_ID}   = shift @args;
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
+	  $self->{INTERUPT}  = 0;
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
@@ -384,6 +385,29 @@ sub _set_failed {
    if($arg == 1 &&(! defined($old) || $old != 1)){
        $self->_on_failure;
    }
+}
+#-------------------------------------------------------------
+#returns true if tier is interupted
+
+sub interupt{
+   my $self = shift;
+   return $self->{INTERUPT};
+}
+
+#-------------------------------------------------------------
+#sets $self->{INTERUPT}
+
+sub _set_interupt {
+   my $self = shift;
+   my $arg = shift;
+
+   if(! defined($arg) || $arg !~ /^0$|^1$/){
+       die "FATAL:  Attempt to set FAILED to an illegal value\n".
+	   "in Process::MpiTiers\n\n";
+   }
+
+   my $old = $self->{INTERUPT};
+   $self->{INTERUPT} = $arg;
 }
 #-------------------------------------------------------------
 #returns whatevever is strored in $self->{ERROR}

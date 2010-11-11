@@ -155,6 +155,9 @@ sub _should_continue {
       $self = new Process::MpiChunk();
    }
 
+   #interupted because another process is working on contig
+   $tier->_set_interupt(1) if($tier->{VARS}{c_flag} == -3);
+
    return $tier->{VARS}{c_flag};
 }
 #--------------------------------------------------------------

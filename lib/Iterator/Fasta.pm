@@ -11,9 +11,7 @@ use Iterator;
 use Fasta;
 use Scalar::Util qw(openhandle);
 
-@ISA = qw(
-		Iterator
-       );
+@ISA = qw(Iterator);
 
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
@@ -25,8 +23,7 @@ sub new {
         my $self = {};
         bless $self;
 
-	$self->_set_number_of_entries($arg);
-
+	$self->fileName($arg);
 	$self->fileHandle($arg);
 
 	return $self;
@@ -34,7 +31,7 @@ sub new {
 #-------------------------------------------------------------------------------
 sub _set_number_of_entries {
 	my $self = shift;
-	my $arg  = shift;
+	my $arg  = $self->fileName();
 
 	my $fh = new FileHandle();
 	   $fh->open($arg);
@@ -46,66 +43,79 @@ sub _set_number_of_entries {
 	}
 	$fh->close();
 
-	$self->number_of_entries($i);
+	$self->{number_of_entries} = $i;
 }
 #-------------------------------------------------------------------------------
-{
-my %hash;
+sub number_of_entries{
+    my $self = shift;
+    
+    if(! defined ($self->{number_of_entries})){
+	$self->_set_number_of_entries();
+    }
+    
+    return $self->{number_of_entries};
+}
+#-------------------------------------------------------------------------------
 sub find {
-	my $self = shift;
-	my $id   = shift;
-
-	return $hash{$id} if defined($hash{$id});
-
-	while (my $query = $self->nextEntry()){
-		my ($id) = Fasta::getSeqID(\$query);
-		$hash{$id} = $query;
-	}
-
-	return $hash{$id};
-
-}
+    die "ERROR: Iterator::Fasta::find is disabled\n";
 }
 #-------------------------------------------------------------------------------
 {
+my @SEEN;
+my $COUNT = -1;
 my @BUF; #buffer for pushing back meta character contamination
 sub nextEntry {
-	my $self = shift;
+    my $self = shift;
 
-	#return buffered entry first
-	if(@BUF){
-	    return shift @BUF;
+    my $fh = $self->fileHandle();
+    local $/ = "\n>";
+    
+    if (! @BUF && ! openhandle($fh)){ #checks to see if file handle is open
+	return undef; 
+    }
+    
+    my $line;
+    while($line = shift @BUF || <$fh>){
+	$COUNT++;
+
+	$line =~ s/>//;
+	$line =~ s/>$//;
+	$line = ">".$line;
+	$/ = "\n";
+
+	if($line =~ /^M\n?|\cM\n?/){
+	    $line =~ s/^M\n?|\cM\n?/\n/g;
+	    my @set = grep {$_ ne "\n" } split(/\n>/, $line);
+	    foreach my $s (@set){
+		$s = ">".$s if($s !~ /^>/);
+	    }
+	    $line = shift @set;
+	    push(@BUF, @set);
 	}
 
-	my $fh = $self->fileHandle();
-	local $/ = "\n>";
+	#already seen so skip
+	next if($SEEN[$COUNT]);
 
-	if (! openhandle($fh)){ #checks to see if file handle is open
-	    return undef; 
+	#step forward in jumps if indicated
+	if($self->{step} && $self->{step} != 1){
+	    next if($COUNT < $self->{step} || $COUNT % $self->{step} != 0);
 	}
-	my $line;
-	while($line = <$fh>){
-                $line =~ s/>//;
-		$line =~ s/>$//;
-                $line = ">".$line;
-		$self->offsetInFile(1);
-		$/ = "\n";
 
-		if($line =~ /^M\n?|\cM\n?/){
-		    $line =~ s/^M\n?|\cM\n?/\n/g;
-		    my @set = grep {$_ ne "\n" } split(/\n>/, $line);
-		    foreach my $s (@set){
-			$s = ">".$s if($s !~ /^>/);
-		    }
-		    $line = shift @set;
-		    push(@BUF, @set);
-		}
+	$SEEN[$COUNT]++;
 
-		return $line;
-	}
-	
-	$fh->close();
-	return undef;
+	return $line;
+    }
+    
+    #end of file but I was jumping using a step, so go back to start
+    if($self->{step} && $self->{step} != 1){
+	$self->{step} = undef; #remove step
+	$COUNT = -1; #reset count
+	$fh->setpos($self->startPos); #go to start of file
+	return $self->nextEntry();
+    }
+    
+    $fh->close();
+    return undef;
 }
 }
 #-------------------------------------------------------------------------------

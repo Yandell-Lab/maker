@@ -269,7 +269,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed){
 
     next if($tier->terminated);
     $tier->run_all;
-    push(@failed, $tier->fasta) if ($tier->failed);
+    push(@failed, $tier->fasta) if ($tier->failed || $tier->interupt);
 }
 
 print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
