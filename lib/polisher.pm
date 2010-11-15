@@ -33,7 +33,6 @@ sub prep {
 	my $g_len = length($$g_seq);
 	my $p_len = length($$p_seq);
 
-
 	return ($p_len, $g_len);	
 }
 #------------------------------------------------------------------------

@@ -135,6 +135,7 @@ sub _load_old_log {
    my $self = shift;
 
    $self->{die_count} = 0;
+   $self->{old_shared_id} = '';
 
    my $log_file = $self->{file_name};
    my %logged_vals;
@@ -149,6 +150,7 @@ sub _load_old_log {
 	 $logged_vals{$type}{$key} = defined($value) ? $value : '';
 	 
 	 $self->{die_count} = $value if($type eq 'DIED' && $key eq 'COUNT');
+	 $self->{old_shared_id} = $key if($type eq 'SHARED_ID');
       }
       close(IN);
    }
@@ -186,41 +188,36 @@ sub _compare_and_clean {
     my @files; #list of files to remove
     my @dirs; #list of directories to remove
 
-    #evaluated if this contig was already seen by this or another process
-    #for certain types of flags which must be interpreted only once
-    my $was_seen; 
-    if($CTL_OPT{force} || $CTL_OPT{again}){
-	my $lock = new File::NFSLock($CTL_OPT{SEEN_file}, 'EX', 120, 30);
-	die "ERROR: Database timed out in runlog::_clean_files\n\n" if(! $lock);
-	my %SEEN; #seen is set in ds_utility.pm
-	tie (%SEEN, 'AnyDBM_File', $CTL_OPT{SEEN_file});
-
-	$was_seen = $SEEN{$name};
-
-	$SEEN{$name} = 1 if(! $was_seen);
-	untie %SEEN;
-	$lock->unlock;
-    }
-
-    #tag contig files for destruction if force is in effect
-    if ($CTL_OPT{force} && !$was_seen) {
-	$rm_key{force}++;
-	$self->{die_count} = 0; #reset the die count
-	$continue_flag = 1;	#run/re-run
-    }
-    #contig is too short so skip
-    elsif($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig}){
-	$continue_flag = -2; #skip
-	$rm_key{force}++; #will destroy analyses for this contig
-    }
     #evaluate existing runlog for contig
-    elsif (-e $log_file) {
+    if (-e $log_file) {
 	my %logged_vals = %{$self->_load_old_log}; #values from existing log
+	my $shared = $self->{old_shared_id} eq $CTL_OPT{_shared_id};
 
-	if ($CTL_OPT{again} && !$was_seen){
+	if($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig} && $shared){
+	    $self->{continue_flag} = -4; #handled elsewhere, don't run, don't report
+	    return;
+	}
+	elsif(-e $gff_file && $shared){
+	    $self->{continue_flag} = -4; #handled elsewhere, don't run, don't report
+	    return;
+	}
+	elsif($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig} && !$shared){
+	    $continue_flag = -2; #skip short
+	    $self->{die_count} = 0; #reset the die count
+	    $rm_key{force}++; #will destroy gff and fastas for this contig
+	}
+	elsif ($CTL_OPT{force} && !$shared) {
+	    $rm_key{force}++;
+	    $self->{die_count} = 0; #reset the die count
+	    $continue_flag = 1;	#run/re-run
+	}
+	elsif ($CTL_OPT{again} && !$shared){
 	    $rm_key{gff}++;
 	    $self->{die_count} = 0; #reset the die count
 	    $continue_flag = 1; #run/re-run
+	}
+	elsif(-e $gff_file){
+	    $continue_flag = 0; #don't re-run finished
 	}
 	elsif ($CTL_OPT{always_try}){
 	    $self->{die_count} = 0; #reset the die count
@@ -231,10 +228,7 @@ sub _compare_and_clean {
 	    $continue_flag = -1 if($self->{die_count} > $CTL_OPT{retry}); #only let die up to count
 	    $rm_key{force}++ if ($continue_flag == 2);
 	}
-	else{
-	    $continue_flag = 0; #don't re-run finished
-	}
-    
+
 	my %skip;
 	if(!$rm_key{force}){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
@@ -251,9 +245,11 @@ sub _compare_and_clean {
 		    next unless($CTL_OPT{genome_gff});
 		    my $old = (exists $logged_vals{CTL_OPTIONS}{genome_gff}) ? 
 			$logged_vals{CTL_OPTIONS}{genome_gff} : '';
-		    $old =~ s/^$CWD\/*//;
+		    $old =~ s/(^|\,)$CWD\/*/$1/g;
+		    $old = join(',', sort split(',', $old));
 		    my $new = $CTL_OPT{genome_gff};
-		    $new =~ s/^$CWD\/*//;
+		    $new =~ s/(^|\,)$CWD\/*/$1/g;
+		    $new = join(',', sort split(',', $new));
 
 		    #only continue if change not already happening
 		    #because of a new gff3 file
@@ -268,33 +264,22 @@ sub _compare_and_clean {
 		my $log_val = '';
 		if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
 		    $log_val = $logged_vals{CTL_OPTIONS}{$key};
+		    $log_val =~ s/(^|\,)$CWD\/*/$1/g;
+		    $log_val = join(',', sort split(',', $log_val));
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$log_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
-		    }
-			
-		    if($log_val =~ /\,/){
-			#don't care about order
-			my @set = split(',', $logged_vals{CTL_OPTIONS}{$key});
-			@set = sort @set;
-			$log_val = join(',', @set);
-		    }
+			$log_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
+		    }			
 		}
 	    
 		my $ctl_val = '';
 		if(defined $CTL_OPT{$key}){
 		    $ctl_val = $CTL_OPT{$key};
-		    $ctl_val =~ s/^$CWD\/*//;
+		    $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
+		    $ctl_val = join(',', sort split(',', $ctl_val));
 		    if($key eq 'repeat_protein'){
 			#don't care about absolute location
-			$ctl_val =~ s/[^\,]+\/maker\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
-		    }
-
-		    if($ctl_val =~ /\,/){
-			#don't care about order
-			my @set = split(',', $logged_vals{CTL_OPTIONS}{$key});
-			@set = sort @set;
-			$ctl_val = join(',', @set);
+			$ctl_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 		    }
 		}
 
@@ -702,25 +687,25 @@ sub _compare_and_clean {
 		    push (@files, $d_fasta);
 		}
 	    }
-
-	    #delete files in the void
-	    foreach my $file (@files) {
-		unlink($file);
-	    }
-	    
-	    #delete directories in the void
-	    foreach my $dir (@dirs) {
-		File::Path::rmtree($dir);
-	    }
-
-	    #just in case, this will help remove temp_dirs
-	    my @d = <$the_void/*.temp_dir>;
-	    foreach my $d (@d){
-		File::Path::rmtree($d) if (-d $d);
-	    }
 	}
+
+	#delete files in the void
+	foreach my $file (@files) {
+	    unlink($file);
+	}
+	
+	#delete directories in the void
+	foreach my $dir (@dirs) {
+	    File::Path::rmtree($dir);
+	}
+	
+	#just in case, this will help remove temp_dirs
+	my @d = <$the_void/*.temp_dir>;
+	foreach my $d (@d){
+	    File::Path::rmtree($d) if (-d $d);
+	}    
     }
-    
+
     $self->{continue_flag} = $continue_flag;
 }
 #-------------------------------------------------------------------------------
@@ -728,25 +713,27 @@ sub _compare_and_clean {
 sub _write_new_log {
    my $self = shift;
 
+   return if($self->{continue_flag} <= 0 && $self->{continue_flag} != -2);
+
    $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
 
    my $log_file = $self->{file_name};   
    my %CTL_OPT = %{$self->{CTL_OPT}};
 
-   return if ($self->{continue_flag} <= 0);
-
    open (LOG, "> $log_file");
 
    #log control file options
+   print LOG "SHARED_ID\t$CTL_OPT{_shared_id}\t\n";
    foreach my $key (@ctl_to_log) {
       my $ctl_val = '';
       if(defined $CTL_OPT{$key}){
-	 $ctl_val = $CTL_OPT{$key} ;
-	 $ctl_val =~ s/^$CWD\/*//;
+	 $ctl_val = $CTL_OPT{$key};
+	 $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
+	 $ctl_val = join(',', sort split(',', $ctl_val));
 	 if($key eq 'repeat_protein'){
-	    #don't care about absolute location
-	    $ctl_val =~ s/.*\/(te_proteins.fasta)$/$1/;
+	     #don't care about absolute location
+	     $ctl_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 	 }
       }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
@@ -865,6 +852,9 @@ sub report_status {
 		   "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::qq);
    }
+   elsif($flag == -4){
+       #do nothing
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -895,6 +885,9 @@ sub get_continue_flag {
    }
    elsif($flag == -3){
       $message = ''; #no short message, as contig is running elsewhere
+   }
+   elsif($flag == -4){
+      $message = ''; #no short message, as contig was finished elsewhere
    }
    else{
       die "ERROR: No valid continue flag\n";

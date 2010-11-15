@@ -146,6 +146,13 @@ sub get_exon_coors_r {
 				$data[$exon]{t}{strand} = $v->{t_strand};
 
                         	#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+
+				#fix 0 length exons in report
+				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+				    $data[$exon] = undef;
+				    $exon--; #undo iteration
+				}
+
 				$exon++;
 			}
                         if ($v->{q_strand} == 1){
@@ -181,6 +188,12 @@ sub get_exon_coors_r {
 
 				$data[$exon]{q}{strand} = $v->{q_strand};
 				$data[$exon]{t}{strand} = $v->{t_strand};
+
+				#fix 0 length exons in report
+				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+				    $data[$exon] = undef;
+				    $exon--; #undo iteration
+				}
 
 				$exon++;
 			}
@@ -382,6 +395,13 @@ sub get_exon_coors_f {
 				$data[$exon]{t}{strand} = $v->{t_strand};
 
 				#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+
+				#fix 0 length exons in report
+				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+				    $data[$exon] = undef;
+				    $exon--; #undo iteration
+				}
+
 				$exon++;
 			}
                         if ($v->{q_strand} == 1){
@@ -418,6 +438,13 @@ sub get_exon_coors_f {
 				$data[$exon]{t}{strand} = $v->{t_strand};
                 						
 				#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
+
+				#fix 0 length exons in report
+				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+				    $data[$exon] = undef;
+				    $exon--; #undo iteration
+				}
+
 				$exon++;
 			}
                         if ($v->{q_strand} == 1){
@@ -661,8 +688,8 @@ sub split_nc_str {
 	my @q_nc_strs = split(/$reg_ex/, $q_nc_str);
 
 	foreach my $str (@q_nc_strs){
-	    $str =~ s/\s+[<>]+\s+$//;
-	    $str =~ s/^\s+[<>]+\s+//;
+	    $str =~ s/\s*[<>]+\s*$//;
+	    $str =~ s/^\s*[<>]+\s*//;
 	}
 
 	return \@q_nc_strs;
@@ -714,34 +741,37 @@ sub add_align_strs {
 	my $q_nc_str = $bad->{q_nc_str};
 
 	if ($q_nc_str =~ /Target Intron/){
-
 		my $q_nc_strs = split_nc_str($q_nc_str);
 
-		my $i = 0;
-		my $o = 0;
+		my $i = 0; #report count
+		my $j = 0; #practical count
+		my $o = 0; #offset
 		foreach my $q_nc_part (@{$q_nc_strs}){
+			my $L = length($q_nc_part);
+
 			my $m_str    = substr($bad->{m_str},    
 				              $o, 
-			                      length($q_nc_part),
+			                      $L,
 			                      );
 
 			my $t_nc_str = substr($bad->{t_nc_str}, 
 			                      $o,
-			                      length($q_nc_part),
+			                      $L,
 			                      );
 
 			my $don = get_donor($bad->{t_nc_str}, $o, $q_nc_part);
 			my $acc = get_acceptor($bad->{t_nc_str}, $o, $q_nc_part);
 
-			$exons->[$i]->{donor}    = $don;
-			$exons->[$i]->{acceptor} = $acc;
+			if($L != 0) { #don't add 0 length exons
+			    $exons->[$j]->{donor}    = $don;
+			    $exons->[$j]->{acceptor} = $acc;
+			    $exons->[$j]->{q_nc_str} = $q_nc_part;
+			    $exons->[$j]->{m_str}    = $m_str;
+			    $exons->[$j]->{t_nc_str} = $t_nc_str;
+			    $j++;
+			}
 
-			$o += length($q_nc_part) + 28 + length($i + 1);
-
-                	$exons->[$i]->{q_nc_str} = $q_nc_part;
-                	$exons->[$i]->{m_str}    = $m_str;
-                	$exons->[$i]->{t_nc_str} = $t_nc_str;
-
+			$o += $L + 28 + length($i + 1);
 			$i++;
 		}
 	}

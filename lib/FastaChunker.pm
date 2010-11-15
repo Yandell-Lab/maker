@@ -42,9 +42,9 @@ sub load_chunks {
            unless $self->chunk_size > 0;
 	
 	my $parent_def = Fasta::getDef($self->parent_fasta);
-	my $parent_seq = Fasta::getSeq($self->parent_fasta);
+	my $parent_seq_ref = Fasta::getSeqRef($self->parent_fasta);
 
-	$self->parent_seq_length(length($parent_seq));
+	$self->parent_seq_length(length($$parent_seq_ref));
         my $fasta = '';
 
 	my $t_c = ceil($self->parent_seq_length/$self->chunk_size);
@@ -61,7 +61,7 @@ sub load_chunks {
 		my $is_last = ($t_c - 1 == $c) ? 1 : 0;
 		
 		my $chunk = new FastaChunk();
-		   $chunk->seq(substr($parent_seq, $i, $l));
+		   $chunk->seq(substr($$parent_seq_ref, $i, $l));
 		   $chunk->def($def);
 		   $chunk->parent_def($parent_def);
 		   $chunk->seqid(Fasta::def2SeqID($parent_def));

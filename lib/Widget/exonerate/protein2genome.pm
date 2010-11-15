@@ -141,6 +141,13 @@ sub get_exon_coors {
 				$data[$exon]{t}{strand} = $v->{t_strand};
 
 				#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+
+                                #fix 0 length exons in report
+                                if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+                                    $data[$exon] = undef;
+                                    $exon--; #undo iteration
+                                }
+
 				$exon++;
 			}
                         if ($v->{q_strand} == 1){
@@ -177,6 +184,13 @@ sub get_exon_coors {
 				$data[$exon]{t}{strand} = $v->{t_strand};
                 						
 				#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
+
+                                #fix 0 length exons in report
+                                if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+                                    $data[$exon] = undef;
+                                    $exon--; #undo iteration
+                                }
+
 				$exon++;
 			}
                         if ($v->{q_strand} == 1){
@@ -401,8 +415,8 @@ sub split_aa_str {
         my @q_aa_strs = split(/$reg_ex/, $q_aa_str);
 
         foreach my $str (@q_aa_strs){
-                $str =~ s/\s+[<>]+\s+$//;
-                $str =~ s/^\s+[<>]+\s+//;
+                $str =~ s/\s*[<>]+\s*$//;
+                $str =~ s/^\s*[<>]+\s*//;
         }
 
         return \@q_aa_strs;
@@ -424,31 +438,37 @@ sub add_align_strs {
 		my $t_aa_strs = [];
 		my $t_nc_strs = [];
 
-		my $o = 0;
-		my $i = 0;
-                foreach my $q_aa_part (@{$q_aa_strs}){
-		    $i++;
+		my $i = 0; #report count
+		my $o = 0; #offset
+		foreach my $q_aa_part (@{$q_aa_strs}){
+		    my $L = length($q_aa_part);
+
 		    my $m_str    = substr($bad->{m_str},
 					  $o,
-					  length($q_aa_part),
+					  $L,
 					  );
 
 		    my $t_aa_str = substr($bad->{t_aa_str},
 					  $o,
-					  length($q_aa_part),
+					  $L,
 					  );
 
 		    my $t_nc_str = substr($bad->{t_nc_str},
 					  $o,
-					  length($q_aa_part),
+					  $L,
 					  );
 
-		    push(@$m_strs, $m_str);
-		    push(@$t_aa_strs, $t_aa_str);
-		    push(@$t_nc_strs, $t_nc_str);
+		    if($L != 0) { #don't add 0 length exons
+			push(@$m_strs, $m_str);
+			push(@$t_aa_strs, $t_aa_str);
+			push(@$t_nc_strs, $t_nc_str);
+		    }
 
-		    $o += length($q_aa_part) + 28 + length($i);
+		    $o += $L + 28 + length($i + 1);
+		    $i++;
 		}
+
+		@{$q_aa_strs} = grep {$_} @{$q_aa_strs}; #remove 0 length seqs
 
 		#now correct splice site crossing features to conform to restraints
 		#cooresponding to HSP objects and the GFF3 Gap attribute. 
@@ -497,8 +517,6 @@ sub add_align_strs {
 		$exons->[0]->{m_str}    = $bad->{m_str};
 		$exons->[0]->{t_aa_str} = $bad->{t_aa_str};
 		$exons->[0]->{t_nc_str} = $bad->{t_nc_str};
-		
-		#$exons->[0]->{q_aa_str} =~ s/[<>]/-/g; ;
 	}
 
 	return $exons;

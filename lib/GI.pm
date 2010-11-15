@@ -142,7 +142,7 @@ sub merge_resolve_hits{
 }
 #-----------------------------------------------------------------------------
 sub reblast_merged_hits {
-   my $g_fasta     = shift @_;
+   my $g_fasta_ref = shift @_;
    my $hits        = shift @_;
    my $db_index    = shift @_;
    my $the_void    = shift @_;
@@ -153,8 +153,8 @@ sub reblast_merged_hits {
    #==get data from parent fasta
 
    #parent fasta get def and seq
-   my $par_def = Fasta::getDef($$g_fasta);
-   my $par_seq = Fasta::getSeqRef($$g_fasta);
+   my $par_def = Fasta::getDef($g_fasta_ref);
+   my $par_seq = Fasta::getSeqRef($g_fasta_ref);
    my $p_id  = Fasta::def2SeqID($par_def);
 
    #build a safe name for file names from the sequence identifier
@@ -218,7 +218,7 @@ sub reblast_merged_hits {
       my $t_def      = $db_index->header_for_hit($hit);
       
       #write fasta file
-      my $fasta = Fasta::toFasta('>'.$t_def, \$t_seq);
+      my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
       my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
       FastaFile::writeFile($fasta, $t_file);
       
@@ -516,9 +516,6 @@ sub split_db {
    my $key      = shift @_;
    my $mpi_size = shift @_ || 1;
 
-   #always set to at least 10 for faster fasta indexing
-   $mpi_size = 10 if($mpi_size < 10);
-
    my @entries = split(',', $CTL_OPT->{$key});
    my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
    
@@ -530,14 +527,17 @@ sub split_db {
 
        #set up names and variables
        my $fasta_iterator = new Iterator::Fasta($file);
-       my $db_size = $fasta_iterator->number_of_entries();
-       my $bins = $mpi_size;
-       $bins = $db_size if ($db_size < $bins);
+       my $num_fastas = $fasta_iterator->number_of_entries();
+       die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
+
+       my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
+       my $bins = (int(($mpi_size/@entries)/10) +1)*10;
+       $bins = $max_bins if ($max_bins < $bins);
        
        my ($f_name) = $file =~ /([^\/]+)$/;
        $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
     
-       my $d_name = "$f_name\.mpi\.$mpi_size";
+       my $d_name = "$f_name\.mpi\.$bins";
        my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
        my $f_dir = "$b_dir/$d_name";
        my $t_dir = $TMP."/$d_name";
@@ -944,7 +944,7 @@ sub fgenesh {
 }
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
-    my $g_fasta     = shift;
+    my $g_fasta_ref = shift;
     my $phat_hits   = shift;
     my $db_index    = shift;
     my $the_void    = shift;
@@ -958,37 +958,63 @@ sub polish_exonerate {
     my $est_forward = shift;
     my $LOG         = shift;
     
-    my $def = Fasta::getDef($g_fasta);
-    my $seq = Fasta::getSeqRef($g_fasta);
+    my $def = Fasta::getDef($g_fasta_ref);
+    my $seq = Fasta::getSeqRef($g_fasta_ref);
+    my $name =  Fasta::def2SeqID($def);
+    my $safe_name = Fasta::seqID2SafeID($name);
     
     my $exe = $exonerate;
     
     my @exonerate_data;
     
+    my %uniq; #make sure this same exonerate hit does not already exist
     foreach my $hit (@{$phat_hits}) {
 	next if $hit->pAh < $pcov/2;
 	next if $hit->hsp('best')->frac_identical < $pid;
-	
-	my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');
-	
-	my @coors = [$nB, $nE];
+
+	my ($B, $E) = PhatHit_utils::get_span_of_hit($hit,'query');
+	($B, $E) = ($E, $B) if($B > $E);
+
+	#gene id specified for est_forward
+	my $gene_id;
+	if($est_forward && $hit->description =~ /gene_id\=([^\s\;]+)/){
+	    $gene_id = $1;
+	}
+
+	#check if fasta contains coordinates for maker
+	if($hit->description =~ /maker_coor\=([^\s\;]+)/){
+	    my $go;
+	    foreach my $coor (split(',', $1)){
+		my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/;
+		($bB, $bE) = ($bE, $bB) if($bB > $bE);
+
+		next if($name ne $bName);
+		next if(compare::compare($B, $E, $bB, $bE) eq '0');
+
+		($B, $E) = ($bB, $bE); #switch to specified coordinates
+		$go++;
+		last;
+	    }
+	    next if(!$go); #skip because the tag limits the seq to only these coors
+	}
+
+	my $id      = $hit->name();
+	my $safe_id = Fasta::seqID2SafeID($id);		
+        my $o_file    = "$the_void/$safe_name.$B-$E.$safe_id";
+	$o_file .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
+
+	#get substring fasta of contig
+	my @coors = [$B, $E];
 	my $p = Shadower::getPieces($seq, \@coors, $pred_flank);
-	my $p_def = $def." ".$p->[0]->{b}." ".$p->[0]->{e};
+	my $p_def = $def." ".$B." ".$E;
 	my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
-	my $name =  Fasta::def2SeqID($p_def);
-	my $safe_name = Fasta::seqID2SafeID($name);
-	
-	my $d_file = $the_void."/".$safe_name.'.'.$p->[0]->{b}.'-'.$p->[0]->{e}.".fasta";
-	
+	my $d_file = $the_void."/".$safe_name.'.'.$B.'-'.$E.".fasta";	
 	FastaFile::writeFile($p_fasta, $d_file);
-	
-	my $offset = $p->[0]->{b} - 1;
-	my $id  = $hit->name();
-	
+
+	#get fasta for EST/protein
 	my $fastaObj = $db_index->get_Seq_for_hit($hit);
-	
-	#still no sequence? try rebuilding the index and try again
 	if (not $fastaObj) {
+	    #still no sequence? try rebuilding the index and try again
 	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
 	    $db_index->reindex();
 	    $fastaObj = $db_index->get_Seq_for_hit($hit);
@@ -998,56 +1024,64 @@ sub polish_exonerate {
 		die "ERROR: Fasta index error\n";
 	    }
 	}
-	
-	my $seq      = $fastaObj->seq();
-	my $def      = $db_index->header_for_hit($hit);
-	
-	my $fasta    = Fasta::toFasta('>'.$def, \$seq);
-	
-	#build a safe name for file names from the sequence identifier
-	my $safe_id = Fasta::seqID2SafeID($id);
-	
-	my $t_file    = $the_void."/".$safe_id.'.fasta';
-	FastaFile::writeFile($fasta, $t_file);
-	
+
+	my $seq     = $fastaObj->seq();
+	my $header  = $db_index->header_for_hit($hit);
+	my $offset  = $p->[0]->{b} - 1;	
+	my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
+	my $t_file    = $the_void."/".$safe_id.'.fasta';	
+	FastaFile::writeFile($fasta, $t_file);	
+
+	#run exonerate
+	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 	my $exonerate_hits = to_polisher($d_file,
 					 $t_file,
+					 $o_file,
 					 $the_void,
 					 $offset,
 					 $type,
 					 $exe,
 					 $score_limit,
-					 $matrix,
-					 $LOG
+					 $matrix
 					 );
+	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
 	#delete fastas
 	unlink($d_file, $t_file);
-	
-	foreach my $exonerate_hit (@{$exonerate_hits}) {
-	    next if(! defined $exonerate_hit);
-	    next if $exonerate_hit->pAh < $pcov;
+
+	#evaluate exonerae results
+	foreach my $e (@{$exonerate_hits}) {
+	    next if(! defined $e);
+	    next if $e->pAh < $pcov;
 
 	    #fix flipped hits when mapping ESTs to gene models as is
-	    if($type eq 'e' && $est_forward && $exonerate_hit->num_hsps == 1 && $exonerate_hit->{_was_flipped}){
-		$exonerate_hit = PhatHit_utils::copy($exonerate_hit, 'both');
-		$exonerate_hit->{_was_flipped} = 0;
+	    if($type eq 'e' && $est_forward && $e->num_hsps == 1 && $e->{_was_flipped}){
+		$e = PhatHit_utils::copy($e, 'both');
+		$e->{_was_flipped} = 0;
 	    }
 
+	    #add gene_id if specified
+	    $e->{gene_id} = $gene_id if($gene_id);
+
 	    #make sure hit overlaps blast input (for large pred_flanks)
-	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($exonerate_hit,'query');
-	    ($nB, $nE) = ($nE, $nB) if($nB > $nE);
+	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($e,'query');
 	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
 
-	    if (exonerate_okay($exonerate_hit) && compare::compare($nB, $nE, $eB, $eE)) {
+	    if (exonerate_okay($e) && compare::compare($B, $E, $eB, $eE)) {
 		#tag the source blastn hit to let you know the counterpart
 		#exonerate hit was flipped to the other strand
-		$hit->{_exonerate_flipped} = 1 if($exonerate_hit->{_was_flipped});
+		$hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
 		$hit->{_keep} = 1;
+
+		#uniq structure string to keep from adding same EST multiple times
+		my $u_string = join('', (map {$_->nB('query').'..'.$_->nE('query').'..'} $e->hsps), "ID=".$e->name);
+		next if($uniq{$u_string});
+		$uniq{$u_string}++;
+
 		$hit->type("exonerate:$type"); #set hit type (exonerate only)
-		$exonerate_hit->{_label} = $hit->{_label} if($hit->{_label});
-		map{$_->{_label} = $hit->{_label}} $exonerate_hit->hsps if($hit->{_label});
-		push(@exonerate_data, $exonerate_hit);	       
+		$e->{_label} = $hit->{_label} if($hit->{_label});
+		map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
+		push(@exonerate_data, $e);	       
 	    }
 	}
     }
@@ -1092,34 +1126,34 @@ sub exonerate_okay {
 sub to_polisher {
    my $d_file   = shift;
    my $t_file   = shift;
+   my $o_file   = shift;
    my $the_void = shift;
    my $offset   = shift;
    my $type     = shift;
    my $exe      = shift;
    my $score_limit = shift;
    my $matrix = shift;
-   my $LOG   = shift;
 
    if ($type eq 'p') {
       return polisher::exonerate::protein::polish($d_file,
 						  $t_file,
+						  $o_file,
 						  $the_void,
 						  $offset,
 						  $exe,
 						  $score_limit,
-						  $matrix,
-						  $LOG
+						  $matrix
 						 );
    }
    elsif ($type eq 'e') {
       return polisher::exonerate::est::polish($d_file,
 					      $t_file,
+					      $o_file,
 					      $the_void,
 					      $offset,
 					      $exe,
 					      $score_limit,
-					      $matrix,
-					      $LOG
+					      $matrix
 					     );
    }
    else {
@@ -1240,6 +1274,25 @@ sub dbformat {
    $lock->unlock;
 }
 #-----------------------------------------------------------------------------
+sub get_blast_finished_name {
+    my $chunk      = shift;
+    my $entry      = shift || '';
+    my $the_void   = shift || '';
+    my $seq_id     = shift || '';
+    my $type       = shift || '';
+
+    #peal off label and build names for files to use and copy
+    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+    my ($db_n) = $db =~ /([^\/]+)$/;
+    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+    my $db_old_n = $db_n;
+    $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
+    
+    my $chunk_number = $chunk->number();
+    
+    return "$the_void/$seq_id\.$chunk_number\.$db_old_n\.$type";
+}
+#-----------------------------------------------------------------------------
 sub blastn_as_chunks {
    my $chunk      = shift;
    my $entry      = shift;
@@ -1261,16 +1314,14 @@ sub blastn_as_chunks {
    my $softmask    = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
+   #finished blast report name
+   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, 'blastn');
+
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
-   my $db_old_n = $db_n;
-   $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
-
    my $chunk_number = $chunk->number();
-
-   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.blastn";
 
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
@@ -1306,16 +1357,12 @@ sub blastn_as_chunks {
 
    #parse blast
    if (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
-      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
-      
-      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
-      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
-	  $o_file = $blast_finished;
-      }
-      else{
-	  return ([], $blast_dir);
-      }
+      return ([], $blast_dir) if(! $LOG_FLAG);
+
+      print STDERR "re reading blast report.\n" unless ($main::quiet);
+      print STDERR "$blast_finished\n" unless ($main::quiet);
+
+      $o_file = $blast_finished;
    }
    else{
        #call blast executable
@@ -1535,25 +1582,22 @@ sub blastx_as_chunks {
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
    my $org_type    = $CTL_OPT->{organism_type};
 
+   #finished blast report name
+   my $type = ($rflag) ? 'repeatrunner': 'blastx';
+   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, $type);
+
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
-   my $db_old_n = $db_n;
-   $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
-
    my $chunk_number = $chunk->number();
-    
-   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.";
-   $blast_finished .= ($rflag) ? 'repeatrunner': 'blastx';
 
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
-   my $o_file    = "$blast_dir/$db_n\.";
-   $o_file .= ($rflag) ? 'repeatrunner' : 'blastx';
+   my $o_file    = "$blast_dir/$db_n\.$type";
     
    my $tmp_db = "$TMP/$db_n";
 
@@ -1582,16 +1626,12 @@ sub blastx_as_chunks {
 
    #parse blast
    if (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
-      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
+      return ([], $blast_dir) if(! $LOG_FLAG);
 
-      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
-      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
-	  $o_file = $blast_finished;
-      }
-      else{
-	  return ([], $blast_dir);
-      }
+      print STDERR "re reading blast report.\n" unless ($main::quiet);
+      print STDERR "$blast_finished\n" unless ($main::quiet);
+
+      $o_file = $blast_finished;
    }
    else{
        #call blast executable
@@ -1832,17 +1872,15 @@ sub tblastx_as_chunks {
    my $softmask     = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
+   #finished blast report name
+   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, 'tblastx');
+
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
-   my $db_old_n = $db_n;
-   $db_old_n =~ s/([^\/]+)\.mpi\.\d+.\d+$/$1/;
-	
    my $chunk_number = $chunk->number();
  
-   my $blast_finished = "$the_void/$seq_id\.$chunk_number\.$db_old_n\.tblastx";
-
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
 
@@ -1877,16 +1915,12 @@ sub tblastx_as_chunks {
 
    #parse blast
    if (-e $blast_finished) {
-      print STDERR "re reading blast report.\n" unless ($main::quiet || !$LOG_FLAG);
-      print STDERR "$blast_finished\n" unless ($main::quiet || !$LOG_FLAG);
+      return ([], $blast_dir) if(! $LOG_FLAG);
 
-      my @ord = $db =~ /\.mpi\.(\d+)\.(\d+)$/;
-      if((! @ord && $LOG_FLAG) || $ord[0] == $ord[1] + 1){ #last mpi database always goes to parent node
-	  $o_file = $blast_finished;
-      }
-      else{
-	  return ([], $blast_dir);
-      }
+      print STDERR "re reading blast report.\n" unless ($main::quiet);
+      print STDERR "$blast_finished\n" unless ($main::quiet);
+
+      $o_file = $blast_finished;
    }
    else{
        #call blast executable
@@ -3282,6 +3316,7 @@ sub load_control_files {
 
    #check who else is also sharing the lock and if running same settings
    $CTL_OPT{_step} = $LOCK->owners() || 1;
+   $CTL_OPT{_shared_id} = $LOCK->shared_id();
    if($CTL_OPT{_step} == 1){ #I am only/first holder of the lock
        #log the control files
        generate_control_files($CTL_OPT{out_base}, 'all', \%CTL_OPT, 1);

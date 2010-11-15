@@ -3,13 +3,15 @@ package Proc::Signal;
 
 require Exporter;
 use strict;
-use vars qw(@EXPORT @EXPORT_OK @ISA $VERSION);
+use vars qw(@EXPORT @EXPORT_OK @ISA $VERSION $PS);
 use URI::Escape;
+use File::Which;
 
 @EXPORT_OK=qw(signal killall signalall exists_proc_by_id exists_proc_by_name);
 @ISA=qw(Exporter);
 
 $VERSION='1.0';
+$PS = File::Which::which('ps');
 #-----------------------------------------------------------------
 sub VERSION {
     return $VERSION;
@@ -31,21 +33,23 @@ sub id_matches_pattern{
     my $pid = shift;
     my $pattern = shift;
 
-    my $stat = grep {/$pattern/} `ps -o args -p $pid 2> /dev/null`;
-
-    if(! $stat){
+    my $stat;
+    
+    if($PS){
+	$stat= grep {/$pattern/} `ps -o args -p $pid 2> /dev/null`;
+    }
+    else{
 	require Proc::ProcessTable;
-	my $obj = new Proc::ProcessTable
-
+	my $obj = new Proc::ProcessTable;
+	
 	foreach my $p (@{$obj->table}) {
-	    if ($p->pid == $id){
+	    if ($p->pid == $pid){
 		$stat = grep {/$pattern/} $p->cmndline();
-		
 		last;
 	    }
 	}
     }
-
+    
     return $stat;
 }
 #-----------------------------------------------------------------

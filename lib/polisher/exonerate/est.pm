@@ -21,24 +21,24 @@ use URI::Escape;
 	polisher
        );
 
-my $LOG;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub polish {
 	my $g_file     = shift;
 	my $e_file     = shift;
+	my $o_file     = shift;
 	my $the_void   = shift;
 	my $offset     = shift || 0;
 	my $exe        = shift;
 	my $percent    = shift;
 	my $matrix     = shift;
-	$LOG           = shift;
 
 	my ($e_len, $g_len) = polisher::prep($g_file, $e_file);
 
 	my $hits = e_exonerate($g_file, 
 			       $e_file, 
+			       $o_file,
 			       $the_void, 
 			       $e_len, 
 			       $g_len,
@@ -59,6 +59,7 @@ sub polish {
 sub e_exonerate {
         my $g_file   = shift;
         my $e_file   = shift;
+	my $o_file     = shift;
         my $the_void = shift;
         my $e_len    = shift;
         my $g_len    = shift;
@@ -66,19 +67,9 @@ sub e_exonerate {
 	my $percent  = shift; 
 	my $matrix   = shift;
 
-        my ($g_name) = $g_file =~ /([^\/]+)$/;
-        $g_name =~ s/\.fasta$//;
-        my ($e_name) = $e_file =~ /([^\/]+)$/;
-        $e_name =~ s/\.fasta$//;
-
-        my $o_file    = "$the_void/$g_name.$e_name.est_exonerate";
-
-	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);   
         runExonerate($g_file, $e_file, $o_file, $exe, $percent, $matrix);
-	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);   
 
         return Widget::exonerate::est2genome::parse($o_file, $e_len, $g_len);
-
 }
 #-----------------------------------------------------------------------------
 sub runExonerate {

@@ -201,7 +201,8 @@ sub _prepare {
    $VARS->{holdover_model_gff}  = [];
    
    #-set up variables that are the result of chunk accumulation
-   $VARS->{masked_total_seq} = '';
+   my $empty = ''; #empty seq
+   $VARS->{masked_total_seq} = \$empty;
    $VARS->{p_fastas} = {};
    $VARS->{t_fastas} = {};
    
@@ -322,14 +323,14 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $fasta = Fasta::ucFasta(\$VARS->{fasta}); #build uppercase fasta
+	    my $fasta = Fasta::ucFastaRef($VARS->{fasta}); #build uppercase fasta
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 
 
 	    #get fasta parts
-	    my $q_def = Fasta::getDef(\$fasta); #Get fasta header
-	    my $q_seq_ref = Fasta::getSeqRef(\$fasta); #Get reference to fasta sequence
+	    my $q_def = Fasta::getDef($fasta); #Get fasta header
+	    my $q_seq_ref = Fasta::getSeqRef($fasta); #Get reference to fasta sequence
 	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
 	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier	    
 
@@ -342,7 +343,7 @@ sub _go {
 				   seq_length => length(${$q_seq_ref}),
 				   out_dir    => $out_dir,
 				   the_void   => $the_void,
-				   fasta_ref  => \$fasta},
+				   fasta_ref  => $fasta},
 				  "$out_dir/run.log"
 				  );
 
@@ -454,6 +455,13 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     #if no masking skip those steps
+	     if(!$VARS->{CTL_OPT}{model_org} && !$VARS->{CTL_OPT}{rmlib} &&
+		!$VARS->{CTL_OPT}{rm_gff} && !$VARS->{CTL_OPT}{repeat_protein}
+	       ){
+		 $VARS->{masked_total_seq} = $VARS->{q_seq_ref};
+		 $next_level = 6;
+	     }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -557,11 +565,22 @@ sub _go {
 	    #-------------------------CHUNKER
 	    $VARS->{rm_blastx_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
-
+	    
+	    #only create all chunks if not already finished
+	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_r_db}}){
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+								 $db,
+								 $VARS->{the_void},
+								 $VARS->{safe_seq_id},
+								 'repeatrunner');
+		
+		next if($fin{$blast_finished});
+
 		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
-                $VARS->{db} = $db;
-                $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		$VARS->{db} = $db;
+		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		$fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
 		my $chunk = new Process::MpiChunk($level, $VARS);
 		push(@chunks, $chunk);
 	    }
@@ -732,7 +751,7 @@ sub _go {
 	    $GFF3->add_repeat_hits($rm_keepers);
       
 	    #-build big masked sequence
-	    $masked_total_seq .= $chunk->seq();
+	    $$masked_total_seq .= $chunk->seq();
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -790,12 +809,12 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};	 
 	 
-	    my $masked_fasta = Fasta::toFasta($q_def.' masked', \$masked_total_seq);
+	    my $masked_fasta = Fasta::toFastaRef($q_def.' masked', $masked_total_seq);
 	    my $masked_file = $the_void."/query.masked.fasta";
-	    FastaFile::writeFile(\$masked_fasta, $masked_file) unless($CTL_OPT{_no_mask});
+	    FastaFile::writeFile($masked_fasta, $masked_file) unless($CTL_OPT{_no_mask});
 	 
 	    my $unmasked_file = $the_void."/query.fasta";
-	    FastaFile::writeFile(\$fasta, $unmasked_file);
+	    FastaFile::writeFile($fasta, $unmasked_file);
 
 	    #==ab initio predictions here
 	    #do masked predictions first
@@ -913,10 +932,21 @@ sub _go {
 	    $VARS->{blastn_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
 	    
-            foreach my $db (@{$VARS->{CTL_OPT}{_e_db}}){
-                $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+	    #only create all chunks if not already finished
+	    my %fin;
+	    foreach my $db (@{$VARS->{CTL_OPT}{_e_db}}){
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+								 $db,
+								 $VARS->{the_void},
+								 $VARS->{safe_seq_id},
+								 'blastn');
+
+		next if($fin{$blast_finished});
+
+		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
 		$VARS->{db} = $db;
 		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+		$fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
 		my $chunk = new Process::MpiChunk($level, $VARS);
 		push(@chunks, $chunk);
 	    }
@@ -1026,7 +1056,7 @@ sub _go {
 	    if ($chunk->number != 0) { #if not first chunk
 		#reviews heldover blast hits,
 		#then merges and reblasts them if they cross the divide
-		$blastn_keepers = GI::merge_resolve_hits(\$masked_fasta,
+		$blastn_keepers = GI::merge_resolve_hits($masked_fasta,
 							 $fasta_t_index,
 							 $blastn_keepers,
 							 $holdover_blastn,
@@ -1074,13 +1104,24 @@ sub _go {
 	    #-------------------------CHUNKER
 	    $VARS->{tblastx_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
-
+	    
+	    #only create all chunks if not already finished
+	    my %fin;
             foreach my $db (@{$VARS->{CTL_OPT}{_a_db}}){
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+								 $db,
+								 $VARS->{the_void},
+								 $VARS->{safe_seq_id},
+								 'tblastx');
+
+                next if($fin{$blast_finished});
+
                 $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
-		$VARS->{db} = $db;
-		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
-		my $chunk = new Process::MpiChunk($level, $VARS);
-		push(@chunks, $chunk);
+                $VARS->{db} = $db;
+                $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+                $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
+                my $chunk = new Process::MpiChunk($level, $VARS);
+                push(@chunks, $chunk);
             }
 	    #-------------------------CHUNKER
 	 }
@@ -1186,7 +1227,7 @@ sub _go {
 	    if ($chunk->number != 0) { #if not first chunk
 		#reviews heldover blast hits,
 		#then merges and reblasts them if they cross the divide
-		$tblastx_keepers = GI::merge_resolve_hits(\$masked_fasta,
+		$tblastx_keepers = GI::merge_resolve_hits($masked_fasta,
 							  $fasta_a_index,
 							  $tblastx_keepers,
 							  $holdover_tblastx,
@@ -1234,13 +1275,24 @@ sub _go {
 	    #-------------------------CHUNKER
 	    $VARS->{blastx_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
-
+	    
+	    #only create all chunks if not already finished
+	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_p_db}}){
-		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+								 $db,
+								 $VARS->{the_void},
+								 $VARS->{safe_seq_id},
+								 'blastx');
+		
+                next if($fin{$blast_finished});
+
+                $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
                 $VARS->{db} = $db;
                 $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
-		my $chunk = new Process::MpiChunk($level, $VARS);
-		push(@chunks, $chunk);
+                $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
+                my $chunk = new Process::MpiChunk($level, $VARS);
+                push(@chunks, $chunk);
             }
 	    #-------------------------CHUNKER
 	 }
@@ -1348,7 +1400,7 @@ sub _go {
 	    if ($chunk->number != 0) { #if not first chunk
 		#reviews heldover blast hits,
 		#then merges and reblasts them if they cross the divide
-		$blastx_keepers = GI::merge_resolve_hits(\$masked_fasta,
+		$blastx_keepers = GI::merge_resolve_hits($masked_fasta,
 							 $fasta_p_index,
 							 $blastx_keepers,
 							 $holdover_blastx,

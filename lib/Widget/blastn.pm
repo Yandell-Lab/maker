@@ -92,6 +92,9 @@ sub keepers {
    my $start = 0;
    
    while (my $result = $sio->next_result()){
+      die "ERROR: BLASTN does not appear to be finished in Widget::blastn::keepers\n"
+	  unless($result->get_statistic('posted_date'));
+
       my $hits = [$result->hits()];
       $start += @{$hits};
 

@@ -191,7 +191,7 @@ catch Error::Simple with{
 };
 
 my $tier;
-while (my $fasta = $iterator->nextFasta() || shift @failed){
+while (my $fasta = $iterator->nextFastaRef() || shift @failed){
     $tier = Process::MpiTiers->new({fasta =>$fasta,
 				    CTL_OPT => \%CTL_OPT,
 				    DS_CTL  => $DS_CTL,

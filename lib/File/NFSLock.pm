@@ -230,6 +230,7 @@ sub new {
 		      $has_lock_exclusive = !((stat $self->{lock_file})[2] && $SHARE_BIT);
 		      $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
 		      
+		      my $id_line = '';
 		      my $content = '';
 		      seek     _FH, 0, 0;
 		      while(defined(my $line=<_FH>)){
@@ -247,6 +248,9 @@ sub new {
 				  push @dead, $line;
 			      }
 			  }
+			  elsif($line !~ / /){
+			      $id_line = $line;
+			  }
 			  else {                  # Running on another host, so
 			      push @them, $line;      #  assume it is still running.
 			      $content .= $line;
@@ -256,8 +260,9 @@ sub new {
 		      ### Save any valid locks or wipe file.
 		      if( length($content) ){
 			  seek     _FH, 0, 0;
+			  print    _FH $id_line;
 			  print    _FH $content;
-			  truncate _FH, length($content);
+			  truncate _FH, length($id_line.$content);
 			  close    _FH;
 		      }else{
 			  close _FH;
@@ -404,10 +409,24 @@ sub create_magic ($;$) {
   local *_FH;
 
   my $exists = -f $append_file;
-  if(($self->{lock_type} && $self->{lock_type} == LOCK_SH) || ! $exists){
+  my $shared = ($self->{lock_type} && $self->{lock_type} == LOCK_SH);
+  my $first  = $append_file eq $self->{rand_file};
+  my $set_id = ($shared && $first && !$exists);
+  if($shared || ! $exists){
+      $self->{_id_line} = Digest::MD5::md5_hex($self->{lock_line})."\n" if($set_id); 
+
       open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
+      print _FH $self->{_id_line} if($set_id);
       print _FH $self->{lock_line};
       close _FH;
+      
+
+      if(! $first && $shared){
+	  open (_FH,"<$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
+	  my $line = <_FH>; #should always be first line
+	  close(_FH);
+	  $self->{id_line} = $line if($line !~ / /);
+      }
 
       if(! $exists){
 	  my $chmod = 0600;
@@ -479,6 +498,10 @@ sub do_lock_shared {
     ### Shared lock exists, append my lock
     $self->create_magic ($self->{lock_file});
   }
+  elsif($success){
+      $self->{id_line} = $self->{_id_line};
+      delete $self->{_id_line};
+  }
 
   # Success
   return 1;
@@ -515,6 +538,7 @@ sub do_unlock_shared ($) {
   }
 
   ### read existing file
+  my $id_line = '';
   my $content = '';
   while(defined(my $line=<_FH>)){
     next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
@@ -525,14 +549,20 @@ sub do_unlock_shared ($) {
     #ignore processes that appear to be dead on this host
     next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
 
+    if($line !~ / /){
+	$id_line .= $line;
+	next
+    }
+
     $content .= $line;
   }
 
   ### other shared locks exist
   if( length($content) ){
     seek     _FH, 0, 0;
+    print    _FH $id_line;
     print    _FH $content;
-    truncate _FH, length($content);
+    truncate _FH, length($id_line.$content);
     close    _FH;
   }
   else{  ### only I exist
@@ -540,7 +570,6 @@ sub do_unlock_shared ($) {
     my $stat = unlink($self->{lock_file});
     return $stat;
   }
-
 }
 
 sub uncache ($;$) {
@@ -642,25 +671,32 @@ sub refresh {
     }
   }
 
+  my $id_line = '';
   my $content = '';
   ### read existing file
   if($self->{lock_type} & LOCK_SH){
-      while(defined(my $line=<_FH>)){
-	  next if $line eq $old_lock_line;
-	  #ignore re-adding shared line if they appear to be stale 
-	  next if($self->{stale_lock_timeout} > 0 &&
-		  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-		 );
-	  $content .= $line;
-      }
+     while(defined(my $line=<_FH>)){
+	next if $line eq $old_lock_line;
+	#ignore re-adding shared line if they appear to be stale 
+	next if($self->{stale_lock_timeout} > 0 &&
+		time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
+		);
+	if($line !~ / /){
+	    $id_line .= $line;
+	    next;
+	}
+
+	$content .= $line;
+     }
   }
   ### add new tag
   $content .= $self->{lock_line};
 
   ### fix file contents
   seek     _FH, 0, 0;
+  print    _FH $id_line;
   print    _FH $content;
-  truncate _FH, length($content);
+  truncate _FH, length($id_line.$content);
   close    _FH;
 }
 
@@ -756,6 +792,8 @@ sub owners {
 		 );
 	#ignore processes that appear to be dead on this host
 	next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
+	#ignire id line
+	next if ($line !~ / /);
 
 	$count++;
     }
@@ -764,6 +802,15 @@ sub owners {
     $lock->unlock;
 
     return $count;
+}
+
+sub shared_id {
+    my $self = shift;
+    my $line = $self->{id_line};
+    return undef if(!$line);
+
+    chomp $line;
+    return $line
 }
 
 sub newpid {

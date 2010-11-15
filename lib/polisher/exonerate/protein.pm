@@ -21,24 +21,24 @@ use URI::Escape;
 	polisher
        );
 
-my $LOG;
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub polish {
 	my $g_file     = shift;
 	my $p_file     = shift;
+	my $o_file     = shift;
 	my $the_void   = shift;
 	my $offset     = shift || 0;
 	my $exe        = shift;
 	my $percent    = shift;
 	my $matrix     = shift;
-	$LOG           = shift;
 
 	my ($p_len, $g_len) = polisher::prep($g_file, $p_file);
 
 	my $hits = p_exonerate($g_file, 
 			       $p_file, 
+			       $o_file,
 			       $the_void, 
 			       $p_len, 
 			       $g_len,
@@ -59,6 +59,7 @@ sub polish {
 sub p_exonerate {
         my $g_file   = shift;
         my $p_file   = shift;
+	my $o_file   = shift;
         my $the_void = shift;
         my $p_len    = shift;
         my $g_len    = shift;
@@ -66,16 +67,7 @@ sub p_exonerate {
 	my $percent  = shift;
 	my $matrix   = shift;
 
-	my ($g_name) = $g_file =~ /([^\/]+)$/;
-	$g_name =~ s/\.fasta$//;
-	my ($p_name) = $p_file =~ /([^\/]+)$/;
-	$p_name =~ s/\.fasta$//;
-
-        my $o_file    = "$the_void/$g_name.$p_name.p_exonerate";
-	
-	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
         runExonerate($g_file, $p_file, $o_file, $exe, $percent, $matrix);
-	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
         return Widget::exonerate::protein2genome::parse($o_file, $p_len, $g_len);
 	

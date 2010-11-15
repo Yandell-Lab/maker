@@ -1454,6 +1454,7 @@ sub run_it {
 	    $transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
 
 	    push(@transcripts, [$transcript, $set, $mia]);
+	    die if($transcript->num_hsps() < 1); #temp
 	    $i++;
 
 	    next;
@@ -1890,45 +1891,50 @@ sub group_transcripts {
 
    #cluster the transcripts to get genes
    my $careful_clusters = [];
-   if ($predictor =~ /^model_gff$|^abinit$/) {
-      my %index;
-      my $i = 0;
-      foreach my $t (@transcripts) {
-	 my $j;
-	 if(! exists $t->{gene_id}){
-	     $j = $i;
-	     $i++;
-	 }
-	 elsif (exists $index{$t->{gene_id}}) {
-	    $j = $index{$t->{gene_id}};
-	 }
-	 else {
-	    $j = $i;
-	    $index{$t->{gene_id}} = $j;
-	    $i++;
-	 }
-	 push(@{$careful_clusters->[$j]}, $t);
-      }
+
+   if ($predictor =~ /^model_gff$|^abinit$/ || ($predictor =~ /^est2genome$/ && $CTL_OPT->{est_forward})) {
+       my @to_do;
+       my %index;
+       my $i = @$careful_clusters;
+       foreach my $t (@transcripts) {
+	   my $j;
+	   if($predictor =~ /^est2genome$/ && ! exists $t->{gene_id}){
+	       push(@to_do, $t);
+	       next;
+	   }
+	   elsif(! exists $t->{gene_id}){
+	       $j = $i;
+	       $i++;
+	   }
+	   elsif (exists $index{$t->{gene_id}}) {
+	       $j = $index{$t->{gene_id}};
+	   }
+	   else {
+	       $j = $i;
+	       $index{$t->{gene_id}} = $j;
+	       $i++;
+	   }
+	   push(@{$careful_clusters->[$j]}, $t);
+       }
+       @transcripts = @to_do;
    }
-   else {
-      #seperate out when multiple HMM's are provided (comma seperated list)
-      my %sources;
-      foreach my $t (@transcripts){
-	  push(@{$sources{$t->{_HMM}}}, $t);
-	  die "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
-      }
-     
-      #now cluster each list seperately
-      foreach my $set (values %sources){
-	  my $clusters = cluster::careful_cluster_phat_hits($set, $seq);
-	  
-	  #remove redundant transcripts in gene
-	  foreach my $c (@{$clusters}) {
-	      my $best_alt_forms = ($CTL_OPT->{est_forward}) ?
-		  $c : clean::remove_redundant_alt_splices($c, $seq, 10);
-	      push(@$careful_clusters, $best_alt_forms);
-	  }
-      }
+
+   #seperate out when multiple HMM's are provided (comma seperated list)
+   my %sources;
+   foreach my $t (@transcripts){
+       push(@{$sources{$t->{_HMM}}}, $t);
+       die "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
+   }
+   #now cluster each list seperately
+   foreach my $set (values %sources){
+       my $clusters = cluster::careful_cluster_phat_hits($set, $seq);
+       
+       #remove redundant transcripts in gene
+       foreach my $c (@{$clusters}) {
+	   my $best_alt_forms = ($CTL_OPT->{est_forward}) ?
+	       $c : clean::remove_redundant_alt_splices($c, $seq, 10);
+	   push(@$careful_clusters, $best_alt_forms);
+       }
    }
 
    #process clusters into genes
@@ -1949,8 +1955,8 @@ sub group_transcripts {
       my $g_name;
       my $g_id;
       if ($predictor eq 'model_gff') {
-	 $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
-	 $g_id = $c->[0]->{gene_id}; #affects GFFV3.pm
+	 $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
+	 $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	 $SEEN->{$g_name}++;
 	 $SEEN->{$g_id}++;
 	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
@@ -1962,9 +1968,9 @@ sub group_transcripts {
       }
       elsif ($predictor eq 'abinit') {
 	  #now check for preexisting name
-	  if ($c->[0]->{gene_name}){
-	      $g_name = $c->[0]->{gene_name}; #affects GFFV3.pm
-	      $g_id = $c->[0]->{gene_id}; #affects GFFV3.pm
+	  if ($c->[0]->{gene_name} || $c->[0]->{gene_id}){
+	      $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
+	      $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	      $SEEN->{$g_name}++;
 	      $SEEN->{$g_id}++;
 	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
@@ -1992,7 +1998,19 @@ sub group_transcripts {
 	      $SEEN->{"$chunk_number\.$c_id"}++;
 	  }
       }
-      else {
+      elsif ($predictor eq 'est2genome' && $CTL_OPT->{est_forward} && ($c->[0]->{gene_id} || $c->[0]->{gene_name})) {
+	  $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
+	  $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
+	  $SEEN->{$g_name}++;
+	  $SEEN->{$g_id}++;
+	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	     $SEEN->{$1}++;
+	 }
+	 if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	     $SEEN->{$1}++;
+	 }
+      }
+      else{
 	 $g_name = "maker-$seq_id-$sources-gene-$chunk_number"; #affects GFFV3.pm
 	 $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	 $g_name = "$g_name.$c_id";

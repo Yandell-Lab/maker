@@ -60,20 +60,28 @@ sub find {
     die "ERROR: Iterator::Fasta::find is disabled\n";
 }
 #-------------------------------------------------------------------------------
+sub nextEntry {
+    my $self = shift;
+    my $ref = $self->nextEntryRef;
+    return ($ref) ? $$ref : undef;
+}
+#-------------------------------------------------------------------------------
+
 {
 my @SEEN;
 my $COUNT = -1;
 my @BUF; #buffer for pushing back meta character contamination
-sub nextEntry {
+sub nextEntryRef {
     my $self = shift;
 
     my $fh = $self->fileHandle();
-    local $/ = "\n>";
     
     if (! @BUF && ! openhandle($fh)){ #checks to see if file handle is open
 	return undef; 
     }
     
+    local $/ = "\n>";
+
     my $line;
     while($line = shift @BUF || <$fh>){
 	$COUNT++;
@@ -81,7 +89,6 @@ sub nextEntry {
 	$line =~ s/>//;
 	$line =~ s/>$//;
 	$line = ">".$line;
-	$/ = "\n";
 
 	if($line =~ /^M\n?|\cM\n?/){
 	    $line =~ s/^M\n?|\cM\n?/\n/g;
@@ -103,15 +110,18 @@ sub nextEntry {
 
 	$SEEN[$COUNT]++;
 
-	return $line;
+	local $/ = "\n";
+	return \$line;
     }
     
+    local $/ = "\n";
+
     #end of file but I was jumping using a step, so go back to start
     if($self->{step} && $self->{step} != 1){
 	$self->{step} = undef; #remove step
 	$COUNT = -1; #reset count
 	$fh->setpos($self->startPos); #go to start of file
-	return $self->nextEntry();
+	return $self->nextEntryRef();
     }
     
     $fh->close();
@@ -121,7 +131,12 @@ sub nextEntry {
 #-------------------------------------------------------------------------------
 sub nextFasta {#alias to nextEntry
    my $self = shift;
-   return $self->nextEntry;
+   return ${$self->nextEntryRef};
+}
+#-------------------------------------------------------------------------------
+sub nextFastaRef {#alias to nextEntry
+   my $self = shift;
+   return $self->nextEntryRef;
 }
 #-------------------------------------------------------------------------------
 sub finished {
