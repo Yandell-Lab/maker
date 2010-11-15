@@ -4,7 +4,6 @@ package Proc::Signal;
 require Exporter;
 use strict;
 use vars qw(@EXPORT @EXPORT_OK @ISA $VERSION);
-use Proc::ProcessTable;
 use URI::Escape;
 
 @EXPORT_OK=qw(signal killall signalall exists_proc_by_id exists_proc_by_name);
@@ -32,7 +31,20 @@ sub id_matches_pattern{
     my $pid = shift;
     my $pattern = shift;
 
-    my $stat = grep {/$pattern/} `ps -o command  -p $pid`;
+    my $stat = grep {/$pattern/} `ps -o args -p $pid 2> /dev/null`;
+
+    if(! $stat){
+	require Proc::ProcessTable;
+	my $obj = new Proc::ProcessTable
+
+	foreach my $p (@{$obj->table}) {
+	    if ($p->pid == $id){
+		$stat = grep {/$pattern/} $p->cmndline();
+		
+		last;
+	    }
+	}
+    }
 
     return $stat;
 }
@@ -70,6 +82,7 @@ sub exists_kill {
 
     return (0,0) if(! $id || $id == $$);
 
+    require Proc::ProcessTable;
     my $obj = new Proc::ProcessTable;
     my $found = 0;
     my $signaled = 0;
@@ -90,6 +103,7 @@ sub exists_kill {
 sub get_name_by_id {
     my $id = shift;
 
+    require Proc::ProcessTable;
     my $obj = new Proc::ProcessTable;
     my $name = '';
     foreach my $p (@{$obj->table}) {
@@ -112,6 +126,7 @@ sub exists_killall {
 
     return (0, 0) if($name eq '');
 
+    require Proc::ProcessTable;
     my $obj = new Proc::ProcessTable;
 
     my $err; #holds all $!
