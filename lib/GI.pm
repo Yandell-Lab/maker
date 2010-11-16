@@ -1514,7 +1514,9 @@ sub runBlastn {
       $command .= " maskextra=10";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
+      $command .= " notes"; #suppress certain notes
       $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " nonnegok"; #fixes failure related to short and masked sequence
       $command .= " shortqueryok"; #fixes failure related to very short sequence
       $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report
@@ -1814,7 +1816,9 @@ sub runBlastx {
       $command .= " kap";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
+      $command .= " notes"; #suppress certain notes
       $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " nonnegok"; #fixes failure related to short and masked sequence
       $command .= " shortqueryok"; #fixes failure related to very short sequence
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
@@ -2069,7 +2073,9 @@ sub runtBlastx {
       $command .= " maskextra=10";
       $command .= " gi";
       $command .= " warnings"; #suppress certain warnings
+      $command .= " notes"; #suppress certain notes
       $command .= " novalidctxok"; #fixes failure related to short and masked sequence
+      $command .= " nonnegok"; #fixes failure related to short and masked sequence
       $command .= " shortqueryok"; #fixes failure related to very short sequence
       $command .= ($org_type eq 'eukaryotic') ? "" : " kap";
       #$command .= " mformat=2"; # remove for full report

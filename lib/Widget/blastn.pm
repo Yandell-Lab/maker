@@ -47,12 +47,6 @@ sub run {
 		   if($all_err !~ /There are no valid contexts/){
 		      die "ERROR: BLASTN failed\n";
 		   }
-		   else{
-		       #print STDERR "NOTE: BLAST failed because the length of unmasked\n".
-		       #             "sequence is too short to produce a statistically\n".
-		       #             "significant alignment.  You can usually ignore\n".
-		       #             "this error\n\n";
-		   }
 		}
 	}
 	else {
@@ -90,10 +84,20 @@ sub keepers {
    
    my @keepers;
    my $start = 0;
-   
+   my $ok; #context override
+
    while (my $result = $sio->next_result()){
-      die "ERROR: BLASTN does not appear to be finished in Widget::blastn::keepers\n"
-	  unless($result->get_statistic('posted_date'));
+      if(!$ok && !$result->get_statistic('posted_date')){
+	  open(my $IN, '<', $sio->file);
+	  while(my $line = <$IN>){
+	      if($line =~ /There are no valid contexts/){
+		  $ok = 1;
+		  last;
+	      }
+	  }
+	  close($IN);
+	  die "ERROR: BLASTN does not appear to be finished in Widget::blastn::keepers\n" if(!$ok);
+      }
 
       my $hits = [$result->hits()];
       $start += @{$hits};

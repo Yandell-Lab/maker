@@ -90,10 +90,21 @@ sub keepers {
    
    my @keepers;
    my $start = 0;
-   
+   my $ok; #context override
+
    while (my $result = $sio->next_result()){
-      die "ERROR: TBLASTX does not appear to be finished in Widget::tblastx::keepers\n"
-          unless($result->get_statistic('posted_date'));
+      if(!$ok && !$result->get_statistic('posted_date')){
+	  my $ok;
+	  open(my $IN, '<', $sio->file);
+	  while(my $line = <$IN>){
+	      if($line =~ /There are no valid contexts/){
+		  $ok = 1;
+		  last;
+	      }
+	  }
+	  close($IN);
+	  die "ERROR: TBLASTX does not appear to be finished in Widget::tblastx::keepers\n" if(!$ok);
+      }
 
       my $hits = [$result->hits()];
       $start += @{$hits};
