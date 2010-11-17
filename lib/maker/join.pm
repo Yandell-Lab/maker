@@ -290,7 +290,7 @@ sub join_f {
 		:[];
 	    
 	    my $join_offset_5 = $b_5->{five_j};
-	    my $join_offset_3 = $b_3->{five_j};
+	    my $join_offset_3 = $b_3->{three_j};
 	    
 	    #-- push on b_5's upsteam hsps
 	    my $i = 0;

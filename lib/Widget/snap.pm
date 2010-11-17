@@ -34,6 +34,7 @@ sub new {
 	bless ($self, $class);
         return $self;
 }
+
 #------------------------------------------------------------------------
 sub prep_for_genefinder {
         my $seq    = shift;
@@ -41,65 +42,17 @@ sub prep_for_genefinder {
         my $flank  = shift;
         my $seq_id = shift;
 
-        my $gomiph = $set->{gomiph};
-        my $mia    = $set->{mia};
-        my $models = $set->{gomod};
-        my $alts   = $set->{alt_ests};
-        my $preds  = $set->{preds};
-        my $ests   = $set->{ests};
-        my @t_data;
+	my ($span, $strand, $p_set_coors, $n_set_coors, $i_set_coors) = process_hints($seq, $set);
 
-        push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$preds})   if defined($preds);
-        push(@t_data, $mia)        if defined($mia);
-        push(@t_data, @{$alts})     if defined($alts);
-        push(@t_data, @{$models})   if defined($models);
-        push(@t_data, @{$ests})    if defined($ests);
-
-        my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
-
-        my $n_set_coors =
-        defined($ests) ? PhatHit_utils::get_hsp_coors($ests, 'query')
-                      : [];
-
-        my @coors;
-        my $plus  = 0;
-        my $minus = 0;
-	my $least;
-        my $most;
-        foreach my $hit (@t_data){
-                foreach my $hsp ($hit->hsps()){
-                        my $s = $hsp->start('query');
-                        my $e = $hsp->end('query');
-
-                        $least = $s if !defined($least) || $s < $least;
-                        $most  = $e if !defined($most)  || $e > $most;
-
-                        if ($hsp->strand('query') == 1) {
-                                $plus++;
-                        }
-                        else {
-                                $minus++;
-                        }
-                }
-        }
-
-        my @span_coors = [$least, $most];
-
-        my $p = Shadower::getPieces($seq, \@span_coors, $flank);
-
-        my $final_seq = $p->[0]->{piece};
-
-        my $offset    = $p->[0]->{b} - 1;
-
-
-	my $strand = $plus > $minus ? 1 : -1;
-
-        my $i_flank = 2;
+        my $p = Shadower::getPieces($seq, $span, $flank);
+        my $final_seq  = $p->[0]->{piece};
+        my $offset = $p->[0]->{b} - 1;
+        my $i_flank    = 2;
 
         my $xdef = get_xdef($seq,
                             $p_set_coors,
                             $n_set_coors,
+                            $i_set_coors,
                             $strand == 1 ? '+' : '-',
                             0.2, # Coding
                             1000, # intron
@@ -107,8 +60,297 @@ sub prep_for_genefinder {
                             $i_flank,
                             );
 
-
         return (\$final_seq, $strand, $offset, $xdef);
+}
+#------------------------------------------------------------------------
+sub process_hints {
+        my $seq    = shift;
+	my $set    = shift;
+
+        my $mia    = $set->{mia};
+        my $gomiph = $set->{gomiph}    || [];
+        my $models = $set->{gomod}     || [];
+        my $alts   = $set->{alt_ests}  || [];
+        my $preds  = $set->{preds}     || [];
+        my $all_p  = $set->{all_preds} || [];
+        my $ests   = $set->{ests}      || [];
+        my @t_data;
+
+	push(@t_data, $mia) if defined($mia);
+        push(@t_data, @{$gomiph});
+        push(@t_data, @{$preds});
+        push(@t_data, @{$alts});
+        push(@t_data, @{$models});
+        push(@t_data, @{$ests});
+
+	#get span
+        my $plus  = 0;
+        my $minus = 0;
+	my $least;
+        my $most;
+        foreach my $hit (@t_data){
+	    foreach my $hsp ($hit->hsps()){
+		my $s = $hsp->start('query');
+		my $e = $hsp->end('query');
+		
+		$least = $s if !defined($least) || $s < $least;
+		$most  = $e if !defined($most)  || $e > $most;
+		
+		if ($hsp->strand('query') == 1) {
+		    $plus++;
+		}
+		else {
+		    $minus++;
+		}
+	    }
+        }
+
+	#instantiate seq position array
+	my @b_seq = map {0} ($least..$most); #0 => empty, 1 => exon, 2 => CDS, -1 => intron
+	my @span_coors = [$least, $most];
+	my $strand = $plus > $minus ? 1 : -1;
+	my $offset = $least;
+
+	#identify all possible confirmed splice sites (compared later to all preds)
+	my %splices;
+	foreach my $e (@$ests, @$gomiph, @$alts){
+	    next if($e->num_hsps() == 1);
+	    my @hsps = sort {$a->start('query') <=> $b->start('query')} $e->hsps;
+ 	    for(my $i = 0; $i < @hsps - 1; $i++){
+		my $hsp1 = $hsps[$i];
+		my $hsp2 = $hsps[$i+1];
+		
+		next if($hsp1->end('query') >= $hsp2->start('query'));
+		
+		$splices{start}{$hsp2->start('query')}++; #exon end
+		$splices{end}{$hsp1->end('query')}++; #exon start
+		$splices{exact}{$hsp1->end('query')}{$hsp2->start('query')}++; #intron (bordering exons)
+	    }
+	}
+
+	#map introns (and unknown coding status exons)
+	my %seen; #skip redundant
+	foreach my $e (@{$ests}){
+            #map entire hit space (defines intron once exons are mapped)
+	    if($e->num_hsps() > 1){
+		my $s = $e->start('query') - $offset;
+		my $e = $e->end('query') - $offset;
+		
+		foreach my $i ($s..$e){
+		    $b_seq[$i] = -1 if($b_seq[$i] == 0);
+		}
+	    }
+
+	    #map exons
+            foreach my $hsp ($e->hsps){
+                my $s = $hsp->start('query');
+                my $e = $hsp->end('query');
+
+		next if($seen{$s}{$e}); #skip redundant HSPs
+		$seen{$s}{$e}++;
+
+                $s -= $offset;
+                $e -= $offset;
+
+                @b_seq[$s..$e] = map {1} ($s..$e);
+            }
+        }
+
+	#map protein HSPs
+	%seen = (); #reset, skip redundant
+        foreach my $c (@{PhatHit_utils::get_hsp_coors($gomiph, 'query')}){
+	    my $s = $c->[0];
+	    my $e = $c->[1];
+	    ($s, $e) = ($e, $s) if($s > $e);
+
+	    next if($seen{$s}{$e}); #skip redundant HSPs
+	    $seen{$s}{$e}++;
+	    
+	    $s -= $offset;
+	    $e -= $offset;
+            foreach my $i ($s..$e){
+                $b_seq[$i] = 2 if($b_seq[$i] != -1); #cannot overide EST inferred intron
+            }
+	}
+
+	#add EST to protein CDS if spliced and all orf
+	my $tM = new CGL::TranslationMachine();
+	foreach my $e (@$ests){
+	    next if($e->num_hsps() == 1);
+	    my ($lAq) = $e->getLengths();
+	    next if($lAq < 300); #orf of 300 required (same as most prokaryotic gene finders)
+	    
+	    my $t_seq  = maker::auto_annotator::get_transcript_seq($e, $seq);
+	    my ($p_seq, $poffset) = $tM->longest_translation($t_seq);
+
+	    if($poffset < 3 && length($t_seq) - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+		foreach my $hsp ($e->hsps){
+		    my $s = $hsp->start('query');
+		    my $e = $hsp->end('query');
+		    
+		    next if($seen{$s}{$e}); #skip redundant HSPs
+		    $seen{$s}{$e}++;
+
+		    $s -= $offset;
+		    $e -= $offset;
+
+		    @b_seq[$s..$e] = map {2} ($s..$e);
+		}	
+		next;
+	    }
+
+	    #if not all orf test internal HSPs
+	    next if($e->num_hsps() < 2);
+	    foreach my $hsp ($e->hsps){
+		next if($hsp->start('query') == $e->start('query')); #skip first HSP
+		next if($hsp->end('query') == $e->end('query')); #skip last HSP
+
+		my $B = $hsp->start('query');
+		my $E = $hsp->end('query');
+		my $L = abs($E - $B) + 1;
+
+		next if($seen{$B}{$E}); #skip redundant HSPs
+		$seen{$B}{$E}++;
+		
+		my $piece = ($e->strand('query') == 1) ?
+		    substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));	    
+		
+		my ($p_seq, $poffset) = $tM->longest_translation($piece);
+		
+		if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+		    my $s = $B - $offset;
+		    my $e = $E - $offset;
+		    @b_seq[$s..$e] = map {2} ($s..$e);
+		}
+	    }
+	}
+
+	#get likely CDS from splice site crossing ESTs
+        foreach my $c (@{PhatHit_utils::splice_infer_exon_coors($ests, $seq)}){
+	    my $s = $c->[0];
+	    my $e = $c->[1];
+	    
+	    next if($seen{$s}{$e}); #skip redundant HSPs
+	    $seen{$s}{$e}++;
+	    
+	    $s -= $offset;
+	    $e -= $offset;
+            foreach my $i ($s..$e){
+                $b_seq[$i] = 2;
+            }
+	}
+
+	#get intron info from protein2genome hits
+	foreach my $p (@{maker::auto_annotator::get_selected_types($gomiph,'protein2genome')}){
+	    my $s = $p->start('query') - $offset;
+	    my $e = $p->end('query') - $offset;
+	
+            foreach my $i ($s..$e){
+                $b_seq[$i] = -1 if($b_seq[$i] == 0);
+            }
+	}
+
+	#get dually confirmed ab-initio and EST CDS/introns
+	my @intron_set;
+	my @exon_set;
+	foreach my $p (@$all_p){
+	    next if($p->num_hsps() == 1);
+	    my @hsps = sort {$a->start('query') <=> $b->start('query')} $p->hsps;
+ 	    for(my $i = 0; $i < @hsps - 1; $i++){
+		my $hsp1 = $hsps[$i];
+		my $hsp2 = $hsps[$i+1];
+
+		my $s1 = $hsp1->start('query');
+		my $e1 = $hsp1->end('query');
+		my $s2 = $hsp2->start('query');
+		my $e2 = $hsp2->end('query');
+		
+		next if($e1 >= $s2); #no gap so skip
+
+		#intron verify
+		if($splices{exact}{$e1}{$s2}){
+		    my $si = $e1 + 1; #fix for inron coordiantes
+		    my $ei = $s2 - 1; #fix for intron coordiantes
+		    push(@intron_set, [$si, $ei]);
+
+		    $si -= $offset;
+		    $ei -= $offset;
+		    foreach my $i ($si..$ei){
+			$b_seq[$i] == -1 if($b_seq[$i] != 3); #make intron (won't override dually verified CDS)
+		    }
+		}
+
+		#CDS verify
+		if($i == 0 && $splices{start}{$s1} && $splices{end}{$e1}){
+		    my $s = $s1 - $offset;
+		    my $e = $e1 - $offset;
+		    push(@exon_set, [$s1, $e1]);
+		    @b_seq[$s..$e] = map {3} ($s..$e); #overides all other hints to force dually verified CDS
+		}
+		elsif($splices{end}{$e1} && ! $splices{start}{$s1}){
+		    my $s = $s1 - $offset;
+		    my $e = $e1 - $offset;
+		    foreach my $i (reverse($s..$e)){
+			if($b_seq[$i] == 1){ #upgrade exon regions to CDS
+			    $b_seq[$i] = 2;
+			}
+			else{ #stop on empty or intron
+			    push(@exon_set, [$i+1+$offset,$e1]) if($i != $e);
+			    last;
+			}
+		    }
+		}
+
+		if($splices{start}{$s2} && $splices{end}{$e2}){
+		    my $s = $s2 - $offset;
+		    my $e = $e2 - $offset;
+		    push(@exon_set, [$s2, $e2]);
+		    @b_seq[$s..$e] = map {3} ($s..$e); #overides all other hints to force dually verified CDS
+		}
+		elsif($splices{start}{$s2} && ! $splices{end}{$e2}){
+		    my $s = $s2 - $offset;
+		    my $e = $e2 - $offset;
+		    foreach my $i ($s..$e){
+			if($b_seq[$i] == 1){ #upgrade exon regions to CDS
+			    $b_seq[$i] = 2;
+			}
+			else{ #stop on empty or intron
+			    push(@exon_set, [$s2,($i-1)+$offset]) if($i != $s);
+			    last;
+			}
+		    }
+		}
+	    }
+	}
+
+	#get coordinates
+	my @n_set_coors;
+	my @p_set_coors;
+	my @i_set_coors;
+	my $nfirst;
+	my $pfirst;
+	my $ifirst;
+	for (my $i = 0; $i < @b_seq; $i++){
+	    $nfirst = $i if(!$nfirst && $b_seq[$i] > 0);
+	    $pfirst = $i if(!$pfirst && $b_seq[$i] > 1);
+	    $ifirst = $i if(!$ifirst && $b_seq[$i] == -1);
+
+	    my $last = $i == @b_seq-1; #flag
+	    if(($b_seq[$i] <= 0 || $last) && $nfirst){
+		push(@n_set_coors, [$nfirst+$offset, $i-1+$offset]);
+		$nfirst = undef;
+	    }
+	    if(($b_seq[$i] <= 1 || $last) && $pfirst){
+		push(@p_set_coors, [$pfirst+$offset, $i-1+$offset]);
+		$pfirst = undef;
+	    }
+	    if(($b_seq[$i] != -1 || $last) && $ifirst){
+		push(@i_set_coors, [$ifirst+$offset, $i-1+$offset]);
+		$ifirst = undef;
+	    }
+	}
+
+        return (\@span_coors, $strand, \@p_set_coors, \@n_set_coors, \@i_set_coors);
 }
 #------------------------------------------------------------------------
 sub get_pred_shot {
@@ -177,13 +419,10 @@ sub snap {
 
         my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.snap";
 
-        write_xdef_file($xdef, $xdef_file);
-
-         FastaFile::writeFile(\$fasta, $file_name);
-
-	 $command .= " -xdef $xdef_file ";
-         $command .= " $file_name";
-         $command .= " > $o_file";
+	
+	$command .= " -xdef $xdef_file ";
+	$command .= " $file_name";
+	$command .= " > $o_file";
 
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
@@ -193,11 +432,15 @@ sub snap {
         }
         else {
                 print STDERR "running  snap.\n" unless $main::quiet;
+		write_xdef_file($xdef, $xdef_file);
+		FastaFile::writeFile(\$fasta, $file_name);
 		my $w = new Widget::snap();
                 $w->run($command);
         }
 
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
+#	unlink($xdef_file) if(-f $xdef_file);
+	unlink($file_name) if(-f $file_name);
 
          my %params;
         $params{min_exon_score}  = -100;
@@ -206,13 +449,14 @@ sub snap {
         my $keepers =
         parse($o_file,
              \%params,
-              $file_name,
+              $fasta,
              );
 
-         PhatHit_utils::add_offset($keepers,
-                                   $offset,
+	
+	PhatHit_utils::add_offset($keepers,
+				  $offset,
                                   );
-
+	
         return $keepers;
 
 }
@@ -243,8 +487,14 @@ sub parse {
         my $params = shift;
 	my $q_file = shift;
 
-	my $iterator = new Iterator::Fasta($q_file);
-        my $fasta = $iterator->nextEntry();
+	my $fasta;
+	if($q_file =~ /^>/){
+            $fasta = $q_file;
+	}
+	else{
+            my $iterator = new Iterator::Fasta($q_file);
+            $fasta = $iterator->nextEntry();
+        }
 
         my $def     = Fasta::getDef($fasta);
         my $q_seq   = Fasta::getSeqRef($fasta);
@@ -292,8 +542,9 @@ sub parse {
 #-------------------------------------------------------------------------------
 sub get_xdef {
 	my $seq     = shift;
-	my $p_coors  = shift;
+	my $p_coors = shift;
 	my $n_coors = shift;
+	my $i_coors = shift;
 	my $s       = shift;
 	my $c_u     = shift;
 	my $i_u     = shift;
@@ -302,31 +553,23 @@ sub get_xdef {
 
 	my @index;
 
-        my $p_pieces = Shadower::getPieces($seq, $p_coors, 0);
-
         my @xdef;
 	push(@xdef, ">xdef file offset: $offset i_flank:$i_flank");
-        for (my $i = 0; $i < @{$p_pieces}; $i++){
-                my $p = $p_pieces->[$i];
-                my $c_b = $p->{b} - $offset;
-                my $c_e = $p->{e} - $offset;
+        foreach my $p (@$p_coors){
+                my $c_b = $p->[0] - $offset;
+                my $c_e = $p->[1] - $offset;
 		my $l = "Coding\t".$c_b."\t".$c_e;
 		$l .= "\t$s\t$c_u\t\.\t\.\t\.\tADJ";
                 push(@xdef, $l);
         }
 
-	my $n_pieces = Shadower::getPieces($seq, $n_coors, 0);
-
-	return \@xdef if !defined($n_pieces->[1]);
+	return \@xdef if(!@$i_coors);
 
         my @intron;
 
-	my $num = @{$n_pieces};
-        for (my $i = @{$n_pieces} - 1; $i > 0;  $i--){
-                my $p_r = $n_pieces->[$i];
-                my $p_l = $n_pieces->[$i - 1];
-                my $i_b = ($p_l->{e} - $offset) + $i_flank;
-                my $i_e = ($p_r->{b} - $offset) - $i_flank;
+	foreach my $i (@$i_coors){
+                my $i_b = ($i->[0] - $offset) + ($i_flank-1);
+                my $i_e = ($i->[1] - $offset) - ($i_flank-1);
 	
 		next if abs($i_b - $i_e) < 2*$i_flank;
 		next if abs($i_b - $i_e) < 25;

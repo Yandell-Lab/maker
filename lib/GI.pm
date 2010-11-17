@@ -31,8 +31,7 @@ use Widget::blastn;
 use Widget::snap; 
 use Widget::genemark; 
 use Widget::fgenesh;
-use Widget::xdformat;
-use Widget::formatdb;
+use Widget::formater;
 use PhatHit_utils;
 use Shadower;
 use polisher::exonerate::protein;
@@ -221,9 +220,6 @@ sub reblast_merged_hits {
       my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
       my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
       FastaFile::writeFile($fasta, $t_file);
-      
-      #build db for blast using xdformat or formatdb
-      #dbformat($CTL_OPT{_formater}, $t_file, $type);
       
       #==run the blast search
       if ($type eq 'blastx') {
@@ -1228,7 +1224,7 @@ sub dbformat {
 
    my ($file) = $file =~ /^([^\:]+)\:?(.*)/; #peal off label
 
-   die "ERROR: Can not find xdformat or formatdb executable\n" if(! -e $command);
+   die "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $command);
    die "ERROR: Can not find the db file $file\n" if(! -e $file);
    die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
@@ -1237,6 +1233,7 @@ sub dbformat {
        die "ERROR:  Could not obtain lock to format database\n\n";
    }
 
+   my $run; #flag
    if ($command =~ /xdformat/) {
       if (($type eq 'blastn' && ! -e $file.'.xnd') ||
 	  ($type eq 'blastx' && ! -e $file.'.xpd') ||
@@ -1245,11 +1242,7 @@ sub dbformat {
 	 $command .= " -p" if($type eq 'blastx');
 	 $command .= " -n" if($type eq 'blastn' || $type eq 'tblastx');
 	 $command .= " $file";
-
-	 $lock->maintain(30);
-	 my $w = new Widget::xdformat();
-	 print STDERR "formating database...\n" unless $main::quiet;
-	 $w->run($command);
+	 $run++;
       }
    }
    elsif ($command =~ /formatdb/) {
@@ -1260,15 +1253,29 @@ sub dbformat {
 	 $command .= " -p T" if($type eq 'blastx');
 	 $command .= " -p F" if($type eq 'blastn' || $type eq 'tblastx');
 	 $command .= " -i $file";
-
-	 $lock->maintain(30);
-	 my $w = new Widget::formatdb();
-	 print STDERR "formating database...\n" unless $main::quiet;
-	 $w->run($command);
+	 $run++;
+      }
+   }
+   elsif ($command =~ /makeblastdb/) {
+      if (($type eq 'blastn' && ! -e $file.'.nsq') ||
+	  ($type eq 'blastx' && ! -e $file.'.psq') ||
+	  ($type eq 'tblastx' && ! -e $file.'.nsq')
+	 ) {
+	 $command .= " -dbtype prot" if($type eq 'blastx');
+	 $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
+	 $command .= " -in $file";
+	 $run++;
       }
    }
    else {
-      die "ERROR: databases can only be formated by xdformat or formatdb not \'$command\'\n";
+      die "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
+   }
+
+   if($run){
+       $lock->maintain(30);
+       my $w = new Widget::formater();
+       print STDERR "formating database...\n" unless $main::quiet;
+       $w->run($command);
    }
 
    $lock->unlock;
@@ -1334,13 +1341,14 @@ sub blastn_as_chunks {
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
-   #copy db to local tmp dir and run xdformat or formatdb
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
    if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
        open(my $L,"$tmp_db.copy");
        flock($L, 2); #try regular file lock for extra safety
        
        if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
 	   (! -e $blast_finished)
 	   ){
 	   $lock->maintain(30);
@@ -1437,7 +1445,8 @@ sub blastn {
    $LOG->add_entry("STARTED", $o_file, ""); 
 
    if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
            (! -e $o_file)
        ){
        dbformat($formater, $db, 'blastn');
@@ -1495,9 +1504,11 @@ sub runBlastn {
    my $softmask   = shift;
 
    my $command  = $blast;
-   if ($command =~ /blastn$/) {
+   if ($command =~ /blasta$/) {
+      symlink($blast, "$TMP/blastn") if(! -e "$TMP/blastn"); #handle blasta linking
+      $command = "$TMP/blastn";
       $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
-      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";;
+      $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " R=3";
       $command .= " W=15";
       $command .= " M=1";
@@ -1533,12 +1544,30 @@ sub runBlastn {
       $command .= " -z 1000";
       $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
-      $command .= " -I";
+      $command .= " -I T";
       #$command .= " -m 8"; # remove for full report
       $command .= " -o $out_file";
+   }
+   elsif ($command =~ /blastn$/) {
+      #$command .= " -task blastn";
+      $command .= " -db $db -query $q_file";
+      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -gapextend 3";
+      $command .= " -word_size 15";
+      $command .= " -reward 1";
+      $command .= " -penalty -3";
+      $command .= " -gapopen 3";
+      $command .= " -dbsize 1000";
+      $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
+      $command .= " -num_threads $cpus";
+      $command .= " -lcase_masking";
+      $command .= " -dust yes";
+      $command .= ($softmask) ? " -soft_masking true" : " -soft_masking false";
+      $command .= " -show_gis";
+      #$command .= " -outfmt 6"; # remove for full report
+      $command .= " -out $out_file";
    }
    else{
       die "ERROR: Must be a blastn executable";  
@@ -1605,13 +1634,14 @@ sub blastx_as_chunks {
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
-   #copy db to local tmp dir and run xdformat or formatdb
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
    if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
        open(my $L,"$tmp_db.copy");
        flock($L, 2); #try regular file lock for extra safety
        
        if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
 	   (! -e $blast_finished)
 	   ){
 	   $lock->maintain(30);
@@ -1739,7 +1769,8 @@ sub blastx {
    $LOG->add_entry("STARTED", $o_file, ""); 
 
    if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
            (! -e $o_file)
        ){
        dbformat($formater, $db, 'blastx');
@@ -1797,20 +1828,17 @@ sub runBlastx {
    my $org_type = shift;
    my $softmask = shift;
 
-
    my $command  = $blast;
-   if ($command =~ /blastx$/) {
+   if ($command =~ /blasta$/) {
+      symlink($blast, "$TMP/blastx") if(! -e "$TMP/blastx"); #handle blasta linking
+      $command = "$TMP/blastx";
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
-      #$command .= " T=20";
-      #$command .= " W=5";
-      #$command .= " wink=5";
       $command .= " Z=300";
       $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
       $command .= ($org_type eq 'eukaryotic') ? " hspmax=100" : " hspmax=5";
       $command .= " cpus=$cpus";
       $command .= ($org_type eq 'eukaryotic') ? " gspmax=100" : " gspmax=5";
-      #$command .= " hspsepqmax=10000";
       $command .= " lcmask";
       $command .= " maskextra=10";
       $command .= " kap";
@@ -1829,12 +1857,24 @@ sub runBlastx {
       $command .= " -z 300";
       $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
-      $command .= " -I";
+      $command .= " -I T";
       #$command .= " -m 8"; # remove for full report
       $command .= " -o $out_file";
+   }
+   elsif ($command =~ /blastx$/) {
+      $command .= " -db $db -query $q_file";
+      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -dbsize 300";
+      $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
+      $command .= " -num_threads $cpus";
+      $command .= " -seg yes";
+      $command .= ($softmask) ? " -soft_masking true" : " -soft_masking false";
+      $command .= " -lcase_masking";
+      $command .= " -show_gis";
+      #$command .= " -outfmt 6"; # remove for full report
+      $command .= " -out $out_file";
    }
    else{
       die "ERROR: Must be a blastx executable";  
@@ -1896,13 +1936,14 @@ sub tblastx_as_chunks {
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
-   #copy db to local tmp dir and run xdformat or formatdb
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
    if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
        open(my $L,"$tmp_db.copy");
        flock($L, 2); #try regular file lock for extra safety
        
        if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/)) &&
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
 	   (! -e $blast_finished)
 	   ){
 	   $lock->maintain(30);
@@ -1999,8 +2040,9 @@ sub tblastx {
    $LOG->add_entry("STARTED", $o_file, ""); 
 
    if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/)) &&
-           (! -e $o_file)
+	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
+	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+       (! -e $o_file)
        ){
        dbformat($formater, $db, 'tblastx');
    }
@@ -2056,12 +2098,12 @@ sub runtBlastx {
    my $org_type = shift;
    my $softmask = shift;
 
-
    my $command  = $blast;
-   if ($command =~ /tblastx$/) {
+   if ($command =~ /blasta$/) {
+      symlink($blast, "$TMP/tblastx") if(! -e "$TMP/tblastx"); #handle blasta linking
+      $command = "$TMP/tblastx";
       $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
-      #$command .= " W=15";
       $command .= " Z=1000";
       $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
       $command .= " cpus=$cpus";	
@@ -2084,16 +2126,27 @@ sub runtBlastx {
    elsif ($command =~ /blastall$/) {
       $command .= " -p tblastx";
       $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
-      #$command .= " -W 15";
       $command .= " -z 1000";
       $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
-      $command .= ($org_type eq 'eukaryotic') ? " -K 100" : " -K 5";
       $command .= " -U";
       $command .= " -F T";
-      $command .= " -I";
+      $command .= " -I T";
       #$command .= " -m 8"; # remove for full report
       $command .= " -o $out_file";
+   }
+   elsif ($command =~ /tblastx$/) {
+      $command .= " -db $db -query $q_file";
+      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -dbsize 1000";
+      $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
+      $command .= " -num_threads $cpus";
+      $command .= " -lcase_masking";
+      $command .= " -seg yes";
+      $command .= ($softmask) ? " -soft_masking true" : " -soft_masking false";
+      $command .= " -show_gis";
+      #$command .= " -outfmt 6"; # remove for full report
+      $command .= " -out $out_file";
    }
    else{
       die "ERROR: Must be a tblastx executable";  
@@ -2372,7 +2425,9 @@ sub set_defaults {
    if ($type eq 'all' || $type eq 'exe') {
       my @exes = ('xdformat',
 		  'formatdb',
+		  'makeblastdb',
 		  'blastall',
+		  'blasta',
 		  'blastn',
 		  'blastx',
 		  'tblastx',
@@ -2395,10 +2450,13 @@ sub set_defaults {
       foreach my $exe (@exes) {
 	  my @alts = grep {/\/$exe$/} @all_alts;
 	  my $loc = shift @alts || File::Which::which($exe) || '';
-	  if($loc && $exe =~ /^.?blast.$/ && Cwd::abs_path($loc) !~ /blasta$/){
-	      $loc = (grep {Cwd::abs_path($_) =~ /blasta$/} (@alts, File::Which::where($exe))) || '';
+	  if(! $loc && $exe eq 'blasta'){ #find blasta using blastx
+	      ($loc) = (map {Cwd::abs_path($_)} grep {Cwd::abs_path($_) =~ /blasta$/} (File::Which::where('blastx')));
 	  }
-	  $CTL_OPT{$exe} = $loc;
+	  elsif($loc && $exe =~ /^.?blast[nx]$/ && Cwd::abs_path($loc) =~ /blasta$/){ #verofy not blasta
+	      ($loc) = (grep {Cwd::abs_path($_) !~ /blasta$/} (@alts, File::Which::where($exe)));
+	  }
+	  $CTL_OPT{$exe} = $loc || '';
       }
    }
 
@@ -2938,50 +2996,55 @@ sub load_control_files {
    $CTL_OPT{run} = join(",", @{$CTL_OPT{_run}}); #reset value for log
 
    #check blast type validity and related values (NCBI vs. WUBLAST)
-   if ($CTL_OPT{blast_type} !~ /^wublast$|^ncbi$/) {
-      warn "WARNING: blast_type must be set to \'wublast\' or \'ncbi\'.\n",
+   $CTL_OPT{blast_type} = lc($CTL_OPT{blast_type});
+   if ($CTL_OPT{blast_type} !~ /^wublast$|^ncbi$|^ncbi\+$/) {
+      warn "WARNING: blast_type must be set to 'wublast', 'ncbi', or 'ncbi+'.\n",
       "The value $CTL_OPT{blast_type} is invalid.\n",
       "This will now be reset to the default 'wublast'.\n\n" unless($main::qq);
       
       $CTL_OPT{blast_type} = 'wublast';
    }
    
-   if ($CTL_OPT{blast_type} =~ /^wublast$/ &&
-       ! -f $CTL_OPT{blastn} &&
-       ! -f $CTL_OPT{blastx} &&
-       ! -f $CTL_OPT{tblastx} &&
-       -f $CTL_OPT{blastall}
+   if (($CTL_OPT{blast_type} =~ /^wublast$/ && ! -f $CTL_OPT{xdformat}) ||
+       ($CTL_OPT{blast_type} =~ /^ncbi$/ && ! -f $CTL_OPT{formatdb}) ||
+       ($CTL_OPT{blast_type} =~ /^ncbi\+$/ && ! -f $CTL_OPT{makeblastdb})
       ) {
-      warn "WARNING: blast_type is set to \'wublast\' but wublast executables\n",
-      "can not be located.  NCBI blast will be used instead.\n\n" unless($main::qq);
+       my $new;
+       if(-f $CTL_OPT{xdformat}){
+	   $new = 'wublast';
+       }
+       elsif(-f $CTL_OPT{formatdb}){
+	   $new = 'ncbi';
+       }
+       elsif(-f $CTL_OPT{makeblastdb}){
+	   $new = 'ncbi+';
+       }
 
-      $CTL_OPT{blast_type} = 'ncbi';
-   }
+       warn "WARNING: blast_type is set to '$CTL_OPT{blast_type}' but executables cannot be located\n" unless($main::qq);
+       die "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
+       warn "The blast_type '$new' will be used instead.\n\n" unless($main::qq);
 
-   if ($CTL_OPT{blast_type} =~ /^ncbi$/ &&
-       ! -f $CTL_OPT{blastall} &&
-       -f $CTL_OPT{blastn} &&
-       -f $CTL_OPT{blastx} &&
-       -f $CTL_OPT{tblastx}
-      ) {
-      warn "WARNING: blast_type is set to \'ncbi\' but ncbi executables\n",
-      "can not be located.  WUBLAST blast will be used instead.\n\n" unless($main::qq);
-
-      $CTL_OPT{blast_type} = 'wublast';
+       $CTL_OPT{blast_type} = $new;
    }
    
    #use standard value to refer to both NCBI and WUBLAST
    if ($CTL_OPT{blast_type} =~ /^wublast$/i) {
       $CTL_OPT{_formater} = $CTL_OPT{xdformat};
-      $CTL_OPT{_blastn} = $CTL_OPT{blastn};
-      $CTL_OPT{_blastx} = $CTL_OPT{blastx};
-      $CTL_OPT{_tblastx} = $CTL_OPT{tblastx};
+      $CTL_OPT{_blastn} = $CTL_OPT{blasta};
+      $CTL_OPT{_blastx} = $CTL_OPT{blasta};
+      $CTL_OPT{_tblastx} = $CTL_OPT{blasta};
    }
    elsif ($CTL_OPT{blast_type} =~ /^ncbi$/i) {
       $CTL_OPT{_formater} = $CTL_OPT{formatdb};
       $CTL_OPT{_blastn} = $CTL_OPT{blastall};
       $CTL_OPT{_blastx} = $CTL_OPT{blastall};
       $CTL_OPT{_tblastx} = $CTL_OPT{blastall};
+   }
+   elsif ($CTL_OPT{blast_type} =~ /^ncbi\+$/i) {
+      $CTL_OPT{_formater} = $CTL_OPT{makeblastdb};
+      $CTL_OPT{_blastn} = $CTL_OPT{blastn};
+      $CTL_OPT{_blastx} = $CTL_OPT{blastx};
+      $CTL_OPT{_tblastx} = $CTL_OPT{tblastx};
    }
    
    #--validate existence of required values from control files
@@ -2991,19 +3054,27 @@ sub load_control_files {
 
    #decide if require
    if($CTL_OPT{blast_type} =~ /^wublast$/i){
-       push (@infiles, 'blastn', 'xdformat') if($CTL_OPT{est});
-       push (@infiles, 'blastn', 'xdformat') if($CTL_OPT{est_reads}); 
-       push (@infiles, 'blastx', 'xdformat') if($CTL_OPT{protein}); 
-       push (@infiles, 'blastx', 'xdformat') if($CTL_OPT{repeat_protein}); 
-       push (@infiles, 'tblastx', 'xdformat') if($CTL_OPT{altest});
+       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{est});
+       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{est_reads}); 
+       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{protein}); 
+       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{repeat_protein}); 
+       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{altest});
    }
-   if($CTL_OPT{blast_type} =~ /^ncbi$/i){
+   elsif($CTL_OPT{blast_type} =~ /^ncbi$/i){
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est});
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est_reads}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{protein}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{altest});
    }
+   elsif($CTL_OPT{blast_type} =~ /^ncbi\+$/i){
+       push (@infiles, 'blastn', 'makeblastdb') if($CTL_OPT{est});
+       push (@infiles, 'blastn', 'makeblastdb') if($CTL_OPT{est_reads}); 
+       push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{protein}); 
+       push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{repeat_protein}); 
+       push (@infiles, 'tblastx', 'makeblastdb') if($CTL_OPT{altest});
+   }
+
    push (@infiles, 'genome') if($CTL_OPT{genome});
    push (@infiles, 'genome') if(!$CTL_OPT{genome_gff});
    push (@infiles, 'est') if($CTL_OPT{est}); 
@@ -3512,12 +3583,14 @@ sub generate_control_files {
    if($type eq 'all' || $type eq 'exe'){
        open (OUT, "> $dir/$app\_exe.$ext");
        print OUT "#-----Location of Executables Used by MAKER/EVALUATOR\n";
+       print OUT "makeblastdb=$O{makeblastdb} #location of NCBI+ makeblastdb executable\n";
+       print OUT "blastn=$O{blastn} #location of NCBI+ blastn executable\n";
+       print OUT "blastx=$O{blastx} #location of NCBI+ blastx executable\n";
+       print OUT "tblastx=$O{tblastx} #location of NCBI+ tblastx executable\n";
        print OUT "formatdb=$O{formatdb} #location of NCBI formatdb executable\n";
        print OUT "blastall=$O{blastall} #location of NCBI blastall executable\n";
        print OUT "xdformat=$O{xdformat} #location of WUBLAST xdformat executable\n";
-       print OUT "blastn=$O{blastn} #location of WUBLAST blastn executable\n";
-       print OUT "blastx=$O{blastx} #location of WUBLAST blastx executable\n";
-       print OUT "tblastx=$O{tblastx} #location of WUBLAST tblastx executable\n";
+       print OUT "blasta=$O{blasta} #location of WUBLAST blasta executable\n";
        print OUT "RepeatMasker=$O{RepeatMasker} #location of RepeatMasker executable\n";
        print OUT "exonerate=$O{exonerate} #location of exonerate executable\n";
        print OUT "\n";

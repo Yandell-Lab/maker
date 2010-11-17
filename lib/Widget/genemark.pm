@@ -81,8 +81,14 @@ sub parse_eukaryotic{
         my $params = shift;
 	my $q_file = shift;
 
-	my $iterator = new Iterator::Fasta($q_file);
-        my $fasta = $iterator->nextEntry();
+	my $fasta;
+	if($q_file =~ /^>/){
+            $fasta = $q_file;
+	}
+	else{
+            my $iterator = new Iterator::Fasta($q_file);
+            $fasta = $iterator->nextEntry();
+        }
 
         my $def     = Fasta::getDef(\$fasta);
         my $q_seq   = Fasta::getSeqRef(\$fasta);
@@ -119,8 +125,14 @@ sub parse_prokaryotic{
         my $params = shift;
 	my $q_file = shift;
 
-	my $iterator = new Iterator::Fasta($q_file);
-        my $fasta = $iterator->nextEntry();
+	my $fasta;
+	if($q_file =~ /^>/){
+            $fasta = $q_file;
+	}
+	else{
+            my $iterator = new Iterator::Fasta($q_file);
+            $fasta = $iterator->nextEntry();
+        }
 
         my $def     = Fasta::getDef(\$fasta);
         my $q_seq   = Fasta::getSeqRef(\$fasta);

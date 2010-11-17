@@ -88,6 +88,74 @@ sub sort_hsps_by_score {
 
 }
 #------------------------------------------------------------------------
+#this method fills in the space between splice site crossing reads to see if
+#there is an ORF that infers the location of an exon
+sub splice_infer_exon_coors {
+    my $ests = shift;
+    my $seq = shift;
+
+    #map likely CDS space based on filling in space between splice site crossing reads
+    my @sorted;
+    my $tM = new CGL::TranslationMachine();
+    foreach my $e (@$ests){
+	next if($e->num_hsps() <= 1);
+	my $fC = $e->start('query');
+	my $lC = $e->end('query');
+	my $first;
+	my $last;
+	
+	foreach my $hsp ($e->hsps){
+	    $first = $hsp if($hsp->start('query') == $fC);
+	    $last = $hsp if($hsp->end('query') == $lC);
+	    last if($first && $last);
+	}
+	push(@sorted, [$first, $last]);
+    }
+    @sorted = sort {$a->[0]->start <=> $b->[0]->start} @sorted; #sort on start coordinate of first HSP
+    
+    my @coors; #coordinates to return
+    my %done; #keep tabs on coordinates already checked
+    for(my $i = 0; $i < @sorted-1; $i++){
+	my $iB = $sorted[$i]->[0]->start; #entire EST start
+	my $iE = $sorted[$i]->[1]->end; #entire EST end
+	my $B = $sorted[$i]->[1]->start; #bridging exon space begin
+
+	next if($done{B}); #skip if this starting coor already checked for ORF
+	$done{$B} = {};
+
+	my $bad = 0; #anything longer than this already been checked and doesn't work
+	my $ok; #anything shorter than this has already been checked and is ok
+	for(my $j = $i+1; $j < @sorted; $j++){
+	    my $jB = $sorted[$j]->[0]->start; #entire EST start
+	    my $jE = $sorted[$j]->[1]->end; #entire EST end
+	    my $E = $sorted[$j]->[0]->end; #bridging exon space end
+	
+	    next if($ok && $E <= $ok); #already verified up to this length
+	    next if($bad && $E >= $bad); #over this length is already known to be bad
+	    next if($E - $B < 300); #min orf of 300 required (same as most prokaryotic gene finders)
+	    next if(compare::compare($iB, $iE, $jB, $jE) ne '0'); #ESTs overlap so there is no in between space
+	    next if($done{$B}{$E}); #skip if these coors already checked
+	    die "ERROR: Logic error in Widget:snap::get_xdef\n" if($B > $E);
+	    $done{$B}{$E}++;
+	    
+	    my $L = abs($E - $B) + 1;
+	    my $piece = ($sorted[$j]->[0]->strand('query') == 1) ?
+		substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
+
+	    my ($p_seq, $poffset) = $tM->longest_translation($piece);
+	    if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+		push(@coors, [$B, $E]);
+		$ok = $E if(! $ok || $E > $ok);
+	    }
+	    else{
+		$bad = $E if(!$bad || $E < $bad);
+	    }
+	}
+    }
+
+    return \@coors;
+}
+#------------------------------------------------------------------------
 sub to_begin_and_end_coors {
 	my $hits = shift;
 	my $what = shift;
@@ -136,6 +204,62 @@ sub get_hit_coors {
         foreach my $hit (@{$hits}){
 	    push(@coors, [$hit->nB($what), $hit->nE($what)]);
         }
+        return \@coors;
+}
+#------------------------------------------------------------------------
+sub shadow_i_corrected_coors {
+        my $hits = shift;
+        my $what = shift;
+	
+	my $B;
+	my $E;
+	foreach my $hit (@{$hits}){
+	    $B = $hit->start('query') if(!$B || $hit->start('query') < $B);
+	    $E = $hit->end('query') if(!$E || $hit->end('query') > $E);
+	}
+
+	my $offset = $B;
+	my $length = abs($E - $B) + 1;
+
+	my @b_seq = map {0} ($B..$E);
+
+        foreach my $hit (@{$hits}){
+	    my $last;
+	    my $s = $hit->start('query') - $offset;
+	    my $e = $hit->end('query') - $offset;
+
+	    #map hit space (defines intron once exons are mapped)
+	    foreach my $i ($s..$e){
+		$b_seq[$i] = 1 if($b_seq[$i] == 0);
+	    }
+
+	    foreach my $hsp ($hit->hsps){
+		$s = $hsp->start('query') - $offset;
+		$e = $hsp->end('query') - $offset;
+
+		@b_seq[$s..$e] = map {2} ($s..$e); #map exon
+	    }
+        }
+
+	my @coors;
+	my $first;
+	for (my $i = 0; $i < @b_seq; $i++){
+	    if($first && $b_seq[$i] == 1){
+		my $last = $i - 1 + $offset;	
+		push(@coors, [$first, $last]);
+		$first = undef;
+	    }
+	    elsif(! $first && $b_seq[$i] != 1){
+		$first = $i + $offset;
+	    }
+
+	    #last bp
+	    if($i == @b_seq - 1 && $first && $b_seq[$i] != 1){
+		my $last = $i + $offset;
+                push(@coors, [$first, $last]);
+	    }
+	}
+	
         return \@coors;
 }
 #------------------------------------------------------------------------
@@ -1270,7 +1394,10 @@ sub merge_hits {
 	my %little_names;
 	my @merged;
         foreach my $b_hit (@{$big_fish}){
-		$big_names{$b_hit->hsp(0)->hit->seq_id} = $b_hit;
+	    my $id = $b_hit->hsp(0)->hit->seq_id;
+	    if(! $big_names{$id} || $big_names{$id}->end < $b_hit->end){
+		$big_names{$id} = $b_hit;
+	    }
 	}
 	foreach my $l_hit (@{$lil_fish}){
 		$little_names{$l_hit->hsp(0)->hit->seq_id}++;
@@ -1278,7 +1405,6 @@ sub merge_hits {
 
 	my %was_merged;
         foreach my $l_hit (@{$lil_fish}){
-
 		next unless defined($big_names{$l_hit->hsp(0)->hit->seq_id});
 
 		my $b_hit = $big_names{$l_hit->hsp(0)->hit->seq_id};
@@ -1294,8 +1420,8 @@ sub merge_hits {
                 my $l_start = $l_hit->nB('query');
                 my $l_end   = $l_hit->nE('query');
 
-               ($l_start, $l_end) = ($l_end, $l_start)
-                if $l_start > $l_end;
+		($l_start, $l_end) = ($l_end, $l_start)
+		    if $l_start > $l_end;
 
                 #print STDERR "b_start:$b_start l_start:$l_start\n";
                 #print STDERR "b_end:$b_end l_end:$l_end\n";
@@ -1317,13 +1443,12 @@ sub merge_hits {
 
                 my @new_b_hsps;
                 foreach my $b_hsp ($b_hit->hsps) {
-                        push(@new_b_hsps, $b_hsp);
+		    push(@new_b_hsps, $b_hsp);
                 }
 
-
-               foreach my $l_hsp ($l_hit->hsps){
-               		push(@new_b_hsps, $l_hsp);
-               }
+		foreach my $l_hsp ($l_hit->hsps){
+		    push(@new_b_hsps, $l_hsp);
+		}
 
 		$b_hit->hsps(\@new_b_hsps);
 		$b_hit->{'_sequenceschanged'} = 1;

@@ -71,62 +71,26 @@ sub get_eAED {
        }
    }
 
-   #map extra likely space based on filling in space between splice site crossing reads
+
+   #fill in space between splice site crossing reads
    if($seq){
-       my $tM = new CGL::TranslationMachine();
-       my @sorted;
-       foreach my $est (@ests){
-	   next if($est->num_hsps() <= 1);
-
-	   my $S = $est->start('query');
-	   my $E = $est->end('query');
-	   my $first;
-	   my $last;
+       foreach my $set (@{PhatHit_utils::splice_infer_exon_coors(\@ests, $seq)}){
+	   #array space coors
+	   my $s = $set->[0] - $offset;
+	   my $e = $set->[1] - $offset;
 	   
-	   foreach my $hsp ($est->hsps){
-	       $first = $hsp if($hsp->start('query') == $S);
-	       $last = $hsp if($hsp->end('query') == $E);
-	       last if($first && $last);
-	   }
-	   push(@sorted, [$first, $last]);
-       }
-       
-       for(my $i = 0; $i < @sorted-1; $i++){
-	   my $iB = $sorted[$i]->[0]->start;
-	   my $iE = $sorted[$i]->[1]->end;
+	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 	   
-	   for(my $j = $i+1; $j < @sorted; $j++){
-	       my $jB = $sorted[$j]->[0]->start;
-	       my $jE = $sorted[$j]->[1]->end;
-	       
-	       my $class = compare::compare($iB, $iE, $jB, $jE);
-	       next unless($class eq '0');
-	       
-	       my ($B, $E) = ($iB < $jB) ? ($sorted[$i]->[1]->start, $sorted[$j]->[0]->end) : ($sorted[$j]->[1]->start, $sorted[$i]->[0]->end); 
-	       my $L = abs($E - $B) + 1;
-	       
-	       my $piece = ($sorted[$j]->[0]->strand('query') == 1) ? substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
-
-	       my ($p_seq , $poffset) = $tM->longest_translation($piece);
-	       if($L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
-		   my $s = $B - $offset;
-		   my $e = $E - $offset;
-		   
-		   #array space coors
-		   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-		   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
-		   
-		   @b_seq[$s..$e] = map {1} ($s..$e); #replaces hit
-	       }
-	   }
+	   @b_seq[$s..$e] = map {1} ($s..$e);
        }
    }
 
    #==calculate bp in evidence
-   my %index = (0 => 0,
-		1 => 0,
-		2 => 0,
-		3 => 0,
+   my %index = (0 => 0, #empty
+		1 => 0, #all evidence
+		2 => 0, #all trans
+		3 => 0, #overlap
 	       );
 
    foreach my $i (@b_seq){
@@ -327,15 +291,17 @@ sub get_eAED {
        $index{3}++ if($i == 3);
    }
 
+   my @error = grep {$_ > 3} keys %index; #should not have keys greater than 3
+
    #catch error caused by bad GFF3 input (i.e. hits with no HSPs)
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
        "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
-       if($index{2} == 0 || $index{1} == 0);
+       if($index{1} == 0 || $index{2} == 0 || @error);
 
-   my $spec = $index{3}/($index{2}); #specificity
-   my $sens = $index{3}/($index{1}); #sensitivity
+   my $spec = $index{3}/$index{2}; #specificity
+   my $sens = $index{3}/$index{1}; #sensitivity
    my $eAED = 1 - ($spec + $sens)/2;
 
    return $eAED;
@@ -394,25 +360,29 @@ sub get_AED {
    }
    
    #calculate AED
-   my %index = (0 => 0,
-		1 => 0,
-		2 => 0,
-		3 => 0,
+   my %index = (0 => 0, #empty
+		1 => 0, #all evidence
+		2 => 0, #all transcript
+		3 => 0, #overlap
 	       );
 
    foreach my $i (@b_seq){
       $index{$i}++;
    }
+   $index{1} += $index{3}; #make as total evidence
+   $index{2} += $index{3}; #make as total transcript
+
+   my @error = grep {$_ > 3} keys %index; #should not have keys greater than 3
 
    #catch error caused by bad GFF3 input
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
        "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
-       if($index{2} + $index{3} == 0 || $index{1} + $index{3} == 0);
+       if($index{1} == 0 || $index{2} == 0 || @error);
 
-   my $spec = $index{3}/($index{2} + $index{3}); #specificity
-   my $sens = $index{3}/($index{1} + $index{3}); #sensitivity
+   my $spec = $index{3}/$index{2}; #specificity
+   my $sens = $index{3}/$index{1}; #sensitivity
    my $AED = 1 - ($spec + $sens)/2;
 
    return $AED;

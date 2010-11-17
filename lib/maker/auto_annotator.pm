@@ -37,7 +37,7 @@ my $SEEN;
 sub prep_hits {
 	my $prot_hits        = shift;
 	my $est_hits         = shift;
-	my $altest_hits     = shift;
+	my $altest_hits      = shift;
 	my $predictions      = shift;
 	my $models           = shift;
 	my $seq              = shift;
@@ -370,12 +370,14 @@ sub join_clusters_around_orf {
 
 	my $iL = abs($iE - $iS) + 1; #space-in-between length
 
+	next if($iL < 300); #min orf of 300 required (same as most prokaryotic gene finders)
+
 	my $piece = ($cs[$i][0]->strand('query') == 1) ? substr($$seq, $iS, $iL) : Fasta::revComp(substr($$seq, $iS, $iL));
 	my $tM = new CGL::TranslationMachine();
-	my ($p_seq , $offset) = $tM->longest_translation($piece);
+	my ($p_seq , $poffset) = $tM->longest_translation($piece);
 
 	#all orf, so merge clusters (merges forward onto next cluster)
-	if($iL - (3 * length($p_seq) + $offset) < 3 && $p_seq !~ /X{10}/){
+	if($poffset < 3 && $iL - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
 	    $cs[$i+1] = [@{$cs[$i]}, @{$cs[$i+1]}];
 	    $cs[$i] = [];
 	}

@@ -103,15 +103,61 @@ sub prep_for_genefinder {
         push(@t_data, @{$ests})    if defined($ests);
 
         my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
+        my $n_set_coors = defined($ests) ? PhatHit_utils::shadow_i_corrected_coors($ests, 'query') : [];
 
-        my $n_set_coors =
-        defined($ests) ? PhatHit_utils::get_hsp_coors($ests, 'query')
-                      : [];
+	#add EST to p_set_coors if spliced and all orf
+        my $tM = new CGL::TranslationMachine();
+        my %seen; #skip redundant
+        foreach my $e (@$ests){
+            next if($e->num_hsps() == 1);
+            my ($lAq) = $e->getLengths();
+            next if($lAq < 300); #orf of 100 required (same as most prokaryotic gene finders)
 
+            my $t_seq  = maker::auto_annotator::get_transcript_seq($e, $seq);
+            my ($p_seq, $poffset) = $tM->longest_translation($t_seq);
+
+            if($poffset < 3 && length($t_seq) - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+                my $coors = PhatHit_utils::get_hsp_coors([$e], 'query');
+                foreach my $set (@$coors){
+                    next if($seen{$set->[0]}{$set->[1]});
+                    $seen{$set->[0]}{$set->[1]}++;
+
+                    push(@$p_set_coors, $set);
+                }
+
+                next;
+            }
+
+            #if not all orf test internal HSPs
+            next if($e->num_hsps() < 3);
+            foreach my $hsp ($e->hsps){
+                next if($hsp->start('query') == $e->start('query')); #skip first HSP
+                next if($hsp->end('query') == $e->end('query')); #skip last HSP
+                next if($seen{$hsp->start('query')}{$hsp->end('query')}); #skip redundant HSPs
+                $seen{$hsp->start('query')}{$hsp->end('query')}++;
+
+                my $B = $hsp->start('query');
+                my $E = $hsp->end('query');
+                my $L = abs($E - $B) + 1;
+
+                my $piece = ($e->strand('query') == 1) ?
+                    substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
+
+                my ($p_seq, $poffset) = $tM->longest_translation($piece);
+
+                if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
+                    push(@$p_set_coors, [$B, $E]);
+                }
+            }
+        }
+
+        #get likely CDS from splice site crossing ESTs
+        push(@$p_set_coors, @{PhatHit_utils::splice_infer_exon_coors($ests, $seq)});
+
+	#get span
         my @coors;
         my $plus  = 0;
         my $minus = 0;
-
 
         my $least;
         my $most;
@@ -196,9 +242,6 @@ sub augustus {
 
         my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
 
-        write_xdef_file($xdef, $xdef_file) if defined $xdef;
-
-        FastaFile::writeFile(\$fasta, $file_name);
 
 	$command .= ' --UTR=off';
         $command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
@@ -215,11 +258,15 @@ sub augustus {
         }
         else {
                 print STDERR "running  augustus.\n" unless $main::quiet;
+		write_xdef_file($xdef, $xdef_file) if defined $xdef;
+		FastaFile::writeFile(\$fasta, $file_name);
 		my $w = new Widget::augustus();
                 $w->run($command);
         }
 
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
+        unlink($xdef_file) if(-f $xdef_file);
+        unlink($file_name) if(-f $file_name);
 
         my %params;
            $params{min_exon_score}  = -100;
@@ -227,7 +274,7 @@ sub augustus {
 
         my $keepers = parse($o_file,
                            \%params,
-                            $file_name,
+                            $fasta,
                            );
 
         PhatHit_utils::add_offset($keepers,
@@ -435,8 +482,14 @@ sub parse {
         my $params = shift;
 	my $q_file = shift;
 
-	my $iterator = new Iterator::Fasta($q_file);
-        my $fasta = $iterator->nextEntry();
+	my $fasta;
+	if($q_file =~ /^>/){
+	    $fasta = $q_file;
+	}
+	else{
+	    my $iterator = new Iterator::Fasta($q_file);
+	    $fasta = $iterator->nextEntry();
+	}
 
         my $def     = Fasta::getDef($fasta);
         my $q_seq   = Fasta::getSeqRef($fasta);
