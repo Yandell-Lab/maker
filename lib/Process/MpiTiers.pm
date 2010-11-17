@@ -42,7 +42,7 @@ sub new {
 	  $self->{TIER_ID}   = shift @args;
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
-	  $self->{INTERUPT}  = 0;
+	  $self->{INTERRUPT} = 0;
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
@@ -387,17 +387,16 @@ sub _set_failed {
    }
 }
 #-------------------------------------------------------------
-#returns true if tier is interupted
+#returns true if tier is interrupted
 
-sub interupt{
+sub interrupt{
    my $self = shift;
-   return $self->{INTERUPT};
+   return $self->{INTERRUPT};
 }
-
 #-------------------------------------------------------------
-#sets $self->{INTERUPT}
+#sets $self->{INTERRUPT}
 
-sub _set_interupt {
+sub _set_interrupt {
    my $self = shift;
    my $arg = shift;
 
@@ -406,8 +405,8 @@ sub _set_interupt {
 	   "in Process::MpiTiers\n\n";
    }
 
-   my $old = $self->{INTERUPT};
-   $self->{INTERUPT} = $arg;
+   my $old = $self->{INTERRUPT};
+   $self->{INTERRUPT} = $arg;
 }
 #-------------------------------------------------------------
 #returns whatevever is strored in $self->{ERROR}

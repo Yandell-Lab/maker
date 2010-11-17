@@ -131,7 +131,9 @@ sub nextEntryRef {
 #-------------------------------------------------------------------------------
 sub nextFasta {#alias to nextEntry
    my $self = shift;
-   return ${$self->nextEntryRef};
+   my $ref = $self->nextEntryRef;
+
+   return (ref($ref) eq '') ? $ref : $$ref;
 }
 #-------------------------------------------------------------------------------
 sub nextFastaRef {#alias to nextEntry

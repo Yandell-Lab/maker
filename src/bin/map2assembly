@@ -133,6 +133,7 @@ my $DS_CTL;
 my $GFF_DB;
 my $build;
 my @failed;
+my @interrupted;
 
 try{
     my $genome      = shift @ARGV;
@@ -191,7 +192,9 @@ catch Error::Simple with{
 };
 
 my $tier;
-while (my $fasta = $iterator->nextFastaRef() || shift @failed){
+my $i_count = @interrupted;
+my $f_count = @failed;
+while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrupted){
     $tier = Process::MpiTiers->new({fasta =>$fasta,
 				    CTL_OPT => \%CTL_OPT,
 				    DS_CTL  => $DS_CTL,
@@ -202,8 +205,19 @@ while (my $fasta = $iterator->nextFastaRef() || shift @failed){
 				   );
 
     next if($tier->terminated);
+
+    #take a short break before processing previously failed contigs
+    #this handles heavy processor usage when failure is related
+    #to maker process overlap
+    sleep 1 if($f_count != @failed);
+
     $tier->run_all;
-    push(@failed, $tier->fasta) if ($tier->failed || $tier->interupt);
+
+    push(@failed, $tier->fasta) if ($tier->failed);
+    push(@interrupted, $tier->fasta) if ($tier->interrupt && $i_count == @interrupted);
+
+    $f_count = @failed; #reset failure count
+    $i_count = @interrupted; #reset interrupt count
 }
 
 #merge gff3 files into big file
