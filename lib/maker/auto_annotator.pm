@@ -1586,7 +1586,11 @@ sub run_it {
 	next if(!@{$on_right_strand});
 	foreach my $pred_shot (@{$on_right_strand}) {
 	    if (defined($pred_shot)){
-		my $transcript = (defined($mia)) ? pneu($ests, $pred_shot, $seq) : $pred_shot;
+		my $transcript = $pred_shot;
+		if(defined($mia)){
+		    $transcript = pneu([$mia], $transcript, $seq) if($CTL_OPT->{alt_splice});
+		    $transcript = pneu($ests, $transcript, $seq);
+		}
 
 		my $all_preds = get_overlapping_hits($transcript, $predictions);
 		$set->{all_preds} = $all_preds;
@@ -1626,6 +1630,7 @@ sub get_pred_shot {
 							      $CTL_OPT->{pred_flank},
 							      $pred_command,
 							      $hmm,
+							      $CTL_OPT->{alt_splice},
 							      $CTL_OPT->{force},
 							      $LOG
 							      );
@@ -1650,6 +1655,7 @@ sub get_pred_shot {
 								  $CTL_OPT->{pred_flank},
 								  $pred_command,
 								  $hmm,
+								  $CTL_OPT->{alt_splice},
 								  $CTL_OPT->{force},
 								  $LOG
 								  );
@@ -1674,6 +1680,7 @@ sub get_pred_shot {
 								 $CTL_OPT->{pred_flank},
 								 $pred_command,
 								 $hmm,
+								 $CTL_OPT->{alt_splice},
 								 $CTL_OPT->{force},
 								 $LOG
 								 );

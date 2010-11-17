@@ -53,6 +53,7 @@ my @ctl_to_log = ('genome_gff',
 		  'keep_preds',
 		  'map_forward',
 		  'est_forward',
+		  'alt_splice',
 		  'always_complete',
 		  'alt_peptide',
 		  'evaluate',
@@ -285,6 +286,11 @@ sub _compare_and_clean {
 
 	        #always_complete was off before and not logged
 		if($key eq 'always_complete' && ! $log_val){
+		    $log_val = 0;
+		}
+
+	        #alt_splice was off before and not logged
+		if($key eq 'alt_splice' && ! $log_val){
 		    $log_val = 0;
 		}
 

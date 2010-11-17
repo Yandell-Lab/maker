@@ -40,9 +40,14 @@ sub prep_for_genefinder {
         my $seq    = shift;
         my $set    = shift;
         my $flank  = shift;
+	my $alt_splice = shift;
         my $seq_id = shift;
 
-	my ($span, $strand, $p_set_coors, $n_set_coors, $i_set_coors) = process_hints($seq, $set);
+	my ($span,
+	    $strand,
+	    $p_set_coors,
+	    $n_set_coors,
+	    $i_set_coors) = process_hints($seq, $set, $alt_splice);
 
         my $p = Shadower::getPieces($seq, $span, $flank);
         my $final_seq  = $p->[0]->{piece};
@@ -66,8 +71,9 @@ sub prep_for_genefinder {
 sub process_hints {
         my $seq    = shift;
 	my $set    = shift;
+	my $alt_splice = shift;
 
-        my $mia    = $set->{mia};
+        my $mia    = $set->{mia} if($alt_splice);
         my $gomiph = $set->{gomiph}    || [];
         my $models = $set->{gomod}     || [];
         my $alts   = $set->{alt_ests}  || [];
@@ -76,7 +82,6 @@ sub process_hints {
         my $ests   = $set->{ests}      || [];
         my @t_data;
 
-	push(@t_data, $mia) if defined($mia);
         push(@t_data, @{$gomiph});
         push(@t_data, @{$preds});
         push(@t_data, @{$alts});
@@ -106,7 +111,14 @@ sub process_hints {
         }
 
 	#instantiate seq position array
-	my @b_seq = map {0} ($least..$most); #0 => empty, 1 => exon, 2 => CDS, -1 => intron
+	# 0 => empty,
+	# 1 => exon,
+	# 2 => reserved_exon,
+	# 3 => CDS,
+	# 4 => reserved_CDS,
+	# -1 => intron,
+	# -2 => reserved_intron
+	my @b_seq = map {0} ($least..$most);
 	my @span_coors = [$least, $most];
 	my $strand = $plus > $minus ? 1 : -1;
 	my $offset = $least;
@@ -125,6 +137,43 @@ sub process_hints {
 		$splices{start}{$hsp2->start('query')}++; #exon end
 		$splices{end}{$hsp1->end('query')}++; #exon start
 		$splices{exact}{$hsp1->end('query')}{$hsp2->start('query')}++; #intron (bordering exons)
+	    }
+	}
+
+	#use $mia to infer alt splicing (keep all structure from mia)
+	if($mia){
+	    my @hsps = sort {$a->start('query') <=> $b->start('query')} $mia->hsps;
+	    for(my $i = 0; $i < @hsps - 1; $i++){
+		my $hsp1 = $hsps[$i];
+		my $hsp2 = $hsps[$i+1];
+		
+		my $s1 = $hsp1->start('query');
+		my $e1 = $hsp1->end('query');
+		my $s2 = $hsp2->start('query');
+		my $e2 = $hsp2->end('query');
+
+		#first exon given lower precedence
+		my $val = ($i == 0) ? 1 : 2;
+		my $s = $s1 - $offset;
+		my $e = $e1 - $offset;
+		@b_seq[$s..$e] = map {$val} ($s..$e); #overrides all
+		
+		#last exon given lower precedence
+		if($i + 1 == @hsps - 1){
+		    $s = $s2 - $offset;
+		    $e = $e2 - $offset;
+		    @b_seq[$s..$e] = map {1} ($s..$e); #overrides all  
+		}
+
+		next if($e1 >= $s2); #no gap so skip
+
+		#intron verify
+		my $si = $e1 + 1; #fix for inron coordiantes
+		my $ei = $s2 - 1; #fix for intron coordiantes
+		
+		$si -= $offset;
+		$ei -= $offset;
+		@b_seq[$si..$ei] = map {-2} ($si..$ei); #overrides all
 	    }
 	}
 
@@ -152,7 +201,9 @@ sub process_hints {
                 $s -= $offset;
                 $e -= $offset;
 
-                @b_seq[$s..$e] = map {1} ($s..$e);
+                foreach my $i ($s..$e){
+                    $b_seq[$i] = 1 if($b_seq[$i] == 0 || $b_seq[$i] == -1);
+                }
             }
         }
 
@@ -169,7 +220,12 @@ sub process_hints {
 	    $s -= $offset;
 	    $e -= $offset;
             foreach my $i ($s..$e){
-                $b_seq[$i] = 2 if($b_seq[$i] != -1); #cannot overide EST inferred intron
+		if($b_seq[$i] == 0 || $b_seq[$i] == 1){ #cannot overide EST inferred intron
+		    $b_seq[$i] = 3;
+		}
+		elsif($b_seq[$i] == 2){
+		    $b_seq[$i] = 4;
+		}
             }
 	}
 
@@ -194,7 +250,14 @@ sub process_hints {
 		    $s -= $offset;
 		    $e -= $offset;
 
-		    @b_seq[$s..$e] = map {2} ($s..$e);
+		    foreach my $i ($s..$e){
+			if($b_seq[$i] == 0 || $b_seq[$i] == 1 || $b_seq[$i] == -1){
+			    $b_seq[$i] = 3;
+			}
+			elsif($b_seq[$i] == 2){
+			    $b_seq[$i] = 4;
+			}
+		    }
 		}	
 		next;
 	    }
@@ -220,7 +283,15 @@ sub process_hints {
 		if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
 		    my $s = $B - $offset;
 		    my $e = $E - $offset;
-		    @b_seq[$s..$e] = map {2} ($s..$e);
+		    
+		    foreach my $i ($s..$e){
+			if($b_seq[$i] == 0 || $b_seq[$i] == 1 || $b_seq[$i] == -1){
+			    $b_seq[$i] = 3;
+			}
+			elsif($b_seq[$i] == 2){
+			    $b_seq[$i] = 4;
+			}
+		    }
 		}
 	    }
 	}
@@ -235,9 +306,15 @@ sub process_hints {
 	    
 	    $s -= $offset;
 	    $e -= $offset;
-            foreach my $i ($s..$e){
-                $b_seq[$i] = 2;
-            }
+
+	    foreach my $i ($s..$e){
+		if($b_seq[$i] == 0 || $b_seq[$i] == 1 || $b_seq[$i] == -1){
+		    $b_seq[$i] = 3;
+		}
+		elsif($b_seq[$i] == 2){
+		    $b_seq[$i] = 4;
+		}
+	    }
 	}
 
 	#get intron info from protein2genome hits
@@ -275,8 +352,10 @@ sub process_hints {
 
 		    $si -= $offset;
 		    $ei -= $offset;
+
+		    #make intron (won't override dually verified CDS)
 		    foreach my $i ($si..$ei){
-			$b_seq[$i] == -1 if($b_seq[$i] != 3); #make intron (won't override dually verified CDS)
+			$b_seq[$i] == -1 if($b_seq[$i] != 2 && $b_seq[$i] != 4 && $b_seq[$i] != -2);
 		    }
 		}
 
@@ -285,15 +364,22 @@ sub process_hints {
 		    my $s = $s1 - $offset;
 		    my $e = $e1 - $offset;
 		    push(@exon_set, [$s1, $e1]);
-		    @b_seq[$s..$e] = map {3} ($s..$e); #overides all other hints to force dually verified CDS
+
+		    #overides most other hints to force dually verified CDS
+		    foreach my $i ($s..$e){
+			$b_seq[$i] = 4 if($b_seq[$i] != -2);
+		    }
 		}
 		elsif($splices{end}{$e1} && ! $splices{start}{$s1}){
 		    my $s = $s1 - $offset;
 		    my $e = $e1 - $offset;
 		    foreach my $i (reverse($s..$e)){
 			if($b_seq[$i] == 1){ #upgrade exon regions to CDS
-			    $b_seq[$i] = 2;
+			    $b_seq[$i] = 3;
 			}
+			elsif($b_seq[$i] == 2){
+			    $b_seq[$i] = 4;
+                        }
 			else{ #stop on empty or intron
 			    push(@exon_set, [$i+1+$offset,$e1]) if($i != $e);
 			    last;
@@ -305,15 +391,22 @@ sub process_hints {
 		    my $s = $s2 - $offset;
 		    my $e = $e2 - $offset;
 		    push(@exon_set, [$s2, $e2]);
-		    @b_seq[$s..$e] = map {3} ($s..$e); #overides all other hints to force dually verified CDS
+
+		    #overides most other hints to force dually verified CDS
+		    foreach my $i ($s..$e){
+                        $b_seq[$i] = 4 if($b_seq[$i] != -2);
+                    }
 		}
 		elsif($splices{start}{$s2} && ! $splices{end}{$e2}){
 		    my $s = $s2 - $offset;
 		    my $e = $e2 - $offset;
 		    foreach my $i ($s..$e){
 			if($b_seq[$i] == 1){ #upgrade exon regions to CDS
-			    $b_seq[$i] = 2;
+			    $b_seq[$i] = 3;
 			}
+			elsif($b_seq[$i] == 2){
+                            $b_seq[$i] = 4;
+                        }
 			else{ #stop on empty or intron
 			    push(@exon_set, [$s2,($i-1)+$offset]) if($i != $s);
 			    last;
@@ -332,19 +425,19 @@ sub process_hints {
 	my $ifirst;
 	for (my $i = 0; $i < @b_seq; $i++){
 	    $nfirst = $i if(!$nfirst && $b_seq[$i] > 0);
-	    $pfirst = $i if(!$pfirst && $b_seq[$i] > 1);
-	    $ifirst = $i if(!$ifirst && $b_seq[$i] == -1);
+	    $pfirst = $i if(!$pfirst && $b_seq[$i] > 2);
+	    $ifirst = $i if(!$ifirst && $b_seq[$i] < 0);
 
 	    my $last = $i == @b_seq-1; #flag
 	    if(($b_seq[$i] <= 0 || $last) && $nfirst){
 		push(@n_set_coors, [$nfirst+$offset, $i-1+$offset]);
 		$nfirst = undef;
 	    }
-	    if(($b_seq[$i] <= 1 || $last) && $pfirst){
+	    if(($b_seq[$i] <= 2 || $last) && $pfirst){
 		push(@p_set_coors, [$pfirst+$offset, $i-1+$offset]);
 		$pfirst = undef;
 	    }
-	    if(($b_seq[$i] != -1 || $last) && $ifirst){
+	    if(($b_seq[$i] >= 0 || $last) && $ifirst){
 		push(@i_set_coors, [$ifirst+$offset, $i-1+$offset]);
 		$ifirst = undef;
 	    }
@@ -362,11 +455,12 @@ sub get_pred_shot {
         my $snap_flank    = shift;
         my $snap_command  = shift;
         my $hmm           = shift;
+        my $alt_splice    = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
         my ($shadow_seq, $strand, $offset, $xdef) =
-            prep_for_genefinder($seq, $set, $snap_flank);
+            prep_for_genefinder($seq, $set, $snap_flank, $alt_splice);
 
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,

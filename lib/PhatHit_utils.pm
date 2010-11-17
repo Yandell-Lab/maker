@@ -1395,7 +1395,7 @@ sub merge_hits {
 	my @merged;
         foreach my $b_hit (@{$big_fish}){
 	    my $id = $b_hit->hsp(0)->hit->seq_id;
-	    if(! $big_names{$id} || $big_names{$id}->end < $b_hit->end){
+	    if(! $big_names{$id} || $big_names{$id}->start > $b_hit->start){
 		$big_names{$id} = $b_hit;
 	    }
 	}

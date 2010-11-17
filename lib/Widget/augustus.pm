@@ -45,13 +45,14 @@ sub get_pred_shot {
         my $pred_flank    = shift;
         my $pred_command  = shift;
         my $hmm           = shift;
+        my $alt_splice    = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
 	my $q_id = Fasta::def2SeqID($def);
 
         my ($shadow_seq, $strand, $offset, $xdef) =
-            prep_for_genefinder($seq, $set, $pred_flank, $id, $q_id);
+            prep_for_genefinder($seq, $set, $pred_flank, $alt_splice, $id, $q_id);
 
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,
@@ -81,118 +82,28 @@ sub get_pred_shot {
 }
 #------------------------------------------------------------------------
 sub prep_for_genefinder {
-        my $seq    = shift;
-        my $set    = shift;
-        my $flank  = shift;
-        my $seq_id = shift;
-        my $q_id   = shift;
+        my $seq         = shift;
+        my $set         = shift;
+        my $flank       = shift;
+        my $alt_splice  = shift;
+        my $seq_id      = shift;
+        my $q_id        = shift;
 
-        my $gomiph = $set->{gomiph};
-        my $mia    = $set->{mia};
-        my $models = $set->{gomod};
-        my $alts   = $set->{alt_ests};
-        my $preds  = $set->{preds};
-        my $ests   = $set->{ests};
-        my @t_data;
+	my ($span,
+	    $strand,
+	    $p_set_coors,
+	    $n_set_coors,
+	    $i_set_coors) = Widget::snap::process_hints($seq, $set, $alt_splice);
 
-        push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$preds})   if defined($preds);
-        push(@t_data, $mia)        if defined($mia);
-        push(@t_data, @{$alts})     if defined($alts);
-        push(@t_data, @{$models})   if defined($models);
-        push(@t_data, @{$ests})    if defined($ests);
-
-        my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
-        my $n_set_coors = defined($ests) ? PhatHit_utils::shadow_i_corrected_coors($ests, 'query') : [];
-
-	#add EST to p_set_coors if spliced and all orf
-        my $tM = new CGL::TranslationMachine();
-        my %seen; #skip redundant
-        foreach my $e (@$ests){
-            next if($e->num_hsps() == 1);
-            my ($lAq) = $e->getLengths();
-            next if($lAq < 300); #orf of 100 required (same as most prokaryotic gene finders)
-
-            my $t_seq  = maker::auto_annotator::get_transcript_seq($e, $seq);
-            my ($p_seq, $poffset) = $tM->longest_translation($t_seq);
-
-            if($poffset < 3 && length($t_seq) - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
-                my $coors = PhatHit_utils::get_hsp_coors([$e], 'query');
-                foreach my $set (@$coors){
-                    next if($seen{$set->[0]}{$set->[1]});
-                    $seen{$set->[0]}{$set->[1]}++;
-
-                    push(@$p_set_coors, $set);
-                }
-
-                next;
-            }
-
-            #if not all orf test internal HSPs
-            next if($e->num_hsps() < 3);
-            foreach my $hsp ($e->hsps){
-                next if($hsp->start('query') == $e->start('query')); #skip first HSP
-                next if($hsp->end('query') == $e->end('query')); #skip last HSP
-                next if($seen{$hsp->start('query')}{$hsp->end('query')}); #skip redundant HSPs
-                $seen{$hsp->start('query')}{$hsp->end('query')}++;
-
-                my $B = $hsp->start('query');
-                my $E = $hsp->end('query');
-                my $L = abs($E - $B) + 1;
-
-                my $piece = ($e->strand('query') == 1) ?
-                    substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
-
-                my ($p_seq, $poffset) = $tM->longest_translation($piece);
-
-                if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
-                    push(@$p_set_coors, [$B, $E]);
-                }
-            }
-        }
-
-        #get likely CDS from splice site crossing ESTs
-        push(@$p_set_coors, @{PhatHit_utils::splice_infer_exon_coors($ests, $seq)});
-
-	#get span
-        my @coors;
-        my $plus  = 0;
-        my $minus = 0;
-
-        my $least;
-        my $most;
-        foreach my $hit (@t_data){
-                foreach my $hsp ($hit->hsps()){
-                        my $s = $hsp->start('query');
-                        my $e = $hsp->end('query');
-
-                        $least = $s if !defined($least) || $s < $least;
-                        $most  = $e if !defined($most)  || $e > $most;
-
-                        if ($hsp->strand('query') == 1) {
-                                $plus++;
-                        }
-                        else {
-                                $minus++;
-                        }
-                }
-        }
-
-        my @span_coors = [$least, $most];
-
-        my $p = Shadower::getPieces($seq, \@span_coors, $flank);
-
+        my $p = Shadower::getPieces($seq, $span, $flank);
         my $final_seq = $p->[0]->{piece};
-
-        my $offset    = $p->[0]->{b} - 1;
-
-        my $strand = $plus > $minus ? 1 : -1;
-
+        my $offset = $p->[0]->{b} - 1;
         my $i_flank = 2;
 
         my $xdef = get_xdef($seq,
-                            $p_set_coors,
+			    $p_set_coors,
                             $n_set_coors,
+                            $i_set_coors,
                             $strand == 1 ? '+' : '-',
                             $offset,
                             $i_flank,
@@ -243,13 +154,6 @@ sub augustus {
         my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
 
 
-	$command .= ' --UTR=off';
-        $command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
-        $command .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
-
-	$command .= " $file_name";
-	$command .= " > $o_file";
-
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 
         if (-e $o_file && ! $OPT_F){
@@ -260,6 +164,13 @@ sub augustus {
                 print STDERR "running  augustus.\n" unless $main::quiet;
 		write_xdef_file($xdef, $xdef_file) if defined $xdef;
 		FastaFile::writeFile(\$fasta, $file_name);
+
+		$command .= ' --UTR=off';
+		$command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
+		$command .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
+		$command .= " $file_name";
+		$command .= " > $o_file";
+
 		my $w = new Widget::augustus();
                 $w->run($command);
         }
@@ -307,22 +218,21 @@ sub run {
 #-------------------------------------------------------------------------------
 sub get_xdef {
        my $seq       = shift;
-        my $p_coors  = shift;
-        my $n_coors = shift;
-        my $s       = shift;
-        my $offset  = shift;
-        my $i_flank = shift;
-	my $q_id    = shift;
+       my $p_coors  = shift;
+       my $n_coors = shift;
+       my $i_coors = shift;
+       my $s       = shift;
+       my $offset  = shift;
+       my $i_flank = shift;
+       my $q_id    = shift;
 
 	my $group = 'gb|bogus;';
 
-        my $p_pieces = Shadower::getPieces($seq, $p_coors, 0);
-
         my @xdef;
-        for (my $i = 0; $i < @{$p_pieces}; $i++){
-                my $p = $p_pieces->[$i];
-                my $c_b = $p->{b} - $offset;
-                my $c_e = $p->{e} - $offset;
+
+       foreach my $p (@$p_coors){
+                my $c_b = $p->[0] - $offset;
+                my $c_e = $p->[1] - $offset;
 
 		my $l  = "$q_id\tPROTEIN\tCDSpart";
 		   $l .= "\t".$c_b."\t".$c_e."\t"."1e-1000"."\t".$s;
@@ -331,33 +241,27 @@ sub get_xdef {
                 push(@xdef, $l);
         }
 
-        my $n_pieces = Shadower::getPieces($seq, $n_coors, 0);
-
-        return \@xdef if !defined($n_pieces->[1]);
+        return \@xdef if(!@$i_coors);
 
         my @intron;
 
-        my $num = @{$n_pieces};
-        for (my $i = @{$n_pieces} - 1; $i > 0;  $i--){
-                my $p_r = $n_pieces->[$i];
-                my $p_l = $n_pieces->[$i - 1];
-                my $i_b = ($p_l->{e} - $offset) + $i_flank;
-                my $i_e = ($p_r->{b} - $offset) - $i_flank;
+       foreach my $i (@$i_coors){
+	   my $i_b = ($i->[0] - $offset) + ($i_flank-1);
+	   my $i_e = ($i->[1] - $offset) - ($i_flank-1);
 
-                next if abs($i_b - $i_e) < 2*$i_flank;
-                next if abs($i_b - $i_e) < 25;
-
-                my $l  = "$q_id\tEST-INTRON\tintronpart";
-                   $l .= "\t".$i_b."\t".$i_e."\t"."1e-1000"."\t".$s;
-                   $l .= "\t".'.'."\t".'group=n_pieces;'."source=E";
-
-                push(@xdef, $l);
+	   next if abs($i_b - $i_e) < 2*$i_flank;
+	   next if abs($i_b - $i_e) < 25;
+	   
+	   my $l  = "$q_id\tEST-INTRON\tintronpart";
+	   $l .= "\t".$i_b."\t".$i_e."\t"."1e-1000"."\t".$s;
+	   $l .= "\t".'.'."\t".'group=n_pieces;'."source=E";
+	   
+	   push(@xdef, $l);
         }
 
-        for (my $i = 0; $i < @{$n_pieces}; $i++){
-                my $p = $n_pieces->[$i];
-                my $e_b = $p->{b} - $offset;
-                my $e_e = $p->{e} - $offset;
+       foreach my $n (@$n_coors){
+                my $e_b = $n->[0] - $offset;
+                my $e_e = $n->[1] - $offset;
 
                 my $l  = "$q_id\tEST-EXON\texonpart";
                    $l .= "\t".$e_b."\t".$e_e."\t"."1e-1000"."\t".$s;

@@ -2380,6 +2380,7 @@ sub set_defaults {
       $CTL_OPT{'TMP'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'run'} = ''; #hidden option
       $CTL_OPT{'unmask'} = 0;
+      $CTL_OPT{'alt_splice'} = 0;
       $CTL_OPT{'clean_up'} = 0;
       $CTL_OPT{'clean_up'} = 1 if($main::server);
       #evaluator below here
@@ -3517,6 +3518,7 @@ sub generate_control_files {
        print OUT "pred_flank=$O{pred_flank} #flank for extending evidence clusters sent to gene predictors\n";
        print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed (bound by 0 and 1)\n" if(!$ev);
        print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
+       print OUT "alt_splice=$O{alt_splice} #Take extra steps to try and find alternative splicing, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "always_complete=$O{always_complete} #force start and stop codon into every gene, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "map_forward=$O{map_forward} #map names and attributes forward from old GFF3 genes, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "est_forward=$O{est_forward} #reserve flag for map2assembly\n" if($O{est_forward});

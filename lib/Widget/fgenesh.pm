@@ -61,113 +61,23 @@ sub prep_for_genefinder {
         my $seq    = shift;
         my $set    = shift;
         my $flank  = shift;
+	my $alt_splice = shift;
 
-        my $gomiph = $set->{gomiph};
-        my $mia    = $set->{mia};
-        my $models = $set->{gomod};
-	my $alts   = $set->{alt_ests};
-        my $preds  = $set->{preds};
-        my $ests   = $set->{ests};
-        my @t_data;
-
-        push(@t_data, @{$gomiph})  if defined($gomiph);
-        push(@t_data, @{$preds})   if defined($preds);
-        push(@t_data, $mia)        if defined($mia);
-        push(@t_data, @{$alts})     if defined($alts);
-        push(@t_data, @{$models})   if defined($models);
-        push(@t_data, @{$ests})    if defined($ests);
-
-        my $p_set_coors = PhatHit_utils::get_hsp_coors($gomiph, 'query');
-        my $n_set_coors = defined($ests) ? PhatHit_utils::shadow_i_corrected_coors($ests, 'query') : [];
-
-	#add EST to p_set_coors if spliced and all orf
-        my $tM = new CGL::TranslationMachine();
-        my %seen; #skip redundant
-        foreach my $e (@$ests){
-            next if($e->num_hsps() == 1);
-            my ($lAq) = $e->getLengths();
-            next if($lAq < 300); #orf of 100 required (same as most prokaryotic gene finders)
-
-            my $t_seq  = maker::auto_annotator::get_transcript_seq($e, $seq);
-            my ($p_seq, $poffset) = $tM->longest_translation($t_seq);
-
-            if($poffset < 3 && length($t_seq) - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
-                my $coors = PhatHit_utils::get_hsp_coors([$e], 'query');
-                foreach my $set (@$coors){
-                    next if($seen{$set->[0]}{$set->[1]});
-                    $seen{$set->[0]}{$set->[1]}++;
-
-                    push(@$p_set_coors, $set);
-                }
-
-                next;
-            }
-
-            #if not all orf test internal HSPs
-            next if($e->num_hsps() < 3);
-            foreach my $hsp ($e->hsps){
-                next if($hsp->start('query') == $e->start('query')); #skip first HSP
-                next if($hsp->end('query') == $e->end('query')); #skip last HSP
-                next if($seen{$hsp->start('query')}{$hsp->end('query')}); #skip redundant HSPs
-                $seen{$hsp->start('query')}{$hsp->end('query')}++;
-
-                my $B = $hsp->start('query');
-                my $E = $hsp->end('query');
-                my $L = abs($E - $B) + 1;
-
-                my $piece = ($e->strand('query') == 1) ?
-                    substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
-
-                my ($p_seq, $poffset) = $tM->longest_translation($piece);
-
-                if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
-                    push(@$p_set_coors, [$B, $E]);
-                }
-            }
-        }
-
-        #get likely CDS from splice site crossing ESTs
-        push(@$p_set_coors, @{PhatHit_utils::splice_infer_exon_coors($ests, $seq)});
-
-	#get span
-        my @coors;
-        my $plus  = 0;
-        my $minus = 0;
-
-
-        my $least;
-        my $most;
-        foreach my $hit (@t_data){
-                foreach my $hsp ($hit->hsps()){
-                        my $s = $hsp->start('query');
-                        my $e = $hsp->end('query');
-
-                        $least = $s if !defined($least) || $s < $least;
-                        $most  = $e if !defined($most)  || $e > $most;
-
-                        if ($hsp->strand('query') == 1) {
-                                $plus++;
-                        }
-                        else {
-                                $minus++;
-                        }
-                }
-        }
-        my @span_coors = [$least, $most];
-
-        my $p = Shadower::getPieces($seq, \@span_coors, $flank);
-
-        my $final_seq = $p->[0]->{piece};
-
-        my $offset    = $p->[0]->{b} - 1;
-
-        my $strand = $plus > $minus ? 1 : -1;
-
-        my $i_flank = 2;
+	my ($span,
+            $strand,
+            $p_set_coors,
+            $n_set_coors,
+	    $i_set_coors) = Widget::snap::process_hints($seq, $set, $alt_splice);
+	
+        my $p = Shadower::getPieces($seq, $span, $flank);
+        my $final_seq  = $p->[0]->{piece};
+        my $offset = $p->[0]->{b} - 1;
+        my $i_flank    = 2;
 
         my $xdef = get_xdef($seq,
                             $p_set_coors,
                             $n_set_coors,
+                            $i_set_coors,
                             $strand == 1 ? '+' : '-',
                             $offset,
                             $i_flank,
@@ -300,11 +210,14 @@ sub get_pred_shot {
         my $pred_flank    = shift;
         my $pred_command  = shift;
         my $hmm           = shift;
+        my $alt_splice    = shift;
            $OPT_F         = shift;
 	   $LOG           = shift;
 
-        my ($shadow_seq, $strand, $offset, $xdef) =
-            prep_for_genefinder($seq, $set, $pred_flank);
+        my ($shadow_seq,
+	    $strand,
+	    $offset,
+	    $xdef) = prep_for_genefinder($seq, $set, $pred_flank, $alt_splice);
 
         my $shadow_fasta = Fasta::toFastaRef($def." $id offset:$offset",
                                           $shadow_seq,
@@ -581,43 +494,39 @@ sub get_xdef {
        my $seq       = shift;
         my $p_coors  = shift;
         my $n_coors = shift;
+        my $i_coors = shift;
         my $s       = shift;
         my $offset  = shift;
         my $i_flank = shift;
 
         my $group = 'gb|bogus;';
 
-        my $p_pieces = Shadower::getPieces($seq, $p_coors, 0);
-        my $n_pieces = Shadower::getPieces($seq, $n_coors, 0);
-
         my @xdef;
-
-        for (my $i = 0; $i < @{$p_pieces}; $i++){
-                my $p = $p_pieces->[$i];
-                my $c_b = $p->{b} - $offset;
-                my $c_e = $p->{e} - $offset;
-
-		my $l = "$c_b $c_e 100";
-                
-                push(@xdef, $l);
-        }
-                
-        for (my $i = @{$n_pieces} - 1; $i > 0;  $i--){
-                my $p_r = $n_pieces->[$i]; 
-                my $p_l = $n_pieces->[$i - 1];
-                my $i_b = ($p_l->{e} - $offset) + $i_flank;
-                my $i_e = ($p_r->{b} - $offset) - $i_flank;
-                
-                next if abs($i_b - $i_e) < 2*$i_flank;
-                next if abs($i_b - $i_e) < 25;
-
-		my $l  = "$i_b $i_e -1000";
-
-                push(@xdef, $l);
+       foreach my $p (@$p_coors){
+	   my $c_b = $p->[0] - $offset;
+	   my $c_e = $p->[1] - $offset;
+	   
+	   my $l = "$c_b $c_e 100";
+	   
+	   push(@xdef, $l);
         }
 
-        my $num = @xdef;
-        unshift(@xdef, "$num $s");
+        return \@xdef if(!@$i_coors);            
+    
+       foreach my $i (@$i_coors){
+	   my $i_b = ($i->[0] - $offset) + ($i_flank-1);
+	   my $i_e = ($i->[1] - $offset) - ($i_flank-1);
+                
+	   next if abs($i_b - $i_e) < 2*$i_flank;
+	   next if abs($i_b - $i_e) < 25;
+	   
+	   my $l  = "$i_b $i_e -1000";
+	   
+	   push(@xdef, $l);
+       }
+
+       my $num = @xdef;
+       unshift(@xdef, "$num $s");
 
 	# The next part also put ESTs as arbitrary exons.
 =pod
@@ -633,8 +542,8 @@ sub get_xdef {
                 push(@xdef, $l);
         }
 =cut
-        return \@xdef;
 
+        return \@xdef;
 }
 #------------------------------------------------------------------------
 sub keepers {
