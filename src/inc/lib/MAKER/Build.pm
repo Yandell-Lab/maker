@@ -193,7 +193,19 @@ sub ACTION_commit {
     my $svn = File::Which::which("svn");
     if($svn){
 	chdir("$cwd/../"); #maker base directory
-	$self->do_system('svn commit -m "Auto-commit from ./Build commit"');
+	my $message = "Auto-commit from ./Build commit";
+
+	#get message off command line
+	my @args = @{$self->args->{ARGV}} if($self->args->{ARGV});
+	while (my $arg = shift @args){
+	    if($arg eq '-m' && @args){
+		$message = quotemeta(shift @args);
+		last;
+	    }
+	}
+
+	my $svn  = "$svn commit -m \"$message\"\n";
+	$self->do_system("$svn commit -m \"$message\"");
 	chdir("$cwd");
     }
     else{
