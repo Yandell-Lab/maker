@@ -182,8 +182,8 @@ sub ACTION_commit {
 	    my $itouch = (stat("$inc/$file"))[9];
 	    
 	    if($btouch > $itouch){
-		print "copy $bin/$file $inc/$file";
-		#File::Copy::copy("$bin/$file","$bin/$file");
+		print "copying $bin/$file  -->  $inc/$file\n";
+		File::Copy::copy("$bin/$file","$bin/$file");
 	    }
 	}
     }
@@ -815,7 +815,7 @@ sub load_w_o_header {
 	      ){
 	    $line = <IN>;
 	}
-	$data = join('', <IN>);
+	$data = join('', $line, <IN>);
     }
     close(IN);
 
