@@ -192,8 +192,6 @@ sub ACTION_commit {
 
     my $svn = File::Which::which("svn");
     if($svn){
-	chdir("$cwd/../"); #maker base directory
-
 	#get message off command line
 	$svn .= " commit";
 	foreach my $arg (@{$self->args->{ARGV}}){
@@ -203,9 +201,9 @@ sub ACTION_commit {
 	    }
 	    $svn .= " $arg";
 	}
+	$svn .= " ".Cwd::abs_path("$cwd/../");
 
 	$self->do_system($svn);
-	chdir("$cwd");
     }
     else{
 	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
