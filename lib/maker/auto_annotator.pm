@@ -1717,7 +1717,7 @@ sub load_transcript_struct {
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	if($p_base->algorithm !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
+	if($p_base && $p_base->algorithm !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
 	    #walk out edges to force completion
 	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
 		$f = PhatHit_utils::adjust_start_stop($f, $seq);

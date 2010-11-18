@@ -24,6 +24,7 @@ sub new {
 	my $fasta_file = $args{-fasta} || undef;
 	my $gff_file = $args{-gff} || undef;
 
+
 	if($gff_file){
 	   $iter = new Iterator::GFF3($gff_file, $fasta_file);
 	}

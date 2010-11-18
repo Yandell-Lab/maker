@@ -28,6 +28,7 @@ sub new {
         bless ($self, $class);
 
 	$fasta_file = $gff_file if (! $fasta_file);
+        $self->fileName($fasta_file);
 	$self->fileHandle($fasta_file);
 	$self->{gff_file} = $gff_file;
 

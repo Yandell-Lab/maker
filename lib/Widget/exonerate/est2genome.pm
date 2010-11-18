@@ -285,7 +285,6 @@ sub get_exon_coors_r {
                 else {
                         die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
                 }
-
         }
 
 	if ($v->{q_b} < $v->{q_e}){

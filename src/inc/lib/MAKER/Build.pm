@@ -192,7 +192,9 @@ sub ACTION_commit {
 
     my $svn = File::Which::which("svn");
     if($svn){
+	chdir("$cwd/../"); #maker base directory
 	$self->do_system('svn commit -m "Auto-commit from ./Build commit"');
+	chdir("$cwd");
     }
     else{
 	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
