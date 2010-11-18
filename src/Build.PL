@@ -65,13 +65,13 @@ my $build = MAKER::Build->new
 	 bindoc => [qw(perl/man)],
 	 libdoc => [qw(perl/man)],
      },
-     PL_files => { 'bin/mpi_scripts.PL' => ['bin/mpi_maker',
-					    'bin/mpi_evaluator',
-					    'bin/mpi_iprscan',],
-		   'lib/Parallel/MPIcar.PL' => ['lib/Parallel/MPIcar.pm',
+     PL_files => {'lib/Parallel/MPIcar.PL' => ['lib/Parallel/MPIcar.pm',
 						'lib/Parallel/MPIcar.xs',
 						'lib/Parallel/utils.c',
-						'lib/Parallel/typemap',]
+						'lib/Parallel/typemap',],
+		  'bin/mpi_scripts.PL' => ['bin/mpi_maker',
+					   'bin/mpi_evaluator',
+					   'bin/mpi_iprscan',],
      },
     );
 

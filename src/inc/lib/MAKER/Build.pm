@@ -158,9 +158,45 @@ sub config {
 #for building a release version of MAKER, updates MAKER version part of the commit
 sub ACTION_commit {
     my $self = shift;
-    
+
+    require Cwd;
+    require File::Copy;
+    my $cwd = Cwd::cwd;
+
+    my @files = ("mpi_maker",
+		 "mpi_evaluator",
+		 "mpi_iprscan"
+		 );
+
+    my $bin = "$cwd/../bin";
+    my $inc = "$cwd/inc/bin";
+    foreach my $file (@files){
+	next if(! -e "$bin/$file");
+
+	my $bdata = load_w_o_header("$bin/$file");
+	my $idata = load_w_o_header("$inc/$file");
+
+	#scripts have been altered by user
+	if($bdata ne $idata){
+	    my $btouch = (stat("$bin/$file"))[9];
+	    my $itouch = (stat("$inc/$file"))[9];
+	    
+	    if($btouch > $itouch){
+		print "copy $bin/$file $inc/$file";
+		#File::Copy::copy("$bin/$file","$bin/$file");
+	    }
+	}
+    }
+
     #$self->depends_on("test");
-    #$self->do_system(qw(svn commit));
+
+    my $svn = File::Which::which("svn");
+    if($svn){
+	$self->do_system('svn commit -m "Auto-commit from ./Build commit"');
+    }
+    else{
+	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
+    }
 }
 
 #replacement for Module::Build's ACTION_install
@@ -763,6 +799,27 @@ sub is_mpich2 {
     close(IN);
     
     return $ok;
+}
+
+sub load_w_o_header {
+    my $file = shift;
+
+    my $data;
+    open(IN, "< $file");
+    while(my $line = <IN>){	
+	#strip of perl shebang portiion 
+	while($line =~ /^\#!.*perl/ ||
+	      $line =~ /exec\s+.*perl/ ||
+	      $line =~ /if\s*0\;/ ||
+	      $line =~ /^[\s\t\n]+$/
+	      ){
+	    $line = <IN>;
+	}
+	$data = join('', <IN>);
+    }
+    close(IN);
+
+    return $data;
 }
 
 1;
