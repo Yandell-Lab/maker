@@ -163,29 +163,50 @@ sub ACTION_commit {
     require File::Copy;
     my $cwd = Cwd::cwd;
 
-    my @files = ("mpi_maker",
-		 "mpi_evaluator",
-		 "mpi_iprscan"
-		 );
+    my $bin  = "$cwd/../bin";
+    my $sbin = "$cwd/bin";
+    my $ibin = "$cwd/inc/bin";
 
-    my $bin = "$cwd/../bin";
-    my $inc = "$cwd/inc/bin";
-    foreach my $file (@files){
-	next if(! -e "$bin/$file");
+    my @ifiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$ibin/*>;
+    my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$sbin/*>;
 
-	my $bdata = load_w_o_header("$bin/$file");
-	my $idata = load_w_o_header("$inc/$file");
+    foreach my $file (@ifiles, @sfiles){
+	my $bfile = "$bin/$file";
+	my $rfile = (-e "$ibin/$file") ? "$ibin/$file" : "$sbin/$file";
+
+	next if(! -e $bfile);
+	#-w permission must be set before these files are edited by the user
+	next unless(sprintf("%04o", (stat($bfile))[2] & 07777) =~ /[2367]/);
+
+	my $bdata = load_w_o_header($bfile);
+	my $rdata = load_w_o_header($rfile);
 
 	#scripts have been altered by user
-	if($bdata ne $idata){
-	    my $btouch = (stat("$bin/$file"))[9];
-	    my $itouch = (stat("$inc/$file"))[9];
+	if($bdata ne $rdata){
+	    my $bmod = (stat($bfile))[9];
+	    my $rmod = (stat($rfile))[9];
 	    
-	    if($btouch > $itouch){
-		print "copying $bin/$file  -->  $inc/$file\n";
-		File::Copy::copy("$bin/$file","$inc/$file");
+	    if($bmod > $rmod){
+		print "copying $bfile  -->  $rfile\n";
+
+		#backup incase of failure
+		File::Copy::move($rfile, "$rfile.bk~");
+
+		if(open(IN, "> $rfile")){
+		    print IN "\#!\\usr\\bin\\perl\n\n";
+		    print IN $bdata;
+		    close(IN);
+		}
+
+		#restore on failure
+		if(! -f $rfile && -f "$rfile.bk~"){
+		    File::Copy::move("$rfile.bk~", $rfile);
+		}
+		else{
+		    unlink("$rfile.bk~");
+		}
 	    }
-	}
+	}	
     }
 
     #$self->depends_on("test");
