@@ -588,7 +588,7 @@ sub split_db {
 		   #most programs use N for masking but for some reason the NCBI decided to
 		   #use X to mask their sequence, which causes many many programs to fail
 		   $$seq_ref =~ s/\-//g;
-		   $$seq_ref =~ s/X/N/g;
+		   $$seq_ref =~ tr/XU/NT/i;
 		   die "ERROR: The nucleotide sequence file \'$file\'\n".
 		       "appears to contain protein sequence or unrecognized characters.\n".
 		       "Please check/fix the file before continuing.\n".
