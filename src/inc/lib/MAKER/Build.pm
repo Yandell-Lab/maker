@@ -183,7 +183,7 @@ sub ACTION_commit {
 	    
 	    if($btouch > $itouch){
 		print "copying $bin/$file  -->  $inc/$file\n";
-		File::Copy::copy("$bin/$file","$bin/$file");
+		File::Copy::copy("$bin/$file","$inc/$file");
 	    }
 	}
     }

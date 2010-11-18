@@ -685,10 +685,12 @@ else {
 		#run chunk
 		$chnk->run($rank);
 		$chunk_result = $chnk;
+		next;
 	    }
 	    #if the reset signal is received do this
 	    elsif($chunk_status == $reset){
-		#do nothing
+		$be_helper = 0;
+		next;
 	    }
 	    #if the terminate signal is received do this
 	    elsif($chunk_status == $terminate){
@@ -821,6 +823,8 @@ else {
 	    }
 
 	    #get chunk results from non-root nodes since root communication has terminated
+	    #and send them something else to do or release them
+	    my @c_results;
 	    foreach my $loc (@{$locs}){
 		next if ($loc == $root);
 		my $c_res;
@@ -835,10 +839,14 @@ else {
 		else{
                     MPI_Send(\$reset, 1, MPI_INT, $loc, $request_status, MPI_COMM_WORLD); #send reset signal
 		}
+		push(@c_results, $c_res);
+	    }
 
+	    #now process collected results
+	    while (my $c_res = shift @c_results){
 		$tier->update_chunk($c_res);
 	    }
-	    
+
 	    #run local chunk if there is one
 	    if(defined($chunk)){
 		$chunk->run($rank);
