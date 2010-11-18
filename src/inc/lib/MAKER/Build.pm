@@ -204,8 +204,9 @@ sub ACTION_commit {
 	    }
 	}
 
-	my $svn  = "$svn commit -m \"$message\"\n";
-	$self->do_system("$svn commit -m \"$message\"");
+	my $svn  = "$svn commit -m \"$message\"";
+	print $svn."\n";
+	$self->do_system($svn);
 	chdir("$cwd");
     }
     else{
