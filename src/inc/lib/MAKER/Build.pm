@@ -199,12 +199,12 @@ sub ACTION_commit {
 	my @args = @{$self->args->{ARGV}} if($self->args->{ARGV});
 	while (my $arg = shift @args){
 	    if($arg eq '-m' && @args){
-		$message = quotemeta(shift @args);
+		$message = shift @args;
 		last;
 	    }
 	}
 
-	my $svn  = "$svn commit -m \"$message\"";
+	my $svn  = "svn commit -m \"$message\"";
 	print $svn."\n";
 	$self->do_system($svn);
 	chdir("$cwd");
