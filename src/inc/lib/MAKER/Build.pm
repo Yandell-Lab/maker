@@ -213,6 +213,7 @@ sub ACTION_release {
     #clean and check versions for release
     $self->dispatch('clean');
     my $ver = $self->check_update_version(); #returns MAKER version
+    $self->dist_version($ver);
 
     File::Which::which('tar') || die "ERROR: Cannot find tar to build the release\n";
     File::Which::which('svn') || die "ERROR: Cannot find the executable svn\n";
@@ -226,7 +227,7 @@ sub ACTION_release {
 	my $exclude = `svn status $dir/$base`;
 	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
 	open(OUT, "> .exclude~");
-	print OUT $exclude;
+	print OUT "$tgz\n$exclude";
 	close(OUT);
 	
 	print "\nBuilding tarball for distribution...\n";
