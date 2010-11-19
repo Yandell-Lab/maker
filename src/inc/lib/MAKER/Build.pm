@@ -229,7 +229,7 @@ sub ACTION_release {
 	print OUT $exclude;
 	close(OUT);
 	
-	print "\nBuilding tarball for distribution\n";
+	print "\nBuilding tarball for distribution...\n";
 	my $command = "tar -C $dir -zcf $tgz $base --exclude \"~\" --exclude \".svn\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
