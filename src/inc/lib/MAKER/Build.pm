@@ -158,8 +158,17 @@ sub config {
 sub ACTION_commit {
     my $self = shift;
 
-    $self->sync_bins();    
+    $self->sync_bins();
+    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+    $self->svn_w_args('update');
+    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     $self->svn_w_args('commit');
+
+    #there were changes so re-run install
+    if($s_svn != $f_svn){
+	$self->dispatch('clean');
+	$self->dispatch('install');
+    }
 }
 
 #update current MAKER from the MAKER repository
@@ -167,9 +176,15 @@ sub ACTION_update {
     my $self = shift;
 
     $self->sync_bins();
+    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     $self->svn_w_args('update');
-    $self->dispatch('clean');
-    $self->dispatch('install');
+    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+
+    #there were changes so re-run install
+    if($s_svn != $f_svn){
+	$self->dispatch('clean');
+	$self->dispatch('install');
+    }
 }
 
 #syncronize the maker/src/bin and maker/src/inc/bin directories
@@ -185,31 +200,38 @@ sub ACTION_release {
     my $self = shift;
 
     $self->sync_bins();
+    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     $self->svn_w_args('update');
+    $self->svn_w_args('commit', '-m "pre-release commit"');
     $self->dispatch('clean');
-    my $ver = $self->check_update_version();
+    my $ver = $self->check_update_version(); #returns MAKER version
 
     File::Which::which('tar') || die "ERROR: Cannot find tar to build the release\n";
     File::Which::which('svn') || die "ERROR: Cannot find the executable svn\n";
-
-    #build tarball for users to downloa
-    my $cwd = getcwd();
+    
+    #build tarball for users to download
+    my $cwd = $self->base_dir;
     my $tgz = "$cwd/maker-$ver.tgz";    
     if(! -f $tgz){
-	my $dir = $cwd;
-	my ($base) = $dir =~ s/([^\/]+)\/src$//;
-
+	my ($dir, $base) = $cwd =~ /^(.*\/)([^\/]+)\/src$/;
+	
 	my $exclude = `svn status $dir/$base`;
-	$exclude = join('\n', ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
+	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
 	open(OUT, "> .exclude~");
 	print OUT $exclude;
 	close(OUT);
-
+	
 	print "Building tarball for distribution\n";
 	my $command = "tar -C $dir -zcf $tgz $base --exclude \"~\" --exclude \".svn\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
 	die "ERROR: tarball creation failed\n" if(! -f $tgz);
+    }
+
+    #there were changes so re-run install (updates version info in scripts)
+    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+    if($s_svn != $f_svn){
+	$self->dispatch('install');
     }
 }
 
@@ -835,7 +857,7 @@ sub svn_w_args {
 		$svn .= " $arg";
 	    }
 	}
-	$svn .= " ".getcwd()."/../";
+	$svn .= " ".$self->base_dir."/../";
 
 	$self->do_system($svn);
     }
@@ -867,7 +889,7 @@ sub load_w_o_header {
 
 sub sync_bins {
     my $self = shift;
-    my $cwd = getcwd();
+    my $cwd = $self->base_dir;
 
     my $bin  = "$cwd/../bin";
     my $sbin = "$cwd/bin";
@@ -934,6 +956,8 @@ sub check_update_version {
     my $version = $old_version;
     if($old_svn == $svn){
 	print "MAKER is already up to date as stable release $version\n";
+
+	return $version;
     }
     else{
 	#set new version
@@ -964,7 +988,7 @@ sub check_update_version {
 	    close(OUT);
 
 	    #files to fix version for
-	    my $cwd = getcwd();
+	    my $cwd = $self->base_dir;
 	    my @files = ("$cwd/bin/maker",
 			 "$cwd/bin/evaluator",
 			 "$cwd/bin/iprscan_wrap",
@@ -993,6 +1017,8 @@ sub check_update_version {
 	}while($svn != $commit_svn);
 
 	print "MAKER has been updated to stable release $version\n";
+
+	return $version;
     }
 }
 
