@@ -738,6 +738,8 @@ sub maker_status {
     my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
     my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
 
+    my $dist_name = $self->dist_name;
+    my $dist_version = $self->dist_version;
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
@@ -748,7 +750,7 @@ sub maker_status {
 
     print "\n\n";
     print "================================================================\n";
-    print "STATUS $self->dist_name $self->dist_version\n";
+    print "STATUS $dist_name $dist_version\n";
     print "================================================================\n";
     print "PERL Dependencies:\t";
     print ((@perl) ? 'MISSING' : 'INSTALLED');
