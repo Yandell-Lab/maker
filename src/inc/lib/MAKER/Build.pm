@@ -7,7 +7,6 @@ use warnings;
 use POSIX;
 use Config;
 use FindBin;
-
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
@@ -155,80 +154,28 @@ sub config {
     return $self->SUPER::config(@_);
 }
 
-#for building a release version of MAKER, updates MAKER version part of the commit
+#commit current MAKER to subversion repository
 sub ACTION_commit {
     my $self = shift;
 
-    require Cwd;
-    require File::Copy;
-    my $cwd = Cwd::cwd;
+    $self->sync_bins();    
+    $self->svn_w_args('commit');
+}
 
-    my $bin  = "$cwd/../bin";
-    my $sbin = "$cwd/bin";
-    my $ibin = "$cwd/inc/bin";
+#update current MAKER from the MAKER repository
+sub ACTION_update {
+    my $self = shift;
 
-    my @ifiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$ibin/*>;
-    my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$sbin/*>;
+    $self->sync_bins();
+    $self->svn_w_args('update', 1);
+}
 
-    foreach my $file (@ifiles, @sfiles){
-	my $bfile = "$bin/$file";
-	my $rfile = (-e "$ibin/$file") ? "$ibin/$file" : "$sbin/$file";
+#syncronize the maker/src/bin and maker/src/inc/bin directories
+#to maker/bin because of user edits to scripts
+sub ACTION_sync {
+    my $self = shift;
 
-	next if(! -e $bfile);
-	#-w permission must be set before these files are edited by the user
-	next unless(sprintf("%04o", (stat($bfile))[2] & 07777) =~ /[2367]/);
-
-	my $bdata = load_w_o_header($bfile);
-	my $rdata = load_w_o_header($rfile);
-
-	#scripts have been altered by user
-	if($bdata ne $rdata){
-	    my $bmod = (stat($bfile))[9];
-	    my $rmod = (stat($rfile))[9];
-	    
-	    if($bmod > $rmod){
-		print "copying $bfile  -->  $rfile\n";
-
-		#backup incase of failure
-		File::Copy::move($rfile, "$rfile.bk~");
-
-		if(open(IN, "> $rfile")){
-		    print IN "\#!\\usr\\bin\\perl\n\n";
-		    print IN $bdata;
-		    close(IN);
-		}
-
-		#restore on failure
-		if(! -f $rfile && -f "$rfile.bk~"){
-		    File::Copy::move("$rfile.bk~", $rfile);
-		}
-		else{
-		    unlink("$rfile.bk~");
-		}
-	    }
-	}	
-    }
-
-    #$self->depends_on("test");
-
-    my $svn = File::Which::which("svn");
-    if($svn){
-	#get message off command line
-	$svn .= " commit";
-	foreach my $arg (@{$self->args->{ARGV}}){
-	    if($arg =~ /[\s\t]/){
-		$arg =~ s/\'/\\\'/g;
-		$arg = "'$arg'" 
-	    }
-	    $svn .= " $arg";
-	}
-	$svn .= " ".Cwd::abs_path("$cwd/../");
-
-	$self->do_system($svn);
-    }
-    else{
-	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
-    }
+    $self->sync_bins();
 }
 
 #replacement for Module::Build's ACTION_install
@@ -625,11 +572,10 @@ sub cpan_install {
     }
 
     # Here we use CPAN to actually install the desired module
-    require Cwd;
     require CPAN;
     
     # Save this because CPAN will chdir all over the place.
-    my $cwd = Cwd::cwd();
+    my $cwd = getcwd();
     
     #set up a non-global local module library for MAKER
     if($local){
@@ -833,6 +779,35 @@ sub is_mpich2 {
     return $ok;
 }
 
+sub svn_w_args {
+    my $self = shift;
+    my $param = shift;
+    my $exec_f = shift;
+
+    my $svn = File::Which::which("svn");
+    if($svn){
+	#get message off command line
+	$svn .= " $param";
+	foreach my $arg (@{$self->args->{ARGV}}){
+	    if($arg =~ /[\s\t]/){
+		$arg =~ s/\'/\\\'/g;
+		$arg = "'$arg'" 
+	    }
+	    $svn .= " $arg";
+	}
+	$svn .= " ".getcwd()."/../";
+
+	if($exec_f){
+	    exec("$svn; ./Build clean; ./Build");
+	}
+
+	$self->do_system($svn);
+    }
+    else{
+	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
+    }
+}
+
 sub load_w_o_header {
     my $file = shift;
 
@@ -853,5 +828,57 @@ sub load_w_o_header {
 
     return $data;
 }
+
+sub sync_bins {
+    my $self = shift;
+    my $cwd = getcwd();
+
+    my $bin  = "$cwd/../bin";
+    my $sbin = "$cwd/bin";
+    my $ibin = "$cwd/inc/bin";
+
+    my @ifiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$ibin/*>;
+    my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$sbin/*>;
+
+    foreach my $file (@ifiles, @sfiles){
+	my $bfile = "$bin/$file";
+	my $rfile = (-e "$ibin/$file") ? "$ibin/$file" : "$sbin/$file";
+
+	next if(! -e $bfile);
+	#-w permission must be set before these files are edited by the user
+	next unless(sprintf("%04o", (stat($bfile))[2] & 07777) =~ /[2367]/);
+
+	my $bdata = load_w_o_header($bfile);
+	my $rdata = load_w_o_header($rfile);
+
+	#scripts have been altered by user
+	if($bdata ne $rdata){
+	    my $bmod = (stat($bfile))[9];
+	    my $rmod = (stat($rfile))[9];
+	    
+	    if($bmod > $rmod){
+		print "copying $bfile  -->  $rfile\n";
+
+		#backup incase of failure
+		File::Copy::move($rfile, "$rfile.bk~");
+
+		if(open(IN, "> $rfile")){
+		    print IN "\#!\\usr\\bin\\perl\n\n";
+		    print IN $bdata;
+		    close(IN);
+		}
+
+		#restore on failure
+		if(! -f $rfile && -f "$rfile.bk~"){
+		    File::Copy::move("$rfile.bk~", $rfile);
+		}
+		else{
+		    unlink("$rfile.bk~");
+		}
+	    }
+	}	
+    }
+}
+
 
 1;
