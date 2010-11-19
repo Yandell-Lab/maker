@@ -244,6 +244,7 @@ sub ACTION_release {
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
 	$self->create_build_script; #update stored Build script
+	$self->dispatch('install');
     }
 }
 
