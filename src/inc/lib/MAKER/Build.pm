@@ -243,6 +243,7 @@ sub ACTION_release {
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('install');
+	$self->create_build_script;#update other script characteristics
     }
 }
 
