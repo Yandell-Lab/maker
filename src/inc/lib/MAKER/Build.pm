@@ -213,7 +213,7 @@ sub ACTION_release {
     #clean and check versions for release
     $self->dispatch('clean');
     my $ver = $self->check_update_version(); #returns MAKER version
-    $self->dist_version($ver);
+    $self->{properties}->{dist_version} = $ver;
 
     File::Which::which('tar') || die "ERROR: Cannot find tar to build the release\n";
     File::Which::which('svn') || die "ERROR: Cannot find the executable svn\n";
