@@ -200,13 +200,13 @@ sub ACTION_release {
     my $self = shift;
 
     #update current MAKER
-    print "Updating to most current repository...\n";
+    print "\nUpdating to most current repository...\n";
     $self->sync_bins();
     my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     $self->svn_w_args('update');
 
     #doing
-    print "Pre-release commit of any user changes...\n";
+    print "\nPre-release commit of any user changes...\n";
     $self->svn_w_args('commit', '-m "pre-release commit"');
     $self->svn_w_args('update');
 
@@ -229,7 +229,7 @@ sub ACTION_release {
 	print OUT $exclude;
 	close(OUT);
 	
-	print "Building tarball for distribution\n";
+	print "\nBuilding tarball for distribution\n";
 	my $command = "tar -C $dir -zcf $tgz $base --exclude \"~\" --exclude \".svn\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
@@ -239,8 +239,8 @@ sub ACTION_release {
     #there were changes so re-run install (updates version info in scripts)
     my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     if($s_svn != $f_svn){
-	print "Now reinstalling MAKER scripts to reflect version changes...\n";
-	sleep 2;
+	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
+	sleep 1;
 	$self->dispatch('install');
     }
 }
