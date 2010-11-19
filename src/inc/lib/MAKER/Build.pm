@@ -199,10 +199,18 @@ sub ACTION_sync {
 sub ACTION_release {
     my $self = shift;
 
+    #update current MAKER
+    print "Updating to most current repository...\n";
     $self->sync_bins();
     my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     $self->svn_w_args('update');
+
+    #doing
+    print "Pre-release commit of any user changes...\n";
     $self->svn_w_args('commit', '-m "pre-release commit"');
+    $self->svn_w_args('update');
+
+    #clean and check versions for release
     $self->dispatch('clean');
     my $ver = $self->check_update_version(); #returns MAKER version
 
