@@ -167,7 +167,9 @@ sub ACTION_update {
     my $self = shift;
 
     $self->sync_bins();
-    $self->svn_w_args('update', 1);
+    $self->svn_w_args('update');
+    $self->dispatch('clean');
+    $self->dispatch('install');
 }
 
 #syncronize the maker/src/bin and maker/src/inc/bin directories
@@ -176,6 +178,39 @@ sub ACTION_sync {
     my $self = shift;
 
     $self->sync_bins();
+}
+
+#creates a versioned MAKER release
+sub ACTION_release {
+    my $self = shift;
+
+    $self->sync_bins();
+    $self->svn_w_args('update');
+    $self->dispatch('clean');
+    my $ver = $self->check_update_version();
+
+    File::Which::which('tar') || die "ERROR: Cannot find tar to build the release\n";
+    File::Which::which('svn') || die "ERROR: Cannot find the executable svn\n";
+
+    #build tarball for users to downloa
+    my $cwd = getcwd();
+    my $tgz = "$cwd/maker-$ver.tgz";    
+    if(! -f $tgz){
+	my $dir = $cwd;
+	my ($base) = $dir =~ s/([^\/]+)\/src$//;
+
+	my $exclude = `svn status $dir/$base`;
+	$exclude = join('\n', ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
+	open(OUT, "> .exclude~");
+	print OUT $exclude;
+	close(OUT);
+
+	print "Building tarball for distribution\n";
+	my $command = "tar -C $dir -zcf $tgz $base --exclude \"~\" --exclude \".svn\" --exclude-from .exclude~";
+	system($command) && unlink($tgz);
+	unlink(".exclude~");
+	die "ERROR: tarball creation failed\n" if(! -f $tgz);
+    }
 }
 
 #replacement for Module::Build's ACTION_install
@@ -782,24 +817,25 @@ sub is_mpich2 {
 sub svn_w_args {
     my $self = shift;
     my $param = shift;
-    my $exec_f = shift;
+    my $o_args = shift;
 
     my $svn = File::Which::which("svn");
     if($svn){
 	#get message off command line
 	$svn .= " $param";
-	foreach my $arg (@{$self->args->{ARGV}}){
-	    if($arg =~ /[\s\t]/){
-		$arg =~ s/\'/\\\'/g;
-		$arg = "'$arg'" 
+	if($o_args){
+	    $svn .= " $o_args";
+	}
+	else{
+	    foreach my $arg (@{$self->args->{ARGV}}){
+		if($arg =~ /[\s\t]/){
+		    $arg =~ s/\'/\\\'/g;
+		    $arg = "'$arg'" 
+		    }
+		$svn .= " $arg";
 	    }
-	    $svn .= " $arg";
 	}
 	$svn .= " ".getcwd()."/../";
-
-	if($exec_f){
-	    exec("$svn; ./Build clean; ./Build");
-	}
 
 	$self->do_system($svn);
     }
@@ -880,5 +916,83 @@ sub sync_bins {
     }
 }
 
+sub check_update_version {
+    my $self = shift;
+
+    #get current subversion version
+    my ($svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+    die "ERROR: Could not query subversion repository\n" if(!$svn);
+
+    #get old version information for last stable release
+    open(IN, "< version") or die "ERROR: Could not open MAKER version file\n";
+    my $data = join("\n", <IN>);
+    my ($old_svn) = $data =~ /\$SVN=(\d+)/;
+    my ($old_version) = $data =~ /\$VERSION=([\d\.]+)/;
+    close(IN);
+
+    #check if update is really needed
+    my $version = $old_version;
+    if($old_svn == $svn){
+	print "MAKER is already up to date as stable release $version\n";
+    }
+    else{
+	#set new version
+	$old_version =~ /(.*)\.(\d+)$/;
+	$version = $1;
+	my $s = $2; #sub version
+	my $n = sprintf ('%02s', $s + 1); #new sub version
+	$s = ".$s"; #add decimal
+	$n = ".$n"; #add decimal
+	
+	#if version iteration results in lower value then make sub iterator
+	#this means major version numbers can only be changed by the user
+	if($n < $s){
+	    $n = "$s.01";
+	}
+	$version .= $n;
+
+	#output what will be next version to file
+	#then another commit will be performed to
+	#sync subverion with the release
+	my $commit_svn = $svn;
+	do{
+	    $svn = $commit_svn;
+	    $svn++;
+	    open(OUT, "> version");
+	    print OUT "\$VERSION=$version\n";
+	    print OUT "\$SVN=$svn\n";
+	    close(OUT);
+
+	    #files to fix version for
+	    my $cwd = getcwd();
+	    my @files = ("$cwd/bin/maker",
+			 "$cwd/bin/evaluator",
+			 "$cwd/bin/iprscan_wrap",
+			 "$cwd/inc/bin/mpi_maker",
+			 "$cwd/inc/bin/mpi_evaluator",
+			 "$cwd/inc/bin/mpi_iprscan"
+			 );
+
+	    #changing script version here
+	    foreach my $file (@files){
+		open(IN, "< $file");
+		unlink($file);
+		open(OUT, "> $file");
+		while(my $line = <IN>){
+		    $line =~ s/\$VERSION\s*\=\s*\'[\d\.]+\'/\$VERSION = \'$version\'/;
+		    print OUT $line;
+		}
+		close(OUT);
+		close(IN);
+	    }
+
+	    $self->svn_w_args('commit', "-m \"MAKER stable release version $version\"");
+	    my ($commit_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+	    die "ERROR: Could not query subversion repository\n" if(!$commit_svn);
+	}while($svn != $commit_svn);
+
+	print "MAKER has been updated to stable release $version\n";
+    }
+}
 
 1;
