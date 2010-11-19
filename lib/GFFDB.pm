@@ -736,7 +736,7 @@ sub _load_hits {
     #strip off unrecognized gene attributes for storage
     my @anns;
     if(@anns = $g->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
 	foreach my $ann (@anns){
 	    my @list = $g->{f}->annotation->get_Annotations();
 	    @list = map {$_->value()} @list;
@@ -744,7 +744,7 @@ sub _load_hits {
 	}
     }
     elsif(@anns = $g->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
         foreach my $ann (@anns){
             my @list = $g->{f}->get_tag_values($ann);
             $ann = $ann.'='.join(',', @list);
@@ -754,11 +754,10 @@ sub _load_hits {
         
     my @phat_hits;
     foreach my $t (@{$g->{mRNAs}}){
-
 	my $tran_id   = $t->{id};
 	my $tran_name = $t->{name};
 	   ($tran_name) = $tran_name =~ /(^[^\s]+)/;
-	    $tran_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
+	    $tran_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/; #for backwards compatability to older maker
 
 	my $description = "g_name=$gene_name;g_id=$gene_id;t_name=$tran_name;t_id=$tran_id" unless(! $gene_name);
 	
@@ -779,7 +778,7 @@ sub _load_hits {
 	#strip off unrecognized hit attributes for storage
 	my @anns;
 	if(@anns = $t->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $t->{f}->annotation->get_Annotations();
 		@list = map {$_->value()} @list;
@@ -787,7 +786,7 @@ sub _load_hits {
 	    }
 	}
 	elsif(@anns = $t->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $t->{f}->get_tag_values($ann);
 		$ann = $ann.'='.join(',', @list);
@@ -855,7 +854,7 @@ sub _load_cdss {
     my $hit_strand = 1;
     my $hit_name = $t->{name};
     ($hit_name) = $hit_name =~ /(^[^\s]+)/;
-    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
+    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/; #for backward compatability to old maker
     
     foreach my $e (@{$t->{cdss}}){
 	my @args;
@@ -965,7 +964,7 @@ sub _load_hsps {
     my $hit_strand = 1;
     my $hit_name = $t->{name};
     ($hit_name) = $hit_name =~ /(^[^\s]+)/;
-    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/;
+    $hit_name =~ s/(mRNA\-\d+)\-AED\:.*/$1/; #for backward compatability to old maker
 
     #catch error caused by malformed GFF3
     if(! $t->{exons}->[0] || ! $t->{exons}->[0]->{f}){
@@ -1098,7 +1097,7 @@ sub _load_hsps {
 	#strip off unrecognized hit attributes for storage
 	my @anns;
 	if(@anns = $e->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){ 
 		my @list = $e->{f}->annotation->get_Annotations();
 		@list = map {$_->value()} @list;
@@ -1106,7 +1105,7 @@ sub _load_hsps {
 	    }
 	}
 	elsif(@anns = $e->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $e->{f}->get_tag_values($ann);
 		$ann = $ann.'='.join(',', @list);

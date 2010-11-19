@@ -482,8 +482,8 @@ sub create_blastdb {
    my $mpi_size = shift@_ || 1;
        
    #rebuild all fastas when specified
-   File::Path::rmtree($CTL_OPT->{out_base}."/mpi_blastdb") if ($CTL_OPT->{force} &&
-							       ! $CTL_OPT->{_multi_chpc});
+   File::Path::rmtree($CTL_OPT->{mpi_blastdb}) if ($CTL_OPT->{force} &&
+						   ! $CTL_OPT->{_multi_chpc});
    
    ($CTL_OPT->{_p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
    ($CTL_OPT->{_e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
@@ -534,7 +534,7 @@ sub split_db {
        $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
     
        my $d_name = "$f_name\.mpi\.$bins";
-       my $b_dir = $CTL_OPT->{out_base}."/mpi_blastdb";
+       my $b_dir = $CTL_OPT->{mpi_blastdb};
        my $f_dir = "$b_dir/$d_name";
        my $t_dir = $TMP."/$d_name";
 
@@ -588,7 +588,7 @@ sub split_db {
 		   #most programs use N for masking but for some reason the NCBI decided to
 		   #use X to mask their sequence, which causes many many programs to fail
 		   $$seq_ref =~ s/\-//g;
-		   $$seq_ref =~ tr/XU/NT/i;
+		   $$seq_ref =~ s/X/N/gi;
 		   die "ERROR: The nucleotide sequence file \'$file\'\n".
 		       "appears to contain protein sequence or unrecognized characters.\n".
 		       "Please check/fix the file before continuing.\n".
@@ -2378,6 +2378,7 @@ sub set_defaults {
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
       $CTL_OPT{'TMP'} .= '=DISABLED' if($main::server);
+      $CTL_OPT{'mpi_blastdb'} = ''; #hidden option
       $CTL_OPT{'run'} = ''; #hidden option
       $CTL_OPT{'unmask'} = 0;
       $CTL_OPT{'alt_splice'} = 0;
@@ -3326,6 +3327,12 @@ sub load_control_files {
    }
    if(! $CTL_OPT{out_base}){
       $CTL_OPT{out_base} = $CTL_OPT{CWD}."/$CTL_OPT{out_name}.maker.output";
+   }
+   if(! $CTL_OPT{mpi_blastdb}){
+      $CTL_OPT{mpi_blastdb} = $CTL_OPT{out_base}."/mpi_blastdb";
+   }
+   else{
+       $CTL_OPT{mpi_blastdb} = abs_path($CTL_OPT{mpi_blastdb});
    }
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
    die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"

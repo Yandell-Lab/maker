@@ -10,12 +10,14 @@ use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
 use MAKER::Build;
 
+chdir($FindBin::Bin); #alway go here for safety
+
 #configure Build
 my $build = MAKER::Build->new
     (
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
-     dist_version_from  => 'version',
+     dist_version_from  => "$FindBin::Bin/version",
      dist_abstract => ('MAKER is a portable and easily configurable genome annotation pipeline. '.
 		       'It\'s purpose is to allow smaller eukaryotic and prokaryotic genome '.
 		       'projects to independently annotate their genomes and to create genome '.

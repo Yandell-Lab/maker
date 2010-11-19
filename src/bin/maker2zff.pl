@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!\usr\bin\perl
 
 use warnings; 
 use strict;
@@ -60,12 +60,12 @@ if(! $opt_d && ! @files) {
     exit();
 }
 
-my $outfile = "output";
-if ($opt_d){
-    ($outfile) = $opt_d =~ /([^\/]+)$/;
-    $outfile =~ s/_master_datastore_index.log//;
-    $outfile .= ".all";
-}
+my $outfile = "genome";
+#if ($opt_d){
+#    ($outfile) = $opt_d =~ /([^\/]+)$/;
+#    $outfile =~ s/_master_datastore_index.log//;
+#    $outfile .= ".all";
+#}
 
 die "ERROR: The file \'$opt_d\' does not exist\n" if ($opt_d && ! -e $opt_d);
 if ($opt_d){

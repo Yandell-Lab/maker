@@ -1456,7 +1456,6 @@ sub run_it {
 	    $transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
 
 	    push(@transcripts, [$transcript, $set, $mia]);
-	    die if($transcript->num_hsps() < 1); #temp
 	    $i++;
 
 	    next;
@@ -2329,14 +2328,6 @@ sub get_non_overlaping_abinits {
        unless($src =~ /_masked$|^pred_gff/ || $CTL_OPT->{_no_mask} || $CTL_OPT->{predictor} eq 'genemark'){
 	   next;
        }
-
-       ##temp
-       ##skip prediction in run option but not in predictor
-       #$src =~ s/_masked//;
-       #unless(grep {/$src/} @{$CTL_OPT->{_predictor}}){
-       #next;
-       #}
-       ##temp
 
        if($g->{g_strand} == 1){
 	   push(@p_ab, $g);

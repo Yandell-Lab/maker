@@ -752,9 +752,9 @@ sub maker_status {
     $maker =  'MISSING PREREQUISITES' if(@perl || @exes);
 
     print "\n\n";
-    print "================================================================\n";
+    print "==============================================================================\n";
     print "STATUS $dist_name $dist_version\n";
-    print "================================================================\n";
+    print "==============================================================================\n";
     print "PERL Dependencies:\t";
     print ((@perl) ? 'MISSING' : 'INSTALLED');
     print"\n";
@@ -766,24 +766,24 @@ sub maker_status {
     print "MPI SUPPORT:\t\t";
     print $mpi;
     print "\n";
-    print "MWAS Web Interface:\t";
-    print $mwas;
-    print "\n";
+#    print "MWAS Web Interface:\t";
+#    print $mwas;
+#    print "\n";
     print "MAKER:\t\t\t";
     print $maker;
     print "\n";
 
     print "\n\nImportant Commands:\n".
         "\t./Build installdeps\t\#installs missing perl dependencies\n".
-        "\t./Build installexes\t\#installs missing external program dependencies\n".
+        "\t./Build installexes\t\#installs all missing program dependencies\n".
         "\t./Build install\t\t\#installs MAKER\n".
         "\t./Build status\t\t\#Shows this status menu\n\n".
         "Other Commands:\n".
-        "\t./Build repeatmasker\t\#installs just RepeatMasker (no RepBase)\n".
-        "\t./Build blast\t\t\#installs just BLAST (NCBI BLAST+)\n".
-        "\t./Build exonerate\t\#installs just Exonerate (v2 on UNIX or v1 on Mac)\n".
-        "\t./Build snap\t\t\#installs just SNAP\n".
-        "\t./Build augustus\t\#installs just Augustus\n";
+        "\t./Build repeatmasker\t\#installs RepeatMasker (no RepBase)\n".
+        "\t./Build blast\t\t\#installs BLAST (NCBI BLAST+)\n".
+        "\t./Build exonerate\t\#installs Exonerate (v2 on UNIX / v1 on Mac)\n".
+        "\t./Build snap\t\t\#installs SNAP\n".
+        "\t./Build augustus\t\#installs Augustus\n";
 }
 
 #test if there is another version of the module overriding the CPAN install
