@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!\usr\bin\perl
 
 use strict "vars";
 use strict "refs";
@@ -10,7 +10,7 @@ use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG $CMD_ARGS $VERSION);
 
 BEGIN{
-   $VERSION = '2.05';
+   $VERSION = '2.04';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
