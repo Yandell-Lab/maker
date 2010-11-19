@@ -239,6 +239,8 @@ sub ACTION_release {
     #there were changes so re-run install (updates version info in scripts)
     my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
     if($s_svn != $f_svn){
+	print "Now reinstalling MAKER scripts to reflect version changes...\n";
+	sleep 2;
 	$self->dispatch('install');
     }
 }
