@@ -987,6 +987,7 @@ sub check_update_version {
 	    }
 
 	    $self->svn_w_args('commit', "-m \"MAKER stable release version $version\"");
+	    $self->svn_w_args('update');
 	    my ($commit_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
 	    die "ERROR: Could not query subversion repository\n" if(!$commit_svn);
 	}while($svn != $commit_svn);
