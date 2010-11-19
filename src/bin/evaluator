@@ -10,7 +10,7 @@ use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG $CMD_ARGS $VERSION);
 
 BEGIN{
-   $VERSION = '2.20';
+   $VERSION = '2.21';
 
    $main::eva = 1; #tells scripts this is evaluator
 

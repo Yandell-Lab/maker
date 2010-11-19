@@ -13,7 +13,7 @@ use threads;
 use threads::shared;
 
 BEGIN{
-   $VERSION = '2.20';
+   $VERSION = '2.21';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
