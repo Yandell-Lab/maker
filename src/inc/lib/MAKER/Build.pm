@@ -227,11 +227,11 @@ sub ACTION_release {
 	my $exclude = `cd $dir; svn status $base`;
 	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
 	open(OUT, "> .exclude~");
-	print OUT "$tgz\n$exclude";
+	print OUT $exclude;
 	close(OUT);
 	
 	print "\nBuilding tarball for distribution...\n";
-	my $command = "tar -C $dir -zcf $tgz $base --exclude \"~\" --exclude \".svn\" --exclude-from .exclude~";
+	my $command = "tar -C $dir -zcf $tgz $base --exclude \"*~\" --exclude \".svn\" --exclude \"maker-*.tgz\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
 	die "ERROR: tarball creation failed\n" if(! -f $tgz);
