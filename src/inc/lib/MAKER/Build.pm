@@ -224,7 +224,7 @@ sub ACTION_release {
     if(! -f $tgz){
 	my ($dir, $base) = $cwd =~ /^(.*\/)([^\/]+)\/src$/;
 	
-	my $exclude = `svn status $dir/$base`;
+	my $exclude = `cd $dir; svn status $base`;
 	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g)) ."\n";
 	open(OUT, "> .exclude~");
 	print OUT "$tgz\n$exclude";
