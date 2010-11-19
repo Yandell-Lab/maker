@@ -242,8 +242,9 @@ sub ACTION_release {
     if($s_svn != $f_svn){
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
-	$self->create_build_script;#update stored Build script
+	$self->dispatch('realclean'); #clean up all old files
 	$self->dispatch('install');
+	$self->create_build_script;#update stored Build script
     }
 }
 
