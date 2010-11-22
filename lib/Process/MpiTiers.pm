@@ -424,7 +424,7 @@ sub current_level{
    return $self->{LEVEL}{CURRENT};
 }
 #--------------------------------------------------------------
-#this reports the number of remaining chunks.
+#this reports the number of chunks remaining to be processed
 
 sub num_chunks {
    my $self = shift;
@@ -434,7 +434,28 @@ sub num_chunks {
 
    return $num;
 }
+#--------------------------------------------------------------
+#this reports the number of chunk results collected.
 
+sub result_count {
+   my $self = shift;
+
+   my $level = $self->{LEVEL}{CURRENT};
+   my $count = $self->{LEVEL}{$level}{RESULT_COUNT} || 0;
+
+   return $count;
+}
+#--------------------------------------------------------------
+#this reports the number of chunks that existed
+
+sub chunk_total_count {
+   my $self = shift;
+
+   my $level = $self->{LEVEL}{CURRENT};
+   my $count = $self->{LEVEL}{$level}{CHUNK_COUNT} || 0;
+
+   return $count;
+}
 #-------------------------------------------------------------
 #returns the id of the tier
 
