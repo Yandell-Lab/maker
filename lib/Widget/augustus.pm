@@ -176,8 +176,8 @@ sub augustus {
         }
 
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
-        #unlink($xdef_file) if(-f $xdef_file);
-        #unlink($file_name) if(-f $file_name);
+        unlink($xdef_file) if(-f $xdef_file);
+        unlink($file_name) if(-f $file_name);
 
         my %params;
            $params{min_exon_score}  = -100;
