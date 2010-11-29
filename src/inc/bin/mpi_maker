@@ -7,7 +7,7 @@ use strict "refs";
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG $CMD_ARGS $VERSION);
+use vars qw($RANK $LOG @CMD_ARGS $VERSION);
 use Storable qw(freeze thaw);
 use Config;
 
@@ -21,7 +21,7 @@ BEGIN{
       $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
    }
 
-   $CMD_ARGS = join(' ', @ARGV);
+   @CMD_ARGS = @ARGV;
 
    #what to do on ^C
    $SIG{'INT'} = sub {
@@ -196,7 +196,7 @@ my $request_status = 4444;
 my $c_res_status   = 5555;
 my $chunk_status   = 6666;
 my $work_order     = 7777; #generic data tag
-my $mpi_data       = 88881;
+my $mpi_data       = 8888;
 my $message_length = 9999;
 
 #--what_I_want type signals
@@ -265,7 +265,7 @@ try{
                "datastore!" =>\$OPT{datastore},
 	       "fast" => \$main::fast,
 	       "dtmp" => \$main::dtmp,
-	       "debug" => sub {require Time::HiRes; $main::debug = 1;},
+	       "debug" => \$main::debug,
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "no_threads" =>\$main::no_threads, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
@@ -274,6 +274,7 @@ try{
 	       );
 
     $main::quiet = 1 if($main::qq);
+    $main::no_threads = 1 if(!$Config::Config{useithreads});
 }
 catch Error::Simple with{
     my $E = shift;
@@ -283,7 +284,7 @@ catch Error::Simple with{
 };
 
 #---set up thread support
-if(!$main::no_threads && $Config::Config{useithreads}){
+unless($main::no_threads){
     require threads;
     require threads::shared;
     threads::shared->import();
@@ -372,6 +373,11 @@ if ($rank == $root) {
 		print $usage;
 		exit(0);
 	    }
+	}
+
+	#--exec regular maker if no-threads and size of 1
+	if($main::no_threads && $size == 1 && ! $main::debug){
+	    exec("$FindBin::Bin/maker", @CMD_ARGS);
 	}
 	
 	#--Control file processing
@@ -745,6 +751,7 @@ if ($rank == $root) {
 }
 #------SECONDARY MPI PROCESSES------
 else {
+    $main::no_threads = 1;
     my $go_mpi_status = 1;
     my $tier_result;
     my $tier;

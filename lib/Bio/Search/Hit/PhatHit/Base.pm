@@ -450,16 +450,6 @@ sub strand {
    $seqType = 'sbjct' if $seqType eq 'hit';
 
    # If there is only one HSP, defer this call to the solitary HSP.
-   if ($self->num_hsps eq "-") { #temp
-       require PostData;
-
-       PostData($self);
-       $self->show;
-
-       my $err = $self->name()."\t".$self->algorithm();
-       die $err."\n";
-   }
-
    if ($self->num_hsps == 1) {
       return $self->hsp->strand($seqType);
    } else {

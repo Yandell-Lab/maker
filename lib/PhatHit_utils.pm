@@ -27,12 +27,11 @@ sub sort_hits {
                 $sorted = $hit->revSortFeatures($what);
         }     
         else {
-		$hit->show();
+	        $hit->show();
 		PostData($hit);
-		print "caller:".caller()."STRAND:".$hit->strand('query')."\n";
+		print STDERR "caller:".caller()."STRAND:".$hit->strand('query')."\n";
 
-                print "not yet supported in PhatHit_utils::sort_hits\n";
-                die;
+                die "ERROR: not yet supported in PhatHit_utils::sort_hits\n";
         }
 
 	return $sorted;
@@ -749,6 +748,9 @@ sub _clip {
 	
 	$hit_start = $hit_start + $length;
     }
+    
+    die "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
+	if($hit_start == 1); #should change with each HSP
 
     $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
     $new_hit->{_label} = $hit->{_label} if($hit->{_label});

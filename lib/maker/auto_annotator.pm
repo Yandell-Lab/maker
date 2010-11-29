@@ -2592,7 +2592,7 @@ sub get_translation_seq {
     if(! defined($offset) || ($p_seq !~ /^M/ && $offset >= 3)){
 	($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
 
-	# does not begin with M....
+	#does not begin with M....
 	if ($p_seq !~ /^M/){
 	    my ($off_new, $p_seq_new) = get_longest_m_seq($seq);
 
@@ -2604,12 +2604,17 @@ sub get_translation_seq {
 	}
     }
 
+    #fix for translations longer than seq (because of third codon ambiguity)
+    if(length($p_seq)*3 + $offset > length($seq)){
+	$p_seq =~ s/.$//; #remove trailing peptide
+    }
+
     #get end, and see if there is a stop, and remove it
     my $end = length($p_seq)*3 + $offset + 1;
     my $has_start = 1 if($p_seq =~ /^M/);
     my $has_stop = 1 if($p_seq =~ s/\*$//);
 
-    #set CDS internally in hit
+    #set CDS internally in hit (CDS includes stop)
     $f->{translation_offset} = $offset;
     $f->{translation_end} = $end;
 
@@ -2626,7 +2631,7 @@ sub get_translation_seq {
 	    next;
 	}
 	elsif(!$coorB){
-	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nB('query') - $toffset;
+	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nE('query') - $toffset;
 	    $tend -= $l;
 	    $toffset = 0;
 	}
@@ -2636,10 +2641,12 @@ sub get_translation_seq {
 
         #find last bp coordinate
 	if($tend <= 1){ #end is always bp after last translated bp
-	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + $tend - 1 : $hsp->nE('query') - $tend + 1;
+	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + ($tend - 1) : $hsp->nB('query') - ($tend - 1);
 	    last;
 	}
     }
+
+    die "ERROR: Logic problem in maker::auto_annotator::get_translation_seq\n" if(!defined($coorE));
 
     $f->{_TSTART}{query} = $coorB;
     $f->{_TSTART}{hit} = $offset + 1;

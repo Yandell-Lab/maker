@@ -83,7 +83,6 @@ sub is_redundant_alt_form {
                 sleep 3;
                 #return 1;
         }
-
         else {
                 #print STDERR "redun not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str a_to_b_str:$a_to_b_str b_to_a_str:$b_to_a_str".$a->name." ".$b->name."\n";
                 #sleep 3;
