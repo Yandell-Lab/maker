@@ -1725,8 +1725,8 @@ sub load_transcript_struct {
 	    }
 	    
 	    #fix for non-canonical (almost certainly bad) 5' and 3' UTR
-	    my $trim5 = (!$has_stop && $end > length($transcript_seq) + 1);
-	    my $trim3 = (!$has_start && $offset > 0);
+	    my $trim5 = (!$has_stop && $end != length($transcript_seq) + 1);
+	    my $trim3 = (!$has_start && $offset != 0);
 	    if($trim5 || $trim3){
 		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
 		$transcript_seq  = get_transcript_seq($f, $seq);
@@ -2631,7 +2631,7 @@ sub get_translation_seq {
 	    next;
 	}
 	elsif(!$coorB){
-	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nE('query') - $toffset;
+	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nB('query') - $toffset;
 	    $tend -= $l;
 	    $toffset = 0;
 	}
@@ -2641,7 +2641,7 @@ sub get_translation_seq {
 
         #find last bp coordinate
 	if($tend <= 1){ #end is always bp after last translated bp
-	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + ($tend - 1) : $hsp->nB('query') - ($tend - 1);
+	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + ($tend - 1) : $hsp->nE('query') - ($tend - 1);
 	    last;
 	}
     }
