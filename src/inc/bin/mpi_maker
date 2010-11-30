@@ -12,7 +12,7 @@ use Storable qw(freeze thaw);
 use Config;
 
 BEGIN{
-   $VERSION = '2.05';
+   $VERSION = '2.06';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
