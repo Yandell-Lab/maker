@@ -1475,25 +1475,25 @@ sub merge_hits {
 #------------------------------------------------------------------------
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
-sub AUTOLOAD {
-        my ($self, $arg) = @_;
-
-        my $caller = caller();
-        use vars qw($AUTOLOAD);
-        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
-        $call =~/DESTROY/ && return;
-
-        #print STDERR "PhatHit::AutoLoader called for: ",
-        #      "\$self->$call","()\n";
-        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
-
-        if ($arg){
-                $self->{$call} = $arg;
-        }
-        else {
-                return $self->{$call};
-        }
-}
+#sub AUTOLOAD {
+#        my ($self, $arg) = @_;
+#
+#        my $caller = caller();
+#        use vars qw($AUTOLOAD);
+#        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
+#        $call =~/DESTROY/ && return;
+#
+#        #print STDERR "PhatHit::AutoLoader called for: ",
+#        #      "\$self->$call","()\n";
+#        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+#
+#        if ($arg){
+#                $self->{$call} = $arg;
+#        }
+#        else {
+#                return $self->{$call};
+#        }
+#}
 #------------------------------------------------------------------------
 1;
 
