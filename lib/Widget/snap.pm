@@ -267,7 +267,7 @@ sub process_hints {
 	    next if($e->num_hsps() < 2);
 	    next if((3 * length($p_seq)) / length($t_seq) < 0.5); #skip unless orf at least 50% of EST
 	    my $pos = 0;
-	    foreach my $hsp (PhatHit_utils::sorted_hits($e)){
+	    foreach my $hsp (@{PhatHit_utils::sort_hits($e, 'query')}){
 		my $B = $hsp->start('query');
 		my $E = $hsp->end('query');
 		my $L = abs($E - $B) + 1;
@@ -454,7 +454,6 @@ sub process_hints {
 sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
-        my $id            = shift;
         my $the_void      = shift;
         my $set           = shift;
         my $snap_flank    = shift;
@@ -464,13 +463,14 @@ sub get_pred_shot {
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
+
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $snap_flank, $alt_splice);
-
+	my $id = $set->{c_id}.'_'.$set->{set_id};
+	my $end = $offset + length($$shadow_seq);
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,
                                          );
-
 
         my ($exe, $param) = $snap_command =~ /(\S+)\s+(\S+)/;
 
@@ -489,6 +489,7 @@ sub get_pred_shot {
 			      $id,
 			      $strand,
 			      $offset,
+			      $end,
 			      $xdef,
 			      $alt_snap_command,
 			      $hmm
@@ -505,6 +506,7 @@ sub snap {
         my $seq_id     = shift;
         my $strand     = shift;
         my $offset     = shift;
+	my $end        = shift;
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
@@ -512,11 +514,11 @@ sub snap {
         my $snap_keepers = [];
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
 
-        my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.snap.fasta";
+        my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap.fasta";
 
-        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.snap";
+        my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.snap";
+        my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.snap";
 
 	
 	$command .= " -xdef $xdef_file ";
@@ -538,7 +540,7 @@ sub snap {
         }
 
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
-#	unlink($xdef_file) if(-f $xdef_file);
+	unlink($xdef_file) if(-f $xdef_file);
 	unlink($file_name) if(-f $file_name);
 
          my %params;

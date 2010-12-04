@@ -215,6 +215,20 @@ sub _next_level {
 
    try {
       $next_level = $self->{CHUNK_REF}->_flow($level, $self->{VARS});
+
+      #---------------#temp
+      #report the clock usage at each level in seconds
+      #use Benchmark;
+      #if($self->{BENCHMARK}){
+      #    my $mark = new Benchmark;
+      #    my $diff = timediff($mark, $self->{BENCHMARK});
+      #    $self->{BENCHMARK} = $mark;
+      #    print "LEVEL $level: Time taken was ", timestr($diff, 'all'), " seconds\n";
+      #}
+      #else{
+      #    $self->{BENCHMARK} = new Benchmark;
+      #}
+      #---------------#temp
    }
    catch Error::Simple with {
       my $E = shift;

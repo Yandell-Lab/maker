@@ -95,6 +95,26 @@ sub prep_hits {
 
 	#join the clusters on the models
 	my $model_clusters = join_clusters_on_pred($models, $careful_clusters, $c_index);
+	
+	# identify the abinits that fall within and between clusters
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
+								   $model_clusters,
+								   $seq,
+								   );
+	
+	merge_into_cluster($hit_one, $model_clusters, $c_index);
+	merge_into_cluster($hit_mult, $model_clusters, $c_index); #these have an internal tag
+
+	#==prep model_gff data
+	my @all_data;
+	my $c_id = 0;
+	#my @gf_data;
+	foreach my $c (@{$model_clusters}){
+	    my $gf = prep_gff_data($c, $c_id, $seq);
+	    push(@all_data, @{$gf}) if defined $gf;
+
+	    $c_id++;
+	}
 
 	#--abinit input
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
@@ -105,6 +125,23 @@ sub prep_hits {
 	#join clusters on the ab-inits
 	my $pred_clusters = join_clusters_on_pred($predictions, $careful_clusters, $c_index);
 
+	# identify the abinits that fall within and between clusters
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
+								   $pred_clusters,
+								   $seq,
+								   );
+	
+	merge_into_cluster($hit_one, $pred_clusters, $c_index);
+	merge_into_cluster($hit_mult, $pred_clusters, $c_index); #these have an internal tag
+
+	#==prep abinit data
+	#my @pr_data;
+	foreach my $c (@{$pred_clusters}){
+	    my $pr = prep_pred_data($c, $c_id, $seq);
+	    push(@all_data, @{$pr}) if defined $pr;
+
+	    $c_id++;
+	}
 
 	#--build clusters joined together by models (for hint based annotations)
 	my $hint_clusters = [];
@@ -150,38 +187,44 @@ sub prep_hits {
 								   $seq,
 								   );
 
-	#only add as hints those that don't cross multiple clusters
 	merge_into_cluster($hit_one, $hint_clusters, $c_index);
+	merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
 
-	#--prep hint data
-	my $c_id = 0;
-	my @bx_data;
+	#==prep hint data
+	#my @bx_data;
 	foreach my $c (@{$hint_clusters}){
 	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type, $est_forward);
-	   push(@bx_data, @{$bx}) if defined $bx;
+	   push(@all_data, @{$bx}) if defined $bx;
 
 	   $c_id++;
 	}
 
-	#--prep model_gff data
-	my @gf_data;
-	foreach my $c (@{$model_clusters}){
-	    my $gf = prep_gff_data($c, $c_id, $seq);
-	    push(@gf_data, @{$gf}) if defined $gf;
-
-	    $c_id++;
+	#add index value to ESTs (corresponds to order in array)
+	my $index = 0;
+	foreach my $f (@$est_hits){
+	    $f->{_index}{est} = $index++;
 	}
 
-	#--prep abinit data
-	my @pr_data;
-	foreach my $c (@{$pred_clusters}){
-	    my $pr = prep_pred_data($c, $c_id, $seq);
-	    push(@pr_data, @{$pr}) if defined $pr;
-
-	    $c_id++;
+	#add index value to proteins (corresponds to order in array)
+	$index = 0;
+	foreach my $f (@$prot_hits){
+	    $f->{_index}{prot} = $index++;
 	}
 
-	return (\@bx_data, \@gf_data, \@pr_data);
+	#add index value to preds (corresponds to order in array)
+	$index = 0;
+	foreach my $f (@$predictions){
+	    $f->{_index}{pred} = $index++;
+	}
+
+	#add index value to clusters (corresponds to order in array)
+	$index = 0;
+	foreach my $d (@all_data){
+	    $d->{index} = $index++;
+	}
+
+	return (\@all_data);
+	#return (\@bx_data, \@gf_data, \@pr_data);
 }
 #------------------------------------------------------------------------
 #called in prep_hits to classify abinits as overlaping one, many, or no
@@ -270,12 +313,15 @@ sub segment_preds {
 
 	    if ($count == 0){
 		push(@hit_none, $index[$i]);
+		$index[$i]->{_hit_multi} = 0;
 	    }
 	    elsif ($count == 1){
 		push(@hit_one, $index[$i]);
+		$index[$i]->{_hit_multi} = 0;
 	    }
 	    else {
 		push(@hit_mult, $index[$i]);
+		$index[$i]->{_hit_multi} = 1;
 	    }
 	}
 
@@ -298,12 +344,15 @@ sub segment_preds {
 
 	    if ($count == 0){
 		push(@hit_none, $index[$i]);
+		$index[$i]->{_hit_multi} = 0;
 	    }
 	    elsif ($count == 1){
 		push(@hit_one, $index[$i]);
+		$index[$i]->{_hit_multi} = 0;
 	    }
 	    else {
 		push(@hit_mult, $index[$i]);
+		$index[$i]->{_hit_multi} = 1;
 	    }
 	}
 
@@ -320,7 +369,8 @@ sub merge_into_cluster {
    foreach my $s (@{$hits}, ){
       my @keys = keys %{$c_index->{$s->{temp_id}}};
       foreach my $i (@keys){
-	 push(@{$clusters->[$i]}, $s);
+	 push(@{$clusters->[$i]}, $s)
+	     unless(grep {$_ eq $s} @{$clusters->[$i]});
       }
    }
 }
@@ -515,7 +565,8 @@ sub prep_blastx_data {
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark', 'pred_gff');
-
+	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
+	
 	# groups of most informative protein hits
 	# go ahead and inclde the proteion2genome data as well... why not?
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
@@ -535,31 +586,22 @@ sub prep_blastx_data {
 	}
 
 	my @data;
-	if (defined($gomias->[0])){
-	   foreach my $mia (@{$gomias}){
-	      push(@data, {'gomiph'    => $gomiph,
-			   'preds'     => $preds_in_cluster,
-			   'ests'      => $ests_in_cluster,
-			   'alt_ests'  => $alt_ests_in_cluster,
-			   'mia'       => $mia,
-			   'model'     => undef,
-			   'gomod'     => $models_in_cluster,
-			   'c_id'      => $c_id
-			  }
-		  );
-	   }
-	}
-	else {
-	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => $preds_in_cluster,
-			'ests'      => $ests_in_cluster,
-			'alt_ests'  => $alt_ests_in_cluster,
-			'mia'       => undef,
-			'model'     => undef,
-			'gomod'     => $models_in_cluster,
-			'c_id'      => $c_id
-		       }
-	       );
+	my $i = 0;
+	$gomias->[0] = undef if(! @{$gomias});
+	foreach my $mia (@{$gomias}){
+	    push(@data, {'gomiph'    => $gomiph,
+			 'preds'     => \@uniq_preds,
+			 'all_preds' => $preds_in_cluster,
+			 'ests'      => $ests_in_cluster,
+			 'alt_ests'  => $alt_ests_in_cluster,
+			 'mia'       => $mia,
+			 'model'     => undef,
+			 'gomod'     => $models_in_cluster,
+			 'c_id'      => $c_id,
+			 'set_id'    => $i++,
+			 'type'      => 'bx',
+			 }
+		 );
 	}
 
 	return \@data;
@@ -584,21 +626,25 @@ sub prep_gff_data {
 	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark',  'pred_gff');
+	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
 	my @data;
-
+	my $i = 0;
 	foreach my $model (@{$models_in_cluster}){
 	   push(@data, {'gomiph'    => $gomiph,
-			'preds' => $preds_in_cluster,
+			'preds'     => \@uniq_preds,
+			'all_preds' => $preds_in_cluster,
 			'ests'      => $ests_in_cluster,
 			'alt_ests'  => $alt_ests_in_cluster,
 			'mia'       => undef,
 			'model'     => $model,
 			'gomod'     => undef,
-			'c_id'      => $c_id
+			'c_id'      => $c_id,
+			'set_id'    => $i++,
+			'type'      => 'gf'
 		       }
 	       );
 	}
@@ -624,24 +670,34 @@ sub prep_pred_data {
 	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark', 'pred_gff');
+	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
+
+	#model is always first cluster entry
+	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
+					 'twinscan', 'genemark', 'pred_gff');
+	die "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
+	    if(!@$abinits);
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
 	my @data;
-
-	foreach my $pred (@{$preds_in_cluster}){
+	my $i = 0;
+	foreach my $pred (@$abinits){
 	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => $preds_in_cluster,
+			'preds'     => \@uniq_preds,
+			'all_preds' => $preds_in_cluster,
 			'model'     => $pred,
 			'gomod'     => undef,
 			'ests'      => $ests_in_cluster,
 			'alt_ests'  => $alt_ests_in_cluster,
 			'mia'       => undef,
-			'c_id'      => $c_id
-		       }
-	       );
-	}
+			'c_id'      => $c_id,
+			'set_id'    => $i++,
+			'type'      => 'pr'
+			}
+		);
+        }
 
 	return \@data;
 }
@@ -652,31 +708,35 @@ sub prep_pred_data {
 #protein homology => each protein exonerate structure
 #alternative splice forms => each protein exonerate structure
 #no snap predictions included
-sub prep_polpro_data {
-	my $c    = shift;
-	my $c_id = shift;
-	my $seq  = shift;
-
-	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
-	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-
-	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
-
-	my $best_exts = clean::get_best_alt_splices($possible_ext_sources, $seq, 10);
-
-	# group of most informative alt splices
-	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
-
-	my @data;
-	foreach my $mia (@{$gomias}){
-		push(@data, {'gomiph' => [$mia],
-			     'ests'   => $best_exts,
-			     'mia'    => $mia,
-			     'c_id'   => $c_id});
-	}
-
-	return \@data;
-}
+#sub prep_polpro_data {
+#	my $c    = shift;
+#	my $c_id = shift;
+#	my $seq  = shift;
+#
+#	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
+#	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
+#
+#	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
+#
+#	my $best_exts = clean::get_best_alt_splices($possible_ext_sources, $seq, 10);
+#
+#	# group of most informative alt splices
+#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
+#
+#	my @data;
+#	my $i = 0;
+#	foreach my $mia (@{$gomias}){
+#		push(@data, {'gomiph' => [$mia],
+#			     'ests'   => $best_exts,
+#			     'mia'    => $mia,
+#			     'c_id'   => $c_id,
+#			     'set_id'    => $i++,
+#			     'type'   => 'pp'
+#			     });
+#	}
+#
+#	return \@data;
+#}
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
 #called by prep_hits for standard evidence clusters
@@ -684,172 +744,203 @@ sub prep_polpro_data {
 #protein homology =>  best set from combined protein exonerate and blastx data
 #alternative splice forms => based on each best ests from all ests
 #no snap predictions included
-sub prep_polest_data {
-	my $c    = shift;
-	my $c_id = shift;
-	my $seq  = shift;
-
-
-	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
-	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
-
-	my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
-	my $best_p_set = clean::remove_redundant_alt_splices($i_set, $seq, 10);
-
-	my $best_exts  = clean::get_best_alt_splices($ests_in_cluster, $seq, 10);
-
-	# group of most informative alt splices
-	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
-
-	my @data;
-	foreach my $alt_splice_est (@{$best_exts}){
-		push(@data, {'gomiph' => $best_p_set,
-			     'ests'   => [$alt_splice_est],
-			     'mia'    => $alt_splice_est,
-			     'c_id'   => $c_id});
-	}
-	return \@data;
-}
+#sub prep_polest_data {
+#	my $c    = shift;
+#	my $c_id = shift;
+#	my $seq  = shift;
+#
+#
+#	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
+#	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
+#	my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
+#
+#	my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
+#	my $best_p_set = clean::remove_redundant_alt_splices($i_set, $seq, 10);
+#
+#	my $best_exts  = clean::get_best_alt_splices($ests_in_cluster, $seq, 10);
+#
+#	# group of most informative alt splices
+#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
+#
+#	my @data;
+#	my $i = 0;
+#	foreach my $alt_splice_est (@{$best_exts}){
+#		push(@data, {'gomiph' => $best_p_set,
+#			     'ests'   => [$alt_splice_est],
+#			     'mia'    => $alt_splice_est,
+#			     'c_id'   => $c_id,
+#			     'set_id'    => $i++,
+#			     'type'   => 'pe'
+#			     });
+#	}
+#	return \@data;
+#}
 #------------------------------------------------------------------------
-#this subroutine returns finished annotations for all predictors.
+#this subroutine returns finished transcripts for all predictors.
 #called outside of package by maker
-sub annotate {
-    my $virgin_fasta     = shift;
-    my $masked_fasta     = shift;
-    my $chunk_number     = shift; #required to name genes for each chunk
-    my $prot_evidence    = shift;
-    my $est_evidence     = shift;
-    my $alt_est_evidence = shift;
-    my $predictions      = shift;
-    my $models           = shift;
+sub annotate_trans {
+    my $v_seq_ref        = shift;
+    my $m_seq_ref        = shift;
+    my $def              = shift;
+    my $seq_id           = shift;
+    my $all_data         = shift; #evidence clusters
     my $the_void         = shift;
-    my $build            = shift;
     my $CTL_OPT          = shift;
     $LOG                 = shift;
 
-    #process fasta files
-    my $def   = Fasta::getDef($masked_fasta);
-    my $seq_id  = Fasta::def2SeqID($def);
-    my $seq_ref   = Fasta::getSeqRef($masked_fasta);
-    my $v_seq_ref = Fasta::getSeqRef($virgin_fasta);
+    my %transcripts;
+    foreach my $dc (@$all_data) {
+	#---model passthrough here
+	if($dc->{type} eq 'gf'){
+	    my $trans = run_it([$dc],
+			       $the_void,
+			       $m_seq_ref,
+			       $v_seq_ref,
+			       $def,
+			       'model_gff',
+			       $CTL_OPT
+			       );
+
+	    push(@{$transcripts{'model_gff'}}, @$trans);
+	}
+	#---hint based gene prediction here (includes est2genome)
+	elsif($dc->{type} eq 'bx'){
+	    foreach my $prdr (@{$CTL_OPT->{_predictor}}){
+		next if($prdr eq 'model_gff' || $prdr eq 'pred_gff');
+		
+		my $trans = run_it([$dc],
+				   $the_void,
+				   $m_seq_ref,
+				   $v_seq_ref,
+				   $def,
+				   $prdr,
+				   $CTL_OPT
+				   );
+		
+		push(@{$transcripts{$prdr}}, @$trans); 
+	    }
+	}
+	#---abinit scoring here
+	elsif($dc->{type} eq 'pr'){
+	    my $trans = run_it([$dc],
+			       $the_void,
+			       $m_seq_ref,
+			       $v_seq_ref,
+			       $def,
+			       'abinit', #all abinits not just pred_gff
+			       $CTL_OPT
+			       );
+
+	    #add abinits to their predictor type after they have been proccessed
+	    #remeber they get treated differently so you want to add them as a
+	    #separate step from hint based predictions.
+	    foreach my $s (@$trans){
+		my $t = $s->[0];
+		my $al = lc($t->algorithm);
+		$al =~ s/_masked$//;
+		$al =~ s/(pred_gff).*$/$1/;
+
+		if($al =~ /^snap$|^genemark$|^augustus$|^fgenesh$/){
+		    push(@{$transcripts{"$al\_abinit"}}, $s);
+		}
+		elsif($al =~ /^pred_gff$/){
+		    push(@{$transcripts{$al}}, $s);
+		}
+		else{
+		    die "ERROR: Not a supported algorithm: ".$t->algorithm."\n";
+		}
+	    }
+	}
+    }
+    
+    return \%transcripts;
+}
+
+#------------------------------------------------------------------------
+#this subroutine returns seperates and groups transcripts for all predictors.
+#called outside of package by maker
+sub annotate_genes {
+    my $transcripts      = shift;
+    my $all_data         = shift; #evidence clusters
+    my $v_seq_ref        = shift;
+    my $seq_id           = shift;
+    my $chunk_number     = shift; #required to name genes for each chunk
+    my $the_void         = shift;
+    my $build            = shift;
+    my $CTL_OPT          = shift;
 
     #reset gene names
     #my $GFF_DB = new GFFDB($CTL_OPT);
     $SEEN = {};#$GFF_DB->get_existing_gene_names($seq_id);
 
-    #group evidence and predictions
-    my ($bx_data, $gf_data, $pr_data) = prep_hits($prot_evidence,
-						  $est_evidence,
-						  $alt_est_evidence,
-						  $predictions,
-						  $models,
-						  $v_seq_ref,
-						  $CTL_OPT->{single_exon},
-						  $CTL_OPT->{single_length},
-						  $CTL_OPT->{pred_flank},
-						  $CTL_OPT->{organism_type},
-						  $CTL_OPT->{est_forward}
-						  );
-
     my %annotations;
-
-    #---model passthrough here
-    if(@$gf_data){
-	print STDERR "Processing GFF3 passthrough annotations\n" unless($main::quiet);
-	my $model_trans = run_it($gf_data,
-				 $the_void,
-				 $seq_ref,
-				 $v_seq_ref,
-				 $def,
-				 'model_gff',
-				 $predictions,
-				 $CTL_OPT
-				 );
-
-	$annotations{'model_gff'} = group_transcripts($model_trans,
-						      $v_seq_ref,
-						      $seq_id,
-						      $chunk_number,
-						      $build,
-						      'model_gff',
-						      $the_void,
-						      $CTL_OPT
-						      );
+    while (my $key = each %{$transcripts}){
+	$annotations{$key} = group_transcripts($transcripts->{$key},
+					       $all_data,
+					       $v_seq_ref,
+					       $seq_id,
+					       $chunk_number,
+					       $build,
+					       $key,
+					       $the_void,
+					       $CTL_OPT
+					       );
     }
-
-    #---hint based gene prediction here (includes est2genome)
-    foreach my $prdr (@{$CTL_OPT->{_predictor}}){
-	next if($prdr eq 'model_gff' || $prdr eq 'pred_gff');
-	print STDERR "Producing $prdr hint based annotations\n" unless($main::quiet);
-
-	my $transcripts = run_it($bx_data,
-				 $the_void,
-				 $seq_ref,
-				 $v_seq_ref,
-				 $def,
-				 $prdr,
-				 $predictions,
-				 $CTL_OPT
-				 );
-
-	my $annot = group_transcripts($transcripts,
-				      $v_seq_ref,
-				      $seq_id,
-				      $chunk_number,
-				      $build,
-				      $prdr,
-				      $the_void,
-				      $CTL_OPT
-				      );
-
-	$annotations{$prdr} =  $annot;
-    }
-
-    #---abinit scoring here
-    print STDERR "Processing ab-initio predictions\n" if(@$pr_data && ! $main::quiet);
-
-    my $pred_trans = run_it($pr_data,
-			    $the_void,
-			    $seq_ref,
-			    $v_seq_ref,
-			    $def,
-			    'abinit', #all abinits not just pref_gff
-			    $predictions,
-			    $CTL_OPT
-			    );
-
-    my $all_ab = group_transcripts($pred_trans,
-				   $v_seq_ref,
-				   $seq_id,
-				   $chunk_number,
-				   $build,
-				   'abinit', #all abinits not_just pred_gff
-				   $the_void,
-				   $CTL_OPT
-				   );
-
-    $annotations{'abinit'} = $all_ab; #all abinit
-
-    #add abinits to their predictor type after they have been proccessed
-    #remeber they get treated differently so you want to add them as a
-    #separate step from hint based predictions.
-    foreach my $g (@$all_ab){
-	my $al = lc($g->{algorithm});
-	$al =~ s/_masked$//;
-	$al =~ s/(pred_gff).*$/$1/;
-
-	if($al =~ /^snap$|^genemark$|^augustus$|^fgenesh$|^pred_gff$/i){
-	    push(@{$annotations{$al}}, $g);
-	}
-	else{
-	    die "ERROR: Not a supported algorithm: ".$g->{algorithm}."\n";
-	}
-    }
-
-    add_abAED(\%annotations);
 
     return \%annotations;
+}
+#------------------------------------------------------------------------
+sub annotate_stats {
+    my $annots    = shift;
+    my $seq       = shift;
+    my $CTL_OPT   = shift;
+
+    my %annotations;
+    while (my $key = each %{$annots}){
+	foreach my $g (@{$annots->{$key}}){
+	    my $evidence = $g->{g_evidence};
+	    my $g_name = $g->{g_name};
+
+	    #load transcript stats
+	    my $AED = 1;
+	    my $eAED = 1;
+	    my $i = 1;
+	    my @t_structs;
+	    foreach my $s (@{$g->{t_structs}}) {
+		my $t_struct = load_transcript_stats($s, $g_name, $i, $evidence, $seq, $CTL_OPT);
+		
+		my $bad = 1 if($t_struct->{p_length} <= $CTL_OPT->{min_protein} ||
+			       $t_struct->{eAED} > $CTL_OPT->{AED_threshold}
+			       );
+
+		next if($bad && $key !~ /_abinit$/);
+
+		push(@t_structs, $t_struct);
+
+		$t_struct->{hit}->{_REMOVE} = 1 if($bad);
+		$AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
+		$eAED = $t_struct->{eAED} if($t_struct->{eAED} < $eAED);
+		$i++;
+	    }
+
+	    next if(!@t_structs);
+
+	    delete($g->{g_evidence}); #remove evidence (compact for transmission)
+	    $g->{t_structs} = \@t_structs;
+	    $g->{AED}       = $AED;
+	    $g->{eAED}      = $eAED;
+
+	    push(@{$annotations{$key}}, $g);
+	}
+    }
+    add_abAED(\%annotations);    
+
+    return \%annotations;
+}
+#------------------------------------------------------------------------
+sub annotate_finalize {
+    my $annotations = shift;
+
 }
 #------------------------------------------------------------------------
 #counts the number of nucleotides in a hit on the query sequence
@@ -930,7 +1021,6 @@ sub add_abAED{
 
     #collect all no UTR base models to get abAED
     foreach my $p (keys %$annotations){
-	next if ($p eq 'abinit'); #these are redundant inside predictor type
 	foreach my $g (@{$annotations->{$p}}){
 	    if($g->{g_strand} == 1){
 		push(@p_genes, $g);#calculate for est2genome
@@ -989,13 +1079,13 @@ sub best_annotations {
     my $out_base = shift;
     my $CTL_OPT = shift;
 
-    print STDERR "Choosing best annotations\n" unless($main::quiet);
+    my @predictors = @{$CTL_OPT->{_predictor}};
 
     my @p_keepers;
     my @m_keepers;
 
     #keep all gff3 passthrough if there's nothing else
-    if(@{$CTL_OPT->{_predictor}} == 1 && $CTL_OPT->{_predictor}->[0] eq 'model_gff'){
+    if(@predictors == 1 && $predictors[0] eq 'model_gff'){
 	my @final;
 	foreach my $g (@{$annotations->{'model_gff'}}){
 	    if($g->{g_strand} == 1){
@@ -1010,8 +1100,8 @@ sub best_annotations {
     }
     #keep all est2genome genes if mapping forward onto a new assembly
     elsif($CTL_OPT->{est_forward} &&
-	  @{$CTL_OPT->{_predictor}} == 1 &&
-	  $CTL_OPT->{_predictor}->[0] eq 'est2genome'
+	  @predictors == 1 &&
+	  $predictors[0] eq 'est2genome'
 	  ){
 	my @final;
 	foreach my $g (@{$annotations->{'est2genome'}}){
@@ -1025,15 +1115,19 @@ sub best_annotations {
 
 	return \@final;
     }
-    elsif(@{$CTL_OPT->{_predictor}}){
+    elsif(@predictors){
 	#set up lists for plus and minus strands as well as possible mergers
 	#predictor types are processed in the order given by control files
 	my $p_list = [];
 	my $m_list = [];
 	my @p_est2g;
 	my @m_est2g;
-	foreach my $p (@{$CTL_OPT->{_predictor}}){
-	    foreach my $g (@{$annotations->{$p}}){
+	foreach my $p (@predictors){
+	    my $pa = "$p\_abinit";
+	    my @hints = @{$annotations->{$p}} if($annotations->{$p});
+	    my @abinits = @{$annotations->{$pa}} if($annotations->{$pa} && $p !~ /2genome$/);
+
+	    foreach my $g (@hints, @abinits){
 		next if($g->{t_structs}->[0]->{hit}->{_REMOVE}); #added to filter low support abinits
 
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
@@ -1112,21 +1206,15 @@ sub remove_CDS_competitors {
 		last;
 	    }
 
-	    #then check abinits (slow)
-	    my $preds = $g->{g_evidence}->{all_preds};
-	    my $pAED = shadow_AED::get_eAED($preds, $t->{hit});
-	    if($pAED < 1){
-		push(@p_final,$g);
-		$add_flag = 1;
-		last;
+	    #then check exact exon overlap (exonerate est/protein)
+	    if($qi[2] > 0){
+                push(@p_final,$g);
+                $add_flag = 1;
+                last;
 	    }
 
-	    #then check exonerate proteins (slow)
-	    my $gomiph = $g->{g_evidence}->{gomiph};
-	    my $p_ex = [];
-	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_eAED($p_ex, $t->{hit});
-	    if($eAED < 1){
+	    #then check abinits
+	    if($qi[4] > 0 || $qi[5] > 0){
 		push(@p_final,$g);
 		$add_flag = 1;
 		last;
@@ -1158,21 +1246,15 @@ sub remove_CDS_competitors {
 		last;
 	    }
 
-	    #then check abinits (slow)
-	    my $preds = $g->{g_evidence}->{all_preds};
-	    my $pAED = shadow_AED::get_eAED($preds, $t->{hit});
-	    if($pAED < 1){
-		push(@m_final,$g);
-		$add_flag = 1;
-		last;
+	    #then check exact exon overlap (exonerate est/protein)
+	    if($qi[2] > 0){
+                push(@m_final,$g);
+                $add_flag = 1;
+                last;
 	    }
 
-	    #then check exonerate proteins (slow)
-	    my $gomiph = $g->{g_evidence}->{gomiph};
-	    my $p_ex = [];
-	    $p_ex = get_selected_types($gomiph,'protein2genome') if($gomiph);
-	    my $eAED = shadow_AED::get_eAED($p_ex, $t->{hit});
-	    if($eAED < 1){
+	    #then check abinits
+	    if($qi[4] > 0 || $qi[5] > 0){
 		push(@m_final,$g);
 		$add_flag = 1;
 		last;
@@ -1338,12 +1420,10 @@ sub run_it {
     my $v_seq        = shift;
     my $def          = shift;
     my $predictor    = shift;
-    my $predictions  = shift;
     my $CTL_OPT      = shift;
 
     my $q_id = Fasta::def2SeqID($def);
     my @transcripts;
-    my $i = 0;
     foreach my $set (@{$data}) {
 	my $mia      = $set->{mia};
 	my $ests     = $set->{ests};
@@ -1353,17 +1433,15 @@ sub run_it {
 	my $pol_p    = get_selected_types($gomiph,'protein2genome');
 	my $alt_ests = $set->{alt_ests};
 	my $preds    = $set->{preds};
+	my $all_preds = $set->{all_preds};
 
 	#------gff passthrough
 	if ($predictor eq 'model_gff') {
 	    next if(! defined $model);
 	    my $transcript = $model;
 
-	    my $all_preds = get_overlapping_hits($transcript, $predictions);
-	    $set->{all_preds} = $all_preds;
-	    push(@transcripts, [$transcript, $set, undef]);
+	    push(@transcripts, [$transcript, $set->{index}, undef]);
 
-	    $i++;
 	    next;
 	}
 
@@ -1406,11 +1484,10 @@ sub run_it {
 		    my $pieces = Shadower::getPieces($seq, $coors, 0);
 
 		    if(@$pieces <= 1 && $model->hsps <= 2){ # if single exon evidence model should be close
-			my $set = get_overlapping_hits($model, $predictions);
-			my $abAED = shadow_AED::get_abAED($set, $model);
+			my $abAED = shadow_AED::get_abAED($all_preds, $model);
 
 			if($abAED <= 0.25){
-			    my $bAED = shadow_AED::get_eAED($blastx,$model); #also verifies reading frame
+			    my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
 			    $remove = 0 if($bAED <= 0.25);
 			}
 		    }
@@ -1426,12 +1503,8 @@ sub run_it {
 	    #don't filter imediately just mark for downstream filtering
 	    $transcript->{_REMOVE} = $remove;
 
-	    my $all_preds = get_overlapping_hits($transcript, $predictions);
-	    $set->{all_preds} = $all_preds;
+	    push(@transcripts, [$transcript, $set->{index}, $model]);
 
-	    push(@transcripts, [$transcript, $set, $model]);
-
-	    $i++;
 	    next;
 	}
 
@@ -1450,13 +1523,9 @@ sub run_it {
 
 	    next if !$transcript;
 
-	    my $all_preds = get_overlapping_hits($transcript, $predictions);
-	    $set->{all_preds} = $all_preds;
-
 	    $transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
 
-	    push(@transcripts, [$transcript, $set, $mia]);
-	    $i++;
+	    push(@transcripts, [$transcript, $set->{index}, $mia]);
 
 	    next;
 	}
@@ -1486,11 +1555,7 @@ sub run_it {
 
 		next if(! $transcript);
 
-		my $all_preds = get_overlapping_hits($transcript, $predictions);
-		$set->{all_preds} = $all_preds;
-
-		push(@transcripts, [$transcript, $set, $miph]);
-		$i++;
+		push(@transcripts, [$transcript, $set->{index}, $miph]);
 	    }
 
 	    next;
@@ -1502,7 +1567,6 @@ sub run_it {
 	#------default hint based behavior
 	my ($pred_shots, $strand) = get_pred_shot($seq,
 						  $def,
-						  $i,
 						  $the_void,
 						  $set,
 						  $predictor,
@@ -1559,11 +1623,10 @@ sub run_it {
 		    }
 		    
 		    if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
-			my $set = get_overlapping_hits($h, $predictions);
 			#make sure ab initio evidence can support a single exon alignment
 			#this step not needed in ab inits because the test model is an abinit model
-			if(grep {$_->hsps <= 2} @$set){
-			    my $abAED = shadow_AED::get_abAED($set, $h);
+			if(grep {$_->hsps <= 2} @$all_preds){
+			    my $abAED = shadow_AED::get_abAED($all_preds, $h);
 			    
 			    if($abAED <= 0.25){
 				my $bAED = shadow_AED::get_eAED($blastx, $h);
@@ -1591,13 +1654,9 @@ sub run_it {
 		    $transcript = pneu($ests, $transcript, $seq);
 		}
 
-		my $all_preds = get_overlapping_hits($transcript, $predictions);
-		$set->{all_preds} = $all_preds;
-
-		push(@transcripts, [$transcript, $set, $pred_shot]);
+		push(@transcripts, [$transcript, $set->{index}, $pred_shot]);
 	    }
 	}
-	$i++;
     }
 
     return \@transcripts;
@@ -1607,7 +1666,6 @@ sub run_it {
 sub get_pred_shot {
    my $seq         = shift;
    my $def         = shift;
-   my $set_id      = shift;
    my $the_void    = shift;
    my $set         = shift;
    my $predictor   = shift;
@@ -1623,7 +1681,6 @@ sub get_pred_shot {
 	   my $pred_command = $CTL_OPT->{snap}.' '.$hmm;
 	   (my $preds, $strand) = Widget::snap::get_pred_shot($seq,
 							      $def,
-							      $set_id,
 							      $the_void,
 							      $set,
 							      $CTL_OPT->{pred_flank},
@@ -1648,7 +1705,6 @@ sub get_pred_shot {
 	   my $pred_command = $CTL_OPT->{augustus}.' --species='.$hmm;
 	   (my $preds, $strand) = Widget::augustus::get_pred_shot($seq,
 								  $def,
-								  $set_id,
 								  $the_void,
 								  $set,
 								  $CTL_OPT->{pred_flank},
@@ -1673,7 +1729,6 @@ sub get_pred_shot {
 	   my $pred_command = $CTL_OPT->{fgenesh}.' '.$hmm;
 	   (my $preds, $strand) = Widget::fgenesh::get_pred_shot($seq,
 								 $def,
-								 $set_id,
 								 $the_void,
 								 $set,
 								 $CTL_OPT->{pred_flank},
@@ -1708,15 +1763,14 @@ sub load_transcript_struct {
 	my $g_name       = shift;
 	my $i            = shift;
 	my $seq          = shift;
-	my $evi          = shift;
 	my $p_base       = shift;
-	my $the_void     = shift;
+	my $predictor    = shift;
 	my $CTL_OPT      = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	if($p_base && $p_base->algorithm !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
+	if($predictor !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
 	    #walk out edges to force completion
 	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
 		$f = PhatHit_utils::adjust_start_stop($f, $seq);
@@ -1739,30 +1793,7 @@ sub load_transcript_struct {
 
 	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
 	my $t_id = ($f->{_tran_id}) ? $f->{_tran_id} : $t_name; #affects GFFV3.pm
-
-	my $pol_p_hits  = get_selected_types($evi->{gomiph}, 'protein2genome');
-	my $pol_e_hits  = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
-	my $blastx_hits = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
-	my $tblastx_hits = get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
-	my $abinits = $evi->{all_preds};
-
-	my @bag = (@$pol_p_hits,
-		   @$pol_e_hits,
-		   @$blastx_hits,
-		   @$tblastx_hits
-		  );
-
-	#evidence AED
-	my $AED = shadow_AED::get_AED(\@bag, $f);
-	my $eAED = shadow_AED::get_eAED(\@bag, $f, $seq);
-	my $qi    = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
 	$f->name($t_name);
-
-	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
-	    $p_base->name($t_name);
-	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
-	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
-	}
 
 	my $t_struct = {'hit'       => $f,
 			't_seq'     => $transcript_seq,
@@ -1771,17 +1802,79 @@ sub load_transcript_struct {
 			't_end'     => $end,
 			't_name'    => $t_name,
 			't_id'      => $t_id,
-			't_qi'      => $qi,
-			'AED'       => $AED,
-			'eAED'      => $eAED,
 			'has_start' => $has_start,
 			'has_stop'  => $has_stop,
-			'evi'       => $evi,
 			'p_base'    => $p_base,
 			'p_length'  => length($translation_seq)
 		    };
 
 	return $t_struct;
+}
+#------------------------------------------------------------------------
+#takes the gene predictions and evidence and builds transcript name,
+#QI, AED and gets protein and mRNA sequence then puts it al into a
+#HASH.  Called by group transcripts. Transcript name is set here, as
+#well as final UTR boudaries
+sub load_transcript_stats {
+	my $struct       = shift;
+	my $g_name       = shift;
+	my $i            = shift;
+	my $evi          = shift;
+	my $seq          = shift;
+	my $CTL_OPT      = shift;
+
+	my $f               = $struct->{hit};
+	my $p_base          = $struct->{p_base};
+	my $offset          = $struct->{t_offset};
+	my $end             = $struct->{t_end};
+	my $transcript_seq  = $struct->{t_seq};
+	my $translation_seq = $struct->{p_seq};
+
+	my $len_3_utr = length($transcript_seq) - $end + 1;
+	my $l_trans   = length($translation_seq);
+
+	my $pol_p_hits   = get_selected_types($evi->{gomiph}, 'protein2genome');
+	my $pol_e_hits   = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
+	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
+	my $tblastx_hits = get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
+	my $abinits      = $evi->{all_preds};
+
+	my @bag = (@$pol_p_hits,
+		   @$pol_e_hits,
+		   @$blastx_hits,
+		   @$tblastx_hits
+		  );
+
+	#evidence AED
+	my $AED  = shadow_AED::get_AED(\@bag, $f);
+	my $eAED = shadow_AED::get_eAED(\@bag, $f, $seq);
+	my $qi   = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
+	$f->{_AED}  = $AED;
+	$f->{_eAED} = $eAED;
+
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
+	    $p_base->name($f->name);
+	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
+	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
+	}
+
+	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
+	my $t_id = ($f->{_tran_id}) ? $f->{_tran_id} : $t_name; #affects GFFV3.pm
+
+	#double check name (mRNA count may have changed)
+	if($f->name ne $t_name){
+	    $struct->{t_name} = $t_name;
+	    $struct->{t_id}   = $t_id;
+	    $f->name($t_name);
+	}
+
+	#add statistics to existing data structure
+	$struct->{hit}  = $f;
+	$struct->{t_qi} = $qi;
+	$struct->{AED}  = $AED;
+	$struct->{eAED} = $eAED;
+
+	return $struct;
 }
 #------------------------------------------------------------------------
 #takes an array of annotations and only returns those that overlap a maker
@@ -1865,6 +1958,7 @@ sub get_non_overlapping {
 #based on the gene_id given in the phat_hit structure and not by overlap.
 
 sub group_transcripts {
+   my $transcripts  = shift;
    my $data         = shift;
    my $seq          = shift;
    my $seq_id       = shift;
@@ -1883,24 +1977,28 @@ sub group_transcripts {
    my %p_bases;
    my %snap_lookup;
    my $temp_id = 0;
-   foreach my $datum (@{$data}) {
-      my $tra       = $datum->[0];
-      my $set       = $datum->[1];
-      my $p_base    = $datum->[2]; # added 12-15-2006
+   foreach my $s (@$transcripts){
+       my $tra    = $s->[0];
+       my $set    = $data->[$s->[1]];
+       my $p_base = $s->[2];
 
-      $tra->{set_id} = $temp_id;
+       #may overlap more predictions than seen in original cluster
+       #my $all_preds = get_overlapping_hits($tra, $predictions);
+       #$set->{all_preds} = $all_preds;
 
-      push(@transcripts, $tra);
-
-      $lookup{$temp_id} = $set;
-      $p_bases{$temp_id} = $p_base;
+       $tra->{set_id} = $temp_id;
+       $lookup{$temp_id} = $set;
+       $p_bases{$temp_id} = $p_base;
+       push(@transcripts, $tra);
       $temp_id++;
    }
 
    #cluster the transcripts to get genes
    my $careful_clusters = [];
 
-   if ($predictor =~ /^model_gff$|^abinit$/ || ($predictor =~ /^est2genome$/ && $CTL_OPT->{est_forward})) {
+   if ($predictor =~ /^model_gff$|_abinit$|^pred_gff$/ ||
+       ($predictor =~ /^est2genome$/ && $CTL_OPT->{est_forward})
+       ) {
        my @to_do;
        my %index;
        my $i = @$careful_clusters;
@@ -1949,8 +2047,6 @@ sub group_transcripts {
    my $c_id = 0;
    my @annotations;
    foreach my $c (@$careful_clusters) {
-      my @t_structs;
-
       #build gene name here
       my %pred_sources;
       foreach my $f (@{$c}) {
@@ -1974,7 +2070,7 @@ sub group_transcripts {
 	     $SEEN->{$1}++;
 	 }
       }
-      elsif ($predictor eq 'abinit') {
+      elsif ($predictor =~ /_abinit$/) {
 	  #now check for preexisting name
 	  if ($c->[0]->{gene_name} || $c->[0]->{gene_id}){
 	      $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
@@ -2032,44 +2128,32 @@ sub group_transcripts {
       foreach my $f (@{$c}) {
 	  my $evi = defined($f->{set_id}) ? $lookup{$f->{set_id}} : {};
 	  merge_evidence($evidence, $evi);
+	  push(@{$evidence->{index}}, $evi->{index});
       }
 
       #load transcript structs
-      my $AED = 1;
-      my $eAED = 1;
-      my $p_length = 0;
       my $i = 1;
+      my @t_structs;
       foreach my $f (@{$c}) {
-	 my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
-
-	 my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $evidence, $p_base, $the_void, $CTL_OPT);
-
-	 push(@t_structs, $t_struct) unless ($t_struct->{p_length} <= $CTL_OPT->{min_protein} ||
-					     $t_struct->{eAED} > $CTL_OPT->{AED_threshold}
-					     );
-
-	 $AED = $t_struct->{AED} if($t_struct->{AED} < $AED);
-	 $eAED = $t_struct->{eAED} if($t_struct->{eAED} < $eAED);
-	 $i++;
-      }
-
-      if(! @t_structs){
-	  $c_id++;
-	  next;
+	  my $p_base = defined($f->{set_id}) ? $p_bases{$f->{set_id}} : undef;
+		
+	  my $t_struct = load_transcript_struct($f, $g_name, $i, $seq, $p_base, $predictor, $CTL_OPT);
+		
+	  push(@t_structs, $t_struct);
+	  $i++;
       }
 
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
       my $g_attrib = (exists $t_structs[0]->{hit}->{gene_attrib}) ? $t_structs[0]->{hit}->{gene_attrib} : undef;
 
-      my $annotation = { 't_structs'  => \@t_structs,
+      my $annotation = { 't_structs'  => \@t_structs, 
 			 'g_name'     => $g_name,
 			 'g_id'       => $g_id,
 			 'g_start'    => $g_start,
 			 'g_end'      => $g_end,
 			 'g_strand'   => $g_strand,
 			 'g_evidence' => $evidence,
-			 'AED'        => $AED,
-			 'eAED'       => $eAED,
+			 'g_evi_index'=> $evidence->{index},
 			 'predictor'  => $predictor,
 			 'algorithm'  => $sources,
 			 'g_attrib'   => $g_attrib
@@ -2082,14 +2166,13 @@ sub group_transcripts {
    return \@annotations;
 }
 #------------------------------------------------------------------------
-#merges evidence of data supporting annotaitons.  Merges them so that
+#merges evidence of data supporting annotations.  Merges them so that
 #all members are uniq and not repeated.  This is important for combining
 #evidence from mutliple transcripts as a single gene.
 
 sub merge_evidence {
     my $evi1 = shift;
     my $evi2 = shift;
-
 
     while(my $key = each %$evi2){
 	next if(ref($evi2->{$key}) ne 'ARRAY');
@@ -2394,31 +2477,32 @@ sub get_non_overlaping_abinits {
 #------------------------------------------------------------------------
 #called by group_transcripts to get gene start and gene end
 sub get_start_and_end_on_seq {
-	my $transcripts = shift;
-
-	my @exons;
-	foreach my $t (@{$transcripts}){
-		my $phat_hit = $t->{hit};
-
-		foreach my $hsp ($phat_hit->hsps){
-			push(@exons, $hsp);
-		}
+    my $transcripts = shift;
+    
+    my @exons;
+    foreach my $t (@{$transcripts}){
+	my $phat_hit = $t->{hit};
+	
+	foreach my $hsp ($phat_hit->hsps){
+	    push(@exons, $hsp);
 	}
-	if(! @exons){
-	    return;
-	}
-	my @sorted_b = sort {$a->start('query') <=> $b->start('query')} @exons;
-	my @sorted_e = sort {$b->end('query')   <=> $a->end('query')}   @exons;
+    }
 
-	my $ref = ref($sorted_b[0]);
+    if(! @exons){
+	return;
+    }
 
-	my $g_start = $sorted_b[0]->start('query');
-	my $g_end   = $sorted_e[0]->end('query');
-
-	my $strand  = $sorted_b[0]->strand('query');
-
-	return ($g_start, $g_end, $strand);
-
+    my @sorted_b = sort {$a->start('query') <=> $b->start('query')} @exons;
+    my @sorted_e = sort {$b->end('query')   <=> $a->end('query')}   @exons;
+    
+    my $ref = ref($sorted_b[0]);
+    
+    my $g_start = $sorted_b[0]->start('query');
+    my $g_end   = $sorted_e[0]->end('query');
+    
+    my $strand  = $sorted_b[0]->strand('query');
+    
+    return ($g_start, $g_end, $strand);    
 }
 #------------------------------------------------------------------------
 #takes an array of phathits and returns only those of a given algorithm

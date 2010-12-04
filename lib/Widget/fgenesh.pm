@@ -204,7 +204,6 @@ sub total_score {
 sub get_pred_shot {
 	my $seq           = shift;
         my $def           = shift;
-        my $id            = shift;
         my $the_void      = shift;
         my $set           = shift;
         my $pred_flank    = shift;
@@ -218,7 +217,8 @@ sub get_pred_shot {
 	    $strand,
 	    $offset,
 	    $xdef) = prep_for_genefinder($seq, $set, $pred_flank, $alt_splice);
-
+        my $id = $set->{c_id}.'_'.$set->{set_id};
+        my $end = $offset + length($$shadow_seq);
         my $shadow_fasta = Fasta::toFastaRef($def." $id offset:$offset",
                                           $shadow_seq,
                                          );
@@ -228,6 +228,7 @@ sub get_pred_shot {
                                   $id,
                                   $strand,
                                   $offset,
+				  $end,
                                   $xdef,
                                   $pred_command,
 				  $hmm
@@ -244,6 +245,7 @@ sub fgenesh {
         my $seq_id     = shift;
         my $strand     = shift;
         my $offset     = shift;
+	my $end        = shift;
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
@@ -252,11 +254,11 @@ sub fgenesh {
 
 	my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
 
-	my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.fgenesh.fasta";
+	my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh.fasta";
 
-        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.fgenesh";
+        my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.fgenesh";
+        my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.fgenesh";
                             
         $command = $wrap . " $command"; #prepend wrapper
 	$command .= " $file_name";

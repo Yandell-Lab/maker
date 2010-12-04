@@ -201,8 +201,8 @@ sub _prepare {
    $VARS->{holdover_model_gff}  = [];
    
    #-set up variables that are the result of chunk accumulation
-   my $empty = ''; #empty seq
-   $VARS->{masked_total_seq} = \$empty;
+   my $empty;
+   $VARS->{masked_total_seq} = \$empty; #empty scalar ref
    $VARS->{p_fastas} = {};
    $VARS->{t_fastas} = {};
    
@@ -1912,23 +1912,17 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 18) {	#annotations
-	 $level_status = 'calculating annotations';
+      elsif ($level == 18) {	#prep hint clusters
+	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    my $chunk = new Process::MpiChunk($level, $VARS);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    @args = (qw{chunk
-			the_void
-			out_dir
-			q_seq_ref
-			build
-			fasta
-			masked_fasta
+      	 elsif ($flag eq 'init') {
+            #------------------------ARGS_IN
+	    @args = (qw{q_seq_ref
 			tblastx_keepers
 			blastx_keepers
 			blastn_keepers
@@ -1941,7 +1935,6 @@ sub _go {
 			prot_gff_keepers
 			pred_gff_keepers
 			model_gff_keepers
-			LOG
 			CTL_OPT}
 		    );
 	    #------------------------ARGS_IN
@@ -1949,13 +1942,7 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $chunk = $VARS->{chunk};
-	    my $the_void = $VARS->{the_void};
-	    my $out_dir = $VARS->{out_dir};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $build = $VARS->{build};
-	    my $fasta = $VARS->{fasta};
-	    my $masked_fasta = $VARS->{masked_fasta};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
@@ -1968,9 +1955,27 @@ sub _go {
 	    my $prot_gff_keepers = $VARS->{prot_gff_keepers};
 	    my $pred_gff_keepers = $VARS->{pred_gff_keepers};
 	    my $model_gff_keepers = $VARS->{model_gff_keepers};
-	    my $LOG = $VARS->{LOG};
+
+	    #trim evidence down to size if specified
+	    if($CTL_OPT{fast}){
+		my @sets = ($blastn_keepers,
+			    $tblastx_keepers,
+			    $blastx_keepers,
+			    $exonerate_e_data,
+			    $exonerate_a_data,
+			    $exonerate_p_data,
+			    $est_gff_keepers,
+			    $altest_gff_keepers,
+			    $prot_gff_keepers);
+
+		#replace actual values
+		foreach my $set (@sets) {
+		    @$set = map {@$_} @{clean_and_cluster($set, ,$q_seq_ref, 10)};
+		}
+	    }
 
 	    #combine final data sets
+	    print STDERR "Preparing evidence for hint based annotation\n" unless($main::quiet);
 	    my $final_est = GI::combine($exonerate_e_data,
 					$est_gff_keepers
 					);
@@ -1994,24 +1999,264 @@ sub _go {
 					 $pred_gff_keepers
 					);
 
+	    #group evidence for annotation
+	    my $all_data = maker::auto_annotator::prep_hits($final_prot,
+							    $final_est,
+							    $final_altest,
+							    $final_pred,
+							    $model_gff_keepers,
+							    $q_seq_ref,
+							    $CTL_OPT{single_exon},
+							    $CTL_OPT{single_length},
+							    $CTL_OPT{pred_flank},
+							    $CTL_OPT{organism_type},
+							    $CTL_OPT{est_forward}
+							    );
+	    #-------------------------CODE
+	 
+	    #------------------------RETURN
+	    %results = (all_data => $all_data);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 19) {	#annotate transcripts
+	 $level_status = 'annotating transcripts';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    $VARS->{trans} = {}; #reset
+	    my @data_sets;
+	    for(my $i = 0; $i < @{$VARS->{all_data}}; $i++){
+		my $j = $i % $VARS->{CTL_OPT}->{_mpi_size};
+		push(@{$data_sets[$j]}, $VARS->{all_data}->[$i]);
+	    }
+
+	    foreach my $dc (@data_sets){
+                $VARS->{dc} = $dc;
+		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
+                my $chunk = new Process::MpiChunk($level, $VARS);
+                push(@chunks, $chunk);
+            }
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw{the_void
+			q_def
+			seq_id
+			q_seq_ref
+			masked_total_seq
+			dc
+			LOG
+			LOG_FLAG
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $q_def = $VARS->{q_def};
+	    my $seq_id = $VARS->{seq_id};
+	    my $dc = $VARS->{dc};
+	    my $the_void = $VARS->{the_void};
+	    my $LOG = $VARS->{LOG};
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
+	    
 	    #####working here###########
-	    #==MAKER annotations built here
-	    #-auto-annotate the input file
-	    my $annotations = maker::auto_annotator::annotate($fasta,
-							      $masked_fasta,
-							      $chunk->number(),
-							      $final_prot,
-							      $final_est,
-							      $final_altest,
-							      $final_pred,
-							      $model_gff_keepers,
+	    #==MAKER hint based predictions and annotations built here
+	    #process transcripts
+	    print STDERR "Making transcripts\n" unless($main::quiet || !$LOG_FLAG);
+	    my $trans = maker::auto_annotator::annotate_trans($q_seq_ref,
+							      $masked_total_seq,
+							      $q_def,
+							      $seq_id,
+							      $dc,
 							      $the_void,
-							      $build,
 							      \%CTL_OPT,
 							      $LOG
-							     );
+							      );
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = (trans => $trans);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		while (my $src = each %{$self->{RESULTS}->{$key}}){
+		    push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
+		}
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 20) {	#grouping transcripts into genes
+	 $level_status = 'clustering transcripts into genes for annotations';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+      	 elsif ($flag eq 'init') {
+            #------------------------ARGS_IN
+	    @args = (qw{trans
+			all_data
+			q_seq_ref
+			seq_id
+			chunk
+			build
+			the_void
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $trans = $VARS->{trans};
+	    my $all_data = $VARS->{all_data};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $seq_id = $VARS->{seq_id};
+	    my $chunk = $VARS->{chunk};
+	    my $build = $VARS->{build};
+	    my $the_void = $VARS->{the_void};
+
+	    #group transcriipts into genes
+	    print STDERR "Processing transcripts into genes\n" unless($main::quiet);
+	    my $annotations = maker::auto_annotator::annotate_genes($trans,
+								    $all_data,
+								    $q_seq_ref,
+								    $seq_id,
+								    $chunk->number(),
+								    $build,
+								    $the_void,
+								    \%CTL_OPT
+								    );
+	    #-------------------------CODE
+	 
+	    #------------------------RETURN
+	    %results = (annotations   => $annotations);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 21) {	#adding quality control statistics
+	 $level_status = 'adding statistics to annotations';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my @data_sets;
+	    my $i = 0;
+	    while (my $key = each %{$VARS->{annotations}}){ 
+		foreach my $an (@{$VARS->{annotations}->{$key}}){
+		    my $j = $i % $VARS->{CTL_OPT}->{_mpi_size};
+		    push(@{$data_sets[$j]{$key}}, $an);
+		    $i++;
+		}
+	    }
+	     
+	    foreach my $an (@data_sets){
+		$VARS->{an} = $an;
+		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
+		my $chunk = new Process::MpiChunk($level, $VARS);
+		push(@chunks, $chunk);
+	    }
+	    $VARS->{annotations} = {}; #reset
+	    #-------------------------CHUNKER
+	 }
+      	 elsif ($flag eq 'init') {
+            #------------------------ARGS_IN
+	    @args = (qw{q_seq_ref
+			an
+			LOG_FLAG
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $an = $VARS->{an};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $LOG_FLAG = $VARS->{LOG_FLAG};
+
+	    #adds AED and other quality control statistics (can change names)
+	    print STDERR "Calculating annotation quality statistics\n" unless($main::quiet || !$LOG_FLAG);
+	    my $annotations = maker::auto_annotator::annotate_stats($an,
+								    $q_seq_ref,
+								    \%CTL_OPT);
+	    #-------------------------CODE
+	 
+	    #------------------------RETURN
+	    %results = (annotations => $annotations);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		while (my $src = each %{$self->{RESULTS}->{$key}}){
+		    push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
+		}
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($level == 22) {	#deciding on final annotations
+	 $level_status = 'choosing best annotation set';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+      	 elsif ($flag eq 'init') {
+            #------------------------ARGS_IN
+	    @args = (qw{annotations
+			out_dir
+			CTL_OPT}
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $annotations = $VARS->{annotations};
+	    my $out_dir = $VARS->{out_dir};
 
 	    #get best annotations
+	    print STDERR "Choosing best annotations\n" unless($main::quiet);
 	    my $maker_anno = maker::auto_annotator::best_annotations($annotations,
 								     $out_dir,
 								     \%CTL_OPT
@@ -2039,18 +2284,30 @@ sub _go {
 
 	    #run evaluator if specified
 	    if($CTL_OPT{evaluate}){
-		evaluator::evaluate::evaluate_maker_annotations($maker_anno,
-								$q_seq_ref,
-								$out_dir,
-								$the_void,
-								\%CTL_OPT
-								);
+		#evaluator::evaluate::evaluate_maker_annotations($maker_anno,
+		#						$q_seq_ref,
+		#						$out_dir,
+		#						$the_void,
+		#						\%CTL_OPT
+		#						);
 	    }
-	    
+
+	    #get AED scored preds for GFF3
+	    my @scored_preds;
+	    while(my $key = each %$annotations){
+		next unless($key =~ /_abinit$|^pred_gff$/);
+		
+		foreach my $g (@{$annotations->{$key}}){
+		    my @p_bases = map {$_->{p_base}} @{$g->{t_structs}};
+		    push(@scored_preds, @p_bases);
+		}
+	    }
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (maker_anno => $maker_anno, annotations => $annotations, non_over => $non_over);
+	    %results = (maker_anno => $maker_anno,
+			non_over => $non_over,
+			scored_preds => \@scored_preds);
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
@@ -2065,7 +2322,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 19) {	#local output
+      elsif ($level == 23) {	#local output
 	 $level_status = 'processing chunk output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2088,8 +2345,7 @@ sub _go {
 			est_gff_keepers
 			altest_gff_keepers
 			prot_gff_keepers
-			pred_gff_keepers
-			preds_on_chunk
+			scored_preds
 			p_fastas
 			t_fastas
 			GFF3}
@@ -2111,8 +2367,7 @@ sub _go {
 	    my $est_gff_keepers = $VARS->{est_gff_keepers};
 	    my $altest_gff_keepers = $VARS->{altest_gff_keepers};
 	    my $prot_gff_keepers = $VARS->{prot_gff_keepers};
-	    my $pred_gff_keepers = $VARS->{pred_gff_keepers};
-	    my $preds_on_chunk = $VARS->{preds_on_chunk};
+	    my $scored_preds = $VARS->{scored_preds};
 	    my $p_fastas = $VARS->{p_fastas};
 	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};
@@ -2130,8 +2385,7 @@ sub _go {
 	    $GFF3->add_phathits($est_gff_keepers);
 	    $GFF3->add_phathits($altest_gff_keepers);
 	    $GFF3->add_phathits($prot_gff_keepers);
-	    $GFF3->add_phathits($preds_on_chunk);
-	    $GFF3->add_phathits($pred_gff_keepers);
+	    $GFF3->add_phathits($scored_preds);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
 	    #--- building fastas for annotations (grows with iteration)
@@ -2164,7 +2418,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 20) {	#global output
+      elsif ($level == 24) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER

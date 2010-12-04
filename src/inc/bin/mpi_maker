@@ -1026,6 +1026,11 @@ else {
 		}
 	    }
 
+	    #nothing provided and nothing to advance to (wait)
+	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){
+		sleep 1;
+	    }
+
 	    #finally run local chunk if there is one
 	    if(defined($chunk)){
 		my $r_chunk = $chunk; #running chunk

@@ -541,7 +541,7 @@ sub do_unlock_shared ($) {
   my $id_line = '';
   my $content = '';
   while(defined(my $line=<_FH>)){
-    next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
+    next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/;
     #ignore shared hosts where lock appears to be stale
     next if ($self->{stale_lock_timeout} > 0 &&
 	     time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
@@ -725,7 +725,7 @@ sub still_mine {
     ### read existing file
     my $mine = 0;
     while(defined(my $line = <_FH>)){
-	if ($line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/){
+	if ($line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/){
 	    $mine = 1;
 	    last;
 	}
@@ -784,15 +784,21 @@ sub owners {
     my $count = 0;
     $count++ if($self->still_mine); #I am almost always an owner
 
+    my %seen;
     while(defined(my $line=<_FH>)){
-	next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+ $id\n/;
+	next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/;
 	#ignore shared hosts where lock appears to be stale
 	next if ($self->{stale_lock_timeout} > 0 &&
 		 time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
 		 );
+
+	$line =~ /^([^\s]+\s+\d+)\s+\d+/;
+	next if($seen{$1});
+	$seen{$1}++;
+
 	#ignore processes that appear to be dead on this host
 	next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
-	#ignire id line
+	#ignore id line
 	next if ($line !~ / /);
 
 	$count++;

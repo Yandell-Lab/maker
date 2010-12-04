@@ -126,23 +126,22 @@ sub confirm_snaps {
 }
 #------------------------------------------------------------------------
 sub confirm_exons {
-        my $t    = shift;
-        my $hits = shift;
+    my $t    = shift;
+    my $hits = shift;
+    
+    my $exon_coors_t = get_exon_coors($t);
 
-        my $exon_coors_t = get_exon_coors($t);
-
-        my @all_supporting_data_exon_coors;
-        foreach my $hit (@{$hits}){
-                my $exon_coors_h = get_exon_coors($hit);
-                push(@all_supporting_data_exon_coors, $exon_coors_h);
-        }
-
-        my $num_confirmed = 0;
-        foreach my $t_e (@{$exon_coors_t}){
-                $num_confirmed++
-                if confirm($t_e, \@all_supporting_data_exon_coors);
-        }
-        return $num_confirmed;
+    my @all_supporting_data_exon_coors;
+    foreach my $hit (@{$hits}){
+	my $exon_coors_h = get_exon_coors($hit);
+	push(@all_supporting_data_exon_coors, $exon_coors_h);
+    }
+    
+    my $num_confirmed = 0;
+    foreach my $t_e (@{$exon_coors_t}){
+	$num_confirmed++ if confirm($t_e, \@all_supporting_data_exon_coors);
+    }
+    return $num_confirmed;
 }
 #------------------------------------------------------------------------
 sub confirm {
@@ -235,7 +234,7 @@ sub get_transcript_qi {
 	push(@bag, @{$gomiph}) if defined($gomiph);
 	push(@bag, @{$ests})   if defined($ests);
 
-	my $pol_est_hits = maker::auto_annotator::get_selected_types($ests, 'est2genome');
+	my $pol_est_hits = maker::auto_annotator::get_selected_types($ests, 'est2genome', 'est_gff');
 	my $pol_pro_hits =  maker::auto_annotator::get_selected_types($gomiph, 'protein2genome');
 
 	my @good_splicers;
@@ -255,7 +254,7 @@ sub get_transcript_qi {
 
 	$qi .= "|$frac_confirmed";
 
-	# frac. exons perfectly tagged by an est2genome or protein2genome hit
+	# frac. exons perfectly tagged by an est2genome, protein2genome, or est_gff hit
 	$num_confirmed  = confirm_exons($t, \@good_splicers);
 	$frac_confirmed = substr($num_confirmed/$num_e, 0, 4);
 
@@ -267,7 +266,7 @@ sub get_transcript_qi {
 	
 	$qi .= "|$frac_confirmed";
 
-        #  fra. of splices confirmed confirmed by a snap abinitio prediction
+        #  fra. of splices confirmed confirmed by an abinitio prediction
         $num_confirmed  = $num_i == 0 ? -1 : confirm_splices($t, $snap_abinits);
         $frac_confirmed = $num_i == 0 ? -1 : substr($num_confirmed/$num_i, 0, 4);
 

@@ -49,7 +49,7 @@ sub get_blocks {
 	local $/ = "\n";
 
 	#checks if exonerate really finished
-	unless(grep {/completed exonerate analysis/} $chunks[-1]){
+	unless(@chunks && grep {/completed exonerate analysis/} $chunks[-1]){
 	    unlink($file);
 	    die "ERROR: The file $file appears to be incomplete\n".
 		"MAKER will need to delete the file, before trying again\n\n";

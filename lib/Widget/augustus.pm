@@ -39,7 +39,6 @@ sub new {
 sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
-        my $id            = shift;
         my $the_void      = shift;
         my $set           = shift;
         my $pred_flank    = shift;
@@ -50,14 +49,13 @@ sub get_pred_shot {
 	   $LOG           = shift;
 
 	my $q_id = Fasta::def2SeqID($def);
-
+        my $id = $set->{c_id}.'_'.$set->{set_id};
         my ($shadow_seq, $strand, $offset, $xdef) =
             prep_for_genefinder($seq, $set, $pred_flank, $alt_splice, $id, $q_id);
-
+        my $end = $offset + length($$shadow_seq);
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,
                                          );
-
 
         my $alt_aug_command;
         if ($strand == 1){
@@ -72,6 +70,7 @@ sub get_pred_shot {
                                   $id,
                                   $strand,
                                   $offset,
+				  $end,
                                   $xdef,
                                   $alt_aug_command,
 				  $hmm
@@ -138,6 +137,7 @@ sub augustus {
         my $seq_id     = shift;
         my $strand     = shift;
         my $offset     = shift;
+	my $end        = shift;
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
@@ -145,11 +145,11 @@ sub augustus {
         my $aug_keepers = [];
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
 
-        my $file_name = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.augustus.fasta";
+        my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus.fasta";
 
-        my $o_file    = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.augustus";
+        my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
 
-        my $xdef_file = "$the_void/$seq_id\.$offset\.$hmm_name\.auto_annotator\.xdef\.augustus";
+        my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.augustus";
 
         my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
 
@@ -293,12 +293,13 @@ sub parse_gene {
 
 	shift(@{$stuff});
 
+	return if(!@{$stuff});
+
 	my %this_gene;
 	my $i = 0;
 	my $gene_name;
 	my $score;
 	foreach my $datum (@{$stuff}){
-
 		next if $datum =~ /\# end gene/;
 
 		my @fields = split(/\s+/, $datum);
@@ -424,6 +425,8 @@ sub parse {
 		my @stuff = split(/\n/, $line);
 
 		my $t_count = grep {/^[^\#]/ && /^[^\s]+\s+AUGUSTUS\s+transcript\s+/} @stuff;
+
+		next unless(@stuff > 1); #empty report
 
 		#augustus can call multiple transcripts for inconsistent hints
 		if($t_count > 1){
@@ -683,7 +686,6 @@ sub load_phat_hits {
 		maker::auto_annotator::get_translation_seq($seq, $f);
 		
               	push(@keepers, $f);
-
         }
         return keepers(\@keepers, $params);
 

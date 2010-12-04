@@ -527,7 +527,7 @@ sub split_db {
        die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
 
        my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
-       my $bins = (int(($mpi_size/@entries)/10) +1)*10;
+       my $bins = ($mpi_size % 10 == 0) ? (int($mpi_size/@entries)/10)*10 : (int(($mpi_size/@entries)/10) +1)*10;
        $bins = $max_bins if ($max_bins < $bins);
        
        my ($f_name) = $file =~ /([^\/]+)$/;
@@ -3436,6 +3436,7 @@ sub load_control_files {
    }
 
    #---set up blast databases and indexes for analyisis
+   $CTL_OPT{_mpi_size} = $mpi_size;
    create_blastdb(\%CTL_OPT, $mpi_size);
    build_all_indexes(\%CTL_OPT);
 
