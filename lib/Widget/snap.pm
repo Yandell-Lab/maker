@@ -238,6 +238,7 @@ sub process_hints {
 	    
 	    my $t_seq  = maker::auto_annotator::get_transcript_seq($e, $seq);
 	    my ($p_seq, $poffset) = $tM->longest_translation($t_seq);
+	    my $end = $poffset + (length($p_seq) * 3 + 1);
 
 	    if($poffset < 3 && length($t_seq) - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
 		foreach my $hsp ($e->hsps){
@@ -264,14 +265,18 @@ sub process_hints {
 
 	    #if not all orf test internal HSPs
 	    next if($e->num_hsps() < 2);
-	    foreach my $hsp ($e->hsps){
-		next if($hsp->start('query') == $e->start('query')); #skip first HSP
-		next if($hsp->end('query') == $e->end('query')); #skip last HSP
-
+	    next if((3 * length($p_seq)) / length($t_seq) < 0.5); #skip unless orf at least 50% of EST
+	    my $pos = 0;
+	    foreach my $hsp (PhatHit_utils::sorted_hits($e)){
 		my $B = $hsp->start('query');
 		my $E = $hsp->end('query');
 		my $L = abs($E - $B) + 1;
+		$pos += $L;
 
+		next unless(($offset < ($pos - $L) + 1) && ($pos < $end)); #skip not fully orf exons
+		next if($hsp->start('query') == $e->start('query')); #skip first HSP
+		next if($hsp->end('query') == $e->end('query')); #skip last HSP
+		next if($L < 3); #can't be translated
 		next if($seen{$B}{$E}); #skip redundant HSPs
 		$seen{$B}{$E}++;
 		
