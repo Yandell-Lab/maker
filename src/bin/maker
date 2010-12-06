@@ -172,7 +172,7 @@ try{
 	       "check" =>\$OPT{check},
 	       "base=s" =>\$OPT{out_name},
 	       "datastore!" =>\$OPT{datastore},
-	       "fast" =>\$main::fast,
+	       "fast" =>\$OPT{fast},
 	       "dtmp" =>\$main::dtmp,
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},

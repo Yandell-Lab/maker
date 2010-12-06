@@ -1980,7 +1980,7 @@ sub _go {
 
 		#replace actual values
 		foreach my $set (@sets) {
-		    @$set = map {@$_} @{clean_and_cluster($set, ,$q_seq_ref, 10)};
+		    @$set = map {@$_} @{cluster::clean_and_cluster($set, ,$q_seq_ref, 10)};
 		}
 	    }
 

@@ -47,22 +47,16 @@ sub clean_and_cluster {
 			unless $main::quiet;
 		my $clean = clean::complexity_filter($c, $seq);
 
-		if(! $main::fast){
-		    next if(! @$clean);
-		    push(@{$clean_clusters[$counter]}, @$clean);
+		my $alts = clean::get_best_alt_splices($clean, $seq, 10);
+		my $i = 0;
+		my @new_cluster;
+		foreach my $a (@{$alts}){
+		    push(@new_cluster, $a);
+		    last if ($i > $depth && $depth > 0);
+		    $i++;
 		}
-		else{
-		    my $alts = clean::get_best_alt_splices($clean, $seq, 10);
-		    my $i = 0;
-		    my @new_cluster;
-		    foreach my $a (@{$alts}){
-		    	push(@new_cluster, $a);
-		    	last if ($i > $depth && $depth > 0);
-		    	$i++;
-		    }
-		    next if(! @new_cluster);
-		    push(@{$clean_clusters[$counter]}, @new_cluster);
-		}
+		next if(! @new_cluster);
+		push(@{$clean_clusters[$counter]}, @new_cluster);
 
 		$counter++;
 	}		
