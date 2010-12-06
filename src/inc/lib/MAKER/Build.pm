@@ -358,7 +358,7 @@ sub exe_failures {
     while (my $name = each %exes){
 	my @cmds = map {$_ =~ s/\s+$|^\s+//g; $_} split(/,/, $exes{$name});
 	my $base = $self->install_destination('exe');
-	my $dest = "$base/$name";
+	my $dest = (-d "$base/$name") ? "$base/$name" : "$base/".lc($name);
 
 	my $loc;
 	foreach my $cmd (@cmds){
@@ -562,7 +562,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
         $self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} <augustus-*>;
+	my ($dir) = grep {-d $_} <augustus*>;
 	chdir("$dir/src");
 	print "Configuring $exe...\n";
 	$self->do_system("make") or return $self->fail($exe, $path);
