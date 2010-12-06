@@ -13,7 +13,7 @@ use threads;
 use threads::shared;
 
 BEGIN{
-    $VERSION = '2.06';
+    $VERSION = '2.07';
 
     #find iprscan
     $EXE = `which iprscan 2> /dev/null`;

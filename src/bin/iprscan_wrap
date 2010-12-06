@@ -12,7 +12,7 @@ use Storable qw(freeze thaw);
 use File::Which qw(which);
 
 BEGIN{
-    $VERSION = '2.06';
+    $VERSION = '2.07';
 
     #find iprscan
     $EXE = which('iprscan') || '/usr/local/iprscan/bin/iprscan';
