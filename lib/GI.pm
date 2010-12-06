@@ -489,6 +489,26 @@ sub create_blastdb {
    ($CTL_OPT->{_e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
    ($CTL_OPT->{_a_db}) = split_db($CTL_OPT, 'altest', $mpi_size);
    ($CTL_OPT->{_r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
+
+   #handle hints given in fasta headers
+   my %to_exonerate;
+   foreach my $db (@{$CTL_OPT->{_e_db}}){
+       open(IN, "< $db");
+       while(my $line = <IN>){
+	   next unless($line =~ /maker_coor=([^\;\n]+)/);
+	   my @coors = split(/,/, $1);
+	   my ($id, $def) = $line =~ /^>([^\s]+)\s*([^\n]*)/;
+	   $def =~ s/maker_coor=[^\;\n]+\;?//g;
+
+	   foreach my $coor (@coors){
+	       $coor =~ /^([^\:]+)/;
+	       push(@{$to_exonerate{$1}}, ">$id maker_coor=$coor\; $def");
+	   }
+       }
+       close(IN);
+   }
+
+   $CTL_OPT->{_to_exonerate} = \%to_exonerate;
 }
 #----------------------------------------------------------------------------
 sub concatenate_files {
@@ -940,19 +960,23 @@ sub fgenesh {
 }
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
-    my $g_fasta_ref = shift;
-    my $phat_hits   = shift;
-    my $db_index    = shift;
-    my $the_void    = shift;
-    my $type        = shift;
-    my $exonerate   = shift;
-    my $pcov        = shift;
-    my $pid         = shift;
-    my $score_limit = shift;
-    my $matrix      = shift;
-    my $pred_flank  = shift;
-    my $est_forward = shift;
-    my $LOG         = shift;
+    my $chunk        = shift;
+    my $g_fasta_ref  = shift;
+    my $phat_hits    = shift;
+    my $db_index     = shift;
+    my $the_void     = shift;
+    my $type         = shift;
+    my $exonerate    = shift;
+    my $pcov         = shift;
+    my $pid          = shift;
+    my $score_limit  = shift;
+    my $matrix       = shift;
+    my $pred_flank   = shift;
+    my $est_forward  = shift;
+    my $to_exonerate = shift;
+    my $LOG          = shift;
+
+    $to_exonerate = [] if($type ne 'e' || ref($to_exonerate) ne 'ARRAY');
     
     my $def = Fasta::getDef($g_fasta_ref);
     my $seq = Fasta::getSeqRef($g_fasta_ref);
@@ -964,37 +988,64 @@ sub polish_exonerate {
     my @exonerate_data;
     
     my %uniq; #make sure this same exonerate hit does not already exist
-    foreach my $hit (@{$phat_hits}) {
-	next if $hit->pAh < $pcov/2;
-	next if $hit->hsp('best')->frac_identical < $pid;
+    foreach my $hit (@{$phat_hits}, @{$to_exonerate}) {
+	my $h_name;
+	my $h_description;
+	my $B;
+	my $E;
+	my $min_intron = 20; #constant
 
-	my ($B, $E) = PhatHit_utils::get_span_of_hit($hit,'query');
-	($B, $E) = ($E, $B) if($B > $E);
+	#scalar for exonerate
+	if(ref($hit) eq '' && $hit =~ />([^\s]+)\s+(.*)/){
+	    $h_name = $1;
+	    $h_description = $2;
+	    $B = $chunk->offset + 1;
+	    $E = $chunk->offset + $chunk->length;
+	}
+	#hit from blastn
+	else{
+	    $h_name = $hit->name;
+	    $h_description = $hit->description;
+
+	    next if $hit->pAh < $pcov/2;
+	    next if $hit->hsp('best')->frac_identical < $pid;
+
+	    ($B, $E) = PhatHit_utils::get_span_of_hit($hit,'query');
+	    ($B, $E) = ($E, $B) if($B > $E);
+	}
 
 	#gene id specified for est_forward
 	my $gene_id;
-	if($est_forward && $hit->description =~ /gene_id\=([^\s\;]+)/){
+	if($est_forward && $h_description =~ /gene_id\=([^\s\;]+)/){
 	    $gene_id = $1;
 	}
 
 	#check if fasta contains coordinates for maker
-	if($hit->description =~ /maker_coor\=([^\s\;]+)/){
+	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $go;
+	    $min_intron = 1;
 	    foreach my $coor (split(',', $1)){
-		my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/;
-		($bB, $bE) = ($bE, $bB) if($bB > $bE);
+		if(my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
+		    ($bB, $bE) = ($bE, $bB) if($bB > $bE);
+		    
+		    next if($name ne $bName);
+		    next if(compare::compare($B, $E, $bB, $bE) eq '0');
+		    next if(ref($hit) eq '' && ($bB < $B || $bB > $E));
 
-		next if($name ne $bName);
-		next if(compare::compare($B, $E, $bB, $bE) eq '0');
-
-		($B, $E) = ($bB, $bE); #switch to specified coordinates
-		$go++;
-		last;
+		    ($B, $E) = ($bB, $bE); #switch to specified coordinates
+		    $go++;
+		    last;
+		}
+		elsif(my ($bName) = $coor =~ /^([^\s\;]+)$/ && ref($hit) ne ''){
+		    next if($name ne $bName);
+		    $go++;
+		    last;
+		}
 	    }
 	    next if(!$go); #skip because the tag limits the seq to only these coors
 	}
 
-	my $id      = $hit->name();
+	my $id      = $h_name;
 	my $safe_id = Fasta::seqID2SafeID($id);		
         my $o_file    = "$the_void/$safe_name.$B-$E.$safe_id";
 	$o_file .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
@@ -1011,12 +1062,12 @@ sub polish_exonerate {
 	my $fastaObj = $db_index->get_Seq_for_hit($hit);
 	if (not $fastaObj) {
 	    #still no sequence? try rebuilding the index and try again
-	    print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
+	    print STDERR "WARNING: Cannot find> ".$h_name.", trying to re-index the fasta.\n";
 	    $db_index->reindex();
 	    $fastaObj = $db_index->get_Seq_for_hit($hit);
 	    
 	    if (not $fastaObj) {
-		print STDERR "stop here:".$hit->name."\n";
+		print STDERR "stop here:".$h_name."\n";
 		die "ERROR: Fasta index error\n";
 	    }
 	}
@@ -1038,6 +1089,7 @@ sub polish_exonerate {
 					 $type,
 					 $exe,
 					 $score_limit,
+					 $min_intron,
 					 $matrix
 					 );
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
@@ -1045,7 +1097,7 @@ sub polish_exonerate {
 	#delete fastas
 	unlink($d_file, $t_file);
 
-	#evaluate exonerae results
+	#evaluate exonerate results
 	foreach my $e (@{$exonerate_hits}) {
 	    next if(! defined $e);
 	    next if $e->pAh < $pcov;
@@ -1063,22 +1115,34 @@ sub polish_exonerate {
 	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($e,'query');
 	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
 
+	    my @keepers;
 	    if (exonerate_okay($e) && compare::compare($B, $E, $eB, $eE)) {
-		#tag the source blastn hit to let you know the counterpart
-		#exonerate hit was flipped to the other strand
-		$hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
-		$hit->{_keep} = 1;
-
 		#uniq structure string to keep from adding same EST multiple times
 		my $u_string = join('', (map {$_->nB('query').'..'.$_->nE('query').'..'} $e->hsps), "ID=".$e->name);
 		next if($uniq{$u_string});
 		$uniq{$u_string}++;
 
-		$hit->type("exonerate:$type"); #set hit type (exonerate only)
-		$e->{_label} = $hit->{_label} if($hit->{_label});
-		map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
-		push(@exonerate_data, $e);	       
+		if(ref($hit) ne ''){
+		    #tag the source blastn hit to let you know the counterpart
+		    #exonerate hit was flipped to the other strand
+		    $hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
+		    $hit->{_keep} = 1;
+		    
+		    $hit->type("exonerate:$type"); #set hit type (exonerate only)
+		    $e->{_label} = $hit->{_label} if($hit->{_label});
+		    map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
+		}
+		push(@keepers, $e);	       
 	    }
+
+	    #remove ambiguous alternate alignments when hints are given (only keep 1)
+	    if($h_description =~ /maker_coor\=([^\s\;]+)/){
+		my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
+		@keepers = @perfect if(@perfect);
+		@keepers = (sort {$b->frac_identical <=> $a->frac_identical} @keepers)[0];
+	    }
+
+	    push(@exonerate_data, @keepers);
 	}
     }
     
@@ -1128,6 +1192,7 @@ sub to_polisher {
    my $type     = shift;
    my $exe      = shift;
    my $score_limit = shift;
+   my $min_intron = shift;
    my $matrix = shift;
 
    if ($type eq 'p') {
@@ -1138,6 +1203,7 @@ sub to_polisher {
 						  $offset,
 						  $exe,
 						  $score_limit,
+						  $min_intron,
 						  $matrix
 						 );
    }
@@ -1149,6 +1215,7 @@ sub to_polisher {
 					      $offset,
 					      $exe,
 					      $score_limit,
+					      $min_intron,
 					      $matrix
 					     );
    }

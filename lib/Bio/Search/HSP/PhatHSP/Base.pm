@@ -202,6 +202,57 @@ sub whatIsInTheMiddle
 
 }
 
+
+################################################ subroutine header begin ##
+
+=head2 nB
+
+ Usage     : How to use this function/method
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub nB {
+    my $self = shift;
+    my $w    = shift || 'query';
+    
+    return ($self->strand($w) eq '-1') ? $self->end($w) : $self->start($w);
+}
+
+################################################ subroutine header begin ##
+
+=head2 nE
+
+ Usage     : How to use this function/method
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub nE {
+    my $self = shift;
+    my $w    = shift || 'query';
+    
+    return ($self->strand($w) eq '-1') ? $self->start($w) : $self->end($w);
+}
+
 ################################################ subroutine header begin ##
 
 =head2 equivalent_pos_in_alignment_partner

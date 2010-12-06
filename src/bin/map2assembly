@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!\usr\bin\perl
 
 use warnings;
 use strict "vars";
@@ -115,9 +115,11 @@ try{
 	       "force|f" => \$OPT{force},
 	       "retry=i" =>\$OPT{retry},
 	       "again|a" =>\$OPT{again},
+	       "qq"    =>\$main::qq,
 	       "quiet" =>\$main::quiet,
 	       "help|?" => sub {print $usage; exit(0)}
 	       );
+    $main::quiet = 1 if($main::qq);
 }
 catch Error::Simple with{
     my $E = shift;
@@ -162,6 +164,7 @@ try{
     $OPT{en_score_limit} = 20;
     $OPT{ep_score_limit} = 10;
     $OPT{R}              = 1;
+    $OPT{blast_type}              = 'ncbi+';
     #--Control file processing
    
     #set up control options from control files
@@ -178,7 +181,7 @@ try{
     $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
 				   -gff => $CTL_OPT{'genome_gff'},
 				   );
-    $iterator->step($CTL_OPT{'_step'}); 
+    $iterator->step($CTL_OPT{'_step'});
 }
 catch Error::Simple with{
     my $E = shift;

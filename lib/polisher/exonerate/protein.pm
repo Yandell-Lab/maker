@@ -32,6 +32,7 @@ sub polish {
 	my $offset     = shift || 0;
 	my $exe        = shift;
 	my $percent    = shift;
+	my $min_intron = shift;
 	my $matrix     = shift;
 
 	my ($p_len, $g_len) = polisher::prep($g_file, $p_file);
@@ -44,6 +45,7 @@ sub polish {
 			       $g_len,
 			       $exe,
 			       $percent,
+			       $min_intron,
 			       $matrix
 			       );
 
@@ -65,9 +67,10 @@ sub p_exonerate {
         my $g_len    = shift;
 	my $exe      = shift;
 	my $percent  = shift;
+	my $min_intron = shift;
 	my $matrix   = shift;
 
-        runExonerate($g_file, $p_file, $o_file, $exe, $percent, $matrix);
+        runExonerate($g_file, $p_file, $o_file, $exe, $percent, $min_intron, $matrix);
 
         return Widget::exonerate::protein2genome::parse($o_file, $p_len, $g_len);
 	
@@ -79,6 +82,7 @@ sub runExonerate {
         my $o_file = shift;
 	my $exe    = shift;
 	my $percent = shift;
+	my $min_intron = shift || 20;
 	my $matrix = shift;
 
         my $command  = "$exe -q $q_file -t $t_file -Q protein -T dna ";

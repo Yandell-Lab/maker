@@ -1452,12 +1452,14 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{blastn_keepers
+	    @args = (qw{chunk
+		        blastn_keepers
 			holdover_blastn
 			the_void
 			q_seq_ref
 			fasta
 			fasta_t_index
+			seq_id
 			LOG
 			CTL_OPT}
 		    );
@@ -1466,22 +1468,25 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $chunk = $VARS->{chunk};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $holdover_blastn = $VARS->{holdover_blastn};
 	    my $the_void = $VARS->{the_void};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $fasta = $VARS->{fasta};
 	    my $fasta_t_index = $VARS->{fasta_t_index};
+	    my $seq_id = $VARS->{seq_id};
 	    my $LOG = $VARS->{LOG};
 
 	    #-polish blastn hits with exonerate
 	    my $exonerate_e_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exonerate_e_data = GI::polish_exonerate($fasta,
+		$exonerate_e_data = GI::polish_exonerate($chunk,
+							 $fasta,
 							 $blastn_keepers,
 							 $fasta_t_index,
 							 $the_void,
-							  'e',
+							 'e',
 							 $CTL_OPT{exonerate},
 							 $CTL_OPT{pcov_blastn},
 							 $CTL_OPT{pid_blastn},
@@ -1489,6 +1494,7 @@ sub _go {
 							 $CTL_OPT{en_matrix},
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
+							 $CTL_OPT{_to_exonerate}{$seq_id},
 							 $LOG
 							 );
 	    }
@@ -1560,11 +1566,12 @@ sub _go {
 	    #-polish tblastx hits with exonerate
 	    my $exonerate_a_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		#$exonerate_a_data = GI::polish_exonerate($fasta,
+		#$exonerate_a_data = GI::polish_exonerate('',
+		#                                        $fasta,
 		#					 $tblastx_keepers,
 		#					 $fasta_t_index,
 		#					 $the_void,
-		#					  'a',
+		#					 'a',
 		#					 $CTL_OPT{exonerate},
 		#					 $CTL_OPT{pcov_tblastx},
 		#					 $CTL_OPT{pid_tblastx},
@@ -1572,6 +1579,7 @@ sub _go {
 		#					 $CTL_OPT{en_matrix},
 		#					 $CTL_OPT{pred_flank},
 		#					 $CTL_OPT{est_forward},
+		#                                        [], #empty
 		#					 $LOG
 		#					 );
 	    }
@@ -1644,7 +1652,8 @@ sub _go {
 	    #-polish the blastx hits with exonerate
 	    my $exonerate_p_data =[];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exonerate_p_data = GI::polish_exonerate($fasta,
+		$exonerate_p_data = GI::polish_exonerate('',
+							 $fasta,
 							 $blastx_keepers,
 							 $fasta_p_index,
 							 $the_void,
@@ -1656,6 +1665,7 @@ sub _go {
 							 $CTL_OPT{ep_matrix},
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
+							 [], #empty
 							 $LOG
 							);
 	    }

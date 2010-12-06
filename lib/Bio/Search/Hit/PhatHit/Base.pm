@@ -180,13 +180,18 @@ sub nB {
    }
 
    if(! defined $self->{nB}{$w}){
+       my $low;
+       my $high;
+       foreach my $hsp ($self->hsps){
+	   $low  = $hsp->start($w) if(!$low || $hsp->start($w) < $low);
+	   $high = $hsp->end($w) if(!$high || $hsp->end($w) > $high);
+       }
+
        if ($self->strand($w) == 1 || $self->strand($w) == 0) {
-	   my $sorted = $self->sortFeatures($w);
-	   $self->{nB}{$w} =  $sorted->[0]->start($w);
+	   $self->{nB}{$w} =  $low;
        }
        elsif ($self->strand($w) == -1) {
-	   my $sorted = $self->revSortFeatures($w);
-	   $self->{nB}{$w} =  $sorted->[0]->end($w);
+	   $self->{nB}{$w} =  $high;
        }
        else {
 	   die "dead in PhatHit::Base::nB\n";
@@ -246,13 +251,18 @@ sub nE {
    }
 
    if(! defined $self->{nE}{$w}){
+       my $low;
+       my $high;
+       foreach my $hsp ($self->hsps){
+	   $low  = $hsp->start($w) if(!$low || $hsp->start($w) < $low);
+	   $high = $hsp->end($w) if(!$high || $hsp->end($w) > $high);
+       }
+
        if ($self->strand($w) == -1) {
-	   my $sorted = $self->sortFeatures($w);
-	   $self->{nE}{$w} = $sorted->[0]->start($w);
+	   $self->{nE}{$w} = $low;
        }
        elsif ($self->strand($w) == 1 || $self->strand($w) == 0) {
-	   my $sorted = $self->revSortFeatures($w);
-	   $self->{nE}{$w} = $sorted->[0]->end($w);
+	   $self->{nE}{$w} = $high;
        }
        else {
 	   die "dead in blastn::PhatHit::nE\n";
@@ -461,9 +471,26 @@ sub strand {
 	 $qstr{ $q }++;
 	 $hstr{ $h }++;
       }
+
       #changed 2/12/2009 to act like current version of Bioperl
-      my ($qstr) = sort {$qstr{$b} <=> $qstr{$a}} keys %qstr;
-      my ($hstr) = sort {$hstr{$b} <=> $hstr{$a}} keys %hstr;
+      my $topq;
+      my $qstr;
+      while(my $key = each %qstr){
+	 if(! $topq || $qstr{$key} > $topq){
+	     $qstr = $key;
+	     $topq = $qstr{$key};
+	 }
+      }
+
+      my $toph;
+      my $hstr;
+      while(my $key = each %hstr){
+	 if(! $toph || $hstr{$key} > $toph){
+	     $hstr = $key;
+	     $toph = $hstr{$key};
+	 }
+      }
+
       if ($seqType =~ /list|array/i) {
 	 return ($qstr, $hstr);
       } elsif ( $seqType eq 'query' ) {

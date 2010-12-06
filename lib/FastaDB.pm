@@ -102,14 +102,15 @@ sub get_Seq_for_hit {
     my $hit = shift;
 
     my $r_ind = $self->{file2index}; #reverse index
-    my $id = $hit->name;
-    my $source = $hit->{_file};
+    my $id = (ref($hit) eq '') ? ($hit =~ /^>([^\s]+)/)[0] : $hit->name;
+    my $source = (ref($hit) eq '') ? undef : $hit->{_file};
+    my $description = (ref($hit) eq '') ? $hit : $hit->description;
 
-    if($hit->description =~ /MD5_alias=(\S+)/){
+    if($description =~ /MD5_alias=(\S+)/){
 	$id = $1;
     }
 
-    my $dbf = $hit->database_name;
+    my $dbf = (ref($hit) eq '') ? undef : $hit->database_name;
 
     return $self->get_Seq_by_id($id, $source) if(! defined $dbf);
 
@@ -139,14 +140,15 @@ sub header_for_hit {
     my $hit = shift;
 
     my $r_ind = $self->{file2index}; #reverse index
-    my $id = $hit->name;
-    my $source = $hit->{_file};
+    my $id = (ref($hit) eq '') ? ($hit =~ /^>([^\s]+)/)[0] : $hit->name;
+    my $source = (ref($hit) eq '') ? undef : $hit->{_file};
+    my $description = (ref($hit) eq '') ? $hit : $hit->description;
 
-    if($hit->description =~ /MD5_alias=(\S+)/){
+    if($description =~ /MD5_alias=(\S+)/){
 	$id = $1;
     }
 
-    my $dbf = $hit->database_name;
+    my $dbf = (ref($hit) eq '') ? undef : $hit->database_name;
 
     return $self->header($id, $source) if(! defined $dbf);
 
