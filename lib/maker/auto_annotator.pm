@@ -2143,6 +2143,15 @@ sub group_transcripts {
 	  $i++;
       }
 
+      #infer gene name for pass-through transcripts (no gene name but yes tran name)
+      if($CTL_OPT->{est_forward} && !$t_structs[0]->{hit}->{gene_name} &&
+	 !$t_structs[0]->{hit}->{gene_id} && $t_structs[0]->{hit}->{_tran_name}
+	 ){
+	  $g_name = $t_structs[0]->{t_name}."-gene";
+	  $g_id = $t_structs[0]->{t_id}."-gene";
+	  $SEEN->{$g_name};
+      }
+
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
       my $g_attrib = (exists $t_structs[0]->{hit}->{gene_attrib}) ? $t_structs[0]->{hit}->{gene_attrib} : undef;
 

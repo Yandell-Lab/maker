@@ -107,6 +107,7 @@ my %OPT;
 my $rank = 0;
 my $size = 1;
 $RANK = $rank;
+$OPT{retry} = 3;
 
 #---Process options on the command line 
 try{

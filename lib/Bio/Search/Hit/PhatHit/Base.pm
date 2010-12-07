@@ -597,7 +597,7 @@ sub pAq {
    $ql = $self->queryLength() unless defined($ql);
 
    die "\$self->queryLength undefined; define or provide as arg!\n"
-   unless defined($ql);
+       unless defined($ql);
 
    my ($laq, $lah) = $self->getLengths();
    my $perAl = ($laq/$ql);
@@ -641,9 +641,15 @@ Usage     : How to use this function/method
 
 sub pAh {
    my $self = shift;
+   my $hl   = shift;
+
+   $hl = $self->length() unless defined($hl);
+
+   die "\$self->length undefined; define or provide as arg!\n"
+       unless defined($hl);
 
    my ($laq, $lah) = $self->getLengths();
-   my $perAl = ($lah/$self->length);
+   my $perAl = ($lah/$hl);
 
    return sprintf '%.4f', $perAl;
 }

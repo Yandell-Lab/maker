@@ -340,6 +340,13 @@ else{
     $main::no_threads = 1;
 }
 
+#--exec regular maker if no-threads and size of 1
+if($main::no_threads && $size == 1 && ! $main::debug){
+    exec("$FindBin::Bin/maker", @CMD_ARGS);
+}
+	
+
+
 #--------------------------------------
 #---------PRIMARY MPI PROCCESS---------
 #--------------------------------------
@@ -375,16 +382,24 @@ if ($rank == $root) {
 	    }
 	}
 
-	#--exec regular maker if no-threads and size of 1
-	if($main::no_threads && $size == 1 && ! $main::debug){
-	    exec("$FindBin::Bin/maker", @CMD_ARGS);
-	}
-	
 	#--Control file processing
 	
 	#set up control options from control files
 	%CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-	
+
+	#--send control files to all nodes
+	for(my $i = 1; $i < $size; $i++){
+	    my $data = \%CTL_OPT;
+	    print "INITIALIZE CTL_OPT\t|  SND2\t|  mpi_data (ctl_opt)\t|  $rank\t-->\t$i\n" if($main::debug);
+	    MPI_SendII(\$data, $i, $mpi_data, MPI_COMM_WORLD);
+	}
+
+	#---set up blast databases and indexes for analyisis
+	if($size > 1){
+	    GI::create_blastdb(\%CTL_OPT);
+	    GI::build_all_indexes(\%CTL_OPT);
+	}
+
 	#--open datastructure controller
 	$DS_CTL = ds_utility->new(\%CTL_OPT);
 	
@@ -756,9 +771,19 @@ else {
     my $chunk_result;
     my $be_helper;
 
+    #--receive control files from root
+    my $CTL_OPT;
+    print "INITIALIZE CTL_OPT\t|  RCV2\t|  mpi_data (ctl_opt)\t|  $rank\t<--\t$root\n" if($main::debug);
+    MPI_RecvII(\$CTL_OPT, $root, $mpi_data, MPI_COMM_WORLD);
+    
+    #---set up blast databases and indexes for analyisis
+    $CTL_OPT->{_not_root} = 1;
+    GI::create_blastdb($CTL_OPT);
+    GI::build_all_indexes($CTL_OPT);
+
     #set to true for threads false for no threads
     $t_need_flag = ($main::no_threads) ? 0 : 1;
-    my $thr = threads->create(\&node_thread) if($t_need_flag);
+    my $thr = threads->create(\&node_thread) if($t_need_flag);    
 
     while ($go_mpi_status) {
 	#====INTERNAL CHUNK THREAD

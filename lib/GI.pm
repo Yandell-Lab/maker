@@ -479,36 +479,63 @@ sub write_p_and_t_fastas{
 #----------------------------------------------------------------------------
 sub create_blastdb {
    my $CTL_OPT = shift @_;
-   my $mpi_size = shift@_ || 1;
-       
+
    #rebuild all fastas when specified
    File::Path::rmtree($CTL_OPT->{mpi_blastdb}) if ($CTL_OPT->{force} &&
 						   ! $CTL_OPT->{_multi_chpc});
    
-   ($CTL_OPT->{_p_db}) = split_db($CTL_OPT, 'protein', $mpi_size);
-   ($CTL_OPT->{_e_db}) = split_db($CTL_OPT, 'est', $mpi_size);
-   ($CTL_OPT->{_a_db}) = split_db($CTL_OPT, 'altest', $mpi_size);
-   ($CTL_OPT->{_r_db}) = split_db($CTL_OPT, 'repeat_protein', $mpi_size);
+   my $mpi_size = $CTL_OPT->{_mpi_size} || 1;
+   my $b_dir = $CTL_OPT->{mpi_blastdb};
+   mkdir($b_dir) if(! -d $b_dir);
 
-   #handle hints given in fasta headers
-   my %to_exonerate;
-   foreach my $db (@{$CTL_OPT->{_e_db}}){
-       open(IN, "< $db");
-       while(my $line = <IN>){
-	   next unless($line =~ /maker_coor=([^\;\n]+)/);
-	   my @coors = split(/,/, $1);
-	   my ($id, $def) = $line =~ /^>([^\s]+)\s*([^\n]*)/;
-	   $def =~ s/maker_coor=[^\;\n]+\;?//g;
+   my @sets = (['_p_db', 'protein'],
+	       ['_e_db', 'est'],
+	       ['_a_db', 'altest'],
+	       ['_r_db', 'repeat_protein']);
+   my %tries;
+   my @check;
+   while(my $set = shift @sets){
+       my $count = @{[split(',', $CTL_OPT->{$set->[1]})]};
+       $tries{$set->[1]}++;
+       my $l_name = "$b_dir/".$set->[1].".$mpi_size.".$tries{$set->[1]};
 
-	   foreach my $coor (@coors){
-	       $coor =~ /^([^\:]+)/;
-	       push(@{$to_exonerate{$1}}, ">$id maker_coor=$coor\; $def");
-	   }
+       if(my $lock = new File::NFSLock("$l_name", 'NB', 600, 40)){
+	   $lock->maintain(30);
+           $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $mpi_size);
+	   $lock->unlock;
        }
-       close(IN);
+       elsif($tries{$set->[1]} < $count){
+	   push(@sets, $set);
+       }
+       else{
+	   push(@check, $set);
+       }
+   }
+   while(my $set = shift @check){
+       $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $mpi_size);
    }
 
-   $CTL_OPT->{_to_exonerate} = \%to_exonerate;
+   #handle hints given in fasta headers
+   if(!$CTL_OPT->{_not_root} & $CTL_OPT->{est_forward}){
+       my %to_exonerate;
+       foreach my $db (@{$CTL_OPT->{_e_db}}){
+	   open(IN, "< $db");
+	   while(my $line = <IN>){
+	       next unless($line =~ /maker_coor=([^\;\n]+)/);
+	       my @coors = split(/,/, $1);
+	       my ($id, $def) = $line =~ /^>([^\s]+)\s*([^\n]*)/;
+	       $def =~ s/maker_coor=[^\;\n]+\;?//g;
+	       
+	       foreach my $coor (@coors){
+		   $coor =~ /^([^\:]+)/;
+		   push(@{$to_exonerate{$1}}, ">$id maker_coor=$coor\; $def");
+	       }
+	   }
+	   close(IN);
+       }
+
+       $CTL_OPT->{_to_exonerate} = \%to_exonerate;
+   }
 }
 #----------------------------------------------------------------------------
 sub concatenate_files {
@@ -538,32 +565,57 @@ sub split_db {
    return ([]) if (! @entries);
 
    my @db_files;
-   foreach my $entry (@entries){
+   my $f_count = @entries;
+   while (my $entry = shift @entries){
        my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
 
-       #set up names and variables
-       my $fasta_iterator = new Iterator::Fasta($file);
-       my $num_fastas = $fasta_iterator->number_of_entries();
-       die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
-
-       my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
-       my $bins = ($mpi_size % 10 == 0) ? (int($mpi_size/@entries)/10)*10 : (int(($mpi_size/@entries)/10) +1)*10;
-       $bins = $max_bins if ($max_bins < $bins);
-       
        my ($f_name) = $file =~ /([^\/]+)$/;
        $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
-    
-       my $d_name = "$f_name\.mpi\.$bins";
        my $b_dir = $CTL_OPT->{mpi_blastdb};
+       my $bins = ($mpi_size % 10 == 0) ? (int($mpi_size/$f_count)/10)*10 : (int(($mpi_size/$f_count)/10) +1)*10;
+       my $d_name = "$f_name\.mpi\.$bins";
        my $f_dir = "$b_dir/$d_name";
        my $t_dir = $TMP."/$d_name";
 
-       #make needed output directories
-       mkdir($t_dir);
-       mkdir($b_dir) unless (-e $b_dir);
-       
-       if(my $lock = new File::NFSLock($f_dir, 'EX', 600, 40)){
+       if(my $lock = new File::NFSLock($f_dir, 'NB', 600, 40)){
 	   $lock->maintain(30);
+
+	   #check if likely already finished
+	   if(-e "$f_dir"){ #on multi processors check if finished
+	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	       
+	       if(@t_db == $bins){ #use existing if right count
+		   $lock->unlock;
+		   push(@db_files, @t_db);
+		   next;
+	       }
+	       else{ #remove if there is an error
+		   File::Path::rmtree($f_dir);
+	       }
+	   }
+
+	   #set up alternate names for short files
+	   my $fasta_iterator = new Iterator::Fasta($file);
+	   my $num_fastas = $fasta_iterator->number_of_entries();
+	   die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
+	   
+	   my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
+	   if ($max_bins < $bins){
+	       $bins = $max_bins;
+	       $d_name = "$f_name\.mpi\.$bins";
+	       $f_dir = "$b_dir/$d_name";
+	       $t_dir = $TMP."/$d_name";
+	       
+	       #fix lock
+	       $lock->unlock;
+	       unless($lock = new File::NFSLock($f_dir, 'EX', 600, 40)){
+		   die "ERROR: Could not get lock to process $file.\n";
+	       }
+	   }
+	   
+	   #make needed output directories
+	   mkdir($t_dir);
+	   mkdir($b_dir) unless (-e $b_dir);
        
 	   if(-e "$f_dir"){ #on multi processors check if finished
 	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
@@ -669,7 +721,9 @@ sub split_db {
 	   }
        }
        else{
-	   die "ERROR: Could not get lock to process fasta\n\n";
+	   push(@entries, $entry);
+	   sleep 5;
+	   next;
        }
    }
 
@@ -982,6 +1036,7 @@ sub polish_exonerate {
     my $seq = Fasta::getSeqRef($g_fasta_ref);
     my $name =  Fasta::def2SeqID($def);
     my $safe_name = Fasta::seqID2SafeID($name);
+    my $length = length($$g_fasta_ref);
     
     my $exe = $exonerate;
     
@@ -1046,16 +1101,18 @@ sub polish_exonerate {
 	}
 
 	my $id      = $h_name;
-	my $safe_id = Fasta::seqID2SafeID($id);		
-        my $o_file    = "$the_void/$safe_name.$B-$E.$safe_id";
+	my $safe_id = Fasta::seqID2SafeID($id);
+	my $S = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
+	my $F = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
+        my $o_file    = "$the_void/$safe_name.$S-$F.$safe_id";
 	$o_file .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
 
 	#get substring fasta of contig
 	my @coors = [$B, $E];
-	my $p = Shadower::getPieces($seq, \@coors, $pred_flank);
-	my $p_def = $def." ".$B." ".$E;
-	my $p_fasta = Fasta::toFasta($p_def, \$p->[0]->{piece});
-	my $d_file = $the_void."/".$safe_name.'.'.$B.'-'.$E.".fasta";	
+	my $p = Shadower::getPieces($seq, \@coors, $pred_flank)->[0];
+	my $p_def = $def." ".$S." ".$F;
+	my $p_fasta = Fasta::toFasta($p_def, \ ($p->{piece}));
+	my $d_file = $the_void."/".$safe_name.'.'.$S.'-'.$F.".fasta";	
 	FastaFile::writeFile($p_fasta, $d_file);
 
 	#get fasta for EST/protein
@@ -1074,7 +1131,7 @@ sub polish_exonerate {
 
 	my $seq     = $fastaObj->seq();
 	my $header  = $db_index->header_for_hit($hit);
-	my $offset  = $p->[0]->{b} - 1;	
+	my $offset  = $p->{b} - 1;	
 	my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
 	my $t_file    = $the_void."/".$safe_id.'.fasta';	
 	FastaFile::writeFile($fasta, $t_file);	
@@ -1098,6 +1155,7 @@ sub polish_exonerate {
 	unlink($d_file, $t_file);
 
 	#evaluate exonerate results
+	my @keepers;
 	foreach my $e (@{$exonerate_hits}) {
 	    next if(! defined $e);
 	    next if $e->pAh < $pcov;
@@ -1115,7 +1173,6 @@ sub polish_exonerate {
 	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($e,'query');
 	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
 
-	    my @keepers;
 	    if (exonerate_okay($e) && compare::compare($B, $E, $eB, $eE)) {
 		#uniq structure string to keep from adding same EST multiple times
 		my $u_string = join('', (map {$_->nB('query').'..'.$_->nE('query').'..'} $e->hsps), "ID=".$e->name);
@@ -1132,18 +1189,18 @@ sub polish_exonerate {
 		    $e->{_label} = $hit->{_label} if($hit->{_label});
 		    map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
 		}
-		push(@keepers, $e);	       
+		push(@keepers, $e);
 	    }
-
-	    #remove ambiguous alternate alignments when hints are given (only keep 1)
-	    if($h_description =~ /maker_coor\=([^\s\;]+)/){
-		my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
-		@keepers = @perfect if(@perfect);
-		@keepers = (sort {$b->frac_identical <=> $a->frac_identical} @keepers)[0];
-	    }
-
-	    push(@exonerate_data, @keepers);
 	}
+	
+	#remove ambiguous alternate alignments when hints are given (only keep 1)
+	if($h_description =~ /maker_coor\=([^\s\;]+)/){
+	    my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
+	    @keepers = @perfect if(@perfect);
+	    @keepers = (sort {$b->frac_identical <=> $a->frac_identical} @keepers)[0];
+	}
+
+	push(@exonerate_data, @keepers);
     }
     
     return \@exonerate_data;
@@ -1271,16 +1328,29 @@ sub build_fasta_index {
 sub build_all_indexes {
    my $CTL_OPT = shift;
 
-   my @dbs = ($CTL_OPT->{_e_db},
-	      $CTL_OPT->{_p_db},
-	      $CTL_OPT->{_r_db},
-	      $CTL_OPT->{_a_db}
+   my @dbs = (@{$CTL_OPT->{_e_db}},
+	      @{$CTL_OPT->{_p_db}},
+	      @{$CTL_OPT->{_r_db}},
+	      @{$CTL_OPT->{_a_db}}
 	     );
 
-   foreach my $db (@dbs){
-       next if(! $db || !$db->[0]);
+   my @check;
+   foreach (my $db = shift @dbs){
+       next if(! $db);
+       my ($file) = split(':', $db);
+       if(my $lock = new File::NFSLock("$file.multi_index", 'NB', 600, 40)){
+	   $lock->maintain(30);
+	   my $index = build_fasta_index($db);
+	   $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
+	   $lock->unlock;
+       }
+       else{
+	   push(@check, $db);
+       }
+   }
+
+   foreach my $db (@check){
        my $index = build_fasta_index($db);
-       $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
    }
 }
 #-----------------------------------------------------------------------------
@@ -1764,6 +1834,12 @@ sub blastx_as_chunks {
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
 			    );
+
+   #add user defined labels
+   foreach my $hit (@$chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
 
    return ($chunk_keepers, $blast_dir);
 }
@@ -2318,6 +2394,12 @@ sub repeatmask {
 			    );
    
    $chunk->erase_fasta_file();
+
+   #add user defined labels
+   foreach my $hit (@$rm_chunk_keepers){
+       $hit->{_label} = $label if($label);
+       map{$_->{_label} = $label} $hit->hsps if($label);
+   }
 	
    return ($rm_chunk_keepers);
 }
@@ -2459,6 +2541,7 @@ sub set_defaults {
       $CTL_OPT{'eva_gspmax'} = 100;
       $CTL_OPT{'enable_fathom'} = 0;
       $CTL_OPT{'enable_fathom'} = 1 if($main::eva);
+      $CTL_OPT{'datastore'} = 1;
    }
 
    #maker_bopts
@@ -3504,8 +3587,8 @@ sub load_control_files {
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;
-   create_blastdb(\%CTL_OPT, $mpi_size);
-   build_all_indexes(\%CTL_OPT);
+   create_blastdb(\%CTL_OPT) if($mpi_size == 1);
+   build_all_indexes(\%CTL_OPT) if($mpi_size == 1);
 
    return %CTL_OPT;
 }
