@@ -94,8 +94,8 @@ elsif(my @mpi = $build->mpi_support){
 	my $mpidir = shift @mpi;
 	$build->feature(mpi_support => 1); #set mpi flag for Build
 	$build->extra_compiler_flags("-I$mpidir -DFLOAT_HACK"); #add mpidir to includes
-	$build->config('cc' => 'mpicc'); #mpicc now default compiler
-	$build->config('ld' => 'mpicc');
+	$build->config('cc' => $cc); #mpicc now default compiler
+	$build->config('ld' => $cc);
 	$build->add_requires('threads' => '1.67');	#add threads to require
 	#$build->>add_to_cleanup();
     }
