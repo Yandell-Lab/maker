@@ -59,16 +59,21 @@ sub mpi_support {
     my $self = shift;
 
     return if(! $self->thread_support );
+    my $ebase = $self->install_destination('exe');
 
-    my $cc = File::Which::which('mpicc') || $self->config('cc');
+    my $cc = "$ebase/mpich2/bin/mpicc";
+    $cc = File::Which::which('mpicc') if(! -f $cc);
+    $cc = $self->config('cc') if(! $cc);
 
     return unless($cc =~ /mpicc$/);
 
     my $ccdir = $cc;
-    $cc =~ s/[^\/]+\/[^\/]+$/include/;
+    $ccdir =~ s/[^\/]+\/[^\/]+$/include/;
 
     #directories to search for mpi.h
-    my @includes = (</usr/include>,
+    my @includes = (<$ebase/mpich2/include>,
+		    <$ccdir>,
+		    </usr/include>,
 		    </usr/include/mpi*>,
 		    </usr/mpi*/include>,
 		    </usr/local/include>,
@@ -79,8 +84,7 @@ sub mpi_support {
 		    </usr/lib/mpi*/include>,
 		    </usr/local/lib>,
 		    </usr/local/lib/include/mpi*>,
-		    </usr/local/lib/mpi*/include>,
-		    $ccdir);
+		    </usr/local/lib/mpi*/include>);
 
     my ($MPIDIR) = grep {-f "$_/mpi.h" && is_mpich2("$_/mpi.h")} @includes;
 
