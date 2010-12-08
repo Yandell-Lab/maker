@@ -591,7 +591,7 @@ sub _install_exe {
 	print "Configuring $exe...\n";
 	chdir($dir);
 	my %shared = (Linux  => '--enable-sharedlibs=gcc',
-		      Darwin => '--enable-sharedlibs=osx-gcc',
+		      Darwin => '--enable-sharedlibs=osx-gcc --disable-f77',
 		      src    => '');
 	$self->do_system("./configure --prefix=$path --enable-shared $shared{$OS}") or return $self->fail($exe, $path);
 	$self->do_system("make") or return $self->fail($exe, $path);
