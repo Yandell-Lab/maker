@@ -746,12 +746,14 @@ sub getstore {
     my $url = shift;
     my $file = shift;
     
-    if(File::Which::which('wget')){#Linux
+    if(File::Which::which('wget')){ #Linux
 	return $self->do_system("wget $url -c -O $file"); #gives status and can continue partial
     }
-    elsif(File::Which::which('curl')){#Mac
-	my $stat = $self->do_system("curl $url -C - -o $file"); #gives status and can continue partial
-	$stat = $self->do_system("curl $url -o $file") if(! $stat); #just redo if continue fails
+    elsif(File::Which::which('curl')){ #Mac
+	#gives status and can continue partial
+	my $stat = $self->do_system("curl --connect-timeout 30 -f -L $url -C - -o $file");
+	#just redo if continue fails
+	$stat = $self->do_system("curl --connect-timeout 30 -f -L $url -o $file") if(! $stat);
 	return $stat;
     }
     else{
