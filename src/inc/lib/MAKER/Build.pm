@@ -303,6 +303,7 @@ sub ACTION_blast{ shift->_exe_action('blast'); }
 sub ACTION_exonerate{ shift->_exe_action('exonerate'); }
 sub ACTION_snap{ shift->_exe_action('snap'); }
 sub ACTION_augustus{ shift->_exe_action('augustus'); }
+sub ACTION_mpich2{ shift->_exe_action('mpich2', 'mpich2version'); }
 
 #runs all the algorithm installs that are missing
 sub ACTION_installexes{
@@ -352,7 +353,8 @@ sub check_exes{
 #returns missing exes, anologous to prereq_failures
 sub exe_failures {
     my $self = shift;
-    my %exes = %{$self->exe_requires};
+    my $other = shift || {};
+    my %exes = (%{$self->exe_requires}, %{$other});
     
     my %exe_failures;
     while (my $name = each %exes){
@@ -379,17 +381,18 @@ sub exe_failures {
 #checks to see if already installed and then run the install method
 sub _exe_action{
     my $self = shift;
-    my $exe = shift;
+    my $label = shift;
+    my $script = shift;
 
-    my $fail = $self->exe_failures();
+    my $fail = ($script) ? $self->exe_failures({$label => $script}) : $self->exe_failures();
     my @list = keys %{$fail->{exe_requires}} if($fail->{exe_requires});
-    if(grep {/^$exe$/i} @list){
-	$self->_install_exe($exe);
+    if(grep {/^$label$/i} @list){
+	$self->_install_exe($label);
     }
     else{
-	my $go = $self->y_n("WARNING: $exe was already found on this system.\n".
-			    "Do you still want MAKER to install $exe for you?", 'N');
-	$self->_install_exe($exe) if($go);
+	my $go = $self->y_n("WARNING: $label was already found on this system.\n".
+			    "Do you still want MAKER to install $label for you?", 'N');
+	$self->_install_exe($label) if($go);
     }
 }
 
@@ -569,6 +572,28 @@ sub _install_exe {
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
 	return $self->fail($exe, $path) if(! -f "$path/bin/$exe");
+    }
+    elsif($exe eq 'mpich2'){
+	#MPICH2
+	&File::Path::rmtree($path);
+	my $file = "$base/$exe.tar.gz"; #file to save to
+	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	print "Downloading $exe...\n";
+	$self->getstore($url, $file) or return $self->fail($exe, $path);
+	print "Unpacking $exe tarball...\n";
+	$self->extract_archive($file) or return $self->fail($exe, $path);
+	push (@unlink, $file);
+	my ($dir) = grep {-d $_} <mpich2*>;
+	print "Configuring $exe...\n";
+	chdir($dir);
+	my %shared = (Linux  => '--enable-sharedlibs=gcc',
+		      Darwin => '--enable-sharedlibs=osx-gcc',
+		      src    => '');
+	$self->do_system("./configure --prefix=$path --enable-shared $shared{$OS}") or return $self->fail($exe, $path);
+	$self->do_system("make") or return $self->fail($exe, $path);
+	$self->do_system("make install") or return $self->fail($exe, $path);
+	chdir($base);
+	File::Path::rmtree($dir) or return $self->fail($exe, $path);
     }
     else{
 	die "ERROR: No install method defined for $exe in MAKER::Build::_install_exe.\n";
