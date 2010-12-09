@@ -62,7 +62,7 @@ sub mpi_support {
     my $ebase = $self->install_destination('exe');
 
     my $cc = "$ebase/mpich2/bin/mpicc";
-    $cc = File::Which::which('mpicc') if(! -f $cc);
+    ($cc) = grep {is_mpich2($_)} File::Which::where('mpicc') if(! -f $cc);
     $cc = $self->config('cc') if(! $cc);
 
     return unless($cc =~ /mpicc$/);
@@ -72,7 +72,7 @@ sub mpi_support {
 
     #directories to search for mpi.h
     my @includes = (<$ebase/mpich2/include>,
-		    <$ccdir>,
+		    <$ccdir/>,
 		    </usr/include>,
 		    </usr/include/mpi*>,
 		    </usr/mpi*/include>,
@@ -805,16 +805,17 @@ sub maker_status {
     print "\n";
 
     print "\n\nImportant Commands:\n".
-        "\t./Build installdeps\t\#installs missing perl dependencies\n".
-        "\t./Build installexes\t\#installs all missing program dependencies\n".
+        "\t./Build installdeps\t\#installs missing PERL dependencies\n".
+        "\t./Build installexes\t\#installs all missing external programs\n".
         "\t./Build install\t\t\#installs MAKER\n".
         "\t./Build status\t\t\#Shows this status menu\n\n".
         "Other Commands:\n".
         "\t./Build repeatmasker\t\#installs RepeatMasker (no RepBase)\n".
         "\t./Build blast\t\t\#installs BLAST (NCBI BLAST+)\n".
-        "\t./Build exonerate\t\#installs Exonerate (v2 on UNIX / v1 on Mac)\n".
+        "\t./Build exonerate\t\#installs Exonerate (v2 on UNIX / v1 on Mac OSX)\n".
         "\t./Build snap\t\t\#installs SNAP\n".
         "\t./Build augustus\t\#installs Augustus\n";
+        "\t./Build mpich2\t\#installs MPICH2\n";
 }
 
 #test if there is another version of the module overriding the CPAN install
@@ -870,15 +871,27 @@ sub is_mpich2 {
     $file = shift if(ref($file) eq 'MAKER::Build');
 
     my $ok;
-    open(IN, "< $file");
-    while(my $line = <IN>){
-	if($line =~ /^\#define\s+MPICH2_VERSION/){
-	    $ok = 1;
-	    last;
-	}
+    if($file =~ /mpicc$/){
+	open(IN, "$file -v |");
+	while(my $line = <IN>){
+            if($line =~ /for MPICH2 version/){
+                $ok = 1;
+                last;
+            }
+        }
+	close(IN);
     }
-    close(IN);
-    
+    else{
+	open(IN, "< $file");
+	while(my $line = <IN>){
+	    if($line =~ /^\#define\s+MPICH2_VERSION/){
+		$ok = 1;
+		last;
+	    }
+	}
+	close(IN);
+    }
+
     return $ok;
 }
 

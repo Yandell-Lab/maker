@@ -1333,24 +1333,10 @@ sub build_all_indexes {
 	      @{$CTL_OPT->{_a_db}}
 	     );
 
-   my @check;
-   while (my $db = shift @dbs){
-       next if(! $db);
-       my ($file) = split(':', $db);
-       if(my $lock = new File::NFSLock("$file.multi_index", 'NB', 600, 40)){
-	   $lock->maintain(30);
-	   my $index = build_fasta_index($db);
-	   $index->reindex() if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
-	   $lock->unlock;
-       }
-       else{
-	   push(@check, $db);
-       }
-   }
-
-   foreach my $db (@check){
-       my $index = build_fasta_index($db);
-   }
+   my $index = build_fasta_index(\@dbs);
+   $index->reindex() if($CTL_OPT->{force} &&
+			!$CTL_OPT->{_not_root} &&
+			!$CTL_OPT->{_multi_chpc});
 }
 #-----------------------------------------------------------------------------
 sub dbformat {
