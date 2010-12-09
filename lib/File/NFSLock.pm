@@ -95,7 +95,7 @@ sub new {
   }
   $self->{file}       ||= "";
   $self->{lock_type}  ||= 0;
-  $self->{blocking_timeout}   ||= 0;
+  $self->{blocking_timeout}   ||= -1;
   $self->{stale_lock_timeout} ||= 0;
   $self->{lock_pid} = $$;
   $self->{unlocked} = 1;
@@ -142,10 +142,10 @@ sub new {
   $self->{lock_file} = $self->{file} . $LOCK_EXTENSION;
   $self->{lock_file} =~ s/([^\/]+)$/\.NFSLock\.$1/;
 
-  my $quit_time = $self->{blocking_timeout} &&
-      !($self->{lock_type} & LOCK_NB) ?
+  my $quit_time = ($self->{blocking_timeout} >= 0 &&
+      $self->{lock_type} != LOCK_NB) ?
       time() + $self->{blocking_timeout} : 0;
-  
+
   while (1) {
       ### remove an old lockfile if it is older than the stale_timeout
       if( -f $self->{lock_file} &&
@@ -301,7 +301,7 @@ sub new {
       sleep(1);
   
       ### but don't wait past the time out
-      if( $quit_time && (time > $quit_time) ){
+      if($quit_time && (time > $quit_time) ){
 	  $errstr = "Timed out waiting for blocking lock";
 	  unlink($self->{rand_file});
 	  return undef;

@@ -775,7 +775,7 @@ else {
     my $CTL_OPT;
     print "INITIALIZE CTL_OPT\t|  RCV2\t|  mpi_data (ctl_opt)\t|  $rank\t<--\t$root\n" if($main::debug);
     MPI_RecvII(\$CTL_OPT, $root, $mpi_data, MPI_COMM_WORLD);
-    
+
     #---set up blast databases and indexes for analyisis
     $CTL_OPT->{_not_root} = 1;
     GI::create_blastdb($CTL_OPT);

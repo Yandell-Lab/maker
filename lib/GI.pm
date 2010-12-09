@@ -1330,12 +1330,11 @@ sub build_all_indexes {
 
    my @dbs = (@{$CTL_OPT->{_e_db}},
 	      @{$CTL_OPT->{_p_db}},
-	      @{$CTL_OPT->{_r_db}},
 	      @{$CTL_OPT->{_a_db}}
 	     );
 
    my @check;
-   foreach (my $db = shift @dbs){
+   while (my $db = shift @dbs){
        next if(! $db);
        my ($file) = split(':', $db);
        if(my $lock = new File::NFSLock("$file.multi_index", 'NB', 600, 40)){
