@@ -69,7 +69,7 @@ div.block {
 }
 
 div.track {
-    position: relative;
+    position: absolute;
     left: 0px;
     width: 100%;
     z-index: 5;
@@ -96,14 +96,13 @@ div#static_track {
     z-index: 20;
 }
 
-div.stripe {
+div.gridline {
     position: absolute;
     top: 0px;
     height: 100%;
     border-style: none none none solid;
     border-width: 1px;
     border-color: #ddd;
-    overflow: visible;
 }
 
 div.pos-label {
@@ -336,7 +335,7 @@ div.feature4-hist {
 
 .minus-feature5 { background-image: url('img/minus-chevron2.png'); }
 
-div.feature-hist {
+div.feature5-hist {
     position: absolute;
     background-color: blue;
     border-color: lightblue;
@@ -619,6 +618,78 @@ div.transcript-hist {
     min-width: 1px;
 }
 
+.plus-transcript-exon,
+.minus-transcript-exon,
+.plus-transcript-UTR, 
+.minus-transcript-UTR,
+.plus-transcript-five_prime_UTR,
+.minus-transcript-five_prime_UTR,
+.plus-transcript-three_prime_UTR,
+.minus-transcript-three_prime_UTR {
+    position: absolute;
+    height: 4px;
+    margin-top: -2px;
+    background-color: #B66;
+    border-style: solid;
+    border-color: #D88;
+    border-width: 2px 0px 2px 0px;
+    z-index: 8;
+    min-width: 1px;
+    cursor: pointer;
+}
+
+.generic_parent,
+.plus-generic_parent,
+.minus-generic_parent {
+    position: absolute;
+    height: 4px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    background-color: #AAA;
+    z-index: 6;
+    min-width: 1px;
+    cursor: pointer;
+}
+
+div.generic_parent-hist {
+    position: absolute;
+    background-color: #ddd;
+    border-color: #555;
+    border-style: solid;
+    border-width: 1px;
+    z-index: 10;
+}
+
+.match_part,
+.plus-match_part,
+.minus-match_part {
+    position: absolute;
+    height: 4px;
+    margin-top: -2px;
+    background-color: #66B;
+    border-style: solid;
+    border-color: #88D;
+    border-width: 2px 0px 2px 0px;
+    z-index: 8;
+    min-width: 1px;
+    cursor: pointer;
+}
+
+.generic_part_a,
+.plus-generic_part_a,
+.minus-generic_part_a {
+    position: absolute;
+    height: 4px;
+    margin-top: -2px;
+    background-color: #6B6;
+    border-style: solid;
+    border-color: #8D8;
+    border-width: 2px 0px 2px 0px;
+    z-index: 8;
+    min-width: 1px;
+    cursor: pointer;
+}
+
 .plus-transcript-exon2,
 .minus-transcript-exon2,
 .plus-transcript-UTR2, 
@@ -693,43 +764,6 @@ div.transcript-hist {
     background-color: #FF99FF;
     border-style: solid;
     border-color: #D88;
-    border-width: 2px 0px 2px 0px;
-    z-index: 8;
-    min-width: 1px;
-    cursor: pointer;
-}
-
-.generic_parent,
-.plus-generic_parent,
-.minus-generic_parent {
-    position: absolute;
-    height: 4px;
-    margin-top: 2px;
-    margin-bottom: 2px;
-    background-color: #AAA;
-    z-index: 6;
-    min-width: 1px;
-    cursor: pointer;
-}
-
-div.generic_parent-hist {
-    position: absolute;
-    background-color: #ddd;
-    border-color: #555;
-    border-style: solid;
-    border-width: 1px;
-    z-index: 10;
-}
-
-.match_part,
-.plus-match_part,
-.minus-match_part {
-    position: absolute;
-    height: 4px;
-    margin-top: -2px;
-    background-color: #66B;
-    border-style: solid;
-    border-color: #88D;
     border-width: 2px 0px 2px 0px;
     z-index: 8;
     min-width: 1px;
@@ -836,21 +870,6 @@ div.generic_parent-hist {
     border-style: solid;
     border-color: #6E6E6E;
     border-width: 2px 1px 2px 1px;
-    z-index: 8;
-    min-width: 1px;
-    cursor: pointer;
-}
-
-.generic_part_a,
-.plus-generic_part_a,
-.minus-generic_part_a {
-    position: absolute;
-    height: 4px;
-    margin-top: -2px;
-    background-color: #6B6;
-    border-style: solid;
-    border-color: #8D8;
-    border-width: 2px 0px 2px 0px;
     z-index: 8;
     min-width: 1px;
     cursor: pointer;
