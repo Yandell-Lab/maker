@@ -1155,8 +1155,8 @@ sub best_annotations {
 	}
 
 	#remove low scoring overlaping genes
-	@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$p_list;
-	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b)} @$m_list;
+	@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$p_list;
+	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$m_list;
 	push(@$p_list, @p_est2g); #est2genome added to end, will only appear if nothing else overlaps
 	push(@$m_list, @m_est2g); #est2genome added to end, will only appear if nothing else overlaps
 	$p_list = _best($p_list);
@@ -1452,7 +1452,7 @@ sub run_it {
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
 	    my $remove;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
-		$remove = ($CTL_OPT->{keep_preds}) ? 0 : 1;
+		$remove = 1;
 		#make sure the spliced EST evidence actually overlaps
 		if($remove && defined $mia){
 		    my $mAED = shadow_AED::get_eAED([$mia],$model); #verifies at least a splice
@@ -1498,7 +1498,12 @@ sub run_it {
 	    }
 
 	    #add UTR to ab-inits
-	    my $transcript = pneu($ests, $model, $seq);
+	    my $select = $model;
+	    my $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+	    while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		$select = $transcript;
+		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+	    }
 
 	    #don't filter imediately just mark for downstream filtering
 	    $transcript->{_REMOVE} = $remove;
@@ -1511,7 +1516,16 @@ sub run_it {
 	#------est2genome
 	if ($predictor eq 'est2genome') {
 	    next if (! defined $mia);
-	    my $transcript = ($CTL_OPT->{est_forward}) ? $mia : pneu($ests, $mia, $seq);
+
+	    my $transcript = $mia;
+	    if($CTL_OPT->{est_forward}){
+		my $select = $mia;
+		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		    $select = $transcript;
+		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		}
+	    }
 	    $transcript->{_HMM} = 'est2genome';
 
 	    if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
@@ -1549,8 +1563,13 @@ sub run_it {
 		#adjust CDS pre-UTR identification
 		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
-		
-		my $transcript = pneu($utr, $copy, $seq);
+
+		my $select = $copy;
+		my $transcript = pneu($utr, $select, $seq); #helps tile ESTs
+		while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		    $select = $transcript;
+		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		}
 		$transcript->{_HMM} = 'protein2genome';
 
 		next if(! $transcript);
@@ -1650,8 +1669,12 @@ sub run_it {
 	    if (defined($pred_shot)){
 		my $transcript = $pred_shot;
 		if(defined($mia)){
-		    $transcript = pneu([$mia], $transcript, $seq) if($CTL_OPT->{alt_splice});
-		    $transcript = pneu($ests, $transcript, $seq);
+		    my $select = ($CTL_OPT->{alt_splice}) ? pneu([$mia], $transcript, $seq) : $transcript;
+		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+			$select = $transcript;
+			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    }
 		}
 
 		push(@transcripts, [$transcript, $set->{index}, $pred_shot]);
@@ -1770,19 +1793,19 @@ sub load_transcript_struct {
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 
-	if($predictor !~ /model_gff/ && ! $CTL_OPT->{est_forward}){
-	    #walk out edges to force completion
-	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
-		$f = PhatHit_utils::adjust_start_stop($f, $seq);
-		$transcript_seq  = get_transcript_seq($f, $seq);
-		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
-	    }
-	    
+	if($predictor !~ /model_gff/ && !$CTL_OPT->{est_forward}){
 	    #fix for non-canonical (almost certainly bad) 5' and 3' UTR
 	    my $trim5 = (!$has_stop && $end != length($transcript_seq) + 1);
 	    my $trim3 = (!$has_start && $offset != 0);
 	    if($trim5 || $trim3){
 		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
+		$transcript_seq  = get_transcript_seq($f, $seq);
+		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	    }
+
+	    #walk out edges to force completion
+	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
+		$f = PhatHit_utils::adjust_start_stop($f, $seq);
 		$transcript_seq  = get_transcript_seq($f, $seq);
 		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 	    }
@@ -2390,11 +2413,18 @@ sub map_forward {
 
 sub get_non_overlaping_abinits {
    my $ann_set = shift;
-   my $abin_set = shift;
+   my $all_set = shift;
    my $CTL_OPT = shift;
 
    my @overlap;
    my @none;
+
+   my $abin_set = [];
+   my @ab_keys = grep {/_abinit$/} keys %$all_set;
+
+   foreach my $key (@ab_keys){
+       push(@$abin_set, @{$all_set->{$key}});
+   }
 
    #separate annotations by strand
    my @p_ann;
@@ -2476,8 +2506,8 @@ sub get_non_overlaping_abinits {
 
    #get best non-overlapping set
    my @keepers;
-   @p_keepers  = sort {crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @p_keepers;
-   @m_keepers  = sort {crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @m_keepers;
+   @p_keepers  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @p_keepers;
+   @m_keepers  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @m_keepers;
    push(@keepers, @{_best(\@p_keepers)});
    push(@keepers, @{_best(\@m_keepers)});
 
@@ -2707,11 +2737,18 @@ sub get_translation_seq {
     my $has_start = 1 if($p_seq =~ /^M/);
     my $has_stop = 1 if($p_seq =~ s/\*$//);
 
+    #if very small CDS try again with longest ORF rather than internal offest
+    if(($f->{translation_offset} || $f->{translation_end}) && ($end - $offset - 1)/(length($p_seq)*3) < 40){
+	$f->{translation_offset} = undef;
+	$f->{translation_end} = undef;
+	return get_translation_seq($seq, $f);
+    }
+
     #set CDS internally in hit (CDS includes stop)
     $f->{translation_offset} = $offset;
     $f->{translation_end} = $end;
 
-    #find correct spacial coordinates
+    #find correct spacial coordinates for easy access
     my $coorB;
     my $coorE;
     my ($toffset, $tend) = ($offset, $end);

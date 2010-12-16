@@ -277,6 +277,7 @@ sub process_the_chunk_divide{
     my $split_hit  = shift @_;
     my $pred_flank = shift @_;
     my $s_flag     = shift @_; #indicates whether to treat strands independantly 
+    my $a_flag     = shift @_; #indicates whether to have a data adjusted floating cutoff
     my $groups_cfh = shift @_; #group to cluster and find holdovers
     
     my $phat_hits;
@@ -320,30 +321,39 @@ sub process_the_chunk_divide{
 	$m_coor->[1] = 0 if($m_coor->[1] < 0);
     }
     
-    my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, $pred_flank);
-    $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
-    my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, $pred_flank);
-    $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
-    
-    my $cutoff = $chunk->length + $chunk->offset - $split_hit;
-    my $p_cutoff = $chunk->length + $chunk->offset + 1;
-    my $m_cutoff = $chunk->length + $chunk->offset + 1;
-
     my @keepers;
     my @holdovers;
 
-    #no internal cutoff if this is the last contig
-    $cutoff = $chunk->length + $chunk->offset + 1 if($chunk->is_last);
+    #no internal cutoff if this is the last contig, return everything
+    if($chunk->is_last) {
+        foreach my $g (@{$groups_cfh}){
+            push (@holdovers, []);
+            push (@keepers, $g);
+        }
+        return @keepers, @holdovers;
+    }
+
+    #set up cutoffs
+    my $cutoff = $chunk->length + $chunk->offset - $split_hit;
+    my $p_cutoff = $chunk->length + $chunk->offset + 1;
+    my $m_cutoff = $chunk->length + $chunk->offset + 1;
     
     #adjust cutoff to overlapping hits
-    foreach my $p_piece (@{$p_pieces}) {
-	if ($p_piece->{e} + $chunk->offset >= $cutoff) {
-	    $p_cutoff = $p_piece->{b} + $chunk->offset;
+    if($a_flag){
+	my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, $pred_flank);
+	$p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
+	my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, $pred_flank);
+	$m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
+	
+	foreach my $p_piece (@{$p_pieces}) {
+	    if ($p_piece->{e} + $chunk->offset >= $cutoff) {
+		$p_cutoff = $p_piece->{b} + $chunk->offset;
+	    }
 	}
-    }
-    foreach my $m_piece (@{$m_pieces}) {
-	if ($m_piece->{e} + $chunk->offset >= $cutoff) {
-	    $m_cutoff = $m_piece->{b} + $chunk->offset;
+	foreach my $m_piece (@{$m_pieces}) {
+	    if ($m_piece->{e} + $chunk->offset >= $cutoff) {
+		$m_cutoff = $m_piece->{b} + $chunk->offset;
+	    }
 	}
     }
     
@@ -361,7 +371,7 @@ sub process_the_chunk_divide{
     foreach my $group (@{$groups_cfh}) {
 	my $group_keepers = [];
 	my $group_holdovers = [];
-	
+
 	foreach my $hit (@{$group}) {
 	    my $b = $hit->nB('query');
 	    my $e = $hit->nE('query');
@@ -398,10 +408,17 @@ sub process_the_chunk_divide{
 sub maker_p_and_t_fastas {
    my $maker    = shift @_;
    my $non_over = shift @_;
-   my $abinit   = shift @_;
+   my $all      = shift @_;
    my $p_fastas = shift @_;
    my $t_fastas = shift @_;
+
+   my $abinit = [];
+   my @ab_keys = grep {/_abinit$/} keys %$all;
    
+   foreach my $key (@ab_keys){
+       push(@$abinit, @{$all->{$key}});
+   }   
+
    foreach my $an (@$maker) {
       foreach my $a (@{$an->{t_structs}}) {
 	 my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
@@ -1160,8 +1177,11 @@ sub polish_exonerate {
 	    next if(! defined $e);
 	    next if $e->pAh < $pcov;
 
+	    #double check was_flipped
+	    $e->{_was_flipped} = (ref($hit) && $e->strand ne $hit->strand) ? 1 : 0;
+
 	    #fix flipped hits when mapping ESTs to gene models as is
-	    if($type eq 'e' && $est_forward && $e->num_hsps == 1 && $e->{_was_flipped}){
+	    if($type eq 'e' && $est_forward && $e->{_was_flipped}){
 		$e = PhatHit_utils::copy($e, 'both');
 		$e->{_was_flipped} = 0;
 	    }
@@ -1174,21 +1194,21 @@ sub polish_exonerate {
 	    ($eB, $eE) = ($eE, $eB) if($eB > $eE);
 
 	    if (exonerate_okay($e) && compare::compare($B, $E, $eB, $eE)) {
+		if(ref($hit)){
+		    #tag the source blastn hit to let you know the counterpart
+		    #exonerate hit was flipped to the other strand
+		    $hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
+		    $hit->{_keep} = 1;
+		    $hit->type("exonerate:$type"); #set hit type (exonerate only)
+		    $e->{_label} = $hit->{_label} if($hit->{_label});
+		    map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
+		}
+
 		#uniq structure string to keep from adding same EST multiple times
 		my $u_string = join('', (map {$_->nB('query').'..'.$_->nE('query').'..'} $e->hsps), "ID=".$e->name);
 		next if($uniq{$u_string});
 		$uniq{$u_string}++;
 
-		if(ref($hit) ne ''){
-		    #tag the source blastn hit to let you know the counterpart
-		    #exonerate hit was flipped to the other strand
-		    $hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
-		    $hit->{_keep} = 1;
-		    
-		    $hit->type("exonerate:$type"); #set hit type (exonerate only)
-		    $e->{_label} = $hit->{_label} if($hit->{_label});
-		    map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
-		}
 		push(@keepers, $e);
 	    }
 	}

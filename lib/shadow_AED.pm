@@ -297,7 +297,8 @@ sub get_eAED {
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
-       "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
+       "passthrough options. Failed on ". $tran->name."\n".
+       "(from shadow_AED::get_eAED)\n"
        if($index{1} == 0 || $index{2} == 0 || @error);
 
    my $spec = $index{3}/$index{2}; #specificity
@@ -306,7 +307,6 @@ sub get_eAED {
 
    return $eAED;
 }
-
 
 sub get_AED {
    my $hits = shift;
@@ -378,7 +378,8 @@ sub get_AED {
    die "ERROR: The feature being compared appears to be missing\n".
        "some of it's structure.  This can happen when you use\n".
        "a malformed GFF3 file as input to one of MAKER's evidence\n".
-       "passthrough options. Failed on ". $tran->name." (from shadow_AED)\n"
+       "passthrough options. Failed on ". $tran->name."\n".
+       "(from shadow_AED::get_AED)\n"
        if($index{1} == 0 || $index{2} == 0 || @error);
 
    my $spec = $index{3}/$index{2}; #specificity

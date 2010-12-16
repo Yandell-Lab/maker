@@ -87,8 +87,8 @@ sub find_best_one {
 		next unless $g_to_e_str =~ /^[^0]$/;
 		next if($g_to_e_str =~ /^[zZ]$/ && $est->num_hsps == 1);
 
-		my ($pre) = $e_to_g_str =~ /(0*[^0]{1}).*/; 
-		my ($pos) = $e_to_g_str =~ /.*([^0]{1}.*)/;
+		my ($pre) = $e_to_g_str =~ /^(0*[^0]{1}).*$/; 
+		my ($pos) = $e_to_g_str =~ /^.*([^0]{1}0*)$/;
 
                 #print " POST find_best_one pre:$pre pos:$pos\n";
                 #sleep 3;
@@ -124,8 +124,8 @@ sub find_best_five {
 		# no extension to be had
                 next if $e_to_g_str =~ /^1+.*$/;
 
-                # can't be a 5 prime ext unless first exon of g is B, z or 1.
-                next unless $g_to_e_str =~ /^[Bz1].*$/;
+                # can't be a 5 prime ext unless first exon of g is B or 1.
+                next unless $g_to_e_str =~ /^[B1].*$/;
 		next if($g_to_e_str =~ /^z.*$/ && $est->num_hsps == 1);
 
                 # cant be same splice form if has an internal 0.
@@ -134,7 +134,7 @@ sub find_best_five {
 		# cant be same splice form if has an internal 0.
                 #next if     $g_to_e_str =~ /[Bz]1*[^1]+[^0]/;
 
-                my ($pre, $pos) = $e_to_g_str =~ /(0*[ZbA1])(.*)$/;
+                my ($pre, $pos) = $e_to_g_str =~ /^(0*[ZbA1])(.*)$/;
                 
                 #print STDERR " POST find_best_five e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
                 #sleep 3;
@@ -181,13 +181,12 @@ sub find_best_three {
 
 		#print "DDDDD\n";
 
-		my ($pre, $pos) = $e_to_g_str =~ /(.*)([a1]0*)$/;
+		my ($pre, $pos) = $e_to_g_str =~ /^(.*)([zBa1]0*)$/;
 		
 		#print STDERR " POST find_best_three e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
 		#sleep 3;
 
-	       push(@candidates, load_candidate($e_to_g_str, $est, $pre, $pos));
-
+		push(@candidates, load_candidate($e_to_g_str, $est, $pre, $pos));
 	}
         my @sorted_three = sort best_three_prime_extension @candidates;
         my $best_three = shift(@sorted_three);
@@ -507,10 +506,10 @@ sub merge_hsp {
 
 	$g_hsp = clone_hsp($g_hsp);
 
-	if($class eq '1'){
+	if($g_hsp->start == $ext_hsp->start && $g_hsp->end == $ext_hsp->end){
 		return $g_hsp;
 	}
-	elsif ($type == 5 && ($class eq 'A' || $class eq 'Z')){
+	elsif ($type == 5 && ($class eq 'A' || $class eq 'Z' || $class eq '1')){
 		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
 			$g_hsp->query->location->start($ext_hsp->start);
 		}
@@ -521,7 +520,7 @@ sub merge_hsp {
 			die "dead in auto_annotator::merge_hsp\n";
 		}
 	}
-        elsif ($type == 3 && ($class eq 'a' || $class eq 'z')){
+        elsif ($type == 3 && ($class eq 'a' || $class eq 'z' || $class eq '1')){
 		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
                         $g_hsp->query->location->end($ext_hsp->end);
                 }

@@ -341,7 +341,7 @@ else{
 }
 
 #--exec regular maker if no-threads and size of 1
-if($main::no_threads && $size == 1 && ! $main::debug){
+if($size == 1 && ! $main::debug){
     exec("$FindBin::Bin/maker", @CMD_ARGS);
 }
 	
@@ -480,21 +480,24 @@ if ($rank == $root) {
 	    my $tier;
 	    my $f_count = @failed;
 	    my $i_count = @interrupted;
-	    while (my $fasta = $iterator->nextFasta() || shift @failed || shift @interrupted){
-		$tier = Process::MpiTiers->new({fasta => $fasta,
-						CTL_OPT => \%CTL_OPT,
-						DS_CTL  => $DS_CTL,
-						GFF_DB  => $GFF_DB,
-						build   => $build},
-					       $root,
-					       'Process::MpiChunk'
-					       );
 
-		last if(! $tier->terminated);
-	    }
-	   
+	    #as of 12/15/2010 threads will process only chunks and not tiers
+	    #uncomment this while statement to change that behavior
+	    #while (my $fasta = $iterator->nextFasta() || shift @failed || shift @interrupted){
+	    #    $tier = Process::MpiTiers->new({fasta => $fasta,
+	    #    				CTL_OPT => \%CTL_OPT,
+	    #    				DS_CTL  => $DS_CTL,
+	    #    				GFF_DB  => $GFF_DB,
+	    #    				build   => $build},
+	    #    			       $root,
+	    #    			       'Process::MpiChunk'
+	    #    			       );
+	    #
+	    #    last if(! $tier->terminated);
+	    #}
+	    
 	    $tier->{_seen}++ if($i_count != @interrupted); #tag tier (easy to do it this way)
-
+	    
 	    #take a short break before processing failed contigs
 	    #this handles heavy processor usage when failure is related
 	    #to maker process overlap

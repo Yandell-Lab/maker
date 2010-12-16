@@ -750,10 +750,21 @@ sub _clip {
     }
     
     die "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
-	if($hit_start == 1); #should change with each HSP
+	if($hit_start == 1 || $new_hit->num_hsps == 0); #should change with each HSP
 
+    #add hidden attributes that may be part of a gene prediction
     $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
     $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+    $new_hit->{_REMOVE} = $hit->{_REMOVE} if($hit->{_REMOVE});
+    $new_hit->{_tran_name} = $hit->{_tran_name} if($hit->{_tran_name});
+    $new_hit->{_tran_id} = $hit->{_tran_id} if($hit->{_tran_id});
+    $new_hit->{gene_name} = $hit->{gene_name} if($hit->{gene_name});
+    $new_hit->{gene_id} = $hit->{gene_id} if($hit->{gene_id});
+    $new_hit->{-attrib} = $hit->{-attrib} if($hit->{-attrib});
+    $new_hit->{gene_attrib} = $hit->{gene_attrib} if($hit->{gene_attrib});
+    $new_hit->{_Alias} = $hit->{_Alias} if($hit->{_Alias});
+    $new_hit->{_AED} = $hit->{_AED} if($hit->{_AED});
+    $new_hit->{_eAED} = $hit->{_eAED} if($hit->{_eAED});
 
     return $new_hit;
 }

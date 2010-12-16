@@ -1074,6 +1074,7 @@ sub _go {
 										   $CTL_OPT{'split_hit'},
 										   $CTL_OPT{'pred_flank'},
 										   1, #treat strands independently
+										   0,
 										   [$blastn_keepers]
 										   );
 	    }
@@ -1245,6 +1246,7 @@ sub _go {
 										     $CTL_OPT{'split_hit'},
 										     $CTL_OPT{'pred_flank'},
 										     1, #treat strands independently
+										     0,
 										     [$tblastx_keepers]
 										     );
 	    }
@@ -1418,6 +1420,7 @@ sub _go {
 										   $CTL_OPT{'split_hit'},
 										   $CTL_OPT{'pred_flank'},
 										   1, #treat strands independently
+										   0,
 										   [$blastx_keepers]
 										   );
 	    }
@@ -1515,7 +1518,7 @@ sub _go {
 	    #------------------------RETURN
 	    %results = (exonerate_e_data => $exonerate_e_data,
 			blastn_keepers => $blastn_keepers,
-			holdover_blastn => $holdover_blastn,
+			holdover_blastn => [],
 			);
 	    #------------------------RETURN
 	 }
@@ -1600,7 +1603,7 @@ sub _go {
 	    #------------------------RETURN
 	    %results = (exonerate_a_data => $exonerate_a_data,
 			tblastx_keepers => $tblastx_keepers,
-			holdover_tblastx => $holdover_tblastx,
+			holdover_tblastx => [],
 			);
 	    #------------------------RETURN
 	 }
@@ -1852,6 +1855,7 @@ sub _go {
 		 ) = GI::process_the_chunk_divide($chunk,
 						  $CTL_OPT{'split_hit'},
 						  $CTL_OPT{'pred_flank'},
+						  1,
 						  1,
 						  [$blastn_keepers,
 						   $blastx_keepers,
@@ -2275,7 +2279,7 @@ sub _go {
 	    
 	    #get best non-overlapping ab-inits
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
-									     $annotations->{abinit},
+									     $annotations,
 									     \%CTL_OPT
 									     );
 	    
@@ -2401,7 +2405,7 @@ sub _go {
 	    #--- building fastas for annotations (grows with iteration)
 	    GI::maker_p_and_t_fastas($maker_anno,
 				     $non_over,
-				     $annotations->{abinit},
+				     $annotations,
 				     $p_fastas,
 				     $t_fastas,
 				   );
