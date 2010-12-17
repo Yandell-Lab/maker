@@ -63,6 +63,9 @@ sub mpi_support {
 
     my $cc = "$ebase/mpich2/bin/mpicc";
     ($cc) = grep {is_mpich2($_)} File::Which::where('mpicc') if(! -f $cc);
+    ($cc) = grep {/mpich2/} File::Which::where('mpicc') if(! -f $cc);
+    ($cc) = File::Which::which('mpicc') if(! -f $cc);
+    
     $cc = $self->config('cc') if(! $cc);
 
     return unless($cc =~ /mpicc$/);
@@ -728,7 +731,20 @@ sub extract_archive {
     return 0 if(! $file);
     
     if(File::Which::which('tar')){
-	return $self->do_system("tar -xmof $file"); #fast
+	my $command;
+	my $u = scalar getpwuid($>);
+	my $g = scalar getgrgid($));
+	if($file =~ /\.gz$|\.tgz$/){
+	    $command = "tar -zxm --owner $u --group $g -f $file";
+	}
+	elsif($file =~ /\.bz2?$|\.tbz2?$/){
+	    $command = "tar -jxm --owner $u --group $g -f $file";
+	}
+	else{
+	    $command = "tar -xm --owner $u --group $g -f $file";
+	}
+
+	return $self->do_system($command); #fast
     }
     else{
 	die "ERROR: Archive::Tar required to unpack missing executables.\n".
