@@ -122,11 +122,11 @@ sub printIt {
       $f->{type} = '3UTR' if($f->{type} eq 'three_prime_UTR');
 	
       #remove comments to change coordinates for chunks
-      #if ($f->{seqid} =~ /^([^\:]+)\:(\d+)\D+\d+$/) {
-      #   $f->{seqid} = $1;
-      #   $f->{start} += $2 - 1;
-      #   $f->{end} += $2 - 1;
-      #}
+      if ($f->{seqid} =~ /^([^\:]+)\:(\d+)\D+\d+$/) {
+         $f->{seqid} = $1;
+         $f->{start} += $2 - 1;
+         $f->{end} += $2 - 1;
+      }
 	
       print $f->{seqid} . "\t";
       print $f->{source} . "\t";
