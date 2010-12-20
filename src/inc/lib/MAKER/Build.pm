@@ -456,6 +456,14 @@ sub _install_exe {
 	File::Path::rmtree("$path/$req");
 	$file = "$path/$req.tar.gz"; #file to save to
         $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
+
+	#glibc 2.5 or greater is required for Linux binary
+	if($OS eq 'Linux'){
+	    my $ldd = File::Which::which('ldd');
+	    my ($ver) = (`$ldd --version` =~ /(\d+\.\d+)/) if($ldd);
+	    $url = $data->{$req}{src} if(!$ver || $ver < 2.5);
+	}
+
 	print "Downloading $req...\n";
         $self->getstore($url, $file) or return $self->fail($req, $path);
 	print "Unpacking $req tarball...\n";
@@ -499,7 +507,6 @@ sub _install_exe {
 	print $fh "5\n";
 	close($fh);
 	$self->do_system("$^X ./configure < $tmp > /dev/null") or return $self->fail($exe, $path);
-        push(@unlink, $file);
         push(@unlink, $tmp);
     }
     elsif($exe eq 'blast'){
@@ -617,7 +624,7 @@ sub _install_exe {
 }
 
 #fail/cleanup method for installing exes
-sub _fail {
+sub fail {
     my $self = shift;
     my $exe = shift;
     my $path = shift;

@@ -781,9 +781,10 @@ else {
 
     #---set up blast databases and indexes for analyisis
     $CTL_OPT->{_not_root} = 1;
-    GI::create_blastdb($CTL_OPT);
-    GI::build_all_indexes($CTL_OPT);
-
+    if($rank < 5){ #only first 5 so as not to overdo it
+	GI::create_blastdb($CTL_OPT);
+	GI::build_all_indexes($CTL_OPT);
+    }
     #set to true for threads false for no threads
     $t_need_flag = ($main::no_threads) ? 0 : 1;
     my $thr = threads->create(\&node_thread) if($t_need_flag);    
