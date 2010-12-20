@@ -238,7 +238,7 @@ sub ACTION_release {
 	close(OUT);
 	
 	print "\nBuilding tarball for distribution...\n";
-	my $command = "tar -C $dir -zcf $tgz $base --exclude \"*~\" --exclude \".svn\" --exclude-from .exclude~";
+	my $command = "tar -C $dir -zcf $tgz $base --exclude \"*~\" --exclude \".svn\" --exclude \"maker-*.tgz\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
 	die "ERROR: tarball creation failed\n" if(! -f $tgz);
