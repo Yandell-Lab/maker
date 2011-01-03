@@ -353,7 +353,6 @@ sub grep_header {
 
 	while (my $seq_obj = $seq_io->next_seq) {
 		my $header = get_header($seq_obj);
-		$header .= " " . $seq_obj->description;
 		my $seq = $seq_obj->seq;
 
 		if ($header =~ /$pattern/) {
@@ -367,7 +366,6 @@ sub grepv_header {
 
 	while (my $seq_obj = $seq_io->next_seq) {
 		my $header = get_header($seq_obj);
-		$header .= " " . $seq_obj->description;
 		my $seq = $seq_obj->seq;
 
 		if ($header !~ /$pattern/) {
