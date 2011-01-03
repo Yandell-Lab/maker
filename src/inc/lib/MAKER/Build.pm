@@ -411,10 +411,11 @@ sub _install_exe {
     my $path = "$base/$exe";
 
     #get OS and architecture
-    my %os_ok = (Linux_x86_64 => 1,
-		 Linux_i386 => 1,
-		 Darwin_i386 => 1,
-		 src => 1); 
+    my %os_ok = (Linux_x86_64  => 1,
+		 Linux_i386    => 1,
+		 Darwin_i386   => 1,
+		 Darwin_x86_64 => 1,
+		 src           => 1); 
     my ($OS, $ARC) = (POSIX::uname())[0,4];
 
     ($OS, $ARC) = ('src', '') if(! $os_ok{"$OS\_$ARC"}); #use source code for unknown architectures

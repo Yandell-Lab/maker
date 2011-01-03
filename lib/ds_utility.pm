@@ -47,6 +47,7 @@ sub _initialize {
    my $out_name = $CTL_OPT->{out_name} || "output";
    my $ds_flag  = (exists($CTL_OPT->{datastore})) ? $CTL_OPT->{datastore} : 1;
 
+   $self->{out_base} = $out_base;
    $self->{root} = "$out_base/$out_name\_datastore";
    $self->{log} = "$out_base/$out_name\_master_datastore_index.log";
    $CTL_OPT->{SEEN_file} = $self->{SEEN_file} = "$out_base/seen.dbm";
@@ -69,8 +70,9 @@ sub _initialize {
    #except when using the hidden chpc option
    #then just append to the existing log
    if(! $CTL_OPT->{_multi_chpc}){
-       unlink($self->{log}) if(-f $self->{log});
-       unlink($self->{SEEN_file}) if(-f $self->{SEEN_file});
+       open(IN, "> $self->{log}");
+       open(IN, "> $self->{SEEN_file}");
+       close(IN);
    }
 }
 #------------------------------------------------------------------------

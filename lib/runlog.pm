@@ -227,7 +227,8 @@ sub _compare_and_clean {
 	elsif ($logged_vals{DIED}) {
 	    $continue_flag = ($CTL_OPT{clean_try}) ? 2 : 3;	#rerun died
 	    $continue_flag = -1 if($self->{die_count} > $CTL_OPT{retry}); #only let die up to count
-	    $rm_key{force}++ if ($continue_flag == 2);
+	    $continue_flag = -4 if($shared && $continue_flag == -1);
+	    $rm_key{force}++ if($continue_flag == 2);	    
 	}
 
 	my %skip;
@@ -719,7 +720,7 @@ sub _compare_and_clean {
 sub _write_new_log {
    my $self = shift;
 
-   return if($self->{continue_flag} <= 0 && $self->{continue_flag} != -2);
+   return if($self->{continue_flag} <= -3);
 
    $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
@@ -744,6 +745,7 @@ sub _write_new_log {
       }	  
       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }
+   $self->add_entry("DIED","COUNT",$self->get_die_count()) if($self->{continue_flag} == -1);
    close(LOG);
 }
 #-------------------------------------------------------------------------------
@@ -893,7 +895,7 @@ sub get_continue_flag {
       $message = ''; #no short message, as contig is running elsewhere
    }
    elsif($flag == -4){
-      $message = ''; #no short message, as contig was finished elsewhere
+      $message = ''; #no short message, as contig was handled elsewhere
    }
    else{
       die "ERROR: No valid continue flag\n";

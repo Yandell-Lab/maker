@@ -25,6 +25,7 @@ sub new {
 
 	$self->fileName($arg);
 	$self->fileHandle($arg);
+	$self->{SKIP} = {};
 
 	return $self;
 }
@@ -54,6 +55,30 @@ sub number_of_entries{
     }
     
     return $self->{number_of_entries};
+}
+#-------------------------------------------------------------------------------
+sub skip_file {
+    my $self = shift;
+    my $file = shift;
+
+    die "ERROR: Log file does not exist in Iterator::Fasta::skip_file\n" if(! -f $file);
+
+    my $out_base = $file;
+    $out_base =~ s/[^\/]+$//;
+    open(IN, "< $file") || die "ERROR: Could not open the log file in Iterator::Fasta::skip_file\n";
+    my %skip;
+    while(my $line = <IN>){
+	chomp $line;
+	my @F = split("\t", $line);
+	next unless(@F == 3);
+	next unless($F[2] eq 'FINISHED');
+	next unless(-d "$out_base/$F[1]");
+	$skip{$F[0]}++;
+    }
+    close(IN);
+
+    $self->{skip_file} = $file;
+    $self->{SKIP} = \%skip;
 }
 #-------------------------------------------------------------------------------
 sub find {
@@ -110,6 +135,9 @@ sub nextEntryRef {
 
 	$SEEN[$COUNT]++;
 
+	$line =~ /^>([^\s\n]+)/;
+	next if(defined ($self->{SKIP}{$1}));
+
 	local $/ = "\n";
 	return \$line;
     }
@@ -121,6 +149,7 @@ sub nextEntryRef {
 	$self->{step} = undef; #remove step
 	$COUNT = -1; #reset count
 	$fh->setpos($self->startPos); #go to start of file
+	$self->skip_file($self->{skip_file}) if($self->{skip_file} && -f $self->{skip_file}); #reload skip file
 	return $self->nextEntryRef();
     }
     

@@ -237,6 +237,7 @@ try{
 				   -gff => $CTL_OPT{'genome_gff'},
 				   );
     $iterator->step($CTL_OPT{'_step'});
+    $iterator->skip_file($DS_CTL->{log});
 }
 catch Error::Simple with{
     my $E = shift;

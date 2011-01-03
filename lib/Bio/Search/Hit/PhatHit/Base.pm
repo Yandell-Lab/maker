@@ -787,7 +787,7 @@ sub show
 
 ################################################ subroutine header begin ##
 
-=head1 revSortFeatures
+=head1 frac_identical
 
  Usage     : How to use this function/method
 
@@ -799,6 +799,57 @@ sub show
 =for example begin
 
  my $hit = $hits->[0];		# $hits is filled in by test harness
+ my $q_hsps = $hit->frac_identical();
+ my $h_hsps = $hit->frac_identical();
+
+=for example end
+
+=for example_testing
+ is($q_hsps->[0]->frac_identical(), .90, "Check fraction identical.");
+
+ Purpose   : Give fraction identical without HSP tiling.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub frac_identical {
+   my $self = shift;
+
+   return $self->{_f_id} if (defined ($self->{_f_id}));
+   
+   my $t_f;
+   my $t_l;
+   
+   foreach my $s ($self->hsps){
+       $t_l += $s->length;
+       $t_f += $s->num_identical;
+   }
+
+   $self->{_f_id} = sprintf("%.3f", $t_f/$t_l);
+  
+   return $self->{_f_id};
+}
+
+################################################ subroutine header begin ##
+=head1 revSortFeatures
+
+ Usage     : How to use this function/method
+
+=for example
+ use Bio::Search::Hit::PhatHit::Base;
+ my $hits = Bio::Search::Hit::PhatHit::Base::_getTestHits('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];          # $hits is filled in by test harness
  my $q_hsps = $hit->revSortFeatures('query');
  my $h_hsps = $hit->revSortFeatures('hit');
 
@@ -815,20 +866,21 @@ sub show
  Comments  : This is a sample subroutine header.
            : It is polite to include more pod and fewer comments.
  See Also  : Other things that might be useful.
-
+                                                                                                                                                                 
 =cut
 
 ################################################## subroutine header end ##
 
 sub revSortFeatures
 {
-   my $self = shift;
-   my $who  = shift;
+    my $self = shift;
+    my $who  = shift;
 
-   my @rev = reverse sort {$a->end($who) <=> $b->end($who)} $self->hsps;
+    my @rev = reverse sort {$a->end($who) <=> $b->end($who)} $self->hsps;
 
-   return \@rev;
+    return \@rev;
 }
+
 
 ################################################ subroutine header begin ##
 

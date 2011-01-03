@@ -26,7 +26,7 @@ BEGIN{
    #what to do on ^C
    $SIG{'INT'} = sub {
       print STDERR "\n\nMaker aborted by user!!\n\n";
-      exit (1);
+      exit (2);
    };
 
    #supress warnings from storable module
@@ -301,10 +301,10 @@ unless($main::no_threads){
 	unless($main::no_threads){
 	    my @threads = threads->list();
 	    foreach my $thr (@threads){
-		$thr->detach;
+		$thr->kill('KILL')->join();
 	    }
 	}
-	exit (1);
+	exit (2);
     };
 
    #output to log file of seq that caused rank to die
@@ -412,6 +412,7 @@ if ($rank == $root) {
 				       -gff => $CTL_OPT{'genome_gff'},
 				       );
 	$iterator->step($CTL_OPT{'_step'});
+	$iterator->skip_file($DS_CTL->{log});
     }
     catch Error::Simple with{
 	my $E = shift;
@@ -538,7 +539,7 @@ if ($rank == $root) {
 		#get result if available
 		if($rs_type == $yes_result){
 		    my $result;
-		    print "COMM TIER REQUESTED\t|  RECV\t|  mpi_data (tier_result)\t|  $rank\t<--\t$who\n" if($main::debug);
+		    print "COMM TIER REQUESTED\t|  RCV2\t|  mpi_data (tier_result)\t|  $rank\t<--\t$who\n" if($main::debug);
 		    MPI_RecvII(\$result, $who, $mpi_data, MPI_COMM_WORLD);
 		    push(@failed, $result->{-fasta}) if ($result->{-failed});
 		    push(@interrupted, $result->{-fasta}) if ($result->{-interrupt});
@@ -759,10 +760,6 @@ if ($rank == $root) {
 	print "TERMINATION\t|  SEND\t|  req_stat (terminate)\t|  $rank\t-->\t$i\n" if($main::debug);
 	MPI_Send(\$terminate, 1, MPI_INT, $i, $request_status, MPI_COMM_WORLD); #signal to become helper
     }
-    
-    #---release thread
-    $t_terminate = 1; #signals to thread to clean up
-    $thr->detach() unless(!$thr || $thr->is_detached);
     
     print STDERR "\n\nMaker is now finished!!!\n\n";
 }
@@ -1087,13 +1084,18 @@ else {
 	    next;
 	}
     }
-
-    #---release thread
-    $t_terminate = 1; #signals to thread to clean up
-    $thr->detach() unless(!$thr || $thr->is_detached);
 }
 
 #---------ALL NODES----------
+#---release thread
+$t_terminate = 1; #signals to thread to clean up
+unless($main::no_threads){
+    my @threads = threads->list();
+    foreach my $thr (@threads){
+	$thr->kill('KILL')->join();
+    }
+}
+
 MPI_Finalize();			#terminate MPI
 
 exit(0);
@@ -1112,9 +1114,12 @@ sub node_thread {
        return;
    }
 
+   #set up thread signal to exit gracefully
+   $SIG{'KILL'} = sub { threads->exit(); };
+
    $t_need_flag = 1;
 
-   while(not $t_terminate){
+   while(! $t_terminate){
       #load serialized tier into tier
       if(! defined ($tier) && defined ($t_tier)){
 	 $t_need_flag = 0;

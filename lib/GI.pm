@@ -590,6 +590,7 @@ sub split_db {
        $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
        my $b_dir = $CTL_OPT->{mpi_blastdb};
        my $bins = ($mpi_size % 10 == 0) ? (int($mpi_size/$f_count)/10)*10 : (int(($mpi_size/$f_count)/10) +1)*10;
+       $bins = 10 if($bins < 10);
        my $d_name = "$f_name\.mpi\.$bins";
        my $f_dir = "$b_dir/$d_name";
        my $t_dir = $TMP."/$d_name";
@@ -1079,8 +1080,9 @@ sub polish_exonerate {
 	    $h_name = $hit->name;
 	    $h_description = $hit->description;
 
-	    next if $hit->pAh < $pcov/2;
-	    next if $hit->hsp('best')->frac_identical < $pid;
+	    next if($hit->pAh < $pcov/2);
+	    next if($hit->hsp('best')->frac_identical < $pid &&
+		    $hit->frac_identical('total') < $pid);
 
 	    ($B, $E) = PhatHit_utils::get_span_of_hit($hit,'query');
 	    ($B, $E) = ($E, $B) if($B > $E);
@@ -1108,7 +1110,7 @@ sub polish_exonerate {
 		    $go++;
 		    last;
 		}
-		elsif(my ($bName) = $coor =~ /^([^\s\;]+)$/ && ref($hit) ne ''){
+		elsif((my ($bName) = $coor =~ /^([^\s\;]+)$/) && (ref($hit) ne '')){
 		    next if($name ne $bName);
 		    $go++;
 		    last;
@@ -1217,7 +1219,7 @@ sub polish_exonerate {
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
 	    @keepers = @perfect if(@perfect);
-	    @keepers = (sort {$b->frac_identical <=> $a->frac_identical} @keepers)[0];
+	    @keepers = (sort {$b->frac_identical('total') <=> $a->frac_identical('total')} @keepers)[0];
 	}
 
 	push(@exonerate_data, @keepers);
@@ -2338,7 +2340,8 @@ sub clean_blast_hits{
 
 	next unless ($significance < $sig);
 	next unless ($hit->pAh > $pcov);
-	next unless ($hit->hsp('best')->frac_identical() > $pid);
+	next unless ($hit->hsp('best')->frac_identical() > $pid ||
+		     $hit->frac_identical() > $pid);
 	next unless (!$con || PhatHit_utils::is_contigous($hit));
 	push(@keepers, $hit);
     }
