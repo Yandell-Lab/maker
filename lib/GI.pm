@@ -1082,7 +1082,7 @@ sub polish_exonerate {
 
 	    next if($hit->pAh < $pcov/2);
 	    next if($hit->hsp('best')->frac_identical < $pid &&
-		    $hit->frac_identical('total') < $pid);
+		    $hit->frac_identical < $pid);
 
 	    ($B, $E) = PhatHit_utils::get_span_of_hit($hit,'query');
 	    ($B, $E) = ($E, $B) if($B > $E);
@@ -1219,7 +1219,7 @@ sub polish_exonerate {
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
 	    @keepers = @perfect if(@perfect);
-	    @keepers = (sort {$b->frac_identical('total') <=> $a->frac_identical('total')} @keepers)[0];
+	    @keepers = (sort {($b->frac_identical * $b->pAh) <=> ($a->frac_identical * $a->pAh)} @keepers)[0];
 	}
 
 	push(@exonerate_data, @keepers);

@@ -2,6 +2,7 @@
 
 use warnings; 
 use strict;
+use URI::Escape;
 use Getopt::Std;
 
 ##### Initialize Threshhold  ####
@@ -23,12 +24,12 @@ maker2zff [options] <gff3_file> <gff3_file> ...
 maker2zff [options] -d <datastore_index>
 
 OPTIONS
-For determining which genes are High Confidence for Retraining, there are 6 criteria.
+For determining which genes are High Confidence for Retraining, there are 7 criteria.
 -c fraction  The fraction of splice sites confirmed by an EST alignment, default 0.5
 -e fraction  The fraction of exons that overlap an EST alignment, default 0.5
 -o fraction  The faction of exons that overlap any evidence (EST or Protein), default 0.5
--a fraction  The fraction of splice sites confirmed by an ab-initio SNAP prediction, default 0
--t fraction  The fraction of exons the overlap an ab-initio SNAP prediction, default 0
+-a fraction  The fraction of splice sites confirmed by an ab-initio prediction, default 0
+-t fraction  The fraction of exons that overlap an ab-initio prediction, default 0
 -l number    The min length of the protein sequence produced by the mRNA
 -x number    Max AED to allow 0.5 is default
 -n           No filtering.  Accept all.
@@ -88,7 +89,8 @@ if ($opt_d){
 
     foreach my $file (@files){
         $file =~ /([^\/]+)$/;
-        $file = "$base/$file/$1.gff";
+	my $name = uri_escape($1, '.');
+        $file = "$base/$file/$name.gff";
     }
 }
 

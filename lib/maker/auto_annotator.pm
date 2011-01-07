@@ -2420,7 +2420,7 @@ sub get_non_overlaping_abinits {
    my @none;
 
    my $abin_set = [];
-   my @ab_keys = grep {/_abinit$/} keys %$all_set;
+   my @ab_keys = grep {/_abinit$|^pred_gff/} keys %$all_set;
 
    foreach my $key (@ab_keys){
        push(@$abin_set, @{$all_set->{$key}});
