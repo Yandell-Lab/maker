@@ -334,7 +334,7 @@ sub unlock ($) {
       kill(2, $self->{_maintain});
       close($self->{_OUT});
       close($self->{_IN});
-
+      
       #attempt kill multiple times if still running
       my $stat = waitpid($self->{_maintain}, WNOHANG);
       my $count = 0;
@@ -344,13 +344,13 @@ sub unlock ($) {
 	  $stat = waitpid($self->{_maintain}, WNOHANG);
 	  $count++;
       }
-
+      
       #if still running, do this
       if($stat == 0){
 	  waitpid($self->{_maintain}, 0) if($stat == 0);
-          #die "ERROR: Could not destroy lock maintainer\n";
+	  #die "ERROR: Could not destroy lock maintainer\n";
       }
-
+      
       $self->{_maintain} = undef;
   }
 
@@ -628,8 +628,13 @@ sub maintain {
     die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
 	if(! $exe || ! -f $exe);
 
+    #run maintainer with unsafe signals (I want imediate responses)
+    $ENV{PERL_SIGNALS} = 'unsafe';
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
     my $pid = open2(my $OUT, my $IN, "$^X $exe $$ $time $serial");
+    $ENV{PERL_SIGNALS} = 'safe';
+
+    #attach maintainer
     $self->{_OUT} = $OUT;
     $self->{_IN} = $IN;
     $self->{_maintain} = $pid;

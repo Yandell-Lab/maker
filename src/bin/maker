@@ -76,7 +76,7 @@ use Process::MpiChunk;
 use Process::MpiTiers;
 use Proc::Signal;
 
-$| = 1;
+select((select(STDOUT), $|=1)[0]); #make STDOUT buffer flush immediately
 
 my $usage = "
 Usage:

@@ -76,9 +76,10 @@ my %constants = qw(MPI_2COMPLEX            MPI_Datatype
 		   MPI_UNEQUAL             undef
 		   MPI_VERSION             undef);
 
-my @funcs =     qw(&MPI_Send
-		   &MPI_Recv
-		   &MPI_Barrier
+my @basic = qw(&MPI_Send
+	       &MPI_Recv);
+
+my @funcs =     qw(&MPI_Barrier
 		   &MPI_Bcast
 		   &MPI_Comm_size
 		   &MPI_Comm_rank
@@ -94,8 +95,8 @@ my @funcs =     qw(&MPI_Send
 		   &MPI_Gather
 		   &MPI_Sendrecv);
 
-%EXPORT_TAGS = ( all => [ keys %constants, @funcs ] );
-@EXPORT_OK = ( keys %constants, @funcs );
+%EXPORT_TAGS = ( all => [ keys %constants, @funcs, @basic ],  most => [ keys %constants, @funcs ]);
+@EXPORT_OK = ( keys %constants, @funcs, @basic );
 
 $VERSION = '0.03';
 

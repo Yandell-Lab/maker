@@ -20,7 +20,7 @@ bin/iprscan_wrap
 bin/maker
 bin/maker2chado
 bin/maker2jbrowse
-bin/maker2zff.pl
+bin/maker2zff
 bin/maker_functional
 bin/maker_functional_fasta
 bin/maker_functional_gff

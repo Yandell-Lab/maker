@@ -36,7 +36,11 @@ sub run {
 
 	if (defined($command)){
 	   $self->print_command($command);
-	   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+
+	   $ENV{PERL_SIGNALS} = 'unsafe';
+	   my $pid = open3(\*CHLD_IN, \*CHLD_ERR, \*CHLD_ERR, $command);
+	   $ENV{PERL_SIGNALS} = 'safe';
+
 	   local $/ = \1;
 	   my $err;
 	   my $fail;
@@ -54,7 +58,7 @@ sub run {
 
 	   if($@){
 	       #warn $@; #removed - don't report first round errors
-	       $fail = 1
+	       $fail = 1;
 	   }
 
 	   #reap process
@@ -72,7 +76,6 @@ sub run {
 
 	   #close handles
 	   close(CHLD_IN);
-	   close(CHLD_OUT);
 	   close(CHLD_ERR);
 
 	   #check for correct STDERR and cleanup tmpdir
@@ -97,7 +100,10 @@ sub run {
 	   return if (! $fail);
 
 	   #always try twice because iprscan is unstable
-	   $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	   $ENV{PERL_SIGNALS} = 'unsafe';
+	   $pid = open3(\*CHLD_IN, \*CHLD_ERR, \*CHLD_ERR, $command);
+	   $ENV{PERL_SIGNALS} = 'safe';
+
 	   undef $err;
 	   undef $fail;
 
@@ -132,7 +138,6 @@ sub run {
 
 	   #close handles
 	   close(CHLD_IN);
-	   close(CHLD_OUT);
 	   close(CHLD_ERR);
 
 	   #check for correct STDERR and cleanup tmpdir
@@ -153,7 +158,10 @@ sub run {
 	       $fail = 1;
 	   }
 
-	   die "ERROR: Iprscan failed\n" if ($fail);
+	   if ($fail){
+	       $err =~ s/^SUBMITTED iprscan-\d+-\d+\n*//;
+	       die "ERROR: Iprscan failed.\n\n$err";
+	   }
 	}
 	else {
 	   die "you must give Widget::iprscan a command to run!\n";

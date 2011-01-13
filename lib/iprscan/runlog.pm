@@ -13,6 +13,7 @@ use Exporter;
 use Fasta;
 use File::NFSLock;
 use AnyDBM_File;
+use URI::Escape;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -43,7 +44,6 @@ sub new {
     bless ($self, $class);    
 
     if($self->_initialize(@args)){
-       $self->_load_old_log();
        $self->_compare_and_clean();
        $self->_write_new_log();
     }
@@ -55,10 +55,10 @@ sub new {
 #-------------------------------------------------------------------------------
 sub _initialize {
    my $self = shift;
-   $self->{CTL_OPTIONS} = shift;
+   $self->{CTL_OPT} = shift;
    $self->{params} = shift;
    $self->{file_name} = shift || "run.log";
-   $self->{CWD} = $self->{CTL_OPTIONS}->{CWD} || Cwd::cwd();
+   $self->{CWD} = $self->{CTL_OPT}->{CWD} || Cwd::cwd();
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
@@ -66,7 +66,6 @@ sub _initialize {
    if(my $lock = new File::NFSLock($self->{file_name}, 'NB', undef, 90)){
        $self->{continue_flag} = 1;
        $self->{LOCK} = $lock;
-
        return 1;
    }
    else{
@@ -79,6 +78,7 @@ sub _load_old_log {
    my $self = shift;
 
    $self->{die_count} = 0;
+   $self->{old_shared_id} = '';
 
    my $log_file = $self->{file_name};
    my %logged_vals;
@@ -93,6 +93,7 @@ sub _load_old_log {
 	 $logged_vals{$type}{$key} = defined($value) ? $value : '';
 	 
 	 $self->{die_count} = $value if($type eq 'DIED' && $key eq 'COUNT');
+         $self->{old_shared_id} = $key if($type eq 'SHARED_ID');
       }
       close(IN);
    }
@@ -109,100 +110,92 @@ sub _compare_and_clean {
         return;
     }
 
+    $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
     my $CWD = $self->{CWD};
     my $the_void = $self->{params}->{the_void};
-    my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
+    my %CTL_OPT = %{$self->{CTL_OPT}};
     
     #get ipr file name
     my $log_file = $self->{file_name};
     my $ipr_file = $the_void;
     my $out_base = $the_void;
     $out_base =~ s/theVoid\.[^\/]+$//;
-    $ipr_file =~ s/theVoid\.([^\/]+)$/$1.ipr/;
+    $ipr_file =~ s/theVoid\.([^\/]+)$//;
+    $ipr_file .= uri_escape($1, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.') .".ipr";
     my $name = $1;
 
     #===id files types that can not be re-used
     my $continue_flag = $self->{continue_flag}; #signal whether to continue with this seq
-    
-    my %logged_vals = %{$self->{old_log}}; #values from existing log
     my %rm_key; #key to what type of old files to remove
     my @files; #list of files to remove
     my @dirs; #list of directories to remove
-    
-    if ($continue_flag > 0 && -e $log_file) {
-#	die "ERROR: Database timed out in runlog::_clean_files\n\n"
-#	    unless (my $lock = new File::NFSLock($CTL_OPTIONS{SEEN_file}, 'EX', 60, 60));
 
-        #seen is set in ds_utility.pm
-#        my %SEEN;
-#        tie (%SEEN, 'AnyDBM_File', $CTL_OPTIONS{SEEN_file});
+    #evaluate existing runlog for contig
+    if (-e $log_file) {
+        my %logged_vals = %{$self->_load_old_log}; #values from existing log                                                                  
+        my $shared = $self->{old_shared_id} eq $CTL_OPT{_shared_id};
 
-	if (exists $logged_vals{DIED}) {
-	    if($CTL_OPTIONS{force} && ! defined $SEEN{$name}){
-		$self->{die_count} = 0; #reset the die count
-		$continue_flag = 1; #re-run
-		$rm_key{force}++;
-	    }
-            elsif($CTL_OPTIONS{always_try} && ! defined $SEEN{$name}){
-                $self->{die_count} = 0; #reset the die count
-                $continue_flag = 1; #re-run
-	    }
-	    else{
-		$continue_flag = ($CTL_OPTIONS{clean_try}) ? 2 : 3;	#rerun died
-		$continue_flag = -1 if($self->{die_count} > $CTL_OPTIONS{retry}); #only let die up to count
-		$rm_key{retry}++ if ($continue_flag == 2);
-	    }
-	}
-	elsif ($CTL_OPTIONS{force} && ! defined $SEEN{$name}) {
-	    $rm_key{force}++;
-	    $continue_flag = 1;	#run/re-run
-	}
-	elsif ($CTL_OPTIONS{again} && ! defined $SEEN{$name}){
-	    $continue_flag = 1; #run/re-run
-	    $rm_key{ipr}++;
-	}
-	else {
-	    $continue_flag = 0 if (-e $ipr_file); #don't re-run finished
-	}
+        if($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig} && $shared){
+            $self->{continue_flag} = -4; #handled elsewhere, don't run, don't report
+            return;
+        }
+        elsif(-e $ipr_file && $shared){
+            $self->{continue_flag} = -4; #handled elsewhere, don't run, don't report
+            return;
+        }
+        elsif($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig} && !$shared){
+            $continue_flag = -2; #skip short
+            $self->{die_count} = 0; #reset the die count
+            $rm_key{force}++; #will destroy ipr and fastas for this contig
+        }
+        elsif ($CTL_OPT{force} && !$shared) {
+            $rm_key{force}++;
+            $self->{die_count} = 0; #reset the die count
+            $continue_flag = 1; #run/re-run
+        }
+        elsif ($CTL_OPT{again} && !$shared){
+            $rm_key{ipr}++;
+            $self->{die_count} = 0; #reset the die count
+            $continue_flag = 1; #run/re-run
+        }
+        elsif(-e $ipr_file){
+            $continue_flag = 0; #don't re-run finished
+        }
+        elsif ($CTL_OPT{always_try}){
+            $self->{die_count} = 0; #reset the die count
+            $continue_flag = 1; #re-run
+        }
+        elsif ($logged_vals{DIED}) {
+            $continue_flag = ($CTL_OPT{clean_try}) ? 2 : 3;     #rerun died
+            $continue_flag = -1 if($self->{die_count} > $CTL_OPT{retry}); #only let die up to count
+            $continue_flag = -4 if($shared && $continue_flag == -1);
+            $rm_key{force}++ if($continue_flag == 2);
+        }
 
-	$SEEN{$name} = $continue_flag;
-#        untie %SEEN;
-#        $lock->unlock;	
-
-	if($continue_flag >= 0 || $continue_flag == -1){
-	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
-	    my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
-	    while (my $key = each %{$logged_vals{CTL_OPTIONS}}) {
-		my $log_val = '';
-		if(defined $logged_vals{CTL_OPTIONS}{$key}){	       
-		    $log_val = $logged_vals{CTL_OPTIONS}{$key};
-		    if($key eq 'appl'){
-			#don't care about order
-			my @set = split(',', $logged_vals{CTL_OPTIONS}{appl});
-			@set = sort @set;
-			$log_val = join(',', @set);
-		    }
+        my %skip;
+        if(!$rm_key{force}){
+            #CHECK CONTROL FILE OPTIONS FOR CHANGES
+            foreach my $key (@ctl_to_log) {
+                my $log_val = '';
+                if(defined $logged_vals{CTL_OPTIONS}{$key}){
+                    $log_val = $logged_vals{CTL_OPTIONS}{$key};
+                    $log_val =~ s/(^|\,)$CWD\/*/$1/g;
+                    $log_val = join(',', sort split(',', $log_val));
 		}
 		
 		my $ctl_val = '';
-		if(defined $CTL_OPTIONS{$key}){
-		    $ctl_val = $CTL_OPTIONS{$key};
-		    $ctl_val =~ s/^$cwd\/*//;
-		    if($key eq 'appl'){
-			#don't care about order
-			my @set = sort @{$CTL_OPTIONS{appl}};
-			$ctl_val = join(',', @set);
-		    }
+		if(defined $CTL_OPT{$key}){
+		    $ctl_val = $CTL_OPT{$key};
+		    $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
+		    $ctl_val = join(',', sort split(',', $ctl_val));
 		}
 		
 		#if previous log options are not the same as current control file options
-		if ($log_val ne $ctl_val) {
-		    
-		    print STDERR "MAKER WARNING: Control file option \'$key\' has changed\n".
+		if ($log_val ne $ctl_val) {	    
+		    print STDERR "WARNING: Control file option \'$key\' has changed\n".
 			"Old:$log_val\tNew:$ctl_val\n\n" unless($main::quiet);
 		    
-		    $continue_flag = 1; #re-run because ctlopts changed
-		    
+		    $continue_flag = 1; #re-run because ctlopts changed		    
 		    $rm_key{ipr}++; #always rebuild IPR when some option has changed
 		    
 		    #certain keys that affect everything
@@ -218,15 +211,24 @@ sub _compare_and_clean {
 		    }
 		}
 	    }
-	    
+	
 	    #CHECK FOR FILES THAT DID NOT FINISH
 	    while (my $key = each %{$logged_vals{STARTED}}) {
 		if (! exists $logged_vals{FINISHED}{$key}) {
-		    print STDERR "MAKER WARNING: The file $key\n".
+		    print STDERR "WARNING: The file $key\n".
 			"did not finish on the last run and must be erased\n" unless($main::quiet);
 		    push(@files, $key);
+
+                    #this next step will get both temp directories and files that
+                    #have the incorrect location in the log but are in theVoid
 		    $key =~ /([^\/]+)$/;
 		    my $rm_f_name = $1;
+
+                    if(! -e $key && -e "$the_void/$rm_f_name"){
+                        push(@files, $rm_f_name);
+                    }
+
+
 		    $rm_f_name =~ s/\.fasta$//;
 		    my @d = <$the_void/*$rm_f_name*>;
 		    foreach my $d (@d){
@@ -255,15 +257,6 @@ sub _compare_and_clean {
 	    unlink($ipr_file) if(-e $ipr_file);
 	    push (@files, @{[<$out_base/*.fasta>]});
 	}
-	elsif (exists $rm_key{retry}) {
-	    print STDERR "WARNING: Old data must be removed before re-running this sequence\n" unless($main::quiet);
-	    
-	    #delete everything in the void
-	    File::Path::rmtree($the_void);
-	    File::Path::mkpath($the_void);
-	    unlink($ipr_file) if(-e $ipr_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
-	}
 	elsif (exists $rm_key{all}) {
 	    print STDERR "WARNING: Changes in control files make re-use of all old data impossible\n".
 		"All old files will be erased before continuing\n" unless($main::quiet);
@@ -271,15 +264,27 @@ sub _compare_and_clean {
 	    #delete everything in the void
 	    File::Path::rmtree($the_void);
 	    File::Path::mkpath($the_void);
+
+	    #remove all other files
 	    unlink($ipr_file) if(-e $ipr_file);
 	    push (@files, @{[<$out_base/*.fasta>]});
 	}
-	elsif (exists $rm_key{ipr}) {
-	    print STDERR "WARNING: Any preexisting IPR files for this contig must now be removed.\n" unless($main::quiet);
-	    push (@files, $ipr_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
+	else{
+	    if (exists $rm_key{ipr}) {
+		print STDERR "WARNING: Any preexisting IPR files for this contig must now be removed.\n" unless($main::quiet);
+		push (@files, $ipr_file);
+		push (@files, @{[<$out_base/*.fasta>]});
+	    }
+	    else{
+		#see if died fasta exists
+		my $d_fasta = $ipr_file;
+		$d_fasta =~ s/\.ipr$/.died.fasta/;
+		if(-e $d_fasta){
+		    push (@files, $d_fasta);
+		}
+	    }
 	}
-
+    
 	#delete files in the void
 	foreach my $file (@files) {
 	    unlink($file) if(-e $file);
@@ -288,12 +293,6 @@ sub _compare_and_clean {
 	#delete directories in the void
 	foreach my $dir (@dirs) {
 	    File::Path::rmtree($dir);
-	}
-	
-	#just in case, this will help remove temp_dirs
-	my @d = <$the_void/*.temp_dir>;
-	foreach my $d (@d){
-	    File::Path::rmtree($d) if (-d $d);
 	}
     }
     
@@ -304,29 +303,27 @@ sub _compare_and_clean {
 sub _write_new_log {
    my $self = shift;
 
-   my $log_file = $self->{file_name};
-   
-   my %CTL_OPTIONS = %{$self->{CTL_OPTIONS}};
+   return if($self->{continue_flag} <= -3);
 
-   return if ($self->{continue_flag} <= 0);
+   $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
+   my $CWD = $self->{CWD};
+   my $log_file = $self->{file_name};
+   my %CTL_OPT = %{$self->{CTL_OPT}};
 
    open (LOG, "> $log_file");
 
    #log control file options
-   my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
+   print LOG "SHARED_ID\t$CTL_OPT{_shared_id}\t\n";
    foreach my $key (@ctl_to_log) {
-      my $ctl_val = '';
-      if(defined $CTL_OPTIONS{$key}){
-	 $ctl_val = $CTL_OPTIONS{$key} ;
-	 $ctl_val =~ s/^$cwd\/*//;
-	 if($key eq 'appl'){
-	     #don't care about order
-	     my @set = sort @{$CTL_OPTIONS{appl}};
-	     $ctl_val = join(',', @set);
-	 }
-      }	  
-      print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
+       my $ctl_val = '';
+       if(defined $CTL_OPT{$key}){
+	   $ctl_val = $CTL_OPT{$key};
+	   $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
+	   $ctl_val = join(',', sort split(',', $ctl_val));
+       }
+       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }
+   $self->add_entry("DIED","COUNT",$self->get_die_count()) if($self->{continue_flag} == -1);
    close(LOG);
 }
 #-------------------------------------------------------------------------------
@@ -337,18 +334,21 @@ sub add_entry {
    my $key   = shift;
    my $value = shift;
 
+   $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
+   my $CWD = $self->{CWD};
+
    my $log_file = $self->{file_name};
-   my $cwd = ($self->{CWD}) ? $self->{CWD} : Cwd::cwd();
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security
+   #also important when moving work directory around
    if(defined $key && defined $type){
-       $key =~ s/^$cwd\/*// if($type =~ /^STARTED$|^FINISHED$/);
+       $key =~ s/^$CWD\/*// if($type =~ /^STARTED$|^FINISHED$/);
    }
 
-   open(LOG, ">> $log_file");
-   print LOG "$type\t$key\t$value\n";
-   close(LOG);
+   open(my $LOG, ">> $log_file");
+   print $LOG "$type\t$key\t$value\n";
+   close($LOG);
 }
 #-------------------------------------------------------------------------------
 sub get_die_count {
@@ -365,7 +365,7 @@ sub report_status {
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
    my $fasta_ref = $self->{params}->{fasta_ref};
-   #my $length = $self->{params}->{seq_length};
+   my $length = $self->{params}->{seq_length};
 
    #maintain lock only if status id positive (possible race condition?)
    $self->{LOCK}->maintain(30) if($flag > 0);
@@ -373,9 +373,9 @@ sub report_status {
    if($flag == 0){
       print STDERR "#---------------------------------------------------------------------\n",
                    "The contig has already been processed!!\n",
-		   "mpi_iprscan will now skip to the next contig.\n",
+		   "iprscan will now skip to the next contig.\n",
 		   "SeqID: $seq_id\n",
-                   #"Length: $length\n",		   
+                   "Length: $length\n",		   
 		   "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
    }
@@ -383,7 +383,7 @@ sub report_status {
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now starting the contig!!\n",
 		   "SeqID: $seq_id\n",
-                   #"Length: $length\n",
+                   "Length: $length\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
    }
@@ -392,7 +392,7 @@ sub report_status {
                    "Now retrying the contig!!\n",
                    "All contig related data will be erased before continuing!!\n",
 		   "SeqID: $seq_id\n",
-                   #"Length: $length\n",
+                   "Length: $length\n",
 		   "Retry: $die_count!!\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
@@ -401,7 +401,7 @@ sub report_status {
       print STDERR "#---------------------------------------------------------------------\n",
                    "Now retrying the contig!!\n",
 		   "SeqID: $seq_id\n",
-                   #"Length: $length\n",
+                   "Length: $length\n",
 		   "Retry: $die_count!!\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
@@ -409,10 +409,10 @@ sub report_status {
    elsif($flag == -1){
       print STDERR "#---------------------------------------------------------------------\n",
                    "The contig failed $die_count time!!\n",
-		   "mpi_iprscan will not try again!!\n",
+		   "iprscan will not try again!!\n",
 		   "The contig will be stored in a fasta file that you can use for debugging.\n",
 		   "SeqID: $seq_id\n",
-                   #"Length: $length\n",
+                   "Length: $length\n",
 		   "FASTA: $out_dir/$seq_out_name.died.fasta\n",
 		   "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
@@ -433,10 +433,13 @@ sub report_status {
       print STDERR "#---------------------------------------------------------------------\n",
                    "Another instance of is processing this contig!!\n",
                    "SeqID: $seq_id\n",
-                   #"Length: $length\n",
+                   "Length: $length\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::quiet);
   }
+   elsif($flag == -4){
+       #do nothing
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -468,6 +471,9 @@ sub get_continue_flag {
    elsif($flag == -3){
        $message = ''; #no short message, as contig is running elsewhere
    }
+   elsif($flag == -4){
+       $message = ''; #no short message, as contig was handled elsewhere
+   }
    else{
       die "ERROR: No valid continue flag\n";
    }
@@ -489,6 +495,25 @@ sub unlock {
     my $self = shift;
 
     $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
+#-------------------------------------------------------------------------------
+sub compare_comma_lists{
+    my $val1 = shift;
+    my $val2 = shift;
+
+    my @set1 = map {$_ =~ /^([^\:]+)/; $1} split(',', $val1);
+    my @set2 = map {$_ =~ /^([^\:]+)/; $1} split(',', $val2);
+
+    my %count;
+
+    foreach my $v (@set1, @set2){
+        $count{$v}++;
+    }
+
+    my @change = map {/([^\/]+)$/; $1} grep {$count{$_} == 1} keys %count;
+    my @keep = map {/([^\/]+)$/; $1} grep {$count{$_} != 1} keys %count;
+
+    return (\@change, \@keep);
 }
 #-------------------------------------------------------------------------------
 sub DESTROY {

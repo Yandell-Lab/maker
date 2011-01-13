@@ -28,6 +28,8 @@ sub polish {
 	my $g_file     = shift;
 	my $p_file     = shift;
 	my $o_file     = shift;
+	my $g_len      = shift;
+        my $p_len      = shift;
 	my $the_void   = shift;
 	my $offset     = shift || 0;
 	my $exe        = shift;
@@ -35,7 +37,7 @@ sub polish {
 	my $min_intron = shift;
 	my $matrix     = shift;
 
-	my ($p_len, $g_len) = polisher::prep($g_file, $p_file);
+	($p_len, $g_len) = polisher::prep($g_file, $p_file) if(!$p_len || !$g_len);
 
 	my $hits = p_exonerate($g_file, 
 			       $p_file, 

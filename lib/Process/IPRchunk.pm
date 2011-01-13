@@ -50,6 +50,7 @@ sub new {
 
    return $self;
 }
+
 #--------------------------------------------------------------
 #Perform any user specified initialization steps here.
 #This method always runs when a new chunk is created.
@@ -162,6 +163,9 @@ sub _should_continue {
 	$self = new Process::IPRchunk();
     }
 
+    #interrupted because another process is working on contig
+    $tier->_set_interrupt(1) if($tier->{VARS}{c_flag} == -3);
+
     return $tier->{VARS}{c_flag};
 }
 
@@ -231,7 +235,7 @@ sub _loader {
    return $chunks;
 }
 #--------------------------------------------------------------
-#cals _go('run') to run code
+#calls _go('run') to run code
 
 sub run {
    my $self = shift;
@@ -287,6 +291,7 @@ sub _go {
    my $VARS = shift @_;
 
    my $next_level = $level + 1;
+   my $result_stat = 1;
    my @chunks;
    my @args;
    my %results;
@@ -312,12 +317,14 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $fasta   = Fasta::ucFasta(\$VARS->{fasta});
+	    my $fasta   = Fasta::ucFastaRef($VARS->{fasta});
 	    my $DS_CTL  =  $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	     
 	    #get fasta parts
-	    my $seq_id = Fasta::getSeqID(\$fasta);
+	    my $seq_id = Fasta::getSeqID($fasta);
+	    my $seq_ref = Fasta::getSeqRef($fasta);
+	    my $seq_length = length($$seq_ref);
 	    my $safe_id = Fasta::seqID2SafeID($seq_id);
 	    
 	    #set up base and void directories for output
@@ -328,23 +335,25 @@ sub _go {
 	    
 	    my $LOG = iprscan::runlog->new(\%CTL_OPT,
 					   {seq_id     => $seq_id,
+					    seq_length => $seq_length,
 					    out_dir    => $out_dir,
 					    the_void   => $the_void,
-					    fasta_ref  => \$fasta},
+					    fasta_ref  => $fasta},
 					   "$out_dir/run.log"
 					   );
 	    
 	    my $LOCK = $LOG->strip_off_lock();
-	     
+	    
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
+
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
 	     
 	    #process existing iprscan output
-	    if($c_flag == 0){		   
+	    if($c_flag == 0){
 		die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
 		    if(! -e $cfile);
 		 
-#		my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
+		my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
 		my $outfile = $CTL_OPT{outfile};
 		 
 		my $FH;
@@ -358,28 +367,36 @@ sub _go {
 		#open for reading
 		open(my $CFH, "< $cfile");
 		 
-		while(my $line = <$CFH>){
-		    print $FH $line;
-		}
+		my $data = '';
+		$data .= join('', <$CFH>);
+		print $FH $data;
 		 
 		close($FH);
 		close($CFH);
 		 
-#		$lock->unlock;
+		$lock->unlock;
 	    }
 	    #-------------------------CODE
 	     
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (seq_id => $seq_id,
 			safe_id => $safe_id,
+			seq_ref => $seq_ref,
 			the_void => $the_void,
 			cfile => $cfile,
 			c_flag => $c_flag,
 			out_dir => $out_dir,
 			LOG => $LOG,
 			LOCK => $LOCK);
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	 }
+	 elsif ($flag eq 'result') {
+            #-------------------------RESULT
+	     while (my $key = each %{$self->{RESULTS}}) {
+		 $VARS->{$key} = $self->{RESULTS}->{$key};
+	     }
+            #-------------------------RESULT
+         }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
@@ -397,6 +414,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw{fasta			
 		        seq_id
+			seq_ref
 		        safe_id
 			the_void}
 		    );
@@ -406,6 +424,7 @@ sub _go {
 	    #-------------------------CODE
 	    my $fasta = $VARS->{fasta};
 	    my $seq_id = $VARS->{seq_id};
+	    my $seq_ref = $VARS->{seq_ref};
 	    my $safe_id = $VARS->{safe_id};
 	    my $the_void = $VARS->{the_void};
 
@@ -413,25 +432,29 @@ sub _go {
 	    $safe_id =~ s/x/\%78/g;
 	    $safe_id =~ s/\%/x/g;
 
-	    #get seq
-	    my $seq = Fasta::getSeqRef(\$fasta);
-	    
 	    #fix fasta seq
-	    $$seq = uc($$seq);
-	    $$seq =~ s/\*//g;
-	    $$seq =~ s/[^ABCDEFGHIKLMNPQRSTVWXYZ]/C/g;
+	    $$seq_ref = uc($$seq_ref);
+	    $$seq_ref =~ s/\*//g;
+	    $$seq_ref =~ s/[^ABCDEFGHIKLMNPQRSTVWXYZ]/C/g;
 
 	    #make a safe fasta
-	    my $safe_fasta = Fasta::toFasta('>'.$safe_id, $seq);
+	    my $safe_fasta = Fasta::toFasta('>'.$safe_id, $seq_ref);
 	    my $fasta_file = "$the_void/query.fasta";
 	    FastaFile::writeFile($safe_fasta, $fasta_file);
 	    #-------------------------CODE
 	 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = (safe_fasta => $safe_fasta,
 			fasta_file => $fasta_file);
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	 }
+	 elsif ($flag eq 'result') {
+            #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+            #-------------------------RESULT
+         }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
@@ -441,7 +464,7 @@ sub _go {
 	 $level_status = 'running iprscan';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	     foreach my $app (@{$VARS->{CTL_OPT}{appl}}) {
+	     foreach my $app (@{$VARS->{CTL_OPT}{_appl}}) {
 		 $VARS->{app} = $app;
 		 my $chunk = new Process::IPRchunk($level, $VARS);
 		 push(@chunks, $chunk);
@@ -514,11 +537,18 @@ sub _go {
 	    close($IN);
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = ("$app" => $result
 		       );
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	 }
+	 elsif ($flag eq 'result') {
+            #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+            #-------------------------RESULT
+         }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
@@ -537,7 +567,7 @@ sub _go {
 	    @args = (qw{CTL_OPT
 			cfile
 		       },		     
-		     @{$VARS->{CTL_OPT}{appl}}
+		     @{$VARS->{CTL_OPT}{_appl}}
 		     );
 	    #------------------------ARGS_IN
 	 }
@@ -547,7 +577,7 @@ sub _go {
 	    my $cfile = $VARS->{cfile}; #combined contig output file
 	    my $outfile = $CTL_OPT{outfile}; #combined every contig output file
 
-#	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
+	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
 
 	    my $FH;
 	    if($outfile){
@@ -561,23 +591,33 @@ sub _go {
 	    my $CFH;
 	    open($CFH, "> $cfile");
 	    
-	    foreach my $key (@{$CTL_OPT{appl}}){
+	    my $data = '';
+	    foreach my $key (@{$CTL_OPT{_appl}}){
 		next if(! defined ($VARS->{$key}));
-		print $FH $VARS->{$key};
-		print $CFH $VARS->{$key};
+		$data .= $VARS->{$key};
 	    }
+
+	    print $FH $data;
+	    print $CFH $data;
 	    
 	    close($CFH);
 
 	    close($FH);
 
-#	    $lock->unlock;
+	    $lock->unlock;
 	    #-------------------------CODE
 
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	    %results = ();
-	    #------------------------RESULTS
+	    #------------------------RETURN
 	 }
+	 elsif ($flag eq 'result') {
+            #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		$VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+            #-------------------------RESULT
+         }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    $next_level = undef;
@@ -604,6 +644,8 @@ sub _go {
    return \%results if($flag eq 'run');
    #return chunks for loader
    return \@chunks if($flag eq 'load');
+   #return result_stat for result
+   return $result_stat if($flag eq 'result');
    #return next_level for flow
    return $next_level if($flag eq 'flow');
 
@@ -622,16 +664,13 @@ sub _go {
 sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
-   my $RESULTS = $self->{RESULTS};	#this ia a hash reference
+   my $level = $self->{LEVEL};
 
    #only return results for finished/succesful chunks
    return if (! $self->finished || $self->failed);
 
-   while (my $key = each %{$RESULTS}) {
-      $VARS->{$key} = $RESULTS->{$key};
-   }
-
-   return 1;
+   #do level specific result processing
+   return $self->_go('result', $level, $VARS);
 }
 #--------------------------------------------------------------
 #returns true if failed

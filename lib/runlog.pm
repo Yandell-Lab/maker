@@ -114,7 +114,7 @@ sub _initialize {
    $self->{CTL_OPT} = shift;
    $self->{params} = shift;
    $self->{file_name} = shift || "run.log";
-   $self->{CWD} = $self->{CTL_OPT}->{CWD};
+   $self->{CWD} = $self->{CTL_OPT}->{CWD} || Cwd::cwd();
 
    print STDERR "\n\n\n--Next Contig--\n\n" unless($main::quiet);
 
@@ -168,9 +168,8 @@ sub _compare_and_clean {
 	return;
     }
 
-    $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
+    $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
     my $CWD = $self->{CWD};
-
     my $the_void = $self->{params}->{the_void};
     my %CTL_OPT = %{$self->{CTL_OPT}};
 
@@ -722,9 +721,8 @@ sub _write_new_log {
 
    return if($self->{continue_flag} <= -3);
 
-   $self->{CWD} = Cwd::cwd() if(!$self->{CWD});
+   $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
-
    my $log_file = $self->{file_name};   
    my %CTL_OPT = %{$self->{CTL_OPT}};
 
@@ -920,6 +918,7 @@ sub unlock {
     $self->{LOCK}->unlock if(defined $self->{LOCK});
 }
 #-------------------------------------------------------------------------------
+#this method is depricated
 sub are_same_opts {
     shift @_ if(ref($_[0]) eq 'runlog'); #can be method or function
     my %CTL_OPT = %{shift @_};

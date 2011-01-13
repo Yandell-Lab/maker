@@ -9,6 +9,7 @@ use Storable;
 use vars qw($LOCK);
 use Proc::Signal;
 use URI::Escape;
+use Perl::Unsafe::Signals;
 
 BEGIN {
     $SIG{QUIT} = sub{$LOCK->unlock if($LOCK); exit(0)};
@@ -38,10 +39,10 @@ while(-f $LOCK->{lock_file}){
     if(! Proc::Signal::exists_proc_by_id($pid)){
 	$LOCK->unlock if($LOCK);
 	exit(0);
-    }
+	}
     if($LOCK && ! $LOCK->still_mine){
 	exit(1);
-    }
+	}
     $LOCK->refresh;
     sleep $time;
 }

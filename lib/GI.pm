@@ -113,7 +113,9 @@ sub get_preds_on_chunk {
 }
 #-----------------------------------------------------------------------------
 sub merge_resolve_hits{
-   my $fasta = shift @_;
+   my $seq_ref = shift @_;
+   my $def = shift @_;
+   my $s_length = shift @_;
    my $fasta_index = shift @_;
    my $blast_keepers = shift @_;
    my $blast_holdovers = shift @_;
@@ -128,7 +130,9 @@ sub merge_resolve_hits{
 			    );
    @{$blast_holdovers} = ();
 
-   $blast_keepers = reblast_merged_hits($fasta,
+   $blast_keepers = reblast_merged_hits($seq_ref,
+					$def,
+					$s_length,
 					$blast_keepers,
 					$fasta_index,
 					$the_void,
@@ -141,7 +145,9 @@ sub merge_resolve_hits{
 }
 #-----------------------------------------------------------------------------
 sub reblast_merged_hits {
-   my $g_fasta_ref = shift @_;
+   my $par_seq     = shift @_;
+   my $par_def     = shift @_;
+   my $p_seq_length = shift @_;
    my $hits        = shift @_;
    my $db_index    = shift @_;
    my $the_void    = shift @_;
@@ -152,11 +158,7 @@ sub reblast_merged_hits {
    #==get data from parent fasta
 
    #parent fasta get def and seq
-   my $par_def = Fasta::getDef($g_fasta_ref);
-   my $par_seq = Fasta::getSeqRef($g_fasta_ref);
    my $p_id  = Fasta::def2SeqID($par_def);
-
-   #build a safe name for file names from the sequence identifier
    my $p_safe_id = Fasta::seqID2SafeID($p_id);
 
    my @blast_keepers;
@@ -169,65 +171,77 @@ sub reblast_merged_hits {
 	 next;
       }
 
-      #== excise region of query fasta and build new chunk object for blast
-      
-      #find region of hit to get piece
-      my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');   
-      my @coors = [$nB, $nE];
-      my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
-      
-      #get piece fasta def, seq, and offset
-      my $piece_def = $par_def." ".$piece->[0]->{b}." ".$piece->[0]->{e};
-      my $piece_seq = $piece->[0]->{piece};
-      my $offset = $piece->[0]->{b} - 1;
-      
-      #make the piece into a fasta chunk
-      my $chunk = new FastaChunk();
-      $chunk->seq($piece_seq);
-      $chunk->def($piece_def);
-      $chunk->parent_def($par_def);
-      $chunk->size(length($$par_seq));	     #the max size of a chunk
-      $chunk->length(length($chunk->seq())); #the actual size of a chunk
-      $chunk->offset($offset);
-      $chunk->number(0);
-      $chunk->is_last(1);
-      $chunk->parent_seq_length(length($$par_seq));
-
-      #==build new fasta and db for blast search from hit name and db index
-      
       #build a safe name for file names from the sequence identifier
       my $t_safe_id = Fasta::seqID2SafeID($hit->name());
 
-      #search db index
-      my $fastaObj = $db_index->get_Seq_for_hit($hit);
+      #== excise region of query fasta and build new chunk object for blast     
+      #find region of hit to get piece
+      my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');   
+      ($nB, $nE) = ($nE, $nB) if($nB > $nE);
+      my @coors = [$nB, $nE];
+      my $F = ($nB - $CTL_OPT{split_hit} < 1) ? 1 : $nB - $CTL_OPT{split_hit};
+      my $L = ($nE + $CTL_OPT{split_hit} > $p_seq_length) ? $p_seq_length : $nE + $CTL_OPT{split_hit};
+
+      #will require chunk to blast
+      my $chunk = new FastaChunk();
+      $chunk->number(0);
+
+      #get input and ioutput blast file names
+      my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
+      my $o_file = get_blast_finished_name($chunk, $hit->name(), $the_void, $p_safe_id.".".$F.".".$L, $type);
+
+      if(! -f $o_file){
+	  #extract sequence
+	  my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
       
-      #still no sequence? try rebuilding the index and try again
-      if (not $fastaObj) {
-	  print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
-	  $db_index->reindex();
-	  $fastaObj = $db_index->get_Seq_for_hit($hit);
-	  if (not $fastaObj) {
-	      print STDERR "stop here:".$hit->name."\n";
-	      die "ERROR: Fasta index error\n";
+	  #get piece fasta def, seq, and offset
+	  my $piece_def = $par_def." ".$F." ".$L;
+	  my $piece_seq = $piece->[0]->{piece};
+	  my $offset = $F - 1;
+      
+	  #finish making the piece into a fasta chunk
+	  $chunk->seq($piece_seq);
+	  $chunk->def($piece_def);
+	  $chunk->parent_def($par_def);
+	  $chunk->size(length($$par_seq));	     #the max size of a chunk
+	  $chunk->length(length($chunk->seq())); #the actual size of a chunk
+	  $chunk->offset($offset);
+	  $chunk->is_last(1);
+	  $chunk->parent_seq_length(length($$par_seq));
+	  
+	  #==build new fasta and db for blast search from hit name and db index	  
+	  if(! -f $t_file){
+	      #search db index
+	      my $fastaObj = $db_index->get_Seq_for_hit($hit);
+	      
+	      #still no sequence? try rebuilding the index and try again
+	      if (not $fastaObj) {
+		  print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
+		  $db_index->reindex();
+		  $fastaObj = $db_index->get_Seq_for_hit($hit);
+		  if (not $fastaObj) {
+		      print STDERR "stop here:".$hit->name."\n";
+		      die "ERROR: Fasta index error\n";
+		  }
+	      }
+      
+	      #get fasta def and seq
+	      my $t_seq      = $fastaObj->seq();
+	      my $t_def      = $db_index->header_for_hit($hit);
+	      
+	      #write fasta file
+	      my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
+	      FastaFile::writeFile($fasta, $t_file);
 	  }
       }
-      
-      #get fasta def and seq
-      my $t_seq      = $fastaObj->seq();
-      my $t_def      = $db_index->header_for_hit($hit);
-      
-      #write fasta file
-      my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
-      my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
-      FastaFile::writeFile($fasta, $t_file);
-      
+
       #==run the blast search
       if ($type eq 'blastx') {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
 			      $t_file,
 			      $the_void,
-			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
+			      $p_safe_id.".".$F.".".$L,
 			      \%CTL_OPT,
 			      $LOG
 			     );
@@ -240,7 +254,7 @@ sub reblast_merged_hits {
 	 my $keepers = blastn($chunk, 
 			      $t_file,
 			      $the_void,
-			      $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
+			      $p_safe_id.".".$F.".".$L,
 			      \%CTL_OPT,
 			      $LOG
 			     );
@@ -253,7 +267,7 @@ sub reblast_merged_hits {
 	 my $keepers = tblastx($chunk,
 			       $t_file,
 			       $the_void,
-			       $p_safe_id.".".$piece->[0]->{b}.".".$piece->[0]->{e},
+			       $p_safe_id.".".$F.".".$L,
 			       \%CTL_OPT,
 			       $LOG
 			      );
@@ -499,7 +513,9 @@ sub create_blastdb {
 
    #rebuild all fastas when specified
    File::Path::rmtree($CTL_OPT->{mpi_blastdb}) if ($CTL_OPT->{force} &&
-						   ! $CTL_OPT->{_multi_chpc});
+						   !$CTL_OPT->{_multi_chpc} &&
+						   !$CTL_OPT->{_not_root}
+						   );
    
    my $mpi_size = $CTL_OPT->{_mpi_size} || 1;
    my $b_dir = $CTL_OPT->{mpi_blastdb};
@@ -589,7 +605,7 @@ sub split_db {
        my ($f_name) = $file =~ /([^\/]+)$/;
        $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
        my $b_dir = $CTL_OPT->{mpi_blastdb};
-       my $bins = ($mpi_size % 10 == 0) ? (int($mpi_size/$f_count)/10)*10 : (int(($mpi_size/$f_count)/10) +1)*10;
+       my $bins = ($mpi_size % 10 == 0) ? (int(($mpi_size/$f_count)/10))*10 : (int(($mpi_size/$f_count)/10)+1)*10;
        $bins = 10 if($bins < 10);
        my $d_name = "$f_name\.mpi\.$bins";
        my $f_dir = "$b_dir/$d_name";
@@ -1033,9 +1049,11 @@ sub fgenesh {
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
     my $chunk        = shift;
-    my $g_fasta_ref  = shift;
+    my $seq          = shift;
+    my $length       = shift;
+    my $def          = shift;
     my $phat_hits    = shift;
-    my $db_index     = shift;
+    my $db_set       = shift;
     my $the_void     = shift;
     my $type         = shift;
     my $exonerate    = shift;
@@ -1045,23 +1063,20 @@ sub polish_exonerate {
     my $matrix       = shift;
     my $pred_flank   = shift;
     my $est_forward  = shift;
-    my $to_exonerate = shift;
     my $LOG          = shift;
+    my $rank         = shift || 0;
 
-    $to_exonerate = [] if($type ne 'e' || ref($to_exonerate) ne 'ARRAY');
-    
-    my $def = Fasta::getDef($g_fasta_ref);
-    my $seq = Fasta::getSeqRef($g_fasta_ref);
+    return [] if(! @{$phat_hits});
+
+    my $db_index = GI::build_fasta_index($db_set);
     my $name =  Fasta::def2SeqID($def);
-    my $safe_name = Fasta::seqID2SafeID($name);
-    my $length = length($$g_fasta_ref);
-    
+    my $safe_name = Fasta::seqID2SafeID($name);    
     my $exe = $exonerate;
     
     my @exonerate_data;
     
     my %uniq; #make sure this same exonerate hit does not already exist
-    foreach my $hit (@{$phat_hits}, @{$to_exonerate}) {
+    foreach my $hit (@{$phat_hits}) {
 	my $h_name;
 	my $h_description;
 	my $B;
@@ -1100,12 +1115,13 @@ sub polish_exonerate {
 	    $min_intron = 1;
 	    foreach my $coor (split(',', $1)){
 		if(my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
+		    next if(ref($hit));
 		    ($bB, $bE) = ($bE, $bB) if($bB > $bE);
 		    
 		    next if($name ne $bName);
 		    next if(compare::compare($B, $E, $bB, $bE) eq '0');
 		    next if(ref($hit) eq '' && ($bB < $B || $bB > $E));
-
+		    
 		    ($B, $E) = ($bB, $bE); #switch to specified coordinates
 		    $go++;
 		    last;
@@ -1121,45 +1137,56 @@ sub polish_exonerate {
 
 	my $id      = $h_name;
 	my $safe_id = Fasta::seqID2SafeID($id);
-	my $S = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
-	my $F = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
-        my $o_file    = "$the_void/$safe_name.$S-$F.$safe_id";
-	$o_file .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
+	my $F = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
+	my $L = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
+	my $offset  = $F - 1;
+        my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
+	$o_file    .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
+	my $o_tfile = "$o_file.$rank";
+	my $t_file  = $the_void."/".$safe_id.".$rank.fasta";	
+	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";	
 
-	#get substring fasta of contig
-	my @coors = [$B, $E];
-	my $p = Shadower::getPieces($seq, \@coors, $pred_flank)->[0];
-	my $p_def = $def." ".$S." ".$F;
-	my $p_fasta = Fasta::toFasta($p_def, \ ($p->{piece}));
-	my $d_file = $the_void."/".$safe_name.'.'.$S.'-'.$F.".fasta";	
-	FastaFile::writeFile($p_fasta, $d_file);
-
-	#get fasta for EST/protein
-	my $fastaObj = $db_index->get_Seq_for_hit($hit);
-	if (not $fastaObj) {
-	    #still no sequence? try rebuilding the index and try again
-	    print STDERR "WARNING: Cannot find> ".$h_name.", trying to re-index the fasta.\n";
-	    $db_index->reindex();
-	    $fastaObj = $db_index->get_Seq_for_hit($hit);
-	    
+	my $d_len = abs($L - $F) + 1;
+	my $t_len = (ref($hit)) ? $hit->length : undef;
+	if(! -f $o_file || ! ref($hit)){
+	    #get fasta for EST/protein
+	    my $fastaObj = $db_index->get_Seq_for_hit($hit);
 	    if (not $fastaObj) {
-		print STDERR "stop here:".$h_name."\n";
-		die "ERROR: Fasta index error\n";
+		#still no sequence? try rebuilding the index and try again
+		print STDERR "WARNING: Cannot find> ".$h_name.", trying to re-index the fasta.\n";
+		$db_index->reindex();
+		$fastaObj = $db_index->get_Seq_for_hit($hit);
+		
+		if (not $fastaObj) {
+		    print STDERR "stop here:".$h_name."\n";
+		    die "ERROR: Fasta index error\n";
+		}
 	    }
+	    
+	    my $seq     = $fastaObj->seq();
+	    my $t_len = length($seq) if(!$t_len);
+	    my $header  = $db_index->header_for_hit($hit);
+	    my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
+	    FastaFile::writeFile($fasta, $t_file);	
+	}
+	if(! -f $o_file){
+	    #get substring fasta of contig
+	    my @coors = [$B, $E];
+	    my $p = Shadower::getPieces($seq, \@coors, $pred_flank)->[0];
+	    my $p_def = $def." ".$F." ".$L;
+	    my $p_fasta = Fasta::toFasta($p_def, \ ($p->{piece}));
+	    FastaFile::writeFile($p_fasta, $d_file);
 	}
 
-	my $seq     = $fastaObj->seq();
-	my $header  = $db_index->header_for_hit($hit);
-	my $offset  = $p->{b} - 1;	
-	my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
-	my $t_file    = $the_void."/".$safe_id.'.fasta';	
-	FastaFile::writeFile($fasta, $t_file);	
-
 	#run exonerate
+	unlink($o_tfile) if(-f $o_tfile);
+	$o_tfile = $o_file if(-f $o_file);
 	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
 	my $exonerate_hits = to_polisher($d_file,
 					 $t_file,
-					 $o_file,
+					 $o_tfile,
+					 $d_len,
+					 $t_len,
 					 $the_void,
 					 $offset,
 					 $type,
@@ -1168,6 +1195,7 @@ sub polish_exonerate {
 					 $min_intron,
 					 $matrix
 					 );
+	File::Copy::move($o_tfile, $o_file) if($o_tfile ne $o_file);
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
 	#delete fastas
@@ -1179,14 +1207,13 @@ sub polish_exonerate {
 	    next if(! defined $e);
 	    next if $e->pAh < $pcov;
 
+	    #fix flipped hits when mapping ESTs to gene models as is
+	    if($type eq 'e' && $est_forward && $e->strand('hit') == -1){
+		$e = PhatHit_utils::copy($e, 'both');
+	    }
+
 	    #double check was_flipped
 	    $e->{_was_flipped} = (ref($hit) && $e->strand ne $hit->strand) ? 1 : 0;
-
-	    #fix flipped hits when mapping ESTs to gene models as is
-	    if($type eq 'e' && $est_forward && $e->{_was_flipped}){
-		$e = PhatHit_utils::copy($e, 'both');
-		$e->{_was_flipped} = 0;
-	    }
 
 	    #add gene_id if specified
 	    $e->{gene_id} = $gene_id if($gene_id);
@@ -1199,11 +1226,14 @@ sub polish_exonerate {
 		if(ref($hit)){
 		    #tag the source blastn hit to let you know the counterpart
 		    #exonerate hit was flipped to the other strand
-		    $hit->{_exonerate_flipped} = 1 if($e->{_was_flipped});
+		    $hit->{_exonerate_flipped} = $e->{_was_flipped};
 		    $hit->{_keep} = 1;
 		    $hit->type("exonerate:$type"); #set hit type (exonerate only)
 		    $e->{_label} = $hit->{_label} if($hit->{_label});
 		    map{$_->{_label} = $hit->{_label}} $e->hsps if($hit->{_label});
+		}
+		else{
+		    $e->{_from_ref} = 1;
 		}
 
 		#uniq structure string to keep from adding same EST multiple times
@@ -1220,6 +1250,7 @@ sub polish_exonerate {
 	    my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
 	    @keepers = @perfect if(@perfect);
 	    @keepers = (sort {($b->frac_identical * $b->pAh) <=> ($a->frac_identical * $a->pAh)} @keepers)[0];
+	    $hit->{_exonerate_flipped} = $keepers[0]->{_was_flipped} if(@keepers && ref($hit));
 	}
 
 	push(@exonerate_data, @keepers);
@@ -1266,6 +1297,8 @@ sub to_polisher {
    my $d_file   = shift;
    my $t_file   = shift;
    my $o_file   = shift;
+   my $d_len    = shift;
+   my $t_len    = shift;
    my $the_void = shift;
    my $offset   = shift;
    my $type     = shift;
@@ -1278,6 +1311,8 @@ sub to_polisher {
       return polisher::exonerate::protein::polish($d_file,
 						  $t_file,
 						  $o_file,
+						  $d_len,
+						  $t_len,
 						  $the_void,
 						  $offset,
 						  $exe,
@@ -1290,6 +1325,8 @@ sub to_polisher {
       return polisher::exonerate::est::polish($d_file,
 					      $t_file,
 					      $o_file,
+					      $d_len,
+					      $t_len,
 					      $the_void,
 					      $offset,
 					      $exe,
@@ -1480,32 +1517,9 @@ sub blastn_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.blastn";
-
    my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
-
-   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-       open(my $L,"$tmp_db.copy");
-       flock($L, 2); #try regular file lock for extra safety
-       
-       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	   (! -e $blast_finished)
-	   ){
-	   $lock->maintain(30);
-	   copy($db, $tmp_db) if(! -e $tmp_db);
-	   dbformat($formater, $tmp_db, 'blastn');
-       }
-
-       flock($L, 8);
-       $lock->unlock;
-   }
-   else{
-       die "ERROR: Could not get lock.\n\n";
-   }
 
    #parse blast
    if (-e $blast_finished) {
@@ -1517,6 +1531,28 @@ sub blastn_as_chunks {
       $o_file = $blast_finished;
    }
    else{
+       #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+	   open(my $L,"$tmp_db.copy");
+	   flock($L, 2); #try regular file lock for extra safety
+	   
+	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	       (! -e $blast_finished)
+	       ){
+	       $lock->maintain(30);
+	       copy($db, $tmp_db) if(! -e $tmp_db);
+	       dbformat($formater, $tmp_db, 'blastn');
+	   }
+	   
+	   flock($L, 8);
+	   $lock->unlock;
+       }
+       else{
+	   die "ERROR: Could not get lock.\n\n";
+       }
+
        #call blast executable
        $chunk->write_file($t_file_name);  
        
@@ -1773,32 +1809,9 @@ sub blastx_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.$type";
-    
    my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
-
-   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-       open(my $L,"$tmp_db.copy");
-       flock($L, 2); #try regular file lock for extra safety
-       
-       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	   (! -e $blast_finished)
-	   ){
-	   $lock->maintain(30);
-	   copy($db, $tmp_db) if(! -e $tmp_db);
-	   dbformat($formater, $tmp_db, 'blastx');
-       }
-
-       flock($L, 8);
-       $lock->unlock;
-   }
-   else{
-       die "ERROR: Could not get lock.\n\n";
-   }
 
    #parse blast
    if (-e $blast_finished) {
@@ -1810,6 +1823,28 @@ sub blastx_as_chunks {
       $o_file = $blast_finished;
    }
    else{
+       #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+	   open(my $L,"$tmp_db.copy");
+	   flock($L, 2); #try regular file lock for extra safety
+	   
+	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	       (! -e $blast_finished)
+	       ){
+	       $lock->maintain(30);
+	       copy($db, $tmp_db) if(! -e $tmp_db);
+	       dbformat($formater, $tmp_db, 'blastx');
+	   }
+	   
+	   flock($L, 8);
+	   $lock->unlock;
+       }
+       else{
+	   die "ERROR: Could not get lock.\n\n";
+       }
+
        #call blast executable
        $chunk->write_file($t_file_name);  
        
@@ -2081,32 +2116,9 @@ sub tblastx_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.tblastx";
-
    my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
-
-   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-       open(my $L,"$tmp_db.copy");
-       flock($L, 2); #try regular file lock for extra safety
-       
-       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	   (! -e $blast_finished)
-	   ){
-	   $lock->maintain(30);
-	   copy($db, $tmp_db) if(! -e $tmp_db);
-	   dbformat($formater, $tmp_db, 'tblastx');
-       }
-
-       flock($L, 8);
-       $lock->unlock;
-   }
-   else{
-       die "ERROR: Could not get lock.\n\n";
-   }
 
    #parse blast
    if (-e $blast_finished) {
@@ -2118,6 +2130,28 @@ sub tblastx_as_chunks {
       $o_file = $blast_finished;
    }
    else{
+       #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
+	   open(my $L,"$tmp_db.copy");
+	   flock($L, 2); #try regular file lock for extra safety
+	   
+	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	       (! -e $blast_finished)
+	       ){
+	       $lock->maintain(30);
+	       copy($db, $tmp_db) if(! -e $tmp_db);
+	       dbformat($formater, $tmp_db, 'tblastx');
+	   }
+	   
+	   flock($L, 8);
+	   $lock->unlock;
+       }
+       else{
+	   die "ERROR: Could not get lock.\n\n";
+       }
+
        #call blast executable
        $chunk->write_file($t_file_name);  
        

@@ -8,7 +8,6 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG @CMD_ARGS $VERSION);
-use Storable qw(freeze thaw);
 use Config;
 
 BEGIN{
@@ -54,7 +53,7 @@ BEGIN{
 }
 
 use Cwd;
-use Storable;
+use Storable qw(freeze thaw);
 use FileHandle;
 use File::Path;
 use Getopt::Long qw(:config no_ignore_case);
@@ -75,10 +74,11 @@ use ds_utility;
 use GFFDB;
 use Error qw(:try);
 use Error::Simple;
+use Perl::Unsafe::Signals;
 use Process::MpiChunk;
 use Process::MpiTiers;
-use Parallel::MPIcar qw(:all);
-
+use Parallel::MPIcar qw(:most);
+use Proc::Signal;
 
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
@@ -761,7 +761,7 @@ if ($rank == $root) {
 	MPI_Send(\$terminate, 1, MPI_INT, $i, $request_status, MPI_COMM_WORLD); #signal to become helper
     }
     
-    print STDERR "\n\nMaker is now finished!!!\n\n";
+    print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
 }
 #------SECONDARY MPI PROCESSES------
 else {
@@ -1211,6 +1211,22 @@ sub totemp{
    close ($fh);
 
    return $name;
+}
+#----------------------------------------------------------------------------
+#make MPI_Send work with unsafe signaling
+sub MPI_Send {
+    my @args = @_;
+    UNSAFE_SIGNALS {
+        &Parallel::MPIcar::MPI_Send(@args);
+    }
+}
+#----------------------------------------------------------------------------
+#make MPI_Recv work with unsafe signaling
+sub MPI_Recv {
+    my @args = @_;
+    UNSAFE_SIGNALS {
+        &Parallel::MPIcar::MPI_Recv(@args);
+    }
 }
 #----------------------------------------------------------------------------
 #sends scalar variable contents via serialization

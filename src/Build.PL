@@ -37,6 +37,7 @@ my $build = MAKER::Build->new
 	 'IO::All'            => '0',
 	 'IO::Prompt'         => '0',
 	 'DBD::SQLite'        => '0',
+	 'Perl::Unsafe::Signals' => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {
