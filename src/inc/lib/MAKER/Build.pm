@@ -274,14 +274,17 @@ sub ACTION_installdeps{
 	my $access = (-w $Config{installsitelib} && -w $Config{installsitearch});
 
 	my $local;
-	if(! grep {/Bio\:\:Graphics\:\:Browser2/} @perl){
+	if(! $access && ! grep {/Bio\:\:Graphics\:\:Browser2/} @perl){
 	    $local = $self->y_n("You do not have write access to install missing Modules.\n".
 				"I can try and install these locally (i.e. only for MAKER)\n".
 				"in the .../maker/perl/lib directory, or you can run\n".
-				"./Build installdeps as root or using sudo and try again.\n".
+				"'./Build installdeps' as root or using sudo and try again.\n".
 				"Do want MAKER to try and build a local installation?", 'N');
-	}
-	
+	}	
+
+	die "\n\nERROR: You do not have write access to install missing Modules.\n".
+	    "Please run './Build installdeps' as root or using sudo.\n\n" if(!$access && !$local);
+
 	foreach my $m (keys %{$prereq->{build_requires}}){    
 	    $self->cpan_install($m, $local);
 	}
