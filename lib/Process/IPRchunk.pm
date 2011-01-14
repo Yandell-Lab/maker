@@ -352,28 +352,27 @@ sub _go {
 	    if($c_flag == 0){
 		die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
 		    if(! -e $cfile);
-		 
-		my $lock = new File::NFSLock("$CTL_OPT{out_base}.output_lock", 'EX', 60, 60);
-		my $outfile = $CTL_OPT{outfile};
-		 
+
+		#open for reading
+		open(my $CFH, "< $cfile");		 
+		my $data = '';
+		$data .= join('', <$CFH>);
+		close($CFH);
+
+		#open for writing
 		my $FH;
+		my $outfile = $CTL_OPT{outfile};		 
 		if($outfile){
 		    open($FH, ">> $outfile");
 		}
 		else{
 		    open($FH, ">&STDOUT");
-		}
-		 
-		#open for reading
-		open(my $CFH, "< $cfile");
-		 
-		my $data = '';
-		$data .= join('', <$CFH>);
+		}		 
+
+		#lock and write
+		my $lock = new File::NFSLock("$CTL_OPT{out_base}/.output_lock", 'EX', 60, 60);
 		print $FH $data;
-		 
 		close($FH);
-		close($CFH);
-		 
 		$lock->unlock;
 	    }
 	    #-------------------------CODE
@@ -577,8 +576,20 @@ sub _go {
 	    my $cfile = $VARS->{cfile}; #combined contig output file
 	    my $outfile = $CTL_OPT{outfile}; #combined every contig output file
 
-	    my $lock = new File::NFSLock("$CTL_OPT{out_base}.output_lock", 'EX', 60, 60);
+	    #gather data
+	    my $data = '';
+	    foreach my $key (@{$CTL_OPT{_appl}}){
+		next if(! defined ($VARS->{$key}));
+		$data .= $VARS->{$key};
+	    }
 
+	    #write to the combined file
+	    my $CFH;
+	    open($CFH, "> $cfile");	    
+	    print $CFH $data;
+	    close($CFH);
+
+	    #open global output file for witing
 	    my $FH;
 	    if($outfile){
 		open($FH, ">> $outfile");
@@ -587,23 +598,10 @@ sub _go {
 		open($FH, ">&STDOUT");
 	    }
 
-	    #write to the combined file using safe locked print
-	    my $CFH;
-	    open($CFH, "> $cfile");
-	    
-	    my $data = '';
-	    foreach my $key (@{$CTL_OPT{_appl}}){
-		next if(! defined ($VARS->{$key}));
-		$data .= $VARS->{$key};
-	    }
-
+	    #lock and write
+	    my $lock = new File::NFSLock("$CTL_OPT{out_base}.output_lock", 'EX', 60, 60);
 	    print $FH $data;
-	    print $CFH $data;
-	    
-	    close($CFH);
-
 	    close($FH);
-
 	    $lock->unlock;
 	    #-------------------------CODE
 
