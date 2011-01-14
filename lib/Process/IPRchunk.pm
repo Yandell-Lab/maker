@@ -353,7 +353,7 @@ sub _go {
 		die "ERROR: Can't find $cfile yet iprscan::runlog says the contig is finished\n"
 		    if(! -e $cfile);
 		 
-		my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
+		my $lock = new File::NFSLock("$CTL_OPT{out_base}.output_lock", 'EX', 60, 60);
 		my $outfile = $CTL_OPT{outfile};
 		 
 		my $FH;
@@ -577,7 +577,7 @@ sub _go {
 	    my $cfile = $VARS->{cfile}; #combined contig output file
 	    my $outfile = $CTL_OPT{outfile}; #combined every contig output file
 
-	    my $lock = new File::NFSLock(".iprscan_lock", 'EX', 60, 60);
+	    my $lock = new File::NFSLock("$CTL_OPT{out_base}.output_lock", 'EX', 60, 60);
 
 	    my $FH;
 	    if($outfile){
