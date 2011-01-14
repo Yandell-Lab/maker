@@ -455,15 +455,46 @@ sub _install_exe {
         push(@unlink, $file);
 	return $self->fail($exe, $path) if(! -f "$path/$exe");
 
+	#RepBase
+	my $req = 'RepBase';
+	my $go = $self->y_n("\nIf are a registered user of RepBase, then MAKER can\n".
+			    "download and install RepBase for RepeatMasker for you.\n".
+			    "Do you want to do this?", 'N');
+
+	if($go){
+	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
+	    my $user = $self->prompt("Please enter your username:", '');
+	    my $pass = $self->safe_prompt("Please enter your Password:", '');
+	    chdir($path);
+	    $file = "$path/$req.tar.gz"; #file to save to
+	    $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
+	    print "Downloading $req...\n";
+	    $self->getstore($url, $file, $user, $pass) or return $self->fail($req, $path);
+	    print "Unpacking $exe tarball...\n";
+	    $self->extract_archive($file) or return $self->fail($req, $path);
+	    push(@unlink, $file);
+	}
+
+	#TRF
+	$req = 'trf';
+        chdir($path);
+	unlink("$path/$req");
+	$file = "$path/$req"; #file to save to
+        $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
+	print "Downloading $req...\n";
+        $self->getstore($url, $file) or return $self->fail($req, $path);
+        chmod(0755, $file) or return $self->fail($req, $path);
+	return $self->fail($req, $path) if(! -f "$path/$req");
+
 	#RMBlast
-	my $req = 'rmblast';
+	$req = 'rmblast';
         chdir($path);
 	File::Path::rmtree("$path/$req");
 	$file = "$path/$req.tar.gz"; #file to save to
         $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
 
-	#glibc 2.5 or greater is required for Linux binary
 	if($OS eq 'Linux'){
+	    #glibc 2.5 or greater is required for Linux binary
 	    my $ldd = File::Which::which('ldd');
 	    my ($ver) = (`$ldd --version` =~ /(\d+\.\d+)/) if($ldd);
 	    $url = $data->{$req}{src} if(!$ver || $ver < 2.5);
@@ -485,37 +516,6 @@ sub _install_exe {
         chdir($path);
 	File::Copy::move($dir, $req);
 	return $self->fail($req, $path) if(! -f "$path/$req/bin/rmblastn");
-
-	#TRF
-	$req = 'trf';
-        chdir($path);
-	unlink("$path/$req");
-	$file = "$path/$req"; #file to save to
-        $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-	print "Downloading $req...\n";
-        $self->getstore($url, $file) or return $self->fail($req, $path);
-        chmod(0755, $file) or return $self->fail($req, $path);
-	return $self->fail($req, $path) if(! -f "$path/$req");
-
-	#RepBase
-	my $go = $self->y_n("\nIf are a registered user of RepBase, then MAKER can\n".
-			    "download and install RepBase for RepeatMasker for you.\n".
-			    "Do you want to do this?", 'N');
-
-	if($go){
-	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
-	    my $user = $self->prompt("Please enter your username:", '');
-	    my $pass = $self->safe_prompt("Please enter your Password:", '');
-	    $req = 'RepBase';
-	    chdir($base);
-	    $file = "$path/$req.tar.gz"; #file to save to
-	    $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-	    print "Downloading $req...\n";
-	    $self->getstore($url, $file, $user, $pass) or return $self->fail($req, $path);
-	    print "Unpacking $exe tarball...\n";
-	    $self->extract_archive($file) or return $self->fail($req, $path);
-	    push(@unlink, $file);
-	}
 
 	#Configure RepeatMasker
 	chdir($path);
