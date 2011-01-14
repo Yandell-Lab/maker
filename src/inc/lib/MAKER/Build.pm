@@ -10,6 +10,7 @@ use FindBin;
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
+use Term::ReadKey;
 
 BEGIN{
     #prepare correct version of Module Build for building everything
@@ -496,6 +497,26 @@ sub _install_exe {
         chmod(0755, $file) or return $self->fail($req, $path);
 	return $self->fail($req, $path) if(! -f "$path/$req");
 
+	#RepBase
+	my $go = $self->y_n("\nIf are a registered user of RepBase, then MAKER can\n".
+			    "download and install RepBase for RepeatMasker for you.\n".
+			    "Do you want to do this?", 'N');
+
+	if($go){
+	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
+	    my $user = $self->prompt("Please enter your username:", '');
+	    my $pass = $self->safe_prompt("Please enter your Password:", '');
+	    $req = 'RepBase';
+	    chdir($base);
+	    $file = "$path/$req.tar.gz"; #file to save to
+	    $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
+	    print "Downloading $req...\n";
+	    $self->getstore($url, $file, $user, $pass) or return $self->fail($req, $path);
+	    print "Unpacking $exe tarball...\n";
+	    $self->extract_archive($file) or return $self->fail($req, $path);
+	    push(@unlink, $file);
+	}
+
 	#Configure RepeatMasker
 	chdir($path);
 	print "Configuring $exe...\n";
@@ -772,15 +793,23 @@ sub getstore {
     my $self = shift;
     my $url = shift;
     my $file = shift;
-    
+    my $user = shift;
+    my $pass = shift;
+
     if(File::Which::which('wget')){ #Linux
-	return $self->do_system("wget $url -c -O $file"); #gives status and can continue partial
+	my $command = "wget $url -c -O $file";
+	$command .= " --user $user --password $pass" if(defined($user) && defined($pass));
+	return $self->do_system($command); #gives status and can continue partial
     }
     elsif(File::Which::which('curl')){ #Mac
+	my $command = "curl --connect-timeout 30 -f -L $url -o $file";
+	$command .= " --user $user:$pass" if(defined($user) && defined($pass));
+	my $continue = " -C -";
+
 	#gives status and can continue partial
-	my $stat = $self->do_system("curl --connect-timeout 30 -f -L $url -C - -o $file");
+	my $stat = $self->do_system($command . $continue);
 	#just redo if continue fails
-	$stat = $self->do_system("curl --connect-timeout 30 -f -L $url -o $file") if(! $stat);
+	$stat = $self->do_system($command) if(! $stat);
 	return $stat;
     }
     else{
@@ -788,6 +817,7 @@ sub getstore {
 	    "Try running ./Build installdeps first.\n"
 	    if(!$self->check_installed_status('LWP::Simple', '0')->{ok});
 
+	$url =~ s/^([^\:]\;\/\/)/$1\:\/\/$user\:$pass\@/ if(defined($user) && defined($pass));
 	return LWP::Simple::getstore($url, $file); #just gets the file with no features
     }
 }
@@ -899,7 +929,7 @@ sub is_mpich2 {
 
     my $ok;
     if($file =~ /mpicc$/){
-	open(IN, "$file -v |");
+	open(IN, "$file -v 2> /dev/null |");
 	while(my $line = <IN>){
             if($line =~ /for MPICH2 version/){
                 $ok = 1;
@@ -1106,6 +1136,39 @@ sub check_update_version {
 
 	return $version;
     }
+}
+
+sub safe_prompt {
+    my $self = shift;
+    my $m = shift;
+    my $d = shift || '';
+
+    print "$m [$d ]";
+
+    my $key = 0;
+    my $r = "";
+    #Start reading the keys
+    ReadMode(4); #Disable the control keys (raw mode)
+
+    while(ord($key = ReadKey(0)) != 10) { #This will continue until the Enter key is pressed (decimal value of 10)
+	if(ord($key) == 127 || ord($key) == 8) { #DEL/Backspace was pressed
+	    if(length($r) > 0){
+		#1. Remove the last char from the password
+		chop($r);
+		#2 move the cursor back by one, print a blank character, move the cursor back by one
+		print "\b \b";
+	    }
+	} elsif(ord($key) < 32) {
+	    # Do nothing with these control characters
+	} else {
+	    $r = $r.$key;
+	    print "*";
+	}
+    }
+    print "\n"; #because the user pressed enter
+    ReadMode(0); #Reset the terminal once we are done
+
+    return $r; #Return the response
 }
 
 1;
