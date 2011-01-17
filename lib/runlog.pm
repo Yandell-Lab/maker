@@ -150,13 +150,21 @@ sub _load_old_log {
 	 my ($type, $key, $value) = split ("\t", $line);
 
 	 if($type eq 'FINISHED' && defined $logged_vals{STARTED}{$key}){
+	     #delete or hash can become very large
 	     delete($logged_vals{STARTED}{$key});
 	     delete($logged_vals{FINISHED}{$key});
 	     next;
 	 }
 	 elsif($type eq 'STARTED' && defined $logged_vals{FINISHED}{$key}){
+	     #delete or hash can become very large
 	     delete($logged_vals{STARTED}{$key});
 	     delete($logged_vals{FINISHED}{$key});
+	     next;
+	 }
+	 elsif($type eq '###'){
+	     #progress checkpoint reached, all analyses completed up to this point
+	     $logged_vals{STARTED} = {};
+	     $logged_vals{FINISHED} = {};
 	     next;
 	 }
 

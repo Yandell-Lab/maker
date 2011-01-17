@@ -1456,6 +1456,7 @@ sub _go {
 										   [$blastx_keepers]
 										   );
 	    }
+	    
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
@@ -1474,6 +1475,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -1587,6 +1589,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -1690,6 +1693,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -1792,6 +1796,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
 	    #-------------------------NEXT_LEVEL
 	 }
       }
