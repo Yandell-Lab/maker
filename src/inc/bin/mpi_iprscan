@@ -170,6 +170,7 @@ my $root = 0; #define root node (only changed for debugging)
 $OPT{retry} = 2;
 $OPT{datastore} = 1;
 $OPT{always_try} = 1;
+$OPT{min_contig} = 5;
 $OPT{seqtype} = 'p'; #default
 
 #---Process options on the command line
@@ -193,7 +194,7 @@ try{
                "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
                );
 
-    $main::quiet = 0 unless($OPT{verbose}); #suppress status messages
+    $main::quiet = 1 unless($OPT{verbose}); #suppress status messages
     $main::no_threads = 1 if(!$Config::Config{useithreads});
 
     #collect app list from iprscan if not suplied by user

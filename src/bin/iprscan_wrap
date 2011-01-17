@@ -105,6 +105,7 @@ my %OPT;
 $OPT{retry} = 2;
 $OPT{datastore} = 1;
 $OPT{always_try} = 1;
+$OPT{min_contig} = 5;
 $OPT{seqtype} = 'p'; #default
 
 #---Process options on the command line
