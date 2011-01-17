@@ -148,10 +148,26 @@ sub _load_old_log {
 	 chomp $line;
       
 	 my ($type, $key, $value) = split ("\t", $line);
+
+	 if($type eq 'FINISHED' && defined $logged_vals{STARTED}{$key}){
+	     delete($logged_vals{STARTED}{$key});
+	     delete($logged_vals{FINISHED}{$key});
+	     next;
+	 }
+	 elsif($type eq 'STARTED' && defined $logged_vals{FINISHED}{$key}){
+	     delete($logged_vals{STARTED}{$key});
+	     delete($logged_vals{FINISHED}{$key});
+	     next;
+	 }
+
 	 $logged_vals{$type}{$key} = defined($value) ? $value : '';
-	 
-	 $self->{die_count} = $value if($type eq 'DIED' && $key eq 'COUNT');
-	 $self->{old_shared_id} = $key if($type eq 'SHARED_ID');
+
+	 if($type eq 'DIED' && $key eq 'COUNT'){
+	     $self->{die_count} = $value;
+	 }
+	 elsif($type eq 'SHARED_ID'){
+	     $self->{old_shared_id} = $key;
+	 }
       }
       close(IN);
    }
@@ -455,9 +471,9 @@ sub _compare_and_clean {
 		}
 	    }
 	     
-	    #CHECK FOR FILES THAT DID NOT FINISH
+	    #CHECK FOR FILES THAT DID NOT 
 	    while (my $key = each %{$logged_vals{STARTED}}) {
-		if (! exists $logged_vals{FINISHED}{$key}) {
+		if (! defined $logged_vals{FINISHED}{$key}) {
 		    print STDERR "MAKER WARNING: The file $key\n".
 			"did not finish on the last run and must be erased\n" unless($main::qq);
 

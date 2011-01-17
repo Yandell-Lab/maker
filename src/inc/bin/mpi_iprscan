@@ -193,7 +193,7 @@ try{
                "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
                );
 
-    $main::quiet = 1 unless($OPT{verbose}); #suppress status messages
+    $main::quiet = 0 unless($OPT{verbose}); #suppress status messages
     $main::no_threads = 1 if(!$Config::Config{useithreads});
 
     #collect app list from iprscan if not suplied by user
