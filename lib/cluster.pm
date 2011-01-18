@@ -190,7 +190,15 @@ sub criteria {
 	die "UNKNOWN CLASS(".ref($hit)."), ALGORITHM($ref), in cluster::criteria\n";
 }
 #------------------------------------------------------------------------
+#third citeria used to address order issue with mpi vs standard maker
 sub criteria_2 {
+    my $hit = shift;
+
+    my ($lAq, undef) = $hit->getLengths();
+    return $lAq;
+}
+#------------------------------------------------------------------------
+sub criteria_3 {
         my $hit = shift;
 
 	my $score =  $hit->score();
@@ -215,82 +223,118 @@ sub criteria_2 {
 	return $score;
 }
 #------------------------------------------------------------------------
-#third citeria used to address order issue with mpi vs standard maker
-sub criteria_3 {
-    my $hit = shift;
-
-    my ($lAq) = $hit->getLengths();
-    return $lAq;
-}
-#------------------------------------------------------------------------
 sub shadow_cluster {
         my $depth     = shift;
         my $seq       = shift;
-        my $phat_hits = shift;
+        my $phat_hits = shift; #these may be hits or clusters of hits
         my $flank     = shift;
+	my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
+
+        print STDERR "in cluster::shadow_cluster...\n" unless $main::quiet;
 
 	$depth = 0 if (! defined($depth) || $depth < 0);
 
-        my $coors  = PhatHit_utils::to_begin_and_end_coors($phat_hits, 'query');
+	my @hits; #hits to be clustered
+	my @pclust; #already pre-clustered hits
+	foreach my $f (@$phat_hits){
+	    if(ref $f eq 'ARRAY'){
+		push (@pclust, $f);
+	    }
+	    else{
+		push (@hits, $f);
+	    }
+	}
+
+        my $coors  = PhatHit_utils::to_begin_and_end_coors(\@hits, 'query');
+	
+	#get coors for features already in cluster
+	foreach my $c (@pclust){
+	    my $start;
+	    my $end;
+	    foreach my $f (@$c){
+		$start = $f->start if(! $start || $start > $f->start);
+		$end = $f->end if(! $end || $end < $f->end);
+	    }
+	    push(@$coors, [$start, $end]);
+	    $c = {array => $c, start => $start, end => $end};
+	}
+
         my $pieces = Shadower::getPieces($seq, $coors, $flank);
  
-        my $temp_id = 0;
-        foreach my $hit (@{$phat_hits}){
-                $hit->{temp_id} = $temp_id;
-                $temp_id++;
-        }
-
         my @clusters;
-        my $i_size = @{$phat_hits};
         my $j_size = @{$pieces};
 
-        print STDERR " in cluster:shadow cluster...\n" unless $main::quiet;
-        print STDERR "    i_size:$i_size j_size:$j_size\n"
-		unless $main::quiet;
-
-	my $i = 0;
-	my %c_size;
-
-	print STDERR " sorting hits in shadow cluster...\n"
-		unless $main::quiet;
-
-	my @sorted = ($depth == 0) ? @{$phat_hits} : sort mani_sort @{$phat_hits};
- 
-	print STDERR "... finished.\n" unless $main::quiet;
-
-	foreach my $hit (@sorted){
-
+	#add hits to clusters
+	foreach my $hit (@hits){
 		my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit, 'query');
                    ($nB, $nE) = ($nE, $nB) if $nB > $nE;
 
 		my $j = 0;
         	foreach my $s (@{$pieces}){
-
-		        if ($depth != 0 &&
-			    defined($c_size{$j}) &&
-			    $c_size{$j} >  $depth
-			   ){
-			      $j++;
-			      next;
-			}
-
                 	my $sB = $s->{b};
                 	my $sE = $s->{e};
 
                         my $class = compare::compare($sB, $sE, $nB, $nE);
 
                         if ($class ne '0'){
-                                push(@{$clusters[$j]}, $hit); 
-				$c_size{$j}++;
-				last;
-                        }
-			
+			    push(@{$clusters[$j]}, $hit);
+			    last;
+			}
 			$j++;
 		}
-
-		print STDERR " i_size:$i_size   current i:$i\n" unless $main::quiet;
-		$i++;
 	}
+
+	#add pre-existing clusters to clusters
+	foreach my $c (@pclust){
+	    my ($nB, $nE) = ($c->{start}, $c->{end});
+
+	    foreach my $s (@{$pieces}){
+		my $sB = $s->{b};
+		my $sE = $s->{e};
+
+		my $class = compare::compare($sB, $sE, $nB, $nE);
+
+		my $j = 0;
+		if ($class ne '0'){
+		    push(@{$clusters[$j]}, @{$c->{array}});
+		    last;
+		}
+		$j++;
+	    }
+	}
+
+	#now sort clusters to depth
+	if($depth != 0){
+	    print STDERR " sorting hits in shadow cluster...\n" unless $main::quiet;
+	    my $j = 0;
+	    foreach my $c (@clusters){
+		print STDERR " j_size:$j_size   current j:$j\n" unless $main::quiet;
+		if(@$c > $depth){
+		    if($t_sep_flag){
+			my %types;
+			foreach my $f (@$c){
+			    push(@{$types{$f->algorithm}}, $f);
+			}
+
+			my @keepers;
+			while(my $key = each %types){
+			    my $s = $types{$key};
+			    if(@$s > $depth){
+				$s = [(sort mani_sort @$s)[0..$depth-1]];
+			    }
+			    push(@keepers, @$s);
+			}
+			$c = \@keepers;
+		    }
+		    else{
+			$c = [(sort mani_sort @$c)[0..$depth-1]];
+		    }
+		}
+		$j++;
+	    }
+	}
+
+	print STDERR "...finished clustering.\n" unless $main::quiet;
 
 	return \@clusters;
 }

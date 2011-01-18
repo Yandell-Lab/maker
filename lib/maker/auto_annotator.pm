@@ -59,9 +59,9 @@ sub prep_hits {
 			   );
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
-	my $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
-
+	my $p_clusters = cluster::shadow_cluster(100, $seq, $p, $pred_flank, 1);
+	my $m_clusters = cluster::shadow_cluster(100, $seq, $m, $pred_flank, 1);
+	
 	#this method will cause clusters that are near each other and are connected by an orf to merge.
 	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
 	$p_clusters = join_clusters_around_orf($p_clusters, $seq);
@@ -146,15 +146,9 @@ sub prep_hits {
 	#--build clusters joined together by models (for hint based annotations)
 	my $hint_clusters = [];
 	if(@$models){
-	    my $m_bag = combine($models,
-				$prot_hits,
-				$est_hits,
-				$altest_hits
-				);
-
-	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $m_bag);
-	    $p_clusters = cluster::shadow_cluster(0, $seq, $p, $pred_flank);
-	    $m_clusters = cluster::shadow_cluster(0, $seq, $m, $pred_flank);
+	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $models);
+	    $p_clusters = cluster::shadow_cluster(0, $seq, [@$p,@$p_clusters], $pred_flank);
+	    $m_clusters = cluster::shadow_cluster(0, $seq, [@$m,@$m_clusters], $pred_flank);
 
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
 	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
@@ -162,20 +156,6 @@ sub prep_hits {
 	    $m_clusters = join_clusters_around_orf($m_clusters, $seq);
 	    
 	    push(@{$hint_clusters}, @{$p_clusters}, @{$m_clusters});
-
-	    #===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
-	    # don't use unpliced single exon ESTs-- may be genomic contamination
-	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
-		$hint_clusters = purge_single_exon_hits_in_cluster($hint_clusters);
-	    }
-	    # throw out the exonerate est hits with weird splice sites
-	    if(!$est_forward){
-		$hint_clusters = throw_out_bad_splicers_in_cluster($hint_clusters, $seq);
-	    }
-	    #throw out short ESTs
-	    if($single_exon == 1 || $organism_type eq 'prokaryotic') {
-		$hint_clusters = purge_short_ESTs_in_clusters($hint_clusters, $single_length);
-	    }
 	}
 	else{
 	    $hint_clusters = $careful_clusters;

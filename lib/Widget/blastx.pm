@@ -44,15 +44,20 @@ sub run {
 		}
 		waitpid $pid, 0;
 		if ($? != 0){
-		   if($all_err !~ /There are no valid contexts/){
-		      die "ERROR: BLASTX failed\n";
-		   }
-		   else{
-		      #print STDERR "NOTE: BLAST failed because the length of unmasked\n".
-		      #             "sequence is too short to produce a statistically\n".
-		      #             "significant alignment.  You can usually ignore\n".
-		      #	            "this error\n\n";
-		   }
+		    #try again a second time
+		    warn "WARNING: BLASTX failed once, trying again.\n";
+                    sleep 2;
+                    $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+                    $all_err = '';
+                    while (my $line = <CHLD_ERR>){
+                        $all_err .= $line;
+                        print STDERR $line unless($main::quiet);
+                    }
+                    waitpid $pid, 0;
+
+                    if ($? != 0 && $all_err !~ /There are no valid contexts/){
+                        die "ERROR: BLASTX failed\n";
+                    }
 		}
 	}
 	else {
