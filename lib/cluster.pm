@@ -273,9 +273,7 @@ sub shadow_cluster {
         	foreach my $s (@{$pieces}){
                 	my $sB = $s->{b};
                 	my $sE = $s->{e};
-
                         my $class = compare::compare($sB, $sE, $nB, $nE);
-
                         if ($class ne '0'){
 			    push(@{$clusters[$j]}, $hit);
 			    last;
@@ -288,13 +286,11 @@ sub shadow_cluster {
 	foreach my $c (@pclust){
 	    my ($nB, $nE) = ($c->{start}, $c->{end});
 
+	    my $j = 0;
 	    foreach my $s (@{$pieces}){
 		my $sB = $s->{b};
 		my $sE = $s->{e};
-
 		my $class = compare::compare($sB, $sE, $nB, $nE);
-
-		my $j = 0;
 		if ($class ne '0'){
 		    push(@{$clusters[$j]}, @{$c->{array}});
 		    last;
