@@ -10,7 +10,6 @@ use FindBin;
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
-use Term::ReadKey;
 
 BEGIN{
     #prepare correct version of Module Build for building everything
@@ -63,9 +62,9 @@ sub mpi_support {
     my $ebase = $self->install_destination('exe');
 
     my $cc = "$ebase/mpich2/bin/mpicc";
-    ($cc) = grep {is_mpich2($_)} File::Which::where('mpicc') if(! -f $cc);
-    ($cc) = grep {/mpich2/} File::Which::where('mpicc') if(! -f $cc);
-    ($cc) = File::Which::which('mpicc') if(! -f $cc);
+    ($cc) = grep {is_mpich2($_)} File::Which::where('mpicc') if(!$cc || ! -f $cc);
+    ($cc) = grep {/mpich2/} File::Which::where('mpicc') if(!$cc || ! -f $cc);
+    ($cc) = File::Which::which('mpicc') if(!$cc || ! -f $cc);
     
     $cc = $self->config('cc') if(! $cc);
 
@@ -464,7 +463,13 @@ sub _install_exe {
 	if($go){
 	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
 	    my $user = $self->prompt("Please enter your username:", '');
-	    my $pass = $self->safe_prompt("Please enter your Password:", '');
+	    my $pass;
+	    if(!$self->check_installed_status('Term::ReadKey', '0')->{ok}){
+		$pass = $self->safe_prompt("Please enter your Password:", '');
+	    }
+	    else{
+		$pass = $self->prompt("Please enter your Password:", '');
+	    }
 	    chdir($path);
 	    $file = "$path/$req.tar.gz"; #file to save to
 	    $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
@@ -1139,6 +1144,8 @@ sub check_update_version {
 }
 
 sub safe_prompt {
+    require Term::ReadKey;
+
     my $self = shift;
     my $m = shift;
     my $d = shift || '';

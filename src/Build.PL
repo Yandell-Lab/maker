@@ -56,6 +56,7 @@ my $build = MAKER::Build->new
      },
      config_requires => {
 	 'File::Which'        => '0',
+	 'Term::ReadKey'      => '0',
      },
      recommends => {
 	 'threads'  => '1.67',

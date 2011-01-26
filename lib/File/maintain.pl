@@ -17,6 +17,14 @@ BEGIN {
     $SIG{TERM} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{STOP} = sub{$LOCK->unlock if($LOCK); exit(0)};
     $SIG{INT}  = sub{$LOCK->unlock if($LOCK); exit(0)};
+
+    $SIG{'__WARN__'} = sub {
+	warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
+			$_[0] !~ /Can\'t store item CODE/ &&
+			$_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/ &&
+			$_[0] !~ /Ran into unknown state/
+			);
+    };
 }
 
 my $pid = shift;
