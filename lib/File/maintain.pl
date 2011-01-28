@@ -31,34 +31,37 @@ my $pid = shift;
 my $time = shift;
 my $serial = shift;
 
-select((select(STDOUT), $|=1)[0]);
-
-die "ERROR: Lock serialization does not exist\n\n"
-    if(! defined($serial));
-die "ERROR:  Lacking input for lock maintainer\n\n"
-    if(! defined($time) || ! defined($pid));
-
-$serial = uri_unescape($serial);
-$LOCK = Storable::thaw($serial);
-
-die "ERROR: Could not retrieve lock" if(! $LOCK);
-
-while(-f $LOCK->{lock_file}){
-    if(! Proc::Signal::exists_proc_by_id($pid)){
-	$LOCK->unlock if($LOCK);
-	exit(0);
+UNSAFE_SIGNALS {
+    select((select(STDOUT), $|=1)[0]);
+    
+    die "ERROR: Lock serialization does not exist\n\n"
+	if(! defined($serial));
+    die "ERROR:  Lacking input for lock maintainer\n\n"
+	if(! defined($time) || ! defined($pid));
+    
+    $serial = uri_unescape($serial);
+    $LOCK = Storable::thaw($serial);
+    
+    die "ERROR: Could not retrieve lock" if(! $LOCK);
+    
+    while(-f $LOCK->{lock_file}){
+	if(! Proc::Signal::exists_proc_by_id($pid)){
+	    $LOCK->unlock if($LOCK);
+	    exit(0);
 	}
-    if($LOCK && ! $LOCK->still_mine){
-	exit(1);
+	if($LOCK && ! $LOCK->still_mine){
+	    exit(1);
 	}
-    $LOCK->refresh;
-    sleep $time;
-}
+	exit (1) unless($LOCK->refresh);
+	sleep $time;
+    }
+    
+    $LOCK->unlock if($LOCK);
 
-$LOCK->unlock if($LOCK);
-
-exit(0);
-
+    exit(0);
+};
+    
 DESTROY {
     $LOCK->unlock if($LOCK);
 }
+    

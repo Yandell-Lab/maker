@@ -531,9 +531,9 @@ sub create_blastdb {
        my $count = @{[split(',', $CTL_OPT->{$set->[1]})]};
        $tries{$set->[1]}++;
        my $l_name = "$b_dir/".$set->[1].".$mpi_size.".$tries{$set->[1]};
-
-       if(my $lock = new File::NFSLock("$l_name", 'NB', 600, 40)){
-	   $lock->maintain(30);
+       
+       my $lock;
+       if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
            $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $mpi_size);
 	   $lock->unlock;
        }
@@ -611,156 +611,166 @@ sub split_db {
        my $f_dir = "$b_dir/$d_name";
        my $t_dir = $TMP."/$d_name";
 
-       if(my $lock = new File::NFSLock($f_dir, 'NB', 600, 40)){
-	   $lock->maintain(30);
-
-	   #check if likely already finished
-	   if(-e "$f_dir"){ #on multi processors check if finished
-	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-	       
-	       if(@t_db == $bins){ #use existing if right count
-		   $lock->unlock;
-		   push(@db_files, @t_db);
-		   next;
-	       }
-	       else{ #remove if there is an error
-		   File::Path::rmtree($f_dir);
-	       }
-	   }
-
-	   #set up alternate names for short files
-	   my $fasta_iterator = new Iterator::Fasta($file);
-	   my $num_fastas = $fasta_iterator->number_of_entries();
-	   die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
+       #check if likely already finished
+       if(-e "$f_dir"){ #on multi processors check if finished
+	   my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
 	   
-	   my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
-	   if ($max_bins < $bins){
-	       $bins = $max_bins;
-	       $d_name = "$f_name\.mpi\.$bins";
-	       $f_dir = "$b_dir/$d_name";
-	       $t_dir = $TMP."/$d_name";
-	       
-	       #fix lock
-	       $lock->unlock;
-	       unless($lock = new File::NFSLock($f_dir, 'EX', 600, 40)){
-		   die "ERROR: Could not get lock to process $file.\n";
-	       }
-	   }
-	   
-	   #make needed output directories
-	   mkdir($t_dir);
-	   mkdir($b_dir) unless (-e $b_dir);
-       
-	   if(-e "$f_dir"){ #on multi processors check if finished
-	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-	       
-	       if(@t_db == $bins){ #use existing if right count
-		   $lock->unlock;
-		   push(@db_files, @t_db);
-		   next;
-	       }
-	       else{ #remove if there is an error
-		   File::Path::rmtree($f_dir);
-	       }
-	   }
-	   
-	   #open filehandles for  pieces on multi processors
-	   my @fhs;
-	   
-	   for (my $i = 0; $i < $bins; $i++) {
-	       my $name = "$t_dir/$d_name\.$i";
-	       my $fh;
-	       open ($fh, "> $name");
-	       
-	       push (@fhs, $fh);
-	   }
-	   
-	   #write fastas here
-	   my %alias;
-	   
-	   my $wflag = 1; #flag set so warnings gets printed only once 
-	   while (my $fasta = $fasta_iterator->nextEntry()) {
-	       my $def = Fasta::getDef(\$fasta);
-	       my $seq_id = Fasta::def2SeqID($def);
-	       my $seq_ref = Fasta::getSeqRef(\$fasta);
-
-	       #fix non standard peptides
-	       if (defined $alt) {
-		   $$seq_ref =~ s/[\*\-]//g;
-		   $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
-	       }
-	       #fix nucleotide sequences
-	       elsif($key !~ /protein/){
-		   #most programs use N for masking but for some reason the NCBI decided to
-		   #use X to mask their sequence, which causes many many programs to fail
-		   $$seq_ref =~ s/\-//g;
-		   $$seq_ref =~ s/X/N/gi;
-		   die "ERROR: The nucleotide sequence file \'$file\'\n".
-		       "appears to contain protein sequence or unrecognized characters.\n".
-		       "Please check/fix the file before continuing.\n".
-		       "Invalid Character: $1\n\n"
-		       if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
-	       }
-	       
-	       #Skip empty fasta entries
-	       next if($$seq_ref eq '');
-	       
-	       #fix weird blast trimming error for long seq IDs by replacing them
-	       if(length($seq_id) > 78){
-		   warn "WARNING: The fasta file contains sequences with names longer\n".
-		       "than 78 characters.  Long names get trimmed by BLAST, making\n".
-		       "it harder to identify the source of an alignmnet. You might\n".
-		       "want to reformat the fasta file with shorter IDs.\n".
-		       "File_name:$file\n\n" if($wflag-- > 0);
-		   
-		   my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
-		   
-		   die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
-		       if($alias{$new_id});
-		   
-		   $alias{$new_id}++;
-		   $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
-	       }
-	       
-	       #reformat fasta, just incase
-	       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
-	       
-	       #build part files only on multi processor
-	       my $fh = shift @fhs;
-	       print $fh $$fasta_ref;
-	       push (@fhs, $fh);
-	   }
-	   
-	   #close part file handles
-	   foreach my $fh (@fhs) {
-	       close ($fh);
-	   }
-	   
-	   #move finished file directory into place
-	   system("mv $t_dir $f_dir"); #File::Copy cannot move directories
-	   
-	   #check if everything is ok
-	   if (-e $f_dir) { #multi processor
-	       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
-	       	       
-	       die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
-
+	   if(@t_db == $bins){ #use existing if right count
 	       push(@db_files, @t_db);
-
-	       $lock->unlock;
 	       next;
 	   }
-	   else {
-	       die "ERROR: Could not split db\n"; #not ok
+	   else{ #maybe not finished
+	       my $lock;
+	       if(($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)) && $lock->maintain(30)){
+		   #check again if likely already finished
+		   if(-e "$f_dir"){ #on multi processors check if finished
+		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+		       
+		       if(@t_db == $bins){ #use existing if right count
+			   $lock->unlock;
+			   push(@db_files, @t_db);
+			   next;
+		       }
+		       else{ #remove if there is an error
+			   File::Path::rmtree($f_dir);
+		       }
+		   }
+		   
+		   #set up alternate names for short files
+		   my $fasta_iterator = new Iterator::Fasta($file);
+		   my $num_fastas = $fasta_iterator->number_of_entries();
+		   die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
+		   
+		   my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
+		   if ($max_bins < $bins){
+		       $bins = $max_bins;
+		       $d_name = "$f_name\.mpi\.$bins";
+		       $f_dir = "$b_dir/$d_name";
+		       $t_dir = $TMP."/$d_name";
+		       
+		       #fix lock
+		       $lock->unlock;
+		       unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 50)){
+			   die "ERROR: Could not get lock to process $file.\n";
+		       }
+		   }
+		   
+		   #make needed output directories
+		   mkdir($t_dir);
+		   mkdir($b_dir) unless (-e $b_dir);
+		   
+		   if(-e "$f_dir"){ #on multi processors check if finished
+		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+		       
+		       if(@t_db == $bins){ #use existing if right count
+			   $lock->unlock;
+			   push(@db_files, @t_db);
+			   next;
+		       }
+		       else{ #remove if there is an error
+			   File::Path::rmtree($f_dir);
+			 }
+		   }
+		   
+		   #open filehandles for  pieces on multi processors
+		   my @fhs;
+		   
+		   for (my $i = 0; $i < $bins; $i++) {
+		       my $name = "$t_dir/$d_name\.$i";
+		       my $fh;
+		       open ($fh, "> $name");
+		       
+		       push (@fhs, $fh);
+		   }
+		   
+		   #write fastas here
+		   my %alias;
+		   
+		   my $wflag = 1; #flag set so warnings gets printed only once 
+		   while (my $fasta = $fasta_iterator->nextEntry()) {
+		       my $def = Fasta::getDef(\$fasta);
+		       my $seq_id = Fasta::def2SeqID($def);
+		       my $seq_ref = Fasta::getSeqRef(\$fasta);
+		       
+		       #fix non standard peptides
+		       if (defined $alt) {
+			   $$seq_ref =~ s/[\*\-]//g;
+			   $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
+		       }
+		       #fix nucleotide sequences
+		       elsif($key !~ /protein/){
+			   #most programs use N for masking but for some reason the NCBI decided to
+			   #use X to mask their sequence, which causes many many programs to fail
+			   $$seq_ref =~ s/\-//g;
+			   $$seq_ref =~ s/X/N/gi;
+			   die "ERROR: The nucleotide sequence file \'$file\'\n".
+			       "appears to contain protein sequence or unrecognized characters.\n".
+			       "Please check/fix the file before continuing.\n".
+			       "Invalid Character: $1\n\n"
+			       if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
+		       }
+		       
+		       #Skip empty fasta entries
+		       next if($$seq_ref eq '');
+		       
+		       #fix weird blast trimming error for long seq IDs by replacing them
+		       if(length($seq_id) > 78){
+			   warn "WARNING: The fasta file contains sequences with names longer\n".
+			       "than 78 characters.  Long names get trimmed by BLAST, making\n".
+			       "it harder to identify the source of an alignmnet. You might\n".
+			       "want to reformat the fasta file with shorter IDs.\n".
+			       "File_name:$file\n\n" if($wflag-- > 0);
+			   
+			   my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
+			   
+			   die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+			       if($alias{$new_id});
+			   
+			   $alias{$new_id}++;
+			   $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+		       }
+		       
+		       #reformat fasta, just incase
+		       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+		       
+		       #build part files only on multi processor
+		       my $fh = shift @fhs;
+		       print $fh $$fasta_ref;
+		       push (@fhs, $fh);
+		   }
+		   
+		   #close part file handles
+		   foreach my $fh (@fhs) {
+		       close ($fh);
+		   }
+		   
+		   #move finished file directory into place
+		   system("mv $t_dir $f_dir"); #File::Copy cannot move directories
+		   
+		   #check if everything is ok
+		   if (-e $f_dir) { #multi processor
+		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
+	       	       
+		       die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
+		       
+		       push(@db_files, @t_db);
+		       
+		       $lock->unlock;
+		       next;
+		   }
+		   else {
+		       die "ERROR: Could not split db\n"; #not ok
+		   }
+	       }
+	       else{
+		   push(@entries, $entry);
+		   sleep 5;
+		   next;
+	       }
 	   }
        }
-       else{
-	   push(@entries, $entry);
-	   sleep 5;
-	   next;
-       }
    }
-
+	   
    return \@db_files;
 }
 #-----------------------------------------------------------------------------
@@ -1409,11 +1419,6 @@ sub dbformat {
    die "ERROR: Can not find the db file $file\n" if(! -e $file);
    die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
-   my $lock;
-   unless($lock = new File::NFSLock("$file.dbformat", 'EX', 600, 40)){
-       die "ERROR:  Could not obtain lock to format database\n\n";
-   }
-
    my $run; #flag
    if ($command =~ /xdformat/) {
       if (($type eq 'blastn' && ! -e $file.'.xnd') ||
@@ -1453,13 +1458,18 @@ sub dbformat {
    }
 
    if($run){
-       $lock->maintain(30);
-       my $w = new Widget::formater();
-       print STDERR "formating database...\n" unless $main::quiet;
-       $w->run($command);
+       my $lock;
+       if(($lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 50)) && $lock->maintain(30)){
+	   my $w = new Widget::formater();
+	   print STDERR "formating database...\n" unless $main::quiet;
+	   $w->run($command);
+	   $lock->unlock;
+       }
+       else{
+	   $lock->unlock if($lock);
+	   die "ERROR:  Could not obtain lock to format database\n\n";
+       }
    }
-
-   $lock->unlock;
 }
 #-----------------------------------------------------------------------------
 sub get_blast_finished_name {
@@ -1532,27 +1542,35 @@ sub blastn_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-	   open(my $L,"$tmp_db.copy");
-	   flock($L, 2); #try regular file lock for extra safety
-	   
-	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	       (! -e $blast_finished)
-	       ){
-	       $lock->maintain(30);
-	       copy($db, $tmp_db) if(! -e $tmp_db);
-	       dbformat($formater, $tmp_db, 'blastn');
+       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	    (! -e $blast_finished)) ||
+	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
+	   ){
+	   my $lock;
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	       open(my $L,"$tmp_db.copy");
+	       flock($L, 2); #try regular file lock for extra safety
+	       
+	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+		   (! -e $blast_finished)
+		   ){
+		   $lock->maintain(30);
+		   copy($db, $tmp_db) if(! -e $tmp_db);
+		   dbformat($formater, $tmp_db, 'blastn');
+	       }
+	       
+	       flock($L, 8);
+	       $lock->unlock;
 	   }
-	   
-	   flock($L, 8);
-	   $lock->unlock;
-       }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
-       }
-
+	   else{
+	       die "ERROR: Could not get lock.\n\n";
+	   }
+	}
+   
        #call blast executable
        $chunk->write_file($t_file_name);  
        
@@ -1824,25 +1842,34 @@ sub blastx_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-	   open(my $L,"$tmp_db.copy");
-	   flock($L, 2); #try regular file lock for extra safety
-	   
-	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	       (! -e $blast_finished)
-	       ){
-	       $lock->maintain(30);
-	       copy($db, $tmp_db) if(! -e $tmp_db);
-	       dbformat($formater, $tmp_db, 'blastx');
+       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	    (! -e $blast_finished)) ||
+	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
+	   ){
+	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+	   my $lock;
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	       open(my $L,"$tmp_db.copy");
+	       flock($L, 2); #try regular file lock for extra safety
+	       
+	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+		   (! -e $blast_finished)
+		   ){
+		   $lock->maintain(30);
+		   copy($db, $tmp_db) if(! -e $tmp_db);
+		   dbformat($formater, $tmp_db, 'blastx');
+	       }
+	       
+	       flock($L, 8);
+	       $lock->unlock;
 	   }
-	   
-	   flock($L, 8);
-	   $lock->unlock;
-       }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
+	   else{
+	       die "ERROR: Could not get lock.\n\n";
+	   }
        }
 
        #call blast executable
@@ -2131,25 +2158,34 @@ sub tblastx_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if(my $lock = new File::NFSLock("$tmp_db.copy", 'EX', 600, 40)){
-	   open(my $L,"$tmp_db.copy");
-	   flock($L, 2); #try regular file lock for extra safety
-	   
-	   if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		(! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	       (! -e $blast_finished)
-	       ){
-	       $lock->maintain(30);
-	       copy($db, $tmp_db) if(! -e $tmp_db);
-	       dbformat($formater, $tmp_db, 'tblastx');
+       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+	    (! -e $blast_finished)) ||
+	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
+	   ){
+	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+	   my $lock;
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	       open(my $L,"$tmp_db.copy");
+	       flock($L, 2); #try regular file lock for extra safety
+	       
+	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
+		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
+		   (! -e $blast_finished)
+		   ){
+		   $lock->maintain(30);
+		   copy($db, $tmp_db) if(! -e $tmp_db);
+		   dbformat($formater, $tmp_db, 'tblastx');
+	       }
+	       
+	       flock($L, 8);
+	       $lock->unlock;
 	   }
-	   
-	   flock($L, 8);
-	   $lock->unlock;
-       }
-       else{
-	   die "ERROR: Could not get lock.\n\n";
+	   else{
+	       die "ERROR: Could not get lock.\n\n";
+	   }
        }
 
        #call blast executable
@@ -3584,10 +3620,7 @@ sub load_control_files {
 
    #--check if MAKER is already running and lock the directory
    #lock must be global or it will be destroyed outside of block
-   if($LOCK = new File::NFSLock($CTL_OPT{out_base}."/gi_lock", 'SH', 40, 40)){
-       $LOCK->maintain(30);
-   }
-   else{
+   unless(($LOCK = new File::NFSLock($CTL_OPT{out_base}."/gi_lock", 'SH', 40, 40)) && $LOCK->maintain(30)){
        die "ERROR: The directory is locked.  Perhaps by an instance of MAKER or EVALUATOR.\n\n";
    }
 

@@ -712,7 +712,7 @@ sub cpan_install {
 
     # Here we use CPAN to actually install the desired module
     require CPAN;
-    
+
     # Save this because CPAN will chdir all over the place.
     my $cwd = getcwd();
     

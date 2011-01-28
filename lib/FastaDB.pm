@@ -34,50 +34,33 @@ sub new {
     }
 
     #build indexes
-    my @check;
-    foreach my $file (@files){ #do non blocking lock to skip over active
-	if(my $lock = new File::NFSLock("$file.index", 'NB', undef, 40)){
-	    if(! -e "$file.index"){ #maintain lock because I must build index
-		$lock->maintain(30);
+    while (my $file = shift @files){ 
+	my $lock; #do non blocking lock to skip over active
+	if (! -e "$file.index" || -e ".NFSLock.$file.index.NFSLock"){ #index is not ready to use
+	    if(($lock = new File::NFSLock("$file.index", 'NB', undef, 50))){
+		if(-e "$file.index"){ #release lock because index is ready to use
+		    $lock->unlock();
+		    $lock = undef;
+		}
+		elsif(! $lock->maintain(30)){ #can't get maintainer to lock
+		    push(@files, $file);
+		    $lock->unlock();
+		    next;
+		}
 	    }
-	    else{ #release lock because index exists and is ready to use
-		$lock->unlock();
-		$lock = undef;
+	    else{
+		push(@files, $file);
+		next;
 	    }
-
-	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-
-	    #build reverse index to get the correct index based on file name
-	    my ($title) = $file =~ /([^\/]+)$/;
-	    $self->{file2index}{$title} = $self->{index}->[-1];
-
-	    $lock->unlock if($lock);
 	}
-	else{
-	    push(@check, $file);
-	}
-    }
-    foreach my $file (@check){ #do blocking lock to check on all active
-	if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){
-	    if(! -e "$file.index"){ #maintain lock because I must build index
-		$lock->maintain(30);
-	    }
-	    else{ #release lock because index exists and is ready to use
-		$lock->unlock();
-		$lock = undef;
-	    }
 
-	    push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-	    
-	    #build reverse index to get the correct index based on file name
-	    my ($title) = $file =~ /([^\/]+)$/;
-	    $self->{file2index}{$title} = $self->{index}->[-1];
-	    
-	    $lock->unlock if($lock);
-	}
-	else{
-	    die "ERROR: Could not get lock for indexing\n\n";
-	}
+	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	
+	#build reverse index to get the correct index based on file name
+	my ($title) = $file =~ /([^\/]+)$/;
+	$self->{file2index}{$title} = $self->{index}->[-1];
+	
+	$lock->unlock if($lock);
     }
     
     return $self;
@@ -104,12 +87,11 @@ sub reindex {
     return $self if(! @files);
 
     #rebuilt build indexes
-    if(my $lock = new File::NFSLock("$files[0].reindex", 'NB', 0, 40)){ #reindex lock
-	$lock->maintain(30);
+    my $lock;
+    if(($lock = new File::NFSLock("$files[0].reindex", 'NB', 0, 50)) && $lock->maintain(30)){ #reindex lock
 	foreach my $file (@files){
-	    if(my $lock = new File::NFSLock("$file.index", 'EX', undef, 40)){ #standard index lock
-		$lock->maintain(30);
-		
+	    my $lock;
+	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
 		push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
 		
 		#build reverse index to get the correct index based on file name

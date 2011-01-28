@@ -592,7 +592,7 @@ sub maintain {
     die "ERROR: No time interval given to maintain lock\n\n"
 	if(! $time || $time < 1);
 
-    $self->refresh; #refresh once on it's own
+    return 0 if(!$self->refresh); #refresh once on it's own
 
     #clean up old maintainers
     if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
@@ -655,7 +655,9 @@ sub refresh {
 
   #make sure the lock really is still mine (also refreshes NFS cache)
   if(! $self->still_mine){
-    die "ERROR: Cannot refresh the lock as it has apparently been broken\n";
+      warn "ERROR: Cannot refresh the lock as it has apparently been broken\n".
+	   "lockfile: ".$self->{file}."\n";
+      return 0;
   }
 
   ### need the hostname
@@ -703,6 +705,8 @@ sub refresh {
   print    _FH $content;
   truncate _FH, length($id_line.$content);
   close    _FH;
+
+  return 1;
 }
 
 sub still_mine {

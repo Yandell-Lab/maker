@@ -77,7 +77,9 @@ my %constants = qw(MPI_2COMPLEX            MPI_Datatype
 		   MPI_VERSION             undef);
 
 my @basic = qw(&MPI_Send
-	       &MPI_Recv);
+	       &MPI_Recv
+	       &MPI_Init
+	       &MPI_Finalize);
 
 my @funcs =     qw(&MPI_Barrier
 		   &MPI_Bcast
@@ -85,8 +87,6 @@ my @funcs =     qw(&MPI_Barrier
 		   &MPI_Comm_rank
 		   &MPI_Wtime
 		   &MPI_Wtick
-		   &MPI_Init
-		   &MPI_Finalize
 		   &MPI_Initialized
 		   &MPI_Abort
 		   &MPI_Reduce
