@@ -25,6 +25,8 @@ sub clean_and_cluster {
 	my $seq     = shift;
 	my $depth   = shift;
 
+	return [] if(!@$keepers);
+
 	$depth = 0 if (! defined($depth) || $depth < 0);
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $keepers);
@@ -203,7 +205,7 @@ sub criteria_3 {
 
 	my $score =  $hit->score();
 	$score = '' if(! defined $score);
-        #check if value is numerical ad adjust if not
+        #check if value is numerical and adjust if not
 	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
 	    $score = $hit->bits();
 	    $score = '' if(! defined $score);

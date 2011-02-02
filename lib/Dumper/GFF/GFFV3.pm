@@ -11,6 +11,7 @@ use PostData;
 use PhatHit_utils;
 use File::Copy;
 use URI::Escape;
+use File::NFSLock;
 
 @ISA = qw(
        );
@@ -69,9 +70,12 @@ sub fasta {
 sub resolved_flag {
     my $self   = shift;
 
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n");
     close($ANN);
+    $lock->unlock;
 }
 #------------------------------------------------------------------------
 sub set_current_contig {
@@ -84,6 +88,8 @@ sub set_current_contig {
 
     $self->{seq_id} = uri_escape($self->{seq_id}, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
 
@@ -97,6 +103,7 @@ sub set_current_contig {
     open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
     print_txt($SEQ, ${$self->fasta});
     close($SEQ);
+    $lock->unlock;
 }
 #------------------------------------------------------------------------
 sub seq {
@@ -209,44 +216,56 @@ sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
     
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
     foreach my $p (@{$hits}){
        print_txt($ANN, hit_data($p, $self->seq_id));
     }
     close($ANN);
+    $lock->unlock;
 }
 #------------------------------------------------------------------------
 sub add_phathits {
    my $self  = shift;
    my $hits  = shift;
    
+   my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+   while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
-    foreach my $h (@{$hits}){
-       print_txt($ANN, hit_data($h, $self->seq_id));
-    }
-    close($ANN);
+   foreach my $h (@{$hits}){
+      print_txt($ANN, hit_data($h, $self->seq_id));
+   }
+   close($ANN);
+   $lock->unlock;
 }
 #------------------------------------------------------------------------
 sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
    
+   my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+   while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
-    foreach my $r (@{$hits}){
-       print_txt($ANN, repeat_data($r, $self->seq_id));
-    }
-    close($ANN);
+   foreach my $r (@{$hits}){
+      print_txt($ANN, repeat_data($r, $self->seq_id));
+   }
+   close($ANN);
+   $lock->unlock;
 }
 #------------------------------------------------------------------------
 sub add_genes {
     my $self  = shift;
     my $genes = shift;
     
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, '>>', $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     foreach my $g (@{$genes}){
        print_txt($ANN, gene_data($g, $self->seq_id));
     }
     close($ANN);
+    $lock->unlock;
 }
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------

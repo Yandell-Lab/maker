@@ -59,6 +59,7 @@ sub load_chunks {
 		my $def = $parent_def. " CHUNK number:$c size:$l offset:$i";
 
 		my $is_last = ($t_c - 1 == $c) ? 1 : 0;
+		my $is_first = ($c == 0) ? 1 : 0;
 		
 		my $chunk = new FastaChunk();
 		   $chunk->seq(substr($$parent_seq_ref, $i, $l));
@@ -70,6 +71,7 @@ sub load_chunks {
 		   $chunk->offset($i);
 		   $chunk->number($c);
 		   $chunk->is_last($is_last);
+		   $chunk->is_first($is_first);
 		   $chunk->parent_seq_length($self->parent_seq_length());
 
 		if($chunk->length > $self->min_size || $chunk->number == 0){
@@ -106,11 +108,29 @@ sub last_chunk {
 	return $self->{chunks}->[-1];
 }
 #-------------------------------------------------------------------------------
+sub all_chunks {
+   my $self = shift;
+
+   return $self->{chunks};
+}
+#-------------------------------------------------------------------------------
 sub add_chunk {
 	my $self  = shift;
 	my $chunk = shift;
 
 	push(@{$self->{chunks}}, $chunk);
+}
+#-------------------------------------------------------------------------------
+sub replace {
+   my $self = shift;
+   my $chunk = shift;
+   
+   $self->{chunks}->[$chunk->number] = $chunk;
+}
+#-------------------------------------------------------------------------------
+sub reset {
+   my $self = shift;
+   $self->{INDEX} = 0;
 }
 #-------------------------------------------------------------------------------
 #---------------------------  CLASS FUNCTIONS ----------------------------------

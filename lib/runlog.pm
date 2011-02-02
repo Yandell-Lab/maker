@@ -707,6 +707,8 @@ sub _compare_and_clean {
 		    unless($main::qq);
 		push (@files, $gff_file);
 		push (@files, @{[<$out_base/*.fasta>]});
+		push (@files, @{[<$the_void/*.holdover>]});
+		push (@files, @{[<$the_void/*.section>]});
 		push (@dirs, "$out_base/evaluator");
 	    }
 	    else{

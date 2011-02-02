@@ -7,6 +7,8 @@ use strict;
 use Error qw(:try);
 use Error::Simple;
 use Storable;
+use Process::MpiTiers;
+use File::Copy;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
@@ -86,6 +88,34 @@ sub _initialize_vars{
 }
 
 #--------------------------------------------------------------
+#gets called by MpiTiers after result is processed
+sub _finalize {
+   my $self = shift;
+   my $tier = shift; 
+   
+   return if(! defined $tier->{VARS}->{extra_chunks});
+
+   my $chunks = $tier->{VARS}->{extra_chunks};
+   my $level = $tier->{LEVEL}{CURRENT};
+   my $new_level = $tier->{VARS}->{extra_level}; 
+
+   #initialize up to newest level                                                                               
+   $tier->go_to_level($new_level) if($new_level > $level);
+   $tier->{LEVEL}{$new_level}{STARTED} = 1;
+   $tier->{LEVEL}{EXTRA} = 1;
+
+   #add chunks to appropriate level
+   foreach my $c (@$chunks){
+      push(@{$tier->{LEVEL}{$c->level}{CHUNKS}}, $c);
+      $tier->{LEVEL}{$c->level}{CHUNK_COUNT}++;
+   }
+
+   #clear temporary variables
+   delete($tier->{VARS}->{extra_chunks});
+   delete($tier->{VARS}->{extra_level});
+}
+
+#--------------------------------------------------------------
 #gets called by MpiTiers object following a failure
 sub _on_failure {
    my $self = shift;
@@ -131,15 +161,34 @@ sub _on_termination {
    return if($tier->failed);
    return if($tier->{VARS}{c_flag} <= 0);
 
-   #only reach this point if termination is due to success
-   my $seq_id = $tier->{VARS}{seq_id};
-   my $out_dir = $tier->{VARS}{out_dir};
-   my $LOG = $tier->{VARS}{LOG};
-   my $LOCK = $tier->{VARS}{LOCK};
-   my $DS_CTL = $tier->{VARS}{DS_CTL};
+   $self->{RESULTS} = {};
+   my $tier_type = $tier->{VARS}->{tier_type};
+   if($tier_type == 1){
+      #only reach this point if termination is due to success
+      my $seq_id = $tier->{VARS}{seq_id};
+      my $out_dir = $tier->{VARS}{out_dir};
+      my $LOG = $tier->{VARS}{LOG};
+      my $LOCK = $tier->{VARS}{LOCK};
+      my $DS_CTL = $tier->{VARS}{DS_CTL};
+      
+      $DS_CTL->add_entry($seq_id, $out_dir, "FINISHED");
+      $LOCK->unlock; #releases locks on the log file
+      
+      $tier->{RESULTS} = {};
+   }
+   elsif($tier_type == 2){
+      $tier->{RESULTS}->{chunk} = $tier->{VARS}{chunk};
+   }
+   elsif($tier_type == 3){
+      $tier->{RESULTS}->{holdover_files} = $tier->{VARS}{holdover_files};
+      $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
+   }
+   elsif($tier_type == 4){
+      $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
+      $tier->{RESULTS}->{t_fastas} = $tier->{VARS}->{t_fastas};
+   }
 
-   $DS_CTL->add_entry($seq_id, $out_dir, "FINISHED");
-   $LOCK->unlock; #releases locks on the log file
+   delete($tier->{VARS});
 
    return;
 }
@@ -172,6 +221,7 @@ sub _should_continue {
 sub _prepare {
    my $self = shift;
    my $VARS = shift;
+   my $tier_type = $VARS->{tier_type} || 1;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
@@ -179,41 +229,43 @@ sub _prepare {
       $self = new Process::MpiChunk();
    }
 
-   #instantiate empty LOG
-   $VARS->{LOG} = undef;
-   
    #==Prepare data here as part of initialization
 
-   #set up contig variables
-   #===
-   my $status = 'instantiating tier variables';
-   #===
-   
-   #-set up variables that are heldover from last chunk
-   $VARS->{holdover_blastn}          = [];
-   $VARS->{holdover_blastx}          = [];
-   $VARS->{holdover_tblastx}         = [];
-   $VARS->{holdover_exonerate_e}     = [];
-   $VARS->{holdover_exonerate_p}     = [];
-   $VARS->{holdover_exonerate_a}     = [];
-   $VARS->{holdover_pred}            = [];
-   $VARS->{holdover_est_gff}         = [];
-   $VARS->{holdover_altest_gff}      = [];
-   $VARS->{holdover_prot_gff}        = [];
-   $VARS->{holdover_pred_gff}        = [];
-   $VARS->{holdover_model_gff}       = [];
-   
-   #-set up variables that are the result of chunk accumulation
-   my $empty;
-   $VARS->{masked_total_seq} = \$empty; #empty scalar ref
-   $VARS->{p_fastas} = {};
-   $VARS->{t_fastas} = {};
-   
-   #--other variables
-   $VARS->{res_dir} = undef;
    $VARS->{c_flag} = 1; #always continue with this implementation and
-                        #let child nodes decide on running chunk.
-                        #Other implementations let the root node decide
+   #let child nodes decide on running chunk.
+   #Other implementations let the root node decide
+
+   if($tier_type == 1){
+      #instantiate empty LOG
+      $VARS->{LOG} = undef;
+
+      #-set up variables that are the result of chunk accumulation
+      my $empty;
+      $VARS->{masked_total_seq} = \$empty; #empty scalar ref
+      $VARS->{p_fastas} = {};
+      $VARS->{t_fastas} = {};
+   }
+   elsif($tier_type == 2){
+
+   }
+   elsif($tier_type == 3){
+      #-set up variables that are heldover from last chunk
+      $VARS->{holdover_blastn}          = [];
+      $VARS->{holdover_blastx}          = [];
+      $VARS->{holdover_tblastx}         = [];
+      $VARS->{holdover_exonerate_e}     = [];
+      $VARS->{holdover_exonerate_p}     = [];
+      $VARS->{holdover_exonerate_a}     = [];
+      $VARS->{holdover_pred}            = [];
+      $VARS->{holdover_est_gff}         = [];
+      $VARS->{holdover_altest_gff}      = [];
+      $VARS->{holdover_prot_gff}        = [];
+      $VARS->{holdover_pred_gff}        = [];
+      $VARS->{holdover_model_gff}       = [];
+
+      #--other variables
+      $VARS->{res_dir} = undef;
+   }
 
    return 1;
 }
@@ -234,6 +286,10 @@ sub _loader {
       $VARS = $level;
       $level = $self;
       $self = new Process::MpiChunk();
+   }
+
+   if(! defined($tID) && $self->id){
+      ($tID) = split(':', $self->id);
    }
 
    my $chunks = $self->_go('load', $level, $VARS);
@@ -271,6 +327,10 @@ sub run {
    }
 }
 #--------------------------------------------------------------
+#for syntactic sugar, same as run
+
+sub run_all {shift->run(@_);}
+#--------------------------------------------------------------
 #this funcion is called by MakerTiers.  It returns the flow of
 #levels, i.e. order control, looping, etc.
 
@@ -299,6 +359,7 @@ sub _go {
    my $level = shift @_;
    my $VARS = shift @_;
 
+   my $tier_type = $VARS->{tier_type} || 1;
    my $next_level = $level + 1;
    my $result_stat = 1;
    my @chunks;
@@ -308,7 +369,10 @@ sub _go {
    my $level_status = '';
 
    try{
-      if ($level == 0) {	#examining contents of the fasta file and run log
+      ##
+      ##TO TIER_TYPE 1
+      ##
+      if ($tier_type == 1 && $level == 0) { #examining contents of the fasta file and run log
 	 $level_status = 'examining contents of the fasta file and run log';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -318,10 +382,10 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{fasta
+	    @args = (qw(fasta
 			CTL_OPT
-		        DS_CTL}
-		    );
+			DS_CTL)
+		     );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
@@ -329,15 +393,14 @@ sub _go {
 	    my $fasta = Fasta::ucFastaRef($VARS->{fasta}); #build uppercase fasta
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-
-
+	    	    
 	    #get fasta parts
 	    my $q_def = Fasta::getDef($fasta); #Get fasta header
 	    my $q_seq_ref = Fasta::getSeqRef($fasta); #Get reference to fasta sequence
 	    my $q_seq_length = length(${$q_seq_ref});
 	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
 	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier	    
-
+	    
 	    #set up base and void directories for output
 	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
 	    
@@ -350,13 +413,13 @@ sub _go {
 				   fasta_ref  => $fasta},
 				  "$out_dir/run.log"
 				  );
-
+	    
 	    my $LOCK = $LOG->strip_off_lock();
 	    
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
 	    #-------------------------CODE
-	 
+	    
 	    #------------------------RETURN
 	    %results = (fasta => $fasta,
 			q_def => $q_def,
@@ -369,13 +432,13 @@ sub _go {
 			c_flag => $c_flag,
 			LOG => $LOG,
 			LOCK => $LOCK
-		       );
+			);
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
 	    }
 	    #-------------------------RESULT
 	 }
@@ -383,8 +446,8 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
 	 }
-     }
-     elsif ($level == 1) {	#set up GFF3 output and fasta chunks
+      }
+      elsif ($tier_type == 1 && $level == 1) {	#set up GFF3 output and fasta chunks
 	 $level_status = 'setting up GFF3 output and fasta chunks';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -394,15 +457,15 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{fasta
+	    @args = (qw(fasta
 			CTL_OPT
 			out_dir
 			build
 			seq_id
 			safe_seq_id
 			the_void
-			q_seq_ref}
-		    );
+			q_seq_ref)
+		     );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
@@ -416,18 +479,17 @@ sub _go {
 	    my $fasta = $VARS->{fasta};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    
-	    
 	    my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
 					       $build,
 					       $the_void
-					      );
-
+					       );
+	    
 	    $GFF3->set_current_contig($seq_id, $q_seq_ref);     
-
+	    
 	    #build file of fasta
 	    my $unmasked_file = $the_void."/query.fasta";	 
 	    FastaFile::writeFile($fasta, $unmasked_file);
-
+	    
 	    #build chunks
 	    my $fasta_chunker = new FastaChunker();
 	    $fasta_chunker->parent_fasta($fasta);
@@ -435,50 +497,102 @@ sub _go {
 	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
 	    $fasta_chunker->min_size($CTL_OPT{split_hit});
 	    $fasta_chunker->load_chunks();
-	    
-	    #--build an index of the databases
-	    my $proteins = $VARS->{CTL_OPT}{_p_db};
-	    my $trans    = $VARS->{CTL_OPT}{_e_db};
-	    my $altests  = $VARS->{CTL_OPT}{_a_db};
-	    my $fasta_t_index = GI::build_fasta_index($trans) if($trans); 
-	    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
-	    my $fasta_a_index = GI::build_fasta_index($altests) if($altests); 	 
-
-	    my $chunk = $fasta_chunker->next_chunk();
 	    #-------------------------CODE
-	 
+	    
 	    #------------------------RETURN
 	    %results = (GFF3 => $GFF3,
-			fasta_chunker => $fasta_chunker,
 			unmasked_file => $unmasked_file,
-			chunk => $chunk,
+			fasta_chunker => $fasta_chunker,
 			fasta => $fasta,
-			fasta_t_index => $fasta_t_index,
-			fasta_p_index => $fasta_p_index,
-			fasta_a_index => $fasta_a_index
-		       );
+			);
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
 	    }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	     #if no masking skip those steps
-	     if(!$VARS->{CTL_OPT}{model_org} && !$VARS->{CTL_OPT}{rmlib} &&
-		!$VARS->{CTL_OPT}{rm_gff} && !$VARS->{CTL_OPT}{repeat_protein}
+	    #if no masking skip those steps
+	    if(!$VARS->{CTL_OPT}{model_org} && !$VARS->{CTL_OPT}{rmlib} &&
+	       !$VARS->{CTL_OPT}{rm_gff} && !$VARS->{CTL_OPT}{repeat_protein}
 	       ){
-		 $VARS->{masked_total_seq} = $VARS->{q_seq_ref};
-		 $next_level = 6;
-	     }
+	       $VARS->{tier_type} = 1;
+	       $VARS->{masked_total_seq} = $VARS->{q_seq_ref};
+	       $next_level = 3;
+	    }
+	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
+	       $VARS->{tier_type} = 1;
+	       my $iterator = new Iterator::Fasta($VARS->{the_void}."/query.masked.fasta");
+	       my $fasta = $iterator->nextFastaRef();
+	       $VARS->{masked_total_seq} = Fasta::getSeqRef($fasta);
+               $next_level = 3;
+	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 2) {	#do repeat masking
+      elsif ($tier_type == 1 && $level == 2) {     #build masking tiers
+	 $level_status = 'builing masking tiers';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER	    
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       my %args = (tier_type   => 2,
+			   chunk       => $fchunk,
+			   order       => $fchunk->number,
+			   the_void    => $VARS->{the_void},
+			   safe_seq_id => $VARS->{safe_seq_id},
+			   q_seq_ref   => $VARS->{q_seq_ref},
+			   GFF_DB      => $VARS->{GFF_DB},
+			   GFF3        => $VARS->{GFF3},
+			   LOG         => $VARS->{LOG},
+			   CTL_OPT     => $VARS->{CTL_OPT}
+			   );
+	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+	       push(@chunks, $tier); #really a tier
+	    }
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'chunk'){
+		  $VARS->{fasta_chunker}->replace($self->{RESULTS}->{chunk});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    $VARS->{fasta_chunker}->reset;
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       ${$VARS->{masked_total_seq}} .= $fchunk->seq;
+	    }
+	    #-------------------------NEXT_LEVEL
+	 }	    
+      }	  
+      ##
+      ##TO TIER_TYPE 2
+      ##
+      elsif ($tier_type == 2 && $level == 0) {	#do repeat masking
 	 $level_status = 'doing repeat masking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -488,13 +602,13 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			the_void
 			safe_seq_id
 			q_seq_ref
 			GFF_DB
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -516,9 +630,10 @@ sub _go {
 							    'repeat'
 							   );
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers)
+		 if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
-      
+	    
 	    #-- repeatmask with RepeatMasker	 
 	    my $rm_rb_keepers = []; #repeat masker RepBase
 	    if ($CTL_OPT{model_org}) { #model organism repeats
@@ -531,9 +646,10 @@ sub _go {
 					       $CTL_OPT{cpus},
 					       $LOG
 					      );
-	 
+	       
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers)
+		   if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 	    my $rm_sp_keepers = []; #repeat masker species
 	    if ($CTL_OPT{rmlib}) {  #species specific repeats;
@@ -545,25 +661,26 @@ sub _go {
 					       $CTL_OPT{rmlib},
 					       $CTL_OPT{cpus},
 					       $LOG
-					      );
-	 
+					       );
+	       
 	       #mask the chunk
-	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
+	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers)
+		   if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 	    #-------------------------CODE
-
+	    
 	    #------------------------RETURN
-	    %results = (rm_gff_keepers => $rm_gff_keepers,
-			rm_rb_keepers => $rm_rb_keepers,
-			rm_sp_keepers => $rm_sp_keepers,
-			chunk => $chunk
+	    %results = ( rm_gff_keepers => $rm_gff_keepers,
+			 rm_rb_keepers => $rm_rb_keepers,
+			 rm_sp_keepers => $rm_sp_keepers,
+			 chunk => $chunk,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
 	    }
 	    #-------------------------RESULT
 	 }
@@ -572,7 +689,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 3) {	#blastx repeat mask
+      elsif ($tier_type == 2 && $level == 1) {	#blastx repeat mask
 	 $level_status = 'doing blastx repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -582,33 +699,35 @@ sub _go {
 	    #only create all chunks if not already finished
 	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_r_db}}){
-		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
-								 $db,
-								 $VARS->{the_void},
-								 $VARS->{safe_seq_id},
-								 'repeatrunner');
-		
-		next if($fin{$blast_finished});
-
-		$db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
-		$VARS->{db} = $db;
-		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
-		$fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
-		my $chunk = new Process::MpiChunk($level, $VARS);
-		push(@chunks, $chunk);
+	       my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+								$db,
+								$VARS->{the_void},
+								$VARS->{safe_seq_id},
+								'repeatrunner');
+	       
+	       next if($fin{$blast_finished});
+	       
+	       $db =~ /\.mpi\.(\d+)\.(\d+)(\:.*)?$/;
+	       $VARS->{db} = $db;
+	       $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
+	       $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
+	       my $chunk = new Process::MpiChunk($level, $VARS);
+	       push(@chunks, $chunk);
 	    }
+	    delete($VARS->{db});
+	    delete($VARS->{LOG_FLAG});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{db
+	    @args = (qw(db
 			chunk
 			the_void
 			safe_seq_id
 			LOG
 			LOG_FLAG
-			CTL_OPT}
-		    );
+			CTL_OPT)
+		     );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
@@ -620,7 +739,7 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
-
+	    
 	    my $res_dir;
 	    my $rm_blastx_keepers = [];
 	    if ($db) {
@@ -634,7 +753,7 @@ sub _go {
 									   $LOG,
 									   $LOG_FLAG
 									   );
-		 
+	       
 	       $rm_blastx_keepers = GI::clean_blast_hits($rm_blastx_keepers,
 							 $CTL_OPT{pcov_rm_blastx},
 							 $CTL_OPT{pid_rm_blastx},
@@ -645,15 +764,15 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = ( rm_blastx_keepers => $rm_blastx_keepers,
-			 res_dir => $res_dir
+	    %results = ( res_dir => $res_dir,
+			 rm_blastx_keepers => $rm_blastx_keepers,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	       push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
 	    }
 	    #-------------------------RESULT
 	 }
@@ -662,21 +781,22 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 4) {	#collect blastx repeatmask
+      elsif ($tier_type == 2 && $level == 2) {	#collect blastx repeatmask
 	 $level_status = 'collecting blastx repeatmasking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    #build chunks
 	    my $chunk = new Process::MpiChunk($level, $VARS);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			res_dir
 		        rm_blastx_keepers
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -695,7 +815,8 @@ sub _go {
 						   );
 	    
 	    #mask the chunk
-	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers) if($CTL_OPT{organism_type} ne 'prokaryotic');
+	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers)
+	      if($CTL_OPT{organism_type} ne 'prokaryotic');
 
 	    $res_dir = undef;
 	    #-------------------------CODE
@@ -703,14 +824,14 @@ sub _go {
 	    #------------------------RETURN
 	    %results = ( chunk => $chunk,
 			 res_dir => $res_dir,
-			 rm_blastx_keepers => $rm_blastx_keepers
+			 rm_blastx_keepers => $rm_blastx_keepers,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
 	    }
 	    #-------------------------RESULT
 	 }
@@ -719,7 +840,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 5) {	#process all repeats
+      elsif ($tier_type == 2 && $level == 3) {	#process all repeats
 	 $level_status = 'processing all repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -729,14 +850,14 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			rm_gff_keepers
 			rm_rb_keepers
 			rm_sp_keepers
 			rm_blastx_keepers
 			q_seq_ref
 			GFF3
-			masked_total_seq}
+		       )
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -749,8 +870,6 @@ sub _go {
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $GFF3 = $VARS->{GFF3};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
-
 
 	    #-combine and cluster repeat hits for consensus
 	    my $rm_keepers = repeat_mask_seq::process($rm_gff_keepers, 
@@ -762,14 +881,10 @@ sub _go {
       
 	    #-add repeats to GFF3
 	    $GFF3->add_repeat_hits($rm_keepers);
-      
-	    #-build big masked sequence
-	    $$masked_total_seq .= $chunk->seq();
 	    #-------------------------CODE
 
 	    #------------------------RETURN
 	    %results = (rm_keepers => $rm_keepers,
-			masked_total_seq => $masked_total_seq,
 			rm_gff_keepers => [], #clear memory
 			rm_rb_keepers => [],  #clear memory
 			rm_sp_keepers => [],  #clear memory
@@ -779,20 +894,21 @@ sub _go {
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    if ($VARS->{chunk} = $VARS->{fasta_chunker}->next_chunk) {
-	       $next_level = 2;
-	    }
+	    $next_level = undef;
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 6) {	#prep masked sequence and abinits
+      ##
+      ##RETURN TO TIER_TYPE 1
+      ##
+      elsif ($tier_type == 1 && $level == 3) {	#prep masked sequence and abinits
 	 $level_status = 'preparing masked sequence and ab-inits';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -802,28 +918,30 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{the_void
+	    @args = (qw(the_void
 			safe_seq_id
 			q_def
 			q_seq_ref
 			masked_total_seq
 			unmasked_file
+                        fasta_chunker
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $fasta_chunker = $VARS->{fasta_chunker};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $masked_total_seq = $VARS->{masked_total_seq};
 	    my $unmasked_file = $VARS->{unmasked_file};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $LOG = $VARS->{LOG};	 
-	 
+            my $LOG = $VARS->{LOG};	 
+	    
 	    my $masked_file = $the_void."/query.masked.fasta";
 	    my $masked_fasta = Fasta::toFastaRef($q_def.' masked', $masked_total_seq);
 	    FastaFile::writeFile($masked_fasta, $masked_file) unless($CTL_OPT{_no_mask});
@@ -831,7 +949,7 @@ sub _go {
 	    #==ab initio predictions here
 	    #do masked predictions first
 	    my $preds = [];
-	    if(! $CTL_OPT{_no_mask}){ 
+	    if(! $CTL_OPT{_no_mask}){
 		$preds = GI::abinits($masked_file,
 				     $the_void,
 				     $safe_seq_id.".masked",
@@ -878,7 +996,7 @@ sub _go {
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
 	    }
 	    #-------------------------RESULT
 	 }
@@ -887,50 +1005,79 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 7) {	#prep new fasta chunks
-	 $level_status = 'preparing new fasta chunks';
+      elsif ($tier_type == 1 && $level == 4){
+	 $level_status = 'preparing new fasta chunk tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
-	    push(@chunks, $chunk);
+	    $VARS->{fasta_chunker}->reset;
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       my $order = $fchunk->number;
+	       my $the_void = $VARS->{the_void};
+	       my $safe_seq_id = $VARS->{safe_seq_id};
+	       my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
+	       my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
+	       my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
+
+	       if(-f $section_file &&
+		  (-f $junction_start_file || $fchunk->is_first) &&
+		  (-f $junction_end_file || $fchunk->is_last)
+		 ){
+		  push(@{$VARS->{section_files}}, $section_file);
+		  push(@{$VARS->{section_files}}, $junction_start_file) if(!$fchunk->is_first);
+		  push(@{$VARS->{section_files}}, $junction_end_file) if(!$fchunk->is_last);
+		  next;
+	       }
+
+	       #-get subset of predictions on each chunk
+	       my $preds_on_chunk = GI::get_preds_on_chunk($VARS->{preds},
+							   $fchunk
+							   );
+	       my %args = (tier_type    => 3,
+                           chunk        => $fchunk,
+                           order        => $order,
+			   the_void     => $VARS->{the_void},
+			   q_def        => $VARS->{q_def},
+			   seq_id       => $VARS->{seq_id},
+			   safe_seq_id  => $VARS->{safe_seq_id},
+			   q_seq_ref    => $VARS->{q_seq_ref},
+			   q_seq_length => $VARS->{q_seq_length},
+			   GFF_DB       => $VARS->{GFF_DB},
+			   GFF3         => $VARS->{GFF3},
+			   LOG          => $VARS->{LOG},
+			   CTL_OPT      => $VARS->{CTL_OPT},
+			   preds_on_chunk => $preds_on_chunk,
+			   masked_total_seq => $VARS->{masked_total_seq},
+			   );
+
+               my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+               push(@chunks, $tier); #really a tier
+	    }
+	    delete($VARS->{preds});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{masked_fasta
-			CTL_OPT}
-		    );
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $masked_fasta = $VARS->{masked_fasta};
-
-	    #--reset fastachunker for masked chunks
-	    my $fasta_chunker = new FastaChunker();
-	    $fasta_chunker = new FastaChunker();
-	    $fasta_chunker->parent_fasta($masked_fasta);
-	    $masked_fasta = undef;
-	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
-	    $fasta_chunker->min_size($CTL_OPT{split_hit});
-	    $fasta_chunker->load_chunks();
-
-	    my $chunk = $fasta_chunker->next_chunk();
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (fasta_chunker => $fasta_chunker,
-			masked_fasta => $masked_fasta,
-			chunk => $chunk
-		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'section_files' || $key eq 'holdover_files'){
+		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -938,7 +1085,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 8) {	#blastn
+      elsif ($tier_type == 3 && $level == 0) {	#blastn
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -963,17 +1110,19 @@ sub _go {
 		my $chunk = new Process::MpiChunk($level, $VARS);
 		push(@chunks, $chunk);
 	    }
+	    delete($VARS->{db});
+	    delete($VARS->{LOG_FLAG});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{db
+	    @args = (qw(db
 			chunk
 			the_void
 			safe_seq_id
 			LOG
 			LOG_FLAG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1006,15 +1155,15 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (res_dir => $res_dir,
-			blastn_keepers => $blastn_keepers
+	    %results = ( res_dir => $res_dir,
+			 blastn_keepers => $blastn_keepers,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+	       push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
 	    }
 	    #-------------------------RESULT
 	 }
@@ -1023,7 +1172,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 9) {	#collect blastn
+      elsif ($tier_type == 3 && $level == 1) {	#collect blastn
 	 $level_status = 'collecting blastn reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1033,19 +1182,17 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			res_dir
 			blastn_keepers
 			masked_total_seq
-			q_def
-			fasta_t_index
-			holdover_blastn
 			the_void
+			safe_seq_id
 			q_seq_ref
 			q_def
 			q_seq_length
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1055,14 +1202,14 @@ sub _go {
 	    my $res_dir = $VARS->{res_dir};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $fasta_t_index = $VARS->{fasta_t_index};
-	    my $holdover_blastn = $VARS->{holdover_blastn};
 	    my $the_void = $VARS->{the_void};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
+	    my $edge_status = {};
 
 	    $blastn_keepers = GI::collect_blast($chunk,
 						$blastn_keepers,
@@ -1070,47 +1217,114 @@ sub _go {
 						$LOG
 						);
 
-	    #==merge in heldover Phathits from last round
-	    if ($chunk->number != 0) { #if not first chunk
-		#reviews heldover blast hits,
-		#then merges and reblasts them if they cross the divide
-		$blastn_keepers = GI::merge_resolve_hits($masked_total_seq,
-							 $q_def,
-							 $q_seq_length,
-							 $fasta_t_index,
-							 $blastn_keepers,
-							 $holdover_blastn,
-							 $the_void,
-							 \%CTL_OPT,
-							 'blastn',
-							 $LOG
-							 );
-	    }
-	    
 	    #separate out hits too close to chunk divide to be run with exonerate
-	    $holdover_blastn = [];
-	    if (not $chunk->is_last) {
-		($blastn_keepers, $holdover_blastn) = GI::process_the_chunk_divide($chunk,
-										   $CTL_OPT{'split_hit'},
-										   $CTL_OPT{'pred_flank'},
-										   1, #treat strands independently
-										   0,
-										   [$blastn_keepers]
-										   );
+	    my $holdover_blastn = [];
+	    ($blastn_keepers, $holdover_blastn) = GI::process_the_chunk_divide($chunk,
+									       $CTL_OPT{'split_hit'},
+									       $CTL_OPT{'pred_flank'},
+									       0,
+									       0,
+									       0,
+									       [$blastn_keepers]
+									       );
+
+	    #get start and end holdovers files
+	    my @start;
+	    my @end;
+	    foreach my $h (@$holdover_blastn){
+	       if($h->{_holdover} == 1){
+		  push(@start, $h);
+	       }
+	       else{ #$h->{_holdover} == 2 
+		  push(@end, $h);
+	       }
 	    }
+
+	    my $order = $chunk->number;
+	    my $start_file = "$the_void/$safe_seq_id.$order.start.blastn.holdover";
+	    my $end_file   = "$the_void/$safe_seq_id.$order.end.blastn.holdover";
+	    my $start_neighbor = "$the_void/$safe_seq_id.".($order+1).".start.blastn.holdover";
+	    my $end_neighbor   = "$the_void/$safe_seq_id.".($order-1).".end.blastn.holdover";
+
+	    $holdover_blastn = [];
+	    if(! $chunk->is_first){
+	       my $lock = new File::NFSLock($start_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $start_file, "");
+	       if(! -f $start_file){
+		  store (\@start, "$start_file.tmp");
+		  move("$start_file.tmp", $start_file);
+	       }
+	       $LOG->add_entry("FINISHED", $start_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.".($order-1).".$order";
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($end_neighbor);
+		  unlink($start_file, $end_neighbor);
+		  push(@$blastn_keepers, @start);
+		  push(@$holdover_blastn, @$neighbor);
+		  $edge_status->{blastn_keepers}{start}++;
+		  $edge_status->{exonerate_e_data}{start}++;
+	       }
+	    }
+	    if(! $chunk->is_last){
+	       my $lock = new File::NFSLock($end_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $end_file, "");
+	       if(! -f $end_file){
+		  store (\@end, "$end_file.tmp");
+		  move("$end_file.tmp", $end_file);
+	       }
+	       $LOG->add_entry("FINISHED", $end_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.$order.".($order+1);
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($start_neighbor);
+		  unlink($end_file, $start_neighbor);
+		  push(@$blastn_keepers, @end);
+		  push(@$holdover_blastn, @$neighbor);
+		  $edge_status->{blastn_keepers}{end}++;
+		  $edge_status->{exonerate_e_data}{end}++;
+	       }
+	    }
+
+	    #merge and reblast
+	    my $trans = $VARS->{CTL_OPT}{_e_db};
+	    my $fasta_e_index = GI::build_fasta_index($trans) if($trans);
+	    $blastn_keepers = GI::merge_resolve_hits($masked_total_seq,
+						     $q_def,
+						     $q_seq_length,
+						     $fasta_e_index,
+						     $blastn_keepers,
+						     $holdover_blastn,
+						     $the_void,
+						     \%CTL_OPT,
+						     'blastn',
+						     $LOG
+						     );
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (holdover_blastn => $holdover_blastn,
-			blastn_keepers => $blastn_keepers,
-			res_dir => undef
+	    %results = ( blastn_keepers => $blastn_keepers,
+			 res_dir => undef,
+			 holdover_files => [$start_file, $end_file],
+			 edge_status => $edge_status
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+            while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'holdover_files'){
+		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
 	    }
 	    #-------------------------RESULT
 	 }
@@ -1119,7 +1333,213 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 10) {	#tblastx
+      elsif ($tier_type == 3 && $level == 2) {	#exonerate ESTs
+	 $level_status = 'polishig ESTs';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $seq_id = $VARS->{seq_id};
+	    my $ex = $VARS->{CTL_OPT}{_to_exonerate}{$seq_id} || [];
+	    my $ql = $VARS->{q_seq_length};
+	    my $l = $VARS->{chunk}->length;
+
+	    #set max chunks
+	    my $altsize = int((@{$VARS->{blastn_keepers}} + @{$ex} * $l/$ql)/5);
+	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
+	    $size = 1 if(! $size);
+
+	    my @data_sets;
+	    for(my $i = 0; $i < @{$VARS->{blastn_keepers}}; $i++){
+		my $j = $i % $size;
+		push(@{$data_sets[$j]}, $VARS->{blastn_keepers}->[$i]);
+	    }
+	    for(my $i = 0; $i < @{$ex}; $i++){
+		my $j = $i % $size;
+		push(@{$data_sets[$j]}, $ex->[$i]);
+	    }
+	    for(my $i = 0; $i < @data_sets; $i++){
+                $VARS->{dc}  = $data_sets[$i];
+                $VARS->{id} = $i;
+                my $chunk = new Process::MpiChunk($level, $VARS);
+                push(@chunks, $chunk);
+            }
+	    delete($VARS->{dc});
+	    delete($VARS->{id});
+
+	    $VARS->{exonerate_e_data} = []; #reset
+	    $VARS->{blastn_keepers} = []; #reset
+	    $VARS->{exonerate_e_clusters} = []; #reset
+	    $VARS->{blastn_clusters} = []; #reset
+	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(chunk
+		        dc
+			id
+			the_void
+			q_seq_ref
+			q_seq_length
+			q_def
+			GFF3
+			LOG
+			CTL_OPT)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $chunk = $VARS->{chunk};
+	    my $dc = $VARS->{dc};
+	    my $id = $VARS->{id};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_length = $VARS->{q_seq_length};
+	    my $q_def = $VARS->{q_def};
+	    my $LOG = $VARS->{LOG};
+	    my $GFF3 = $VARS->{GFF3};
+
+	    #-polish blastn hits with exonerate
+	    my $exonerate_e_data = [];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		$exonerate_e_data = GI::polish_exonerate($chunk,
+							 $q_seq_ref,
+							 $q_seq_length,
+							 $q_def,
+							 $dc,
+							 $CTL_OPT{_e_db},
+							 $the_void,
+							 'e',
+							 $CTL_OPT{exonerate},
+							 $CTL_OPT{pcov_blastn},
+							 $CTL_OPT{pid_blastn},
+							 $CTL_OPT{en_score_limit},
+							 $CTL_OPT{en_matrix},
+							 $CTL_OPT{pred_flank},
+							 $CTL_OPT{est_forward},
+							 $LOG,
+							 $id
+							 );
+	    }
+
+	    #-clean the blastn hits
+	    #this must happen after exonerate (otherwise I filter out good hits)
+	    print STDERR "cleaning blastn...\n" unless $main::quiet;
+	    my $blastn_keepers = [grep {ref($_)} @{$dc}];
+
+	    #Shatter hits. This is only for prokaryotic organisms.
+	    #Flip strand of blastn where appropriate.
+	    #This is done on blastn hits because exonerate is skipped.
+	    #I shatter after processing the chunk divide to avoid weird
+	    #complications from flipping on only one side of a split HSP
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$blastn_keepers  = PhatHit_utils::shatter_all_hits($blastn_keepers);
+
+		#this checks the open reading frame and can flip the hit
+		foreach my $phat_hit (@$blastn_keepers){
+		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
+			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
+		}
+	    }
+
+	    $blastn_keepers = GI::clean_blast_hits($blastn_keepers,
+						   $CTL_OPT{pcov_blastn},
+						   $CTL_OPT{pid_blastn},
+						   $CTL_OPT{eval_blastn},
+						   1 #contiguity flag
+						   );
+
+	    $GFF3->add_phathits($blastn_keepers);
+	    $GFF3->add_phathits($exonerate_e_data);
+
+	    #blastn will be empty from this point on in the script if eukaryotic
+	    my $blastn_clusters = [];
+	    my $exonerate_e_clusters = [];
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+	       $blastn_clusters = cluster::clean_and_cluster($blastn_keepers, $q_seq_ref, 20);
+	    }
+	    else{
+	       $exonerate_e_clusters = cluster::clean_and_cluster($exonerate_e_data, $q_seq_ref, 20);
+	    }
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = ( exonerate_e_clusters => $exonerate_e_clusters,
+			 blastn_clusters => $blastn_clusters,
+			);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+	       push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 3 && $level == 3) {	#further cluster
+	 $level_status = 'flattening EST clusters';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    delete($VARS->{_clust_flag});
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(exonerate_e_clusters
+		        blastn_clusters
+			q_seq_ref
+			_clust_flag)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
+	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $flag = $VARS->{_clust_flag};
+
+	    #further combine and cluster
+	    if($flag){
+	       $blastn_clusters = cluster::clean_and_cluster($blastn_clusters, $q_seq_ref, 20);
+	       $exonerate_e_clusters = cluster::clean_and_cluster($exonerate_e_clusters, $q_seq_ref, 20);
+	    }
+
+	    my $blastn_keepers = GI::flatten($blastn_clusters);
+	    my $exonerate_e_data = GI::flatten($exonerate_e_clusters);
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = ( exonerate_e_clusters => [], #clear memory
+			 blastn_clusters => [], #clear memory
+			 exonerate_e_data => $exonerate_e_data,
+			 blastn_keepers => $blastn_keepers,
+			);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
+	    #-------------------------NEXT_LEVEL
+	 }
+      }  
+      elsif ($tier_type == 3 && $level == 4) {	#tblastx
 	 $level_status = 'doing tblastx of alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1144,17 +1564,19 @@ sub _go {
                 my $chunk = new Process::MpiChunk($level, $VARS);
                 push(@chunks, $chunk);
             }
+	    delete($VARS->{db});
+	    delete($VARS->{LOG_FLAG});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{db
+	    @args = (qw(db
 			chunk
 			the_void
 			safe_seq_id
 			LOG
 			LOG_FLAG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1185,16 +1607,16 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (res_dir => $res_dir,
-			tblastx_keepers => $tblastx_keepers
+	    %results = ( res_dir => $res_dir,
+			 tblastx_keepers => $tblastx_keepers,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1202,7 +1624,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 11) {	#collect tblastx
+      elsif ($tier_type == 3 && $level == 5) {	#collect tblastx
 	 $level_status = 'collecting tblastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1212,18 +1634,18 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk			    
+	    @args = (qw(chunk
 			res_dir
 			tblastx_keepers
 			masked_total_seq
-			fasta_a_index
-			holdover_tblastx
 			the_void
+			safe_seq_id
 			q_seq_ref
 			q_def
                         q_seq_length
+			edge_status
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1233,63 +1655,130 @@ sub _go {
 	    my $res_dir = $VARS->{res_dir};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $fasta_a_index = $VARS->{fasta_a_index};
-	    my $holdover_tblastx = $VARS->{holdover_tblastx};
 	    my $the_void = $VARS->{the_void};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
+	    my $edge_status = $VARS->{edge_status};
 
 	    $tblastx_keepers = GI::collect_blast($chunk,
 						 $tblastx_keepers,
 						 $res_dir,
 						 $LOG
 						 );
-	    
-	    #==merge in heldover Phathits from last round
-	    if ($chunk->number != 0) { #if not first chunk
-		#reviews heldover blast hits,
-		#then merges and reblasts them if they cross the divide
-		$tblastx_keepers = GI::merge_resolve_hits($masked_total_seq,
-							  $q_def,
-							  $q_seq_length,
-							  $fasta_a_index,
-							  $tblastx_keepers,
-							  $holdover_tblastx,
-							  $the_void,
-							  \%CTL_OPT,
-							  'tblastx',
-							  $LOG
-							  );
-	    }
-	    
+
 	    #separate out hits too close to chunk divide to be run with exonerate
-	    $holdover_tblastx = [];
-	    if (not $chunk->is_last) {
-		($tblastx_keepers, $holdover_tblastx) = GI::process_the_chunk_divide($chunk,
-										     $CTL_OPT{'split_hit'},
-										     $CTL_OPT{'pred_flank'},
-										     1, #treat strands independently
-										     0,
-										     [$tblastx_keepers]
-										     );
+	    my $holdover_tblastx = [];
+	    ($tblastx_keepers, $holdover_tblastx) = GI::process_the_chunk_divide($chunk,
+										 $CTL_OPT{'split_hit'},
+										 $CTL_OPT{'pred_flank'},
+										 0,
+										 0,
+										 0,
+										 [$tblastx_keepers]
+										 );
+
+	    #get start and end holdovers files
+	    my @start;
+	    my @end;
+	    foreach my $h (@$holdover_tblastx){
+	       if($h->{_holdover} == 1){
+		  push(@start, $h);
+	       }
+	       else{ #$h->{_holdover} == 2 
+		  push(@end, $h);
+	       }
 	    }
+
+	    my $order = $chunk->number;
+	    my $start_file = "$the_void/$safe_seq_id.$order.start.tblastx.holdover";
+	    my $end_file   = "$the_void/$safe_seq_id.$order.end.tblastx.holdover";
+	    my $start_neighbor = "$the_void/$safe_seq_id.".($order+1).".start.tblastx.holdover";
+	    my $end_neighbor   = "$the_void/$safe_seq_id.".($order-1).".end.tblastx.holdover";
+
+	    $holdover_tblastx = [];	    
+	    if(! $chunk->is_first){
+	       my $lock = new File::NFSLock($start_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $start_file, "");
+	       if(! -f $start_file){
+		  store (\@start, "$start_file.tmp");
+		  move("$start_file.tmp", $start_file);
+	       }
+	       $LOG->add_entry("FINISHED", $start_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.".($order-1).".$order";
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($end_neighbor);
+		  unlink($start_file, $end_neighbor);
+		  push(@$tblastx_keepers, @start);
+		  push(@$holdover_tblastx, @$neighbor);
+		  $edge_status->{tblastx_keepers}{start}++;
+		  $edge_status->{exonerate_a_data}{start}++;
+	       }
+	    }
+	    if(! $chunk->is_last){
+	       my $lock = new File::NFSLock($end_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $end_file, "");
+	       if(! -f $end_file){
+		  store (\@end, "$end_file.tmp");
+		  move("$end_file.tmp", $end_file);
+	       }
+	       $LOG->add_entry("FINISHED", $end_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.$order.".($order+1);
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($start_neighbor);
+		  unlink($end_file, $start_neighbor);
+		  push(@$tblastx_keepers, @end);
+		  push(@$holdover_tblastx, @$neighbor);
+		  $edge_status->{tblastx_keepers}{end}++;
+		  $edge_status->{exonerate_a_data}{end}++;
+	       }
+	    }
+
+	    #merge and reblast
+	    my $altests  = $VARS->{CTL_OPT}{_a_db};
+	    my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
+	    $tblastx_keepers = GI::merge_resolve_hits($masked_total_seq,
+						     $q_def,
+						     $q_seq_length,
+						     $fasta_a_index,
+						     $tblastx_keepers,
+						     $holdover_tblastx,
+						     $the_void,
+						     \%CTL_OPT,
+						     'tblastx',
+						     $LOG
+						     );
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (holdover_tblastx => $holdover_tblastx,
-			tblastx_keepers => $tblastx_keepers,
-			res_dir => undef
+	    %results = ( tblastx_keepers => $tblastx_keepers,
+			 res_dir => undef,
+                         holdover_files => [$start_file, $end_file],
+			 edge_status => $edge_status
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'holdover_files'){
+		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1297,7 +1786,203 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 12) {	#blastx
+      elsif ($tier_type == 3 && $level == 6) {	#exonerate alt-ESTs
+	 $level_status = 'polishing alt-ESTs';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    #set max chunks
+	    #my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
+	    #my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
+	    #$size = 1 if(! $size);
+	    my $size = 1; #write now exonerate is skipped
+	    my @data_sets;
+	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
+	       my $j = $i % $size;
+	       push(@{$data_sets[$j]}, $VARS->{tblastx_keepers}->[$i]);
+	    }
+	    for(my $i = 0; $i < @data_sets; $i++){
+	       $VARS->{dc}  = $data_sets[$i];
+	       $VARS->{id} = $i;
+	       my $chunk = new Process::MpiChunk($level, $VARS);
+	       push(@chunks, $chunk);
+	    }
+	    delete($VARS->{dc});
+	    delete($VARS->{id});
+	    $VARS->{exonerate_a_data} = []; #reset
+	    $VARS->{tblastx_keepers} = []; #reset
+	    $VARS->{exonerate_a_clusters} = []; #reset
+	    $VARS->{tblastx_clusters} = []; #reset
+	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(chunk
+			dc
+			id
+			the_void
+			q_seq_ref
+			q_seq_length
+			q_def
+			GFF3
+			LOG
+			CTL_OPT)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $chunk = $VARS->{chunk};
+	    my $dc = $VARS->{dc};
+	    my $id = $VARS->{id};
+	    my $the_void = $VARS->{the_void};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_length = $VARS->{q_seq_length};
+	    my $q_def = $VARS->{q_def};
+	    my $LOG = $VARS->{LOG};
+	    my $GFF3 = $VARS->{GFF3};
+
+	    #-polish tblastx hits with exonerate
+	    my $exonerate_a_data = [];
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+	       #$exonerate_a_data = GI::polish_exonerate('',
+	       #					 $q_seq_ref,
+	       #					 $q_seq_length,
+	       #					 $q_def,
+	       #					 $dc,
+	       #					 $CTL_OPT{_a_db},
+	       #					 $the_void,
+	       #					 'q',
+	       #					 $CTL_OPT{exonerate},
+	       #					 $CTL_OPT{pcov_tblastx},
+	       #					 $CTL_OPT{pid_tblastx},
+	       #					 $CTL_OPT{en_score_limit},
+	       #					 $CTL_OPT{en_matrix},
+	       #					 $CTL_OPT{pred_flank},
+	       #					 $CTL_OPT{est_forward},
+	       #					 $LOG,
+	       #                                         $id
+	       #					 );
+	    }
+	    
+	    #-clean the tblastx hits
+	    #this must happen after exonerate (otherwise I filter out good hits)
+	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
+	    my $tblastx_keepers = [grep {ref($_)} @{$dc}];
+
+	    #Shatter hits. This is only for prokaryotic organisms.
+	    #Flip strand of blastn where appropriate.
+	    #This is done on blastn hits because exonerate is skipped.
+	    #I shatter after processing the chunk divide to avoid weird
+	    #complications from flipping on only one side of a split HSP
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$tblastx_keepers  = PhatHit_utils::shatter_all_hits($tblastx_keepers);
+
+		#this checks the open reading frame and can flip the hit
+		foreach my $phat_hit (@$tblastx_keepers){
+		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
+			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
+		}
+	    }
+
+	    $tblastx_keepers = GI::clean_blast_hits($tblastx_keepers,
+						    $CTL_OPT{pcov_tblastx},
+						    $CTL_OPT{pid_tblastx},
+						    $CTL_OPT{eval_tblastx},
+						    1 #contiguity flag
+						    );
+
+	    $GFF3->add_phathits($tblastx_keepers);
+	    $GFF3->add_phathits($exonerate_a_data);
+
+	    #tblastx will be empty from this point on in the script if eukaryotic
+	    my $tblastx_clusters = [];
+	    my $exonerate_a_clusters = [];
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+	       $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers, $q_seq_ref, 20);
+	    }
+	    else{
+	       $exonerate_a_clusters = cluster::clean_and_cluster($exonerate_a_data, $q_seq_ref, 20);
+	    }
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = ( exonerate_a_clusters => $exonerate_a_clusters,
+			 tblastx_clusters => $tblastx_clusters,
+			);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+               push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 3 && $level == 7) {	#further cluster
+	 $level_status = 'flattening altEST clusters';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    delete($VARS->{_clust_flag});
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(exonerate_a_clusters
+		        tblastx_clusters
+			q_seq_ref
+			_clust_flag)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my $exonerate_a_clusters = $VARS->{exonerate_a_clusters}; #array of overlapping clusters
+	    my $tblastx_clusters = $VARS->{tblastx_clusters}; #array of overlapping clusters
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $flag = $VARS->{_clust_flag};
+
+	    #further combine and cluster
+	    if($flag){
+	       $tblastx_clusters = cluster::clean_and_cluster($tblastx_clusters, $q_seq_ref, 20);
+	       $exonerate_a_clusters = cluster::clean_and_cluster($exonerate_a_clusters, $q_seq_ref, 20);
+	    }
+
+	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
+	    my $exonerate_a_data = GI::flatten($exonerate_a_clusters);
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = ( exonerate_a_clusters => [], #clear memory
+			 tblastx_clusters => [], #clear memory
+			 exonerate_a_data => $exonerate_a_data,
+			 tblastx_keepers => $tblastx_keepers,
+			);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
+	    #-------------------------NEXT_LEVEL
+	 }
+      }  
+      elsif ($tier_type == 3 && $level == 8) {	#blastx
 	 $level_status = 'doing blastx of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1322,17 +2007,19 @@ sub _go {
                 my $chunk = new Process::MpiChunk($level, $VARS);
                 push(@chunks, $chunk);
             }
+	    delete($VARS->{db});
+	    delete($VARS->{LOG_FLAG});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{db
+	    @args = (qw(db
 			chunk
 			the_void
 			safe_seq_id
 			LOG
 			LOG_FLAG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1365,16 +2052,16 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (res_dir => $res_dir,
-			blastx_keepers => $blastx_keepers
+	    %results = ( res_dir => $res_dir,
+			 blastx_keepers => $blastx_keepers,
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       push(@{$VARS->{$key}}, $self->{RESULTS}->{$key});
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1382,7 +2069,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 13) {	#collect blastx
+      elsif ($tier_type == 3 && $level == 9) {	#collect blastx
 	 $level_status = 'collecting blastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1392,18 +2079,18 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			res_dir
 			blastx_keepers
 			masked_total_seq
-			fasta_p_index
-			holdover_blastx
 			the_void
+			safe_seq_id
 			q_seq_ref
 			q_def
 			q_seq_length
+			edge_status
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1413,178 +2100,130 @@ sub _go {
 	    my $res_dir = $VARS->{res_dir};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $fasta_p_index = $VARS->{fasta_p_index};
-	    my $holdover_blastx = $VARS->{holdover_blastx};
 	    my $the_void = $VARS->{the_void};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
+	    my $edge_status = $VARS->{edge_status};
 
 	    $blastx_keepers = GI::collect_blast($chunk,
 						$blastx_keepers,
 						$res_dir,
 						$LOG
 						);
-
-	    #==merge in heldover Phathits from last round
-	    if ($chunk->number != 0) { #if not first chunk
-		#reviews heldover blast hits,
-		#then merges and reblasts them if they cross the divide
-		$blastx_keepers = GI::merge_resolve_hits($masked_total_seq,
-							 $q_def,
-							 $q_seq_length,
-							 $fasta_p_index,
-							 $blastx_keepers,
-							 $holdover_blastx,
-							 $the_void,
-							 \%CTL_OPT,
-							 'blastx',
-							 $LOG
-							 );
-	    }
 	    
 	    #separate out hits too close to chunk divide to be run with exonerate
-	    $holdover_blastx = [];
-	    if (not $chunk->is_last) {
-		($blastx_keepers, $holdover_blastx) = GI::process_the_chunk_divide($chunk,
-										   $CTL_OPT{'split_hit'},
-										   $CTL_OPT{'pred_flank'},
-										   1, #treat strands independently
-										   0,
-										   [$blastx_keepers]
-										   );
+	    my $holdover_blastx = [];
+	    ($blastx_keepers, $holdover_blastx) = GI::process_the_chunk_divide($chunk,
+									       $CTL_OPT{'split_hit'},
+									       $CTL_OPT{'pred_flank'},
+									       0,
+									       0,
+									       0,
+									       [$blastx_keepers]
+									       );
+
+	    #get start and end holdovers files
+	    my @start;
+	    my @end;
+	    foreach my $h (@$holdover_blastx){
+	       if($h->{_holdover} == 1){
+		  push(@start, $h);
+	       }
+	       else{ #$h->{_holdover} == 2 
+		  push(@end, $h);
+	       }
 	    }
-	    
+
+	    my $order = $chunk->number;
+	    my $start_file = "$the_void/$safe_seq_id.$order.start.blastx.holdover";
+	    my $end_file   = "$the_void/$safe_seq_id.$order.end.blastx.holdover";
+	    my $start_neighbor = "$the_void/$safe_seq_id.".($order+1).".start.blastx.holdover";
+	    my $end_neighbor   = "$the_void/$safe_seq_id.".($order-1).".end.blastx.holdover";
+
+	    $holdover_blastx = [];	    
+	    if(! $chunk->is_first){
+	       my $lock = new File::NFSLock($start_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $start_file, "");
+	       if(! -f $start_file){
+		  store (\@start, "$start_file.tmp");
+		  move("$start_file.tmp", $start_file);
+	       }
+	       $LOG->add_entry("FINISHED", $start_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.".($order-1).".$order";
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($end_neighbor);
+		  unlink($start_file, $end_neighbor);
+		  push(@$blastx_keepers, @start);
+		  push(@$holdover_blastx, @$neighbor);
+		  $edge_status->{blastx_keepers}{start}++;
+		  $edge_status->{exonerate_p_data}{start}++;
+	       }
+	    }
+	    if(! $chunk->is_last){
+	       my $lock = new File::NFSLock($end_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $end_file, "");
+	       if(! -f $end_file){
+		  store (\@end, "$end_file.tmp");
+		  move("$end_file.tmp", $end_file);
+	       }
+	       $LOG->add_entry("FINISHED", $end_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.$order.".($order+1);
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($start_neighbor);
+		  unlink($end_file, $start_neighbor);
+		  push(@$blastx_keepers, @end);
+		  push(@$holdover_blastx, @$neighbor);
+		  $edge_status->{blastx_keepers}{end}++;
+		  $edge_status->{exonerate_p_data}{end}++;
+	       }
+	    }
+
+	    #merge and reblast
+	    my $proteins = $VARS->{CTL_OPT}{_p_db};
+	    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
+	    $blastx_keepers = GI::merge_resolve_hits($masked_total_seq,
+						     $q_def,
+						     $q_seq_length,
+						     $fasta_p_index,
+						     $blastx_keepers,
+						     $holdover_blastx,
+						     $the_void,
+						     \%CTL_OPT,
+						     'blastx',
+						     $LOG
+						     );
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
-	    %results = (holdover_blastx => $holdover_blastx,
-			blastx_keepers => $blastx_keepers,
-			res_dir => undef
+	    %results = ( blastx_keepers => $blastx_keepers,
+			 res_dir => undef,
+                         holdover_files => [$start_file, $end_file],
+			 edge_status =>  $edge_status
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
-	    #-------------------------RESULT
-	 }
-	 elsif ($flag eq 'flow') {
-	    #-------------------------NEXT_LEVEL
-	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
-	    #-------------------------NEXT_LEVEL
-	 }
-      }
-      elsif ($level == 14) {	#exonerate ESTs
-	 $level_status = 'polishig ESTs';
-	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER
-	    my $seq_id = $VARS->{seq_id};
-	    my $ex = $VARS->{CTL_OPT}{_to_exonerate}{$seq_id} || [];
-	    my $ql = $VARS->{q_seq_length};
-	    my $l = $VARS->{chunk}->length;
-
-	    #set max chunks
-	    my $altsize = int((@{$VARS->{blastn_keepers}} + @{$ex} * $l/$ql)/5);
-	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
-	    $size = 1 if(! $size);
-
-	    my @data_sets;
-	    for(my $i = 0; $i < @{$VARS->{blastn_keepers}}; $i++){
-		my $j = $i % $size;
-		push(@{$data_sets[$j]}, $VARS->{blastn_keepers}->[$i]);
-	    }
-	    for(my $i = 0; $i < @{$ex}; $i++){
-		my $j = $i % $size;
-		push(@{$data_sets[$j]}, $ex->[$i]);
-	    }
-	    for(my $i = 0; $i < @data_sets; $i++){
-                $VARS->{dc}  = $data_sets[$i];
-                $VARS->{id} = $i;
-                my $chunk = new Process::MpiChunk($level, $VARS);
-                push(@chunks, $chunk);
+            while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'holdover_files'){
+		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
             }
-	    $VARS->{exonerate_e_data} = []; #reset
-	    $VARS->{blastn_keepers} = []; #reset
-	    #-------------------------CHUNKER
-	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    @args = (qw{chunk
-		        dc
-			id
-			the_void
-			q_seq_ref
-			q_seq_length
-			q_def			
-			seq_id
-			LOG
-			CTL_OPT}
-		    );
-	    #------------------------ARGS_IN
-	 }
-	 elsif ($flag eq 'run') {
-	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $chunk = $VARS->{chunk};
-	    my $dc = $VARS->{dc};
-	    my $id = $VARS->{id};
-	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $q_def = $VARS->{q_def};
-	    my $LOG = $VARS->{LOG};
-
-	    #-polish blastn hits with exonerate
-	    my $exonerate_e_data = [];
-	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exonerate_e_data = GI::polish_exonerate($chunk,
-							 $q_seq_ref,
-							 $q_seq_length,
-							 $q_def,
-							 $dc,
-							 $CTL_OPT{_e_db},
-							 $the_void,
-							 'e',
-							 $CTL_OPT{exonerate},
-							 $CTL_OPT{pcov_blastn},
-							 $CTL_OPT{pid_blastn},
-							 $CTL_OPT{en_score_limit},
-							 $CTL_OPT{en_matrix},
-							 $CTL_OPT{pred_flank},
-							 $CTL_OPT{est_forward},
-							 $LOG,
-							 $id
-							 );
-	    }
-
-	    #-clean the blastn hits
-	    #this must happen after exonerate (otherwise I filter out good hits)
-	    print STDERR "cleaning blastn...\n" unless $main::quiet;
-	    my $blastn_keepers = [grep {ref($_)} @{$dc}];
-	    $blastn_keepers = GI::clean_blast_hits($blastn_keepers,
-						   $CTL_OPT{pcov_blastn},
-						   $CTL_OPT{pid_blastn},
-						   $CTL_OPT{eval_blastn},
-						   1 #contiguity flag
-						   );
-	    #-------------------------CODE
-
-	    #------------------------RETURN
-	    %results = (exonerate_e_data => $exonerate_e_data,
-			blastn_keepers => $blastn_keepers,
-			);
-	    #------------------------RETURN
-	 }
-	 elsif ($flag eq 'result') {
-	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
-	    }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1593,111 +2232,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 15) {	#exonerate alt-ESTs
-	 $level_status = 'polishing alt-ESTs';
-	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER
-	     #set max chunks
-	     #my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
-	     #my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
-	     #$size = 1 if(! $size);
-	     my $size = 1; #write now exonerate is skipped
-
-	     my @data_sets;
-	     for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
-		 my $j = $i % $size;
-		 push(@{$data_sets[$j]}, $VARS->{tblastx_keepers}->[$i]);
-	     }
-	    for(my $i = 0; $i < @data_sets; $i++){
-                $VARS->{dc}  = $data_sets[$i];
-                $VARS->{id} = $i;
-		 my $chunk = new Process::MpiChunk($level, $VARS);
-		 push(@chunks, $chunk);
-	     }
-	     $VARS->{exonerate_a_data} = []; #reset
-	     $VARS->{tblastx_keepers} = []; #reset
-	    #-------------------------CHUNKER
-	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    @args = (qw{dc
-			id
-			the_void
-			q_seq_ref
-			q_seq_length
-			q_def
-			seq_id
-			LOG
-			CTL_OPT}
-		     );
-	    #------------------------ARGS_IN
-	 }
-	 elsif ($flag eq 'run') {
-	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $dc = $VARS->{dc};
-	    my $id = $VARS->{id};
-	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $q_def = $VARS->{q_def};
-	    my $LOG = $VARS->{LOG};
-
-	    #-polish tblastx hits with exonerate
-	    my $exonerate_a_data = [];
-	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		#$exonerate_a_data = GI::polish_exonerate('',
-		#					 $q_seq_ref,
-		#					 $q_seq_length,
-		#					 $q_def,
-		#					 $dc,
-		#					 $CTL_OPT{_a_db},
-		#					 $the_void,
-		#					 'q',
-		#					 $CTL_OPT{exonerate},
-		#					 $CTL_OPT{pcov_tblastx},
-		#					 $CTL_OPT{pid_tblastx},
-		#					 $CTL_OPT{en_score_limit},
-		#					 $CTL_OPT{en_matrix},
-		#					 $CTL_OPT{pred_flank},
-		#					 $CTL_OPT{est_forward},
-		#					 $LOG,
-		#                                        $id
-		#					 );
-	    }
-	    
-	    #-clean the tblastx hits
-	    #this must happen after exonerate (otherwise I filter out good hits)
-	    print STDERR "cleaning tblastx...\n" unless $main::quiet;
-	    my $tblastx_keepers = [grep {ref($_)} @{$dc}];
-	    $tblastx_keepers = GI::clean_blast_hits($tblastx_keepers,
-						    $CTL_OPT{pcov_tblastx},
-						    $CTL_OPT{pid_tblastx},
-						    $CTL_OPT{eval_tblastx},
-						    1 #contiguity flag
-						    );
-	    #-------------------------CODE
-
-	    #------------------------RETURN
-	    %results = (exonerate_a_data => $exonerate_a_data,
-			tblastx_keepers => $tblastx_keepers,
-			);
-	    #------------------------RETURN
-	 }
-	 elsif ($flag eq 'result') {
-	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
-	    }
-	    #-------------------------RESULT
-	 }
-	 elsif ($flag eq 'flow') {
-	    #-------------------------NEXT_LEVEL
-	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
-	    #-------------------------NEXT_LEVEL
-	 }
-      }
-      elsif ($level == 16) {	#exonerate proteins
+      elsif ($tier_type == 3 && $level == 10) {	#exonerate proteins
 	 $level_status = 'polishing proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1717,26 +2252,34 @@ sub _go {
 		my $chunk = new Process::MpiChunk($level, $VARS);
 		push(@chunks, $chunk);
 	    }
+	    delete($VARS->{dc});
+	    delete($VARS->{id});
 	    $VARS->{exonerate_p_data} = []; #reset
 	    $VARS->{blastx_keepers} = []; #reset
+	    $VARS->{exonerate_p_clusters} = []; #reset
+	    $VARS->{blastx_clusters} = []; #reset
+	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	     @args = (qw{dc
-			 id
-			 the_void
-			 q_seq_ref
-			 q_seq_length
-			 q_def
-			 LOG
-			 CTL_OPT}
-		      );
+	    @args = (qw(chunk
+			dc
+			id
+			the_void
+			q_seq_ref
+			q_seq_length
+			q_def
+			GFF3
+			LOG
+			CTL_OPT)
+		    );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $chunk = $VARS->{chunk};
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
@@ -1744,9 +2287,9 @@ sub _go {
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $LOG = $VARS->{LOG};
+	    my $GFF3 = $VARS->{GFF3};
 
-	    #-make a multi-fasta of the seqs in the blastx_clusters 
-	    #-polish the blastx hits with exonerate
+	    #-polish blastx hits with exonerate
 	    my $exonerate_p_data =[];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
 		$exonerate_p_data = GI::polish_exonerate('',
@@ -1773,25 +2316,54 @@ sub _go {
 	    #this must happen after exonerate (otherwise I filter out good hits)
 	    print STDERR "cleaning blastx...\n" unless $main::quiet;
 	    my $blastx_keepers = [grep {ref($_)} @{$dc}];
+
+	    #Shatter hits. This is only for prokaryotic organisms.
+	    #Flip strand of blastn where appropriate.
+	    #This is done on blastn hits because exonerate is skipped.
+	    #I shatter after processing the chunk divide to avoid weird
+	    #complications from flipping on only one side of a split HSP
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$blastx_keepers  = PhatHit_utils::shatter_all_hits($blastx_keepers);
+
+		#this checks the open reading frame and can flip the hit
+		foreach my $phat_hit (@$blastx_keepers){
+		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
+			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
+		}
+	    }
+
 	    $blastx_keepers = GI::clean_blast_hits($blastx_keepers,
 						   $CTL_OPT{pcov_blastx},
 						   $CTL_OPT{pid_blastx},
 						   $CTL_OPT{eval_blastx},
 						   0 #contiguity flag
 						   );
+
+	    $GFF3->add_phathits($blastx_keepers);
+	    $GFF3->add_phathits($exonerate_p_data);
+
+	    #blastx will be empty from this point on in the script if eukaryotic
+	    my $blastx_clusters = [];
+	    my $exonerate_p_clusters = [];
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+	       $blastx_clusters = cluster::clean_and_cluster($blastx_keepers, $q_seq_ref, 20);
+	    }
+	    else{
+	       $exonerate_p_clusters = cluster::clean_and_cluster($exonerate_p_data, $q_seq_ref, 20);
+	    }
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (exonerate_p_data => $exonerate_p_data,
-			blastx_keepers => $blastx_keepers,
+	    %results = ( exonerate_p_clusters => $exonerate_p_clusters,
+			 blastx_clusters => $blastx_clusters,
 			);
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -1800,8 +2372,64 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 17) {	#process chunk divide
-	 $level_status = 'processing the chunk divide';
+      elsif ($tier_type == 3 && $level == 11) {	#further cluster
+	 $level_status = 'flattening protein clusters';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    delete($VARS->{_clust_flag});
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(exonerate_p_clusters
+		        blastx_clusters
+			q_seq_ref
+			_clust_flag)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my $exonerate_p_clusters = $VARS->{exonerate_p_clusters}; #array of overlapping clusters
+	    my $blastx_clusters = $VARS->{blastx_clusters}; #array of overlapping clusters
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $flag = $VARS->{_clust_flag};
+
+	    #further combine and cluster
+	    if($flag){
+	       $blastx_clusters = cluster::clean_and_cluster($blastx_clusters, $q_seq_ref, 20);
+	       $exonerate_p_clusters = cluster::clean_and_cluster($exonerate_p_clusters, $q_seq_ref, 20);
+	    }
+
+	    my $blastx_keepers = GI::flatten($blastx_clusters);
+	    my $exonerate_p_data = GI::flatten($exonerate_p_clusters);
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    %results = ( exonerate_p_clusters => [], #clear memory
+			 blastx_clusters => [], #clear memory
+			 exonerate_p_data => $exonerate_p_data,
+			 blastx_keepers => $blastx_keepers,
+			);
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	     $VARS->{LOG}->add_entry("###"); #indicate progress checkpoint
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 3 && $level == 12) {	#prepare section files
+	 $level_status = 'prepare section files';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    my $chunk = new Process::MpiChunk($level, $VARS);
@@ -1810,75 +2438,42 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
-			the_void
-			q_seq_ref
-			masked_total_seq
-			preds
+	    @args = (qw(chunk
+                        the_void
+			safe_seq_id
+                        q_seq_ref
+			preds_on_chunk
 			blastn_keepers
 			blastx_keepers
 			tblastx_keepers
 			exonerate_e_data
 			exonerate_a_data
 			exonerate_p_data
-			holdover_blastn
-			holdover_blastx
-			holdover_tblastx
-			holdover_exonerate_e
-			holdover_exonerate_a
-			holdover_exonerate_p
-			holdover_pred
-			holdover_est_gff
-			holdover_altest_gff
-			holdover_prot_gff
-			holdover_pred_gff
-			holdover_model_gff
-			fasta_p_index
-			fasta_t_index
-			fasta_a_index
 			GFF_DB
+			GFF3
 			LOG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
-	    my $preds = $VARS->{preds};
+	    my $preds_on_chunk = $VARS->{preds_on_chunk};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $exonerate_a_data = $VARS->{exonerate_a_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
-	    my $holdover_blastn = $VARS->{holdover_blastn};
-	    my $holdover_blastx = $VARS->{holdover_blastx};
-	    my $holdover_tblastx = $VARS->{holdover_tblastx};
-	    my $holdover_exonerate_e = $VARS->{holdover_exonerate_e};
-	    my $holdover_exonerate_a = $VARS->{holdover_exonerate_a};
-	    my $holdover_exonerate_p = $VARS->{holdover_exonerate_p};
-	    my $holdover_pred = $VARS->{holdover_pred};
-	    my $holdover_est_gff = $VARS->{holdover_est_gff};
-	    my $holdover_altest_gff = $VARS->{holdover_altest_gff};
-	    my $holdover_prot_gff = $VARS->{holdover_prot_gff};
-	    my $holdover_pred_gff = $VARS->{holdover_pred_gff};
-	    my $holdover_model_gff = $VARS->{holdover_model_gff};
-	    my $fasta_p_index = $VARS->{fasta_p_index};
-	    my $fasta_t_index = $VARS->{fasta_t_index};
-	    my $fasta_a_index = $VARS->{fasta_a_index};
 	    my $GFF_DB = $VARS->{GFF_DB};
+	    my $GFF3 = $VARS->{GFF3};
 	    my $LOG = $VARS->{LOG};
-   
-	    #-get only those predictions on the chunk
-	    my $preds_on_chunk = GI::get_preds_on_chunk($preds,
-							$chunk
-						       );
-
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    
 	    #==GFF3 passthrough of evidence
 	    my $prot_gff_keepers = [];
 	    my $est_gff_keepers = [];
@@ -1891,159 +2486,269 @@ sub _go {
 							      $q_seq_ref,
 							      'protein'
 							      );
+	       $GFF3->add_phathits($prot_gff_keepers);
+
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							     $q_seq_ref,
 							     'est'
 							     );
+	       $GFF3->add_phathits($est_gff_keepers);
+
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 								$q_seq_ref,
 								'altest'
 								);
+	       $GFF3->add_phathits($altest_gff_keepers);
+
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							       $q_seq_ref,
 							       'model'
 							       );
+	       $GFF3->add_phathits($model_gff_keepers);
+
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
 							      'pred'
 							      );
-	   }
-
-	    #combine standard types
-	    $blastn_keepers   = GI::combine($blastn_keepers, $holdover_blastn);
-	    $blastx_keepers   = GI::combine($blastx_keepers, $holdover_blastx);
-	    $tblastx_keepers  = GI::combine($tblastx_keepers, $holdover_tblastx);
-	    $exonerate_e_data = GI::combine($exonerate_e_data, $holdover_exonerate_e);
-	    $exonerate_p_data = GI::combine($exonerate_p_data, $holdover_exonerate_p);	    
-	    $exonerate_a_data = GI::combine($exonerate_a_data, $holdover_exonerate_a);
-
-	    #combine remaining holdover types
-	    push(@{$preds_on_chunk}, @{$holdover_pred});
-	    push(@{$pred_gff_keepers}, @{$holdover_pred_gff});
-	    push(@{$est_gff_keepers}, @{$holdover_est_gff});
-	    push(@{$altest_gff_keepers}, @{$holdover_altest_gff});
-	    push(@{$prot_gff_keepers}, @{$holdover_prot_gff});
-	    push(@{$model_gff_keepers}, @{$holdover_model_gff});
+	       $GFF3->add_phathits($pred_gff_keepers);
+	    }
 	    
-	    #clear holdovers
-	    @{$holdover_blastn} = ();
-	    @{$holdover_blastx} = ();
-	    @{$holdover_tblastx} = ();
-	    @{$holdover_exonerate_e} = ();
-	    @{$holdover_exonerate_p} = ();
-	    @{$holdover_exonerate_a} = ();
-	    @{$holdover_pred} = ();
-	    @{$holdover_est_gff} = ();
-	    @{$holdover_altest_gff} = ();
-	    @{$holdover_prot_gff} = ();
-	    @{$holdover_pred_gff} = ();
-	    @{$holdover_model_gff} = ();
-	 
-	    #==PROCESS HITS CLOSE TO CODE DIVISIONS
-	    #holdover hits that are too close to the divide for review with next chunk
-	    if (not $chunk->is_last) { #if not last chunk
-		($blastn_keepers,
-		 $blastx_keepers,
-		 $tblastx_keepers,
-		 $preds_on_chunk,
-		 $est_gff_keepers,
-		 $altest_gff_keepers,
-		 $prot_gff_keepers,
-		 $pred_gff_keepers,
-		 $model_gff_keepers,
-		 $exonerate_e_data,
-		 $exonerate_a_data,
-		 $exonerate_p_data,
-		 $holdover_blastn,
-		 $holdover_blastx,
-		 $holdover_tblastx,
-		 $holdover_pred,
-		 $holdover_est_gff,
-		 $holdover_altest_gff,
-		 $holdover_prot_gff,
-		 $holdover_pred_gff,
-		 $holdover_model_gff,
-		 $holdover_exonerate_e,
-		 $holdover_exonerate_a,
-		 $holdover_exonerate_p,
-		 ) = GI::process_the_chunk_divide($chunk,
-						  $CTL_OPT{'split_hit'},
-						  $CTL_OPT{'pred_flank'},
-						  1,
-						  1,
-						  [$blastn_keepers,
-						   $blastx_keepers,
-						   $tblastx_keepers,
-						   $preds_on_chunk,
-						   $est_gff_keepers,
-						   $altest_gff_keepers,
-						   $prot_gff_keepers,
-						   $pred_gff_keepers,
-						   $model_gff_keepers,
-						   $exonerate_e_data,
-						   $exonerate_a_data,
-						   $exonerate_p_data]
-						  );
-
-		@$holdover_exonerate_e = grep {$_->{_from_ref}} @$holdover_exonerate_e;
-		@$holdover_exonerate_a = grep {$_->{_from_ref}} @$holdover_exonerate_a;
-		@$holdover_exonerate_p = grep {$_->{_from_ref}} @$holdover_exonerate_p;
+	    my %section = (est_gff_keepers => $est_gff_keepers,
+			   altest_gff_keepers => $altest_gff_keepers,
+			   prot_gff_keepers => $prot_gff_keepers,
+			   pred_gff_keepers => $pred_gff_keepers,
+			   model_gff_keepers => $model_gff_keepers,
+			   preds_on_chunk => $preds_on_chunk,
+			   blastn_keepers => $blastn_keepers,
+			   blastx_keepers => $blastx_keepers,
+			   tblastx_keepers => $tblastx_keepers,
+			   exonerate_e_data => $exonerate_e_data,
+			   exonerate_a_data => $exonerate_a_data,
+			   exonerate_p_data => $exonerate_p_data
+			   );
+	    
+	    #separate out junction crossing hits
+	    my %start_junction;
+	    my %end_junction;
+	    my ($aB, $aE) = ($chunk->offset +1, $chunk->offset + $chunk->length);
+	    while(my $key = each %section){
+	       my @keepers;
+	       foreach my $h (@{$section{$key}}){
+		  my ($bB, $bE) = PhatHit_utils::get_span_of_hit($h,'query');
+		  ($bB, $bE) = ($bE, $bB) if($bB > $bE);
+		  if($bB < $aB) {
+		     push(@{$start_junction{$key}}, $h);
+		  }
+		  elsif($bE > $aE) {
+		     push(@{$end_junction{$key}}, $h);
+		  }
+		  else{
+		     push(@keepers, $h);
+		  }
+	       }
+	       $section{$key} = \@keepers;
 	    }
 
-	    #Shatter hits. This is only for prokaryotic organisms.
-	    #Flip strand of blastn where appropriate.
-	    #This is done on blastn hits because exonerate is skipped.
-	    #I shatter after processing the chunk divide to avoid weird
-	    #complications from flipping on only one side of a split HSP
-	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-		$blastn_keepers  = PhatHit_utils::shatter_all_hits($blastn_keepers);
-		$blastx_keepers  = PhatHit_utils::shatter_all_hits($blastx_keepers);
-		$tblastx_keepers = PhatHit_utils::shatter_all_hits($tblastx_keepers);
-		#this checks the open reading frame and can flip the hit
-		foreach my $phat_hit (@$blastn_keepers){
-		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
-			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
-		}
+	    #make section files
+	    my @all_files;
+	    my $order = $chunk->number;
+	    my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
+	    my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
+	    my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
+	    $LOG->add_entry("STARTED", $section_file, "");
+	    store (\%section, $section_file) unless(-f $section_file);
+	    $LOG->add_entry("FINISHED", $section_file, "");
+	    push(@all_files, $section_file);
+
+	    #make combined junction files
+	    my $start_file = "$the_void/$safe_seq_id.$order.start.section.holdover";
+	    my $end_file = "$the_void/$safe_seq_id.$order.end.section.holdover";
+	    my $start_neighbor = "$the_void/$safe_seq_id.".($order+1).".start.section.holdover";
+	    my $end_neighbor   = "$the_void/$safe_seq_id.".($order-1).".end.section.holdover";
+
+	    if(! $chunk->is_first && ! -f $junction_start_file){
+	       my $lock = new File::NFSLock($start_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $start_file, "");
+	       if(! -f $start_file){
+		  store (\%start_junction, "$start_file.tmp");
+		  move("$start_file.tmp", $start_file);
+	       }
+	       $LOG->add_entry("FINISHED", $start_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.raw.".($order-1)."-$order";
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($end_neighbor);
+		  unlink($start_file, $end_neighbor);
+		  while(my $key = each %$neighbor){
+		     push(@{$start_junction{$key}}, @{$neighbor->{$key}});
+		  }
+		  $LOG->add_entry("STARTED", $junction_start_file, "");
+		  store(\%start_junction, $junction_start_file);
+		  $LOG->add_entry("FINISHED", $junction_start_file, "");
+	       }
 	    }
+	    push(@all_files, $junction_start_file) if(-f $junction_start_file);
+	    if(! $chunk->is_last && ! -f $junction_end_file){
+	       my $lock = new File::NFSLock($end_file, 'EX', 300, 40);
+	       $lock->maintain(30);
+	       $LOG->add_entry("STARTED", $end_file, "");
+	       if(! -f $end_file){
+		  store (\%end_junction, "$end_file.tmp");
+		  move("$end_file.tmp", $end_file);
+	       }
+	       $LOG->add_entry("FINISHED", $end_file, "");
+	       $lock->unlock;
+
+	       my $name = "junction.raw.$order-".($order+1);
+	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+		  $lock->maintain(30);
+		  my $neighbor = retrieve($start_neighbor);
+		  unlink($end_file, $start_neighbor);
+		  while(my $key = each %$neighbor){
+		     push(@{$start_junction{$key}}, @{$neighbor->{$key}});
+		  }
+		  $LOG->add_entry("STARTED", $junction_end_file, "");
+		  store(\%start_junction, $junction_end_file);
+		  $LOG->add_entry("FINISHED", $junction_end_file, "");
+	       }
+	    }
+	    push(@all_files, $junction_end_file) if(-f $junction_end_file);
 	    #-------------------------CODE
-
+	    
 	    #------------------------RETURN
-	    %results = (prot_gff_keepers => $prot_gff_keepers,
-			est_gff_keepers => $est_gff_keepers,
-			altest_gff_keepers => $altest_gff_keepers,
-			model_gff_keepers => $model_gff_keepers,
-			pred_gff_keepers => $pred_gff_keepers,
-			preds_on_chunk => $preds_on_chunk,
-			blastn_keepers => $blastn_keepers,
-			blastx_keepers => $blastx_keepers,
-			tblastx_keepers => $tblastx_keepers,
-			exonerate_e_data => $exonerate_e_data,
-			exonerate_a_data => $exonerate_a_data,
-			exonerate_p_data => $exonerate_p_data,
-			holdover_est_gff => $holdover_est_gff,
-			holdover_altest_gff => $holdover_altest_gff,
-			holdover_prot_gff => $holdover_prot_gff,
-			holdover_pred_gff => $holdover_pred_gff,
-			holdover_model_gff => $holdover_model_gff,
-			holdover_pred => $holdover_pred,
-			holdover_blastn => $holdover_blastn,
-			holdover_blastx => $holdover_blastx,
-			holdover_tblastx => $holdover_tblastx,
-			holdover_exonerate_e => $holdover_exonerate_e,
-			holdover_exonerate_a => $holdover_exonerate_a,
-			holdover_exonerate_p => $holdover_exonerate_p,
+	    %results = ( holdover_files => [$start_file, $end_file],
+			 section_files => \@all_files
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+               if($key eq 'holdover_files'){
+                  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+               }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
 	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    $next_level = undef;
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 1 && $level == 5) {	#process section files
+	 $level_status = 'processing the chunk divide';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(fasta_chunker
+			the_void
+                        safe_seq_id
+			q_seq_ref
+			masked_total_seq
+			section_files
+			LOG
+			CTL_OPT)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $the_void = $VARS->{the_void};
+	    my $fasta_chunker = $VARS->{fasta_chunker};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $section_files = $VARS->{section_files};
+	    my $LOG = $VARS->{LOG};
+
+	    #process data from each chunk linearly
+	    $fasta_chunker->reset;
+	    my $holdovers = {}; #holds heldover data on each chunk
+	    my @new_files;
+	    while(my $chunk = $fasta_chunker->next_chunk){
+	       #get evidence alignments from chunk section files
+	       my $order = $chunk->number;
+	       my ($s_file) = grep{/\.$order\.raw\.section$/} @$section_files;
+	       my ($j_file) = grep{/\.$order\-\d+\.raw\.section$/} @$section_files;
+	       my $section = retrieve($s_file);
+	       my $junction = ($j_file) ? retrieve($j_file) : {};
+
+	       #merge the junction data onto the rest of the chunk section
+	       while(my $key = each %$junction){
+		  push(@{$section->{$key}}, @{$junction->{$key}});
+	       }
+
+	       #merge the junction data onto the rest of the chunk section
+	       while(my $key = each %$holdovers){
+		  push(@{$section->{$key}}, @{$holdovers->{$key}});
+	       }
+
+	       #keys to grab out of $section hash
+	       my @keys = qw(blastn_keepers
+			     blastx_keepers
+			     tblastx_keepers
+			     preds_on_chunk
+			     est_gff_keepers
+			     altest_gff_keepers
+			     prot_gff_keepers
+			     pred_gff_keepers
+			     model_gff_keepers
+			     exonerate_e_data
+			     exonerate_a_data
+			     exonerate_p_data);
+
+	       #==PROCESS HITS CLOSE TO CODE DIVISIONS
+	       #holdover hits that are too close to the divide for review with next chunk
+	       if (not $chunk->is_last) { #if not last chunk
+		  (@{$section}{@keys},
+		   @{$holdovers}{@keys}) = GI::process_the_chunk_divide($chunk,
+									$CTL_OPT{'split_hit'},
+									$CTL_OPT{'pred_flank'},
+									1,
+									1,
+									1,
+									[@{$section}{@keys}]
+									);
+	       }
+
+	       #write final section file
+	       my $section_file = "$the_void/$safe_seq_id.$order.final.section";
+	       $LOG->add_entry("STARTED", $section_file, "");
+	       store($section, $section_file) unless(-f $section_file);
+	       $LOG->add_entry("FINISHED", $section_file, "");
+	       push (@new_files, $section_file);
+	    }
+
+	    $section_files = \@new_files;
+	    #-------------------------CODE
+	    
+	    #------------------------RETURN
+	    %results = ( section_files => $section_files,
+		       );
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+               $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2051,7 +2756,72 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 18) {	#prep hint clusters
+      elsif ($tier_type == 1 && $level == 6) {     #build annotation tiers
+	 $level_status = 'builing annotation tiers';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    unlink(@{$VARS->{holdover_files}}) if($VARS->{holdover_files});
+	    delete($VARS->{holdover_files});
+	    my $section_files = $VARS->{section_files};
+	    $VARS->{fasta_chunker}->reset;
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       my $order = $fchunk->number;
+	       my ($file) = grep {/\.$order\.final\.section$/} @$section_files;
+	       my $section = retrieve($file);
+	       my %args = (%$section,
+			   (tier_type          => 4,
+			    chunk              => $fchunk,
+			    order              => $order,
+			    the_void           => $VARS->{the_void},
+			    safe_seq_id        => $VARS->{safe_seq_id},
+			    seq_id             => $VARS->{seq_id},
+			    q_def              => $VARS->{q_def},
+			    q_seq_ref          => $VARS->{q_seq_ref},
+			    out_dir            => $VARS->{out_dir},
+			    masked_total_seq   => $VARS->{masked_total_seq},
+			    section_files      => $VARS->{section_files},
+			    GFF3               => $VARS->{GFF3},
+			    CTL_OPT            => $VARS->{CTL_OPT},
+			    LOG                => $VARS->{LOG})
+			   );
+	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+	       push(@chunks, $tier); #really a tier
+	    }
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'p_fastas' || $key eq 't_fastas'){
+		  while(my $key2 = each %{$self->{RESULTS}->{$key}}){
+		     $VARS->{$key}->{$key2} .= $self->{RESULTS}->{$key}->{$key2};
+		  }
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }	    
+      }
+      elsif ($tier_type == 4 && $level == 0) {	#prep hint clusters
 	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2061,7 +2831,7 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw{q_seq_ref
+	    @args = (qw(q_seq_ref
 			tblastx_keepers
 			blastx_keepers
 			blastn_keepers
@@ -2074,8 +2844,8 @@ sub _go {
 			prot_gff_keepers
 			pred_gff_keepers
 			model_gff_keepers
-			CTL_OPT}
-		    );
+			CTL_OPT)
+		     );
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
@@ -2109,7 +2879,7 @@ sub _go {
 
 		#replace actual values
 		foreach my $set (@sets) {
-		    @$set = map {@$_} @{cluster::clean_and_cluster($set, ,$q_seq_ref, 10)};
+		    @$set = map {@$_} @{cluster::clean_and_cluster($set, $q_seq_ref, 10)};
 		}
 	    }
 
@@ -2154,14 +2924,15 @@ sub _go {
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = (all_data => $all_data);
+	    %results = (all_data => $all_data
+		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+               $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2169,7 +2940,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 19) {	#annotate transcripts
+      elsif ($tier_type == 4 && $level == 1) {	#annotate transcripts
 	 $level_status = 'annotating transcripts';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2179,18 +2950,19 @@ sub _go {
 		my $j = $i % $VARS->{CTL_OPT}->{_mpi_size};
 		push(@{$data_sets[$j]}, $VARS->{all_data}->[$i]);
 	    }
-
 	    foreach my $dc (@data_sets){
                 $VARS->{dc} = $dc;
 		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
                 my $chunk = new Process::MpiChunk($level, $VARS);
                 push(@chunks, $chunk);
             }
+	    delete($VARS->{dc});
+	    delete($VARS->{LOG_FLAG});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{the_void
+	    @args = (qw(the_void
 			q_def
 			seq_id
 			q_seq_ref
@@ -2198,7 +2970,7 @@ sub _go {
 			dc
 			LOG
 			LOG_FLAG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2230,16 +3002,17 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (trans => $trans);
+	    %results = ( trans => $trans
+		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		while (my $src = each %{$self->{RESULTS}->{$key}}){
-		    push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
-		}
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+               while (my $src = each %{$self->{RESULTS}->{$key}}){
+                  push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
+               }
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2247,7 +3020,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 20) {	#grouping transcripts into genes
+      elsif ($tier_type == 4 && $level == 2) {	#grouping transcripts into genes
 	 $level_status = 'clustering transcripts into genes for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2257,14 +3030,13 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw{trans
+	    @args = (qw(trans
 			all_data
 			q_seq_ref
 			seq_id
 			chunk
-			build
 			the_void
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2276,7 +3048,6 @@ sub _go {
 	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $seq_id = $VARS->{seq_id};
 	    my $chunk = $VARS->{chunk};
-	    my $build = $VARS->{build};
 	    my $the_void = $VARS->{the_void};
 
 	    #group transcriipts into genes
@@ -2286,21 +3057,21 @@ sub _go {
 								    $q_seq_ref,
 								    $seq_id,
 								    $chunk->number(),
-								    $build,
 								    $the_void,
 								    \%CTL_OPT
 								    );
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = (annotations   => $annotations);
+	    %results = ( annotations   => $annotations
+		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+               $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2308,7 +3079,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 21) {	#adding quality control statistics
+      elsif ($tier_type == 4 && $level == 3) {	#adding quality control statistics
 	 $level_status = 'adding statistics to annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2328,15 +3099,18 @@ sub _go {
 		my $chunk = new Process::MpiChunk($level, $VARS);
 		push(@chunks, $chunk);
 	    }
+
+	    delete($VARS->{an});
+	    delete($VARS->{LOG_FLAG});
 	    $VARS->{annotations} = {}; #reset
 	    #-------------------------CHUNKER
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw{q_seq_ref
+	    @args = (qw(q_seq_ref
 			an
 			LOG_FLAG
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2355,16 +3129,17 @@ sub _go {
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = (annotations => $annotations);
+	    %results = ( annotations => $annotations
+		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		while (my $src = each %{$self->{RESULTS}->{$key}}){
-		    push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
-		}
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+	       while (my $src = each %{$self->{RESULTS}->{$key}}){
+		  push(@{$VARS->{$key}->{$src}}, @{$self->{RESULTS}->{$key}->{$src}});
+	       }
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2372,7 +3147,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 22) {	#deciding on final annotations
+      elsif ($tier_type == 4 && $level == 4) {	#deciding on final annotations
 	 $level_status = 'choosing best annotation set';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2382,9 +3157,9 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw{annotations
+	    @args = (qw(annotations
 			out_dir
-			CTL_OPT}
+			CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2397,7 +3172,6 @@ sub _go {
 	    #get best annotations
 	    print STDERR "Choosing best annotations\n" unless($main::quiet);
 	    my $maker_anno = maker::auto_annotator::best_annotations($annotations,
-								     $out_dir,
 								     \%CTL_OPT
 								    );
 	    
@@ -2444,16 +3218,17 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (maker_anno => $maker_anno,
-			non_over => $non_over,
-			scored_preds => \@scored_preds);
+	    %results = ( maker_anno => $maker_anno,
+			 non_over => $non_over,
+			 scored_preds => \@scored_preds
+		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
-	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
-	    }
+            while (my $key = each %{$self->{RESULTS}}) {
+               $VARS->{$key} = $self->{RESULTS}->{$key};
+            }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
@@ -2461,17 +3236,17 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 23) {	#local output
+      elsif ($tier_type == 4 && $level == 5) {	#local output
 	 $level_status = 'processing chunk output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    my $chunk = new Process::MpiChunk($level, $VARS);
 	    push(@chunks, $chunk);
-	    #-------------------------CHUNKER
+	    #-------------------------Chunker
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{chunk
+	    @args = (qw(chunk
 			maker_anno
 			non_over
 			annotations
@@ -2485,9 +3260,7 @@ sub _go {
 			altest_gff_keepers
 			prot_gff_keepers
 			scored_preds
-			p_fastas
-			t_fastas
-			GFF3}
+			GFF3)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2497,37 +3270,19 @@ sub _go {
 	    my $maker_anno  = $VARS->{maker_anno};
 	    my $non_over    = $VARS->{non_over};
 	    my $annotations = $VARS->{annotations};
-	    my $blastx_keepers = $VARS->{blastx_keepers};
-	    my $blastn_keepers = $VARS->{blastn_keepers};
-	    my $tblastx_keepers = $VARS->{tblastx_keepers};
-	    my $exonerate_e_data = $VARS->{exonerate_e_data};
-	    my $exonerate_a_data = $VARS->{exonerate_a_data};
-	    my $exonerate_p_data = $VARS->{exonerate_p_data};
-	    my $est_gff_keepers = $VARS->{est_gff_keepers};
-	    my $altest_gff_keepers = $VARS->{altest_gff_keepers};
-	    my $prot_gff_keepers = $VARS->{prot_gff_keepers};
 	    my $scored_preds = $VARS->{scored_preds};
-	    my $p_fastas = $VARS->{p_fastas};
-	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};
 
 
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
 	    $GFF3->add_genes($maker_anno);
-	    $GFF3->add_phathits($blastn_keepers);
-	    $GFF3->add_phathits($tblastx_keepers);
-	    $GFF3->add_phathits($blastx_keepers);
-	    $GFF3->add_phathits($exonerate_e_data);
-	    $GFF3->add_phathits($exonerate_a_data);
-	    $GFF3->add_phathits($exonerate_p_data);
-	    $GFF3->add_phathits($est_gff_keepers);
-	    $GFF3->add_phathits($altest_gff_keepers);
-	    $GFF3->add_phathits($prot_gff_keepers);
 	    $GFF3->add_phathits($scored_preds);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
 	    #--- building fastas for annotations (grows with iteration)
+	    my $p_fastas = {};
+	    my $t_fastas = {};
 	    GI::maker_p_and_t_fastas($maker_anno,
 				     $non_over,
 				     $annotations,
@@ -2537,27 +3292,43 @@ sub _go {
 	    #-------------------------CODE
 
 	    #------------------------RETURN
-	    %results = (p_fastas => $p_fastas,
-			t_fastas => $t_fastas
+	    %results = ( p_fastas => $p_fastas,
+			 t_fastas => $t_fastas,
+			 maker_anno         => [], #clear memory
+			 blastn_keepers     => [], #clear memory
+			 tblastx_keepers    => [], #clear memory
+			 blastx_keepers     => [], #clear memory
+			 exonerate_e_data   => [], #clear memory
+			 exonerate_a_data   => [], #clear memory
+			 exonerate_p_data   => [], #clear memory
+			 est_gff_keepers    => [], #clear memory
+			 altest_gff_keepers => [], #clear memory
+			 prot_gff_keepers   => [], #clear memory
+			 scored_preds       => [], #clear memory
 		       );
 	    #------------------------RETURN
 	 }
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-		$VARS->{$key} = $self->{RESULTS}->{$key};
+	       if($key eq 'p_fastas' || $key eq 't_fastas'){
+		  while(my $key2 = each %{$self->{RESULTS}->{$key}}){
+		     $VARS->{$key}->{$key2} .= $self->{RESULTS}->{$key}->{$key2};
+		  }
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
 	    }
 	    #-------------------------RESULT
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    if ($VARS->{chunk} = $VARS->{fasta_chunker}->next_chunk) {
-	       $next_level = 8;
-	    }
+	    $next_level = undef;
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($level == 24) {	#global output
+      elsif ($tier_type == 1 && $level == 7) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2567,19 +3338,18 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw{the_void
+	    @args = (qw(the_void
 			out_dir
 			seq_id
 			safe_seq_id
 			q_seq_ref
-			preds		  
 			p_fastas
 			t_fastas
 			GFF3
 			DS_CTL
 			CTL_OPT
 			LOG
-			LOCK}
+			LOCK)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2591,7 +3361,6 @@ sub _go {
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $preds = $VARS->{preds};
 	    my $p_fastas = $VARS->{p_fastas};
 	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};
@@ -2639,6 +3408,12 @@ sub _go {
       $self->_handler($E, $level_status, $tag);
    };
 
+   print $level_status."\n" if($flag eq 'run');
+   if($flag eq 'init'){
+      $VARS->{tier_type} = $tier_type;
+      push(@args, 'tier_type');
+   }
+
    #return args list for initializing
    return \@args if($flag eq 'init');
    #return results after running
@@ -2666,13 +3441,40 @@ sub _go {
 sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
-   my $level = $self->{LEVEL};
+   my $level = shift;
+   $level = $self->{LEVEL} if(!defined($level));
 
    #only return results for finished/succesful chunks
    return if (! $self->finished || $self->failed);
 
    #do level specific result processing
    return $self->_go('result', $level, $VARS);
+}
+#--------------------------------------------------------------
+#sorts chunks for the tier into a more convenient order (optional)
+sub _sort_levels{
+   my $self = shift;
+   my $chunks = shift;
+   my $level = shift;
+
+   #sorts by fasta chunk order then by level
+   #so all levels on fasta chunk 1 get processed before chunk 2
+   #but they can also be processed simultaneously
+   @$chunks = sort {crit1($a) <=> crit1($b) || $a->level <=> $b->level || $a->id cmp $b->id} @$chunks;
+
+   return $chunks;
+}
+#--------------------------------------------------------------
+#first sort criteria
+sub crit1 {
+   my $chunk = shift;
+
+   if(defined $chunk->{VARS}->{order}){
+      return $chunk->{VARS}->{order};
+   }
+   else{
+      return -1;
+   }
 }
 #--------------------------------------------------------------
 #returns true if failed
@@ -2726,7 +3528,13 @@ sub id {
 
    return $self->{ID};
 }
+#--------------------------------------------------------------
+#return level the chunk is working on
 
+sub level {
+   my $self = shift;
+   return $self->{LEVEL};
+}
 #--------------------------------------------------------------
 #deep clone of self
 #this uses the storable module, so globs and code refs are ignored

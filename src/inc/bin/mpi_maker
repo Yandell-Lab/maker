@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict "vars";
@@ -814,7 +811,7 @@ else {
 	    next;
 	}
 	#====END THREAD
-	
+
 	#decide what this node needs
 	my $what;
 	my $chunk;
@@ -997,7 +994,7 @@ else {
 		}
 		$locs = \@non;
 	    }
-	    
+
 	    #send off chunks if the node needs a helper
 	    my $helpers = [];
 	    if ($what == $need_helper){
@@ -1066,7 +1063,7 @@ else {
 
 	    #nothing provided and nothing to advance to (wait)
 	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){
-		sleep 1;
+	       sleep 1;
 	    }
 
 	    #finally run local chunk if there is one

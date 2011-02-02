@@ -846,7 +846,6 @@ sub annotate_genes {
     my $seq_id           = shift;
     my $chunk_number     = shift; #required to name genes for each chunk
     my $the_void         = shift;
-    my $build            = shift;
     my $CTL_OPT          = shift;
 
     #reset gene names
@@ -860,7 +859,6 @@ sub annotate_genes {
 					       $v_seq_ref,
 					       $seq_id,
 					       $chunk_number,
-					       $build,
 					       $key,
 					       $the_void,
 					       $CTL_OPT
@@ -1056,7 +1054,6 @@ sub add_abAED{
 
 sub best_annotations {
     my $annotations = shift;
-    my $out_base = shift;
     my $CTL_OPT = shift;
 
     my @predictors = @{$CTL_OPT->{_predictor}};
@@ -1966,7 +1963,6 @@ sub group_transcripts {
    my $seq          = shift;
    my $seq_id       = shift;
    my $chunk_number = shift;
-   my $build        = shift;
    my $predictor    = shift;
    my $the_void     = shift;
    my $CTL_OPT      = shift;

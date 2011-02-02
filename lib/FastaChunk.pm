@@ -29,7 +29,6 @@ sub write_file {
 	my $self      = shift;
 	my $file_name = shift;
 
-
 	$self->fasta_file_location($file_name);
 
 	FastaFile::writeFile($self->fasta, $file_name);

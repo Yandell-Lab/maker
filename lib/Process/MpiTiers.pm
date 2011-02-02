@@ -16,11 +16,6 @@ use Storable;
 $Storable::forgive_me = 1; #allows serializaion of objects with code refs
 
 #-----------------------------------------------------------------------------
-#------------------------------GLOBAL VARIABLES-------------------------------
-#-----------------------------------------------------------------------------
-
-
-#-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
 #-----------------------------------------------------------------------------
 
@@ -39,7 +34,8 @@ sub new {
       }
       else {
 	  my $VARS           = $arg; #this should be a hash ref
-	  $self->{TIER_ID}   = shift @args;
+	  $self->{TIER_ID}   = shift @args || 0;
+	  $self->{RANK}      = $self->{TIER_ID};
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
 	  $self->{INTERRUPT} = 0;
@@ -90,35 +86,67 @@ sub _initialize_level {
    my $self = shift;
    my $level = shift;
 
-   #undef previous level
+   #undef forward levels when we move backwards
    if(exists ($self->{LEVEL}{CURRENT})){
        my $last = $self->{LEVEL}{CURRENT};
        $self->{LEVEL}{LAST} = $last;
-       $self->{LEVEL}{$last} = undef;
+
+       if(defined($level) && $last > $level){
+	  for(my $i = $last; $i > $level; $i--){
+	     $self->{LEVEL}{$i} = undef;
+	  }
+       }
    }
 
    #terminate
    if (! defined $level){ #level will be undefined when finished
       $self->_set_terminate(1);
       $level = $self->{LEVEL}{CURRENT};
+      $self->{LEVEL} = undef;
+      $self->{LEVEL}{CURRENT} = $level;
+      $self->{LEVEL}{ALL}{CHUNK_COUNT} = 0;
+      $self->{LEVEL}{ALL}{RESULT_COUNT} = 0;
+      $self->{LEVEL}{ALL}{CHUNKS} = [];
+      return;
    }
 
    #set current level
    $self->{LEVEL}{CURRENT} = $level;
 
    #--initiate level variables
-   $self->{LEVEL}{$level} = {};
-   $self->{LEVEL}{$level}{CHUNK_COUNT} = 0;
-   $self->{LEVEL}{$level}{RESULT_COUNT} = 0;
-   $self->{LEVEL}{$level}{CHUNKS} = [];
-   $self->{LEVEL}{$level}{ERROR} = undef;
-   $self->{LEVEL}{$level}{STARTED} = 0;
-   $self->{LEVEL}{$level}{FINISHED} = 0;
+   if(! $self->{LEVEL}{$level} || ! $self->_level_started($level) || $self->_level_finished($level)){
+      $self->{LEVEL}{$level} = {};
+      $self->{LEVEL}{$level}{CHUNK_COUNT} = 0;
+      $self->{LEVEL}{$level}{RESULT_COUNT} = 0;
+      $self->{LEVEL}{$level}{CHUNKS} = [];
+      $self->{LEVEL}{$level}{ERROR} = undef;
+      $self->{LEVEL}{$level}{STARTED} = 0;
+      $self->{LEVEL}{$level}{FINISHED} = 0;
+   }
+
+   if(! $self->{LEVEL}{ALL}){
+      $self->{LEVEL}{ALL}{CHUNK_COUNT} = 0;
+      $self->{LEVEL}{ALL}{RESULT_COUNT} = 0;
+      $self->{LEVEL}{ALL}{CHUNKS} = [];
+   }
+
+   #initiate earlier levels if I jump forward non-sequentially
+   for(my $i = $level; $i >= 0; $i--){
+      if(! $self->{LEVEL}{$i}){
+	 $self->{LEVEL}{$i} = {};
+	 $self->{LEVEL}{$i}{CHUNK_COUNT} = 0;
+	 $self->{LEVEL}{$i}{RESULT_COUNT} = 0;
+	 $self->{LEVEL}{$i}{CHUNKS} = [];
+	 $self->{LEVEL}{$i}{ERROR} = undef;
+	 $self->{LEVEL}{$i}{STARTED} = 1;
+	 $self->{LEVEL}{$i}{FINISHED} = 0;
+      }
+   }
 }
 #--------------------------------------------------------------
 #jump to indicated level
 #same as _initialize_level, defined for syntactic sugar
-sub _go_to_level {
+sub go_to_level {
     my $self = shift;
     my $level = shift;
 
@@ -137,15 +165,17 @@ sub next_chunk {
    while($self->_level_finished){
        $self->_next_level;
        $self->_load_chunks;
+       $self->_load_extra if($self->{LEVEL}{EXTRA});
    }
-
+   
    #handle case where level needs to be initialized
    $self->_load_chunks if(! $self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
 
    #get level after doing any necessary moves to next level
    my $level = $self->{LEVEL}{CURRENT};
 
-   if (my $chunk = shift @{$self->{LEVEL}{$level}{CHUNKS}}) {
+   if (my $chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}}) {
       return $chunk;
    }
    else{
@@ -158,16 +188,20 @@ sub next_chunk {
 
 sub run {
    my $self = shift;
+   my $rank = shift;
+
+   $self->{RANK} = $rank if($rank);
 
    return if ($self->terminated && ! $self->failed);
    return if ($self->_level_started && ! $self->_level_finished);
 
    $self->_next_level if ($self->_level_finished);
    $self->_load_chunks if (!$self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
 
-   while ($self->num_chunks == 1){
+   while ($self->num_chunks == 1 && ref($self->{LEVEL}{ALL}{CHUNKS}[0]) ne 'Parallel::MpiTier'){
        my $chunk = $self->next_chunk;
-       $chunk->run($self->id);
+       $chunk->run($self->rank);
        $self->update_chunk($chunk);
 
        return if ($self->terminated && ! $self->failed);
@@ -175,6 +209,7 @@ sub run {
 
        $self->_next_level if ($self->_level_finished);
        $self->_load_chunks if (!$self->_level_started);
+       $self->_load_extra if($self->{LEVEL}{EXTRA});
    }
 }
 #--------------------------------------------------------------
@@ -182,19 +217,27 @@ sub run {
 
 sub run_all {
    my $self = shift;
+   my $rank = shift;
+
+   $self->{RANK} = $rank if($rank);
 
    return if ($self->terminated || $self->failed);
    return if ($self->_level_started && ! $self->_level_finished);
 
    $self->_next_level if ($self->_level_finished);
    $self->_load_chunks if (!$self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
 
    while(my $chunk = $self->next_chunk){
-       $chunk->run($self->id);
-       $self->update_chunk($chunk);
+      if($chunk->can('run_all')){
+	 $chunk->run_all($self->rank);
+      }
+      else{
+	 $chunk->run($self->rank);
+      }
+      $self->update_chunk($chunk);
    }
 }
-
 #--------------------------------------------------------------
 #This method moves from one level to another
 
@@ -206,6 +249,7 @@ sub _next_level {
 
    if(! $self->_level_started){
        $self->_load_chunks;
+       $self->_load_extra if($self->{LEVEL}{EXTRA});
        return;
    }
 
@@ -238,7 +282,12 @@ sub _next_level {
 
    return if($self->failed);
 
-   $self->_go_to_level($next_level);
+   $self->go_to_level($next_level);
+   
+   #always reset global chunk variables when next level
+   $self->{LEVEL}{ALL}{CHUNKS} = [];
+   $self->{LEVEL}{ALL}{CHUNK_COUNT} = 0;
+   $self->{LEVEL}{ALL}{RESULT_COUNT} = 0;
 }
 
 #--------------------------------------------------------------
@@ -254,14 +303,15 @@ sub _load_chunks {
    my $chunks;
 
    try {
-      $chunks = $self->{CHUNK_REF}->_loader($level, $self->{VARS}, $self->id);
+      $chunks = $self->{CHUNK_REF}->_loader($level, $self->{VARS}, $self->rank);
    }
    catch Error::Simple with {
       my $E = shift;
 
       $self->{LEVEL}{$level}{CHUNKS} = [];
-      $self->{LEVEL}{$level}{CHUNK_COUNT} = $self->num_chunks;
+      $self->{LEVEL}{$level}{CHUNK_COUNT} = $self->num_chunks($level);
       $self->{LEVEL}{$level}{STARTED} = 1; #avoids infinite loop
+      $self->{LEVEL}{EXTRA} = 0;
 
       $self->_handler($E, 'Can not load chunks');
    };
@@ -269,10 +319,32 @@ sub _load_chunks {
    return if($self->failed);
 
    $self->{LEVEL}{$level}{CHUNKS} = $chunks;
-   $self->{LEVEL}{$level}{CHUNK_COUNT} = $self->num_chunks;
+   $self->{LEVEL}{$level}{CHUNK_COUNT} = $self->num_chunks($level);
    $self->{LEVEL}{$level}{STARTED} = 1;
+   $self->{LEVEL}{EXTRA} = 1;
+   $self->_load_extra;
 }
 
+sub _load_extra {
+   my $self = shift;
+   my $level = $self->{LEVEL}{CURRENT};
+
+   return if ($self->terminated || $self->failed);
+
+   #set up chunk pool
+   if($self->{LEVEL}{EXTRA}){
+      for(my $i = 0; $i <= $level; $i++){
+	 $self->{LEVEL}{ALL}{CHUNK_COUNT} += @{$self->{LEVEL}{$i}{CHUNKS}};
+	 push(@{$self->{LEVEL}{ALL}{CHUNKS}}, @{$self->{LEVEL}{$i}{CHUNKS}});
+	 $self->{LEVEL}{$i}{CHUNKS} = [];
+      }
+      $self->{LEVEL}{EXTRA} = 0;
+
+      #sort to specified order if any
+      $self->{LEVEL}{ALL}{CHUNKS} = $self->{CHUNK_REF}->_sort_levels($self->{LEVEL}{ALL}{CHUNKS}, $level)
+	if($self->{CHUNK_REF}->can('_sort_levels'));
+   }
+}
 #--------------------------------------------------------------
 #takes a chunk and adds its results to the tier
 
@@ -285,10 +357,10 @@ sub update_chunk {
    my ($tier_id, $level_num, $chunk_num) = split (":", $id);
 
    #check if chunk goes with tier/level
-   if($tier_id != $self->id()){
+   if($tier_id != $self->rank()){
       die "ERROR:  This MpiChunk is not part of this MpiTier\n";
    }
-   if($level_num != $self->{LEVEL}{CURRENT}){
+   if(! $self->_level_started($level_num) || $self->_level_finished($level_num)){
       die "ERROR:  This MpiChunk is not part of this level\n";
    }
 
@@ -298,25 +370,50 @@ sub update_chunk {
       $self->_handler($E, "Chunk failed at level $level_num\n");
    }
    else{
-       #let the chunk add results to $self->{VARS}
-       $chunk->_result($self->{VARS});
+      #let the chunk add results to $self->{VARS}
+      my $stat = $chunk->_result($self->{VARS}, $level_num);
+      
+      $chunk->_finalize($self) if($stat && $chunk->can('_finalize'));
    }
 
    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;    
+   $self->{LEVEL}{ALL}{RESULT_COUNT}++;    
    $self->{ERROR} .= $chunk->error();
 
    print STDERR $chunk->error();
+}
+#--------------------------------------------------------------
+#method to allow Tiers to produce results like chunks
+sub _result{
+   my $self = shift;
+   my $VARS = shift;            #this ia a hash reference
+   my $level = shift;
+
+   #only return results for finished/succesful chunks
+   return if (! $self->terminated || $self->failed);
+
+   #results set in $self->{CHUNK_REF}->_on_termination
+   $self->{CHUNK_REF}->{RESULTS} = $self->{RESULTS};
+   $self->{CHUNK_REF}->{VARS} = {};
+   $self->{CHUNK_REF}->{FINISHED} = 1;
+
+   return $self->{CHUNK_REF}->_result($VARS, $level);
 }
 #--------------------------------------------------------------
 #returns true if level is finished
 
 sub _level_finished {
    my $self = shift;
-   my $level = $self->{LEVEL}{CURRENT};
+   my $level = shift;
+   $level = $self->{LEVEL}{CURRENT} if(! defined($level));
+   my $previous = $level - 1;
 
    return undef if (! $self->_level_started);
+   return $self->{LEVEL}{$level}{FINISHED} if($self->{LEVEL}{$level}{FINISHED});
 
-   if($self->{LEVEL}{$level}{RESULT_COUNT} == $self->{LEVEL}{$level}{CHUNK_COUNT}){
+   if($self->{LEVEL}{$level}{RESULT_COUNT} == $self->{LEVEL}{$level}{CHUNK_COUNT} &&
+      ($previous < 0 || $self->_level_finished($previous))
+     ){
        $self->{LEVEL}{$level}{FINISHED} = 1;
    }
    
@@ -328,7 +425,8 @@ sub _level_finished {
 
 sub _level_started {
    my $self = shift;
-   my $level = $self->{LEVEL}{CURRENT};
+   my $level = shift;
+   $level = $self->{LEVEL}{CURRENT} if(! defined($level));
 
    return $self->{LEVEL}{$level}{STARTED};
 }
@@ -442,8 +540,12 @@ sub current_level{
 
 sub num_chunks {
    my $self = shift;
+   my $level = shift;
+   $level = 'ALL' if(! defined($level));
 
-   my $level = $self->{LEVEL}{CURRENT};
+   #$self->_load_chunks if(! $self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
+
    my $num = @{$self->{LEVEL}{$level}{CHUNKS}};
 
    return $num;
@@ -453,8 +555,12 @@ sub num_chunks {
 
 sub result_count {
    my $self = shift;
+   my $level = shift;
+   $level = 'ALL' if(! defined($level));
 
-   my $level = $self->{LEVEL}{CURRENT};
+   #$self->_load_chunks if(! $self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
+
    my $count = $self->{LEVEL}{$level}{RESULT_COUNT} || 0;
 
    return $count;
@@ -464,8 +570,12 @@ sub result_count {
 
 sub chunk_total_count {
    my $self = shift;
+   my $level = shift;
+   $level = 'ALL' if(! defined($level));
 
-   my $level = $self->{LEVEL}{CURRENT};
+   #$self->_load_chunks if(! $self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
+
    my $count = $self->{LEVEL}{$level}{CHUNK_COUNT} || 0;
 
    return $count;
@@ -475,7 +585,30 @@ sub chunk_total_count {
 
 sub id {
    my $self = shift @_;
+   my $id = shift;
+
+   if(defined($id)){
+      $self->{TIER_ID} = $id;
+   }
+
    return $self->{TIER_ID};
+}
+#-------------------------------------------------------------
+#returns the id of the tier (split on ':')
+
+sub id_safe {
+   my $self = shift @_;
+   my ($id) = split(':', $self->{TIER_ID});
+
+   return $id;
+}
+#-------------------------------------------------------------
+#returns the rank of the tier
+
+sub rank {
+   my $self = shift @_;
+
+   return $self->{RANK};
 }
 #--------------------------------------------------------------
 #returns a copy of this MpiTiers object using the Storable
@@ -518,7 +651,7 @@ sub _handler {
 
    #clear queue on error
    while(my $chunk = $self->next_chunk){
-       $self->{LEVEL}{$level}{RESULT_COUNT}++;
+       $self->{LEVEL}{$chunk->level}{RESULT_COUNT}++;
    }
 
    $self->_set_failed(1);
