@@ -370,6 +370,10 @@ sub process_the_chunk_divide{
 	    }
 	}
     }
+    else{
+       $p_cutoff = $cutoff;
+       $m_cutoff = $cutoff;
+    }
     
     #too small, all are heldover for next round
     if ($p_cutoff <= 1 + $chunk->offset &&
@@ -600,175 +604,187 @@ sub split_db {
    my @db_files;
    my $f_count = @entries;
    while (my $entry = shift @entries){
-       my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-
-       my ($f_name) = $file =~ /([^\/]+)$/;
-       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
-       my $b_dir = $CTL_OPT->{mpi_blastdb};
-       my $bins = ($mpi_size % 10 == 0) ? (int(($mpi_size/$f_count)/10))*10 : (int(($mpi_size/$f_count)/10)+1)*10;
-       $bins = 10 if($bins < 10);
-       my $d_name = "$f_name\.mpi\.$bins";
-       my $f_dir = "$b_dir/$d_name";
-       my $t_dir = $TMP."/$d_name";
-
-       #check if likely already finished
-       if(-e "$f_dir"){ #on multi processors check if finished
-	   my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-	   
-	   if(@t_db == $bins){ #use existing if right count
+      my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+      
+      my ($f_name) = $file =~ /([^\/]+)$/;
+      $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+      my $b_dir = $CTL_OPT->{mpi_blastdb};
+      my $bins = ($mpi_size % 10 == 0) ? (int(($mpi_size/$f_count)/10))*10 : (int(($mpi_size/$f_count)/10)+1)*10;
+      $bins = 10 if($bins < 10);
+      my $d_name = "$f_name\.mpi\.$bins";
+      my $f_dir = "$b_dir/$d_name";
+      my $t_dir = $TMP."/$d_name";
+      
+      #check if likely already finished
+      my $lock;
+      if(-e "$f_dir"){ #on multi processors check if finished
+	 my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	 
+	 if(@t_db == $bins){ #use existing if right count
+	    push(@db_files, @t_db);
+	    next;
+	 }
+	 else{ #maybe not finished
+	    if(($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)) && $lock->maintain(30)){
+	       #check again if likely already finished
+	       if(-e "$f_dir"){ #on multi processors check if finished
+		  my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+		  
+		  if(@t_db == $bins){ #use existing if right count
+		     $lock->unlock;
+		     push(@db_files, @t_db);
+		     next;
+		  }
+		  else{ #remove if there is an error
+		     File::Path::rmtree($f_dir);
+		  }
+	       }
+	    }
+	    else{
+	       $lock = undef;
+	    }
+	 }
+      }
+      elsif($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)){
+	 $lock = undef unless($lock->maintain(30));
+      }
+      else{
+	 $lock = undef;
+      }
+      
+      #set up a new database
+      if($lock){
+	 #set up alternate names for short files
+	 my $fasta_iterator = new Iterator::Fasta($file);
+	 my $num_fastas = $fasta_iterator->number_of_entries();
+	 die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
+	 
+	 my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
+	 if ($max_bins < $bins){
+	    $bins = $max_bins;
+	    $d_name = "$f_name\.mpi\.$bins";
+	    $f_dir = "$b_dir/$d_name";
+	    $t_dir = $TMP."/$d_name";
+	    
+	    #fix lock
+	    $lock->unlock;
+	    unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 50)){
+	       die "ERROR: Could not get lock to process $file.\n";
+	    }
+	 }
+	 
+	 #make needed output directories
+	 mkdir($t_dir);
+	 mkdir($b_dir) unless (-e $b_dir);
+	 
+	 if(-e "$f_dir"){ #on multi processors check if finished
+	    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	    
+	    if(@t_db == $bins){ #use existing if right count
+	       $lock->unlock;
 	       push(@db_files, @t_db);
 	       next;
-	   }
-	   else{ #maybe not finished
-	       my $lock;
-	       if(($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)) && $lock->maintain(30)){
-		   #check again if likely already finished
-		   if(-e "$f_dir"){ #on multi processors check if finished
-		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-		       
-		       if(@t_db == $bins){ #use existing if right count
-			   $lock->unlock;
-			   push(@db_files, @t_db);
-			   next;
-		       }
-		       else{ #remove if there is an error
-			   File::Path::rmtree($f_dir);
-		       }
-		   }
-		   
-		   #set up alternate names for short files
-		   my $fasta_iterator = new Iterator::Fasta($file);
-		   my $num_fastas = $fasta_iterator->number_of_entries();
-		   die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
-		   
-		   my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
-		   if ($max_bins < $bins){
-		       $bins = $max_bins;
-		       $d_name = "$f_name\.mpi\.$bins";
-		       $f_dir = "$b_dir/$d_name";
-		       $t_dir = $TMP."/$d_name";
-		       
-		       #fix lock
-		       $lock->unlock;
-		       unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 50)){
-			   die "ERROR: Could not get lock to process $file.\n";
-		       }
-		   }
-		   
-		   #make needed output directories
-		   mkdir($t_dir);
-		   mkdir($b_dir) unless (-e $b_dir);
-		   
-		   if(-e "$f_dir"){ #on multi processors check if finished
-		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-		       
-		       if(@t_db == $bins){ #use existing if right count
-			   $lock->unlock;
-			   push(@db_files, @t_db);
-			   next;
-		       }
-		       else{ #remove if there is an error
-			   File::Path::rmtree($f_dir);
-			 }
-		   }
-		   
-		   #open filehandles for  pieces on multi processors
-		   my @fhs;
-		   
-		   for (my $i = 0; $i < $bins; $i++) {
-		       my $name = "$t_dir/$d_name\.$i";
-		       my $fh;
-		       open ($fh, "> $name");
-		       
-		       push (@fhs, $fh);
-		   }
-		   
-		   #write fastas here
-		   my %alias;
-		   
-		   my $wflag = 1; #flag set so warnings gets printed only once 
-		   while (my $fasta = $fasta_iterator->nextEntry()) {
-		       my $def = Fasta::getDef(\$fasta);
-		       my $seq_id = Fasta::def2SeqID($def);
-		       my $seq_ref = Fasta::getSeqRef(\$fasta);
-		       
-		       #fix non standard peptides
-		       if (defined $alt) {
-			   $$seq_ref =~ s/[\*\-]//g;
-			   $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
-		       }
-		       #fix nucleotide sequences
-		       elsif($key !~ /protein/){
-			   #most programs use N for masking but for some reason the NCBI decided to
-			   #use X to mask their sequence, which causes many many programs to fail
-			   $$seq_ref =~ s/\-//g;
-			   $$seq_ref =~ s/X/N/gi;
-			   die "ERROR: The nucleotide sequence file \'$file\'\n".
-			       "appears to contain protein sequence or unrecognized characters.\n".
-			       "Please check/fix the file before continuing.\n".
-			       "Invalid Character: $1\n\n"
-			       if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
-		       }
-		       
-		       #Skip empty fasta entries
-		       next if($$seq_ref eq '');
-		       
-		       #fix weird blast trimming error for long seq IDs by replacing them
-		       if(length($seq_id) > 78){
-			   warn "WARNING: The fasta file contains sequences with names longer\n".
-			       "than 78 characters.  Long names get trimmed by BLAST, making\n".
-			       "it harder to identify the source of an alignmnet. You might\n".
-			       "want to reformat the fasta file with shorter IDs.\n".
-			       "File_name:$file\n\n" if($wflag-- > 0);
-			   
-			   my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
-			   
-			   die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
-			       if($alias{$new_id});
-			   
-			   $alias{$new_id}++;
-			   $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
-		       }
-		       
-		       #reformat fasta, just incase
-		       my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
-		       
-		       #build part files only on multi processor
-		       my $fh = shift @fhs;
-		       print $fh $$fasta_ref;
-		       push (@fhs, $fh);
-		   }
-		   
-		   #close part file handles
-		   foreach my $fh (@fhs) {
-		       close ($fh);
-		   }
-		   
-		   #move finished file directory into place
-		   system("mv $t_dir $f_dir"); #File::Copy cannot move directories
-		   
-		   #check if everything is ok
-		   if (-e $f_dir) { #multi processor
-		       my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
-	       	       
-		       die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
-		       
-		       push(@db_files, @t_db);
-		       
-		       $lock->unlock;
-		       next;
-		   }
-		   else {
-		       die "ERROR: Could not split db\n"; #not ok
-		   }
-	       }
-	       else{
-		   push(@entries, $entry);
-		   sleep 5;
-		   next;
-	       }
-	   }
-       }
+	    }
+	    else{ #remove if there is an error
+	       File::Path::rmtree($f_dir);
+	      }
+	 }
+	 
+	 #open filehandles for  pieces on multi processors
+	 my @fhs;
+	 
+	 for (my $i = 0; $i < $bins; $i++) {
+	    my $name = "$t_dir/$d_name\.$i";
+	    my $fh;
+	    open ($fh, "> $name");
+	    
+	    push (@fhs, $fh);
+	 }
+	 
+	 #write fastas here
+	 my %alias;
+	 
+	 my $wflag = 1; #flag set so warnings gets printed only once 
+	 while (my $fasta = $fasta_iterator->nextEntry()) {
+	    my $def = Fasta::getDef(\$fasta);
+	    my $seq_id = Fasta::def2SeqID($def);
+	    my $seq_ref = Fasta::getSeqRef(\$fasta);
+	    
+	    #fix non standard peptides
+	    if (defined $alt) {
+	       $$seq_ref =~ s/[\*\-]//g;
+	       $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
+	    }
+	    #fix nucleotide sequences
+	    elsif($key !~ /protein/){
+	       #most programs use N for masking but for some reason the NCBI decided to
+	       #use X to mask their sequence, which causes many many programs to fail
+	       $$seq_ref =~ s/\-//g;
+	       $$seq_ref =~ s/X/N/gi;
+	       die "ERROR: The nucleotide sequence file \'$file\'\n".
+		   "appears to contain protein sequence or unrecognized characters.\n".
+		   "Please check/fix the file before continuing.\n".
+		   "Invalid Character: $1\n\n"
+		   if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
+	    }
+	    
+	    #Skip empty fasta entries
+	    next if($$seq_ref eq '');
+	    
+	    #fix weird blast trimming error for long seq IDs by replacing them
+	    if(length($seq_id) > 78){
+	       warn "WARNING: The fasta file contains sequences with names longer\n".
+		   "than 78 characters.  Long names get trimmed by BLAST, making\n".
+		   "it harder to identify the source of an alignmnet. You might\n".
+		   "want to reformat the fasta file with shorter IDs.\n".
+		   "File_name:$file\n\n" if($wflag-- > 0);
+	       
+	       my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
+	       
+	       die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+		   if($alias{$new_id});
+	       
+	       $alias{$new_id}++;
+	       $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+	    }
+	    
+	    #reformat fasta, just incase
+	    my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+	    
+	    #build part files only on multi processor
+	    my $fh = shift @fhs;
+	    print $fh $$fasta_ref;
+	    push (@fhs, $fh);
+	 }
+	 
+	 #close part file handles
+	 foreach my $fh (@fhs) {
+	    close ($fh);
+	 }
+	 
+	 #move finished file directory into place
+	 system("mv $t_dir $f_dir"); #File::Copy cannot move directories
+	 
+	 #check if everything is ok
+	 if (-e $f_dir) { #multi processor
+	    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
+	    
+	    die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
+	    
+	    push(@db_files, @t_db);
+	    
+	    $lock->unlock;
+	    next;
+	 }
+	 else {
+	    die "ERROR: Could not split db\n"; #not ok
+	 }
+      }
+      else{
+	 push(@entries, $entry);
+	 sleep 5;
+	 next;
+      }
    }
 	   
    return \@db_files;
