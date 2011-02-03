@@ -709,6 +709,7 @@ sub _compare_and_clean {
 		push (@files, @{[<$out_base/*.fasta>]});
 		push (@files, @{[<$the_void/*.holdover>]});
 		push (@files, @{[<$the_void/*.section>]});
+		push (@files, "$the_void/query.masked.fasta");
 		push (@dirs, "$out_base/evaluator");
 	    }
 	    else{

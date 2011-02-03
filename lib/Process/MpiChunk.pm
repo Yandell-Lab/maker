@@ -30,14 +30,15 @@ sub new { #do not change or edit this
 	 $self = $arg->clone();
       }
       else {
-	 $self->{LEVEL} = $arg;
-	 my $VARS       = shift @args;
-	 $self->{ID}    = shift @args || "0:".$self->{LEVEL}.":0";
-	 $self->{RANK}  = shift @args || 0;
-	 $self->{FINISHED} = 0;
-	 $self->{FAILED}   = 0;
-	 $self->{VARS}     = {};
-	 $self->{RESULTS}  = {};
+	 my $VARS           = $arg;
+	 $self->{LEVEL}     = shift @args;
+	 $self->{TIER_TYPE} = shift @args || 0;
+	 $self->{ID}        = shift @args || "0:".$self->{LEVEL}.":".$self->{TIER_TYPE}.":0";
+	 $self->{RANK}      = 0;
+	 $self->{FINISHED}  = 0;
+	 $self->{FAILED}    = 0;
+	 $self->{VARS}      = {};
+	 $self->{RESULTS}   = {};
 
 	 $self->_initialize();
 	 $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
@@ -72,10 +73,12 @@ sub _initialize{
 
 sub _initialize_vars{
    my $self       = shift;
-   my $level      = $self->{LEVEL};
    my $VARS       = shift;	#this should be a hash reference
+   my $level      = $self->{LEVEL};
+   my $tier_type  = $self->{TIER_TYPE};
 
-   my @args = @{$self->_go('init', $level, $VARS)};
+
+   my @args = @{$self->_go('init', $VARS, $level, $tier_type)};
 
    foreach my $key (@args) {
       if (! exists $VARS->{$key}) {
@@ -86,9 +89,9 @@ sub _initialize_vars{
       }
    }
 }
-
 #--------------------------------------------------------------
 #gets called by MpiTiers after result is processed
+
 sub _finalize {
    my $self = shift;
    my $tier = shift; 
@@ -144,51 +147,8 @@ sub _on_failure {
 
    $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
 
-   return;
-}
-#--------------------------------------------------------------
-#gets called by MpiTiers object following termination
-sub _on_termination {
-   my $self = shift;
-   my $tier = shift;
-
-   #handle case of calling as function rather than method
-   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
-      $tier = $self;
-      $self = new Process::MpiChunk();
-   }
-
-   return if($tier->failed);
-   return if($tier->{VARS}{c_flag} <= 0);
-
-   $self->{RESULTS} = {};
-   my $tier_type = $tier->{VARS}->{tier_type};
-   if($tier_type == 1){
-      #only reach this point if termination is due to success
-      my $seq_id = $tier->{VARS}{seq_id};
-      my $out_dir = $tier->{VARS}{out_dir};
-      my $LOG = $tier->{VARS}{LOG};
-      my $LOCK = $tier->{VARS}{LOCK};
-      my $DS_CTL = $tier->{VARS}{DS_CTL};
-      
-      $DS_CTL->add_entry($seq_id, $out_dir, "FINISHED");
-      $LOCK->unlock; #releases locks on the log file
-      
-      $tier->{RESULTS} = {};
-   }
-   elsif($tier_type == 2){
-      $tier->{RESULTS}->{chunk} = $tier->{VARS}{chunk};
-   }
-   elsif($tier_type == 3){
-      $tier->{RESULTS}->{holdover_files} = $tier->{VARS}{holdover_files};
-      $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
-   }
-   elsif($tier_type == 4){
-      $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
-      $tier->{RESULTS}->{t_fastas} = $tier->{VARS}->{t_fastas};
-   }
-
-   delete($tier->{VARS});
+   $tier->{VARS} = {};
+   $tier->{RESULTS} = {};
 
    return;
 }
@@ -221,7 +181,7 @@ sub _should_continue {
 sub _prepare {
    my $self = shift;
    my $VARS = shift;
-   my $tier_type = $VARS->{tier_type} || 1;
+   my $tier_type = shift || 0;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
@@ -235,7 +195,7 @@ sub _prepare {
    #let child nodes decide on running chunk.
    #Other implementations let the root node decide
 
-   if($tier_type == 1){
+   if($tier_type == 0){
       #instantiate empty LOG
       $VARS->{LOG} = undef;
 
@@ -245,10 +205,10 @@ sub _prepare {
       $VARS->{p_fastas} = {};
       $VARS->{t_fastas} = {};
    }
-   elsif($tier_type == 2){
+   elsif($tier_type == 1){
 
    }
-   elsif($tier_type == 3){
+   elsif($tier_type == 2){
       #-set up variables that are heldover from last chunk
       $VARS->{holdover_blastn}          = [];
       $VARS->{holdover_blastx}          = [];
@@ -273,28 +233,30 @@ sub _prepare {
 #This function is called by MpiTiers.  It returns all the
 #chunks for a given level.  This allows for the number of
 #chunks created per level to be controlled within MpiChunks.
+#called as {CHUNK_REF}
 
 sub _loader {
    my $self = shift;
-   my $level = shift;
    my $VARS = shift;
-   my $tID  = shift;
+   my $level = shift;
+   my $tier_type = shift;
+   my $tier  = shift;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
-      $tID = $VARS;
-      $VARS = $level;
-      $level = $self;
+      $tier = $tier_type;
+      $tier_type = $level;
+      $level = $VARS;
+      $VARS = $self;
       $self = new Process::MpiChunk();
    }
 
-   if(! defined($tID) && $self->id){
-      ($tID) = split(':', $self->id);
-   }
+   my $rank = $tier->rank || 0;
 
-   my $chunks = $self->_go('load', $level, $VARS);
+   my $chunks = $self->_go('load', $VARS, $level, $tier_type);
    for (my $i = 0; $i < @{$chunks}; $i++){
-      $chunks->[$i]->id("$tID:$level:$i");
+      $chunks->[$i]->id("$rank:$level:$tier_type:$i");
+      $chunks->[$i]->parent($tier->id);
    }
 
    return $chunks;
@@ -304,16 +266,19 @@ sub _loader {
 
 sub run {
    my $self = shift;
-   my $level = $self->{LEVEL};
-   my $VARS = $self->{VARS};
+   my $rank = shift;
 
-   $self->{RANK} = shift || $self->{RANK};
+   my $VARS = $self->{VARS};
+   my $level = $self->{LEVEL};
+   my $tier_type = $self->{TIER_TYPE};
+
+   $self->{RANK} = $rank if(defined($rank));
 
    if ($self->{FINISHED} || $self->{FAILED}) {
       return undef;
    }
 
-   my $results = $self->_go('run', $level, $VARS);
+   my $results = $self->_go('run', $VARS, $level, $tier_type);
 
    $self->{VARS} = {};
    $self->{RESULTS} = $results;
@@ -333,20 +298,25 @@ sub run_all {shift->run(@_);}
 #--------------------------------------------------------------
 #this funcion is called by MakerTiers.  It returns the flow of
 #levels, i.e. order control, looping, etc.
+#called frm {CHUNK_REF}
 
 sub _flow {
    my $self = shift;
+   my $VARS = shift; 
    my $level = shift;
-   my $VARS = shift;
+   my $tier_type = shift;
+   my $tier = shift;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
-      $VARS = $level;
-      $level = $self;
+      $tier = $tier_type;
+      $tier_type = $level;
+      $level = $VARS;
+      $VARS = $self;
       $self = new Process::MpiChunk();
    }
 
-   return $self->_go('flow', $level, $VARS);
+   return $self->_go('flow', $VARS, $level, $tier_type);
 }
 #--------------------------------------------------------------
 #initializes chunk variables, runs code, or returns flow
@@ -356,10 +326,14 @@ sub _flow {
 sub _go {
    my $self = shift;
    my $flag = shift;
-   my $level = shift @_;
-   my $VARS = shift @_;
+   my $VARS = shift;
+   my $level = shift;
+   my $tier_type = shift;
 
-   my $tier_type = $VARS->{tier_type} || 1;
+   $VARS = $self->{VARS} if(! defined($VARS));
+   $level = $self->{LEVEL} if(! defined($level));
+   $tier_type = $self->{TIER_TYPE} if(! defined($tier_type));
+
    my $next_level = $level + 1;
    my $result_stat = 1;
    my @chunks;
@@ -370,13 +344,13 @@ sub _go {
 
    try{
       ##
-      ##TO TIER_TYPE 1
+      ##TO TIER_TYPE 0
       ##
-      if ($tier_type == 1 && $level == 0) { #examining contents of the fasta file and run log
+      if ($tier_type == 0 && $level == 0) { #examining contents of the fasta file and run log
 	 $level_status = 'examining contents of the fasta file and run log';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -447,11 +421,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 1) {	#set up GFF3 output and fasta chunks
+      elsif ($tier_type == 0 && $level == 1) {	#set up GFF3 output and fasta chunks
 	 $level_status = 'setting up GFF3 output and fasta chunks';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -520,12 +494,10 @@ sub _go {
 	    if(!$VARS->{CTL_OPT}{model_org} && !$VARS->{CTL_OPT}{rmlib} &&
 	       !$VARS->{CTL_OPT}{rm_gff} && !$VARS->{CTL_OPT}{repeat_protein}
 	       ){
-	       $VARS->{tier_type} = 1;
 	       $VARS->{masked_total_seq} = $VARS->{q_seq_ref};
 	       $next_level = 3;
 	    }
 	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
-	       $VARS->{tier_type} = 1;
 	       my $iterator = new Iterator::Fasta($VARS->{the_void}."/query.masked.fasta");
 	       my $fasta = $iterator->nextFastaRef();
 	       $VARS->{masked_total_seq} = Fasta::getSeqRef($fasta);
@@ -534,13 +506,12 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 2) {     #build masking tiers
+      elsif ($tier_type == 0 && $level == 2) {     #build masking tiers
 	 $level_status = 'builing masking tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER	    
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
-	       my %args = (tier_type   => 2,
-			   chunk       => $fchunk,
+	       my %args = (chunk       => $fchunk,
 			   order       => $fchunk->number,
 			   the_void    => $VARS->{the_void},
 			   safe_seq_id => $VARS->{safe_seq_id},
@@ -550,7 +521,9 @@ sub _go {
 			   LOG         => $VARS->{LOG},
 			   CTL_OPT     => $VARS->{CTL_OPT}
 			   );
-	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+
+	       my $tier_type = 1;
+	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
 	    #-------------------------CHUNKER
@@ -590,13 +563,13 @@ sub _go {
 	 }	    
       }	  
       ##
-      ##TO TIER_TYPE 2
+      ##TO TIER_TYPE 1
       ##
-      elsif ($tier_type == 2 && $level == 0) {	#do repeat masking
+      elsif ($tier_type == 1 && $level == 0) {	#do repeat masking
 	 $level_status = 'doing repeat masking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -689,7 +662,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 1) {	#blastx repeat mask
+      elsif ($tier_type == 1 && $level == 1) {	#blastx repeat mask
 	 $level_status = 'doing blastx repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -711,7 +684,7 @@ sub _go {
 	       $VARS->{db} = $db;
 	       $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
 	       $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
-	       my $chunk = new Process::MpiChunk($level, $VARS);
+	       my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	       push(@chunks, $chunk);
 	    }
 	    delete($VARS->{db});
@@ -781,12 +754,12 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 2) {	#collect blastx repeatmask
+      elsif ($tier_type == 1 && $level == 2) {	#collect blastx repeatmask
 	 $level_status = 'collecting blastx repeatmasking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    #build chunks
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -840,11 +813,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 3) {	#process all repeats
+      elsif ($tier_type == 1 && $level == 3) {	#process all repeats
 	 $level_status = 'processing all repeats';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -906,13 +879,13 @@ sub _go {
 	 }
       }
       ##
-      ##RETURN TO TIER_TYPE 1
+      ##RETURN TO TIER_TYPE 0
       ##
-      elsif ($tier_type == 1 && $level == 3) {	#prep masked sequence and abinits
+      elsif ($tier_type == 0 && $level == 3) {	#prep masked sequence and abinits
 	 $level_status = 'preparing masked sequence and ab-inits';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -1005,7 +978,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 4){
+      elsif ($tier_type == 0 && $level == 4){
 	 $level_status = 'preparing new fasta chunk tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1032,8 +1005,7 @@ sub _go {
 	       my $preds_on_chunk = GI::get_preds_on_chunk($VARS->{preds},
 							   $fchunk
 							   );
-	       my %args = (tier_type    => 3,
-                           chunk        => $fchunk,
+	       my %args = (chunk        => $fchunk,
                            order        => $order,
 			   the_void     => $VARS->{the_void},
 			   q_def        => $VARS->{q_def},
@@ -1049,7 +1021,8 @@ sub _go {
 			   masked_total_seq => $VARS->{masked_total_seq},
 			   );
 
-               my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+	       my $tier_type = 2;
+               my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
                push(@chunks, $tier); #really a tier
 	    }
 	    delete($VARS->{preds});
@@ -1085,7 +1058,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 0) {	#blastn
+      elsif ($tier_type == 2 && $level == 0) {	#blastn
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1107,7 +1080,7 @@ sub _go {
 		$VARS->{db} = $db;
 		$VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
 		$fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
-		my $chunk = new Process::MpiChunk($level, $VARS);
+		my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 		push(@chunks, $chunk);
 	    }
 	    delete($VARS->{db});
@@ -1172,11 +1145,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 1) {	#collect blastn
+      elsif ($tier_type == 2 && $level == 1) {	#collect blastn
 	 $level_status = 'collecting blastn reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -1333,7 +1306,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 2) {	#exonerate ESTs
+      elsif ($tier_type == 2 && $level == 2) {	#exonerate ESTs
 	 $level_status = 'polishig ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1359,7 +1332,7 @@ sub _go {
 	    for(my $i = 0; $i < @data_sets; $i++){
                 $VARS->{dc}  = $data_sets[$i];
                 $VARS->{id} = $i;
-                my $chunk = new Process::MpiChunk($level, $VARS);
+                my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
                 push(@chunks, $chunk);
             }
 	    delete($VARS->{dc});
@@ -1483,11 +1456,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 3) {	#further cluster
+      elsif ($tier_type == 2 && $level == 3) {	#further cluster
 	 $level_status = 'flattening EST clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    delete($VARS->{_clust_flag});
 	    #-------------------------CHUNKER
@@ -1539,7 +1512,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }  
-      elsif ($tier_type == 3 && $level == 4) {	#tblastx
+      elsif ($tier_type == 2 && $level == 4) {	#tblastx
 	 $level_status = 'doing tblastx of alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1561,7 +1534,7 @@ sub _go {
                 $VARS->{db} = $db;
                 $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
                 $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
-                my $chunk = new Process::MpiChunk($level, $VARS);
+                my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
                 push(@chunks, $chunk);
             }
 	    delete($VARS->{db});
@@ -1624,11 +1597,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 5) {	#collect tblastx
+      elsif ($tier_type == 2 && $level == 5) {	#collect tblastx
 	 $level_status = 'collecting tblastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -1786,7 +1759,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 6) {	#exonerate alt-ESTs
+      elsif ($tier_type == 2 && $level == 6) {	#exonerate alt-ESTs
 	 $level_status = 'polishing alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1803,7 +1776,7 @@ sub _go {
 	    for(my $i = 0; $i < @data_sets; $i++){
 	       $VARS->{dc}  = $data_sets[$i];
 	       $VARS->{id} = $i;
-	       my $chunk = new Process::MpiChunk($level, $VARS);
+	       my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	       push(@chunks, $chunk);
 	    }
 	    delete($VARS->{dc});
@@ -1926,11 +1899,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 7) {	#further cluster
+      elsif ($tier_type == 2 && $level == 7) {	#further cluster
 	 $level_status = 'flattening altEST clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    delete($VARS->{_clust_flag});
 	    #-------------------------CHUNKER
@@ -1982,7 +1955,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }  
-      elsif ($tier_type == 3 && $level == 8) {	#blastx
+      elsif ($tier_type == 2 && $level == 8) {	#blastx
 	 $level_status = 'doing blastx of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2004,7 +1977,7 @@ sub _go {
                 $VARS->{db} = $db;
                 $VARS->{LOG_FLAG} = (!$2) ? 1 : 0;
                 $fin{$blast_finished} = -e $blast_finished if($VARS->{LOG_FLAG});
-                my $chunk = new Process::MpiChunk($level, $VARS);
+                my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
                 push(@chunks, $chunk);
             }
 	    delete($VARS->{db});
@@ -2069,11 +2042,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 9) {	#collect blastx
+      elsif ($tier_type == 2 && $level == 9) {	#collect blastx
 	 $level_status = 'collecting blastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -2232,7 +2205,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 10) {	#exonerate proteins
+      elsif ($tier_type == 2 && $level == 10) {	#exonerate proteins
 	 $level_status = 'polishing proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2249,7 +2222,7 @@ sub _go {
 	    for(my $i = 0; $i < @data_sets; $i++){
                 $VARS->{dc}  = $data_sets[$i];
                 $VARS->{id} = $i;
-		my $chunk = new Process::MpiChunk($level, $VARS);
+		my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 		push(@chunks, $chunk);
 	    }
 	    delete($VARS->{dc});
@@ -2372,11 +2345,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 11) {	#further cluster
+      elsif ($tier_type == 2 && $level == 11) {	#further cluster
 	 $level_status = 'flattening protein clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    delete($VARS->{_clust_flag});
 	    #-------------------------CHUNKER
@@ -2428,11 +2401,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 12) {	#prepare section files
+      elsif ($tier_type == 2 && $level == 12) {	#prepare section files
 	 $level_status = 'prepare section files';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -2646,11 +2619,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 5) {	#process section files
+      elsif ($tier_type == 0 && $level == 5) {	#process section files
 	 $level_status = 'processing the chunk divide';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -2756,7 +2729,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 6) {     #build annotation tiers
+      elsif ($tier_type == 0 && $level == 6) {     #build annotation tiers
 	 $level_status = 'builing annotation tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2769,8 +2742,7 @@ sub _go {
 	       my ($file) = grep {/\.$order\.final\.section$/} @$section_files;
 	       my $section = retrieve($file);
 	       my %args = (%$section,
-			   (tier_type          => 4,
-			    chunk              => $fchunk,
+			   (chunk              => $fchunk,
 			    order              => $order,
 			    the_void           => $VARS->{the_void},
 			    safe_seq_id        => $VARS->{safe_seq_id},
@@ -2784,7 +2756,8 @@ sub _go {
 			    CTL_OPT            => $VARS->{CTL_OPT},
 			    LOG                => $VARS->{LOG})
 			   );
-	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF});
+	       my $tier_type = 3;
+	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
 	    #-------------------------CHUNKER
@@ -2821,11 +2794,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }	    
       }
-      elsif ($tier_type == 4 && $level == 0) {	#prep hint clusters
+      elsif ($tier_type == 3 && $level == 0) {	#prep hint clusters
 	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -2940,7 +2913,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 4 && $level == 1) {	#annotate transcripts
+      elsif ($tier_type == 3 && $level == 1) {	#annotate transcripts
 	 $level_status = 'annotating transcripts';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2953,7 +2926,7 @@ sub _go {
 	    foreach my $dc (@data_sets){
                 $VARS->{dc} = $dc;
 		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
-                my $chunk = new Process::MpiChunk($level, $VARS);
+                my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
                 push(@chunks, $chunk);
             }
 	    delete($VARS->{dc});
@@ -3020,11 +2993,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 4 && $level == 2) {	#grouping transcripts into genes
+      elsif ($tier_type == 3 && $level == 2) {	#grouping transcripts into genes
 	 $level_status = 'clustering transcripts into genes for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -3079,7 +3052,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 4 && $level == 3) {	#adding quality control statistics
+      elsif ($tier_type == 3 && $level == 3) {	#adding quality control statistics
 	 $level_status = 'adding statistics to annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3096,7 +3069,7 @@ sub _go {
 	    foreach my $an (@data_sets){
 		$VARS->{an} = $an;
 		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
-		my $chunk = new Process::MpiChunk($level, $VARS);
+		my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 		push(@chunks, $chunk);
 	    }
 
@@ -3147,11 +3120,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 4 && $level == 4) {	#deciding on final annotations
+      elsif ($tier_type == 3 && $level == 4) {	#deciding on final annotations
 	 $level_status = 'choosing best annotation set';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -3236,11 +3209,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 4 && $level == 5) {	#local output
+      elsif ($tier_type == 3 && $level == 5) {	#local output
 	 $level_status = 'processing chunk output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------Chunker
 	 }
@@ -3328,11 +3301,11 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 1 && $level == 7) {	#global output
+      elsif ($tier_type == 0 && $level == 7) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($level, $VARS);
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -3408,12 +3381,6 @@ sub _go {
       $self->_handler($E, $level_status, $tag);
    };
 
-   print $level_status."\n" if($flag eq 'run');
-   if($flag eq 'init'){
-      $VARS->{tier_type} = $tier_type;
-      push(@args, 'tier_type');
-   }
-
    #return args list for initializing
    return \@args if($flag eq 'init');
    #return results after running
@@ -3429,6 +3396,50 @@ sub _go {
    #should never reach this line
    die "FATAL: \'$flag\' is not a valid flag in MpiChunk _go!!\n";
 }
+#--------------------------------------------------------------
+#gets called by MpiTiers object following termination
+#called from {CHUNK_REF}
+sub _on_termination {
+   my $self = shift;
+   my $tier = shift;
+   my $tier_type = $tier->{TIER_TYPE};
+
+   #handle case of calling as function rather than method
+   if ($self ne "Process::MpiChunk" && ref($self) ne "Process::MpiChunk") {
+      $tier = $self;
+      $self = new Process::MpiChunk();
+   }
+
+   return if($tier->failed);
+   return if($tier->{VARS}{c_flag} <= 0);
+
+   #only reach this point if termination is due to success
+   $self->{RESULTS} = {};
+
+   if($tier_type == 0){
+      $tier->{VARS}{DS_CTL}->add_entry($tier->{VARS}{seq_id},
+				       $tier->{VARS}{out_dir},
+				       "FINISHED");
+      $$tier->{VARS}{LOCK}->unlock; #releases locks on the log file
+      
+      $tier->{RESULTS} = {};
+   }
+   elsif($tier_type == 1){
+      $tier->{RESULTS}->{chunk} = $tier->{VARS}{chunk};
+   }
+   elsif($tier_type == 2){
+      $tier->{RESULTS}->{holdover_files} = $tier->{VARS}{holdover_files};
+      $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
+   }
+   elsif($tier_type == 3){
+      $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
+      $tier->{RESULTS}->{t_fastas} = $tier->{VARS}->{t_fastas};
+   }
+
+   delete($tier->{VARS});
+
+   return;
+}
 
 #--------------------------------------------------------------
 #reaches inside MpiTiers->{VARS} and places result in the 
@@ -3442,13 +3453,17 @@ sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
    my $level = shift;
+   my $tier_type = shift;
+   my $tier = shift;
+
    $level = $self->{LEVEL} if(!defined($level));
+   $tier_type = $self->{TIER_TYPE} if(!defined($tier_type));
 
    #only return results for finished/succesful chunks
    return if (! $self->finished || $self->failed);
 
    #do level specific result processing
-   return $self->_go('result', $level, $VARS);
+   return $self->_go('result', $VARS, $level, $tier_type);
 }
 #--------------------------------------------------------------
 #sorts chunks for the tier into a more convenient order (optional)
@@ -3456,6 +3471,8 @@ sub _sort_levels{
    my $self = shift;
    my $chunks = shift;
    my $level = shift;
+   my $tier_type = shift;
+   my $tier = shift;
 
    #sorts by fasta chunk order then by level
    #so all levels on fasta chunk 1 get processed before chunk 2
@@ -3522,11 +3539,25 @@ sub id {
    my $self = shift;
    my $arg = shift;
 
-   if ($arg) {
+   if (defined($arg)) {
       $self->{ID} = $arg;
    }
 
    return $self->{ID};
+}
+#--------------------------------------------------------------
+#returns the parent id
+#use this to identify correct tier to add to 
+
+sub parent {
+   my $self = shift;
+   my $arg = shift;
+
+   if (defined($arg)) {
+      $self->{PARENT} = $arg;
+   }
+
+   return $self->{PARENT};
 }
 #--------------------------------------------------------------
 #return level the chunk is working on
@@ -3560,6 +3591,8 @@ sub _handler {
    
    if($tag eq 'handle'){
       $self->{FAILED} = 1;
+      $self->{RESULTS} = {};
+      $self->{VARS} = {};
       $self->{EXCEPTION} = $E;
    }
    else{

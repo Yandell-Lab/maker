@@ -22,9 +22,7 @@ $Storable::forgive_me = 1; #allows serializaion of objects with code refs
 #returns a new MpiTier object
 sub new {
    my ($class, @args) = @_;
-
    my $self = {};
-   
    bless ($self, $class);
    
    if (@args) {
@@ -33,21 +31,26 @@ sub new {
 	 $self = $arg->clone();
       }
       else {
-	  my $VARS           = $arg; #this should be a hash ref
+	  $self->{VARS}      = $arg; #this should be a hash ref
 	  $self->{TIER_ID}   = shift @args || 0;
-	  $self->{RANK}      = $self->{TIER_ID};
+	  $self->{RANK}      = (split(':', $self->{TIER_ID}))[0];
+	  $self->{PARENT}    = $self->{TIER_ID};
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
 	  $self->{INTERRUPT} = 0;
+
 
 	  #optionaly override chunk type
 	  $self->{CHUNK_REF} = shift @args || "Process::MpiChunk";
 	  eval "require ". $self->{CHUNK_REF};
 	  $self->{CHUNK_REF} = $self->{CHUNK_REF}->new(); #turn into object
 
+          #set up tier_type for tiers within tiers
+          $self->{TIER_TYPE} = shift @args || 0;
+
 	  #setup the tier
 	  $self->_initialize_level(0);
-	  $self->_prepare($VARS);
+	  $self->_prepare();
       }
    }
 
@@ -60,12 +63,11 @@ sub new {
 
 sub _prepare {
    my $self = shift;
-   my $VARS = shift;
-
-   $self->{VARS} = $VARS;
+   my $VARS = $self->{VARS};
+   my $tier_type = $self->{TIER_TYPE};
 
    try{
-      $self->{CHUNK_REF}->_prepare($VARS);
+      $self->{CHUNK_REF}->_prepare($VARS, $tier_type);
    }
    catch Error::Simple with {
       my $E = shift;
@@ -124,6 +126,7 @@ sub _initialize_level {
       $self->{LEVEL}{$level}{FINISHED} = 0;
    }
 
+   #--initiate all-level variables
    if(! $self->{LEVEL}{ALL}){
       $self->{LEVEL}{ALL}{CHUNK_COUNT} = 0;
       $self->{LEVEL}{ALL}{RESULT_COUNT} = 0;
@@ -152,12 +155,14 @@ sub go_to_level {
 
     return $self->_initialize_level($level);
 }
+
 #--------------------------------------------------------------
 #itteratively gets the next chunk from the tier.  It returns
 #undef if there is no chunk, or if the tier cannot yet advance
 
 sub next_chunk {
    my $self = shift;
+   my $chunk_first = shift;
 
    return undef if ($self->terminated || $self->failed);
 
@@ -175,12 +180,52 @@ sub next_chunk {
    #get level after doing any necessary moves to next level
    my $level = $self->{LEVEL}{CURRENT};
 
+   #if flag is set, try and return MpiChunks first over Mpi Tiers
+   if($chunk_first){
+      my @skip;
+      my $chunk;
+      while(($chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}})){
+	 if(ref($chunk) eq ref($self)){
+	    push(@skip, $chunk);
+	    next;
+	 }
+	 else{
+	    last;
+	 }
+      }
+      unshift(@{$self->{LEVEL}{ALL}{CHUNKS}}, @skip);
+      return $chunk if($chunk);
+   }
+   
    if (my $chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}}) {
       return $chunk;
    }
    else{
       return undef;
    }
+}
+
+#--------------------------------------------------------------
+#fill in all chunks and levels to maximum without running
+
+sub actualize {
+   my $self = shift;
+
+   return if ($self->terminated || $self->failed);
+
+   #handle levels that have no chunks to run
+   while($self->_level_finished){
+       $self->_next_level;
+       $self->_load_chunks;
+       $self->_load_extra if($self->{LEVEL}{EXTRA});
+   }
+   
+   #handle case where level needs to be initialized
+   $self->_load_chunks if(! $self->_level_started);
+   $self->_load_extra if($self->{LEVEL}{EXTRA});
+
+   #get level after doing any necessary moves to next level
+   my $level = $self->{LEVEL}{CURRENT};
 }
 
 #--------------------------------------------------------------
@@ -199,7 +244,7 @@ sub run {
    $self->_load_chunks if (!$self->_level_started);
    $self->_load_extra if($self->{LEVEL}{EXTRA});
 
-   while ($self->num_chunks == 1 && ref($self->{LEVEL}{ALL}{CHUNKS}[0]) ne 'Parallel::MpiTier'){
+   while ($self->num_chunks == 1 && ref($self->{LEVEL}{ALL}{CHUNKS}[0]) ne ref($self)){
        my $chunk = $self->next_chunk;
        $chunk->run($self->rank);
        $self->update_chunk($chunk);
@@ -243,7 +288,9 @@ sub run_all {
 
 sub _next_level {
    my $self = shift;
+   my $VARS = $self->{VARS};
    my $level = $self->{LEVEL}{CURRENT};
+   my $tier_type = $self->{TIER_TYPE};
 
    return if ($self->terminated || $self->failed);
 
@@ -258,7 +305,7 @@ sub _next_level {
    my $next_level;
 
    try {
-      $next_level = $self->{CHUNK_REF}->_flow($level, $self->{VARS});
+      $next_level = $self->{CHUNK_REF}->_flow($VARS, $level, $tier_type, $self);
 
       #---------------#temp
       #report the clock usage at each level in seconds
@@ -295,7 +342,9 @@ sub _next_level {
 
 sub _load_chunks {
    my $self = shift;
+   my $VARS = $self->{VARS};
    my $level = $self->{LEVEL}{CURRENT};
+   my $tier_type = $self->{TIER_TYPE};
 
    return if ($self->terminated || $self->failed);
    return if ($self->_level_started);
@@ -303,7 +352,7 @@ sub _load_chunks {
    my $chunks;
 
    try {
-      $chunks = $self->{CHUNK_REF}->_loader($level, $self->{VARS}, $self->rank);
+      $chunks = $self->{CHUNK_REF}->_loader($VARS, $level, $tier_type, $self);
    }
    catch Error::Simple with {
       my $E = shift;
@@ -328,6 +377,7 @@ sub _load_chunks {
 sub _load_extra {
    my $self = shift;
    my $level = $self->{LEVEL}{CURRENT};
+   my $tier_type = $self->{TIER_TYPE};
 
    return if ($self->terminated || $self->failed);
 
@@ -341,7 +391,8 @@ sub _load_extra {
       $self->{LEVEL}{EXTRA} = 0;
 
       #sort to specified order if any
-      $self->{LEVEL}{ALL}{CHUNKS} = $self->{CHUNK_REF}->_sort_levels($self->{LEVEL}{ALL}{CHUNKS}, $level)
+      my $all = $self->{LEVEL}{ALL};
+      $all->{CHUNKS} = $self->{CHUNK_REF}->_sort_levels($all->{CHUNKS}, $level, $tier_type, $self)
 	if($self->{CHUNK_REF}->can('_sort_levels'));
    }
 }
@@ -354,11 +405,18 @@ sub update_chunk {
 
    #get chuck id
    my $id = $chunk->id();
-   my ($tier_id, $level_num, $chunk_num) = split (":", $id);
+   my $parent = $chunk->parent();
+   my ($tier_id, $level_num, $tier_type, $chunk_num) = split (":", $id);
+
+   #handles older 3 level IDs
+   if(! defined($chunk_num)){
+      $chunk_num = $tier_type;
+      $tier_type = 0;
+   }
 
    #check if chunk goes with tier/level
-   if($tier_id != $self->rank()){
-      die "ERROR:  This MpiChunk is not part of this MpiTier\n";
+   if($parent ne $self->id){
+      die "ERROR:  This MpiChunk does not belong to this MpiTier\n";
    }
    if(! $self->_level_started($level_num) || $self->_level_finished($level_num)){
       die "ERROR:  This MpiChunk is not part of this level\n";
@@ -371,8 +429,8 @@ sub update_chunk {
    }
    else{
       #let the chunk add results to $self->{VARS}
-      my $stat = $chunk->_result($self->{VARS}, $level_num);
-      
+      my $VARS = $self->{VARS};
+      my $stat = $chunk->_result($VARS, $level_num, $tier_type, $self);
       $chunk->_finalize($self) if($stat && $chunk->can('_finalize'));
    }
 
@@ -388,6 +446,7 @@ sub _result{
    my $self = shift;
    my $VARS = shift;            #this ia a hash reference
    my $level = shift;
+   my $tier_type = shift;
 
    #only return results for finished/succesful chunks
    return if (! $self->terminated || $self->failed);
@@ -397,7 +456,7 @@ sub _result{
    $self->{CHUNK_REF}->{VARS} = {};
    $self->{CHUNK_REF}->{FINISHED} = 1;
 
-   return $self->{CHUNK_REF}->_result($VARS, $level);
+   return $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
 }
 #--------------------------------------------------------------
 #returns true if level is finished
@@ -592,6 +651,20 @@ sub id {
    }
 
    return $self->{TIER_ID};
+}
+#--------------------------------------------------------------
+#returns the parent id
+#use this to identify parent of tiers in rtiers
+
+sub parent {
+   my $self = shift;
+   my $arg = shift;
+
+   if (defined($arg)) {
+      $self->{PARENT} = $arg;
+   }
+
+   return $self->{PARENT};
 }
 #-------------------------------------------------------------
 #returns the id of the tier (split on ':')
