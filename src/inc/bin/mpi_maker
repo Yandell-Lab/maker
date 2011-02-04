@@ -439,7 +439,9 @@ if ($rank == $root) {
     #---main code for distribution of mpi data starts here    
 
     #thread for root node to do other things than just manage mpi
-    $t_need_flag = ($main::no_threads) ? 0 : 1; #set to true for threads false for no threads
+    #no thread if size is > 10 as it starts to affect node management
+    #also no thereads if not threaded perl
+    $t_need_flag = ($main::no_threads || $size > 10) ? 0 : 1;
     my $thr = threads->create(\&node_thread) if($t_need_flag);
 
     my $go_mpi_status = 1;
