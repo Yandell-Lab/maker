@@ -33,7 +33,7 @@ sub new {
       else {
 	  $self->{VARS}      = $arg; #this should be a hash ref
 	  $self->{TIER_ID}   = shift @args || 0;
-	  $self->{RANK}      = (split(':', $self->{TIER_ID}))[0];
+	  $self->{RANK}      = undef;
 	  $self->{PARENT}    = $self->{TIER_ID};
 	  $self->{TERMINATE} = 0;
 	  $self->{FAILED}    = 0;
@@ -164,6 +164,9 @@ sub next_chunk {
    my $self = shift;
    my $chunk_first = shift;
 
+   warn "WARNING: You must always set a rank before running MpiTiers\n"
+       if(! defined $self->{RANK});
+
    return undef if ($self->terminated || $self->failed);
 
    #handle levels that have no chunks to run
@@ -210,6 +213,11 @@ sub next_chunk {
 
 sub actualize {
    my $self = shift;
+   my $rank = shift;
+
+   $self->{RANK} = $rank if(defined($rank));
+   warn "WARNING: You must always set a rank before running MpiTiers\n"
+       if(! defined $self->{RANK});
 
    return if ($self->terminated || $self->failed);
 
@@ -235,7 +243,9 @@ sub run {
    my $self = shift;
    my $rank = shift;
 
-   $self->{RANK} = $rank if($rank);
+   $self->{RANK} = $rank if(defined($rank));
+   warn "WARNING: You must always supply a rank before running MpiTiers\n"
+       if(! defined ($self->{RANK}));
 
    return if ($self->terminated && ! $self->failed);
    return if ($self->_level_started && ! $self->_level_finished);
@@ -264,7 +274,10 @@ sub run_all {
    my $self = shift;
    my $rank = shift;
 
-   $self->{RANK} = $rank if($rank);
+   $self->{RANK} = $rank if(defined($rank));
+
+   warn "WARNING: You must always supply a rank before running MpiTiers\n"
+       if(! defined ($self->{RANK}));
 
    return if ($self->terminated || $self->failed);
    return if ($self->_level_started && ! $self->_level_finished);
@@ -425,13 +438,16 @@ sub update_chunk {
    #check run status
    if($chunk->failed){
       my $E = $chunk->exception;
-      $self->_handler($E, "Chunk failed at level $level_num\n");
+      $self->_handler($E, "Chunk failed at level:$level_num, tier_type:$tier_type\n");
    }
-   else{
+   elsif($chunk->terminated){
       #let the chunk add results to $self->{VARS}
       my $VARS = $self->{VARS};
       my $stat = $chunk->_result($VARS, $level_num, $tier_type, $self);
       $chunk->_finalize($self) if($stat && $chunk->can('_finalize'));
+   }
+   else{
+       die "ERROR: Logic error, attempt to update unfinished chunk\n";
    }
 
    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;    
@@ -588,6 +604,14 @@ sub error{
    return $self->{ERROR} || '';
 }
 #-------------------------------------------------------------
+#returns whatevever is strored in $self->{VARS}->{fasta}
+
+sub fasta{
+   my $self = shift;
+
+   return $self->{VARS}->{fasta} || '';
+}
+#-------------------------------------------------------------
 #returns the value of the current level
 
 sub current_level{
@@ -680,6 +704,11 @@ sub id_safe {
 
 sub rank {
    my $self = shift @_;
+   my $arg = shift @_;
+
+   if($arg){
+       $self->{RANK} = $arg;
+   }
 
    return $self->{RANK};
 }
@@ -708,6 +737,13 @@ sub _on_termination {
    my $self = shift;
 
    return $self->{CHUNK_REF}->_on_termination($self);
+}
+
+#-------------------------------------------------------------
+sub exception {
+    my $self = shift;
+
+    return $self->{EXCEPTION};
 }
 #-------------------------------------------------------------
 #exception handler

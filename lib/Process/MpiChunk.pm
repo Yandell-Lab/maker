@@ -251,7 +251,7 @@ sub _loader {
       $self = new Process::MpiChunk();
    }
 
-   my $rank = $tier->rank || 0;
+   my $rank = $tier->rank;
 
    my $chunks = $self->_go('load', $VARS, $level, $tier_type);
    for (my $i = 0; $i < @{$chunks}; $i++){
@@ -519,11 +519,12 @@ sub _go {
 			   GFF_DB      => $VARS->{GFF_DB},
 			   GFF3        => $VARS->{GFF3},
 			   LOG         => $VARS->{LOG},
+			   DS_CTL      => $VARS->{DS_CTL},
 			   CTL_OPT     => $VARS->{CTL_OPT}
 			   );
 
 	       my $tier_type = 1;
-	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
+	       my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
 	    #-------------------------CHUNKER
@@ -1016,13 +1017,14 @@ sub _go {
 			   GFF_DB       => $VARS->{GFF_DB},
 			   GFF3         => $VARS->{GFF3},
 			   LOG          => $VARS->{LOG},
+			   DS_CTL      => $VARS->{DS_CTL},
 			   CTL_OPT      => $VARS->{CTL_OPT},
 			   preds_on_chunk => $preds_on_chunk,
 			   masked_total_seq => $VARS->{masked_total_seq},
 			   );
 
 	       my $tier_type = 2;
-               my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
+               my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
                push(@chunks, $tier); #really a tier
 	    }
 	    delete($VARS->{preds});
@@ -1342,7 +1344,7 @@ sub _go {
 	    $VARS->{blastn_keepers} = []; #reset
 	    $VARS->{exonerate_e_clusters} = []; #reset
 	    $VARS->{blastn_clusters} = []; #reset
-	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
+	    $VARS->{_clust_flag} = (@chunks > 10) ? 1 : 0;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -1430,10 +1432,12 @@ sub _go {
 	    my $blastn_clusters = [];
 	    my $exonerate_e_clusters = [];
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-	       $blastn_clusters = cluster::clean_and_cluster($blastn_keepers, $q_seq_ref, 20);
+	       $blastn_clusters = (@$blastn_keepers > 50) ?
+		   cluster::clean_and_cluster(20, $q_seq_ref, $blastn_keepers) : $blastn_keepers;
 	    }
 	    else{
-	       $exonerate_e_clusters = cluster::clean_and_cluster($exonerate_e_data, $q_seq_ref, 20);
+	       $exonerate_e_clusters = (@$exonerate_e_data > 50) ?
+		   cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_e_data) : $exonerate_e_data;
 	    }
 	    #-------------------------CODE
 
@@ -1479,12 +1483,12 @@ sub _go {
 	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
 	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
 	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $flag = $VARS->{_clust_flag};
+	    my $flag = $VARS->{_clust_flag};	    
 
 	    #further combine and cluster
 	    if($flag){
-	       $blastn_clusters = cluster::clean_and_cluster($blastn_clusters, $q_seq_ref, 20);
-	       $exonerate_e_clusters = cluster::clean_and_cluster($exonerate_e_clusters, $q_seq_ref, 20);
+	       $blastn_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $blastn_clusters);
+	       $exonerate_e_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_e_clusters);
 	    }
 
 	    my $blastn_keepers = GI::flatten($blastn_clusters);
@@ -1764,10 +1768,10 @@ sub _go {
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    #set max chunks
-	    #my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
-	    #my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
-	    #$size = 1 if(! $size);
-	    my $size = 1; #write now exonerate is skipped
+	    my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
+	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
+	    $size = 1 if(! $size);
+	    #my $size = 1; #write now exonerate is skipped
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
 	       my $j = $i % $size;
@@ -1781,11 +1785,12 @@ sub _go {
 	    }
 	    delete($VARS->{dc});
 	    delete($VARS->{id});
+
 	    $VARS->{exonerate_a_data} = []; #reset
 	    $VARS->{tblastx_keepers} = []; #reset
 	    $VARS->{exonerate_a_clusters} = []; #reset
 	    $VARS->{tblastx_clusters} = []; #reset
-	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
+	    $VARS->{_clust_flag} = (@chunks > 10) ? 1 : 0;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -1869,20 +1874,15 @@ sub _go {
 	    $GFF3->add_phathits($tblastx_keepers);
 	    $GFF3->add_phathits($exonerate_a_data);
 
-	    #tblastx will be empty from this point on in the script if eukaryotic
-	    my $tblastx_clusters = [];
-	    my $exonerate_a_clusters = [];
-	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-	       $tblastx_clusters = cluster::clean_and_cluster($tblastx_keepers, $q_seq_ref, 20);
-	    }
-	    else{
-	       $exonerate_a_clusters = cluster::clean_and_cluster($exonerate_a_data, $q_seq_ref, 20);
-	    }
+	    my $tblastx_clusters = (@$tblastx_keepers > 50) ?
+		cluster::clean_and_cluster(20, $q_seq_ref, $tblastx_keepers) : $tblastx_keepers;
+	    my $exonerate_a_clusters = (@$exonerate_a_data > 50) ?
+		cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_a_data) : $exonerate_a_data;
 	    #-------------------------CODE
 
 	    #------------------------RETURN
 	    %results = ( exonerate_a_clusters => $exonerate_a_clusters,
-			 tblastx_clusters => $tblastx_clusters,
+			 tblastx_clusters => $tblastx_clusters
 			);
 	    #------------------------RETURN
 	 }
@@ -1899,7 +1899,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 7) {	#further cluster
+      elsif ($tier_type == 2 && $level == 7) {	#further cluster and flatten
 	 $level_status = 'flattening altEST clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1926,8 +1926,8 @@ sub _go {
 
 	    #further combine and cluster
 	    if($flag){
-	       $tblastx_clusters = cluster::clean_and_cluster($tblastx_clusters, $q_seq_ref, 20);
-	       $exonerate_a_clusters = cluster::clean_and_cluster($exonerate_a_clusters, $q_seq_ref, 20);
+	       $tblastx_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $tblastx_clusters);
+	       $exonerate_a_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_a_clusters);
 	    }
 
 	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
@@ -2227,11 +2227,12 @@ sub _go {
 	    }
 	    delete($VARS->{dc});
 	    delete($VARS->{id});
+
 	    $VARS->{exonerate_p_data} = []; #reset
 	    $VARS->{blastx_keepers} = []; #reset
 	    $VARS->{exonerate_p_clusters} = []; #reset
 	    $VARS->{blastx_clusters} = []; #reset
-	    $VARS->{_clust_flag} = (@chunks > 1) ? 1 : 0;
+	    $VARS->{_clust_flag} = (@chunks > 10) ? 1 : 0;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -2316,14 +2317,10 @@ sub _go {
 	    $GFF3->add_phathits($exonerate_p_data);
 
 	    #blastx will be empty from this point on in the script if eukaryotic
-	    my $blastx_clusters = [];
-	    my $exonerate_p_clusters = [];
-	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-	       $blastx_clusters = cluster::clean_and_cluster($blastx_keepers, $q_seq_ref, 20);
-	    }
-	    else{
-	       $exonerate_p_clusters = cluster::clean_and_cluster($exonerate_p_data, $q_seq_ref, 20);
-	    }
+	    my $blastx_clusters = (@$blastx_keepers > 50) ?
+		cluster::clean_and_cluster(20, $q_seq_ref, $blastx_keepers) : $blastx_keepers;
+	    my $exonerate_p_clusters = (@$exonerate_p_data > 50) ?
+		cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_p_data) : $exonerate_p_data;
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2372,8 +2369,8 @@ sub _go {
 
 	    #further combine and cluster
 	    if($flag){
-	       $blastx_clusters = cluster::clean_and_cluster($blastx_clusters, $q_seq_ref, 20);
-	       $exonerate_p_clusters = cluster::clean_and_cluster($exonerate_p_clusters, $q_seq_ref, 20);
+	       $blastx_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $blastx_clusters);
+	       $exonerate_p_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_p_clusters);
 	    }
 
 	    my $blastx_keepers = GI::flatten($blastx_clusters);
@@ -2489,7 +2486,19 @@ sub _go {
 							      );
 	       $GFF3->add_phathits($pred_gff_keepers);
 	    }
+
+	    #trim evidence down to size if specified
+	    my @sets = ($est_gff_keepers,
+			$altest_gff_keepers,
+			$prot_gff_keepers);
 	    
+	    #replace actual values
+	    foreach my $set (@sets) {
+		if(@$set > 50){
+		    @$set = map {@$_} @{cluster::clean_and_cluster(20, $q_seq_ref, $set)};
+		}
+	    }
+
 	    my %section = (est_gff_keepers => $est_gff_keepers,
 			   altest_gff_keepers => $altest_gff_keepers,
 			   prot_gff_keepers => $prot_gff_keepers,
@@ -2753,11 +2762,12 @@ sub _go {
 			    masked_total_seq   => $VARS->{masked_total_seq},
 			    section_files      => $VARS->{section_files},
 			    GFF3               => $VARS->{GFF3},
-			    CTL_OPT            => $VARS->{CTL_OPT},
-			    LOG                => $VARS->{LOG})
+			    LOG                => $VARS->{LOG},
+			    DS_CTL             => $VARS->{DS_CTL},
+			    CTL_OPT            => $VARS->{CTL_OPT})
 			   );
 	       my $tier_type = 3;
-	       my $tier = new Process::MpiTiers(\%args, $self->id, $self->{CHUNK_REF}, $tier_type);
+	       my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
 	    #-------------------------CHUNKER
@@ -2837,24 +2847,6 @@ sub _go {
 	    my $prot_gff_keepers = $VARS->{prot_gff_keepers};
 	    my $pred_gff_keepers = $VARS->{pred_gff_keepers};
 	    my $model_gff_keepers = $VARS->{model_gff_keepers};
-
-	    #trim evidence down to size if specified
-	    if($CTL_OPT{fast}){
-		my @sets = ($blastn_keepers,
-			    $tblastx_keepers,
-			    $blastx_keepers,
-			    $exonerate_e_data,
-			    $exonerate_a_data,
-			    $exonerate_p_data,
-			    $est_gff_keepers,
-			    $altest_gff_keepers,
-			    $prot_gff_keepers);
-
-		#replace actual values
-		foreach my $set (@sets) {
-		    @$set = map {@$_} @{cluster::clean_and_cluster($set, $q_seq_ref, 10)};
-		}
-	    }
 
 	    #combine final data sets
 	    print STDERR "Preparing evidence for hint based annotation\n" unless($main::quiet);
@@ -3420,7 +3412,7 @@ sub _on_termination {
       $tier->{VARS}{DS_CTL}->add_entry($tier->{VARS}{seq_id},
 				       $tier->{VARS}{out_dir},
 				       "FINISHED");
-      $$tier->{VARS}{LOCK}->unlock; #releases locks on the log file
+      $tier->{VARS}{LOCK}->unlock; #releases locks on the log file
       
       $tier->{RESULTS} = {};
    }
@@ -3510,6 +3502,10 @@ sub finished {
    return $self->{FINISHED} || undef;
 }
 #--------------------------------------------------------------
+#alias to finished (syntactic sugar)
+sub terminated {return shift->finished;}
+
+#--------------------------------------------------------------
 #returns Error::Simple exception object
 #this is created after a failure
 
@@ -3544,6 +3540,20 @@ sub id {
    }
 
    return $self->{ID};
+}
+#--------------------------------------------------------------
+#returns the chunks rank
+#i.e. on what MPI node the chunk ran
+
+sub rank {
+   my $self = shift;
+   my $arg = shift;
+
+   if (defined($arg)) {
+      $self->{RANK} = $arg;
+   }
+
+   return $self->{RANK};
 }
 #--------------------------------------------------------------
 #returns the parent id

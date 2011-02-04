@@ -332,8 +332,8 @@ sub unlock ($) {
   #remove maintainer if running
   if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
       kill(2, $self->{_maintain});
-      close($self->{_OUT});
-      close($self->{_IN});
+      close($self->{_OUT}) if(ref($self->{_OUT}) eq 'GLOB');
+      close($self->{_IN}) if(ref($self->{_IN}) eq 'GLOB');
       
       #attempt kill multiple times if still running
       my $stat = waitpid($self->{_maintain}, WNOHANG);

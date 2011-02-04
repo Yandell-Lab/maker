@@ -90,6 +90,10 @@ sub set_global_temp {
     }
 }
 #------------------------------------------------------------------------
+sub LOCK {
+    return $LOCK;
+}
+#------------------------------------------------------------------------
 sub get_preds_on_chunk {
    my $preds = shift;
    my $chunk = shift;
@@ -568,11 +572,13 @@ sub write_p_and_t_fastas{
 sub create_blastdb {
    my $CTL_OPT = shift @_;
 
+   my $lock = new File::NFSLock($CTL_OPT->{mpi_blastdb}, 'EX', 1800, 50);
    #rebuild all fastas when specified
    File::Path::rmtree($CTL_OPT->{mpi_blastdb}) if ($CTL_OPT->{force} &&
 						   !$CTL_OPT->{_multi_chpc} &&
 						   !$CTL_OPT->{_not_root}
 						   );
+   $lock->unlock;
    
    my $mpi_size = $CTL_OPT->{_mpi_size} || 1;
    my $b_dir = $CTL_OPT->{mpi_blastdb};
@@ -848,6 +854,10 @@ sub flatten {
    my $type     = shift;
    my @hits;
    foreach my $c (@{$clusters}) {
+      if(ref($c) ne 'ARRAY'){
+	 push(@hits, $c);
+	 next;
+      }
       foreach my $hit (@{$c}) {
 	 $hit->type($type) if defined($type);
 	 push(@hits, $hit);

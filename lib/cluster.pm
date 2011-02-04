@@ -21,49 +21,52 @@ use Shadower;
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub clean_and_cluster {
-	my $keepers = shift;
-	my $seq     = shift;
-	my $depth   = shift;
+    my $depth   = shift;
+    my $seq     = shift;
+    my $keepers = shift;
+    my $flank   = shift || 0;
+    my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
+    
+    return [] if(!@$keepers);
+    $depth = 0 if (! defined($depth) || $depth < 0);
+    
+    my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $keepers);
+    
+    $p = clean::complexity_filter($p, $seq);
+    $m = clean::complexity_filter($m, $seq);
+    my $p_clusters = shadow_cluster(0, $seq, $p, $flank);
+    my $m_clusters = shadow_cluster(0, $seq, $m, $flank);
+    
+    my $counter = 0;
+    my @clusters = (@$p_clusters, @$m_clusters);
+    my $num_c = @clusters;
+    print STDERR "cleaning clusters....\n" unless $main::quiet;
+    foreach my $c (@$p_clusters, @$m_clusters){
+	print STDERR "total clusters:$num_c now processing $counter\n";
+	$c = clean::get_best_alt_splices($c, $seq, 10);
 
-	return [] if(!@$keepers);
-
-	$depth = 0 if (! defined($depth) || $depth < 0);
-
-	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $keepers);
-
-	my $p_clusters = shadow_cluster($depth, $seq, $p);
-        my $m_clusters = shadow_cluster($depth, $seq, $m);
-
-	my @clusters = (@{$p_clusters}, @{$m_clusters});
-
-	my $num_c = @clusters;
-	print STDERR "cleaning clusters....\n" unless $main::quiet;
-	my $counter = 0;
-	my @clean_clusters;
-
-	#show_clusters(\@clusters);
-	#die;
-
-	foreach my $c (@clusters){
-		print STDERR "total clusters:$num_c now processing $counter\n"
-			unless $main::quiet;
-		my $clean = clean::complexity_filter($c, $seq);
-
-		my $alts = clean::get_best_alt_splices($clean, $seq, 10);
-		my $i = 0;
-		my @new_cluster;
-		foreach my $a (@{$alts}){
-		    push(@new_cluster, $a);
-		    last if ($i > $depth && $depth > 0);
-		    $i++;
-		}
-		next if(! @new_cluster);
-		push(@{$clean_clusters[$counter]}, @new_cluster);
-
-		$counter++;
-	}		
-
-	return \@clean_clusters;
+	next if($depth == 0 || @$c <= $depth);
+	    
+	if($t_sep_flag){
+	   my %types;
+	   foreach my $f (@$c){
+	       push(@{$types{$f->algorithm}}, $f);
+	   }
+	   
+	   my @keepers;
+	   while(my $key = each %types){
+	       my $s = $types{$key};
+	       $s = @{$s}[0..$depth-1] if(@$s > $depth);
+	       push(@keepers, @$s);
+	   }
+	   $c = \@keepers;
+       }
+       else{
+	   $c = @{$c}[0..$depth-1];
+       }	
+    }
+    
+    return \@clusters;
 }
 #------------------------------------------------------------------------
 sub special_cluster_phat_hits {
@@ -268,20 +271,20 @@ sub shadow_cluster {
 
 	#add hits to clusters
 	foreach my $hit (@hits){
-		my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit, 'query');
-                   ($nB, $nE) = ($nE, $nB) if $nB > $nE;
-
-		my $j = 0;
-        	foreach my $s (@{$pieces}){
-                	my $sB = $s->{b};
-                	my $sE = $s->{e};
-                        my $class = compare::compare($sB, $sE, $nB, $nE);
-                        if ($class ne '0'){
-			    push(@{$clusters[$j]}, $hit);
-			    last;
-			}
-			$j++;
+	    my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit, 'query');
+	    ($nB, $nE) = ($nE, $nB) if $nB > $nE;
+	    
+	    my $j = 0;
+	    foreach my $s (@{$pieces}){
+		my $sB = $s->{b};
+		my $sE = $s->{e};
+		my $class = compare::compare($sB, $sE, $nB, $nE);
+		if ($class ne '0'){
+		    push(@{$clusters[$j]}, $hit);
+		    last;
 		}
+		$j++;
+	    }
 	}
 
 	#add pre-existing clusters to clusters

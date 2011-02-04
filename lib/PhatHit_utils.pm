@@ -52,14 +52,15 @@ sub separate_by_strand {
 	my @x;
 	my @z;
 	foreach my $hit (@{$hits}){
-	    my $strand = $hit->strand($what);
+	    my $obj = (ref($hit) eq 'ARRAY') ? $hit->[0] : $hit;
+	    my $strand = $obj->strand($what);
 	    
 	    unless($strand =~ /^\-?\d$/){
 		die "FATAL: Could not get stand correctly. Perhaps".
 		    "your using the wrong version of BioPerl.\n\n";
 	    }	    
 
-	    $strand *= -1 if($exonerate_flag && $hit->{_exonerate_flipped});
+	    $strand *= -1 if($exonerate_flag && $obj->{_exonerate_flipped});
 	    
 	    if ($strand == 1) {
 		push(@p, $hit);

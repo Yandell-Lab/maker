@@ -31,10 +31,9 @@ sub is_same_alt_form {
 
 	my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);
 
-	if     ($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0+$/){
+	if($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0+$/){
 		return 1;
 	}
-
         elsif ($s_to_a_str =~ /[^0]0+[^0]/){
 		#print STDERR "QAAAA s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
 		#print STDERR $a->name." ".$b->name."\n";
@@ -49,8 +48,9 @@ sub is_same_alt_form {
                 return 0;
         }
 	else {
-		#print STDERR "not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str".$a->name." ".$b->name."\n";
+	        #print STDERR "not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str ".$a->name." ".$b->name."\n";
 		#sleep 3;
+
 		return 1;
 	}
 }
@@ -188,7 +188,6 @@ sub get_shadow_code {
 
 	my $code = simplify_comparison_code(\@codes);
 
-
 	return $code;
 }
 #------------------------------------------------------------------------
@@ -255,10 +254,8 @@ sub compare_phat_hits {
 	my @codes;
 	my $i = 0;
         foreach my $hsp_a (@{$sorted_a}){
-			
                 my $aB = $hsp_a->nB($what);
                 my $aE = $hsp_a->nE($what);
-
 
 		my $j = 0;
                 foreach my $hsp_b (@{$sorted_b}){

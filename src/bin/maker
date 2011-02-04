@@ -270,7 +270,7 @@ while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrup
     #to maker process overlap
     sleep 1 if($f_count != @failed);
 
-    $tier->run_all;
+    $tier->run_all(0);
 
     push(@failed, $tier->fasta) if ($tier->failed);
     push(@interrupted, $tier->fasta) if ($tier->interrupt && $i_count == @interrupted);

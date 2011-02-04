@@ -31,7 +31,7 @@ BEGIN{
    #supress warnings from storable module
    $SIG{'__WARN__'} = sub {
       warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-		      $_[0] !~ /Can\'t store item CODE/ &&
+		      $_[0] !~ /Can\'t store item / &&
 		      $_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
 		    );
    };
@@ -567,7 +567,8 @@ if ($rank == $root) {
 						    GFF_DB  => $GFF_DB,
 						    build   => $build},
 						   $who,
-						   'Process::MpiChunk'
+						   'Process::MpiChunk',
+						   0
 						   );
 		    
 		    last if(! $tier->terminated);
@@ -809,7 +810,7 @@ else {
 	    my $c_res =  ${thaw($t_chunk_result)};
 	    $t_chunk_result = undef;
 	    update_chunk(\@tiers, $c_res);
-	    run(\@tiers);
+	    run(\@tiers, $rank);
 	    next;
 	}
 	#====END THREAD
@@ -822,10 +823,16 @@ else {
 	    #NOTE: $be_helper is set to true here
 	    $what = $have_c_res;
 	}
-	elsif($be_helper && (my $tier = terminated(\@tiers))){
-	    #NOTE: $be_helper is set to true here
-	    $what = $have_c_res;
-	    $chunk_result = $tier;
+	elsif($be_helper && (my $ftier = terminated(\@tiers))){
+	    if(update_chunk(\@tiers, $ftier)){
+		run(\@tiers, $rank);
+		next
+	    }
+	    else{
+		#NOTE: $be_helper is set to true here
+		$what = $have_c_res;
+		$chunk_result = $ftier;
+	    }
 	}
 	elsif($be_helper && !@tiers){
 	    #see who needs help
@@ -846,9 +853,9 @@ else {
 		MPI_RecvII(\$chnk, $who, $mpi_data, MPI_COMM_WORLD);
 
 		#if chunk is tier, treat as such
-		if(ref($chnk) eq 'Parallel::MpiTiers'){
+		if(ref($chnk) eq 'Process::MpiTiers'){		   
 		   push(@tiers, $chnk);
-		   run(\@tiers);
+		   run(\@tiers, $rank);
 		   next;
 		}
 
@@ -866,17 +873,25 @@ else {
 		die "ERROR: Invalid chunk status signal\n;";
 	    }
 	}
-	elsif((!@tiers || $tiers[0]->terminated) && !$be_helper){
-	   $what = $need_tier;
-	   if(@tiers){
-	      #collect errors and failures if any
-	      my $tier = shift @tiers;
-	      $tier_result->{-error} = $tier->error;
-	      $tier_result->{-failed} = $tier->failed;
-	      $tier_result->{-interrupt} = $tier->interrupt if(!$tier->{_seen});
-	      $tier_result->{-fasta} = $tier->fasta if($tier->failed || $tier_result->{-interrupt});
-	      $tier = undef;
-	   }
+	elsif(!$be_helper && !@tiers){
+	    $what = $need_tier;
+	}
+	elsif(!$be_helper && (my $tier = terminated(\@tiers))){
+	    if(@tiers){
+		update_chunk(\@tiers, $tier);
+		run(\@tiers, $rank);
+		next;
+	    }
+	    else{
+		$what = $need_tier;
+
+		#collect errors and failures if any
+		$tier_result->{-error} = $tier->error;
+		$tier_result->{-failed} = $tier->failed;
+		$tier_result->{-interrupt} = $tier->interrupt if(!$tier->{_seen});
+		$tier_result->{-fasta} = $tier->fasta if($tier->failed || $tier_result->{-interrupt});
+		$tier = undef;
+	    }
 	}
 	elsif((chunk_total_count(\@tiers) == 1) && (num_chunks(\@tiers) == 1)){
 	    #run lonesome chunk (should never happen but it's here just in case)
@@ -884,15 +899,15 @@ else {
 	    $chunk = undef; #just incase
 	
 	    #if chunk is tier, treat as such
-	    if(ref($r_chunk) eq 'Parallel::MpiTiers'){
+	    if(ref($r_chunk) eq 'Process::MpiTiers'){
 	       push(@tiers, $r_chunk);
-	       run(\@tiers);
+	       run(\@tiers, $rank);
 	       next;
 	    }
 	
 	    $r_chunk->run($rank);
 	    update_chunk(\@tiers, $r_chunk);
-	    run(\@tiers);
+	    run(\@tiers, $rank);
 	    next;
 	}
 	elsif((result_count(\@tiers) == chunk_total_count(\@tiers) - 1) && (num_chunks(\@tiers) == 1)){
@@ -901,15 +916,15 @@ else {
 	    $chunk = undef; #just incase
 
 	    #if chunk is tier, treat as such
-	    if(ref($r_chunk) eq 'Parallel::MpiTiers'){
+	    if(ref($r_chunk) eq 'Process::MpiTiers'){
 	       push(@tiers, $r_chunk);
-	       run(\@tiers);
+	       run(\@tiers, $rank);
 	       next;
 	    }
 
 	    $r_chunk->run($rank);
 	    update_chunk(\@tiers, $r_chunk);
-	    run(\@tiers);
+	    run(\@tiers, $rank);
 	    next;
 	}
 	elsif($thr && !$t_need_flag && (result_count(\@tiers) == chunk_total_count(\@tiers) - 1)){
@@ -921,9 +936,9 @@ else {
 	    $chunk = next_chunk(\@tiers) if(!$thr || $t_need_flag);
 
 	    #if chunk is tier, treat as such
-	    if(ref($chunk) eq 'Parallel::MpiTiers'){
+	    if(ref($chunk) eq 'Process::MpiTiers'){
 	       push(@tiers, $chunk);
-	       run(\@tiers);
+	       run(\@tiers, $rank);
 	       next;
 	    }
 
@@ -933,16 +948,16 @@ else {
 	    $chunk = next_chunk(\@tiers) if(!$thr || $t_need_flag);
 
 	    #if chunk is tier, treat as such
-	    if(ref($chunk) eq 'Parallel::MpiTiers'){
+	    if(ref($chunk) eq 'Process::MpiTiers'){
 	       push(@tiers, $chunk);
-	       run(\@tiers);
+	       run(\@tiers, $rank);
 	       next;
 	    }
 
 	    $what = $need_c_res;
 	}
 	else{
-	    run(\@tiers);
+	    run(\@tiers, $rank);
 	    next;
 	}
 
@@ -980,7 +995,7 @@ else {
 	       print "COMM TIER REQUESTED\t|  RCV2\t|  mpi_data (tier)\t\t|  $rank\t<--\t$root\n" if($main::debug);
 	       MPI_RecvII(\$tier, $root, $mpi_data, MPI_COMM_WORLD);
 	       push(@tiers, $tier);
-	       run(\@tiers);
+	       run(\@tiers, $rank);
 	       next;
 	    }
 	    #just wait and then try again later
@@ -1011,7 +1026,7 @@ else {
 	} #if what I want is help or the result from a helper do this
 	elsif ($what == $need_helper || $what == $need_c_res){
 	    #give chunk to thread
-	    if($thr && defined($chunk) && $tier->chunk_total_count > 1){
+	    if($thr && defined($chunk) && chunk_total_count(\@tiers) > 1){
 		$t_need_flag = 0;
 		$t_chunk = freeze(\$chunk);
 		$chunk = undef;
@@ -1041,6 +1056,7 @@ else {
 		    MPI_RecvII(\$c_res, $loc, $mpi_data, MPI_COMM_WORLD);
 
 		    update_chunk(\@tiers, $c_res);
+		    actualize(\@tiers, $rank);
 		}
 		$locs = \@non;
 	    }
@@ -1071,7 +1087,7 @@ else {
 
 		#send chunk if availabile
 		my $chnk = next_chunk(\@tiers, 1);
-		if($chnk && ($helper != 0 || (ref($chnk) ne 'Parallel::MpiTiers'))){
+		if($chnk && ($helper != 0 || (ref($chnk) ne 'Process::MpiTiers'))){
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (go_chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
 		    MPI_Send(\$go_chunk, 1, MPI_INT, $helper, $c_req_status, MPI_COMM_WORLD); #say chunk is available
 		    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_data (chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
@@ -1081,6 +1097,7 @@ else {
 		   push(@tiers, $chnk) if($chnk);
 		   print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (reset *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
 		   MPI_Send(\$c_reset, 1, MPI_INT, $helper, $c_req_status, MPI_COMM_WORLD); #send reset signal
+		   actualize(\@tiers, $rank);
 		}
 	    }
 
@@ -1094,6 +1111,7 @@ else {
 		print "COMM HAVE C_RESULT\t|  RCV2\t|  mpi_data (c_res no-root)\t|  $rank\t<--\t$loc\n" if($main::debug);
 		MPI_RecvII(\$c_res, $loc, $mpi_data, MPI_COMM_WORLD);
 		update_chunk(\@tiers, $c_res);
+		actualize(\@tiers, $rank);
 
 		print "HELPER/RESULT REQUESTED\t|  SEND\t|  who_I_am (for xhelpers)\t|  $rank\t-->\t$loc\n" if($main::debug);
 		MPI_Send(\$rank, 1,  MPI_INT, $loc, $who_I_am, MPI_COMM_WORLD); #restablish relationship
@@ -1122,10 +1140,11 @@ else {
 		my $r_chunk = $chunk; #running chunk
 		$chunk = undef;
 		$r_chunk->run($rank);
-		$tier->update_chunk($r_chunk);
+		update_chunk(\@tiers,$r_chunk);
+		actualize(\@tiers, $rank);
 	    }
 
-	    $tier->run();
+	    run(\@tiers, $rank);
 	    next;
 	}
 	#if just finished a helper chunk, inform that it is finished
@@ -1165,7 +1184,8 @@ unless($main::no_threads){
     }
 }
 
-MPI_Finalize();			#terminate MPI
+GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock           
+MPI_Finalize(); #terminate MPI
 
 exit(0);
 
@@ -1193,6 +1213,7 @@ sub node_thread {
       if(! defined ($tier) && defined ($t_tier)){
 	 $t_need_flag = 0;
 	 $tier = ${thaw($t_tier)};
+	 $tier->rank($rank); #set rank
 	 $t_tier = undef;
 	 next;
       }#process tier
@@ -1204,7 +1225,7 @@ sub node_thread {
 	 }
 
 	 #run the tier as far as possible
-	 $tier->run;
+	 $tier->run($rank);
 
 	 #get all chunks available
 	 my $chnk = $tier->next_chunk;
@@ -1228,7 +1249,7 @@ sub node_thread {
 	 }
 
 	 #let tier advance if possible
-	 $tier->run();
+	 $tier->run($rank);
 
 	 #terminate tier, wait, or continue
 	 if($tier->terminated){
@@ -1286,30 +1307,73 @@ sub totemp{
 sub next_chunk {
    my $buffer = shift;
 
-   for(my $i = 0; $i < @$buffer; $i++){
-      my $chunk = $buffer->[$i]->next_chunk;
+   for(my $i = @$buffer - 1; $i >= 0; $i--){
+      my $chunk = $buffer->[$i]->next_chunk();
       return $chunk if($chunk);
    }
 
    return undef;
 }
-#----------------------------------------------------------------------------
-#function to itterate through chunk buffer and update the correct one
-sub update_chunk {
-   my $buffer = shift;
-   my $chunk = shift;
 
-   my ($rank, $level, $tier_id, $num) = split(':', $chunk->id); 
-   $buffer->[$tier_id]->update_chunk($chunk);
+#----------------------------------------------------------------------------
+#function to itterate through chunk buffer and returns first finished tier
+sub terminated {
+   my $buffer = shift;
+
+   my @keep;
+   while (my $t = shift @$buffer){
+       if($t->terminated){
+	   unshift(@$buffer, @keep);
+	   return $t;
+       }
+       else{
+	   push(@keep, $t);
+       }
+   }
+
+   @$buffer = @keep;
+   return;
+}
+
+#----------------------------------------------------------------------------
+#function to itterate through chunk buffer and return the first MpiChunk found
+sub update_chunk {
+    my $buffer = shift;
+    my $chunk = shift;;
+    
+    my $stat;
+    foreach my $t (@$buffer){
+	if($t->id eq $chunk->parent){
+	    $t->update_chunk($chunk);
+	    $stat = 1;
+	    last;
+	}
+    }
+
+    return $stat;
 }
 #----------------------------------------------------------------------------
-#function to itterate through chunk buffer and update the correct one
-sub chunk_total {
+#function to itterate through chunk buffer and count all total chunkse
+sub chunk_total_count {
+   my $buffer = shift;
+
+   actualize($buffer);
+
+   my $sum = 0;
+   foreach my $t (@$buffer){
+      $sum += $t->chunk_total_count();
+   }
+
+   return $sum;
+}
+#----------------------------------------------------------------------------
+#function to itterate through chunk buffer andcount results
+sub result_count {
    my $buffer = shift;
 
    my $sum = 0;
    foreach my $t (@$buffer){
-      $sum += $t->chunk_total();
+      $sum += $t->result_count();
    }
 
    return $sum;
@@ -1319,12 +1383,49 @@ sub chunk_total {
 sub num_chunks {
    my $buffer = shift;
 
+   actualize($buffer);
+
    my $sum = 0;
    foreach my $t (@$buffer){
       $sum += $t->num_chunks();
    }
 
    return $sum;
+}
+#----------------------------------------------------------------------------
+#function to itterate through chunk buffer to adavance without run
+sub actualize {
+   my $buffer = shift;
+   my $rank = shift;
+
+   foreach my $t (@$buffer){
+       $t->actualize($rank);
+   }
+}
+#----------------------------------------------------------------------------
+#function to itterate through buffer to run
+sub run {
+   my $buffer = shift;
+   my $rank = shift;
+
+   actualize($buffer, $rank);   
+
+   if(chunk_total_count($buffer) > 1){
+       return;
+   }
+
+   while ((chunk_total_count($buffer) == 1) && (my $chunk = next_chunk($buffer))){
+       if(ref($chunk) eq 'Process::MpiTiers'){
+	   push(@$buffer, $chunk);
+	   return run($buffer, $rank);
+       }
+       else{
+	   $chunk->run($rank);
+	   update_chunk($buffer, $chunk);
+       }
+   }
+
+   return;
 }
 #----------------------------------------------------------------------------
 #make MPI_Send work with unsafe signaling

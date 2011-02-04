@@ -117,7 +117,6 @@ sub remove_redundant_alt_splices {
                         }
                         if (compare::is_redundant_alt_form($hit_i, $hit_j, $seq, $flank)){
                                 $dead{$j}++;
-
                         }
                 }
         }
