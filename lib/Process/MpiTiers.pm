@@ -522,7 +522,7 @@ sub terminated {
    #that must be gathered and destroyed before terminating the tier
    if ($self->failed &&
        ($self->_level_finished ||
-	($self->chunk_total == $self->result_count))
+	($self->chunk_total_count == $self->result_count))
       ){
        $self->_set_terminate(1);
    }
