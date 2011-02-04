@@ -699,6 +699,18 @@ sub id_safe {
 
    return $id;
 }
+
+#-------------------------------------------------------------
+#returns level a child belongs to in parent for children teirs
+
+sub level {
+   my $self = shift @_;
+   my ($id, $level) = split(':', $self->{TIER_ID});
+
+   warn "WARNING:  Can not call level on base tiers\n";
+
+   return $level;
+}
 #-------------------------------------------------------------
 #returns the rank of the tier
 
