@@ -854,7 +854,8 @@ sub _go {
 						     );
       
 	    #-add repeats to GFF3
-	    $GFF3->add_repeat_hits($rm_keepers);
+	    my $uid = $chunk->number.':'.$self->id;
+	    $GFF3->add_repeat_hits($rm_keepers, $uid);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1425,8 +1426,9 @@ sub _go {
 						   1 #contiguity flag
 						   );
 
-	    $GFF3->add_phathits($blastn_keepers);
-	    $GFF3->add_phathits($exonerate_e_data);
+	    my $uid = $chunk->number.':'.$self->id;
+	    $GFF3->add_phathits($blastn_keepers, $uid);
+	    $GFF3->add_phathits($exonerate_e_data, $uid);
 
 	    #blastn will be empty from this point on in the script if eukaryotic
 	    my $blastn_clusters = [];
@@ -1871,8 +1873,9 @@ sub _go {
 						    1 #contiguity flag
 						    );
 
-	    $GFF3->add_phathits($tblastx_keepers);
-	    $GFF3->add_phathits($exonerate_a_data);
+	    my $uid = $chunk->number.':'.$self->id;
+	    $GFF3->add_phathits($tblastx_keepers, $uid);
+	    $GFF3->add_phathits($exonerate_a_data, $uid);
 
 	    my $tblastx_clusters = (@$tblastx_keepers > 50) ?
 		cluster::clean_and_cluster(20, $q_seq_ref, $tblastx_keepers) : $tblastx_keepers;
@@ -2132,6 +2135,7 @@ sub _go {
 	       my $name = "junction.".($order-1).".$order";
 	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
 		  $lock->maintain(30);
+		  my $lock2 = new File::NFSLock($end_neighbor, 'EX', 300, 40);
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
 		  push(@$blastx_keepers, @start);
@@ -2154,6 +2158,7 @@ sub _go {
 	       my $name = "junction.$order.".($order+1);
 	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
 		  $lock->maintain(30);
+		  my $lock2 = new File::NFSLock($start_neighbor, 'EX', 300, 40);
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
 		  push(@$blastx_keepers, @end);
@@ -2313,8 +2318,9 @@ sub _go {
 						   0 #contiguity flag
 						   );
 
-	    $GFF3->add_phathits($blastx_keepers);
-	    $GFF3->add_phathits($exonerate_p_data);
+	    my $uid = $chunk->number.':'.$self->id;
+	    $GFF3->add_phathits($blastx_keepers, $uid);
+	    $GFF3->add_phathits($exonerate_p_data, $uid);
 
 	    #blastx will be empty from this point on in the script if eukaryotic
 	    my $blastx_clusters = (@$blastx_keepers > 50) ?
@@ -2451,40 +2457,42 @@ sub _go {
 	    my $model_gff_keepers = [];
 	    my $pred_gff_keepers = [];
 	    if ($CTL_OPT{go_gffdb}) {
+	       my $uid = $chunk->number.':'.$self->id;
+
 	       #-protein evidence passthraough
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
 							      'protein'
 							      );
-	       $GFF3->add_phathits($prot_gff_keepers);
+	       $GFF3->add_phathits($prot_gff_keepers, $uid);
 
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							     $q_seq_ref,
 							     'est'
 							     );
-	       $GFF3->add_phathits($est_gff_keepers);
+	       $GFF3->add_phathits($est_gff_keepers, $uid);
 
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 								$q_seq_ref,
 								'altest'
 								);
-	       $GFF3->add_phathits($altest_gff_keepers);
+	       $GFF3->add_phathits($altest_gff_keepers, $uid);
 
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							       $q_seq_ref,
 							       'model'
 							       );
-	       $GFF3->add_phathits($model_gff_keepers);
+	       $GFF3->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_ref,
 							      'pred'
 							      );
-	       $GFF3->add_phathits($pred_gff_keepers);
+	       $GFF3->add_phathits($pred_gff_keepers, $uid);
 	    }
 
 	    #trim evidence down to size if specified
@@ -3241,8 +3249,9 @@ sub _go {
 
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
+	    my $uid = $chunk->number.':'.$self->id;
 	    $GFF3->add_genes($maker_anno);
-	    $GFF3->add_phathits($scored_preds);
+	    $GFF3->add_phathits($scored_preds, $uid);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
 	    #--- building fastas for annotations (grows with iteration)

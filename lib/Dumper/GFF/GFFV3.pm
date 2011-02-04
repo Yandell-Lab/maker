@@ -215,12 +215,13 @@ sub header {
 sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
-    
+    my $uid   = shift;
+
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
     foreach my $p (@{$hits}){
-       print_txt($ANN, hit_data($p, $self->seq_id));
+       print_txt($ANN, hit_data($p, $self->seq_id, $uid));
     }
     close($ANN);
     $lock->unlock;
@@ -229,12 +230,13 @@ sub add_predictions {
 sub add_phathits {
    my $self  = shift;
    my $hits  = shift;
-   
+   my $uid   = shift;
+
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file})|| die "ERROR: Can't open annotation file\n\n";
    foreach my $h (@{$hits}){
-      print_txt($ANN, hit_data($h, $self->seq_id));
+      print_txt($ANN, hit_data($h, $self->seq_id, $uid));
    }
    close($ANN);
    $lock->unlock;
@@ -243,12 +245,13 @@ sub add_phathits {
 sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
-   
+   my $uid   = shift;
+  
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
    foreach my $r (@{$hits}){
-      print_txt($ANN, repeat_data($r, $self->seq_id));
+      print_txt($ANN, repeat_data($r, $self->seq_id, $uid));
    }
    close($ANN);
    $lock->unlock;
@@ -368,6 +371,7 @@ sub gene_data {
 sub hit_data {
    my $h      = shift;
    my $seq_id = shift;
+   my $uid    = shift;
 
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    
@@ -392,7 +396,7 @@ sub hit_data {
    my $QI .= $h->{_QI} if($h->{_QI});
 
    my $h_id = get_id_hit();
-   $h_id = join(":", $seq_id, $h_id);
+   $h_id = join(":", $seq_id, $h_id, $uid);
    my $score = $h->score() || '.';
    $score .= 0 if $score eq '0.';
    
@@ -410,7 +414,7 @@ sub hit_data {
    
    foreach my $hsp (@{$sorted}){
       my $hsp_id = get_id_hsp();
-      $hsp_id = join(":", $seq_id, $hsp_id);
+      $hsp_id = join(":", $seq_id, $hsp_id, $uid);
       $hsp_id =~ s/\s/_/g;
       my $hsp_l =
       get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $name);
@@ -425,6 +429,7 @@ sub hit_data {
 sub repeat_data {
    my $h      = shift;
    my $seq_id = shift;
+   my $uid    = shift;
 
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    #my $h_str = '+';
@@ -448,7 +453,7 @@ sub repeat_data {
    $h_n = uri_escape($h_n, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
    
    my $h_id = get_id_hit();
-   $h_id = join(":", $seq_id, $h_id);
+   $h_id = join(":", $seq_id, $h_id, $uid);
    my $score = $h->score() || '.';
    $score .= 0 if $score eq '0.';
 
@@ -463,7 +468,7 @@ sub repeat_data {
    
    foreach my $hsp (@{$sorted}){
       my $hsp_id = get_id_hsp();
-      $hsp_id = join(":", $seq_id, $hsp_id);
+      $hsp_id = join(":", $seq_id, $hsp_id, $uid);
       $hsp_id =~ s/\s/_/g;
       my $hsp_l =
       get_repeat_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $h_n);

@@ -59,8 +59,8 @@ sub prep_hits {
 			   );
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::clean_and_cluster(100, $seq, $p, $pred_flank, 1);
-	my $m_clusters = cluster::clean_and_cluster(100, $seq, $m, $pred_flank, 1);
+	my $p_clusters = cluster::clean_and_cluster(50, $seq, $p, $pred_flank, 1);
+	my $m_clusters = cluster::clean_and_cluster(50, $seq, $m, $pred_flank, 1);
 	
 	#this method will cause clusters that are near each other and are connected by an orf to merge.
 	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
