@@ -520,7 +520,10 @@ sub terminated {
 
    #_level_finished is required because there may still be chunks
    #that must be gathered and destroyed before terminating the tier
-   if ($self->failed && $self->_level_finished){
+   if ($self->failed &&
+       ($self->_level_finished ||
+	($self->chunk_total == $self->result_count))
+      ){
        $self->_set_terminate(1);
    }
 
@@ -707,7 +710,7 @@ sub level {
    my $self = shift @_;
    my ($id, $level) = split(':', $self->{TIER_ID});
 
-   warn "WARNING:  Can not call level on base tiers\n";
+   $level = $self->{LEVEL}{CURRENT} if(!$level);
 
    return $level;
 }
@@ -772,7 +775,9 @@ sub _handler {
 
    #clear queue on error
    while(my $chunk = $self->next_chunk){
+       my $clevel = $chunk->level;
        $self->{LEVEL}{$chunk->level}{RESULT_COUNT}++;
+       $self->{LEVEL}{ALL}{RESULT_COUNT}++;
    }
 
    $self->_set_failed(1);
