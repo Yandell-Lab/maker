@@ -282,11 +282,8 @@ sub compare {
 	my $r  = shift || 0;
 
 	my $class;
-	if(same_strand($aB, $aE, $bB, $bE)){
-
-	}
-	else {
-		return 'R';
+	if(!same_strand($aB, $aE, $bB, $bE)){
+	    return 'R';
 	}
 
 	my $s = 1;
@@ -297,7 +294,7 @@ sub compare {
 	}
 		
 
-	if     ($bE < $aB || $bB > $aE){
+	if($bE < $aB || $bB > $aE){
 		# a        ----
 		# b  ---- 
 		$class = 0;

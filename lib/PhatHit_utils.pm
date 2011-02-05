@@ -10,6 +10,7 @@ use FileHandle;
 use PostData;
 use Exporter;
 use Fasta;
+use SimpleCluster;
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -1392,97 +1393,49 @@ sub reset_query_lengths {
 sub merge_hits {
    my $big_fish = shift;
    my $lil_fish = shift;
-   my $max_sep  = shift;
-   
+   my $max_sep  = shift;   
+
    return if(! @{$lil_fish});
-   
-   if(! @{$big_fish}){
-      @{$big_fish} = @{$lil_fish};
-      @{$lil_fish} = ();
-      return;
-   }
-   
+
    print STDERR "merging blast reports...\n" unless($main::quiet);
-   
-   #-- working
-   my %big_names;
-   my %little_names;
+
+   my %sets;
+   foreach my $h (@$big_fish, @$lil_fish){
+       push (@{$sets{$h->name}}, $h);
+   }
+
    my @merged;
-   foreach my $b_hit (@{$big_fish}){
-      my $id = $b_hit->hsp(0)->hit->seq_id;
-      if(! $big_names{$id} || $big_names{$id}->start > $b_hit->start){
-	 $big_names{$id} = $b_hit;
-      }
+   while(my $key = each %sets){
+       if(@{$sets{$key}} == 1){
+	   push(@merged, @{$sets{$key}});
+	   next;
+       }
+
+       my $clusters = SimpleCluster::cluster_hits($sets{$key}, $max_sep);
+
+       foreach my $c (@$clusters){
+	   if(@$c == 1){
+	       push(@merged, @$c);
+	   }
+	   else{
+	       my @new_hsps;
+	       foreach my $h (@$c){
+		   push(@new_hsps, $h->hsps);
+	       }
+
+	       $c->[0]->hsps(\@new_hsps);
+	       $c->[0]->{'_sequenceschanged'} = 1;
+	       $c->[0]->{'_sequences_was_merged'} = 1;
+	       $c->[0]->{'nB'} = undef; #force recompute of start
+	       $c->[0]->{'nE'} = undef; #force recompute of end
+	       push(@merged, $c->[0]);
+	   }
+       }
    }
-   foreach my $l_hit (@{$lil_fish}){
-      $little_names{$l_hit->hsp(0)->hit->seq_id}++;
-   }
-   
-   my %was_merged;
-   foreach my $l_hit (@{$lil_fish}){
-      next unless defined($big_names{$l_hit->hsp(0)->hit->seq_id});
-      
-      my $b_hit = $big_names{$l_hit->hsp(0)->hit->seq_id};
-      
-      my $b_start = $b_hit->nB('query');
-      my $b_end   = $b_hit->nE('query');
-      
-      ($b_start, $b_end) = ($b_end, $b_start)
-	  if $b_start > $b_end;
-      
-      my @new_l_hsps;
-      
-      my $l_start = $l_hit->nB('query');
-      my $l_end   = $l_hit->nE('query');
-      
-      ($l_start, $l_end) = ($l_end, $l_start)
-	  if $l_start > $l_end;
-      
-      #print STDERR "b_start:$b_start l_start:$l_start\n";
-      #print STDERR "b_end:$b_end l_end:$l_end\n";
-      
-      my $distance = $b_start <= $l_start ? $l_start - $b_end : $b_start - $l_end;
-      
-      #print STDERR "distance:$distance\n";
-      
-      next unless $distance < $max_sep;
-      
-      next unless $b_hit->strand('query') eq $l_hit->strand('query');
-      
-      next unless $b_hit->strand('hit') eq $l_hit->strand('hit');
-      
-      #print STDERR "adding new hsp to ".$b_hit->name." ".$b_hit->description."\n";
-      
-      $was_merged{$l_hit->hsp(0)->hit->seq_id}++;
-      
-      my @new_b_hsps;
-      foreach my $b_hsp ($b_hit->hsps) {
-	 push(@new_b_hsps, $b_hsp);
-      }
-      
-      foreach my $l_hsp ($l_hit->hsps){
-	 push(@new_b_hsps, $l_hsp);
-      }
-      
-      $b_hit->hsps(\@new_b_hsps);
-      $b_hit->{'_sequenceschanged'} = 1;
-      $b_hit->{'_sequences_was_merged'} = 1;
-      $b_hit->{'nB'} = undef; #force recompute of start
-      $b_hit->{'nE'} = undef; #force recompute of end
-	 push(@merged, $b_hit)	;
-   }
-   
-   foreach my $b_hit (@{$big_fish}){
-      next if $was_merged{$b_hit->hsp(0)->hit->seq_id};
-      push(@merged, $b_hit);
-   }
-   foreach my $l_hit (@{$lil_fish}){
-      next if $was_merged{$l_hit->hsp(0)->hit->seq_id};
-      push(@merged, $l_hit);
-   }
-   
+
    print STDERR "...finished\n" unless($main::quiet);
-   @{$big_fish} = @merged;
+
+  @{$big_fish} = @merged;
    @{$lil_fish} = ();
 }
 #------------------------------------------------------------------------

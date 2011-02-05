@@ -42,7 +42,7 @@ sub clean_and_cluster {
     my $num_c = @clusters;
     print STDERR "cleaning clusters....\n" unless $main::quiet;
     foreach my $c (@$p_clusters, @$m_clusters){
-	print STDERR "total clusters:$num_c now processing $counter\n";
+	print STDERR "total clusters:$num_c now processing $counter\n" unless($main::quiet);
 	$c = clean::get_best_alt_splices($c, $seq, 10);
 
 	next if($depth == 0 || @$c <= $depth);
@@ -235,7 +235,7 @@ sub shadow_cluster {
         my $flank     = shift;
 	my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
 
-        print STDERR "in cluster::shadow_cluster...\n" unless $main::quiet;
+        print STDERR "in cluster::shadow_cluster...\n" unless($main::quiet);
 
 	$depth = 0 if (! defined($depth) || $depth < 0);
 
@@ -306,10 +306,10 @@ sub shadow_cluster {
 
 	#now sort clusters to depth
 	if($depth != 0){
-	    print STDERR " sorting hits in shadow cluster...\n" unless $main::quiet;
+	    print STDERR " sorting hits in shadow cluster...\n" unless($main::quiet);
 	    my $j = 0;
 	    foreach my $c (@clusters){
-		print STDERR " j_size:$j_size   current j:$j\n" unless $main::quiet;
+		print STDERR " j_size:$j_size   current j:$j\n" unless($main::quiet);
 		if(@$c > $depth){
 		    if($t_sep_flag){
 			my %types;
@@ -335,7 +335,7 @@ sub shadow_cluster {
 	    }
 	}
 
-	print STDERR "...finished clustering.\n" unless $main::quiet;
+	print STDERR "...finished clustering.\n" unless($main::quiet);
 
 	return \@clusters;
 }
@@ -358,8 +358,8 @@ sub shadow_cluster_old {
 	my $i = 0;
 	my $i_size = @{$pieces};
 	my $j_size = @{$phat_hits};
-	print STDERR " in cluster:shadow cluster...\n" unless $main::quiet;
-	print STDERR "    i_size:$i_size j_size:$j_size\n" unless $main::quiet;
+	print STDERR " in cluster:shadow cluster...\n" unless($main::quiet);
+	print STDERR "    i_size:$i_size j_size:$j_size\n" unless($main::quiet);
 	my %clustered;
         foreach my $s (@{$pieces}){
         	my $sB = $s->{b};
@@ -371,8 +371,8 @@ sub shadow_cluster_old {
 			next if defined($clustered{$hit->{temp_id}});
 
 			print STDERR "     i:$i   i_size:$i_size j_size:$j_size\n"
-				unless $main::quiet;
-			print STDERR "          n:$n\n" unless $main::quiet;
+				unless($main::quiet);
+			print STDERR "          n:$n\n" unless($main::quiet);
 		        my ($nB, $nE) = 
 			PhatHit_utils::get_span_of_hit($hit, 'query');
 
@@ -461,66 +461,10 @@ sub get_overlap_evidence {
 }
 #------------------------------------------------------------------------
 sub careful_cluster {
-    my $seq       = shift;
     my $phat_hits = shift;
     my $flank     = shift;
 
-
-    my @careful_clusters;
-    if (!defined($phat_hits->[1])){
-	push(@careful_clusters, $phat_hits);
-	return \@careful_clusters;
-    }
-    my $temp_id = 0;
-    foreach my $hit (@{$phat_hits}){
-	$hit->{temp_id} = $temp_id;
-	
-	$temp_id++;
-    }
-    print STDERR "now careful_clustering....\n"
-	unless $main::quiet;
-    my %lookup;
-    my %matrix;
-    for (my $i = 0; $i < @{$phat_hits} - 1;$i++){
-	my $hit_i = $phat_hits->[$i];
-	$lookup{$hit_i->{temp_id}} = $hit_i;
-	for (my $j = $i +1 ; $j < @{$phat_hits}; $j++){
-	    my $hit_j = $phat_hits->[$j];
-	    $lookup{$hit_j->{temp_id}} = $hit_j;
-	    if (compare::hsps_overlap($hit_i, $hit_j, 'query', $flank)){
-		$matrix{$hit_i->{temp_id}}{$hit_j->{temp_id}}++;
-	    }
-	    else {
-		#
-	    }
-
-	}
-    }
-
-    my $pairs = SimpleCluster::pairs(\%matrix);
-    my $map   = SimpleCluster::singleLinkageClusters($pairs);
-
-    my %clustered;
-    my $i = 0;
-    foreach my $c (keys %{$map}){
-	next if(! defined $map->{$c});
-	foreach my $m (@{$map->{$c}}){
-	    my $hit = $lookup{$m};
-	    die "name not found in careful cluster!\n"
-		unless defined $m;
-	    push(@{$careful_clusters[$i]}, $hit);
-	    $clustered{$m}++;
-	}
-	$i++;
-    }
-    # get the left overs...
-    foreach my $temp_id (keys %lookup){
-	next if defined($clustered{$temp_id});
-	push(@{$careful_clusters[$i]}, $lookup{$temp_id});
-	$i++;
-    }
-    
-    return \@careful_clusters;
+    return SimpleCluster::cluster_hits($phat_hits, $flank);
 }
 #------------------------------------------------------------------------
 sub show_clusters {

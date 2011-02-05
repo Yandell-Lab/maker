@@ -138,52 +138,71 @@ sub _load_old_log {
    $self->{die_count} = 0;
    $self->{old_shared_id} = '';
 
-   my $log_file = $self->{file_name};
+   print STDERR "Processing run.log file...\n"
+       if(-f $self->{file_name} && !$main::quiet);
+
    my %logged_vals;
-
-   if (-e $log_file){#load log file if available
-      print STDERR "Processing run.log file...\n" unless($main::quiet);
-      open (IN, "< $log_file");      
-      while( defined (my $line = <IN>)){
-	 chomp $line;
-      
-	 my ($type, $key, $value) = split ("\t", $line);
-
-	 if($type eq 'FINISHED' && defined $logged_vals{STARTED}{$key}){
-	     #delete or hash can become very large
-	     delete($logged_vals{STARTED}{$key});
-	     delete($logged_vals{FINISHED}{$key});
-	     next;
-	 }
-	 elsif($type eq 'STARTED' && defined $logged_vals{FINISHED}{$key}){
-	     #delete or hash can become very large
-	     delete($logged_vals{STARTED}{$key});
-	     delete($logged_vals{FINISHED}{$key});
-	     next;
-	 }
-	 elsif($type eq '###'){
-	     #progress checkpoint reached, all analyses completed up to this point
-	     $logged_vals{STARTED} = {};
-	     $logged_vals{FINISHED} = {};
-	     next;
-	 }
-
-	 $logged_vals{$type}{$key} = defined($value) ? $value : '';
-
-	 if($type eq 'DIED' && $key eq 'COUNT'){
-	     $self->{die_count} = $value;
-	 }
-	 elsif($type eq 'SHARED_ID'){
-	     $self->{old_shared_id} = $key;
-	 }
-      }
-      close(IN);
+   my @files = ($self->{file_name});
+   foreach my $log_file (@files){       
+       my %stat;
+       if (-f $log_file){ #load log file if available
+	   open (IN, "< $log_file");      
+	   while( defined (my $line = <IN>)){
+	       chomp $line;
+	       
+	       my ($type, $key, $value) = split ("\t", $line);
+	       
+	       if($type eq 'FINISHED' && defined $stat{STARTED}{$key}){
+		   #delete or hash can become very large
+		   delete($stat{STARTED}{$key});
+		   delete($stat{FINISHED}{$key});
+		   next;
+	       }
+	       elsif($type eq 'STARTED' && defined $stat{FINISHED}{$key}){
+		   #delete or hash can become very large
+		   delete($stat{STARTED}{$key});
+		   delete($stat{FINISHED}{$key});
+		   next;
+	       }
+	       elsif($type eq '###'){
+		   #progress checkpoint reached, all analyses completed up to this point
+		   $stat{STARTED} = {};
+		   $stat{FINISHED} = {};
+		   next;
+	       }
+	       
+	       if($type eq 'FINISHED' || $type eq 'STARTED' || $type eq 'LOGCHILD'){
+		   $stat{$type}{$key} = defined($value) ? $value : '';
+	       }
+	       else{
+		   $logged_vals{$type}{$key} = defined($value) ? $value : '';
+	       }
+	       
+	       if($type eq 'DIED' && $key eq 'COUNT'){
+		   $self->{die_count} = $value;
+	       }
+	       elsif($type eq 'SHARED_ID'){
+		   $self->{old_shared_id} = $key;
+	       }
+	   }
+	   close(IN);
+   
+	   while(my $type = each %stat){
+	       while(my $key = each %{$stat{$type}}){
+		   if($type eq 'LOGCHILD'){
+		       push(@files, $key);
+		       next;
+		   }
+		   $logged_vals{$type}{$key} = $stat{$type}{$key};
+	       }
+	   }
+       }
    }
-
+   
    $self->{old_log} = \%logged_vals;
 }
 #-------------------------------------------------------------------------------
-sub _compare_and_clean {
+   sub _compare_and_clean {
     my $self = shift;
 
     #make sure lock is till mine
@@ -752,26 +771,56 @@ sub _write_new_log {
    my $CWD = $self->{CWD};
    my $log_file = $self->{file_name};   
    my %CTL_OPT = %{$self->{CTL_OPT}};
-
+   
    open (LOG, "> $log_file");
-
+   
    #log control file options
    print LOG "SHARED_ID\t$CTL_OPT{_shared_id}\t\n";
    foreach my $key (@ctl_to_log) {
-      my $ctl_val = '';
-      if(defined $CTL_OPT{$key}){
-	 $ctl_val = $CTL_OPT{$key};
-	 $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
-	 $ctl_val = join(',', sort split(',', $ctl_val));
-	 if($key eq 'repeat_protein'){
-	     #don't care about absolute location
-	     $ctl_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
-	 }
-      }	  
-      print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
+       my $ctl_val = '';
+       if(defined $CTL_OPT{$key}){
+	   $ctl_val = $CTL_OPT{$key};
+	   $ctl_val =~ s/(^|\,)$CWD\/*/$1/g;
+	   $ctl_val = join(',', sort split(',', $ctl_val));
+	   if($key eq 'repeat_protein'){
+	       #don't care about absolute location
+	       $ctl_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
+	   }
+       }	  
+       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }
    $self->add_entry("DIED","COUNT",$self->get_die_count()) if($self->{continue_flag} == -1);
-   close(LOG);
+   close(LOG);      
+}
+#-------------------------------------------------------------------------------
+#sets a log child to hold values seperate from the whole log
+sub set_child {
+    my $self = shift;
+    my $num = shift;
+
+    if(! defined $num){
+	$self->{logchild} = undef;
+	return;
+    }
+
+    my $log_file = $self->{file_name};
+    my $file = $log_file;
+    my $the_void = $self->{params}->{the_void};
+    $file =~ s/(.*\/)?([^\/]+)$/$the_void\/$2.child.$num/;
+    
+    $self->{logchild} = $file;
+
+    #make note of log childs existance
+    open(my $LOG, ">> $log_file");
+    #add more than once just incase (important when multiple nodes write here)
+    print $LOG "LOGCHILD\t$file\t\n".
+	       "LOGCHILD\t$file\t\n".
+	       "LOGCHILD\t$file\t\n";
+    close($LOG);
+
+    #instantiate as empty
+    open(my $CHILD, ">$file");
+    close($CHILD);
 }
 #-------------------------------------------------------------------------------
 sub add_entry {
@@ -784,7 +833,7 @@ sub add_entry {
    $self->{CWD} = Cwd::getcwd() if(!$self->{CWD});
    my $CWD = $self->{CWD};
 
-   my $log_file = $self->{file_name};
+   my $log_file = ($self->{logchild}) ? $self->{logchild} : $self->{file_name};
 
    #this line hides unnecessarilly deep directory details
    #this is important for maker webserver security

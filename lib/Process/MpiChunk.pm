@@ -511,8 +511,9 @@ sub _go {
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER	    
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       my $order = $fchunk->number;
 	       my %args = (chunk       => $fchunk,
-			   order       => $fchunk->number,
+			   order       => $order,
 			   the_void    => $VARS->{the_void},
 			   safe_seq_id => $VARS->{safe_seq_id},
 			   q_seq_ref   => $VARS->{q_seq_ref},
@@ -570,6 +571,7 @@ sub _go {
 	 $level_status = 'doing repeat masking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG}->set_child($VARS->{order});
 	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
@@ -1065,6 +1067,7 @@ sub _go {
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG}->set_child($VARS->{order});
 	    $VARS->{blastn_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
 	    
@@ -1234,8 +1237,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $start_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.".($order-1).".$order";
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+	       if(($lock = new File::NFSLock($end_neighbor, 'EX', 300, 40)) && (-f $end_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
@@ -1243,6 +1245,7 @@ sub _go {
 		  push(@$holdover_blastn, @$neighbor);
 		  $edge_status->{blastn_keepers}{start}++;
 		  $edge_status->{exonerate_e_data}{start}++;
+		  $lock->unlock;
 	       }
 	    }
 	    if(! $chunk->is_last){
@@ -1256,8 +1259,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $end_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.$order.".($order+1);
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+	       if(($lock = new File::NFSLock($start_neighbor, 'EX', 300, 40)) && (-f $start_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
@@ -1265,6 +1267,7 @@ sub _go {
 		  push(@$holdover_blastn, @$neighbor);
 		  $edge_status->{blastn_keepers}{end}++;
 		  $edge_status->{exonerate_e_data}{end}++;
+		  $lock->unlock;
 	       }
 	    }
 
@@ -1690,8 +1693,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $start_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.".($order-1).".$order";
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+	       if(($lock = new File::NFSLock($end_neighbor, 'EX', 300, 40)) && (-f $end_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
@@ -1699,6 +1701,7 @@ sub _go {
 		  push(@$holdover_tblastx, @$neighbor);
 		  $edge_status->{tblastx_keepers}{start}++;
 		  $edge_status->{exonerate_a_data}{start}++;
+		  $lock->unlock;
 	       }
 	    }
 	    if(! $chunk->is_last){
@@ -1712,8 +1715,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $end_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.$order.".($order+1);
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+	       if(($lock = new File::NFSLock($start_neighbor, 'EX', 300, 40)) && (-f $start_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
@@ -1721,6 +1723,7 @@ sub _go {
 		  push(@$holdover_tblastx, @$neighbor);
 		  $edge_status->{tblastx_keepers}{end}++;
 		  $edge_status->{exonerate_a_data}{end}++;
+		  $lock->unlock;
 	       }
 	    }
 
@@ -2102,6 +2105,8 @@ sub _go {
 									       [$blastx_keepers]
 									       );
 
+	    die if(! @$holdover_blastx); #temp
+
 	    #get start and end holdovers files
 	    my @start;
 	    my @end;
@@ -2132,16 +2137,15 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $start_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.".($order-1).".$order";
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+	       if(($lock = new File::NFSLock($end_neighbor, 'EX', 300, 40)) && (-f $end_neighbor)){
 		  $lock->maintain(30);
-		  my $lock2 = new File::NFSLock($end_neighbor, 'EX', 300, 40);
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
 		  push(@$blastx_keepers, @start);
 		  push(@$holdover_blastx, @$neighbor);
 		  $edge_status->{blastx_keepers}{start}++;
 		  $edge_status->{exonerate_p_data}{start}++;
+		  $lock->unlock;
 	       }
 	    }
 	    if(! $chunk->is_last){
@@ -2155,16 +2159,16 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $end_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.$order.".($order+1);
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+	       if(($lock = new File::NFSLock($start_neighbor, 'EX', 300, 40)) && (-f $start_neighbor)){
 		  $lock->maintain(30);
-		  my $lock2 = new File::NFSLock($start_neighbor, 'EX', 300, 40);
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
 		  push(@$blastx_keepers, @end);
 		  push(@$holdover_blastx, @$neighbor);
+		  die if(! @$neighbor);
 		  $edge_status->{blastx_keepers}{end}++;
 		  $edge_status->{exonerate_p_data}{end}++;
+		  $lock->unlock;
 	       }
 	    }
 
@@ -2571,8 +2575,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $start_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.raw.".($order-1)."-$order";
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $end_neighbor)){
+	       if(($lock = new File::NFSLock($end_neighbor, 'EX', 300, 40)) && (-f $end_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
@@ -2582,6 +2585,7 @@ sub _go {
 		  $LOG->add_entry("STARTED", $junction_start_file, "");
 		  store(\%start_junction, $junction_start_file);
 		  $LOG->add_entry("FINISHED", $junction_start_file, "");
+		  $lock->unlock;
 	       }
 	    }
 	    push(@all_files, $junction_start_file) if(-f $junction_start_file);
@@ -2596,8 +2600,7 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $end_file, "");
 	       $lock->unlock;
 
-	       my $name = "junction.raw.$order-".($order+1);
-	       if(($lock = new File::NFSLock($name, 'EX', 300, 40)) && (-f $start_neighbor)){
+	       if(($lock = new File::NFSLock($start_neighbor, 'EX', 300, 40)) && (-f $start_neighbor)){
 		  $lock->maintain(30);
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
@@ -2607,6 +2610,7 @@ sub _go {
 		  $LOG->add_entry("STARTED", $junction_end_file, "");
 		  store(\%start_junction, $junction_end_file);
 		  $LOG->add_entry("FINISHED", $junction_end_file, "");
+		  $lock->unlock;
 	       }
 	    }
 	    push(@all_files, $junction_end_file) if(-f $junction_end_file);
@@ -2816,6 +2820,7 @@ sub _go {
 	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG}->set_child($VARS->{order});
 	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
