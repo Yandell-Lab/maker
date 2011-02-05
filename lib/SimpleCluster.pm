@@ -8,145 +8,92 @@ use Exporter;
 use PostData;
 use FileHandle;
 
-@ISA = qw(
-       );
-#------------------------------------------------------------------------------
-#--------------------------------- METHODS ------------------------------------
-#------------------------------------------------------------------------------
-sub new {
-        my $self  = shift;
-}
-#-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
-sub pairs {
-        my $matrix    = shift;
-        my $threshold = shift;
+sub cluster_hits {
+    my $hits = shift;
+    my $flank = shift;
 
-	print STDERR "getting Pairs\n" unless($main::quiet);
-        my @pairs;
-         while (my $iUid = each %{$matrix}){
-                 while (my $jUid = each %{$matrix->{$iUid}}) {
-                        next if $iUid eq $jUid;
-                        my $Sij = $matrix->{$iUid}->{$jUid};
-                        next unless defined($Sij);
-                        next if (defined($threshold) && $Sij < $threshold);
-                        next if $Sij == 0;
-                        push(@pairs, [$iUid, $jUid]);
-                }
-        }
-        return \@pairs;
-}
-#---------------------------------------------------------------------------
-sub singleLinkageClusters {
-        my $pairs     = shift;
+    my $cMap = cluster_pairs(build_pairs($hits, $flank));
 
-        my $cId = -1;
-        my %cIds;
-        my %rMap;
-        print STDERR "doing single linkage clustering\n" unless($main::quiet);
-        foreach my $pair (@{$pairs}){
-                my ($mUidI, $mUidJ) = @{$pair};
-                if    (!defined($cIds{$mUidI}) && !defined($cIds{$mUidJ})){
-                        $cId++;
-                        $cIds{$mUidI} = $cId;
-                        $cIds{$mUidJ} = $cId;
-                        push(@{$rMap{$cIds{$mUidI}}}, $mUidI, $mUidJ);
-                }
-                elsif (defined($cIds{$mUidI}) && !defined($cIds{$mUidJ})){
-                        my $cId = $cIds{$mUidI};
-                        $cIds{$mUidJ} = $cId;
-                        push(@{$rMap{$cId}}, $mUidJ);
-                }
-                elsif (!defined($cIds{$mUidI}) && defined($cIds{$mUidJ})){
-                        my $cId = $cIds{$mUidJ};
-                        $cIds{$mUidI} = $cId;
-                        push(@{$rMap{$cId}}, $mUidI);
-                }
-                elsif (defined($cIds{$mUidI}) && defined($cIds{$mUidJ})){
-                        next if ($cIds{$mUidI} == $cIds{$mUidJ} 
-			     && $cIds{$mUidI}  eq $cIds{$mUidJ});
+    my @clusters;
+    for(my $i = 0; $i < @$cMap; $i++){
+        my $members = $cMap->[$i];
+        next unless $members->[0];
 
-                        my @copy;
-                        my $cIdI = $cIds{$mUidI};
-                        my $cIdJ = $cIds{$mUidJ};
-                        foreach my $mUid (@{$rMap{$cIdJ}}){
-				$cIds{$mUid}= $cIdI;
-                                push(@copy, $mUid);
-                        }
-                        foreach my $mUid (@{$rMap{$cIdI}}){
-                                push(@copy, $mUid);
-                        }
-                        $rMap{$cIdI} = \@copy;
-			undef $rMap{$cIdJ};
-                }
-        }
-        return \%rMap;
-}
-#----------------------------------------------------------------------------
-sub joinAlternates {
-        my $a          = shift;
-        my $b          = shift;
-        my $alternates = shift;
-        unless (defined(@{$alternates})){        #-- start
-                push(@{$alternates->[0]}, $a);
-                push(@{$alternates->[0]}, $b);
-                return $alternates;
-        }
-        my $swallow = 0;
-        for (my $i = 0; $i < @{$alternates}; $i++){
-                my %hash;
-                my @newGroup;
-                foreach my $f (@{$alternates->[$i]}){
-                        $hash{$f->name} = 1;
-                         push(@newGroup, $f);
-                }
-                if (!defined($hash{$a->name}) && defined($hash{$b->name})){
-                        $swallow = 1;
-                        push(@newGroup, $a);
-                }
-                elsif (defined($hash{$a->name}) && !defined($hash{$b->name})){
-                        $swallow = 1;
-                        push(@newGroup, $b);
-                }
-                elsif (!defined($hash{$a->name}) && !defined($hash{$b->name})){
-                        #-- does not go in this group
-                }
-                elsif (defined($hash{$a->name}) && defined($hash{$b->name})){
-                        $swallow = 1;
-                        #-- just comming at it from the opposite direction
-                }
-                $alternates->[$i] = \@newGroup;
-        }
-        if ($swallow == 0){
-                my $counts = @{$alternates};
-                push(@{$alternates->[$counts]}, $a);
-                push(@{$alternates->[$counts]}, $b);
-        }
-        return $alternates;
+        my @array = map {$hits->[$_]} @{$members};
+
+	push(@clusters, \@array);
+    }
+    
+    return \@clusters;
 }
 #-------------------------------------------------------------------------------
-sub AUTOLOAD {
-        my ($self, $arg) = @_;
+sub build_pairs {
+    my $hits = shift;;
+    my $flank = shift;
 
-        my $caller = caller();
-        use vars qw($AUTOLOAD);
-        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
-        $call =~/DESTROY/ && return;
+    my @pairs;
 
-        print STDERR "SimpleCluster::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+    for (my $i = 0; $i < @$hits; $i++) {
+	my $aName = $hits->[$i]->name;
+	my $aB = $hits->[$i]->nB('query');
+	my $aE = $hits->[$i]->nE('query');
+	push(@pairs, [$i, $i]);
 
-        if ($arg){
-                $self->{$call} = $arg;
-        }
-        else {
-                return $self->{$call};
-        }
+	for (my $j = $i+1; $j < @$hits; $j++) {
+	    my $bName = $hits->[$j]->name;
+	    my $bB = $hits->[$j]->nB('query');
+	    my $bE = $hits->[$j]->nE('query');
+	    my $code = compare::compare($aB, $aE, $bB, $bE, $flank);
+	    push(@pairs, [$i, $j]) if($code && $code ne 'R');
+	}
+    }
+
+    return \@pairs;
 }
-#------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+sub cluster_pairs {
+    my $pairs = shift;
+    my $cId = 0;
+    my @cId_index;
+    my @cMap;
+
+    foreach my $p (@$pairs){
+        my ($mUidI, $mUidJ) = @{$p};
+        if (!defined($cId_index[$mUidI]) && !defined($cId_index[$mUidJ])){
+            $cId_index[$mUidI] = $cId;
+            $cId_index[$mUidJ] = $cId;
+            push(@{$cMap[$cId]}, $mUidI, $mUidJ);
+            $cId++;
+        }
+        elsif (defined($cId_index[$mUidI]) && !defined($cId_index[$mUidJ])){
+            my $cId = $cId_index[$mUidI];
+            $cId_index[$mUidJ] = $cId;
+            push(@{$cMap[$cId]}, $mUidJ);
+        }
+        elsif (!defined($cId_index[$mUidI]) && defined($cId_index[$mUidJ])){
+            my $cId = $cId_index[$mUidJ];
+            $cId_index[$mUidI] = $cId;
+            push(@{$cMap[$cId]}, $mUidI);
+        }
+        elsif (defined($cId_index[$mUidI]) && defined($cId_index[$mUidJ])){
+            next if ($cId_index[$mUidI] == $cId_index[$mUidJ]);
+
+            my @copy;
+            my $cIdI = $cId_index[$mUidI];
+            my $cIdJ = $cId_index[$mUidJ];
+            foreach my $mUid (@{$cMap[$cIdJ]}){
+                $cId_index[$mUid]= $cIdI;
+                push(@{$cMap[$cIdI]}, $mUid);
+            }
+
+            undef $cMap[$cIdJ];
+        }
+    }
+}
+
 1;
 
 
