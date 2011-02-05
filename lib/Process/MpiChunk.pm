@@ -2105,8 +2105,6 @@ sub _go {
 									       [$blastx_keepers]
 									       );
 
-	    die if(! @$holdover_blastx); #temp
-
 	    #get start and end holdovers files
 	    my @start;
 	    my @end;
