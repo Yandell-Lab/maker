@@ -175,6 +175,13 @@ sub complexity_filter {
     my @keepers;
     
     foreach my $f (@$candidates){
+	#handle cluster of clusters
+	if(ref $f eq 'ARRAY'){
+	    my $set = complexity_filter($f, $seq);
+	    push(@keepers, $f) if(@$set);
+	    next;
+	}
+	
 	my $qOff = $f->start('query');
 	my $hOff = $f->start('hit');
 	

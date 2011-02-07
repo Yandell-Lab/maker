@@ -41,26 +41,25 @@ sub new {
 	    $self->{last_build} = undef;
 	    $self->{next_build} = $CTL_OPTIONS{out_name}."::1.00";
 	    $self->{go_gffdb} = $CTL_OPTIONS{go_gffdb};
-	    
-	    if(my $lock = new File::NFSLock($self->{dbfile}.".gff", 'EX', 1200, 60)){
-		$self->initiate();
-		return $self unless($self->{go_gffdb});
 
-		$lock->maintain(30);
-		$self->add_maker($CTL_OPTIONS{genome_gff},\%CTL_OPTIONS);
-		$self->add_repeat($CTL_OPTIONS{rm_gff});
-		$self->add_est($CTL_OPTIONS{est_gff});
-		$self->add_altest($CTL_OPTIONS{altest_gff});
-		$self->add_protein($CTL_OPTIONS{protein_gff});
-		$self->add_pred($CTL_OPTIONS{pred_gff});
-		$self->add_model($CTL_OPTIONS{model_gff});
-		$self->add_other($CTL_OPTIONS{other_gff});
-		$self->do_indexing();
-		$lock->unlock;
-	    }
-	    else{
-		die "ERROR: Could not get lock to create GFF3 DB\n\n";
-	    }
+	    my $lock;
+	    while(! $lock || ! $lock->maintain(30)){
+		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60);
+	    }	    
+
+	    $self->initiate();
+	    return $self unless($self->{go_gffdb});
+	    
+	    $self->add_maker($CTL_OPTIONS{genome_gff},\%CTL_OPTIONS);
+	    $self->add_repeat($CTL_OPTIONS{rm_gff});
+	    $self->add_est($CTL_OPTIONS{est_gff});
+	    $self->add_altest($CTL_OPTIONS{altest_gff});
+	    $self->add_protein($CTL_OPTIONS{protein_gff});
+	    $self->add_pred($CTL_OPTIONS{pred_gff});
+	    $self->add_model($CTL_OPTIONS{model_gff});
+	    $self->add_other($CTL_OPTIONS{other_gff});
+	    $self->do_indexing();
+	    $lock->unlock;
 	}
 	elsif(defined $in){
 	    $dbfile = $in;
@@ -68,7 +67,13 @@ sub new {
 	    $self->{last_build} = undef;
 	    $self->{next_build} = "Build::1.00";
 	    $self->{go_gffdb} = 1;
+
+	    my $lock;
+	    while(! $lock || ! $lock->maintain(30)){
+		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60);
+	    }
 	    $self->initiate();
+	    $lock->unlock;
 	}
 
 	return $self;
@@ -81,24 +86,17 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-	if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	    $lock->maintain(30);
-	    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
-       
-	    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	    if (! grep( /^sources$/, @{$tables})){
-		$dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
-	    }
-       
-	    $dbh->commit;
-	    $dbh->disconnect;
-	    $lock->unlock;
+	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	
+	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	if (! grep( /^sources$/, @{$tables})){
+	    $dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
 	}
-	else{
-	    die "ERROR: Could not get lock for in GFFDD::initiate\n\n";
-	}
+	
+	$dbh->commit;
+	$dbh->disconnect;
     }
     elsif($dbfile && -e $dbfile){
        unlink($dbfile);
@@ -111,29 +109,22 @@ sub do_indexing {
     return unless($self->{go_gffdb});
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
-	
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	my $indices = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'index'});
-	
-	foreach my $table (@{$tables}){
-	    next if($table eq 'sources');
-	    unless (grep(/^$table\_inx$/, @{$indices})){
-		$dbh->do("CREATE INDEX $table\_inx ON $table(seqid)");
-	    }
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
+    
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    my $indices = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'index'});
+    
+    foreach my $table (@{$tables}){
+	next if($table eq 'sources');
+	unless (grep(/^$table\_inx$/, @{$indices})){
+	    $dbh->do("CREATE INDEX $table\_inx ON $table(seqid)");
 	}
+    }
 	
-	$dbh->commit;
-	$dbh->disconnect;
-	$lock->unlock;
-    }
-    else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
-    }
+    $dbh->commit;
+    $dbh->disconnect;
 }
 #-------------------------------------------------------------------------------
 sub add_maker {
@@ -154,126 +145,119 @@ sub add_maker {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
-
-	#check to see if tables need to be created, erased, or skipped
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	@$tables = grep {/\_maker$/} @$tables; #filter out the source table
-
-	my %all;
-	foreach my $t (@types, @$tables){
-	    $all{$t}++;
-	}
-
-	my %skip;
-	foreach my $table (keys %all){
-	    my $source = (grep {/^$table$/} @types) ? $gff_file : 'empty';
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
+    
+    #check to see if tables need to be created, erased, or skipped
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    @$tables = grep {/\_maker$/} @$tables; #filter out the source table
+    
+    my %all;
+    foreach my $t (@types, @$tables){
+	$all{$t}++;
+    }
+    
+    my %skip;
+    foreach my $table (keys %all){
+	my $source = (grep {/^$table$/} @types) ? $gff_file : 'empty';
+	
+	if (grep {/^$table$/} @{$tables}){
+	    my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
 	    
-	    if (grep {/^$table$/} @{$tables}){
-		my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
+	    if($source ne $o_source){
+		$dbh->do(qq{DROP TABLE $table});
+		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+		$dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
+		}
+	    else{
+		$skip{$table}++;
+	    }
+	}
+	else{
+	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	    $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
+	}
+    }
+    
+    #parse gff3
+    if(scalar(keys %skip) < @types && $gff_file){
+	my @files = split(/\,/, $gff_file);
+	open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
+	open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
+	my $count = 0;
+	my $line;
+	while(defined($line = <$IN>)){
+	    chomp($line);
+	    if($line =~ /^\#\#genome-build maker ([^\s\n\t]+)/){
+		my $build = $1;
+		my ($id, $count) = split("::", $build);
+		next unless($count =~ /^\d+\.\d\d$/);
 		
-		if($source ne $o_source){
-		    $dbh->do(qq{DROP TABLE $table});
-		    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-		    $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
-		}
-		else{
-		    $skip{$table}++;
-		}
+		$self->{last_build} = $build;
+		$self->{next_build} = sprintf $id.'::%.2f', $count;
+	    }
+	    last if ($line =~ /^\#\#FASTA/);
+	    next if ($line =~ /^\s*$/);
+	    next if ($line =~ /^\#/);
+	    
+	    my $l = $self->_parse_line(\$line);
+	    
+	    my $table;
+	    if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
+		next if (! $codes{rm_pass});
+		next if ($skip{repeat_maker});
+		$table = 'repeat_maker';
+	    }
+	    elsif($l->{source} =~ /^blastn$|^est2genome$|^est_gff\:/i){
+		next if (! $codes{est_pass});
+		next if ($skip{est_maker});
+		$table = 'est_maker';
+	    }
+	    elsif($l->{source} =~ /^tblastx$|^altest_gff\:/i){
+		next if (! $codes{altest_pass});
+		next if ($skip{altest_maker});
+		$table = 'altest_maker';
+	    }
+	    elsif($l->{source} =~ /^blastx$|^protein2genome$|^protein_gff\:/i){
+		next if (! $codes{protein_pass});
+		next if ($skip{protein_maker});
+		$table = 'protein_maker';
+	    }
+	    elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
+		next if (! $codes{pred_pass});
+		next if ($skip{pred_maker});
+		$table = 'pred_maker';
+	    }
+	    elsif($l->{source} =~ /^maker$|^model_gff\:/i){
+		next if (! $codes{model_pass});
+		next if ($skip{model_maker});
+		$table = 'model_maker';
+	    }
+	    elsif($l->{source} =~/^\.$/){
+		next;  #this is just the contig line
 	    }
 	    else{
-		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-		$dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
+		next if (! $codes{other_pass});
+		next if ($skip{other_maker});
+		$table = 'other_maker';
+	    }
+	    
+	    $self->_add_to_db($dbh, $table, $l);
+	    if($count == 10000){ #commit every 10000 entries
+		$dbh->commit;
+		$count = 0;
+		}
+	    else{
+		$count++;
 	    }
 	}
-	
-	#parse gff3
-	if(scalar(keys %skip) < @types && $gff_file){
-	    my @files = split(/\,/, $gff_file);
-	    open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
-	    open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
-	    my $count = 0;
-	    my $line;
-	    while(defined($line = <$IN>)){
-		chomp($line);
-		if($line =~ /^\#\#genome-build maker ([^\s\n\t]+)/){
-		    my $build = $1;
-		    my ($id, $count) = split("::", $build);
-		    next unless($count =~ /^\d+\.\d\d$/);
-		    
-		    $self->{last_build} = $build;
-		    $self->{next_build} = sprintf $id.'::%.2f', $count;
-		}
-		last if ($line =~ /^\#\#FASTA/);
-		next if ($line =~ /^\s*$/);
-		next if ($line =~ /^\#/);
-		
-		my $l = $self->_parse_line(\$line);
-		
-		my $table;
-		if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
-		    next if (! $codes{rm_pass});
-		    next if ($skip{repeat_maker});
-		    $table = 'repeat_maker';
-		}
-		elsif($l->{source} =~ /^blastn$|^est2genome$|^est_gff\:/i){
-		    next if (! $codes{est_pass});
-		    next if ($skip{est_maker});
-		    $table = 'est_maker';
-		}
-		elsif($l->{source} =~ /^tblastx$|^altest_gff\:/i){
-		    next if (! $codes{altest_pass});
-		    next if ($skip{altest_maker});
-		    $table = 'altest_maker';
-		}
-		elsif($l->{source} =~ /^blastx$|^protein2genome$|^protein_gff\:/i){
-		    next if (! $codes{protein_pass});
-		    next if ($skip{protein_maker});
-		    $table = 'protein_maker';
-		}
-		elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
-		    next if (! $codes{pred_pass});
-		    next if ($skip{pred_maker});
-		    $table = 'pred_maker';
-		}
-		elsif($l->{source} =~ /^maker$|^model_gff\:/i){
-		    next if (! $codes{model_pass});
-		    next if ($skip{model_maker});
-		    $table = 'model_maker';
-		}
-		elsif($l->{source} =~/^\.$/){
-		    next;  #this is just the contig line
-		}
-		else{
-		    next if (! $codes{other_pass});
-		    next if ($skip{other_maker});
-		    $table = 'other_maker';
-		}
-		
-		$self->_add_to_db($dbh, $table, $l);
-		if($count == 10000){ #commit every 10000 entries
-		    $dbh->commit;
-		    $count = 0;
-		}
-		else{
-		    $count++;
-		}
-	    }
-	    close($IN);
-	}
-
-	#commit changes
-	$dbh->commit;
-	$dbh->disconnect;
-	$lock->unlock;
+	close($IN);
     }
-    else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
-    }
+    
+    #commit changes
+    $dbh->commit;
+    $dbh->disconnect;
 }
 #-------------------------------------------------------------------------------
 sub add_repeat {
@@ -342,68 +326,61 @@ sub _add_type {
 
     my $dbfile = $self->{dbfile};
 
-    if(my $lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)){
-	$lock->maintain(30);
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    
+    #see if table needs to be created, erased or skipped
+    my $source = ($gff_file) ? $gff_file : 'empty';
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    my $skip = 0;
+    if (grep(/^$table$/, @{$tables})){
+	my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
 	
-	#see if table needs to be created, erased or skipped
-	my $source = ($gff_file) ? $gff_file : 'empty';
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	my $skip = 0;
-	if (grep(/^$table$/, @{$tables})){
-	    my ($o_source) = $dbh->selectrow_array(qq{SELECT source FROM sources WHERE name = '$table'});
-	    
-	    if($source ne $o_source){
-		my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
-		$dbh->do(qq{DROP TABLE $table});
-		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-		$dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
-	    }
-	    else{
-		$skip = 1;
-	    }
+	if($source ne $o_source){
+	    my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
+	    $dbh->do(qq{DROP TABLE $table});
+	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	    $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
 	}
 	else{
-	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
-	    $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
+	    $skip = 1;
 	}
-	
-	#parse gff3
-	if(! $skip && $gff_file){
-	    my @files = split(/\,/, $gff_file);
-	    open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
-	    open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
-	    my $count = 0;
-	    while(defined(my $line = <$IN>)){
-		chomp($line);
-		last if ($line =~ /^\#\#FASTA/);
-		next if ($line =~ /^\s*$/);
-		next if ($line =~ /^\#/);
-		
-		my $l = $self->_parse_line(\$line, $table);
-		$self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
-		
-		if($count == 10000){ #commit every 10000 entries
-		    $dbh->commit;
-		    $count = 0;
-		}
-		else{
-		    $count++;
-		}
-	    }
-	    close($IN);
-	}
-	
-	#commit changes
-	$dbh->commit();
-	$dbh->disconnect();
-	$lock->unlock;
     }
     else{
-	die "ERROR: Could not get lock in GFFDB\n\n";
+	$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	$dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
     }
+    
+    #parse gff3
+    if(! $skip && $gff_file){
+	my @files = split(/\,/, $gff_file);
+	open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
+	open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
+	my $count = 0;
+	while(defined(my $line = <$IN>)){
+	    chomp($line);
+	    last if ($line =~ /^\#\#FASTA/);
+	    next if ($line =~ /^\s*$/);
+	    next if ($line =~ /^\#/);
+	    
+	    my $l = $self->_parse_line(\$line, $table);
+	    $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
+	    
+	    if($count == 10000){ #commit every 10000 entries
+		$dbh->commit;
+		$count = 0;
+	    }
+	    else{
+		$count++;
+	    }
+	}
+	close($IN);
+    }
+    
+    #commit changes
+    $dbh->commit();
+    $dbh->disconnect();
 }
 #-------------------------------------------------------------------------------
 sub _parse_line{
