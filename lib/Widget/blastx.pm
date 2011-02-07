@@ -43,10 +43,8 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		if ($? != 0){
+		if ($? != 0 && $all_err !~ /There are no valid contexts/){
 		    #try again a second time
-		    warn "WARNING: BLASTX failed once, trying again.\n";
-                    sleep 2;
                     $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
                     $all_err = '';
                     while (my $line = <CHLD_ERR>){

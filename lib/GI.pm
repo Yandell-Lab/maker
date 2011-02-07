@@ -1232,7 +1232,7 @@ sub polish_exonerate {
         my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
 	$o_file    .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
 	my $o_tfile = "$o_file.$rank";
-	my $t_file  = $the_void."/".$safe_id.".$rank.fasta";	
+	my $t_file  = $the_void."/".$safe_id.".for.$F-$L.$rank.fasta";	
 	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";	
 
 	my $d_len = abs($L - $F) + 1;

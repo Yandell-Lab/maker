@@ -562,7 +562,7 @@ if ($rank == $root) {
 		my $tier;
 		my $f_count = @failed;
 		my $i_count = @interrupted;
-		while (my $fasta = $iterator->nextFasta() || shift @failed || shift @interrupted){
+		while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrupted){
 		    $tier = Process::MpiTiers->new({fasta => $fasta,
 						    CTL_OPT => \%CTL_OPT,
 						    DS_CTL  => $DS_CTL,

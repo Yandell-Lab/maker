@@ -133,11 +133,9 @@ sub getDef {
 	$fasta = $$fasta while(ref($fasta) eq 'REF');
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
-	my @fasta = split(/\n/, $$fasta_ref);
-        while(my $l = shift(@fasta)){
-                chomp($l);
-                return $l if $l =~ /^>/;
-        }
+	my ($def) = $$fasta =~ /(>[^\n\cM]+)/;
+	
+	return $def;
 }
 #-----------------------------------------------------------------------------
 sub getSeqID {

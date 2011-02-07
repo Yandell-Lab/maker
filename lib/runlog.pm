@@ -860,8 +860,11 @@ sub report_status {
    my $seq_id = $self->{params}->{seq_id};
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
+   my $the_void = $self->{params}->{the_void};
    my $fasta_ref = $self->{params}->{fasta_ref};
    my $length = $self->{params}->{seq_length};
+
+   $self->{params}->{fasta_ref} = undef; #clear from object
 
    #maintain lock only if status id positive (possible race condition?)
    $self->{LOCK}->maintain(30) if($flag > 0);
@@ -940,6 +943,15 @@ sub report_status {
    else{
       die "ERROR: No valid continue flag\n";
    }
+
+   #make local copy of fasta file
+   if($flag > 0){
+      $self->{fasta_file} = "$the_void/query.fasta";
+      
+      open (my $FAS, "> $the_void/query.fasta");
+      print $FAS $$fasta_ref;
+      close ($FAS);
+   }
 }
 #-------------------------------------------------------------------------------
 sub get_continue_flag {
@@ -992,6 +1004,12 @@ sub unlock {
     my $self = shift;
     
     $self->{LOCK}->unlock if(defined $self->{LOCK});
+}
+#-------------------------------------------------------------------------------
+sub fasta_file {
+   my $self = shift;
+   
+   return $self->{fasta_file};
 }
 #-------------------------------------------------------------------------------
 #this method is depricated

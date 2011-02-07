@@ -43,9 +43,7 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		if ($? != 0){
-                    warn "WARNING: TBLASTX failed once, trying again.\n";
-                    sleep 2;
+		if ($? != 0 && $all_err !~ /There are no valid contexts/){
                     $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
                     $all_err = '';
                     while (my $line = <CHLD_ERR>){

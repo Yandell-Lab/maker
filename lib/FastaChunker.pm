@@ -33,7 +33,7 @@ sub load_chunks {
 	my $self = shift;
 
 	die " you must assign a parent_fasta!\n" 
-	   unless defined($self->parent_fasta);
+	   unless(defined($self->parent_fasta) || defined($self->{parent_seq_ref}));
 
         die " you must assign a chunk_size!\n"
            unless defined($self->chunk_size);
@@ -41,8 +41,8 @@ sub load_chunks {
 	die " chunk_size must be greater than 0!\n"
            unless $self->chunk_size > 0;
 	
-	my $parent_def = Fasta::getDef($self->parent_fasta);
-	my $parent_seq_ref = Fasta::getSeqRef($self->parent_fasta);
+	my $parent_def = $self->{parent_def} || Fasta::getDef($self->parent_fasta);
+	my $parent_seq_ref = $self->{parent_seq_ref} || Fasta::getSeqRef($self->parent_fasta);
 
 	$self->parent_seq_length(length($$parent_seq_ref));
         my $fasta = '';
@@ -86,6 +86,8 @@ sub load_chunks {
 		$c++;
         }
 
+	$self->{parent_fasta} = undef;
+	$self->{parent_seq_ref} = undef;
 }
 #-------------------------------------------------------------------------------
 sub get_chunk {

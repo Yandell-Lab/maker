@@ -59,14 +59,6 @@ sub _initialize {
    $self->{seq_file} = $seq_file;
 }
 #------------------------------------------------------------------------
-sub fasta {
-    my $self  = shift;
-
-    my $fasta_ref = Fasta::toFastaRef('>'.$self->{seq_id}, \uc(${$self->seq}));
-
-    return $fasta_ref;
-}
-#------------------------------------------------------------------------
 sub resolved_flag {
     my $self   = shift;
 
@@ -84,10 +76,12 @@ sub set_current_contig {
     my $flag = 0;
     $flag = 1 if (defined $self->{seq_id});
     $self->{seq_id} = shift;
-    $self->{seq} = shift;
+    my $seq = shift;
+    $self->{seq_length} = length($$seq);
 
     $self->{seq_id} = uri_escape($self->{seq_id}, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
+    $$seq =~ s/(.{1,60})/$1\n/g; #make 60 width fasta
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
@@ -101,15 +95,16 @@ sub set_current_contig {
     close($ANN);
 
     open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
-    print_txt($SEQ, ${$self->fasta});
+    print $SEQ ">".$self->{seq_id}."\n".$$seq;
     close($SEQ);
     $lock->unlock;
+    $$seq =~ s/[^A-Z]//g; #make single line
 }
 #------------------------------------------------------------------------
-sub seq {
+sub seq_length {
     my $self   = shift;
 
-    return $self->{seq} || undef;
+    return $self->{seq_length} || undef;
 }
 
 #------------------------------------------------------------------------
@@ -156,11 +151,9 @@ sub contig_line {
     my $self = shift;
     
     die "no contig seq in Dumper::GFFV3::contig_line\n"
-	unless defined($self->seq);
+	unless defined($self->seq_id);
     
-    my $seq = $self->seq();
-    
-    my $length = length($$seq);
+    my $length = $self->seq_length();
     my $id     = $self->seq_id();
     my $name   = $id;
     my @data;
@@ -175,12 +168,10 @@ sub contig_comment {
     my $self = shift;
 
     die "no contig seq in Dumper::GFFV3::contig_comment\n"
-        unless defined($self->seq);
+        unless defined($self->seq_id);
 
-    my $seq = $self->seq;
-
-    my $length = length($$seq);
-    my $id     = $self->seq_id;
+    my $length = $self->seq_length();
+    my $id     = $self->seq_id();
     my $name   = $id;
     my @data;
     push(@data, "##sequence-region", $id, 1, $length);

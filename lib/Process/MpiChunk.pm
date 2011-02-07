@@ -364,14 +364,15 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $fasta = Fasta::ucFastaRef($VARS->{fasta}); #build uppercase fasta
+	    ${$VARS->{fasta}} =~ tr/[a-z]/[A-Z]/; #build uppercase fasta
+	    my $fasta = $VARS->{fasta};
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    	    
 	    #get fasta parts
 	    my $q_def = Fasta::getDef($fasta); #Get fasta header
-	    my $q_seq_ref = Fasta::getSeqRef($fasta); #Get reference to fasta sequence
-	    my $q_seq_length = length(${$q_seq_ref});
+	    my $q_seq_length = $$fasta =~ tr/[A-Z]/[A-Z]/; #seq length
+
 	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
 	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier	    
 	    
@@ -387,7 +388,15 @@ sub _go {
 				   fasta_ref  => $fasta},
 				  "$out_dir/run.log"
 				  );
-	    
+
+	    my $unmasked_file = $LOG->fasta_file();
+
+	    #make sequence only
+	    my $q_seq_ref = $fasta;
+	    $$q_seq_ref =~ s/>[^\n]+//;
+	    $$q_seq_ref =~ s/[^A-Z]//g;
+	    $fasta = undef;
+
 	    my $LOCK = $LOG->strip_off_lock();
 	    
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
@@ -396,6 +405,7 @@ sub _go {
 	    
 	    #------------------------RETURN
 	    %results = (fasta => $fasta,
+			unmasked_file => $unmasked_file,
 			q_def => $q_def,
 			q_seq_ref => $q_seq_ref,
 			q_seq_length => $q_seq_length,
@@ -431,13 +441,13 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw(fasta
-			CTL_OPT
+	    @args = (qw(CTL_OPT
 			out_dir
 			build
 			seq_id
 			safe_seq_id
 			the_void
+			q_def
 			q_seq_ref)
 		     );
 	    #------------------------ARGS_IN
@@ -449,8 +459,8 @@ sub _go {
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $the_void = $VARS->{the_void};
+	    my $q_def = $VARS->{q_def};
 	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $fasta = $VARS->{fasta};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    
 	    my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
@@ -458,16 +468,12 @@ sub _go {
 					       $the_void
 					       );
 	    
-	    $GFF3->set_current_contig($seq_id, $q_seq_ref);     
-	    
-	    #build file of fasta
-	    my $unmasked_file = $the_void."/query.fasta";	 
-	    FastaFile::writeFile($fasta, $unmasked_file);
+	    $GFF3->set_current_contig($seq_id, $q_seq_ref);
 	    
 	    #build chunks
 	    my $fasta_chunker = new FastaChunker();
-	    $fasta_chunker->parent_fasta($fasta);
-	    $fasta = undef;
+	    $fasta_chunker->parent_seq_ref($q_seq_ref);
+	    $fasta_chunker->parent_def($q_def);
 	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
 	    $fasta_chunker->min_size($CTL_OPT{split_hit});
 	    $fasta_chunker->load_chunks();
@@ -475,9 +481,7 @@ sub _go {
 	    
 	    #------------------------RETURN
 	    %results = (GFF3 => $GFF3,
-			unmasked_file => $unmasked_file,
-			fasta_chunker => $fasta_chunker,
-			fasta => $fasta,
+			fasta_chunker => $fasta_chunker
 			);
 	    #------------------------RETURN
 	 }
@@ -499,8 +503,9 @@ sub _go {
 	    }
 	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
 	       my $iterator = new Iterator::Fasta($VARS->{the_void}."/query.masked.fasta");
-	       my $fasta = $iterator->nextFastaRef();
-	       $VARS->{masked_total_seq} = Fasta::getSeqRef($fasta);
+	       $VARS->{masked_total_seq} = $iterator->nextFastaRef();
+	       ${$VARS->{masked_total_seq}} =~ s/>[^\n]+//;
+	       ${$VARS->{masked_total_seq}} =~ s/[^A-Z]//g;
                $next_level = 3;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -1285,6 +1290,12 @@ sub _go {
 						     'blastn',
 						     $LOG
 						     );
+
+	    #quick trim on overly dense evidence
+	    if(@$blastn_keepers > 100){
+	       $blastn_keepers = cluster::shadow_cluster(50, $q_seq_ref, $blastn_keepers);
+	       $blastn_keepers = GI::flatten($blastn_keepers);
+	    }
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1741,6 +1752,12 @@ sub _go {
 						     'tblastx',
 						     $LOG
 						     );
+
+	    #quick trim on overly dense evidence
+	    if(@$tblastx_keepers > 100){
+	       $tblastx_keepers = cluster::shadow_cluster(50, $q_seq_ref, $tblastx_keepers);
+	       $tblastx_keepers = GI::flatten($tblastx_keepers);
+	    }
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2183,6 +2200,12 @@ sub _go {
 						     'blastx',
 						     $LOG
 						     );
+
+	    #quick trim on overly dense evidence
+	    if(@$blastx_keepers > 100){
+	       $blastx_keepers = cluster::shadow_cluster(50, $q_seq_ref, $blastx_keepers);
+	       $blastx_keepers = GI::flatten($blastx_keepers);
+	    }
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
