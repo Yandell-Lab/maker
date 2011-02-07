@@ -510,7 +510,7 @@ if ($rank == $root) {
 	    #    last if(! $tier->terminated);
 	    #}
 	    
-	    $tier->{_seen}++ if($i_count != @interrupted); #tag tier (easy to do it this way)
+	    $tier->{_seen}++ if(defined $tier && $i_count != @interrupted); #tag tier (easy to do it this way)
 	    
 	    #take a short break before processing failed contigs
 	    #this handles heavy processor usage when failure is related
@@ -576,8 +576,8 @@ if ($rank == $root) {
 		    last if(! $tier->terminated);
 		}
 		
-		$tier->{_seen}++ if($i_count != @interrupted); #tag tier (easy to do it this way)		
-		
+		$tier->{_seen}++ if(defined $tier && $i_count != @interrupted); #tag tier (easy to do it this way)
+
 		#take a short break before processing failed contigs
 		#this handles heavy processor usage when failure is related
 		#to maker process overlap

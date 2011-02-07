@@ -364,6 +364,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
+	    $VARS->{fasta} = \($VARS->{fasta}) if(! ref($VARS->{fasta}));
 	    ${$VARS->{fasta}} =~ tr/[a-z]/[A-Z]/; #build uppercase fasta
 	    my $fasta = $VARS->{fasta};
 	    my $DS_CTL = $VARS->{DS_CTL};
