@@ -2163,7 +2163,6 @@ sub _go {
 		  unlink($end_file, $start_neighbor);
 		  push(@$blastx_keepers, @end);
 		  push(@$holdover_blastx, @$neighbor);
-		  die if(! @$neighbor);
 		  $edge_status->{blastx_keepers}{end}++;
 		  $edge_status->{exonerate_p_data}{end}++;
 		  $lock->unlock;
@@ -2487,7 +2486,7 @@ sub _go {
 							       $q_seq_ref,
 							       'model'
 							       );
-	       $GFF3->add_phathits($model_gff_keepers, $uid);
+	       #$GFF3->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,

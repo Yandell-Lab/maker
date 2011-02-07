@@ -104,10 +104,8 @@ sub runExonerate {
         }
         else {
 	    print STDERR "running  exonerate search.\n" unless($main::quiet);
-	    $w->run($command);
+	    $w->run($command, $o_file);
         }
-	
-	
     }
 #-----------------------------------------------------------------------------
 1;

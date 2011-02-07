@@ -1265,6 +1265,8 @@ sub polish_exonerate {
 	    my $p_def = $def." ".$F." ".$L;
 	    my $p_fasta = Fasta::toFasta($p_def, \ ($p->{piece}));
 	    FastaFile::writeFile($p_fasta, $d_file);
+
+	    unlink($o_tfile) if(-f $o_tfile);
 	}
 
 	#run exonerate

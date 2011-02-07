@@ -30,6 +30,7 @@ sub new {
 sub run {
 	my $self    = shift;
 	my $command = shift;
+	my $o_file  = shift;
 
 	if (defined($command)){
 		$self->print_command($command);
@@ -39,7 +40,21 @@ sub run {
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
-		die "ERROR: Exonerate failed\n" if $? != 0;
+
+		#try a second time
+		if($? != 0){
+		   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		   local $/ = \1;
+		   while (my $line = <CHLD_ERR>){
+		      print STDERR $line unless($main::quiet);
+		   }
+		   waitpid $pid, 0;
+		   
+		   if($? != 0){
+		      unlink($o_file) if($o_file && -f $o_file);
+		      die "ERROR: Exonerate failed\n";
+		   }
+		}
 	}
 	else {
 		die " Widget::exonerate::run needs a command!\n";
