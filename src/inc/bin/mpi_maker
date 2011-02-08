@@ -1030,6 +1030,13 @@ else {
 	    next;
 	} #if what I want is help or the result from a helper do this
 	elsif ($what == $need_helper || $what == $need_c_res){
+	    #give chunk to thread
+	    if($thr && defined($chunk) && chunk_total_count(\@tiers) > 1){
+		$t_need_flag = 0;
+		$t_chunk = freeze(\$chunk);
+		$chunk = undef;
+	    }
+
 	    #check c_result_status
 	    my $c_res_stat;
 	    print "COMM HAVE C_RESULT\t|  RECV\t|  c_res_status (is c_res?)\t|  $rank\t<--\t$root\n" if($main::debug);
@@ -1130,13 +1137,6 @@ else {
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (reset xhelpers)\t|  $rank\t-->\t$loc\n" if($main::debug);
                     MPI_Send(\$c_reset, 1, MPI_INT, $loc, $c_req_status, MPI_COMM_WORLD); #send reset signal
 		}
-	    }
-
-	    #give chunk to thread
-	    if($thr && defined($chunk) && chunk_total_count(\@tiers) > 1){
-		$t_need_flag = 0;
-		$t_chunk = freeze(\$chunk);
-		$chunk = undef;
 	    }
 
 	    #nothing provided and nothing to advance to (wait)
