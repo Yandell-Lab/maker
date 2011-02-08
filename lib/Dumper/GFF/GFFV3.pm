@@ -98,7 +98,7 @@ sub set_current_contig {
     print $SEQ ">".$self->{seq_id}."\n".$$seq;
     close($SEQ);
     $lock->unlock;
-    $$seq =~ s/[^A-Z]//g; #make single line
+    $$seq =~ s/[^A-Za-z]//g; #make single line
 }
 #------------------------------------------------------------------------
 sub seq_length {

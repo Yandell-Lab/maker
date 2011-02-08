@@ -472,7 +472,15 @@ sub _result{
    $self->{CHUNK_REF}->{VARS} = {};
    $self->{CHUNK_REF}->{FINISHED} = 1;
 
-   return $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
+   #run result in CHUNK_REF
+   my $stat = $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
+
+   #clear memory
+   $self->{CHUNK_REF}->{RESULTS} = {};
+   $self->{CHUNK_REF}->{VARS} = {};
+   $self->{CHUNK_REF}->{FINISHED} = 0;
+
+   return $stat;
 }
 #--------------------------------------------------------------
 #returns true if level is finished

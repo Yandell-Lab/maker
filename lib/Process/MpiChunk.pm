@@ -395,7 +395,7 @@ sub _go {
 	    #make sequence only
 	    my $q_seq_ref = $fasta;
 	    $$q_seq_ref =~ s/>[^\n]+//;
-	    $$q_seq_ref =~ s/[^A-Z]//g;
+	    $$q_seq_ref =~ s/[^A-Za-z]//g;
 	    $fasta = undef;
 
 	    my $LOCK = $LOG->strip_off_lock();
@@ -534,6 +534,10 @@ sub _go {
 	       my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
+
+	    #empty chunker to save memory
+	    my $c_array = $VARS->{fasta_chunker}->{chunks};
+	    @$c_array = map {undef} @$c_array;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -925,9 +929,13 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
             my $LOG = $VARS->{LOG};	 
 	    
+	    #print masked fasta
 	    my $masked_file = $the_void."/query.masked.fasta";
-	    my $masked_fasta = Fasta::toFastaRef($q_def.' masked', $masked_total_seq);
-	    FastaFile::writeFile($masked_fasta, $masked_file) unless($CTL_OPT{_no_mask});
+	    $$masked_total_seq =~ s/(.{1,60})/$1\n/g;
+	    open(my $OUT, "> $masked_file");
+	    print $OUT "$q_def masked\n".$$masked_total_seq;
+	    close($OUT);
+	    $$masked_total_seq =~ s/[^A-Za-z]//g;
 
 	    #==ab initio predictions here
 	    #do masked predictions first
@@ -970,7 +978,6 @@ sub _go {
 	 
 	    #------------------------RETURN
 	    %results = (masked_file => $masked_file,
-			masked_fasta => $masked_fasta,
 			preds => $preds,
 			qra_preds => $qra_preds
 		       );
