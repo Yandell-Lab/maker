@@ -53,7 +53,7 @@ BEGIN{
 }
 
 use Cwd;
-use Storable qw(freeze thaw);
+use Storable qw(freeze thaw store retrieve);
 use FileHandle;
 use File::Path;
 use Getopt::Long qw(:config no_ignore_case);
@@ -450,7 +450,8 @@ if ($rank == $root) {
 	#====INTERNAL TIER THREAD
 	#check on results from internal thread
 	if (defined($t_tier_result)){
-	    my $t_res = ${thaw($t_tier_result)};
+	    my $t_res = ${retrieve($t_tier_result)};
+	    unlink($t_tier_result);
 	    $t_tier_result = undef;
 	    $active[$root] = 0;
 
@@ -458,7 +459,8 @@ if ($rank == $root) {
 	    push(@interrupted, $t_res->{-fasta}) if ($t_res->{-interrupt});
 	}
 	if (defined($t_chunk_result)){
-	    my $chunk =  ${thaw($t_chunk_result)};
+	    my $chunk =  ${retrieve($t_chunk_result)};
+	    unlink($t_chunk_result);
 	    $t_chunk_result = undef;
 	    my $id = $chunk->id();
 	    ($id) = split (":", $id);
@@ -485,6 +487,10 @@ if ($rank == $root) {
 	    MPI_Send(\$root, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD); #tell helper node I need help
 	    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (go_chunk from thread)\t|  $rank\t-->\t$helper\n" if($main::debug);
 	    MPI_Send(\$go_chunk, 1, MPI_INT, $helper, $c_req_status, MPI_COMM_WORLD ); #tell helper node a chunk is coming
+	    open(my $IN, "< $chunk");
+	    unlink($chunk);
+	    $chunk = join('', <$IN>);
+	    close($IN);
 	    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_data (chunk from thread)\t|  $rank\t-->\t$helper\n" if($main::debug);
 	    MPI_SendII(\$chunk, $helper, $mpi_data, MPI_COMM_WORLD, 1); #send the chunk
 	}
@@ -519,7 +525,10 @@ if ($rank == $root) {
 
 	    if(defined $tier && ! $tier->terminated){
 		$t_need_flag = 0;
-		$t_tier = freeze(\$tier);
+		$t_tier = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+		my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+		store(\$tier, $file);
+		$t_tier = $file;
 		$tier = undef;
 		$active[$root] = 1;
 	    }
@@ -694,8 +703,11 @@ if ($rank == $root) {
 				my $chnk;
 				print "HELPER/RESULT REQUESTED\t|  RCV2\t|  mpi_data (chunk for root)\t|  $rank\t<--\t$who2\n" if($main::debug);
 				MPI_RecvII(\$chnk, $who2, $mpi_data, MPI_COMM_WORLD, 1);
+				my ($fh, $file) = tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0);
+				print $fh $chnk;
+				close($fh);
 				$t_need_flag = 0;
-				$t_chunk = $chnk;
+				$t_chunk = $file;
 			    }
 			    elsif($req_stat == $c_reset){
 				$t_need_flag = 2;
@@ -740,7 +752,11 @@ if ($rank == $root) {
 		    MPI_Send(\$root, 1,  MPI_INT, $who, $who_I_am, MPI_COMM_WORLD); #tell helper node who I am
 		    print "COMM HAVE C_RESULT\t|  SEND\t|  c_req_stat (reset from root)\t|  $rank\t-->\t$who\n" if($main::debug);
 		    MPI_Send(\$c_reset, 1, MPI_INT, $who, $c_req_status, MPI_COMM_WORLD); #reset node (no chunk)
-		    push(@returned_chunks, $chunk_res);
+
+		    my ($fh, $file) = tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0);
+		    print $fh $chunk_res;
+		    close($fh);
+		    push(@returned_chunks, $file);
 		}
 		else{ #take note of owner to tell him he has a result waiting
 		    push(@{$res_loc[$owner]}, $who);
@@ -810,7 +826,8 @@ else {
 	#====INTERNAL CHUNK THREAD
 	#check on results from internal thread
 	if (defined($t_chunk_result)){
-	    my $c_res =  ${thaw($t_chunk_result)};
+	    my $c_res =  ${retrieve($t_chunk_result)};
+	    unlink($t_chunk_result);
 	    $t_chunk_result = undef;
 	    update_chunk(\@tiers, $c_res);
 	    run(\@tiers, $rank);
@@ -936,7 +953,15 @@ else {
 	    next;
 	}
 	elsif((num_chunks(\@tiers) > 1) || ($thr && !$t_need_flag && num_chunks(\@tiers) > 0)){
-	    my $r_chunk = next_chunk(\@tiers) if(!$thr || $t_need_flag);
+	   #gets chunk or tier
+	   my $r_chunk;
+	    if(!$thr || $t_need_flag){
+	       $r_chunk = next_chunk(\@tiers, 'chunk');
+	       if(! $r_chunk){
+		  my ($top) = sort {$b->tier_type <=> $a->tier_type} @tiers;
+		  $r_chunk = next_chunk([$top]);
+	       }
+	    }
 
 	    #if chunk is tier, treat as such
 	    if(ref($r_chunk) eq 'Process::MpiTiers'){
@@ -949,7 +974,7 @@ else {
 	    $what = $need_helper;
 	}
 	elsif(result_count(\@tiers) < chunk_total_count(\@tiers)){
-	    my $r_chunk = next_chunk(\@tiers) if(!$thr || $t_need_flag);
+	    my $r_chunk = next_chunk(\@tiers, 'chunk') if(!$thr || $t_need_flag);
 
 	    #if chunk is tier, treat as such
 	    if(ref($r_chunk) eq 'Process::MpiTiers'){
@@ -1033,7 +1058,9 @@ else {
 	    #give chunk to thread
 	    if($thr && defined($chunk) && chunk_total_count(\@tiers) > 1){
 		$t_need_flag = 0;
-		$t_chunk = freeze(\$chunk);
+		my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+		store(\$chunk, $file);
+		$t_chunk = $file;
 		$chunk = undef;
 	    }
 
@@ -1071,7 +1098,6 @@ else {
 	    if ($what == $need_helper){
 		#send the number of helpers required
 		my $num_helpers_req = (num_chunks(\@tiers) - @$locs > 0) ? num_chunks(\@tiers) - @$locs : 0;
-		$num_helpers_req++ if($chunk);
 		print "HELPER/RESULT REQUESTED\t|  SEND\t|  work_order (num_helpers_req)\t|  $rank\t-->\t$root\n" if($main::debug);
 		MPI_Send(\$num_helpers_req, 1, MPI_INT, $root, $work_order, MPI_COMM_WORLD);
 		
@@ -1091,10 +1117,16 @@ else {
 		print "HELPER/RESULT REQUESTED\t|  SEND\t|  who_I_am (for *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
 		MPI_Send(\$rank, 1,  MPI_INT, $helper, $who_I_am, MPI_COMM_WORLD); #say I'm the one who needs help
 
+		#skip root helper here (comment out to have root helper)
+		if($helper == $root){
+		   print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (reset *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
+                   MPI_Send(\$c_reset, 1, MPI_INT, $helper, $c_req_status, MPI_COMM_WORLD); #send reset signal
+		   next;
+		}
+
 		#send chunk if availabile
-		my $chnk = $chunk || next_chunk(\@tiers, 1);
-		$chunk = undef if($chunk);
-		if($chnk && ($helper != 0 || (ref($chnk) ne 'Process::MpiTiers'))){
+		my $chnk = next_chunk(\@tiers, 'tier') || next_chunk(\@tiers, 'chunk');
+		if($chnk && (ref($chnk) ne 'Process::MpiTiers')){
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (go_chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
 		    MPI_Send(\$go_chunk, 1, MPI_INT, $helper, $c_req_status, MPI_COMM_WORLD); #say chunk is available
 		    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_data (chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debug);
@@ -1125,9 +1157,8 @@ else {
 		MPI_Send(\$rank, 1,  MPI_INT, $loc, $who_I_am, MPI_COMM_WORLD); #restablish relationship
 
 		#send something else or release helper
-		if($chunk || num_chunks(\@tiers) > 0){
-		    my $chnk = $chunk || next_chunk(\@tiers, 1);
-		    $chunk = undef if($chunk);
+		if(num_chunks(\@tiers) > 0){
+		    my $chnk = next_chunk(\@tiers, 'tier') || next_chunk(\@tiers, 'chunk');
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (go_chunk xhelpers)\t|  $rank\t-->\t$loc\n" if($main::debug);
                     MPI_Send(\$go_chunk, 1, MPI_INT, $loc, $c_req_status, MPI_COMM_WORLD); #say chunk is available
 		    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_data (chunk xhelpers)\t|  $rank\t-->\t$loc\n" if($main::debug);
@@ -1220,15 +1251,17 @@ sub node_thread {
       #load serialized tier into tier
       if(! defined ($tier) && defined ($t_tier)){
 	 $t_need_flag = 0;
-	 $tier = ${thaw($t_tier)};
+	 $tier = ${retrieve($t_tier)};
 	 $tier->rank($rank); #set rank
+	 unlink $t_tier;
 	 $t_tier = undef;
 	 next;
       }#process tier
       elsif(defined($tier)){
 	 #get chunk results from other nodes
-	 while(my $res = shift @returned_chunks){
-	    $res = ${thaw($res)};
+	 while(my $file = shift @returned_chunks){
+	    my $res = ${retrieve($file)};
+	    unlink($file);
 	    $tier->update_chunk($res);
 	 }
 
@@ -1238,15 +1271,17 @@ sub node_thread {
 	 #get all chunks available
 	 my $chnk = $tier->next_chunk;
 	 while(my $o_chnk = $tier->next_chunk){
-	    $o_chnk = freeze(\$o_chnk);
-	    push (@chunks, $o_chnk);
+	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    store(\$o_chnk, $file);
+	    push (@chunks, $file);
 	 }
 
 	 #run chunks one at a time
 	 $chnk->run($rank) if ($chnk);
 	 $tier->update_chunk($chnk) if ($chnk);
-	 while($chnk = shift @chunks){
-	    $chnk = ${thaw($chnk)};
+	 while(my $file = shift @chunks){
+	    $chnk = ${retrieve($file)};
+	    unlink($file);
 	    if($tier->failed){ #skip chunks after failure
 		$tier->update_chunk($chnk);
 		next;
@@ -1269,7 +1304,9 @@ sub node_thread {
 	    $tier = undef;
 
 	    sleep 1 while (defined ($t_tier_result)); #pause incase result will be overwritten
-	    $t_tier_result = freeze(\$tier_result);
+	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    store(\$tier_result, $file);
+	    $t_tier_result = $file;
 	    $tier_result = undef;
 	    $t_need_flag = 1;
 	 }#take a break
@@ -1282,14 +1319,17 @@ sub node_thread {
       }#load serialized chunk into chunk
       elsif(! defined ($chunk) && defined ($t_chunk)){
 	 $t_need_flag = 0;
-	 $chunk = ${thaw($t_chunk)};
+	 $chunk = ${retrieve($t_chunk)};
+	 unlink($t_chunk);
 	 $t_chunk = undef;
 	 next;
       }#process chunk
       elsif(defined($chunk)){
 	 $chunk->run($rank);
 	 sleep 1 while (defined ($t_chunk_result)); #pause incase result will be overwritten
-	 $t_chunk_result = freeze(\$chunk);
+	 my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	 store(\$chunk, $file);
+	 $t_chunk_result = $file;
 	 $chunk = undef;
 	 $t_need_flag = 1;
 	 next;
@@ -1315,10 +1355,20 @@ sub totemp{
 #function to itterate through chunk buffer and return the first MpiChunk found
 sub next_chunk {
    my $buffer = shift;
+   my $what;
 
-   for(my $i = @$buffer - 1; $i >= 0; $i--){
-      my $chunk = $buffer->[$i]->next_chunk();
-      return $chunk if($chunk);
+   #return outer chunks first
+   if(!$what || $what eq 'chunk'){
+      for(my $i = @$buffer - 1; $i >= 0; $i--){
+	 my $chunk = $buffer->[$i]->next_chunk($what);
+	 return $chunk if($chunk);
+      }
+   }
+   else{ #return inner chunks first
+      for(my $i = 0; $i < @$buffer; $i++){
+         my $chunk = $buffer->[$i]->next_chunk($what);
+         return $chunk if($chunk);
+      }
    }
 
    return undef;

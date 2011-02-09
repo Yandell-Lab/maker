@@ -166,7 +166,7 @@ sub careful_cluster_phat_hits {
 }
 #------------------------------------------------------------------------
 sub mani_sort {
-	criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a) || criteria_3($b) <=> criteria_3($a);
+   criteria($b) <=> criteria($a) || criteria_2($b) <=> criteria_2($a) || criteria_3($b) <=> criteria_3($a);
 }
 #------------------------------------------------------------------------
 sub criteria {
@@ -305,6 +305,7 @@ sub shadow_cluster {
 	}
 
 	#now sort clusters to depth
+	#this is very very ugly but the cleaner solution runs so much slower
 	if($depth != 0){
 	    print STDERR " sorting hits in shadow cluster...\n" unless($main::quiet);
 	    my $j = 0;
@@ -321,14 +322,14 @@ sub shadow_cluster {
 			while(my $key = each %types){
 			    my $s = $types{$key};
 			    if(@$s > $depth){
-				$s = [(sort mani_sort @$s)[0..$depth-1]];
+			       $s = [(sort mani_sort @$s)[0..$depth-1]];
 			    }
 			    push(@keepers, @$s);
 			}
 			$c = \@keepers;
 		    }
 		    else{
-			$c = [(sort mani_sort @$c)[0..$depth-1]];
+		       $c = [(sort mani_sort @$c)[0..$depth-1]];
 		    }
 		}
 		$j++;

@@ -155,14 +155,16 @@ sub go_to_level {
 
     return $self->_initialize_level($level);
 }
-
 #--------------------------------------------------------------
 #itteratively gets the next chunk from the tier.  It returns
 #undef if there is no chunk, or if the tier cannot yet advance
 
 sub next_chunk {
    my $self = shift;
-   my $chunk_first = shift;
+   my $what = shift; #tier or chunk
+
+   die "ERROR: Improper type specification in Process::MpiTiers:next_chunk\n"
+       if($what && $what ne 'chunk' && $what ne 'tier');
 
    warn "WARNING: You must always set a rank before running MpiTiers\n"
        if(! defined $self->{RANK});
@@ -183,29 +185,20 @@ sub next_chunk {
    #get level after doing any necessary moves to next level
    my $level = $self->{LEVEL}{CURRENT};
 
-   #if flag is set, try and return MpiChunks first over Mpi Tiers
-   if($chunk_first){
-      my @skip;
-      my $chunk;
-      while(($chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}})){
-	 if(ref($chunk) eq ref($self)){
-	    push(@skip, $chunk);
-	    next;
-	 }
-	 else{
-	    last;
-	 }
-      }
-      unshift(@{$self->{LEVEL}{ALL}{CHUNKS}}, @skip);
-      return $chunk if($chunk);
+   #get chunk to return
+   my $chunk;
+   my @skip;
+   while(($chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}})){
+      last if(! $what);
+      last if($what eq 'chunk' && ref($chunk) ne ref($self));
+      last if($what eq 'tier' && ref($chunk) eq ref($self));
+      
+      push(@skip, $chunk);
+      $chunk = undef;
    }
-   
-   if (my $chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}}) {
-      return $chunk;
-   }
-   else{
-      return undef;
-   }
+
+   unshift(@{$self->{LEVEL}{ALL}{CHUNKS}}, @skip);
+   return $chunk;
 }
 
 #--------------------------------------------------------------
@@ -712,7 +705,7 @@ sub id_safe {
 }
 
 #-------------------------------------------------------------
-#returns level a child belongs to in parent for children teirs
+#returns level the child tier belongs to in parent
 
 sub level {
    my $self = shift @_;
@@ -721,6 +714,14 @@ sub level {
    $level = $self->{LEVEL}{CURRENT} if(!$level);
 
    return $level;
+}
+#-------------------------------------------------------------
+#returns tier_type value for the given tier
+
+sub tier_type {
+   my $self = shift @_;
+
+   return $self->{TIER_TYPE};
 }
 #-------------------------------------------------------------
 #returns the rank of the tier
