@@ -133,7 +133,7 @@ sub getDef {
 	$fasta = $$fasta while(ref($fasta) eq 'REF');
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
-	my ($def) = $$fasta =~ /(>[^\n\cM]+)/;
+	my ($def) = $$fasta_ref =~ /(>[^\n\cM]+)/;
 	
 	return $def;
 }
