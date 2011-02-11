@@ -133,6 +133,8 @@ sub getDef {
 	$fasta = $$fasta while(ref($fasta) eq 'REF');
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
+	die if(ref($fasta) eq '');
+
 	my ($def) = $$fasta_ref =~ /(>[^\n\cM]+)/;
 	
 	return $def;
@@ -218,6 +220,60 @@ sub getSeqRef {
     return \$seq;
 }
 #-------------------------------------------------------------------------------
+sub getSeqLength {
+    my $fasta = shift;
+
+    #always work with references
+    $fasta = $$fasta while(ref($fasta) eq 'REF');
+    my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+    my $def = getDef($fasta);
+    $fasta_ref = fasta2seqRef($fasta_ref);
+    my $length = length($$fasta_ref);
+    $fasta_ref = seq2fastaRef($def, $fasta_ref);
+
+    return $length;
+}
+
+#-------------------------------------------------------------------------------
+sub fasta2seqRef {
+    my $fasta = shift;
+
+    #always work with references
+    $fasta = $$fasta while(ref($fasta) eq 'REF');
+    my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+    $$fasta_ref =~ s/(>[^\n\cM]+)//; #remove header
+    $$fasta_ref =~ s/[^A-Za-z]//g; #remove whitespace and binary characters
+
+    return $fasta_ref;
+}
+#-------------------------------------------------------------------------------
+sub fasta2seq {
+    my $fasta = shift;
+    return ${fasta2seqRef(\$fasta)};
+}
+#-------------------------------------------------------------------------------
+sub seq2fastaRef {
+    my $def = shift;
+    my $seq = shift;
+
+    #always work with references
+    $seq = $$seq while(ref($seq) eq 'REF');
+    my $fasta_ref = (ref($seq) eq '') ? \$seq : $seq;
+    $$fasta_ref =~ s/(.{1,60})/$1\n/g;
+    $$fasta_ref =~ s/^(.)/$def\n$1/;
+
+    return $fasta_ref;
+}
+#-------------------------------------------------------------------------------
+sub seq2fasta {
+    my $def = shift;
+    my $seq = shift;
+    
+    return ${seq2fastaRef($def, \$seq)};
+}
+#-------------------------------------------------------------------------------
 sub ucFasta{
     my $fasta = shift;
 
@@ -232,9 +288,11 @@ sub ucFastaRef{
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;	
 
 	my $def = getDef($fasta_ref);
-	my $seq = uc(getSeq($fasta_ref));
+	$fasta_ref = fasta2seqRef($fasta_ref);
+	$$fasta_ref =~ tr/a-z/A-Z/;
+	$fasta_ref = seq2fastaRef($def, $fasta_ref);
 
-        return toFastaRef($def, \$seq);
+        return $fasta_ref;
 }
 #-------------------------------------------------------------------------------
 sub revComp {

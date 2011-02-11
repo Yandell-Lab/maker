@@ -82,12 +82,12 @@ sub special_cluster_phat_hits {
 
         my @careful_clusters;
         foreach my $c (@{$p_clusters}){
-                my $cares = careful_cluster($seq, $c, $flank);
+                my $cares = careful_cluster($c, $flank);
                 push(@careful_clusters, @{$cares});
         }
 
         foreach my $c (@{$m_clusters}){
-                my $cares = careful_cluster($seq, $c, $flank);
+                my $cares = careful_cluster($c, $flank);
                 push(@careful_clusters, @{$cares});
         }
 
@@ -153,12 +153,12 @@ sub careful_cluster_phat_hits {
         
         my @careful_clusters;
         foreach my $c (@{$p_clusters}){
-                my $cares = careful_cluster($seq, $c, $flank);
+                my $cares = careful_cluster($c, $flank);
                 push(@careful_clusters, @{$cares});
         }
 
         foreach my $c (@{$m_clusters}){
-                my $cares = careful_cluster($seq, $c, $flank);
+                my $cares = careful_cluster($c, $flank);
                 push(@careful_clusters, @{$cares});
         }
 
@@ -465,7 +465,7 @@ sub careful_cluster {
     my $phat_hits = shift;
     my $flank     = shift;
 
-    return SimpleCluster::cluster_hits($phat_hits, $flank);
+    return SimpleCluster::cluster_on_hsps($phat_hits, $flank);
 }
 #------------------------------------------------------------------------
 sub show_clusters {

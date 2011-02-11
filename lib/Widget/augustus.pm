@@ -388,16 +388,20 @@ sub parse {
 	my $q_file = shift;
 
 	my $fasta;
+	my $def;
+	my $q_seq;
+
 	if($q_file =~ /^>/){
-	    $fasta = $q_file;
+	    $fasta   = $q_file;
+	    $def     = Fasta::getDef(\$fasta);
+	    $q_seq   = Fasta::getSeqRef(\$fasta);
 	}
 	else{
 	    my $iterator = new Iterator::Fasta($q_file);
-	    $fasta = $iterator->nextEntry();
+	    $fasta = $iterator->nextFastaRef();
+	    $def     = Fasta::getDef(\$fasta);
+	    $q_seq   = Fasta::fasta2seqRef(\$fasta);
 	}
-
-        my $def     = Fasta::getDef($fasta);
-        my $q_seq   = Fasta::getSeqRef($fasta);
 
         my ($q_name)  = $def =~ /^>(.+)/;
 

@@ -436,8 +436,10 @@ sub update_chunk {
    elsif($chunk->terminated){
       #let the chunk add results to $self->{VARS}
       my $VARS = $self->{VARS};
-      my $stat = $chunk->_result($VARS, $level_num, $tier_type, $self);
-      $chunk->_finalize($self) if($stat && $chunk->can('_finalize'));
+      if(! $self->failed){
+	  my $stat = $chunk->_result($VARS, $level_num, $tier_type, $self);
+	  $chunk->_finalize($self) if($stat && $chunk->can('_finalize'));
+      }
    }
    else{
        die "ERROR: Logic error, attempt to update unfinished chunk\n";

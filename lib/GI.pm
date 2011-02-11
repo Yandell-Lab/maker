@@ -953,6 +953,12 @@ sub genemark {
    my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
+   my $alt_file    = shift;
+
+   if($alt_file && $seq_id =~ /\.masked$/){
+       $seq_id =~ s/\.masked$//;
+       $in_file = $alt_file;
+   }
 
    #genemark sometimes fails if called directly so I built a wrapper
    my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";

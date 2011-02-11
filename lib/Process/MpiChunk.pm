@@ -147,8 +147,19 @@ sub _on_failure {
 
    $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
 
-   $tier->{VARS} = {};
-   $tier->{RESULTS} = {};
+   if($tier->tier_type == 0){
+       my $def = $tier->{VARS}->{q_def};
+       my $seq = $tier->{VARS}->{q_seq_ref};
+
+       $tier->{VARS} = {};
+       $tier->{RESULTS} = {};
+
+       $tier->{VARS}->{fasta} = Fasta::seq2fastaRef($def, $seq);
+   }
+   else{
+       $tier->{VARS} = {};
+       $tier->{RESULTS} = {};
+   }
 
    return;
 }
@@ -364,19 +375,16 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    $VARS->{fasta} = \($VARS->{fasta}) if(! ref($VARS->{fasta}));
-	    ${$VARS->{fasta}} =~ tr/[a-z]/[A-Z]/; #build uppercase fasta
-	    my $fasta = $VARS->{fasta};
+	    my $fasta = Fasta::ucFastaRef(\$VARS->{fasta}); #build uppercase fasta
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    	    
+	    
 	    #get fasta parts
 	    my $q_def = Fasta::getDef($fasta); #Get fasta header
-	    my $q_seq_length = $$fasta =~ tr/[A-Z]/[A-Z]/; #seq length
-
 	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
-	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier	    
-	    
+	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
+	    my $q_seq_length = Fasta::getSeqLength($fasta); #seq length
+
 	    #set up base and void directories for output
 	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
 	    
@@ -393,9 +401,7 @@ sub _go {
 	    my $unmasked_file = $LOG->fasta_file();
 
 	    #make sequence only
-	    my $q_seq_ref = $fasta;
-	    $$q_seq_ref =~ s/>[^\n]+//;
-	    $$q_seq_ref =~ s/[^A-Za-z]//g;
+	    my $q_seq_ref = Fasta::fasta2seqRef($fasta);
 	    $fasta = undef;
 
 	    my $LOCK = $LOG->strip_off_lock();
@@ -504,9 +510,7 @@ sub _go {
 	    }
 	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
 	       my $iterator = new Iterator::Fasta($VARS->{the_void}."/query.masked.fasta");
-	       $VARS->{masked_total_seq} = $iterator->nextFastaRef();
-	       ${$VARS->{masked_total_seq}} =~ s/>[^\n]+//;
-	       ${$VARS->{masked_total_seq}} =~ s/[^A-Z]//g;
+	       $VARS->{masked_total_seq} = Fasta::fasta2seqRef($iterator->nextFastaRef());
                $next_level = 3;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -931,11 +935,11 @@ sub _go {
 	    
 	    #print masked fasta
 	    my $masked_file = $the_void."/query.masked.fasta";
-	    $$masked_total_seq =~ s/(.{1,60})/$1\n/g;
+	    $masked_total_seq = Fasta::seq2fastaRef($q_def." masked", $masked_total_seq);
 	    open(my $OUT, "> $masked_file");
-	    print $OUT "$q_def masked\n".$$masked_total_seq;
+	    print $OUT $$masked_total_seq;
 	    close($OUT);
-	    $$masked_total_seq =~ s/[^A-Za-z]//g;
+	    $masked_total_seq = Fasta::fasta2seqRef($masked_total_seq);
 
 	    #==ab initio predictions here
 	    #do masked predictions first
