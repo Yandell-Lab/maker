@@ -37,7 +37,8 @@ sub polish {
 	my $min_intron = shift;
 	my $matrix     = shift;
 
-	($p_len, $g_len) = polisher::prep($g_file, $p_file) if(!$p_len || !$g_len);
+	$p_len = polisher::prep($p_file) if(!$p_len);
+        $g_len = polisher::prep($g_file) if(!$g_len);
 
 	my $hits = p_exonerate($g_file, 
 			       $p_file, 

@@ -1210,7 +1210,7 @@ sub polish_exonerate {
 	    $min_intron = 1;
 	    foreach my $coor (split(',', $1)){
 		if(my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
-		    next if(ref($hit));
+		    next if($type eq 'e' && ref($hit));
 		    ($bB, $bE) = ($bE, $bB) if($bB > $bE);
 		    
 		    next if($name ne $bName);
