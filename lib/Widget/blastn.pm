@@ -35,10 +35,11 @@ sub run {
    
    if (defined($command)){
       $self->print_command($command);
-      my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+      my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+      my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
       local $/ = \1;
       my $all_err;
-      while (my $line = <CHLD_ERR>){
+      while (my $line = <$CHLD_ERR>){
 	 $all_err .= $line;
 	 print STDERR $line unless($main::quiet);
       }
@@ -46,9 +47,9 @@ sub run {
       if ($? != 0 && $all_err !~ /There are no valid contexts/){
 	 #run a second time on failure
 	 sleep 15;
-	 $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+	 $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	 $all_err = '';
-	 while (my $line = <CHLD_ERR>){
+	 while (my $line = <$CHLD_ERR>){
 	    $all_err .= $line;
 	    print STDERR $line unless($main::quiet);
 	 }

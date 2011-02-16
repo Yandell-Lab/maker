@@ -38,7 +38,8 @@ sub run {
 	   $self->print_command($command);
 
 	   $ENV{PERL_SIGNALS} = 'unsafe';
-	   my $pid = open3(\*CHLD_IN, \*CHLD_ERR, \*CHLD_ERR, $command);
+	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 
 	   local $/ = \1;
@@ -49,7 +50,7 @@ sub run {
 	   eval{
 	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
 	       alarm 1800;
-	       while (my $line = <CHLD_ERR>){
+	       while (my $line = <$CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
 	       }
@@ -101,7 +102,7 @@ sub run {
 
 	   #always try twice because iprscan is unstable
 	   $ENV{PERL_SIGNALS} = 'unsafe';
-	   $pid = open3(\*CHLD_IN, \*CHLD_ERR, \*CHLD_ERR, $command);
+	   $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 
 	   undef $err;
@@ -111,7 +112,7 @@ sub run {
 	   eval{
 	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
 	       alarm 600;
-	       while (my $line = <CHLD_ERR>){
+	       while (my $line = <$CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		   $err .= $line;
 	       }

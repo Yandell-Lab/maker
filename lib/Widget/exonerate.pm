@@ -34,18 +34,19 @@ sub run {
 
 	if (defined($command)){
 		$self->print_command($command);
-		my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 		local $/ = \1;
-		while (my $line = <CHLD_ERR>){
+		while (my $line = <$CHLD_ERR>){
 		   print STDERR $line unless($main::quiet);
 		}
 		waitpid $pid, 0;
 
 		#try a second time
 		if($? != 0){
-		   my $pid = open3(\*CHLD_IN, \*CHLD_OUT, \*CHLD_ERR, $command);
+		   $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 		   local $/ = \1;
-		   while (my $line = <CHLD_ERR>){
+		   while (my $line = <$CHLD_ERR>){
 		      print STDERR $line unless($main::quiet);
 		   }
 		   waitpid $pid, 0;
