@@ -39,11 +39,18 @@ sub new {
 
 	if($gff_file eq $fasta_file){
 	    my $line;
+	    my $last = $self->fileHandle()->getpos();
 	    while($line = <$fh>){
 		if ($line =~ /^\#\#FASTA/){
 		    $self->startPos($self->fileHandle()->getpos());
 		    last;
 		}
+		elsif($line =~ /^\>/){
+		    $self->startPos($last);
+		    $self->fileHandle()->setpos($self->startPos);
+		    last;
+		}
+		$last = $self->fileHandle()->getpos();
 	    }
 	}
 

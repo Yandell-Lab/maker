@@ -23,10 +23,7 @@ use Bio::Search::HSP::PhatHSP::tblastx;
 #--------------------------- FUNCTIONS ----------------------------------
 #------------------------------------------------------------------------
 sub process {
-	my $query_seq = pop;
-
 	my @features;  
-
 	while (my $f = shift){
 	   push(@features, @{$f});
 	}
@@ -34,7 +31,7 @@ sub process {
 	my ($tes, $lcs) = separate_types(\@features);
 
 	my $shattered_lcs = shatter_hits($lcs);
-	my $tes_keepers   = clean_tes($query_seq, $tes);
+	my $tes_keepers   = clean_tes($tes);
 
 	my @best_keepers  = (@{$shattered_lcs}, @{$tes_keepers});
 
@@ -66,12 +63,11 @@ sub l_sort {
 }
 #------------------------------------------------------------------------
 sub clean_tes {
-	my $seq = shift;
 	my $tes = shift;
 
 	my $shattered_hits = shatter_hits($tes);
 
-	my $clusters = cluster::shadow_cluster(10, $seq, $shattered_hits, 20);
+	my $clusters = cluster::shadow_cluster(10, $shattered_hits, 20);
 
 	my @keepers;
 	foreach my $c (@{$clusters}){
@@ -94,8 +90,8 @@ sub mask_chunk {
 
 	my $seq = $chunk->seq();
 
-	_hard_mask_seq (\$seq, $tes_coors, 50, 'N');
-    	_soft_mask_seq(\$seq, $lcs_coors, 0);
+	_hard_mask_seq ($seq, $tes_coors, 50, 'N');
+    	_soft_mask_seq($seq, $lcs_coors, 0);
 
 	$chunk->seq($seq);
 	

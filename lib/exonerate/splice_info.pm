@@ -139,7 +139,9 @@ sub set_donors_acceptors {
 	    my $E = $pre_hsp->nE('query') - 1; #make array space value
 	    my $length = 2; #substr length
 	    my $p = ($strand == 1) ? $E + 1 : $E - $length; #substr start position
-	    my $donor = substr($$seq, $p, $length);
+	    my $donor = (ref($seq) eq 'SCALAR') ? 
+		substr($$seq, $p, $length) : $seq->subseq($p+1, $p+$length-1);
+
 	    $donor = Fasta::revComp($donor) if($strand == -1);
 	    $pre_hsp->{donor} = $donor;
 	}
@@ -148,7 +150,8 @@ sub set_donors_acceptors {
 	    my $B = $pos_hsp->nB('query') - 1; #make array space value
 	    my $length = 2; #substr length
 	    my $p = ($strand == 1) ? $B - $length : $B + 1; #substr start position
-	    my $acceptor = substr($$seq, $p, $length);
+	    my $acceptor = (ref($seq) eq 'SCALAR') ?
+		substr($$seq, $p, $length) : $seq->subseq($p+1, $p+$length-1);
 	    $acceptor = Fasta::revComp($acceptor) if($strand == -1);
 	    $pos_hsp->{acceptor} = $acceptor;
 	}

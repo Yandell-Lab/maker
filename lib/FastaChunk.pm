@@ -25,13 +25,32 @@ sub new {
 	return $self;
 }
 #-------------------------------------------------------------------------------
+sub seq {
+    my $self = shift;
+    my $arg  = shift;
+
+    if(defined($arg)){
+        $arg = $$arg while(ref($arg) eq 'REF');
+        my $seq_ref = (ref($arg) eq '') ? \$arg : $arg;
+
+	$self->{seq} = $seq_ref;
+    }
+
+    if(ref($self->{seq}) eq 'SCALAR'){
+	return $self->{seq};
+    }
+    elsif($self->{seq}){
+	return \ ($self->{seq}->subseq($self->start, $self->end));
+    }
+}
+#-------------------------------------------------------------------------------
 sub write_file {
 	my $self      = shift;
 	my $file_name = shift;
 
 	$self->fasta_file_location($file_name);
 
-	FastaFile::writeFile($self->fasta, $file_name);
+	FastaFile::writeFile($self->fasta_ref, $file_name);
 }
 #-------------------------------------------------------------------------------
 sub erase_fasta_file {
@@ -56,6 +75,15 @@ sub fasta {
 	my $seq = $self->seq();
 
 	return Fasta::toFasta($def, \$seq);
+}
+#-------------------------------------------------------------------------------
+sub fasta_ref {
+	my $self = shift;
+
+	my $def = $self->def();
+	my $seq = $self->seq();
+
+	return Fasta::toFastaRef($def, $seq);
 }
 #-------------------------------------------------------------------------------
 #---------------------------  CLASS FUNCTIONS ----------------------------------
@@ -85,5 +113,3 @@ sub AUTOLOAD {
 }
 #------------------------------------------------------------------------
 1;
-
-

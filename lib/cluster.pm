@@ -22,7 +22,6 @@ use Shadower;
 #------------------------------------------------------------------------
 sub clean_and_cluster {
     my $depth   = shift;
-    my $seq     = shift;
     my $keepers = shift;
     my $flank   = shift || 0;
     my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
@@ -32,10 +31,10 @@ sub clean_and_cluster {
     
     my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $keepers);
     
-    $p = clean::complexity_filter($p, $seq);
-    $m = clean::complexity_filter($m, $seq);
-    my $p_clusters = shadow_cluster(0, $seq, $p, $flank);
-    my $m_clusters = shadow_cluster(0, $seq, $m, $flank);
+    $p = clean::complexity_filter($p);
+    $m = clean::complexity_filter($m);
+    my $p_clusters = shadow_cluster(0, $p, $flank);
+    my $m_clusters = shadow_cluster(0, $m, $flank);
     
     my $counter = 0;
     my @clusters = (@$p_clusters, @$m_clusters);
@@ -43,7 +42,7 @@ sub clean_and_cluster {
     print STDERR "cleaning clusters....\n" unless $main::quiet;
     foreach my $c (@$p_clusters, @$m_clusters){
 	print STDERR "total clusters:$num_c now processing $counter\n" unless($main::quiet);
-	$c = clean::get_best_alt_splices($c, $seq, 10);
+	$c = clean::get_best_alt_splices($c, 10);
 
 	next if($depth == 0 || @$c <= $depth);
 	    
@@ -72,13 +71,12 @@ sub clean_and_cluster {
 sub special_cluster_phat_hits {
         my $phat_hits = shift;        
 	my $ests      = shift;
-	my $seq       = shift;        
 	my $flank     = shift || 10;
 
         my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $phat_hits);
 
-        my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
-        my $m_clusters = shadow_cluster(20, $seq, $m, $flank);
+        my $p_clusters = shadow_cluster(20, $p, $flank);
+        my $m_clusters = shadow_cluster(20, $m, $flank);
 
         my @careful_clusters;
         foreach my $c (@{$p_clusters}){
@@ -101,7 +99,7 @@ sub special_cluster_phat_hits {
 	my $i = 0;
 	foreach my $c (@careful_clusters){
 		my $coors  = PhatHit_utils::to_begin_and_end_coors($c, 'query');
-		my $pieces = Shadower::getPieces($seq, $coors, $flank);
+		my $pieces = Shadower::getVectorPieces($coors, $flank);
 
 		push(@{$special_clusters[$i]}, @{$c});
 		die "multiple pieces in cluster::special_cluster_phat_hits!\n"
@@ -129,7 +127,7 @@ sub special_cluster_phat_hits {
 		push(@remains, $est) 
 		unless defined($done{$est->{temp_id}});
 	}
-	my $new_e_clusters = shadow_cluster(20, $seq, \@remains, $flank);
+	my $new_e_clusters = shadow_cluster(20, \@remains, $flank);
 
 	my $start = @special_clusters;
 
@@ -144,12 +142,11 @@ sub special_cluster_phat_hits {
 #------------------------------------------------------------------------
 sub careful_cluster_phat_hits {
         my $phat_hits = shift;
-	my $seq       = shift;
 	my $flank     = shift || 10;
         my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $phat_hits);
 
-        my $p_clusters = shadow_cluster(20, $seq, $p, $flank);
-        my $m_clusters = shadow_cluster(20, $seq, $m, $flank);
+        my $p_clusters = shadow_cluster(20, $p, $flank);
+        my $m_clusters = shadow_cluster(20, $m, $flank);
         
         my @careful_clusters;
         foreach my $c (@{$p_clusters}){
@@ -230,7 +227,6 @@ sub criteria_3 {
 #------------------------------------------------------------------------
 sub shadow_cluster {
         my $depth     = shift;
-        my $seq       = shift;
         my $phat_hits = shift; #these may be hits or clusters of hits
         my $flank     = shift;
 	my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
@@ -264,7 +260,7 @@ sub shadow_cluster {
 	    $c = {array => $c, start => $start, end => $end};
 	}
 
-        my $pieces = Shadower::getPieces($seq, $coors, $flank);
+        my $pieces = Shadower::getVectorPieces($coors, $flank);
  
         my @clusters;
         my $j_size = @{$pieces};

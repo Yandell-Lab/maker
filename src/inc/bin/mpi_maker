@@ -180,7 +180,9 @@ Options:
 #-------------------------------------------------------------------------------
 
 #--set object variables for serialization of data
-$Storable::forgive_me = 1; #allows serializaion of objects with code refs
+$Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
+#$Storable::Deparse = 1; #now serializes CODE refs
+#$Storable::Eval = 1;$ #now serializes CODE refs
 
 #------INITIATE MPI VARIABLES------
 my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
@@ -419,9 +421,7 @@ if ($rank == $root) {
 	$build = $GFF_DB->next_build;
 	
 	#---load genome multifasta/GFF3 file
-	$iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
-				       -gff => $CTL_OPT{'genome_gff'},
-				       );
+	$iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
 	$iterator->step($CTL_OPT{'_step'});
 	$iterator->skip_file($DS_CTL->{log});
     }
@@ -503,8 +503,8 @@ if ($rank == $root) {
 
 	    #as of 12/15/2010 threads will process only chunks and not tiers
 	    #uncomment this while statement to change that behavior
-	    #while (my $fasta = $iterator->nextFasta() || shift @failed || shift @interrupted){
-	    #    $tier = Process::MpiTiers->new({fasta => $fasta,
+	    #while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
+	    #    $tier = Process::MpiTiers->new({q_def => q_def,
 	    #    				CTL_OPT => \%CTL_OPT,
 	    #    				DS_CTL  => $DS_CTL,
 	    #    				GFF_DB  => $GFF_DB,
@@ -571,8 +571,8 @@ if ($rank == $root) {
 		my $tier;
 		my $f_count = @failed;
 		my $i_count = @interrupted;
-		while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrupted){
-		    $tier = Process::MpiTiers->new({fasta => $fasta,
+		while (my $q_def = $iterator->nextDef || shift @failed || shift @interrupted){
+		    $tier = Process::MpiTiers->new({q_def => $q_def,
 						    CTL_OPT => \%CTL_OPT,
 						    DS_CTL  => $DS_CTL,
 						    GFF_DB  => $GFF_DB,

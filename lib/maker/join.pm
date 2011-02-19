@@ -11,6 +11,8 @@ use PhatHit_utils;
 use compare;
 use cluster;
 use clean;
+use FastaSeq;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -383,8 +385,9 @@ sub join_f {
 	push(@evidence, $b_5->{f}->name) if defined($b_5->{f});
 	push(@evidence, $b_3->{f}->name) if defined($b_3->{f});
 
+	$new_f->queryLength(length_o($q_seq));
+
 	$new_f->evidence(\@evidence);
-	$new_f->queryLength(length($$q_seq));
 	$new_f->{_HMM} = $g->{_HMM} if($g->{_HMM});
 	$new_f->{_label} = $g->{_label} if($g->{_label});
 	$new_f->{translation_offset} += $d_offset if(defined $g->{translation_offset});

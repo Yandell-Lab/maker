@@ -84,6 +84,8 @@ sub nE {
 sub cigar_string {
     my $self = shift;
     
+    return($self->{_CIGAR}) if($self->{_CIGAR});
+
     my $cigar = '';
     
     my @nt = $self->query_string() =~ /(.)/g;
@@ -217,7 +219,7 @@ sub cigar_string {
 	}
     }
     
-    return $cigar;
+    return ($self->{_CIGAR} = $cigar);
 }
 #-------------------------------------------------------------------------------
 sub hasRun {

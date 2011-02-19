@@ -10,6 +10,7 @@ use FileHandle;
 use Widget;
 use PhatHit_utils;
 use IPC::Open3;
+use Symbol;
 
 @ISA = qw(
 	Widget
@@ -35,7 +36,7 @@ sub run {
 	if (defined($command)){
 	        my ($exe) = $command =~ /^([^\s]+)/;
 		$self->print_command($command);
-		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
 		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 		local $/ = \1;
 		while (my $line = <$CHLD_ERR>){

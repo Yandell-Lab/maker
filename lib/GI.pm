@@ -41,6 +41,7 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 use FastaDB;
+use FastaSeq;
 use Digest::MD5;
 use Bio::Root::Version 1.006; #force correct version of BioPerl
 
@@ -117,7 +118,7 @@ sub get_preds_on_chunk {
 }
 #-----------------------------------------------------------------------------
 sub merge_resolve_hits{
-   my $seq_ref = shift @_;
+   my $q_seq_obj = shift @_;
    my $def = shift @_;
    my $s_length = shift @_;
    my $fasta_index = shift @_;
@@ -136,7 +137,7 @@ sub merge_resolve_hits{
 			     $CTL_OPT{split_hit},
 			    );
 
-   $blast_keepers = reblast_merged_hits($seq_ref,
+   $blast_keepers = reblast_merged_hits($q_seq_obj,
 					$def,
 					$s_length,
 					$blast_keepers,
@@ -184,7 +185,6 @@ sub reblast_merged_hits {
       #find region of hit to get piece
       my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');   
       ($nB, $nE) = ($nE, $nB) if($nB > $nE);
-      my @coors = [$nB, $nE];
       my $F = ($nB - $CTL_OPT{split_hit} < 1) ? 1 : $nB - $CTL_OPT{split_hit};
       my $L = ($nE + $CTL_OPT{split_hit} > $p_seq_length) ? $p_seq_length : $nE + $CTL_OPT{split_hit};
       
@@ -192,28 +192,36 @@ sub reblast_merged_hits {
       my $chunk = new FastaChunk();
       $chunk->number(0);
       
-      #get input and ioutput blast file names
+      #get input and output blast file names
       my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
       my $o_file = get_blast_finished_name($chunk, $hit->name(), $the_void, $p_safe_id.".".$F.".".$L, $type);
       
       if(! -f $o_file){
 	 #extract sequence
-	 my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
-	 
+	 my $piece_seq;
+	 if(!ref($par_seq) || ref($par_seq) eq 'SCALAR'){
+	     my @coors = [$nB, $nE];
+	     my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
+	     $piece_seq = $piece->[0]->{piece};
+	 }
+	 else{ #seq object
+	     $piece_seq = $par_seq->subseq($F, $L);
+	 }
+
 	 #get piece fasta def, seq, and offset
 	 my $piece_def = $par_def." ".$F." ".$L;
-	 my $piece_seq = $piece->[0]->{piece};
 	 my $offset = $F - 1;
 	 
 	 #finish making the piece into a fasta chunk
-	 $chunk->seq($piece_seq);
+	 $chunk->seq(\$piece_seq);
 	 $chunk->def($piece_def);
 	 $chunk->parent_def($par_def);
-	 $chunk->size(length($$par_seq));	     #the max size of a chunk
-	 $chunk->length(length($chunk->seq())); #the actual size of a chunk
+	 $chunk->size($p_seq_length); #the max size of a chunk
+	 $chunk->length($L - $F + 1); #the actual size of a chunk
 	 $chunk->offset($offset);
 	 $chunk->is_last(1);
-	 $chunk->parent_seq_length(length($$par_seq));
+	 $chunk->is_first(1);
+	 $chunk->parent_seq_length($p_seq_length);
 	 
 	 #==build new fasta and db for blast search from hit name and db index	  
 	 if(! -f $t_file){
@@ -381,9 +389,9 @@ sub process_the_chunk_divide{
 
     #adjust cutoff to overlapping hits
     if($a_flag){
-       my $p_pieces = Shadower::getPieces(\$chunk->seq, $p_coors, $pred_flank);
+       my $p_pieces = Shadower::getVectorPieces($p_coors, $pred_flank);
        $p_pieces = [sort {$b->{e} <=> $a->{e}} @{$p_pieces}];
-       my $m_pieces = Shadower::getPieces(\$chunk->seq, $m_coors, $pred_flank);
+       my $m_pieces = Shadower::getVectorPieces($m_coors, $pred_flank);
        $m_pieces = [sort {$b->{e} <=> $a->{e}} @{$m_pieces}];
        
        foreach my $p_piece (@{$p_pieces}) {
@@ -587,13 +595,16 @@ sub create_blastdb {
    my @sets = (['_p_db', 'protein'],
 	       ['_e_db', 'est'],
 	       ['_a_db', 'altest'],
-	       ['_r_db', 'repeat_protein']);
+	       ['_r_db', 'repeat_protein'],
+	       ['_g_db', 'genome']
+	       );
    my %tries;
    my @check;
    while(my $set = shift @sets){
        my $count = @{[split(',', $CTL_OPT->{$set->[1]})]};
        $tries{$set->[1]}++;
        my $l_name = "$b_dir/".$set->[1].".$mpi_size.".$tries{$set->[1]};
+       $l_name = "$b_dir/".$set->[1].".".$tries{$set->[1]} if($set->[1] eq 'genome');
        
        my $lock;
        if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
@@ -656,6 +667,7 @@ sub split_db {
    my $mpi_size = shift @_ || 1;
    
    my @entries = split(',', $CTL_OPT->{$key});
+   @entries = split(',', $CTL_OPT->{"$key\_gff"}) if($key eq 'genome' && ! @entries);
    my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
    
    return ([]) if (! @entries);
@@ -670,6 +682,7 @@ sub split_db {
       my $b_dir = $CTL_OPT->{mpi_blastdb};
       my $bins = ($mpi_size % 10 == 0) ? (int(($mpi_size/$f_count)/10))*10 : (int(($mpi_size/$f_count)/10)+1)*10;
       $bins = 10 if($bins < 10);
+      $bins = 1 if($key eq 'genome');
       my $d_name = "$f_name\.mpi\.$bins";
       my $f_dir = "$b_dir/$d_name";
       my $t_dir = $TMP."/$d_name";
@@ -714,7 +727,7 @@ sub split_db {
       #set up a new database
       if($lock){
 	 #set up alternate names for short files
-	 my $fasta_iterator = new Iterator::Fasta($file);
+	 my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
 	 my $num_fastas = $fasta_iterator->number_of_entries();
 	 die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
 	 
@@ -764,27 +777,29 @@ sub split_db {
 	 my %alias;
 	 
 	 my $wflag = 1; #flag set so warnings gets printed only once 
-	 while (my $fasta = $fasta_iterator->nextEntry()) {
-	    my $def = Fasta::getDef(\$fasta);
+	 while (my $fasta = $fasta_iterator->nextFastaRef()) {
+	    my $def = Fasta::getDef($fasta);
 	    my $seq_id = Fasta::def2SeqID($def);
-	    my $seq_ref = Fasta::getSeqRef(\$fasta);
+	    my $seq_ref = Fasta::fasta2seqRef($fasta);
 	    
 	    #fix non standard peptides
 	    if (defined $alt) {
+	       $$seq_ref =~ tr/[a-z]/[A-Z]/;
 	       $$seq_ref =~ s/[\*\-]//g;
-	       $$seq_ref =~ s/[^abcdefghiklmnpqrstvwyzxACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
+	       $$seq_ref =~ s/[^ACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
 	    }
 	    #fix nucleotide sequences
 	    elsif($key !~ /protein/){
 	       #most programs use N for masking but for some reason the NCBI decided to
 	       #use X to mask their sequence, which causes many many programs to fail
+	       $$seq_ref =~ tr/[a-z]/[A-Z]/;
 	       $$seq_ref =~ s/\-//g;
-	       $$seq_ref =~ s/X/N/gi;
+	       $$seq_ref =~ s/X/N/g;
 	       die "ERROR: The nucleotide sequence file \'$file\'\n".
 		   "appears to contain protein sequence or unrecognized characters.\n".
 		   "Please check/fix the file before continuing.\n".
 		   "Invalid Character: $1\n\n"
-		   if($$seq_ref =~ /([^acgturykmswbdhvnxACGTURYKMSWBDHVNX\-\n])/);
+		   if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/);
 	    }
 	    
 	    #Skip empty fasta entries
@@ -808,9 +823,9 @@ sub split_db {
 	    }
 	    
 	    #reformat fasta, just incase
-	    my $fasta_ref = Fasta::toFastaRef($def, $seq_ref);
+	    my $fasta_ref = Fasta::seq2fastaRef($def, $seq_ref);
 	    
-	    #build part files only on multi processor
+	    #build part files
 	    my $fh = shift @fhs;
 	    print $fh $$fasta_ref;
 	    push (@fhs, $fh);
@@ -955,10 +970,9 @@ sub genemark {
    my $LOG         = shift;
    my $alt_file    = shift;
 
-   if($alt_file && $seq_id =~ /\.masked$/){
-       $seq_id =~ s/\.masked$//;
-       $in_file = $alt_file;
-   }
+   #genemark always uses the alt_file (no masking)
+   return [] if(! $alt_file);
+   $in_file = $alt_file;
 
    #genemark sometimes fails if called directly so I built a wrapper
    my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
@@ -1144,7 +1158,7 @@ sub fgenesh {
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
     my $chunk        = shift;
-    my $seq          = shift;
+    my $q_seq_obj    = shift;
     my $length       = shift;
     my $def          = shift;
     my $phat_hits    = shift;
@@ -1259,17 +1273,16 @@ sub polish_exonerate {
 	    }
 	    
 	    my $seq     = $fastaObj->seq();
-	    my $t_len = length($seq) if(!$t_len);
+	    $t_len      = length($seq) if(!$t_len);
 	    my $header  = $db_index->header_for_hit($hit);
 	    my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
 	    FastaFile::writeFile($fasta, $t_file);	
 	}
 	if(! -f $o_file){
 	    #get substring fasta of contig
-	    my @coors = [$B, $E];
-	    my $p = Shadower::getPieces($seq, \@coors, $pred_flank)->[0];
+	    my $p_seq = $q_seq_obj->subseq($F, $L);
 	    my $p_def = $def." ".$F." ".$L;
-	    my $p_fasta = Fasta::toFasta($p_def, \ ($p->{piece}));
+	    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
 	    FastaFile::writeFile($p_fasta, $d_file);
 
 	    unlink($o_tfile) if(-f $o_tfile);
@@ -1486,7 +1499,8 @@ sub build_all_indexes {
 
    my @dbs = (@{$CTL_OPT->{_e_db}},
 	      @{$CTL_OPT->{_p_db}},
-	      @{$CTL_OPT->{_a_db}}
+	      @{$CTL_OPT->{_a_db}},
+	      @{$CTL_OPT->{_g_db}}
 	     );
 
    my $index = build_fasta_index(\@dbs);

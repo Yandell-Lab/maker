@@ -75,30 +75,43 @@ sub set_current_contig {
 
     my $flag = 0;
     $flag = 1 if (defined $self->{seq_id});
-    $self->{seq_id} = shift;
+    my $id  = shift;
     my $seq = shift;
-    $self->{seq_length} = length($$seq);
 
-    $self->{seq_id} = uri_escape($self->{seq_id}, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+    #escape seqid per gff standards
+    $self->{seq_id} = uri_escape($id, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|");
 
-    $$seq =~ s/(.{1,60})/$1\n/g; #make 60 width fasta
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
+
+    if(! ref($seq) || ref($seq) eq 'SCALAR'){
+	$self->{seq_length} = length($$seq);
+
+	$$seq =~ s/(.{1,60})/$1\n/g; #make 60 width fasta
+	open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
+	print $SEQ ">".$self->{seq_id}."\n".$$seq;
+	close($SEQ);
+	$$seq =~ s/[^A-Za-z]//g; #make single line
+    }
+    else{
+	$self->{seq_length} = $seq->length;	
+
+	open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
+	print $SEQ ${&Fasta::seq2fastaRef($id, \ ($seq->seq))};
+	close($SEQ);	
+    }
+
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
-
+    
     #skip adding the optional sequence-region line because many programs
     #do not handle it correctly or consistently - 06/05/2010
     #print_txt($ANN, $self->contig_comment."\n");
-
+    
     print_txt($ANN, $self->contig_line."\n"); 
     close($ANN);
 
-    open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
-    print $SEQ ">".$self->{seq_id}."\n".$$seq;
-    close($SEQ);
     $lock->unlock;
-    $$seq =~ s/[^A-Za-z]//g; #make single line
 }
 #------------------------------------------------------------------------
 sub seq_length {

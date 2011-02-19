@@ -16,6 +16,8 @@ use Bio::Search::HSP::PhatHSP::augustus;
 use PhatHit_utils;
 use IPC::Open3;
 use FindBin;
+use Symbol;
+use FastaSeq;
 
 @ISA = qw(
 	Widget
@@ -117,14 +119,14 @@ sub get_exon_seq {
         my $exon  = shift;
         my $q_seq = shift;
 
-       my $e_b = $exon->{b};
-       my $e_e = $exon->{e};
+	my $e_b = $exon->{b};
+	my $e_e = $exon->{e};
 
         my $length = abs($e_e - $e_b) + 1;
 
-        ($e_b, $e_e) = ($e_e, $e_b) if $exon->{strand} == -1;
-
-        my $e_seq = substr($$q_seq, $e_b - 1, $length);
+        ($e_b, $e_e) = ($e_e, $e_b) if($e_b > $e_e);
+	
+	my $e_seq = substr_o($q_seq, $e_b - 1, $length);
 
         $e_seq = Fasta::revComp($e_seq) if $exon->{strand} == -1;
 
@@ -201,7 +203,7 @@ sub run {
 
 	if (defined($command)){
 	   $self->print_command($command);
-	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
 	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	   local $/ = \1;
 	   while (my $line = <$CHLD_ERR>){
@@ -398,10 +400,10 @@ sub parse {
 	    $q_seq   = Fasta::getSeqRef(\$fasta);
 	}
 	else{
-	    my $iterator = new Iterator::Fasta($q_file);
-	    $fasta = $iterator->nextFastaRef();
-	    $def     = Fasta::getDef(\$fasta);
-	    $q_seq   = Fasta::fasta2seqRef(\$fasta);
+            my $index = GI::build_fasta_index($q_file);
+            my ($id) = $index->get_all_ids;
+            $def = ">$id";
+            $q_seq   = $index->get_Seq_by_id($id);
 	}
 
         my ($q_name)  = $def =~ /^>(.+)/;
@@ -532,7 +534,7 @@ sub load_phat_hits {
 	my $genes   = shift;
 	my $params  = shift;
 
-	my $q_len = length($$q_seq);
+	my $q_len = length_o($q_seq);
 
 	my @keepers;
 	foreach my $g (@{$genes}){

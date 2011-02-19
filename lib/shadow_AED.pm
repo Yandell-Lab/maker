@@ -3,6 +3,7 @@
 #------------------------------------------------------------------------
 package shadow_AED;
 use strict;
+use Bit::Vector;
 
 sub get_abAED{
     my $hits = shift;
@@ -70,7 +71,6 @@ sub get_eAED {
 	   @b_seq[$s..$e] = map {1} ($s..$e);
        }
    }
-
 
    #fill in space between splice site crossing reads
    if($seq){
@@ -281,8 +281,8 @@ sub get_eAED {
 	   my @select =  ($tran->strand('query') == 1) ? ($bB..$bE) : reverse($bB..$bE);
 	   foreach my $i (@select){
 	       $b_seq[$i] += 1 if($b_seq[$i] == 2 && $ok_frames[$i]->{$phase});
-	       $phase = ($phase + 1) % 3
-	       }
+	       $phase = ($phase + 1) % 3;
+	   }
        }
    }
 
@@ -325,7 +325,8 @@ sub get_AED {
 
    my $length = $end - $start + 1;
    my $offset = $start; # do not - 1 so as to give array space coors
-   my @b_seq = map {0} (1..$length);
+   my $t_vec = Bit::Vector->new($length);
+   my $h_vec = Bit::Vector->new($length);
    
    #map out hit space
    foreach my $hit (@{$hits}){
@@ -339,7 +340,7 @@ sub get_AED {
 	 die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
 	 die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
-	 @b_seq[$s..$e] = map {1} ($s..$e);
+	 $h_vec->Interval_Fill($s, $e);
       }
    }
 
@@ -354,36 +355,14 @@ sub get_AED {
       die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
       die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
       
-      foreach my $i ($s..$e){
-	 $b_seq[$i] += 2;
-      }
+      $t_vec->Interval_Fill($s, $e);
    }
    
    #calculate AED
-   my %index = (0 => 0, #empty
-		1 => 0, #all evidence
-		2 => 0, #all transcript
-		3 => 0, #overlap
-	       );
-
-   foreach my $i (@b_seq){
-      $index{$i}++;
-   }
-   $index{1} += $index{3}; #make as total evidence
-   $index{2} += $index{3}; #make as total transcript
-
-   my @error = grep {$_ > 3} keys %index; #should not have keys greater than 3
-
-   #catch error caused by bad GFF3 input
-   die "ERROR: The feature being compared appears to be missing\n".
-       "some of it's structure.  This can happen when you use\n".
-       "a malformed GFF3 file as input to one of MAKER's evidence\n".
-       "passthrough options. Failed on ". $tran->name."\n".
-       "(from shadow_AED::get_AED)\n"
-       if($index{1} == 0 || $index{2} == 0 || @error);
-
-   my $spec = $index{3}/$index{2}; #specificity
-   my $sens = $index{3}/$index{1}; #sensitivity
+   my $inter = Bit::Vector->new($length);
+   $inter->Intersection($t_vec, $h_vec);
+   my $spec = $inter->Norm()/$t_vec->Norm(); #specificity
+   my $sens = $inter->Norm()/$h_vec->Norm(); #sensitivity
    my $AED = 1 - ($spec + $sens)/2;
 
    return $AED;

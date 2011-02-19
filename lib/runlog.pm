@@ -861,10 +861,10 @@ sub report_status {
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
    my $the_void = $self->{params}->{the_void};
-   my $fasta_ref = $self->{params}->{fasta_ref};
+   my $q_seq_obj = $self->{params}->{q_seq_obj};
    my $length = $self->{params}->{seq_length};
 
-   $self->{params}->{fasta_ref} = undef; #clear from object
+   delete($self->{params}->{q_seq_obj}); #clear from object
 
    #maintain lock only if status id positive (possible race condition?)
    $self->{LOCK}->maintain(30) if($flag > 0);
@@ -917,8 +917,9 @@ sub report_status {
 		   "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::qq);
 
+      
       open (my $DFAS, "> $out_dir/$seq_out_name.died.fasta");
-      print $DFAS $$fasta_ref;
+      print $DFAS ${&Fasta::seq2fastaRef($seq_id, \ ($q_seq_obj->seq))};
       close ($DFAS);
    }
    elsif($flag == -2){
@@ -942,15 +943,6 @@ sub report_status {
    }
    else{
       die "ERROR: No valid continue flag\n";
-   }
-
-   #make local copy of fasta file
-   if($flag > 0){
-      $self->{fasta_file} = "$the_void/query.fasta";
-      
-      open (my $FAS, "> $the_void/query.fasta");
-      print $FAS $$fasta_ref;
-      close ($FAS);
    }
 }
 #-------------------------------------------------------------------------------
@@ -1008,7 +1000,12 @@ sub unlock {
 #-------------------------------------------------------------------------------
 sub fasta_file {
    my $self = shift;
-   
+   my $arg = shift;
+
+   if($arg){
+       $self->{fasta_file} = $arg;
+   }
+
    return $self->{fasta_file};
 }
 #-------------------------------------------------------------------------------

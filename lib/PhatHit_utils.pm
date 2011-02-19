@@ -11,6 +11,8 @@ use PostData;
 use Exporter;
 use Fasta;
 use SimpleCluster;
+use FastaSeq;
+
 @ISA = qw(
        );
 #------------------------------------------------------------------------
@@ -140,8 +142,8 @@ sub splice_infer_exon_coors {
 	    $done{$B}{$E}++;
 	    
 	    my $L = abs($E - $B) + 1;
-	    my $piece = ($sorted[$j]->[0]->strand('query') == 1) ?
-		substr($$seq, $B-1, $L) : Fasta::revComp(substr($$seq, $B-1, $L));
+	    my $piece; ($sorted[$j]->[0]->strand('query') == 1) ?
+		substr_o($seq, $B-1, $L) : Fasta::revComp(substr_o($seq, $B-1, $L));
 
 	    my ($p_seq, $poffset) = $tM->longest_translation($piece);
 	    if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
@@ -472,7 +474,7 @@ sub make_flat_hits {
 	my $strand = $hits->[0]->strand;
 
 	my $coors  = get_hit_coors($hits, 'query');
-	my $pieces = Shadower::getPieces($seq, $coors, 0);
+	my $pieces = Shadower::getVecotrPieces($coors, 0);
 
 	my @new_hits;
 
@@ -484,7 +486,7 @@ sub make_flat_hits {
 	    #natural end and beginning are non-normalized values
 	    ($nB, $nE) = ($nE, $nB) if($nB < $nE && $strand == -1);
 
-	    my $pSeq = $p->{piece};
+	    my $pSeq = substr_o($seq, $p->{b}-1, $p->{e}-$p->{b}+1);
 	    $pSeq = Fasta::revComp(\$pSeq) if($strand == -1);
 
 	    my $new_hit = new $ref('-name'         => "flat_hit_$nB\_$nE",
@@ -792,7 +794,7 @@ sub _adjust {
     die "ERROR: Need seq to determine translation adjustments in PhatHit_utils::_adjust\n" if(!$seq);
 
     my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
-    my $slength = length($$seq);
+    my $slength = length_o($seq);
     my $tlength = length($transcript_seq); #edge
 
     if(!$end || !defined($offset)){
@@ -817,7 +819,9 @@ sub _adjust {
 		$edge = $slength if($edge > $slength); #cannot walk past end of contig
 		$edge = 1 if($edge < 1); #can't walk apst start of contig 
 		my $l = abs($last - $edge);
-		my $add_seq = ($strand == 1) ? substr($$seq, $last, $l) : Fasta::revComp(substr($$seq, $last-$l-1, $l));
+		my $add_seq = ($strand == 1) ?
+			substr_o($seq, $last, $l) : Fasta::revComp(substr_o($seq, $last-$l-1, $l));
+
 		$zseq .= $add_seq;
 		$zlength += $l;
 	    }
@@ -866,7 +870,9 @@ sub _adjust {
 		$edge = $slength if($edge > $slength); #cannot walk past contig end 
 		$edge = 1 if($edge < 1);  #cannot walk past contig start
 		my $l = abs($last - $edge) + 1;
-		my $add_seq = ($strand == 1) ? substr($$seq, $last-$l-1 , $l) : Fasta::revComp(substr($$seq, $last, $l));
+		my $add_seq = ($strand == 1) ?
+			substr_o($seq, $last-$l-1 , $l) : Fasta::revComp(substr_o($seq, $last, $l));
+
 		$iseq = $add_seq . $iseq;
 		$i += $l;
 	    }
@@ -946,9 +952,9 @@ sub _adjust {
 	#set natural begining (important for correct strandedness)
 	my ($nB, $nE) = ($strand == 1) ? ($hB, $hE) : ($hE, $hB) ;
 
-	my $qrSeq = substr($$seq,
-			  $hB-1,
-			  $length);
+	my $qrSeq = substr_o($seq,
+			     $hB-1,
+			     $length);
 	$qrSeq = Fasta::revComp($qrSeq) if($strand == -1);
 	my $htSeq = $qrSeq;
 	my $hoSeq = '|'x$length;

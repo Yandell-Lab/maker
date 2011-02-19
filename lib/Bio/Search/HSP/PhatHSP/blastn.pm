@@ -545,9 +545,10 @@ sub _set_exit
 =cut
 
 ################################################## subroutine header end ##
-
 sub cigar_string {
     my $self = shift;
+
+    return($self->{_CIGAR}) if($self->{_CIGAR});
 
     my $cigar = '';
     my $q_str = ($self->strand("hit") == -1) ? reverse($self->query_string()) : $self->query_string();
@@ -593,7 +594,7 @@ sub cigar_string {
         $cigar .= "$type$value";
     }
 
-    return $cigar;
+    return ($self->{_CIGAR} = $cigar);
 }
 
 ################################################ subroutine header begin ##

@@ -10,6 +10,7 @@ use FileHandle;
 use URI::Escape;
 use Bio::DB::Fasta;
 use File::NFSLock;
+use FastaSeq;
 
 @ISA = qw(
           );
@@ -137,14 +138,14 @@ sub get_Seq_for_hit {
     my $fastaObj;
     if(exists $r_ind->{$dbf}){
 	my $db = $r_ind->{$dbf};
-	$fastaObj = $db->get_Seq_by_id($id);
+	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
     }
     
     if(! $fastaObj){
 	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
 	foreach my $dbf (@files){
 	    my $db = $r_ind->{$dbf};
-	    $fastaObj = $db->get_Seq_by_id($id);
+	    $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
 	    last if($fastaObj);
 	}
     }
@@ -176,7 +177,7 @@ sub header_for_hit {
     my $header;
     if(exists $r_ind->{$dbf}){
 	my $db = $r_ind->{$dbf};
-	$fastaObj = $db->get_Seq_by_id($id);
+	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
 	$header = $db->header($id) if($fastaObj);
     }
     
@@ -184,7 +185,7 @@ sub header_for_hit {
 	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
 	foreach my $dbf (@files){
 	    my $db = $r_ind->{$dbf};
-	    $fastaObj = $db->get_Seq_by_id($id);
+	    $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
 
 	    if($fastaObj){
 		$header = $db->header($id);
@@ -211,7 +212,7 @@ sub get_Seq_by_id {
 
     my $fastaObj;
     foreach my $db (@index){
-	$fastaObj = $db->get_Seq_by_id($id);
+	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
 	last if($fastaObj);
     }
 
@@ -238,11 +239,24 @@ sub get_Seq_by_alias {
 
     my $fastaObj;
     foreach my $db (@index){
-	$fastaObj = $db->get_Seq_by_id($alias);
+	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($alias));
 	last if($fastaObj);
     }
 
     return $fastaObj;
+}
+#-------------------------------------------------------------------------------
+sub get_all_ids {
+    my $self = shift;
+
+    my @index = @{$self->{index}};
+    my @all_ids;
+    foreach my $db (@index){
+        my @ids = $db->get_all_ids;
+	push(@all_ids, @ids);
+    }
+
+    return @all_ids;
 }
 #-------------------------------------------------------------------------------
 sub header {
@@ -261,7 +275,7 @@ sub header {
     my $h;
     foreach my $db (@index){
 	#do it this way first to avoid warnings
-	my $fastaObj = $db->get_Seq_by_id($id);
+	my $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id));
 	next if (!$fastaObj);
 	$h = $db->header($id);
 	last;
@@ -291,13 +305,46 @@ sub header_by_alias {
     my $h;
     foreach my $db (@index){
 	#do it this way first to avoid warnings
-	my $fastaObj = $db->get_Seq_by_id($alias);
+	my $fastaObj = FastaSeq->convert($db->get_Seq_by_id($alias));
 	next if (!$fastaObj);
 	$h = $db->header($alias);
 	last;
     }
 
     return $h;
+}
+#-------------------------------------------------------------------------------
+#for safe freezing of indexes using storable
+sub STORABLE_freeze {
+    my ($self, $cloning) = @_;
+
+    my $locs = $self->{locs};
+
+    return '', $locs;
+}
+#-------------------------------------------------------------------------------
+#for safe thawing of indexes using storable
+sub STORABLE_thaw {
+    my ($self, $cloning, $serialized, $locs) = @_;
+
+    $self->{locs} = $locs;
+
+    my @args;
+    push (@args, ('-makeid' => \&makeid));
+
+    my @files = @$locs;
+    foreach my $dir (grep {-d $_} @$locs){
+	push(@files, grep {-f $_ && /\.(fa|fasta|fast|FA|FASTA|FAST|dna|\.mpi\.\d+\.\d+)$/} <$dir/*>);
+    }
+    
+    #build indexes
+    while (my $file = shift @files){ 
+	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	
+	#build reverse index to get the correct index based on file name
+	my ($title) = $file =~ /([^\/]+)$/;
+	$self->{file2index}{$title} = $self->{index}->[-1];
+    }
 }
 #-------------------------------------------------------------------------------
 #------------------------------- SUBS ------------------------------------------

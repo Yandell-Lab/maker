@@ -10,6 +10,7 @@ use IPC::Open3;
 use POSIX ":sys_wait_h";
 use File::Path;
 use Cwd;
+use Symbol;
 
 @ISA = qw(
 	Widget
@@ -38,7 +39,7 @@ sub run {
 	   $self->print_command($command);
 
 	   $ENV{PERL_SIGNALS} = 'unsafe';
-	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR);
+	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
 	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 

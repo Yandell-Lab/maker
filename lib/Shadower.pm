@@ -7,6 +7,7 @@ use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use PostData;
 use FileHandle;
+use Bit::Vector;
 
 @ISA = qw(
           );
@@ -39,6 +40,33 @@ sub shadowSequence {
         }
 
 	return $sequence;
+}
+#-------------------------------------------------------------------------------
+sub shadowVector {
+	my $max      = shift;
+	my $features = shift;
+	my $flank    = shift;
+
+	$max++; #I pretend coordinate 0 doesn't exist
+
+	$flank = 0 unless defined($flank);
+
+	my $vector = Bit::Vector->new($max);
+        foreach my $p (@{$features}){
+                my $b = $p->[0];
+                my $e = $p->[1];
+
+                ($b, $e) = ($e, $b) if $e < $b;
+
+		my $f = $b - $flank;
+
+                $b = $f > 0 ? $b - $flank : 1;
+                $e = $e + $flank;
+		
+                $vector->Interval_Fill($b,$e);
+        }
+
+	return $vector;
 }
 #-------------------------------------------------------------------------------
 sub reverseMaskSequence {
@@ -112,19 +140,51 @@ sub getUpperCasedSegments {
 #-------------------------------------------------------------------------------
 sub getPieces {
         my $sequence = shift;
-        my $features = shift;
+        my $features = shift; #coordinates not objects
         my $flank    = shift;
 
 	$flank = 0 unless defined($flank);
 
-        my $sSeq = shadowSequence($sequence, $features, $flank);
+	my $pieces = getVectorPieces($features, $flank);
+
+	if(ref($sequence) eq 'SCALAR'){
+	    foreach my $p (@$pieces){
+		my $seq = substr($$sequence, $p->{b}-1, $p->{e}-$p->{b}+1);
+		$p->{piece} = $seq;
+	    }
+	}
+	else{
+	    foreach my $p (@$pieces){
+		my $seq = $sequence->subseq($p->{b}, $p->{e});
+		$p->{piece} = $seq;
+	    }
+	}
+
+	return $pieces;
+}
+#-------------------------------------------------------------------------------
+sub getVectorPieces {
+        my $features = shift; #coordinates not objects
+        my $flank    = shift;
+
+	$flank = 0 unless defined($flank);
+
+	my $top = 0;
+	foreach my $f (@$features){
+	    $top = $f->[1]+$flank if($f->[1]+$flank > $top);
+	    $top = $f->[0]+$flank if($f->[0]+$flank > $top);
+	}
+
+        my $sVec = shadowVector($top, $features, $flank);
 
         my @pieces;
-        while ($$sSeq =~ m/([A-Z]+)/g ) {
-                my $e = pos($$sSeq);
-                my $b = $e - length($1) + 1;
-                push(@pieces, {b => $b , e => $e, piece => $1});
-        }
+	my $s = 0;
+	while (($s < $sVec->Size()) && (my ($min,$max) = $sVec->Interval_Scan_inc($s))){
+	    $s = $max + 2;
+
+	    push(@pieces, {b => $min , e => $max});
+	}
+
 	return \@pieces;
 }
 #-------------------------------------------------------------------------------

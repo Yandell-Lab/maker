@@ -21,13 +21,12 @@ use clean;
 sub is_same_alt_form {
         my $a     = shift;
         my $b     = shift;
-	my $seq   = shift;
 	my $flank = shift;
 
 	die "only one feature in is_same_alt_form!\n"
 	unless defined($a) && defined($b);
 
-	my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $seq, $flank);
+	my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $flank);
 
 	my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);
 
@@ -58,7 +57,6 @@ sub is_same_alt_form {
 sub is_redundant_alt_form {
         my $a     = shift;
         my $b     = shift;
-        my $seq   = shift;
         my $flank = shift;
 
        die "only one feature in is_redundant_form!\n"
@@ -66,7 +64,7 @@ sub is_redundant_alt_form {
 
 	# note that b will always have fewer exons or be shorter...
 
-        my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $seq, $flank);
+        my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $flank);
 
         my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);
 	my $b_to_a_str = compare_phat_hits($b, $a, 'query', $flank);
@@ -146,7 +144,6 @@ sub overlap {
 sub compare_by_shadow {
         my $a     = shift;
         my $b     = shift;
-        my $seq   = shift;
 	my $flank = shift;
 
         my $a_coors  = PhatHit_utils::get_hsp_coors_from_hit($a, 'query');
@@ -154,7 +151,7 @@ sub compare_by_shadow {
 
 	my @t_coors = (@{$a_coors}, @{$b_coors});
 
-        my $pieces  = Shadower::getPieces($seq, \@t_coors, 0);
+        my $pieces  = Shadower::getVectorPieces(\@t_coors, 0);
 
 	my $s_code_a = get_shadow_code($pieces, $a_coors, $flank);
 	my $s_code_b = get_shadow_code($pieces, $b_coors, $flank);

@@ -40,7 +40,6 @@ sub nextEntry {
 sub fileHandle {
 	my $self = shift;
 	my $arg  = shift;
-	
 
 	if    (defined($arg) && ref($arg) eq 'FileHandle'){
 	    die "ERROR: You must provide a file name and not a file handle Iterator::fileHandle\n";

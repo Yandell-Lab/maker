@@ -26,7 +26,10 @@ sub new {
 	$self->fileName($arg);
 	$self->fileHandle($arg);
 	$self->{SKIP} = {};
-
+	$self->{SEEN} = [];
+	$self->{COUNT} = -1;
+	$self->{BUF} = []; #buffer for pushing back meta character contamination
+	
 	return $self;
 }
 #-------------------------------------------------------------------------------
@@ -35,7 +38,8 @@ sub _set_number_of_entries {
 	my $arg  = $self->fileName();
 
 	my $fh = new FileHandle();
-	   $fh->open($arg);
+	$fh->open($arg);
+	$fh->setpos($self->startPos) if($self->startPos);
 
 	my $i = 0;
 	my $line;
@@ -91,25 +95,26 @@ sub nextEntry {
     return ($ref) ? $$ref : undef;
 }
 #-------------------------------------------------------------------------------
-
-{
-my @SEEN;
-my $COUNT = -1;
-my @BUF; #buffer for pushing back meta character contamination
 sub nextEntryRef {
     my $self = shift;
 
+    die "ERROR: Iterator type is: '".$self->{type}."' not 'full'\n"
+	if($self->{type} && $self->{type} ne 'full');
+
+    $self->{type} = 'full';
+
     my $fh = $self->fileHandle();
     
-    if (! @BUF && ! openhandle($fh)){ #checks to see if file handle is open
+    $self->{BUF} = [] if(! $self->{BUF});
+    if (! @{$self->{BUF}} && ! openhandle($fh)){ #checks to see if file handle is open
 	return undef; 
     }
     
     local $/ = "\n>";
 
     my $line;
-    while($line = shift @BUF || <$fh>){
-	$COUNT++;
+    while($line = shift @{$self->{BUF}} || <$fh>){
+	$self->{COUNT}++;
 
 	$line =~ s/>//;
 	$line =~ s/>$//;
@@ -122,18 +127,18 @@ sub nextEntryRef {
 		$s = ">".$s if($s !~ /^>/);
 	    }
 	    $line = shift @set;
-	    push(@BUF, @set);
+	    push(@{$self->{BUF}}, @set);
 	}
 
 	#already seen so skip
-	next if($SEEN[$COUNT]);
+	next if($self->{SEEN}->[$self->{COUNT}]);
 
 	#step forward in jumps if indicated
 	if($self->{step} && $self->{step} != 1){
-	    next if($COUNT < $self->{step} || $COUNT % $self->{step} != 0);
+	    next if($self->{COUNT} < $self->{step} || $self->{COUNT} % $self->{step} != 0);
 	}
 
-	$SEEN[$COUNT]++;
+	$self->{SEEN}->[$self->{COUNT}]++;
 
 	$line =~ /^>([^\s\n]+)/;
 	next if(defined ($self->{SKIP}{$1}));
@@ -147,7 +152,7 @@ sub nextEntryRef {
     #end of file but I was jumping using a step, so go back to start
     if($self->{step} && $self->{step} != 1){
 	$self->{step} = undef; #remove step
-	$COUNT = -1; #reset count
+	$self->{COUNT} = -1; #reset count
 	$fh->setpos($self->startPos); #go to start of file
 	$self->skip_file($self->{skip_file}) if($self->{skip_file} && -f $self->{skip_file}); #reload skip file
 	return $self->nextEntryRef();
@@ -156,6 +161,106 @@ sub nextEntryRef {
     $fh->close();
     return undef;
 }
+#-------------------------------------------------------------------------------
+sub nextID {
+    my $self = shift;
+
+    die "ERROR: Iterator type is: '".$self->{type}."' not 'Def'\n"
+	if($self->{type} && $self->{type} ne 'Def');
+
+    $self->{type} = 'Def';
+
+    my $fh = $self->fileHandle();
+    
+    if (! openhandle($fh)){ #checks to see if file handle is open
+	return undef; 
+    }
+    
+    my $line;
+    while($line = <$fh>){
+	next unless($line =~ /^>/);
+	chomp $line;
+
+	$self->{COUNT}++;
+
+	#already seen so skip
+	next if($self->{SEEN}->[$self->{COUNT}]);
+
+	#step forward in jumps if indicated
+	if($self->{step} && $self->{step} != 1){
+	    next if($self->{COUNT} < $self->{step} || $self->{COUNT} % $self->{step} != 0);
+	}
+
+	$self->{SEEN}->[$self->{COUNT}]++;
+
+	$line =~ /^>([^\s\n]+)/;
+	next if(defined ($self->{SKIP}{$1}));
+
+	return $1;
+    }
+
+    #end of file but I was jumping using a step, so go back to start
+    if($self->{step} && $self->{step} != 1){
+	$self->{step} = undef; #remove step
+	$self->{COUNT} = -1; #reset count
+	$fh->setpos($self->startPos); #go to start of file
+	$self->skip_file($self->{skip_file}) if($self->{skip_file} && -f $self->{skip_file}); #reload skip file
+	return $self->nextID();
+    }
+    
+    $fh->close();
+    return undef;
+}
+#-------------------------------------------------------------------------------
+sub nextDef {
+    my $self = shift;
+
+    die "ERROR: Iterator type is: '".$self->{type}."' not 'Def'\n"
+	if($self->{type} && $self->{type} ne 'Def');
+
+    $self->{type} = 'Def';
+
+    my $fh = $self->fileHandle();
+    
+    if (! openhandle($fh)){ #checks to see if file handle is open
+	return undef; 
+    }
+    
+    my $line;
+    while($line = <$fh>){
+	next unless($line =~ /^>/);
+	chomp $line;
+	$line =~ s/[\n\t\s\cM]+$//;
+
+	$self->{COUNT}++;
+
+	#already seen so skip
+	next if($self->{SEEN}->[$self->{COUNT}]);
+
+	#step forward in jumps if indicated
+	if($self->{step} && $self->{step} != 1){
+	    next if($self->{COUNT} < $self->{step} || $self->{COUNT} % $self->{step} != 0);
+	}
+
+	$self->{SEEN}->[$self->{COUNT}]++;
+
+	$line =~ /^>([^\s\n]+)/;
+	next if(defined ($self->{SKIP}{$1}));
+
+	return $line;
+    }
+
+    #end of file but I was jumping using a step, so go back to start
+    if($self->{step} && $self->{step} != 1){
+	$self->{step} = undef; #remove step
+	$self->{COUNT} = -1; #reset count
+	$fh->setpos($self->startPos); #go to start of file
+	$self->skip_file($self->{skip_file}) if($self->{skip_file} && -f $self->{skip_file}); #reload skip file
+	return $self->nextDef();
+    }
+    
+    $fh->close();
+    return undef;
 }
 #-------------------------------------------------------------------------------
 sub nextFasta {#alias to nextEntry

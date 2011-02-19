@@ -261,6 +261,8 @@ sub seq2fastaRef {
     #always work with references
     $seq = $$seq while(ref($seq) eq 'REF');
     my $fasta_ref = (ref($seq) eq '') ? \$seq : $seq;
+
+    $def = ">$def" unless($def =~ /^>/);
     $$fasta_ref =~ s/(.{1,60})/$1\n/g;
     $$fasta_ref =~ s/^(.)/$def\n$1/;
 

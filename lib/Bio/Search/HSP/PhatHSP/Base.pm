@@ -862,6 +862,8 @@ sub _getTestHSPs {
 sub cigar_string {
     my $self = shift;
 
+    return($self->{_CIGAR}) if($self->{_CIGAR});
+
     my $string = $self->SUPER::cigar_string();
     my $cigar = '';
     my $type = '';
@@ -879,7 +881,7 @@ sub cigar_string {
 
     $cigar .=  "$type$value" if($value);
 
-    return $cigar;
+    return ($self->{_CIGAR} = $cigar);
 }
 
 ################################################ subroutine header begin ##

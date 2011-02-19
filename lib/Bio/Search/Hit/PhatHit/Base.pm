@@ -75,6 +75,7 @@ use strict;
 use warnings;
 
 use Bio::Search::Hit::GenericHit;
+use Bit::Vector;
 
 BEGIN {
    use vars qw( $VERSION @ISA );
@@ -709,34 +710,22 @@ sub getLengths {
    my $qOffset = $q_b - 1;
    my $hOffset = $h_b - 1;
 
-   my $q_seq = 'n'x$qLen;
-   my $h_seq = 'n'x$hLen;
+   my $q_vec = Bit::Vector->new($qLen + 1); #pretend 0 coor doesn't exist
+   my $h_vec = Bit::Vector->new($hLen + 1); #pretend 0 coor doesn't exist
 
    foreach my $s ($self->hsps) {
-      my $q_hspLen = abs($s->end('query') - $s->start('query')) + 1;
-      my $h_hspLen = abs($s->end('hit') - $s->start('hit')) + 1;
+      my $q_hspEnd = $s->end('query') - $qOffset;
+      my $h_hspEnd = $s->end('hit') - $hOffset;
 
       my $q_hspStart = $s->start('query') - $qOffset;
       my $h_hspStart = $s->start('hit') - $hOffset;
- 
-      substr($q_seq,
-	     $q_hspStart - 1,
-	     $q_hspLen,
-	     uc(substr($q_seq, $q_hspStart - 1, $q_hspLen))
-	    );
 
-      substr($h_seq,
-	     $h_hspStart - 1,
-	     $h_hspLen,
-	     uc(substr($h_seq, $h_hspStart - 1, $h_hspLen))
-	    );
+      $q_vec->Interval_Fill($q_hspStart, $q_hspEnd);
+      $h_vec->Interval_Fill($h_hspStart, $h_hspEnd);
    }
    
-   my $laq = 0;
-   my $lah = 0;
-
-   $laq++ while ($q_seq =~ m/N/g);
-   $lah++ while ($q_seq =~ m/N/g);
+   my $laq = $q_vec->Norm();
+   my $lah = $h_vec->Norm();
 
    return ($laq, $lah);
 }

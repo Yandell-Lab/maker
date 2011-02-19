@@ -13,6 +13,7 @@ use Bio::Search::Hit::PhatHit::gff3;
 use Bio::Search::HSP::PhatHSP::gff3;
 use Cwd;
 use File::NFSLock;
+use FastaSeq;
 
 @ISA = qw(
        );
@@ -424,7 +425,7 @@ sub _add_to_db {
 sub phathits_on_chunk {
     my $self = shift;
     my $chunk = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
     my $h_type = shift;
 
     return [] unless($self->{go_gffdb});
@@ -458,23 +459,23 @@ sub phathits_on_chunk {
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq_ref);
+	$structs = _get_genes($features, $seq);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_genes($features, $seq_ref);
-	my $structs2 = _get_structs($features, $seq_ref);
+	$structs = _get_genes($features, $seq);
+	my $structs2 = _get_structs($features, $seq);
 	push(@$structs, @$structs2); 
     }
     elsif($h_type eq 'other'){
@@ -487,7 +488,7 @@ sub phathits_on_chunk {
     my @phat_hits;    
     foreach my $s (@{$structs}){
 	next unless ($c_start <= $s->{start} && $s->{start} <= $c_end);
-	push(@phat_hits, @{_load_hits($s, $seq_ref)});
+	push(@phat_hits, @{_load_hits($s, $seq)});
     }
 
     return \@phat_hits;
@@ -496,7 +497,7 @@ sub phathits_on_chunk {
 sub phathits_on_contig {
     my $self = shift;
     my $seqid = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
     my $h_type = shift;
 
     return [] unless($self->{go_gffdb});
@@ -525,23 +526,23 @@ sub phathits_on_contig {
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq_ref);
+	$structs = _get_genes($features, $seq);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_structs($features, $seq_ref);
-	my $structs2 = _get_genes($features, $seq_ref);
+	$structs = _get_structs($features, $seq);
+	my $structs2 = _get_genes($features, $seq);
 	push(@{$structs}, @{$structs2});
     }
     elsif($h_type eq 'other'){
@@ -553,7 +554,7 @@ sub phathits_on_contig {
     
     my @phat_hits;    
     foreach my $s (@{$structs}){
-	push(@phat_hits, @{_load_hits($s, $seq_ref)});
+	push(@phat_hits, @{_load_hits($s, $seq)});
     }
     
     return \@phat_hits;
@@ -705,7 +706,7 @@ sub _ary_to_features{
 #-------------------------------------------------------------------------------
 sub _load_hits {
     my $g   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
         
     my $gene_id   = $g->{id};
     my $gene_name = $g->{name};
@@ -783,7 +784,7 @@ sub _load_hits {
 	    if($t_offset != -1){ #only happens on bad CDS entries
 		$f->{translation_offset} = $t_offset;
 		$f->{translation_end}    = $t_end;
-		my $cdss = _load_cdss($t, $seq_ref);
+		my $cdss = _load_cdss($t, $seq);
 		$f->{cdss} = $cdss;
 	    }
 	    else{
@@ -795,7 +796,7 @@ sub _load_hits {
 
 	$f->{seq} = $t->{seq};
 
-	my $hsps = _load_hsps($t, $seq_ref);
+	my $hsps = _load_hsps($t, $seq);
 
 	foreach my $hsp (@{$hsps}){
 	    $f->add_hsp($hsp);
@@ -824,7 +825,7 @@ sub _get_t_offset_and_end {
 #-------------------------------------------------------------------------------
 sub _load_cdss {
     my $t   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
 
     my @hsps;
     my $hit_start = 1;
@@ -890,8 +891,8 @@ sub _load_cdss {
 	push(@args, 0.0);
 	
 	push(@args, '-query_length');
-	push(@args, length($$seq_ref));
-	     
+	push(@args, length_o($seq));
+
 	push(@args, '-query_end');
 	push(@args, $e->{f}->end);
 
@@ -934,7 +935,7 @@ sub _load_cdss {
 #-------------------------------------------------------------------------------
 sub _load_hsps {
     my $t   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
 
     my @hsps;
     my $hit_start = 1;
@@ -1051,7 +1052,7 @@ sub _load_hsps {
 	push(@args, 0.0);
 	
 	push(@args, '-query_length');
-	push(@args, length($$seq_ref));
+	push(@args, length_o($seq));
 
 	push(@args, '-query_end');
 	push(@args, $e->{f}->end);
@@ -1117,7 +1118,7 @@ sub _load_hsps {
 #-------------------------------------------------------------------------------
 sub _get_genes {
     my $features = shift;
-    my $seq_ref      = shift;
+    my $seq    = shift;
 
     my $exons = _grab(['exon'], $features);
     my $cdss  = _grab(['CDS'],  $features);
@@ -1170,7 +1171,7 @@ sub _get_genes {
 	push @valid_genes, $gene if _validate_gene($gene);
     }
 
-    _load_seqs(\@valid_genes, $seq_ref);
+    _load_seqs(\@valid_genes, $seq);
 
     return (\@valid_genes);
 }
@@ -1249,7 +1250,7 @@ sub _fix_wormbase {
 #but for non gene hits in the gff3
 sub _get_structs {
     my $features = shift;
-    my $seq_ref      = shift;
+    my $seq    = shift;
 
     my @bases;
     my %index;
@@ -1308,7 +1309,7 @@ sub _get_structs {
 	     );
     }
 
-    _load_seqs(\@genes, $seq_ref);
+    _load_seqs(\@genes, $seq);
 
     return (\@genes);
 }
@@ -1446,38 +1447,40 @@ sub _validate_gene {
 #--------------------------------------------------------------------------------
 sub _get_gene_seq {
     my $g   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
 
     my $g_b = $g->{f}->start();
     my $g_e = $g->{f}->end();
 
     my $start;
-    my $length;
+    my $end;
     my ($src_s, $src_e);
     if (($g_b - 1) < 0){
-	$start = $g_b - 1;
-	$length = abs($g_e - $g_b) + 1;
+	$start = $g_b;
+	$end = $g_e;
 	$src_s = 1;
-	$src_e = $g_e > length($$seq_ref) ? length($$seq_ref) : $g_e; 
+	my $len = length_($seq);
+	$src_e = $g_e > $len ? $len : $g_e; 
     }
     else {
-	$start = $g_b - 1;
-	$length = abs($g_e - $g_b) + 1;
+	$start = $g_b;
+	$end = $g_e;
 	$src_s = $g_b;
-	$src_e = $g_e > length($$seq_ref) ? length($$seq_ref) : $g_e; 
+	my $len = length_o($seq);
+	$src_e = $g_e > $len ? $len : $g_e; 
     } 
 
-    my $g_seq = substr($$seq_ref, $start, $length);
+    my $g_seq = substr_o($seq, $src_s-1, $src_e-$src_s+1);
 
     return ($g_seq, $src_s, $src_e);
 }
 #-------------------------------------------------------------------------------
 sub _load_seqs {
     my $genes = shift;
-    my $seq_ref   = shift;
+    my $seq   = shift;
     
     foreach my $g (@{$genes}){
-	my ($g_seg_seq, $src_start, $src_end) = _get_gene_seq($g, $seq_ref);
+	my ($g_seg_seq, $src_start, $src_end) = _get_gene_seq($g, $seq);
 	
 	$g->{seq}     = $g_seg_seq;
 	$g->{src_s}   = $src_start;
@@ -1487,7 +1490,7 @@ sub _load_seqs {
 
         foreach my $t (@{$g->{mRNAs}}){
 	    foreach my $e (@{$t->{exons}}){
-		my $e_seq = _get_exon_seq($e, $seq_ref); 
+		my $e_seq = _get_exon_seq($e, $seq); 
 		
 		$e->{seq} = $e_seq;
                 $e->{i_start} = $e->{f}->start() - $g->{src_s} + 1;
@@ -1495,7 +1498,7 @@ sub _load_seqs {
 		$e->{i_end}   = $e->{f}->end() - $g->{src_s} + 1;  
 	    }
 	    foreach my $c (@{$t->{cdss}}){
-		my $c_seq = _get_exon_seq($c, $seq_ref);
+		my $c_seq = _get_exon_seq($c, $seq);
 
 		$c->{seq} = $c_seq;
 		$c->{i_start} = $c->{f}->start() - $g->{src_s} + 1;
@@ -1503,8 +1506,8 @@ sub _load_seqs {
 		$c->{i_end} = $c->{f}->end() - $g->{src_s} + 1;
 	    }
 
-	    my $t_seq   = _get_mRNA_seq($t, $seq_ref); 
-	    my $cds_seq = _get_cds_seq($t, $seq_ref);
+	    my $t_seq   = _get_mRNA_seq($t, $seq); 
+	    my $cds_seq = _get_cds_seq($t, $seq);
 
 	    #debug
 	    my $index = index($t_seq, $cds_seq) if($cds_seq);
@@ -1521,13 +1524,13 @@ sub _load_seqs {
 #-------------------------------------------------------------------------------
 sub _get_cds_seq {
     my $t   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
 
     my $sorted = _sort_cdss($t);
 
     my $cds_seq;
     foreach my $c (@{$sorted}){
-	my $c_seq = $c->{seq} || _get_exon_seq($c, $seq_ref);
+	my $c_seq = $c->{seq} || _get_exon_seq($c, $seq);
 	$cds_seq .= $c_seq;
 
     }
@@ -1536,13 +1539,13 @@ sub _get_cds_seq {
 #-------------------------------------------------------------------------------
 sub _get_mRNA_seq {
     my $t   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
     
     my $sorted = _sort_exons($t);
 
     my $transcript;
     foreach my $e (@{$sorted}){
-	my $exon_seq = $e->{seq} || _get_exon_seq($e, $seq_ref);
+	my $exon_seq = $e->{seq} || _get_exon_seq($e, $seq);
 	$transcript .= $exon_seq;
 	
     }
@@ -1551,14 +1554,12 @@ sub _get_mRNA_seq {
 #-------------------------------------------------------------------------------
 sub _get_exon_seq {
     my $e   = shift;
-    my $seq_ref = shift;
+    my $seq = shift;
 
     my $e_b = $e->{f}->start();
     my $e_e = $e->{f}->end();
 
-    my $length = abs($e_e - $e_b) + 1;
-
-    my $exon_seq = substr($$seq_ref, $e_b - 1, $length);
+    my $exon_seq = substr_o($seq, $e_b-1, $e_e-$e_b+1);
 
     $exon_seq = Fasta::revComp($exon_seq) if $e->{f}->strand() == -1;
 

@@ -20,6 +20,7 @@ use Widget::snap;
 use Widget::augustus;
 use GFFDB;
 use shadow_AED;
+use FastaSeq;
 
 $Storable::forgive_me = 1;
 
@@ -59,8 +60,8 @@ sub prep_hits {
 			   );
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::clean_and_cluster(50, $seq, $p, $pred_flank, 1);
-	my $m_clusters = cluster::clean_and_cluster(50, $seq, $m, $pred_flank, 1);
+	my $p_clusters = cluster::clean_and_cluster(50, $p, $pred_flank, 1);
+	my $m_clusters = cluster::clean_and_cluster(50, $m, $pred_flank, 1);
 	
 	#this method will cause clusters that are near each other and are connected by an orf to merge.
 	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
@@ -89,8 +90,7 @@ sub prep_hits {
 	#--model_gff3 input
 	# identify the models that fall within and between basic clusters
 	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models,
-								      $careful_clusters,
-								      $seq,
+								      $careful_clusters
 								      );
 
 	#join the clusters on the models
@@ -98,8 +98,7 @@ sub prep_hits {
 	
 	# identify the abinits that fall within and between clusters
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $model_clusters,
-								   $seq,
+								   $model_clusters
 								   );
 	
 	merge_into_cluster($hit_one, $model_clusters, $c_index);
@@ -118,8 +117,7 @@ sub prep_hits {
 
 	#--abinit input
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $careful_clusters,
-								   $seq,
+								   $careful_clusters
 								   );
 
 	#join clusters on the ab-inits
@@ -127,8 +125,7 @@ sub prep_hits {
 
 	# identify the abinits that fall within and between clusters
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $pred_clusters,
-								   $seq,
+								   $pred_clusters
 								   );
 	
 	merge_into_cluster($hit_one, $pred_clusters, $c_index);
@@ -147,8 +144,8 @@ sub prep_hits {
 	my $hint_clusters = [];
 	if(@$models){
 	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $models);
-	    $p_clusters = cluster::shadow_cluster(0, $seq, [@$p,@$p_clusters], $pred_flank);
-	    $m_clusters = cluster::shadow_cluster(0, $seq, [@$m,@$m_clusters], $pred_flank);
+	    $p_clusters = cluster::shadow_cluster(0, [@$p,@$p_clusters], $pred_flank);
+	    $m_clusters = cluster::shadow_cluster(0, [@$m,@$m_clusters], $pred_flank);
 
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
 	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
@@ -163,8 +160,7 @@ sub prep_hits {
 
 	# identify the abinits that fall within and between clusters
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $hint_clusters,
-								   $seq,
+								   $hint_clusters
 								   );
 
 	merge_into_cluster($hit_one, $hint_clusters, $c_index);
@@ -212,7 +208,6 @@ sub prep_hits {
 sub segment_preds {
 	my $preds            = shift;
 	my $careful_clusters = shift;
-	my $seq              = shift;
 
 	#identify span of preds
 	my @index;
@@ -402,7 +397,9 @@ sub join_clusters_around_orf {
 
 	next if($iL < 300); #min orf of 300 required (same as most prokaryotic gene finders)
 
-	my $piece = ($cs[$i][0]->strand('query') == 1) ? substr($$seq, $iS, $iL) : Fasta::revComp(substr($$seq, $iS, $iL));
+	my $piece = ($cs[$i][0]->strand('query') == 1) ?
+		substr_o($seq, $iS, $iL) : Fasta::revComp(substr_o($seq, $iS, $iL));
+
 	my $tM = new CGL::TranslationMachine();
 	my ($p_seq , $poffset) = $tM->longest_translation($piece);
 
@@ -559,7 +556,7 @@ sub prep_blastx_data {
 	}
 	elsif($org_type eq 'eukaryotic'){
 	    $gomias = clean::purge_single_exon_hits($ests_in_cluster);
-	    $gomias = clean::get_best_alt_splices($gomias, $seq, 10);
+	    $gomias = clean::get_best_alt_splices($gomias, 10);
 	}
 	else{
 	    $gomias = PhatHit_utils::make_flat_hits($ests_in_cluster, $seq);
@@ -698,10 +695,10 @@ sub prep_pred_data {
 #
 #	my $possible_ext_sources = combine($ests_in_cluster, $ps_in_cluster);
 #
-#	my $best_exts = clean::get_best_alt_splices($possible_ext_sources, $seq, 10);
+#	my $best_exts = clean::get_best_alt_splices($possible_ext_sources, 10);
 #
 #	# group of most informative alt splices
-#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
+#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, 10);
 #
 #	my @data;
 #	my $i = 0;
@@ -735,12 +732,12 @@ sub prep_pred_data {
 #	my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
 #
 #	my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
-#	my $best_p_set = clean::remove_redundant_alt_splices($i_set, $seq, 10);
+#	my $best_p_set = clean::remove_redundant_alt_splices($i_set, 10);
 #
-#	my $best_exts  = clean::get_best_alt_splices($ests_in_cluster, $seq, 10);
+#	my $best_exts  = clean::get_best_alt_splices($ests_in_cluster, 10);
 #
 #	# group of most informative alt splices
-#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, $seq, 10);
+#	my $gomias = clean::get_best_alt_splices($ps_in_cluster, 10);
 #
 #	my @data;
 #	my $i = 0;
@@ -1390,7 +1387,7 @@ sub crit4 {
 #est2genome predictions are also built here by adding UTR to the best
 #spliced ESTs
 
-sub run_it {
+sub run_it{
     my $data         = shift;
     my $the_void     = shift;
     my $seq          = shift;
@@ -1458,7 +1455,7 @@ sub run_it {
 		#make sure blastx evidence is sufficient
 		if($remove && @$blastx){
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-		    my $pieces = Shadower::getPieces($seq, $coors, 0);
+		    my $pieces = Shadower::getVectorPieces($coors, 0);
 
 		    if(@$pieces <= 1 && $model->hsps <= 2){ # if single exon evidence model should be close
 			my $abAED = shadow_AED::get_abAED($all_preds, $model);
@@ -1477,7 +1474,7 @@ sub run_it {
 	    #add UTR to ab-inits
 	    my $select = $model;
 	    my $transcript = pneu($ests, $select, $seq); #helps tile ESTs
-	    while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+	    while(! compare::is_same_alt_form($select, $transcript, 0)){
 		$select = $transcript;
 		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
 	    }
@@ -1498,7 +1495,7 @@ sub run_it {
 	    if($CTL_OPT->{est_forward}){
 		my $select = $mia;
 		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
-		while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		while(! compare::is_same_alt_form($select, $transcript, 0)){
 		    $select = $transcript;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		}
@@ -1532,7 +1529,11 @@ sub run_it {
 
 	    foreach my $miph (@$miphs){
 		my $transcript_seq  = get_transcript_seq($miph, $seq);
-		my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $miph);
+		my ($translation_seq,
+		    $offset,
+		    $end,
+		    $has_start,
+		    $has_stop) = get_translation_seq($transcript_seq, $miph);
 
 		#at least 80% of protein must be CDS to make a gene prediction
 		next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
@@ -1543,7 +1544,7 @@ sub run_it {
 
 		my $select = $copy;
 		my $transcript = pneu($utr, $select, $seq); #helps tile ESTs
-		while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		while(! compare::is_same_alt_form($select, $transcript, 0)){
 		    $select = $transcript;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		}
@@ -1615,7 +1616,7 @@ sub run_it {
 		if($remove && @$blastx){
 		    if(! $pieces){ # only calculate once
 			my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-			$pieces = Shadower::getPieces($seq, $coors, 0);
+			$pieces = Shadower::getVectorPieces($coors, 0);
 		    }
 		    
 		    if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
@@ -1648,7 +1649,7 @@ sub run_it {
 		if(defined($mia)){
 		    my $select = ($CTL_OPT->{alt_splice}) ? pneu([$mia], $transcript, $seq) : $transcript;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
-		    while(! compare::is_same_alt_form($select, $transcript, $seq, 0)){
+		    while(! compare::is_same_alt_form($select, $transcript, 0)){
 			$select = $transcript;
 			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		    }
@@ -2032,12 +2033,12 @@ sub group_transcripts {
    }
    #now cluster each list seperately
    foreach my $set (values %sources){
-       my $clusters = cluster::careful_cluster_phat_hits($set, $seq);
+       my $clusters = cluster::careful_cluster_phat_hits($set);
        
        #remove redundant transcripts in gene
        foreach my $c (@{$clusters}) {
 	   my $best_alt_forms = ($CTL_OPT->{est_forward}) ?
-	       $c : clean::remove_redundant_alt_splices($c, $seq, 10);
+	       $c : clean::remove_redundant_alt_splices($c, 10);
 	   push(@$careful_clusters, $best_alt_forms);
        }
    }
@@ -2572,7 +2573,7 @@ sub get_transcript_seq {
 	       ($e_b, $e_e) = ($e_e, $e_b)
 		if $hsp->strand('query') == -1;
 
-		my $exon_seq = substr($$seq, $e_b - 1, $length);
+		my $exon_seq = substr_o($seq, $e_b - 1, $length);
 
 		$exon_seq = Fasta::revComp($exon_seq)
 		if $hsp->strand('query') == -1;

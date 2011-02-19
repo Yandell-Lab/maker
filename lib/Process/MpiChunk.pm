@@ -12,7 +12,9 @@ use File::Copy;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
-$Storable::forgive_me = 1; #allows serializaion of objects with code refs
+$Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
+#$Storable::Deparse = 1; #now serializes CODE refs
+#$Storable::Eval= 1;$ #now serializes CODE refs
 
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
@@ -131,6 +133,7 @@ sub _on_failure {
    }
 
    my $level = $tier->current_level;
+   my $q_def = $tier->{VARS}{q_def};
    my $seq_id = $tier->{VARS}{seq_id};
    my $out_dir = $tier->{VARS}{out_dir};
    my $LOG = $tier->{VARS}{LOG};
@@ -149,12 +152,11 @@ sub _on_failure {
 
    if($tier->tier_type == 0){
        my $def = $tier->{VARS}->{q_def};
-       my $seq = $tier->{VARS}->{q_seq_ref};
 
        $tier->{VARS} = {};
        $tier->{RESULTS} = {};
 
-       $tier->{VARS}->{fasta} = Fasta::seq2fastaRef($def, $seq);
+       $tier->{VARS}->{q_def} = $q_def;
    }
    else{
        $tier->{VARS} = {};
@@ -211,8 +213,6 @@ sub _prepare {
       $VARS->{LOG} = undef;
 
       #-set up variables that are the result of chunk accumulation
-      my $empty;
-      $VARS->{masked_total_seq} = \$empty; #empty scalar ref
       $VARS->{p_fastas} = {};
       $VARS->{t_fastas} = {};
    }
@@ -367,7 +367,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    @args = (qw(fasta
+	    @args = (qw(q_def
 			CTL_OPT
 			DS_CTL)
 		     );
@@ -375,15 +375,18 @@ sub _go {
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    my $fasta = Fasta::ucFastaRef(\$VARS->{fasta}); #build uppercase fasta
+	    my $q_def = $VARS->{q_def};
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+
+	    #get genome index
+	    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 	    
 	    #get fasta parts
-	    my $q_def = Fasta::getDef($fasta); #Get fasta header
-	    my $seq_id = Fasta::def2SeqID($q_def); #Get sequence identifier
+	    my $seq_id = Fasta::def2SeqID($q_def); #get sequence identifier
 	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
-	    my $q_seq_length = Fasta::getSeqLength($fasta); #seq length
+	    my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+	    my $q_seq_length = $q_seq_obj->length(); #seq length
 
 	    #set up base and void directories for output
 	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
@@ -394,35 +397,40 @@ sub _go {
 				   seq_length => $q_seq_length,
 				   out_dir    => $out_dir,
 				   the_void   => $the_void,
-				   fasta_ref  => $fasta},
-				  "$out_dir/run.log"
+				   q_seq_obj  => $q_seq_obj},
+				  "$out_dir/run.log"				  
 				  );
 
-	    my $unmasked_file = $LOG->fasta_file();
-
-	    #make sequence only
-	    my $q_seq_ref = Fasta::fasta2seqRef($fasta);
-	    $fasta = undef;
-
-	    my $LOCK = $LOG->strip_off_lock();
-	    
+	    my $LOCK = $LOG->strip_off_lock();	    
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
+
+	    #write local contig fasta
+	    my $unmasked_file = "$the_void/query.fasta";
+	    if($c_flag > 0){
+		open (my $FAS, "> $the_void/query.fasta");
+		print $FAS ${&Fasta::seq2fastaRef($seq_id, \ ($q_seq_obj->seq))};
+		close ($FAS);
+
+		#make g_index be smaller file
+		GI::build_fasta_index($unmasked_file); #once to tie file
+		$g_index = GI::build_fasta_index($unmasked_file);
+		$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
+	    }
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
-	    %results = (fasta => $fasta,
-			unmasked_file => $unmasked_file,
-			q_def => $q_def,
-			q_seq_ref => $q_seq_ref,
+	    %results = (unmasked_file => $unmasked_file,
 			q_seq_length => $q_seq_length,
+			q_seq_obj => $q_seq_obj,
 			seq_id => $seq_id,
 			safe_seq_id => $safe_seq_id,
 			out_dir => $out_dir,
 			the_void => $the_void,
 			c_flag => $c_flag,
 			LOG => $LOG,
-			LOCK => $LOCK
+			LOCK => $LOCK,
+			g_index => $g_index
 			);
 	    #------------------------RETURN
 	 }
@@ -452,10 +460,10 @@ sub _go {
 			out_dir
 			build
 			seq_id
+			q_seq_obj
 			safe_seq_id
 			the_void
-			q_def
-			q_seq_ref)
+			q_def)
 		     );
 	    #------------------------ARGS_IN
 	 }
@@ -467,7 +475,7 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $the_void = $VARS->{the_void};
 	    my $q_def = $VARS->{q_def};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    
 	    my $GFF3 = Dumper::GFF::GFFV3->new("$out_dir/$safe_seq_id.gff",
@@ -475,12 +483,12 @@ sub _go {
 					       $the_void
 					       );
 	    
-	    $GFF3->set_current_contig($seq_id, $q_seq_ref);
+	    $GFF3->set_current_contig($seq_id, $q_seq_obj);
 	    
 	    #build chunks
 	    my $fasta_chunker = new FastaChunker();
-	    $fasta_chunker->parent_seq_ref($q_seq_ref);
 	    $fasta_chunker->parent_def($q_def);
+	    $fasta_chunker->parent_seq($q_seq_obj);
 	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
 	    $fasta_chunker->min_size($CTL_OPT{split_hit});
 	    $fasta_chunker->load_chunks();
@@ -502,16 +510,34 @@ sub _go {
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    #if no masking skip those steps
-	    if(!$VARS->{CTL_OPT}{model_org} && !$VARS->{CTL_OPT}{rmlib} &&
-	       !$VARS->{CTL_OPT}{rm_gff} && !$VARS->{CTL_OPT}{repeat_protein}
-	       ){
-	       $VARS->{masked_total_seq} = $VARS->{q_seq_ref};
-	       $next_level = 3;
+	    if($VARS->{CTL_OPT}{_no_mask}){
+		$VARS->{fasta_chunker}->reset;
+		$VARS->{m_index} = $VARS->{g_index};
+		$VARS->{m_seq_obj} = $VARS->{q_seq_obj};
+		$VARS->{masked_file} = $VARS->{unmasked_file};
+
+		$next_level = 4;
 	    }
 	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
-	       my $iterator = new Iterator::Fasta($VARS->{the_void}."/query.masked.fasta");
-	       $VARS->{masked_total_seq} = Fasta::fasta2seqRef($iterator->nextFastaRef());
-               $next_level = 3;
+		#make masked index
+		my $masked_file = $VARS->{the_void}."/query.masked.fasta";
+		my $m_index = GI::build_fasta_index($masked_file);
+		my $m_seq_obj = $m_index->get_Seq_by_id($VARS->{seq_id});
+
+		#build masked chunks    
+		my $fasta_chunker = new FastaChunker();
+		$fasta_chunker->parent_def($VARS->{q_def}." masked");
+		$fasta_chunker->parent_seq($m_seq_obj);
+		$fasta_chunker->chunk_size($VARS->{CTL_OPT}{max_dna_len});
+		$fasta_chunker->min_size($VARS->{CTL_OPT}{split_hit});
+		$fasta_chunker->load_chunks();
+
+		$VARS->{masked_file} = $masked_file;
+		$VARS->{m_index} = $m_index;
+		$VARS->{m_seq_obj} = $m_seq_obj;
+		$VARS->{fasta_chunker} = $fasta_chunker;
+
+		$next_level = 4;
 	    }
 	    #-------------------------NEXT_LEVEL
 	 }
@@ -525,8 +551,9 @@ sub _go {
 	       my %args = (chunk       => $fchunk,
 			   order       => $order,
 			   the_void    => $VARS->{the_void},
+			   seq_id      => $VARS->{seq_id},
 			   safe_seq_id => $VARS->{safe_seq_id},
-			   q_seq_ref   => $VARS->{q_seq_ref},
+			   q_seq_obj   => $VARS->{q_seq_obj},
 			   GFF_DB      => $VARS->{GFF_DB},
 			   GFF3        => $VARS->{GFF3},
 			   LOG         => $VARS->{LOG},
@@ -571,10 +598,6 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    $VARS->{fasta_chunker}->reset;
-	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
-	       ${$VARS->{masked_total_seq}} .= $fchunk->seq;
-	    }
 	    #-------------------------NEXT_LEVEL
 	 }	    
       }	  
@@ -593,9 +616,9 @@ sub _go {
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
 	    @args = (qw(chunk
+			q_seq_obj
 			the_void
 			safe_seq_id
-			q_seq_ref
 			GFF_DB
 			LOG
 			CTL_OPT)
@@ -608,7 +631,7 @@ sub _go {
 	    my $LOG = $VARS->{LOG};
 	    my $GFF_DB = $VARS->{GFF_DB};
 	    my $chunk = $VARS->{chunk};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 
@@ -616,14 +639,14 @@ sub _go {
 	    my $rm_gff_keepers = [];
 	    if ($CTL_OPT{go_gffdb}) {
 	       $rm_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							    $q_seq_ref,
+							    $q_seq_obj,
 							    'repeat'
 							   );
 	       #mask the chunk
 	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers)
 		 if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
-	    
+
 	    #-- repeatmask with RepeatMasker	 
 	    my $rm_rb_keepers = []; #repeat masker RepBase
 	    if ($CTL_OPT{model_org}) { #model organism repeats
@@ -652,10 +675,11 @@ sub _go {
 					       $CTL_OPT{cpus},
 					       $LOG
 					       );
-	       
+
 	       #mask the chunk
 	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers)
 		   if($CTL_OPT{organism_type} ne 'prokaryotic');
+
 	    }
 	    #-------------------------CODE
 	    
@@ -845,7 +869,6 @@ sub _go {
 			rm_rb_keepers
 			rm_sp_keepers
 			rm_blastx_keepers
-			q_seq_ref
 			GFF3
 		       )
 		    );
@@ -858,15 +881,13 @@ sub _go {
 	    my $rm_rb_keepers = $VARS->{rm_rb_keepers};
 	    my $rm_sp_keepers = $VARS->{rm_sp_keepers};
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $GFF3 = $VARS->{GFF3};
 
 	    #-combine and cluster repeat hits for consensus
 	    my $rm_keepers = repeat_mask_seq::process($rm_gff_keepers, 
 						      $rm_rb_keepers, 
 						      $rm_sp_keepers, 
-						      $rm_blastx_keepers,
-						      $q_seq_ref
+						      $rm_blastx_keepers
 						     );
       
 	    #-add repeats to GFF3
@@ -899,8 +920,8 @@ sub _go {
       ##
       ##RETURN TO TIER_TYPE 0
       ##
-      elsif ($tier_type == 0 && $level == 3) {	#prep masked sequence and abinits
-	 $level_status = 'preparing masked sequence and ab-inits';
+      elsif ($tier_type == 0 && $level == 3) {	#prep masked sequence
+	 $level_status = 'preparing masked sequence';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
@@ -911,11 +932,87 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(the_void
 			safe_seq_id
+			seq_id
 			q_def
-			q_seq_ref
-			masked_total_seq
-			unmasked_file
                         fasta_chunker
+			CTL_OPT)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $the_void = $VARS->{the_void};
+	    my $fasta_chunker = $VARS->{fasta_chunker};
+	    my $q_def = $VARS->{q_def};
+	    my $seq_id = $VARS->{seq_id};
+
+	    #write local contig fasta
+	    my $seq;
+	    my $masked_file = "$the_void/query.masked.fasta";
+
+	    $VARS->{fasta_chunker}->reset;
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+		$seq .= ${$fchunk->seq};
+		$fchunk->seq(''); #clear memory
+	    }
+
+	    open (my $FAS, "> $masked_file");
+	    print $FAS ${&Fasta::seq2fastaRef($seq_id, \$seq)};
+	    close ($FAS);
+
+	    $seq = undef; #clear memory
+
+	    #make masked index and seq object
+	    GI::build_fasta_index($masked_file); #once to tie file
+	    my $m_index = GI::build_fasta_index($masked_file);
+	    my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+
+	    #build masked chunks
+	    $fasta_chunker = new FastaChunker();
+	    $fasta_chunker->parent_def($q_def." masked");
+	    $fasta_chunker->parent_seq($m_seq_obj);
+	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
+	    $fasta_chunker->min_size($CTL_OPT{split_hit});
+	    $fasta_chunker->load_chunks();
+	    #-------------------------CODE
+	 
+	    #------------------------RETURN
+	    %results = (masked_file => $masked_file,
+			m_index => $m_index,
+			m_seq_obj => $m_seq_obj,
+			fasta_chunker => $fasta_chunker
+		       );
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+	       $VARS->{$key} = $self->{RESULTS}->{$key};
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 0 && $level == 4) {	#prep  abinits
+	 $level_status = 'preparing ab-inits';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
+	    push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(the_void
+			safe_seq_id
+			seq_id
+			q_def
+			unmasked_file
+			masked_file
 			LOG
 			CTL_OPT)
 		    );
@@ -924,35 +1021,26 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $fasta_chunker = $VARS->{fasta_chunker};
 	    my $q_def = $VARS->{q_def};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $masked_file = $VARS->{masked_file};
 	    my $unmasked_file = $VARS->{unmasked_file};
 	    my $the_void = $VARS->{the_void};
+	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
             my $LOG = $VARS->{LOG};	 
-	    
-	    #print masked fasta
-	    my $masked_file = $the_void."/query.masked.fasta";
-	    $masked_total_seq = Fasta::seq2fastaRef($q_def." masked", $masked_total_seq);
-	    open(my $OUT, "> $masked_file");
-	    print $OUT $$masked_total_seq;
-	    close($OUT);
-	    $masked_total_seq = Fasta::fasta2seqRef($masked_total_seq);
 
 	    #==ab initio predictions here
 	    #do masked predictions first
-	    my $preds = [];
-	    if(! $CTL_OPT{_no_mask}){
-		$preds = GI::abinits($masked_file,
-				     $the_void,
-				     $safe_seq_id.".masked",
-				     \%CTL_OPT,
-				     $LOG,
-				     $unmasked_file #for genemark
-				     );
-	    
+	    my $id = ($CTL_OPT{_no_mask}) ? $safe_seq_id : $safe_seq_id.".masked";
+	    my $preds = GI::abinits($masked_file,
+				    $the_void,
+				    $id,
+				    \%CTL_OPT,
+				    $LOG,
+				    $unmasked_file #for genemark
+				    );
+	 
+	    unless($CTL_OPT{_no_mask}){
 		#add tag that says these are masked
 		foreach my $p (@$preds){
 		    my $alg = $p->algorithm();
@@ -963,9 +1051,9 @@ sub _go {
 		    }
 		}
 	    }
-
+	 
 	    #now do unmasked predictions
-	    if($CTL_OPT{unmask} || $CTL_OPT{_no_mask}){
+	    if($CTL_OPT{unmask} && ! $CTL_OPT{_no_mask}){
 	       my $unmasked_preds = GI::abinits($unmasked_file,
 						$the_void,
 						$safe_seq_id,
@@ -981,8 +1069,7 @@ sub _go {
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = (masked_file => $masked_file,
-			preds => $preds,
+	    %results = (preds => $preds,
 			qra_preds => $qra_preds
 		       );
 	    #------------------------RETURN
@@ -999,7 +1086,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 4){
+      elsif ($tier_type == 0 && $level == 5){ #preparing evidence tiers
 	 $level_status = 'preparing new fasta chunk tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1032,15 +1119,15 @@ sub _go {
 			   q_def        => $VARS->{q_def},
 			   seq_id       => $VARS->{seq_id},
 			   safe_seq_id  => $VARS->{safe_seq_id},
-			   q_seq_ref    => $VARS->{q_seq_ref},
+			   q_seq_obj    => $VARS->{q_seq_obj},
+			   m_seq_obj    => $VARS->{m_seq_obj},
 			   q_seq_length => $VARS->{q_seq_length},
 			   GFF_DB       => $VARS->{GFF_DB},
 			   GFF3         => $VARS->{GFF3},
 			   LOG          => $VARS->{LOG},
-			   DS_CTL      => $VARS->{DS_CTL},
+			   DS_CTL       => $VARS->{DS_CTL},
 			   CTL_OPT      => $VARS->{CTL_OPT},
 			   preds_on_chunk => $preds_on_chunk,
-			   masked_total_seq => $VARS->{masked_total_seq},
 			   );
 
 	       my $tier_type = 2;
@@ -1181,10 +1268,9 @@ sub _go {
 	    @args = (qw(chunk
 			res_dir
 			blastn_keepers
-			masked_total_seq
+			m_seq_obj
 			the_void
 			safe_seq_id
-			q_seq_ref
 			q_def
 			q_seq_length
 			LOG
@@ -1197,12 +1283,11 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $m_seq_obj = $VARS->{m_seq_obj};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = {};
@@ -1305,7 +1390,7 @@ sub _go {
 	    #merge and reblast
 	    my $trans = $VARS->{CTL_OPT}{_e_db};
 	    my $fasta_e_index = GI::build_fasta_index($trans) if($trans);
-	    $blastn_keepers = GI::merge_resolve_hits($masked_total_seq,
+	    $blastn_keepers = GI::merge_resolve_hits($m_seq_obj,
 						     $q_def,
 						     $q_seq_length,
 						     $fasta_e_index,
@@ -1319,7 +1404,7 @@ sub _go {
 
 	    #quick trim on overly dense evidence
 	    if(@$blastn_keepers > 100){
-	       $blastn_keepers = cluster::shadow_cluster(50, $q_seq_ref, $blastn_keepers);
+	       $blastn_keepers = cluster::shadow_cluster(50, $blastn_keepers);
 	       $blastn_keepers = GI::flatten($blastn_keepers);
 	    }
 	    #-------------------------CODE
@@ -1394,9 +1479,9 @@ sub _go {
 		        dc
 			id
 			the_void
-			q_seq_ref
 			q_seq_length
 			q_def
+			q_seq_obj
 			GFF3
 			LOG
 			CTL_OPT)
@@ -1410,9 +1495,9 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3 = $VARS->{GFF3};
 
@@ -1420,7 +1505,7 @@ sub _go {
 	    my $exonerate_e_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
 		$exonerate_e_data = GI::polish_exonerate($chunk,
-							 $q_seq_ref,
+							 $q_seq_obj,
 							 $q_seq_length,
 							 $q_def,
 							 $dc,
@@ -1475,11 +1560,11 @@ sub _go {
 	    my $exonerate_e_clusters = [];
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
 	       $blastn_clusters = (@$blastn_keepers > 50) ?
-		   cluster::clean_and_cluster(20, $q_seq_ref, $blastn_keepers) : $blastn_keepers;
+		   cluster::clean_and_cluster(20, $blastn_keepers) : $blastn_keepers;
 	    }
 	    else{
 	       $exonerate_e_clusters = (@$exonerate_e_data > 50) ?
-		   cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_e_data) : $exonerate_e_data;
+		   cluster::clean_and_cluster(20, $exonerate_e_data) : $exonerate_e_data;
 	    }
 	    #-------------------------CODE
 
@@ -1515,7 +1600,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_e_clusters
 		        blastn_clusters
-			q_seq_ref
 			_clust_flag)
 		    );
 	    #------------------------ARGS_IN
@@ -1524,13 +1608,12 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
 	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $flag = $VARS->{_clust_flag};	    
 
 	    #further combine and cluster
 	    if($flag){
-	       $blastn_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $blastn_clusters);
-	       $exonerate_e_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_e_clusters);
+	       $blastn_clusters = cluster::clean_and_cluster(20, $blastn_clusters);
+	       $exonerate_e_clusters = cluster::clean_and_cluster(20, $exonerate_e_clusters);
 	    }
 
 	    my $blastn_keepers = GI::flatten($blastn_clusters);
@@ -1656,10 +1739,9 @@ sub _go {
 	    @args = (qw(chunk
 			res_dir
 			tblastx_keepers
-			masked_total_seq
+			m_seq_obj
 			the_void
 			safe_seq_id
-			q_seq_ref
 			q_def
                         q_seq_length
 			edge_status
@@ -1673,12 +1755,11 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $m_seq_obj = $VARS->{m_seq_obj};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
@@ -1781,7 +1862,7 @@ sub _go {
 	    #merge and reblast
 	    my $altests  = $VARS->{CTL_OPT}{_a_db};
 	    my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
-	    $tblastx_keepers = GI::merge_resolve_hits($masked_total_seq,
+	    $tblastx_keepers = GI::merge_resolve_hits($m_seq_obj,
 						     $q_def,
 						     $q_seq_length,
 						     $fasta_a_index,
@@ -1795,7 +1876,7 @@ sub _go {
 
 	    #quick trim on overly dense evidence
 	    if(@$tblastx_keepers > 100){
-	       $tblastx_keepers = cluster::shadow_cluster(50, $q_seq_ref, $tblastx_keepers);
+	       $tblastx_keepers = cluster::shadow_cluster(50, $tblastx_keepers);
 	       $tblastx_keepers = GI::flatten($tblastx_keepers);
 	    }
 	    #-------------------------CODE
@@ -1861,9 +1942,9 @@ sub _go {
 			dc
 			id
 			the_void
-			q_seq_ref
 			q_seq_length
 			q_def
+			q_seq_obj
 			GFF3
 			LOG
 			CTL_OPT)
@@ -1877,17 +1958,17 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3 = $VARS->{GFF3};
 
 	    #-polish tblastx hits with exonerate
 	    my $exonerate_a_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-	       #$exonerate_a_data = GI::polish_exonerate('',
-	       #					 $q_seq_ref,
+	       #$exonerate_a_data = GI::polish_exonerate($chunk,
+	       #                                         $q_seq_obj,
 	       #					 $q_seq_length,
 	       #					 $q_def,
 	       #					 $dc,
@@ -1938,9 +2019,9 @@ sub _go {
 	    $GFF3->add_phathits($exonerate_a_data, $uid);
 
 	    my $tblastx_clusters = (@$tblastx_keepers > 50) ?
-		cluster::clean_and_cluster(20, $q_seq_ref, $tblastx_keepers) : $tblastx_keepers;
+		cluster::clean_and_cluster(20, $tblastx_keepers) : $tblastx_keepers;
 	    my $exonerate_a_clusters = (@$exonerate_a_data > 50) ?
-		cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_a_data) : $exonerate_a_data;
+		cluster::clean_and_cluster(20, $exonerate_a_data) : $exonerate_a_data;
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1975,7 +2056,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_a_clusters
 		        tblastx_clusters
-			q_seq_ref
 			_clust_flag)
 		    );
 	    #------------------------ARGS_IN
@@ -1984,13 +2064,12 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_a_clusters = $VARS->{exonerate_a_clusters}; #array of overlapping clusters
 	    my $tblastx_clusters = $VARS->{tblastx_clusters}; #array of overlapping clusters
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $flag = $VARS->{_clust_flag};
 
 	    #further combine and cluster
 	    if($flag){
-	       $tblastx_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $tblastx_clusters);
-	       $exonerate_a_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_a_clusters);
+	       $tblastx_clusters = cluster::clean_and_cluster(20, $tblastx_clusters);
+	       $exonerate_a_clusters = cluster::clean_and_cluster(20, $exonerate_a_clusters);
 	    }
 
 	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
@@ -2118,10 +2197,9 @@ sub _go {
 	    @args = (qw(chunk
 			res_dir
 			blastx_keepers
-			masked_total_seq
+			m_seq_obj
 			the_void
 			safe_seq_id
-			q_seq_ref
 			q_def
 			q_seq_length
 			edge_status
@@ -2135,12 +2213,11 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $m_seq_obj = $VARS->{m_seq_obj};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
@@ -2243,7 +2320,7 @@ sub _go {
 	    #merge and reblast
 	    my $proteins = $VARS->{CTL_OPT}{_p_db};
 	    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
-	    $blastx_keepers = GI::merge_resolve_hits($masked_total_seq,
+	    $blastx_keepers = GI::merge_resolve_hits($m_seq_obj,
 						     $q_def,
 						     $q_seq_length,
 						     $fasta_p_index,
@@ -2257,7 +2334,7 @@ sub _go {
 
 	    #quick trim on overly dense evidence
 	    if(@$blastx_keepers > 100){
-	       $blastx_keepers = cluster::shadow_cluster(50, $q_seq_ref, $blastx_keepers);
+	       $blastx_keepers = cluster::shadow_cluster(50, $blastx_keepers);
 	       $blastx_keepers = GI::flatten($blastx_keepers);
 	    }
 	    #-------------------------CODE
@@ -2324,9 +2401,9 @@ sub _go {
 			dc
 			id
 			the_void
-			q_seq_ref
 			q_seq_length
 			q_def
+			q_seq_obj
 			GFF3
 			LOG
 			CTL_OPT)
@@ -2340,17 +2417,17 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3 = $VARS->{GFF3};
 
 	    #-polish blastx hits with exonerate
-	    my $exonerate_p_data =[];
+	    my $exonerate_p_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-		$exonerate_p_data = GI::polish_exonerate('',
-		                                         $q_seq_ref,
+		$exonerate_p_data = GI::polish_exonerate($chunk,
+							 $q_seq_obj,
 							 $q_seq_length,
 							 $q_def,
 							 $dc,
@@ -2402,9 +2479,9 @@ sub _go {
 
 	    #blastx will be empty from this point on in the script if eukaryotic
 	    my $blastx_clusters = (@$blastx_keepers > 50) ?
-		cluster::clean_and_cluster(20, $q_seq_ref, $blastx_keepers) : $blastx_keepers;
+		cluster::clean_and_cluster(20, $blastx_keepers) : $blastx_keepers;
 	    my $exonerate_p_clusters = (@$exonerate_p_data > 50) ?
-		cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_p_data) : $exonerate_p_data;
+		cluster::clean_and_cluster(20, $exonerate_p_data) : $exonerate_p_data;
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2439,7 +2516,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_p_clusters
 		        blastx_clusters
-			q_seq_ref
 			_clust_flag)
 		    );
 	    #------------------------ARGS_IN
@@ -2448,13 +2524,12 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_p_clusters = $VARS->{exonerate_p_clusters}; #array of overlapping clusters
 	    my $blastx_clusters = $VARS->{blastx_clusters}; #array of overlapping clusters
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $flag = $VARS->{_clust_flag};
 
 	    #further combine and cluster
 	    if($flag){
-	       $blastx_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $blastx_clusters);
-	       $exonerate_p_clusters = cluster::clean_and_cluster(20, $q_seq_ref, $exonerate_p_clusters);
+	       $blastx_clusters = cluster::clean_and_cluster(20, $blastx_clusters);
+	       $exonerate_p_clusters = cluster::clean_and_cluster(20, $exonerate_p_clusters);
 	    }
 
 	    my $blastx_keepers = GI::flatten($blastx_clusters);
@@ -2495,7 +2570,7 @@ sub _go {
 	    @args = (qw(chunk
                         the_void
 			safe_seq_id
-                        q_seq_ref
+                        q_seq_obj
 			preds_on_chunk
 			blastn_keepers
 			blastx_keepers
@@ -2515,7 +2590,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $preds_on_chunk = $VARS->{preds_on_chunk};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
@@ -2539,38 +2614,38 @@ sub _go {
 
 	       #-protein evidence passthraough
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							      $q_seq_ref,
+							      $q_seq_obj,
 							      'protein'
 							      );
 	       $GFF3->add_phathits($prot_gff_keepers, $uid);
 
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							     $q_seq_ref,
+							     $q_seq_obj,
 							     'est'
 							     );
 	       $GFF3->add_phathits($est_gff_keepers, $uid);
 
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-								$q_seq_ref,
+								$q_seq_obj,
 								'altest'
 								);
 	       $GFF3->add_phathits($altest_gff_keepers, $uid);
 
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							       $q_seq_ref,
+							       $q_seq_obj,
 							       'model'
 							       );
 	       #$GFF3->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
-							      $q_seq_ref,
+							      $q_seq_obj,
 							      'pred'
 							      );
-	       $GFF3->add_phathits($pred_gff_keepers, $uid);
+	       #$GFF3->add_phathits($pred_gff_keepers, $uid);
 	    }
 
 	    #trim evidence down to size if specified
@@ -2581,7 +2656,7 @@ sub _go {
 	    #replace actual values
 	    foreach my $set (@sets) {
 		if(@$set > 50){
-		    @$set = map {@$_} @{cluster::clean_and_cluster(20, $q_seq_ref, $set)};
+		    @$set = map {@$_} @{cluster::clean_and_cluster(20, $set)};
 		}
 	    }
 
@@ -2608,10 +2683,10 @@ sub _go {
 	       foreach my $h (@{$section{$key}}){
 		  my ($bB, $bE) = PhatHit_utils::get_span_of_hit($h,'query');
 		  ($bB, $bE) = ($bE, $bB) if($bB > $bE);
-		  if($bB < $aB) {
+		  if($bB < $aB && ! $chunk->is_first) {
 		     push(@{$start_junction{$key}}, $h);
 		  }
-		  elsif($bE > $aE) {
+		  elsif($bE > $aE && ! $chunk->is_last) {
 		     push(@{$end_junction{$key}}, $h);
 		  }
 		  else{
@@ -2624,6 +2699,7 @@ sub _go {
 	    #make section files
 	    my @all_files;
 	    my $order = $chunk->number;
+
 	    my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
 	    my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
 	    my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
@@ -2661,6 +2737,8 @@ sub _go {
 		    store(\%start_junction, $junction_start_file);
 		    $LOG->add_entry("FINISHED", $junction_start_file, "");
 
+		    push(@all_files, $junction_start_file) if(-f $junction_start_file);
+
 		    $lock1->unlock;
 		    $lock3->unlock;
 		    $lock2->unlock;
@@ -2669,7 +2747,7 @@ sub _go {
 		    $lock1->unlock;
 		}
 	    }
-	    push(@all_files, $junction_start_file) if(-f $junction_start_file);
+
 	    if(! $chunk->is_last && ! -f $junction_end_file){
 		my $lock1;
 		$lock1 = new File::NFSLock($end_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
@@ -2687,12 +2765,14 @@ sub _go {
 		    my $neighbor = retrieve($start_neighbor);
 		    unlink($end_file, $start_neighbor);
 		    while(my $key = each %$neighbor){
-			push(@{$start_junction{$key}}, @{$neighbor->{$key}});
+			push(@{$end_junction{$key}}, @{$neighbor->{$key}});
 		    }
 		    $LOG->add_entry("STARTED", $junction_end_file, "");
-		    store(\%start_junction, $junction_end_file);
+		    store(\%end_junction, $junction_end_file);
 		    $LOG->add_entry("FINISHED", $junction_end_file, "");
-		    
+
+		    push(@all_files, $junction_end_file) if(-f $junction_end_file);
+
 		    $lock1->unlock;
 		    $lock3->unlock;
 		    $lock2->unlock;
@@ -2701,7 +2781,6 @@ sub _go {
 		    $lock1->unlock;
 		}
 	    }
-	    push(@all_files, $junction_end_file) if(-f $junction_end_file);
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
@@ -2728,7 +2807,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 5) {	#process section files
+      elsif ($tier_type == 0 && $level == 6) {	#process section files
 	 $level_status = 'processing the chunk divide';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2741,8 +2820,7 @@ sub _go {
 	    @args = (qw(fasta_chunker
 			the_void
                         safe_seq_id
-			q_seq_ref
-			masked_total_seq
+			m_seq_obj
 			section_files
 			LOG
 			CTL_OPT)
@@ -2755,8 +2833,7 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $fasta_chunker = $VARS->{fasta_chunker};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $m_seq_obj = $VARS->{m_seq_obj};
 	    my $section_files = $VARS->{section_files};
 	    my $LOG = $VARS->{LOG};
 
@@ -2769,6 +2846,12 @@ sub _go {
 	       my $order = $chunk->number;
 	       my ($s_file) = grep{/\.$order\.raw\.section$/} @$section_files;
 	       my ($j_file) = grep{/\.$order\-\d+\.raw\.section$/} @$section_files;
+
+	       #missing junction
+	       if(!$chunk->is_last && (! $j_file || ! -f $j_file)){
+		   die "ERROR: Missing junction file for $order\-".($order+1)."\n";
+	       }
+
 	       my $section = retrieve($s_file);
 	       my $junction = ($j_file) ? retrieve($j_file) : {};
 
@@ -2838,7 +2921,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 6) {     #build annotation tiers
+      elsif ($tier_type == 0 && $level == 7) {     #build annotation tiers
 	 $level_status = 'builing annotation tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2857,9 +2940,9 @@ sub _go {
 			    safe_seq_id        => $VARS->{safe_seq_id},
 			    seq_id             => $VARS->{seq_id},
 			    q_def              => $VARS->{q_def},
-			    q_seq_ref          => $VARS->{q_seq_ref},
 			    out_dir            => $VARS->{out_dir},
-			    masked_total_seq   => $VARS->{masked_total_seq},
+			    q_seq_obj          => $VARS->{q_seq_obj},
+			    m_seq_obj          => $VARS->{m_seq_obj},
 			    section_files      => $VARS->{section_files},
 			    GFF3               => $VARS->{GFF3},
 			    LOG                => $VARS->{LOG},
@@ -2915,8 +2998,7 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw(q_seq_ref
-			tblastx_keepers
+	    @args = (qw(tblastx_keepers
 			blastx_keepers
 			blastn_keepers
 			exonerate_e_data
@@ -2928,6 +3010,8 @@ sub _go {
 			prot_gff_keepers
 			pred_gff_keepers
 			model_gff_keepers
+			seq_id
+			q_seq_obj
 			CTL_OPT)
 		     );
 	    #------------------------ARGS_IN
@@ -2935,7 +3019,8 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $seq_id = $VARS->{seq_id};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
@@ -2980,7 +3065,7 @@ sub _go {
 							    $final_altest,
 							    $final_pred,
 							    $model_gff_keepers,
-							    $q_seq_ref,
+							    $q_seq_obj,
 							    $CTL_OPT{single_exon},
 							    $CTL_OPT{single_length},
 							    $CTL_OPT{pred_flank},
@@ -3031,8 +3116,8 @@ sub _go {
 	    @args = (qw(the_void
 			q_def
 			seq_id
-			q_seq_ref
-			masked_total_seq
+			q_seq_obj
+			m_seq_obj
 			dc
 			LOG
 			LOG_FLAG
@@ -3043,8 +3128,8 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
-	    my $masked_total_seq = $VARS->{masked_total_seq};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $m_seq_obj = $VARS->{m_seq_obj};
 	    my $q_def = $VARS->{q_def};
 	    my $seq_id = $VARS->{seq_id};
 	    my $dc = $VARS->{dc};
@@ -3056,8 +3141,8 @@ sub _go {
 	    #==MAKER hint based predictions and annotations built here
 	    #process transcripts
 	    print STDERR "Making transcripts\n" unless($main::quiet || !$LOG_FLAG);
-	    my $trans = maker::auto_annotator::annotate_trans($q_seq_ref,
-							      $masked_total_seq,
+	    my $trans = maker::auto_annotator::annotate_trans($q_seq_obj,
+							      $m_seq_obj,
 							      $q_def,
 							      $seq_id,
 							      $dc,
@@ -3098,7 +3183,7 @@ sub _go {
             #------------------------ARGS_IN
 	    @args = (qw(trans
 			all_data
-			q_seq_ref
+			q_seq_obj
 			seq_id
 			chunk
 			the_void
@@ -3111,7 +3196,7 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $trans = $VARS->{trans};
 	    my $all_data = $VARS->{all_data};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $seq_id = $VARS->{seq_id};
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
@@ -3120,7 +3205,7 @@ sub _go {
 	    print STDERR "Processing transcripts into genes\n" unless($main::quiet);
 	    my $annotations = maker::auto_annotator::annotate_genes($trans,
 								    $all_data,
-								    $q_seq_ref,
+								    $q_seq_obj,
 								    $seq_id,
 								    $chunk->number(),
 								    $the_void,
@@ -3173,7 +3258,7 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw(q_seq_ref
+	    @args = (qw(q_seq_obj
 			an
 			LOG_FLAG
 			CTL_OPT)
@@ -3184,13 +3269,13 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $an = $VARS->{an};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
+	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
 
 	    #adds AED and other quality control statistics (can change names)
 	    print STDERR "Calculating annotation quality statistics\n" unless($main::quiet || !$LOG_FLAG);
 	    my $annotations = maker::auto_annotator::annotate_stats($an,
-								    $q_seq_ref,
+								    $q_seq_obj,
 								    \%CTL_OPT);
 	    #-------------------------CODE
 	 
@@ -3264,7 +3349,7 @@ sub _go {
 	    #run evaluator if specified
 	    if($CTL_OPT{evaluate}){
 		#evaluator::evaluate::evaluate_maker_annotations($maker_anno,
-		#						$q_seq_ref,
+		#						$q_seq_obj,
 		#						$out_dir,
 		#						$the_void,
 		#						\%CTL_OPT
@@ -3395,7 +3480,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 7) {	#global output
+      elsif ($tier_type == 0 && $level == 8) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3409,7 +3494,6 @@ sub _go {
 			out_dir
 			seq_id
 			safe_seq_id
-			q_seq_ref
 			p_fastas
 			t_fastas
 			GFF3
@@ -3427,7 +3511,6 @@ sub _go {
 	    my $out_dir = $VARS->{out_dir};
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $q_seq_ref = $VARS->{q_seq_ref};
 	    my $p_fastas = $VARS->{p_fastas};
 	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};

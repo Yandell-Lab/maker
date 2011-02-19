@@ -550,6 +550,8 @@ sub _set_exit
 sub cigar_string {
     my $self = shift;
 
+    return($self->{_CIGAR}) if($self->{_CIGAR});
+
     my $cigar = '';
     my $q_str = ($self->strand("hit") == -1) ? reverse($self->query_string()) : $self->query_string();
     my $h_str = ($self->strand("hit") == -1) ? reverse($self->hit_string()) : $self->hit_string();
@@ -593,6 +595,8 @@ sub cigar_string {
     if($value){
         $cigar .= "$type$value";
     }
+
+    return ($self->{_CIGAR} = $cigar);
 
     return $cigar;
 }

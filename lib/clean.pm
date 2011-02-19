@@ -95,7 +95,6 @@ sub is_identical_form {
 #------------------------------------------------------------------------
 sub remove_redundant_alt_splices {
         my $candidates = shift;
-        my $seq        = shift;
         my $flank      = shift;
 
         return [] unless defined($candidates);
@@ -115,7 +114,7 @@ sub remove_redundant_alt_splices {
                         if (defined($dead{$j})){
                                 next;
                         }
-                        if (compare::is_redundant_alt_form($hit_i, $hit_j, $seq, $flank)){
+                        if (compare::is_redundant_alt_form($hit_i, $hit_j, $flank)){
                                 $dead{$j}++;
                         }
                 }
@@ -131,7 +130,6 @@ sub remove_redundant_alt_splices {
 #------------------------------------------------------------------------
 sub get_best_alt_splices {
         my $candidates = shift;
-	my $seq        = shift;
 	my $flank      = shift;
 
 	return [] unless defined($candidates);
@@ -151,7 +149,7 @@ sub get_best_alt_splices {
 			if (defined($dead{$j})){
 				next;
 			}
-			if (compare::is_same_alt_form($hit_i, $hit_j, $seq, $flank)){
+			if (compare::is_same_alt_form($hit_i, $hit_j, $flank)){
 				$dead{$j}++;
 
 			}
@@ -170,14 +168,13 @@ sub get_best_alt_splices {
 #from the same region (caused by low complexity repeats) 
 sub complexity_filter {
     my $candidates = shift;
-    my $seq        = shift;
     
     my @keepers;
     
     foreach my $f (@$candidates){
 	#handle cluster of clusters
 	if(ref $f eq 'ARRAY'){
-	    my $set = complexity_filter($f, $seq);
+	    my $set = complexity_filter($f);
 	    push(@keepers, $f) if(@$set);
 	    next;
 	}

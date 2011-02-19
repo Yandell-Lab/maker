@@ -13,7 +13,9 @@ use Storable;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MPIChunk object
-$Storable::forgive_me = 1; #allows serializaion of objects with code refs
+$Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
+#$Storable::Deparse = 1; #now serializes CODE refs
+#$Storable::Eval= 1;$ #now serializes CODE refs
 
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------

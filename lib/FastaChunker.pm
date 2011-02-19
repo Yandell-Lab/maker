@@ -10,7 +10,6 @@ use FileHandle;
 use FastaChunk;
 use Fasta;
 use FastaFile;
-use POSIX qw(ceil);
 
 @ISA = qw(
        );
@@ -29,11 +28,43 @@ sub new {
 	return $self;
 }
 #-------------------------------------------------------------------------------
+sub parent_seq {
+    my $self = shift;
+    my $seq = shift;
+
+    if(defined $seq){
+	#always work with references
+	$seq = $$seq while(ref($seq) eq 'REF');
+	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
+	
+	$self->{parent_seq} = $seq_ref;
+    }
+
+    return $self->{parent_seq}; #this can be a sequence objection
+}
+#-------------------------------------------------------------------------------
+sub parent_fasta {
+    my $self = shift;
+    my $fasta = shift;
+
+    if(defined $fasta){
+	#always work with references
+	$fasta = $$fasta while(ref($fasta) eq 'REF');
+	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
+
+	$self->{parent_def} = Fasta::getDef($fasta_ref);
+	$self->{parent_seq} = Fasta::getSeqRef($fasta_ref);
+    }
+}
+#-------------------------------------------------------------------------------
 sub load_chunks {
 	my $self = shift;
 
-	die " you must assign a parent_fasta!\n" 
-	   unless(defined($self->parent_fasta) || defined($self->{parent_seq_ref}));
+	die " you must assign a parent_seq or parent_fasta!\n" 
+	    unless(defined($self->parent_seq));
+
+	die " you must assign a parent_def or parent_fasta!\n" 
+	    unless(defined($self->parent_def));
 
         die " you must assign a chunk_size!\n"
            unless defined($self->chunk_size);
@@ -41,53 +72,61 @@ sub load_chunks {
 	die " chunk_size must be greater than 0!\n"
            unless $self->chunk_size > 0;
 	
-	my $parent_def = $self->{parent_def} || Fasta::getDef($self->parent_fasta);
-	my $parent_seq_ref = $self->{parent_seq_ref} || Fasta::getSeqRef($self->parent_fasta);
+	my $parent_def = $self->parent_def;
+	my $parent_seq = $self->parent_seq;
 
-	$self->parent_seq_length(length($$parent_seq_ref));
-        my $fasta = '';
+	if(ref($parent_seq) eq 'SCALAR'){
+	    $self->parent_seq_length(length($$parent_seq));
+	}
+	else{
+	    $self->parent_seq_length($parent_seq->length);
+	}
 
-	my $t_c = ceil($self->parent_seq_length/$self->chunk_size);
+	#decide on number of chunks
+	my $t_c = int($self->parent_seq_length/$self->chunk_size);
+	$t_c++ if(!$t_c || ($self->chunk_size % $t_c) > $self->min_size);
 
 	$self->total_chunks($t_c);
 	my $l = $self->chunk_size();
 	
 	$self->{INDEX} = 0;
+        for (my $i=0; $i < $t_c; $i++){
+	    my $offset = $i * $l;
+	    my $def = $parent_def. " CHUNK number:$i size:$l offset:$offset";
 
-	my $c = 0;
-        for (my $i=0; $i< $self->parent_seq_length; $i+=$l){
-		my $def = $parent_def. " CHUNK number:$c size:$l offset:$i";
+	    my $is_last = ($t_c - 1 == $i) ? 1 : 0;
+	    my $is_first = ($i == 0) ? 1 : 0;
 
-		my $is_last = ($t_c - 1 == $c) ? 1 : 0;
-		my $is_first = ($c == 0) ? 1 : 0;
-		
-		my $chunk = new FastaChunk();
-		   $chunk->seq(substr($$parent_seq_ref, $i, $l));
-		   $chunk->def($def);
-		   $chunk->parent_def($parent_def);
-		   $chunk->seqid(Fasta::def2SeqID($parent_def));
-		   $chunk->size($l); #the max size of a chunk
-		   $chunk->length(length($chunk->seq())); #the actual size of a chunk
-		   $chunk->offset($i);
-		   $chunk->number($c);
-		   $chunk->is_last($is_last);
-		   $chunk->is_first($is_first);
-		   $chunk->parent_seq_length($self->parent_seq_length());
+	    #set start and end coordinates in 1 base space
+	    my $start = $offset + 1;
+	    my $end = ($is_last) ? $self->parent_seq_length : $offset + $l;
 
-		if($chunk->length > $self->min_size || $chunk->number == 0){
-		   $self->add_chunk($chunk);
-		}
-		else{
-		   $self->last_chunk->seq($self->last_chunk->seq . $chunk->seq);
-		   $self->last_chunk->length($self->last_chunk->length + $chunk->length);
-		   $self->last_chunk->is_last(1);
-		   $self->total_chunks($t_c - 1);
-		}
-		$c++;
+	    my $chunk = new FastaChunk();
+	    $chunk->def($def);
+	    $chunk->parent_def($parent_def);
+	    $chunk->seqid(Fasta::def2SeqID($parent_def));
+	    $chunk->size($l); #the max size of a chunk
+	    $chunk->offset($offset);
+	    $chunk->number($i);
+	    $chunk->is_last($is_last);
+	    $chunk->is_first($is_first);
+	    $chunk->start($start);
+	    $chunk->end($end);
+	    $chunk->parent_seq_length($self->parent_seq_length());
+	    $chunk->length($end - $start + 1); #the actual size of a chunk
+
+	    if(ref($parent_seq) eq 'SCALAR'){
+		$chunk->seq(substr($$parent_seq, $offset, $chunk->length));
+	    }
+	    else{
+		$chunk->seq($parent_seq);
+	    }
+
+	    push(@{$self->{chunks}}, $chunk);
         }
 
-	$self->{parent_fasta} = undef;
-	$self->{parent_seq_ref} = undef;
+	$self->{parent_fasta} = undef; #depricated
+	$self->{parent_seq_ref} = undef; #depricated
 }
 #-------------------------------------------------------------------------------
 sub get_chunk {
