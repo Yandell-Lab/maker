@@ -8,6 +8,7 @@ use Exporter;
 use PostData;
 use FileHandle;
 use URI::Escape;
+use Carp;
 
 @ISA = qw(
           );
@@ -132,8 +133,6 @@ sub getDef {
 	#always work with references
 	$fasta = $$fasta while(ref($fasta) eq 'REF');
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
-
-	die if(ref($fasta) eq '');
 
 	my ($def) = $$fasta_ref =~ /(>[^\n\cM]+)/;
 	
@@ -343,19 +342,21 @@ sub toFastaRef {
 }
 #-------------------------------------------------------------------------------
 sub _formatSeq {
-        my $seq = shift;
-	my $l   = shift;
-
-	#always work with references
-	$seq = $$seq while(ref($seq) eq 'REF');
-	my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
-
-	my $f_seq = '';
-        for (my $i=0; $i< length($$seq_ref);$i+=$l){
-                $f_seq .= substr($$seq_ref, $i, $l)."\n";
-        }
-
-        return \$f_seq;
+    my $seq = shift;
+    my $l   = shift;
+    
+    #always work with references
+    $seq = $$seq while(ref($seq) eq 'REF');
+    my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
+    
+    confess "ERROR: Not a SCALAR reference\n" if(ref $seq_ref ne 'SCALAR');
+    
+    my $f_seq = '';
+    for (my $i=0; $i< length($$seq_ref);$i+=$l){
+	$f_seq .= substr($$seq_ref, $i, $l)."\n";
+    }
+    
+    return \$f_seq;
 }
 #-------------------------------------------------------------------------------
 sub toBpos {
@@ -405,7 +406,7 @@ sub toQual {
 			$j = 0;
 		}
 		else {
-			die "dead in toQual\n";
+			confess "dead in toQual\n";
 		}
         }
 	$fasta .= "\n" unless $fasta =~ /\n$/;

@@ -9,6 +9,7 @@ use Error::Simple;
 use Storable;
 use Process::MpiTiers;
 use File::Copy;
+use Carsp;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
@@ -84,7 +85,7 @@ sub _initialize_vars{
 
    foreach my $key (@args) {
       if (! exists $VARS->{$key}) {
-	 die "FATAL: argument \`$key\` does not exist in MpiTier object\n";
+	 confess "FATAL: argument \`$key\` does not exist in MpiTier object\n";
       }
       else {
 	 $self->{VARS}{$key} = $VARS->{$key};
@@ -394,7 +395,7 @@ sub _go {
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 		if (not $q_seq_obj) {
 		    print STDERR "stop here: $seq_id\n";
-		    die "ERROR: Fasta index error\n";
+		    confess "ERROR: Fasta index error\n";
 		}
 	    }
 
@@ -436,7 +437,7 @@ sub _go {
 		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 		    if (not $q_seq_obj) {
 			print STDERR "stop here: $seq_id\n";
-			die "ERROR: Fasta index error\n";
+			confess "ERROR: Fasta index error\n";
 		    }
 		}
 	    }
@@ -555,7 +556,7 @@ sub _go {
 		    $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 		    if (not $m_seq_obj) {
 			print STDERR "stop here: $seq_id\n";
-			die "ERROR: Fasta index error\n";
+			confess "ERROR: Fasta index error\n";
 		    }
 		}
 
@@ -608,12 +609,12 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1010,7 +1011,7 @@ sub _go {
 		$m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 		if (not $m_seq_obj) {
 		    print STDERR "stop here: $seq_id\n";
-		    die "ERROR: Fasta index error\n";
+		    confess "ERROR: Fasta index error\n";
 		}
 	    }
 
@@ -1185,12 +1186,12 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2895,7 +2896,7 @@ sub _go {
 
 	       #missing junction
 	       if(!$chunk->is_last && (! $j_file || ! -f $j_file)){
-		   die "ERROR: Missing junction file for $order\-".($order+1)."\n";
+		   confess "ERROR: Missing junction file for $order\-".($order+1)."\n";
 	       }
 
 	       my $section = retrieve($s_file);
@@ -3003,12 +3004,12 @@ sub _go {
 	 }
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
-	    die "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -3617,7 +3618,7 @@ sub _go {
 
 
    #should never reach this line
-   die "FATAL: \'$flag\' is not a valid flag in MpiChunk _go!!\n";
+   confess "FATAL: \'$flag\' is not a valid flag in MpiChunk _go!!\n";
 }
 #--------------------------------------------------------------
 #gets called by MpiTiers object following termination

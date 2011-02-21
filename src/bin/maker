@@ -8,6 +8,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG $CMD_ARGS $VERSION);
+use Carp;
 
 BEGIN{
    $VERSION = '2.09';
@@ -186,7 +187,7 @@ catch Error::Simple with{
     my $E = shift;
     
     print STDERR $E->{-text};
-    die "\n\nMaker failed parsing command line options!!\n\n" if();
+    confess "\n\nMaker failed parsing command line options!!\n\n";
 };
 
 #varibles that are persistent outside of try

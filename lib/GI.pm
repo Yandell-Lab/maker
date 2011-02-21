@@ -44,6 +44,7 @@ use FastaDB;
 use FastaSeq;
 use Digest::MD5;
 use Bio::Root::Version 1.006; #force correct version of BioPerl
+use Carp;
 
 @ISA = qw(
 	);
@@ -235,7 +236,7 @@ sub reblast_merged_hits {
 	       $fastaObj = $db_index->get_Seq_for_hit($hit);
 	       if (not $fastaObj) {
 		  print STDERR "stop here:".$hit->name."\n";
-		  die "ERROR: Fasta index error\n";
+		  confess "ERROR: Fasta index error\n";
 	       }
 	    }
 	    
@@ -290,7 +291,7 @@ sub reblast_merged_hits {
 	 print STDERR "...finished\n" unless $main::quiet;
       }
       else {
-	 die "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
+	 confess "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
       }
       
       unlink <$t_file.x??>;
@@ -741,7 +742,7 @@ sub split_db {
 	    #fix lock
 	    $lock->unlock;
 	    unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 50)){
-	       die "ERROR: Could not get lock to process $file.\n";
+	       confess "ERROR: Could not get lock to process $file.\n";
 	    }
 	 }
 	 
@@ -843,7 +844,7 @@ sub split_db {
 	 if (-e $f_dir) { #multi processor
 	    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
 	    
-	    die "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
+	    confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
 	    
 	    push(@db_files, @t_db);
 	    
@@ -851,7 +852,7 @@ sub split_db {
 	    next;
 	 }
 	 else {
-	    die "ERROR: Could not split db\n"; #not ok
+	    confess "ERROR: Could not split db\n"; #not ok
 	 }
       }
       else{
@@ -1268,7 +1269,7 @@ sub polish_exonerate {
 		
 		if (not $fastaObj) {
 		    print STDERR "stop here:".$h_name."\n";
-		    die "ERROR: Fasta index error\n";
+		    confess "ERROR: Fasta index error\n";
 		}
 	    }
 	    
@@ -1446,7 +1447,7 @@ sub to_polisher {
 					     );
    }
    else {
-      die "unknown type:$type in sub to_polisher.\n";
+      confess "unknown type:$type in sub to_polisher.\n";
    }
 }
 #-----------------------------------------------------------------------------
@@ -1466,7 +1467,7 @@ sub make_multi_fasta {
 
 	     if (not $fastaObj) {
 		 print STDERR "stop here:".$hit->name."\n";
-		 die "ERROR: Fasta index error\n";
+		 confess "ERROR: Fasta index error\n";
 	     }
 	 }
 
@@ -1516,9 +1517,9 @@ sub dbformat {
 
    my ($file) = $file =~ /^([^\:]+)\:?(.*)/; #peal off label
 
-   die "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $command);
-   die "ERROR: Can not find the db file $file\n" if(! -e $file);
-   die "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
+   confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $command);
+   confess "ERROR: Can not find the db file $file\n" if(! -e $file);
+   confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
    my $run; #flag
    if ($command =~ /xdformat/) {
@@ -1555,7 +1556,7 @@ sub dbformat {
       }
    }
    else {
-      die "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
+      confess "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
    }
 
    if($run){
@@ -1568,7 +1569,7 @@ sub dbformat {
        }
        else{
 	   $lock->unlock if($lock);
-	   die "ERROR:  Could not obtain lock to format database\n\n";
+	   confess "ERROR:  Could not obtain lock to format database\n\n";
        }
    }
 }
@@ -1668,7 +1669,7 @@ sub blastn_as_chunks {
 	       $lock->unlock;
 	   }
 	   else{
-	       die "ERROR: Could not get lock.\n\n";
+	       confess "ERROR: Could not get lock.\n\n";
 	   }
 	}
    
@@ -1869,7 +1870,7 @@ sub runBlastn {
       $command .= " -out $out_file";
    }
    else{
-      die "ERROR: Must be a blastn executable";  
+      confess "ERROR: Must be a blastn executable";  
    }
 
    my $w = new Widget::blastn();
@@ -1969,7 +1970,7 @@ sub blastx_as_chunks {
 	       $lock->unlock;
 	   }
 	   else{
-	       die "ERROR: Could not get lock.\n\n";
+	       confess "ERROR: Could not get lock.\n\n";
 	   }
        }
 
@@ -2030,7 +2031,7 @@ sub collect_blast{
        #merge blast reports
        if ( -e $dir && ! -e $blast_finished) {
 	   system ("cat $dir/\*\.$ext > $blast_finished")
-	       && die "ERROR: Could not colapse BLAST reports\n";
+	       && confess "ERROR: Could not colapse BLAST reports\n";
 	   rmtree ("$dir");
        }
        $LOG->add_entry("FINISHED", $blast_finished, ""); 
@@ -2195,7 +2196,7 @@ sub runBlastx {
       $command .= " -out $out_file";
    }
    else{
-      die "ERROR: Must be a blastx executable";  
+      confess "ERROR: Must be a blastx executable";  
    }
 
    my $w = new Widget::blastx();
@@ -2290,7 +2291,7 @@ sub tblastx_as_chunks {
 	       $lock->unlock;
 	   }
 	   else{
-	       die "ERROR: Could not get lock.\n\n";
+	       confess "ERROR: Could not get lock.\n\n";
 	   }
        }
 
@@ -2475,7 +2476,7 @@ sub runtBlastx {
       $command .= " -out $out_file";
    }
    else{
-      die "ERROR: Must be a tblastx executable";  
+      confess "ERROR: Must be a tblastx executable";  
    }
 
    my $w = new Widget::tblastx();
@@ -3357,7 +3358,7 @@ sub load_control_files {
        }
 
        warn "WARNING: blast_type is set to '$CTL_OPT{blast_type}' but executables cannot be located\n" unless($main::qq);
-       die "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
+       confess "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
        warn "The blast_type '$new' will be used instead.\n\n" unless($main::qq);
 
        $CTL_OPT{blast_type} = $new;
@@ -3669,7 +3670,7 @@ sub load_control_files {
        $CTL_OPT{mpi_blastdb} = abs_path($CTL_OPT{mpi_blastdb});
    }
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
-   die "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
+   confess "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
 
    #--set up optional global TMP (If TMP is not accessible from other nodes
@@ -3750,7 +3751,7 @@ sub load_control_files {
 		       );
 
        unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
-	   die "ERROR: Could not query control option logs\n\n";
+	   confess "ERROR: Could not query control option logs\n\n";
        }
 
        #should be same

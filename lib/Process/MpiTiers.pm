@@ -165,7 +165,7 @@ sub next_chunk {
    my $self = shift;
    my $what = shift; #tier or chunk
 
-   die "ERROR: Improper type specification in Process::MpiTiers:next_chunk\n"
+   confess "ERROR: Improper type specification in Process::MpiTiers:next_chunk\n"
        if($what && $what ne 'chunk' && $what ne 'tier');
 
    warn "WARNING: You must always set a rank before running MpiTiers\n"
@@ -424,10 +424,10 @@ sub update_chunk {
 
    #check if chunk goes with tier/level
    if($parent ne $self->id){
-      die "ERROR:  This MpiChunk does not belong to this MpiTier\n";
+      confess "ERROR:  This MpiChunk does not belong to this MpiTier\n";
    }
    if(! $self->_level_started($level_num) || $self->_level_finished($level_num)){
-      die "ERROR:  This MpiChunk is not part of this level\n";
+      confess "ERROR:  This MpiChunk is not part of this level\n";
    }
 
    #check run status
@@ -444,7 +444,7 @@ sub update_chunk {
       }
    }
    else{
-       die "ERROR: Logic error, attempt to update unfinished chunk\n";
+       confess "ERROR: Logic error, attempt to update unfinished chunk\n";
    }
 
    $self->{LEVEL}{$level_num}{RESULT_COUNT}++;    
@@ -542,7 +542,7 @@ sub _set_terminate {
    my $arg = shift;
 
    if(! defined($arg) || $arg !~ /^0$|^1$/){
-       die "FATAL:  Attempt to set TERMINATE to an illegal value\n".
+       confess "FATAL:  Attempt to set TERMINATE to an illegal value\n".
 	   "in Process::MpiTiers\n\n";
    }
 
@@ -570,7 +570,7 @@ sub _set_failed {
    my $arg = shift;
 
    if(! defined($arg) || $arg !~ /^0$|^1$/){
-       die "FATAL:  Attempt to set FAILED to an illegal value\n".
+       confess "FATAL:  Attempt to set FAILED to an illegal value\n".
 	   "in Process::MpiTiers\n\n";
    }
 
@@ -596,7 +596,7 @@ sub _set_interrupt {
    my $arg = shift;
 
    if(! defined($arg) || $arg !~ /^0$|^1$/){
-       die "FATAL:  Attempt to set FAILED to an illegal value\n".
+       confess "FATAL:  Attempt to set FAILED to an illegal value\n".
 	   "in Process::MpiTiers\n\n";
    }
 
@@ -806,7 +806,7 @@ sub AUTOLOAD {
     $call =~/DESTROY/ && return;
 
     if (! exists $self->{VARS}{$call}) {
-	die "Error: Invalid method \'$call\' in Process::MpiTiers\n".
+	confess "Error: Invalid method \'$call\' in Process::MpiTiers\n".
 	    "call to AutoLoader issued from: $caller\n\n";
     }
 
