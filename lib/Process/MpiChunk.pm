@@ -13,8 +13,8 @@ use File::Copy;
 #--set object variables for serialization of data
 #this is needed when cloning an MpiChunk object
 $Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
-#$Storable::Deparse = 1; #now serializes CODE refs
-#$Storable::Eval= 1;$ #now serializes CODE refs
+$Storable::Deparse = 1; #now serializes CODE refs
+$Storable::Eval= 1; #now serializes CODE refs
 
 #-----------------------------------------------------------------------------
 #-----------------------------------METHODS-----------------------------------
@@ -386,6 +386,18 @@ sub _go {
 	    my $seq_id = Fasta::def2SeqID($q_def); #get sequence identifier
 	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
 	    my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+
+            #still no sequence? try rebuilding the index and try again
+            if (not $q_seq_obj) {
+		print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		$g_index->reindex();
+		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		if (not $q_seq_obj) {
+		    print STDERR "stop here: $seq_id\n";
+		    die "ERROR: Fasta index error\n";
+		}
+	    }
+
 	    my $q_seq_length = $q_seq_obj->length(); #seq length
 
 	    #set up base and void directories for output
@@ -416,6 +428,17 @@ sub _go {
 		GI::build_fasta_index($unmasked_file); #once to tie file
 		$g_index = GI::build_fasta_index($unmasked_file);
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
+
+		#still no sequence? try rebuilding the index and try again
+		if (not $q_seq_obj) {
+		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		    $g_index->reindex();
+		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    if (not $q_seq_obj) {
+			print STDERR "stop here: $seq_id\n";
+			die "ERROR: Fasta index error\n";
+		    }
+		}
 	    }
 	    #-------------------------CODE
 	    
@@ -520,9 +543,21 @@ sub _go {
 	    }
 	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
 		#make masked index
+		my $seq_id = $VARS->{seq_id};
 		my $masked_file = $VARS->{the_void}."/query.masked.fasta";
 		my $m_index = GI::build_fasta_index($masked_file);
-		my $m_seq_obj = $m_index->get_Seq_by_id($VARS->{seq_id});
+		my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+
+		#still no sequence? try rebuilding the index and try again
+		if (not $m_seq_obj) {
+		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		    $m_index->reindex();
+		    $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+		    if (not $m_seq_obj) {
+			print STDERR "stop here: $seq_id\n";
+			die "ERROR: Fasta index error\n";
+		    }
+		}
 
 		#build masked chunks    
 		my $fasta_chunker = new FastaChunker();
@@ -967,6 +1002,17 @@ sub _go {
 	    GI::build_fasta_index($masked_file); #once to tie file
 	    my $m_index = GI::build_fasta_index($masked_file);
 	    my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+
+            #still no sequence? try rebuilding the index and try again
+            if (not $m_seq_obj) {
+		print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		$m_index->reindex();
+		$m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+		if (not $m_seq_obj) {
+		    print STDERR "stop here: $seq_id\n";
+		    die "ERROR: Fasta index error\n";
+		}
+	    }
 
 	    #build masked chunks
 	    $fasta_chunker = new FastaChunker();

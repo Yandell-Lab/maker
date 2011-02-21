@@ -181,8 +181,8 @@ Options:
 
 #--set object variables for serialization of data
 $Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
-#$Storable::Deparse = 1; #now serializes CODE refs
-#$Storable::Eval = 1;$ #now serializes CODE refs
+$Storable::Deparse = 1; #now serializes CODE refs
+$Storable::Eval = 1; #now serializes CODE refs
 
 #------INITIATE MPI VARIABLES------
 my $rank = MPI_Comm_rank(MPI_COMM_WORLD); #my proccess number
