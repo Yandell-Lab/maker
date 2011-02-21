@@ -10,6 +10,7 @@ use Error qw(:try);
 use Error::Simple;
 use Process::MpiChunk;
 use Storable;
+use Carp;
 
 #--set object variables for serialization of data
 #this is needed when cloning an MPIChunk object
