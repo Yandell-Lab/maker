@@ -38,6 +38,7 @@ my $build = MAKER::Build->new
 	 'IO::Prompt'         => '0',
 	 'DBD::SQLite'        => '0',
 	 'Perl::Unsafe::Signals' => '0',
+	 'Bit::Vector'         => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!\usr\bin\perl
 
 use strict;
 use warnings;
@@ -21,8 +21,10 @@ Dbxrefs and Ontology_term fields to the GFF3 attributes field.
 ";
 
 
-my ($help);
-my $opt_success = GetOptions('help'    => \$help,
+my ($help,
+    $tab2go);
+my $opt_success = GetOptions('tab2go' => \$tab2go,
+			     'help'    => \$help,
 			      );
 
 die $usage if $help || ! $opt_success;
@@ -108,10 +110,12 @@ sub parse_genes {
 			next LINE;
 		}
 
+		my ($name)   = $attrb =~ /Name\s*=\s*(.*?);/;
 		my ($id)     = $attrb =~ /ID\s*=\s*(.*?);/;
 		my ($parent) = $attrb =~ /Parent\s*=\s*(.*?);/;
 
 		$gene_map{$id} = $parent;
+		$gene_map{$name} = $parent if($name && $name ne $id);
 	}
 	return \%gene_map;
 }
@@ -142,24 +146,36 @@ sub parse_ipr_scan {
 		    $start, $end, $e_val, $status, $date, $ipr_id,
 		    $ipr_desc, $go_text) = split /\t/, $_;
 
-		next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
+		if($tab2go){
+		   my ($seq_id, undef, undef, undef, $go_text) = split /[\t\s]+/, $_;
 
-		$method = $db_map{$method} || $method;
+		   my @go_ids = $go_text =~ /(GO:\d+)/g unless(! $go_text);
+                   map {$ipr{$seq_id}{go}{$_}++} @go_ids;
 
-		push @{$ipr{$seq_id}{dbxref}{$method}}, {id   => $db_id,
-							       desc => $db_desc};
-		push @{$ipr{$seq_id}{dbxref}{InterPro}}, {id   => $ipr_id,
-								desc => $ipr_desc};
-		my @go_ids = $go_text =~ /\((GO:\d+)\)/g unless(! $go_text);
-		map {$ipr{$seq_id}{go}{$_}++} @go_ids;
-
-
-		my $gene_id = $gene_map->{$seq_id};
-		push @{$ipr{$gene_id}{dbxref}{$method}}, {id   => $db_id,
-								desc => $db_desc};
-		push @{$ipr{$gene_id}{dbxref}{InterPro}}, {id   => $ipr_id,
-								 desc => $ipr_desc};
-		map {$ipr{$gene_id}{go}{$_}++} @go_ids;
+		   my $gene_id = $gene_map->{$seq_id};
+		   map {$ipr{$gene_id}{go}{$_}++} @go_ids;
+		}
+		else{
+		   next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
+		   
+		   $method = $db_map{$method} || $method;
+		   
+		   push @{$ipr{$seq_id}{dbxref}{$method}}, {id   => $db_id,
+							    desc => $db_desc};
+		   push @{$ipr{$seq_id}{dbxref}{InterPro}}, {id   => $ipr_id,
+							     desc => $ipr_desc};
+		   
+		   my @go_ids = $go_text =~ /\((GO:\d+)\)/g unless(! $go_text);
+		   map {$ipr{$seq_id}{go}{$_}++} @go_ids;
+		   
+		   
+		   my $gene_id = $gene_map->{$seq_id};
+		   push @{$ipr{$gene_id}{dbxref}{$method}}, {id   => $db_id,
+							  desc => $db_desc};
+		   push @{$ipr{$gene_id}{dbxref}{InterPro}}, {id   => $ipr_id,
+							      desc => $ipr_desc};
+		   map {$ipr{$gene_id}{go}{$_}++} @go_ids;
+		}
 	}
 	return \%ipr;
 }
