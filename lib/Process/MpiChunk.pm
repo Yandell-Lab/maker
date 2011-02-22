@@ -803,13 +803,6 @@ sub _go {
 									   $LOG,
 									   $LOG_FLAG
 									   );
-	       
-	       $rm_blastx_keepers = GI::clean_blast_hits($rm_blastx_keepers,
-							 $CTL_OPT{pcov_rm_blastx},
-							 $CTL_OPT{pid_rm_blastx},
-							 $CTL_OPT{eval_rm_blastx},
-							 0 #contiguity flag
-							 );
 	    }
 	    #-------------------------CODE
 
@@ -858,11 +851,11 @@ sub _go {
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
 	    my $LOG = $VARS->{LOG};
 
-	    $rm_blastx_keepers = GI::collect_blast($chunk,
-						   $rm_blastx_keepers,
-						   $res_dir,
-						   $LOG
-						   );
+	    $rm_blastx_keepers = GI::combine_blast_report($chunk,
+							  $rm_blastx_keepers,
+							  $res_dir,
+							  $LOG
+							  );
 	    
 	    #mask the chunk
 	    $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_blastx_keepers)
@@ -1339,11 +1332,11 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = {};
 
-	    $blastn_keepers = GI::collect_blast($chunk,
-						$blastn_keepers,
-						$res_dir,
-						$LOG
-						);
+	    $blastn_keepers = GI::combine_blast_report($chunk,
+						       $blastn_keepers,
+						       $res_dir,
+						       $LOG
+						       );
 
 	    #separate out hits too close to chunk divide to be run with exonerate
 	    my $holdover_blastn = [];
@@ -1449,11 +1442,9 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim on overly dense evidence
-	    if(@$blastn_keepers > 100){
-	       $blastn_keepers = cluster::shadow_cluster(50, $blastn_keepers);
-	       $blastn_keepers = GI::flatten($blastn_keepers);
-	    }
+	    #quick trim combined clusters
+	    $blastn_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastn}, $blastn_keepers);
+	    $blastn_keepers = GI::flatten($blastn_keepers);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1606,12 +1597,10 @@ sub _go {
 	    my $blastn_clusters = [];
 	    my $exonerate_e_clusters = [];
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-	       $blastn_clusters = (@$blastn_keepers > 50) ?
-		   cluster::clean_and_cluster(20, $blastn_keepers) : $blastn_keepers;
+	       $blastn_clusters = cluster::clean_and_cluster(10, $blastn_keepers);
 	    }
 	    else{
-	       $exonerate_e_clusters = (@$exonerate_e_data > 50) ?
-		   cluster::clean_and_cluster(20, $exonerate_e_data) : $exonerate_e_data;
+	       $exonerate_e_clusters = cluster::clean_and_cluster(10, $exonerate_e_data)
 	    }
 	    #-------------------------CODE
 
@@ -1659,8 +1648,8 @@ sub _go {
 
 	    #further combine and cluster
 	    if($flag){
-	       $blastn_clusters = cluster::clean_and_cluster(20, $blastn_clusters);
-	       $exonerate_e_clusters = cluster::clean_and_cluster(20, $exonerate_e_clusters);
+	       $blastn_clusters = cluster::clean_and_cluster(10, $blastn_clusters);
+	       $exonerate_e_clusters = cluster::clean_and_cluster(10, $exonerate_e_clusters);
 	    }
 
 	    my $blastn_keepers = GI::flatten($blastn_clusters);
@@ -1811,11 +1800,11 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
 
-	    $tblastx_keepers = GI::collect_blast($chunk,
-						 $tblastx_keepers,
-						 $res_dir,
-						 $LOG
-						 );
+	    $tblastx_keepers = GI::combine_blast_report($chunk,
+							$tblastx_keepers,
+							$res_dir,
+							$LOG
+							);
 
 	    #separate out hits too close to chunk divide to be run with exonerate
 	    my $holdover_tblastx = [];
@@ -1921,11 +1910,9 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim on overly dense evidence
-	    if(@$tblastx_keepers > 100){
-	       $tblastx_keepers = cluster::shadow_cluster(50, $tblastx_keepers);
-	       $tblastx_keepers = GI::flatten($tblastx_keepers);
-	    }
+	    #quick trim combined clusters
+	    $tblastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_tblastx}, $tblastx_keepers);
+	    $tblastx_keepers = GI::flatten($tblastx_keepers);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2065,10 +2052,8 @@ sub _go {
 	    $GFF3->add_phathits($tblastx_keepers, $uid);
 	    $GFF3->add_phathits($exonerate_a_data, $uid);
 
-	    my $tblastx_clusters = (@$tblastx_keepers > 50) ?
-		cluster::clean_and_cluster(20, $tblastx_keepers) : $tblastx_keepers;
-	    my $exonerate_a_clusters = (@$exonerate_a_data > 50) ?
-		cluster::clean_and_cluster(20, $exonerate_a_data) : $exonerate_a_data;
+	    my $tblastx_clusters = cluster::clean_and_cluster(10, $tblastx_keepers);
+	    my $exonerate_a_clusters = cluster::clean_and_cluster(10, $exonerate_a_data);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2115,8 +2100,8 @@ sub _go {
 
 	    #further combine and cluster
 	    if($flag){
-	       $tblastx_clusters = cluster::clean_and_cluster(20, $tblastx_clusters);
-	       $exonerate_a_clusters = cluster::clean_and_cluster(20, $exonerate_a_clusters);
+	       $tblastx_clusters = cluster::clean_and_cluster(10, $tblastx_clusters);
+	       $exonerate_a_clusters = cluster::clean_and_cluster(10, $exonerate_a_clusters);
 	    }
 
 	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
@@ -2269,11 +2254,11 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
 
-	    $blastx_keepers = GI::collect_blast($chunk,
-						$blastx_keepers,
-						$res_dir,
-						$LOG
-						);
+	    $blastx_keepers = GI::combine_blast_report($chunk,
+						       $blastx_keepers,
+						       $res_dir,
+						       $LOG
+						       );
 	    
 	    #separate out hits too close to chunk divide to be run with exonerate
 	    my $holdover_blastx = [];
@@ -2379,11 +2364,9 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim on overly dense evidence
-	    if(@$blastx_keepers > 100){
-	       $blastx_keepers = cluster::shadow_cluster(50, $blastx_keepers);
-	       $blastx_keepers = GI::flatten($blastx_keepers);
-	    }
+	    #quick trim combined clusters
+	    $blastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastx}, $blastx_keepers);
+	    $blastx_keepers = GI::flatten($blastx_keepers);
 	    #-------------------------CODE
 	    
 	    #------------------------RETURN
@@ -2525,10 +2508,8 @@ sub _go {
 	    $GFF3->add_phathits($exonerate_p_data, $uid);
 
 	    #blastx will be empty from this point on in the script if eukaryotic
-	    my $blastx_clusters = (@$blastx_keepers > 50) ?
-		cluster::clean_and_cluster(20, $blastx_keepers) : $blastx_keepers;
-	    my $exonerate_p_clusters = (@$exonerate_p_data > 50) ?
-		cluster::clean_and_cluster(20, $exonerate_p_data) : $exonerate_p_data;
+	    my $blastx_clusters = cluster::clean_and_cluster(10, $blastx_keepers);
+	    my $exonerate_p_clusters = cluster::clean_and_cluster(10, $exonerate_p_data);
 	    #-------------------------CODE
 
 	    #------------------------RETURN

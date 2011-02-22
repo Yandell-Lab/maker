@@ -1,4 +1,4 @@
-#------------------------------------------------------------------------
+#-----------------------------------------------------------------------
 #----                                GI                              ----
 #------------------------------------------------------------------------
 package GI;
@@ -257,7 +257,7 @@ sub reblast_merged_hits {
 			      $t_file,
 			      $the_void,
 			      $p_safe_id.".".$F.".".$L,
-			      \%CTL_OPT,
+			      {%CTL_OPT, split_hit => 0},
 			      $LOG
 			      );
 	 
@@ -270,7 +270,7 @@ sub reblast_merged_hits {
 			      $t_file,
 			      $the_void,
 			      $p_safe_id.".".$F.".".$L,
-			      \%CTL_OPT,
+			      {%CTL_OPT, split_hit => 0},
 			      $LOG
 			      );
 	 
@@ -283,7 +283,7 @@ sub reblast_merged_hits {
 			       $t_file,
 			       $the_void,
 			       $p_safe_id.".".$F.".".$L,
-			       \%CTL_OPT,
+			       {%CTL_OPT, split_hit => 0},
 			       $LOG
 			       );
 	 
@@ -1604,6 +1604,7 @@ sub blastn_as_chunks {
    my $LOG_FLAG   = shift;   
    
    my $blast      = $CTL_OPT->{_blastn};
+   my $depth_blast = $CTL_OPT->{depth_blastn};
    my $bit_blast  = $CTL_OPT->{bit_blastn};
    my $eval_blast = $CTL_OPT->{eval_blastn};
    my $pcov_blast = $CTL_OPT->{pcov_blastn};
@@ -1696,6 +1697,7 @@ sub blastn_as_chunks {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::blastn::parse($o_file,
 					     \%params,
@@ -1723,6 +1725,7 @@ sub blastn {
    my $LOG        = shift;
 
    my $blast      = $CTL_OPT->{_blastn};
+   my $depth_blast = $CTL_OPT->{depth_blastn};
    my $bit_blast  = $CTL_OPT->{bit_blastn};
    my $eval_blast = $CTL_OPT->{eval_blastn};
    my $pcov_blast = $CTL_OPT->{pcov_blastn};
@@ -1770,6 +1773,7 @@ sub blastn {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::blastn::parse($o_file,
 					     \%params,
@@ -1807,7 +1811,7 @@ sub runBlastn {
    if ($command =~ /blasta$/) {
       symlink($blast, "$TMP/blastn") if(! -e "$TMP/blastn"); #handle blasta linking
       $command = "$TMP/blastn";
-      $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
+      $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " R=3";
       $command .= " W=15";
@@ -1835,7 +1839,7 @@ sub runBlastn {
    }
    elsif ($command =~ /blastall$/) {
       $command .= " -p blastn";
-      $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
+      $command .= " -d $db -i $q_file -b 10000 -v 10000 -e $eval_blast";
       $command .= " -E 3";
       $command .= " -W 15";
       $command .= " -r 1";
@@ -1853,7 +1857,7 @@ sub runBlastn {
    elsif ($command =~ /blastn$/) {
       #$command .= " -task blastn";
       $command .= " -db $db -query $q_file";
-      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -num_alignments 10000 -num_descriptions 10000 -evalue $eval_blast";
       $command .= " -gapextend 3";
       $command .= " -word_size 15";
       $command .= " -reward 1";
@@ -1902,12 +1906,13 @@ sub blastx_as_chunks {
    my $LOG_FLAG   = shift;
    my $rflag      = shift; #am I running repeatrunner?
 
-   my $blast      = $CTL_OPT->{_blastx};
-   my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
-   my $eval_blast = ($rflag) ? $CTL_OPT->{eval_rm_blastx} : $CTL_OPT->{eval_blastx};
-   my $pcov_blast = ($rflag) ? $CTL_OPT->{pcov_rm_blastx} : $CTL_OPT->{pcov_blastx};
-   my $pid_blast  = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
-   my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
+   my $blast       = $CTL_OPT->{_blastx};
+   my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
+   my $bit_blast   = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
+   my $eval_blast  = ($rflag) ? $CTL_OPT->{eval_rm_blastx} : $CTL_OPT->{eval_blastx};
+   my $pcov_blast  = ($rflag) ? $CTL_OPT->{pcov_rm_blastx} : $CTL_OPT->{pcov_blastx};
+   my $pid_blast   = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
+   my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
@@ -1997,6 +2002,7 @@ sub blastx_as_chunks {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::blastx::parse($o_file,
 					     \%params,
@@ -2015,7 +2021,7 @@ sub blastx_as_chunks {
    return ($chunk_keepers, $blast_dir);
 }
 #-----------------------------------------------------------------------------
-sub collect_blast{
+sub combine_blast_report {
    my $chunk     = shift;
    my $hits      = shift;
    my $blast_dir = shift;
@@ -2064,11 +2070,12 @@ sub blastx {
    my $rflag      = shift;
 
    my $blast      = $CTL_OPT->{_blastx};
+   my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
    my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
    my $eval_blast = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{eval_blastx};
    my $pcov_blast = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pcov_blastx};
    my $pid_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
-   my $split_hit   = $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
+   my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
@@ -2113,6 +2120,7 @@ sub blastx {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
    
    my $chunk_keepers = Widget::blastx::parse($o_file,
 					     \%params,
@@ -2172,7 +2180,7 @@ sub runBlastx {
    }
    elsif ($command =~ /blastall$/) {
       $command .= " -p blastx";
-      $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
+      $command .= " -d $db -i $q_file -b 10000 -v 10000 -e $eval_blast";
       $command .= " -z 300";
       $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
@@ -2184,7 +2192,7 @@ sub runBlastx {
    }
    elsif ($command =~ /blastx$/) {
       $command .= " -db $db -query $q_file";
-      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -num_alignments 10000 -num_descriptions 10000 -evalue $eval_blast";
       $command .= " -dbsize 300";
       $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
       $command .= " -num_threads $cpus";
@@ -2225,6 +2233,7 @@ sub tblastx_as_chunks {
    my $LOG_FLAG   = shift;
 
    my $blast      = $CTL_OPT->{_tblastx};
+   my $depth_blast = $CTL_OPT->{depth_tblastx};
    my $bit_blast  = $CTL_OPT->{bit_tblastx};
    my $eval_blast = $CTL_OPT->{eval_tblastx};
    my $pcov_blast = $CTL_OPT->{pcov_tblastx};
@@ -2318,6 +2327,7 @@ sub tblastx_as_chunks {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
@@ -2345,6 +2355,7 @@ sub tblastx {
    my $LOG        = shift;
 
    my $blast      = $CTL_OPT->{_tblastx};
+   my $depth_blast = $CTL_OPT->{depth_tblastx};
    my $bit_blast  = $CTL_OPT->{bit_tblastx};
    my $eval_blast = $CTL_OPT->{eval_tblastx};
    my $pcov_blast = $CTL_OPT->{pcov_tblastx};
@@ -2392,6 +2403,7 @@ sub tblastx {
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
+   $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
@@ -2429,7 +2441,7 @@ sub runtBlastx {
    if ($command =~ /blasta$/) {
       symlink($blast, "$TMP/tblastx") if(! -e "$TMP/tblastx"); #handle blasta linking
       $command = "$TMP/tblastx";
-      $command .= " $db $q_file B=100000 V=100000 E=$eval_blast";
+      $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " Z=1000";
       $command .= ($org_type eq 'eukaryotic') ? " Y=500000000" : " Y=20000000";
@@ -2452,7 +2464,7 @@ sub runtBlastx {
    }
    elsif ($command =~ /blastall$/) {
       $command .= " -p tblastx";
-      $command .= " -d $db -i $q_file -b 100000 -v 100000 -e $eval_blast";
+      $command .= " -d $db -i $q_file -b 10000 -v 10000 -e $eval_blast";
       $command .= " -z 1000";
       $command .= ($org_type eq 'eukaryotic') ? " -Y 500000000" : " -Y 20000000";
       $command .= " -a $cpus";	
@@ -2464,7 +2476,7 @@ sub runtBlastx {
    }
    elsif ($command =~ /tblastx$/) {
       $command .= " -db $db -query $q_file";
-      $command .= " -num_alignments 100000 -num_descriptions 100000 -evalue $eval_blast";
+      $command .= " -num_alignments 10000 -num_descriptions 10000 -evalue $eval_blast";
       $command .= " -dbsize 1000";
       $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
       $command .= " -num_threads $cpus";
@@ -2737,10 +2749,12 @@ sub set_defaults {
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
       $CTL_OPT{'bit_blastn'} = 40;
+      $CTL_OPT{'depth_blastn'} = 20;
       $CTL_OPT{'pcov_blastx'} = 0.50;
       $CTL_OPT{'pid_blastx'} = 0.40;
       $CTL_OPT{'eval_blastx'} = 1e-6;
       $CTL_OPT{'bit_blastx'} = 30;
+      $CTL_OPT{'depth_blastx'} = 20;
       $CTL_OPT{'pcov_rm_blastx'} = 0.50;
       $CTL_OPT{'pid_rm_blastx'} = 0.40;
       $CTL_OPT{'eval_rm_blastx'} = 1e-6;
@@ -2749,6 +2763,7 @@ sub set_defaults {
       $CTL_OPT{'pid_tblastx'} = 0.85;
       $CTL_OPT{'eval_tblastx'} = 1e-10;
       $CTL_OPT{'bit_tblastx'} = 40;
+      $CTL_OPT{'depth_tblastx'} = 20;
       $CTL_OPT{'en_score_limit'} = 20;
       $CTL_OPT{'ep_score_limit'} = 20;
       #evaluator below here
@@ -3130,7 +3145,7 @@ sub load_server_files {
 		    warn "WARNING: Invalid option \'$key\' in control file $ctlfile\n\n";
 		}
 	    }#now load menus
-	    elsif($line =~ /^\#\#Menus from Data::Dumper/){ #only non-sandard format control file
+	    elsif($line =~ /^\#\#Menus from Data::Dumper/){ #only non-standard format control file
 		my $data = join('', <CTL>);
 		my $menus; #will be set by data
 		eval $data;
@@ -3574,8 +3589,8 @@ sub load_control_files {
       "max_dna_len will be reset to 50,000\n\n";
       $CTL_OPT{max_dna_len} = 50000;
    }
-   if ($CTL_OPT{split_hit} > 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
-      $CTL_OPT{split_hit} = 0;
+   if ($CTL_OPT{split_hit} < 50 || $CTL_OPT{organism_type} eq 'prokaryotic') {
+      $CTL_OPT{split_hit} = 50; #important or hits will not be merged across chunk junctions
    }
    if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
       warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n" unless($main::qq);
@@ -3895,21 +3910,24 @@ sub generate_control_files {
        print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
        print OUT "eval_blastn=$O{eval_blastn} #Blastn eval cutoff\n";
        print OUT "bit_blastn=$O{bit_blastn} #Blastn bit cutoff\n";
+       print OUT "depth_blastn=$O{depth_blastn} #Blastn depth cutoff\n";
        print OUT "\n";
        print OUT "pcov_blastx=$O{pcov_blastx} #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
        print OUT "pid_blastx=$O{pid_blastx} #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
        print OUT "eval_blastx=$O{eval_blastx} #Blastx eval cutoff\n";
        print OUT "bit_blastx=$O{bit_blastx} #Blastx bit cutoff\n";
-       print OUT "\n";
-       print OUT "pcov_rm_blastx=$O{pcov_rm_blastx} #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
-       print OUT "pid_rm_blastx=$O{pid_rm_blastx} #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
-       print OUT "eval_rm_blastx=$O{eval_rm_blastx} #Blastx eval cutoff for transposable element masking\n";
-       print OUT "bit_rm_blastx=$O{bit_rm_blastx} #Blastx bit cutoff for transposable element masking\n";
+       print OUT "depth_blastx=$O{depth_blastx} #Blastx depth cutoff\n";
        print OUT "\n";
        print OUT "pcov_tblastx=$O{pcov_tblastx} #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
        print OUT "pid_tblastx=$O{pid_tblastx} #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
        print OUT "eval_tblastx=$O{eval_tblastx} #tBlastx eval cutoff\n";
        print OUT "bit_tblastx=$O{bit_tblastx} #tBlastx bit cutoff\n";
+       print OUT "depth_tblastx=$O{depth_tblastx} #tBlastx depth cutoff\n";
+       print OUT "\n";
+       print OUT "pcov_rm_blastx=$O{pcov_rm_blastx} #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
+       print OUT "pid_rm_blastx=$O{pid_rm_blastx} #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
+       print OUT "eval_rm_blastx=$O{eval_rm_blastx} #Blastx eval cutoff for transposable element masking\n";
+       print OUT "bit_rm_blastx=$O{bit_rm_blastx} #Blastx bit cutoff for transposable element masking\n";
        print OUT "\n";
        print OUT "eva_pcov_blastn=$O{eva_pcov_blastn} #EVALUATOR Blastn Percent Coverage Threshold EST-Genome Alignments\n";
        print OUT "eva_pid_blastn=$O{eva_pid_blastn} #EVALUATOR Blastn Percent Identity Threshold EST-Genome Alignments\n";

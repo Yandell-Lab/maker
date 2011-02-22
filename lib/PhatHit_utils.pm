@@ -12,6 +12,7 @@ use Exporter;
 use Fasta;
 use SimpleCluster;
 use FastaSeq;
+use Carp;
 
 @ISA = qw(
        );
@@ -337,8 +338,8 @@ sub split_hit_on_intron {
 #------------------------------------------------------------------------
 sub split_hit_by_strand {
    my $hits = shift;
-
-   push (@{$hits}, $hits) if (ref($hits) ne 'ARRAY');
+   $hits = [$hits] if(ref($hits) ne 'ARRAY' &&
+		      ref($hits) =~ /Bio\:\:Search\:\:PhatHit\:\:/);
 
    my @new_hits;
 

@@ -94,9 +94,16 @@ sub keepers {
    my $params = shift; 
    
    my @keepers;
+   my $clusters = [];
    my $start = 0;
-   my $ok; #context override
+   my $ok; #context override (check if report is finished)
 
+   my $depth = $params->{depth};
+   my $split_hit = $params->{split_hit} || 0;
+   my $hsp_bit_min = $params->{hsp_bit_min} || 0;
+
+   #iterate through results
+   my $i = 0;
    while (my $result = $sio->next_result()){
       if(!$ok && !$result->get_statistic('posted_date')){
 	  open(my $IN, '<', $sio->file);
@@ -110,43 +117,90 @@ sub keepers {
 	  die "ERROR: BLASTX does not appear to be finished in Widget::blastx::keepers\n" if(!$ok);
       }
       
-      my $hits = [$result->hits()];
-      $start += @{$hits};
+      $start += $result->num_hits;
       
-      foreach my $hit (@{$hits}){
-	 $hit->queryLength($result->query_length);
-	 $hit->queryName($result->query_name);
-	 $hit->database_name($result->database_name);
+      #iterate hits
+      my $q_length = $result->query_length;
+      my $q_name = $result->query_name;
+      my $db_name = $result->database_name;
+      my $cutoff = $q_length - $split_hit;
+      my $scutoff = 1 + $split_hit;
+      
+      while (my $hit = $result->next_hit){
+	  $hit->queryLength($q_length);
+	  $hit->queryName($q_name);
+	  $hit->database_name($db_name);
 
-	 my @hsps;
-	 while(my $hsp = $hit->next_hsp) {
-		 $hsp->query_name($result->query_name);
-		 
-		 push(@hsps, $hsp) if $hsp->bits > $params->{hsp_bit_min};
+	  #iterate HSP
+	  my @hsps;
+	  while(my $hsp = $hit->next_hsp) {
+	      $hsp->query_name($q_name);
+	      push(@hsps, $hsp) if($hsp->bits > $hsp_bit_min);
+	  }
+	  $hit->hsps(\@hsps);
+
+	  #split hits
+	  my $hits = PhatHit_utils::split_hit_by_strand([$hit]);
+	  $hits = PhatHit_utils::split_hit_on_intron($hits, $split_hit) if($split_hit);
+
+	  #filter split hits
+	  foreach my $h (@{$hits}) {
+	      next unless($h->hsps());
+	      
+	      #fix strand for messed up ncbi blast
+	      $hit = PhatHit_utils::copy($hit, 'both') if ($hit->strand('hit') < 0);	 
+	      
+	      my $s = $h->start('query');
+	      my $e = $h->end('query');
+	      if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){
+		  push(@keepers, $h);
+		  next;
 	      }
-	 $hit->hsps(\@hsps);
-      }
-
-      $hits = PhatHit_utils::split_hit_by_strand($hits);
-      if (exists $params->{split_hit}){
-	 $hits = PhatHit_utils::split_hit_on_intron($hits, $params->{split_hit});
-      }
-
-      foreach my $hit (@{$hits}) {
-	 #my $significance = $hit->significance();
-	 #$significance = "1".$significance if  $significance =~ /^e/;
-	 #$significance = 0                 if  $significance =~ /0\.$/;
-	 #next unless $significance < $params->{significance};
-	 #next unless $hit->pAh > $params->{percov};
-	 #next unless $hit->hsp('best')->frac_identical() > $params->{percid};
-	 #next unless PhatHit_utils::is_contigous($hit);
-
-	 #fix strand for messed up ncbi blast
-	 $hit = PhatHit_utils::copy($hit, 'both') if ($hit->strand('hit') < 0);	 
-
-	 push(@keepers, $hit) if $hit->hsps();
+	      
+	      #filtering
+	      #next unless PhatHit_utils::is_contigous($h);
+	      if(defined($params->{significance})){
+		  my $sig_thr = $params->{significance};
+		  my $significance = $h->significance();
+		  $significance = "1".$significance if  $significance =~ /^e/;
+		  $significance = 0                 if  $significance =~ /0\.$/;
+		  next if($significance > $sig_thr);
+	      }
+	      if(defined($params->{percov})){
+		  my $pcov = $params->{percov} || 0;
+		  next if($h->pAh < $pcov/2);
+	      }
+	      if(defined($params->{percid})){
+		  my $pid = $params->{percid} || 0;
+		  next if($h->hsp('best')->frac_identical() < $pid &&
+			  $h->frac_identical < $pid);
+	      }
+	      
+	      #keep
+	      if(!$depth){
+		  push(@keepers, $h);
+		  next;
+                }
+	      else{
+		  push(@$clusters, $h);
+		  $i++;
+	      }
+	  }
+	  
+	  #parse, cluster, and filter at same time
+	  next if(! $depth || $i < $depth*20);
+	  $i = 0;
+	  
+	  $clusters = cluster::shadow_cluster($depth, $clusters);
       }
    }
+
+   #final filter
+   if($depth && @$clusters){
+       $clusters = cluster::shadow_cluster($depth, $clusters);
+       push(@keepers, @{GI::flatten($clusters)});
+   }
+
    my $end     = @keepers;
    my $deleted = $start - $end;
    print STDERR "deleted:$deleted hits\n" unless $main::quiet;
