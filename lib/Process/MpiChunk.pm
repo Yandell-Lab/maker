@@ -849,7 +849,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $res_dir = $VARS->{res_dir};
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
-	    my $LOG = $VARS->{LOG};
+    my $LOG = $VARS->{LOG};
 
 	    $rm_blastx_keepers = GI::combine_blast_report($chunk,
 							  $rm_blastx_keepers,
@@ -2955,6 +2955,10 @@ sub _go {
 	    #-------------------------CHUNKER
 	    unlink(@{$VARS->{holdover_files}}) if($VARS->{holdover_files});
 	    delete($VARS->{holdover_files});
+
+	    return [] if(!@{$VARS->{CTL_OPT}{_run}} && 
+			 !@{$VARS->{CTL_OPT}{_predictor}});
+
 	    my $section_files = $VARS->{section_files};
 	    $VARS->{fasta_chunker}->reset;
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){

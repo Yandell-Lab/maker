@@ -1452,25 +1452,19 @@ sub _get_gene_seq {
     my $g_b = $g->{f}->start();
     my $g_e = $g->{f}->end();
 
-    my $start;
-    my $end;
     my ($src_s, $src_e);
     if (($g_b - 1) < 0){
-	$start = $g_b;
-	$end = $g_e;
 	$src_s = 1;
-	my $len = length_($seq);
+	my $len = length_o($seq);
 	$src_e = $g_e > $len ? $len : $g_e; 
     }
     else {
-	$start = $g_b;
-	$end = $g_e;
 	$src_s = $g_b;
 	my $len = length_o($seq);
 	$src_e = $g_e > $len ? $len : $g_e; 
     } 
 
-    my $g_seq = substr_o($seq, $src_s-1, $src_e-$src_s+1);
+    my $g_seq = substr_o($seq, $src_s-1, abs($src_e-$src_s)+1);
 
     return ($g_seq, $src_s, $src_e);
 }
@@ -1559,7 +1553,7 @@ sub _get_exon_seq {
     my $e_b = $e->{f}->start();
     my $e_e = $e->{f}->end();
 
-    my $exon_seq = substr_o($seq, $e_b-1, $e_e-$e_b+1);
+    my $exon_seq = substr_o($seq, $e_b-1, abs($e_e-$e_b)+1);
 
     $exon_seq = Fasta::revComp($exon_seq) if $e->{f}->strand() == -1;
 
