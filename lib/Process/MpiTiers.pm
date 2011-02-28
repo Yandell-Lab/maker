@@ -621,6 +621,14 @@ sub fasta{
    return $self->{VARS}->{fasta} || '';
 }
 #-------------------------------------------------------------
+#returns whatevever is strored in $self->{VARS}->{q_def}
+
+sub q_def{
+   my $self = shift;
+
+   return $self->{VARS}->{q_def} || '';
+}
+#-------------------------------------------------------------
 #returns the value of the current level
 
 sub current_level{

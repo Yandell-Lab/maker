@@ -231,8 +231,6 @@ sub shadow_cluster {
         my $flank     = shift || 0;
 	my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
 
-        print STDERR "in cluster::shadow_cluster...\n" unless($main::quiet);
-
 	$depth = 0 if (! defined($depth) || $depth < 0);
 
 	my @hits; #hits to be clustered
@@ -250,6 +248,8 @@ sub shadow_cluster {
 	return [] if(!@hits && !@pclust);
 	return [\@hits] if(@hits == 1 && !@pclust);
 	return \@pclust if(@pclust == 1 && !@hits);
+
+        print STDERR "in cluster::shadow_cluster...\n" unless($main::quiet);
 
         my $coors  = PhatHit_utils::to_begin_and_end_coors(\@hits, 'query');
 	

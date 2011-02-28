@@ -21,6 +21,7 @@ use Widget::augustus;
 use GFFDB;
 use shadow_AED;
 use FastaSeq;
+use Carp;
 
 $Storable::forgive_me = 1;
 
@@ -228,7 +229,7 @@ sub segment_preds {
 		$m_ab_spans{$temp_id} = [$sB, $sE];
 	    }
 	    else{
-		die "FATAL: Logic error in segmenting preds\n";
+		confess "FATAL: Logic error in segmenting preds\n";
 	    }
 
 	    $temp_id++;
@@ -255,7 +256,7 @@ sub segment_preds {
 		$m_c_spans{$cid} = [$cB, $cE];
 	    }
 	    else{
-		die "FATAL: Logic error in segmenting preds\n";
+		confess "FATAL: Logic error in segmenting preds\n";
 	    }
 
 	    $cid++;
@@ -378,6 +379,8 @@ sub join_clusters_around_orf {
     my $clusters = shift;
     my $seq = shift;
 
+    return [] if(!@$clusters);
+
     my @cs = sort {$a->[0]->start('query') <=> $b->[0]->start('query')} @$clusters;
     for(my $i = 0; $i < @cs - 1; $i++){
 	#get cluster end
@@ -399,6 +402,8 @@ sub join_clusters_around_orf {
 
 	my $piece = ($cs[$i][0]->strand('query') == 1) ?
 		substr_o($seq, $iS, $iL) : Fasta::revComp(substr_o($seq, $iS, $iL));
+
+	confess "ERROR: No sequence for exon\n" if(! $piece);
 
 	my $tM = new CGL::TranslationMachine();
 	my ($p_seq , $poffset) = $tM->longest_translation($piece);
@@ -652,7 +657,7 @@ sub prep_pred_data {
 	#model is always first cluster entry
 	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
 					 'twinscan', 'genemark', 'pred_gff');
-	die "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
+	confess "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
 	    if(!@$abinits);
 
 	# groups of most informative protein hits
@@ -824,7 +829,7 @@ sub annotate_trans {
 		    push(@{$transcripts{$al}}, $s);
 		}
 		else{
-		    die "ERROR: Not a supported algorithm: ".$t->algorithm."\n";
+		    confess "ERROR: Not a supported algorithm: ".$t->algorithm."\n";
 		}
 	    }
 	}
@@ -935,8 +940,8 @@ sub get_n_count{
 	    my $e = $hsp->end('query') - $offset;
 
 	    #array space coors
-	    die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	    die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	    confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	    confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
 	    @b_seq[$s..$e] = map {1} ($s..$e);
 	}
@@ -1010,7 +1015,7 @@ sub add_abAED{
 		push(@m_bag, @$hits);
 	    }
 	    else{
-		die "ERROR: Logic error in auto_annotator::best_annotations\n";
+		confess "ERROR: Logic error in auto_annotator::best_annotations\n";
 	    }
 	}
     }
@@ -1123,7 +1128,7 @@ sub best_annotations {
 		    push(@m_est2g, $g) if($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold});
 		}
 		else{
-		    die "ERROR: Logic error in auto_annotator::best_annotations\n";
+		    confess "ERROR: Logic error in auto_annotator::best_annotations\n";
 		}
 	    }
 	}
@@ -1749,7 +1754,7 @@ sub get_pred_shot {
        }
    }
    else{
-      die "ERROR: Not a valid predictor in auto_annoator::get_pred_shot\n";
+      confess "ERROR: Not a valid predictor in auto_annoator::get_pred_shot\n";
    }
 
    return (\@all_preds, $strand);
@@ -2029,7 +2034,7 @@ sub group_transcripts {
    my %sources;
    foreach my $t (@transcripts){
        push(@{$sources{$t->{_HMM}}}, $t);
-       die "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
+       confess "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
    }
    #now cluster each list seperately
    foreach my $set (values %sources){
@@ -2232,7 +2237,7 @@ sub map_forward {
 	    push(@m_ann, @{$hits});
 	}
 	else{
-	    die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
+	    confess "ERROR: Logic error in auto_annotator::verify_old_forms\n";
 	}
 
 	#add temp ID
@@ -2256,7 +2261,7 @@ sub map_forward {
 	    push(@m_gff, @{$hits});
 	}
 	else{
-	    die "ERROR: Logic error in auto_annotator::verify_old_forms\n";
+	    confess "ERROR: Logic error in auto_annotator::verify_old_forms\n";
 	}
 
 	#add temp ID
@@ -2414,7 +2419,7 @@ sub get_non_overlaping_abinits {
 	   push(@m_ann, $g);
        }
        else{
-	   die "ERROR: Logic error in auto_annotator::best_annotations\n";
+	   confess "ERROR: Logic error in auto_annotator::best_annotations\n";
        }
    }
 
@@ -2435,7 +2440,7 @@ sub get_non_overlaping_abinits {
 	   push(@m_ab, $g);
        }
        else{
-	   die "ERROR: Logic error in auto_annotator::best_annotations\n";
+	   confess "ERROR: Logic error in auto_annotator::best_annotations\n";
        }
    }
 
@@ -2652,7 +2657,7 @@ sub get_off_and_str {
 
 	my ($t_seq) = $p_seq_2 =~ /(^[^\*]+\*?)/;
 
-	die "logic error in auto_annotate::get_off_and_str!\n"
+	confess "logic error in auto_annotate::get_off_and_str!\n"
 	unless $t_seq  =~ /^M/;
 
 	return ($offset, $t_seq);
@@ -2753,7 +2758,7 @@ sub get_translation_seq {
 	}
     }
 
-    die "ERROR: Logic problem in maker::auto_annotator::get_translation_seq\n" if(!defined($coorE));
+    confess "ERROR: Logic problem in maker::auto_annotator::get_translation_seq\n" if(!defined($coorE));
 
     $f->{_TSTART}{query} = $coorB;
     $f->{_TSTART}{hit} = $offset + 1;

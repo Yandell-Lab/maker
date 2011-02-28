@@ -16,6 +16,7 @@ use File::NFSLock;
 use AnyDBM_File;
 use GI;
 use URI::Escape;
+use Carp;
 
 @ISA = qw();
 $VERSION = 0.1;
@@ -864,10 +865,8 @@ sub report_status {
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
    my $the_void = $self->{params}->{the_void};
-   my $q_seq_obj = $self->{params}->{q_seq_obj};
    my $length = $self->{params}->{seq_length};
-
-   delete($self->{params}->{q_seq_obj}); #clear from object
+   my $CTL_OPT = $self->{params}->{CTL_OPT};
 
    #maintain lock only if status id positive (possible race condition?)
    $self->{LOCK}->maintain(30) if($flag > 0);
@@ -920,6 +919,19 @@ sub report_status {
 		   "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::qq);
 
+      my $g_index = GI::build_fasta_index($CTL_OPT->{_g_db});
+      my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+
+      #still no sequence? try rebuilding the index and try again
+      if (! $q_seq_obj) {
+	  print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+	  $g_index->reindex();
+	  $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+	  if (! $q_seq_obj) {
+	      print STDERR "stop here: $seq_id\n";
+	      confess "ERROR: Fasta index error\n";
+	  }
+      }
       
       open (my $DFAS, "> $out_dir/$seq_out_name.died.fasta");
       print $DFAS ${&Fasta::seq2fastaRef($seq_id, \ ($q_seq_obj->seq))};
@@ -945,7 +957,7 @@ sub report_status {
        #do nothing
    }
    else{
-      die "ERROR: No valid continue flag\n";
+      confess "ERROR: No valid continue flag\n";
    }
 }
 #-------------------------------------------------------------------------------
@@ -979,7 +991,7 @@ sub get_continue_flag {
       $message = ''; #no short message, as contig was handled elsewhere
    }
    else{
-      die "ERROR: No valid continue flag\n";
+      confess "ERROR: No valid continue flag\n";
    }
 
    return $flag, $message;

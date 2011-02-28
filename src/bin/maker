@@ -192,6 +192,7 @@ catch Error::Simple with{
 
 #varibles that are persistent outside of try
 my %CTL_OPT;
+my $g_index;
 my $iterator;
 my $DS_CTL;
 my $GFF_DB;
@@ -225,7 +226,8 @@ try{
     
     #set up control options from control files
     %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-    
+    $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
     
@@ -254,6 +256,7 @@ my $f_count = @failed;
 my $i_count = @interrupted;
 while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
     $tier = Process::MpiTiers->new({q_def   => $q_def,
+				    g_index => $g_index,
 				    CTL_OPT => \%CTL_OPT,
 				    DS_CTL  => $DS_CTL,
 				    GFF_DB  => $GFF_DB,
@@ -271,8 +274,8 @@ while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
 
     $tier->run_all(0);
 
-    push(@failed, $tier->fasta) if ($tier->failed);
-    push(@interrupted, $tier->fasta) if ($tier->interrupt && $i_count == @interrupted);
+    push(@failed, $tier->q_def) if ($tier->failed);
+    push(@interrupted, $tier->q_def) if ($tier->interrupt && $i_count == @interrupted);
 
     $f_count = @failed; #reset failure count
     $i_count = @interrupted; #reset interrupt count

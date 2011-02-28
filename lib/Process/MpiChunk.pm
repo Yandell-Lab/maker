@@ -213,6 +213,34 @@ sub _prepare {
       #instantiate empty LOG
       $VARS->{LOG} = undef;
 
+      #get genome index
+      my $g_index = $VARS->{g_index};
+      delete($VARS->{g_index});
+
+      #get fasta parts
+      my $q_def = $VARS->{q_def};
+      my $seq_id = Fasta::def2SeqID($q_def); #get sequence identifier
+      my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
+      my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+
+      #still no object? try rebuilding the index and try again
+      if (not $q_seq_obj) {
+	  print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+	  $g_index->reindex();
+	  $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+	  if (not $q_seq_obj) {
+	      print STDERR "stop here: $seq_id\n";
+	      confess "ERROR: Fasta index error\n";
+	  }
+      }
+
+      my $q_seq_length = $q_seq_obj->length(); #seq length
+
+      #set values inside of tier
+      $VARS->{seq_id} = $seq_id;
+      $VARS->{safe_seq_id} = $safe_seq_id;
+      $VARS->{q_seq_length} = $q_seq_length;
+
       #-set up variables that are the result of chunk accumulation
       $VARS->{p_fastas} = {};
       $VARS->{t_fastas} = {};
@@ -236,7 +264,14 @@ sub _prepare {
       $VARS->{holdover_model_gff}       = [];
 
       #--other variables
-      $VARS->{res_dir} = undef;
+      $VARS->{exonerate_e_data} = [];
+      $VARS->{exonerate_p_data} = [];
+      $VARS->{exonerate_a_data} = [];
+      $VARS->{blastn_keepers}   = [];
+      $VARS->{blastx_keepers}   = [];
+      $VARS->{tblastx_keepers}  = [];
+      $VARS->{res_dir} = [];
+      $VARS->{edge_status} = {};
    }
 
    return 1;
@@ -369,6 +404,9 @@ sub _go {
 	 elsif ($flag eq 'init') {
 	    #------------------------ARGS_IN
 	    @args = (qw(q_def
+			seq_id
+			safe_seq_id
+			q_seq_length
 			CTL_OPT
 			DS_CTL)
 		     );
@@ -377,29 +415,11 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    #-------------------------CODE
 	    my $q_def = $VARS->{q_def};
+	    my $seq_id = $VARS->{seq_id};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-
-	    #get genome index
-	    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
-	    
-	    #get fasta parts
-	    my $seq_id = Fasta::def2SeqID($q_def); #get sequence identifier
-	    my $safe_seq_id = Fasta::seqID2SafeID($seq_id); #Get safe named identifier
-	    my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-
-            #still no sequence? try rebuilding the index and try again
-            if (not $q_seq_obj) {
-		print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		$g_index->reindex();
-		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		if (not $q_seq_obj) {
-		    print STDERR "stop here: $seq_id\n";
-		    confess "ERROR: Fasta index error\n";
-		}
-	    }
-
-	    my $q_seq_length = $q_seq_obj->length(); #seq length
 
 	    #set up base and void directories for output
 	    my ($out_dir, $the_void) = $DS_CTL->seq_dirs($seq_id);
@@ -409,9 +429,8 @@ sub _go {
 				  {seq_id     => $seq_id,
 				   seq_length => $q_seq_length,
 				   out_dir    => $out_dir,
-				   the_void   => $the_void,
-				   q_seq_obj  => $q_seq_obj},
-				  "$out_dir/run.log"				  
+				   the_void   => $the_void},
+				  "$out_dir/run.log"
 				  );
 
 	    my $LOCK = $LOG->strip_off_lock();	    
@@ -419,8 +438,25 @@ sub _go {
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
 
 	    #write local contig fasta
+	    my $g_index;
+	    my $q_seq_obj;
 	    my $unmasked_file = "$the_void/query.fasta";
 	    if($c_flag > 0){
+		#get genome index and object
+		$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		
+		#still no sequence? try rebuilding the index and try again
+		if (not $q_seq_obj) {
+		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		    $g_index->reindex();
+		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    if (not $q_seq_obj) {
+			print STDERR "stop here: $seq_id\n";
+			confess "ERROR: Fasta index error\n";
+		    }
+		}
+
 		open (my $FAS, "> $the_void/query.fasta");
 		print $FAS ${&Fasta::seq2fastaRef($seq_id, \ ($q_seq_obj->seq))};
 		close ($FAS);
@@ -445,10 +481,7 @@ sub _go {
 	    
 	    #------------------------RETURN
 	    %results = (unmasked_file => $unmasked_file,
-			q_seq_length => $q_seq_length,
 			q_seq_obj => $q_seq_obj,
-			seq_id => $seq_id,
-			safe_seq_id => $safe_seq_id,
 			out_dir => $out_dir,
 			the_void => $the_void,
 			c_flag => $c_flag,
@@ -849,7 +882,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $res_dir = $VARS->{res_dir};
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
-    my $LOG = $VARS->{LOG};
+	    my $LOG = $VARS->{LOG};
 
 	    $rm_blastx_keepers = GI::combine_blast_report($chunk,
 							  $rm_blastx_keepers,
@@ -1292,6 +1325,9 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+		$next_level = 4;
+	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -1314,7 +1350,8 @@ sub _go {
 			q_def
 			q_seq_length
 			LOG
-			CTL_OPT)
+			CTL_OPT
+			edge_status)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -1330,7 +1367,7 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
-	    my $edge_status = {};
+	    my $edge_status = $VARS->{edge_status};
 
 	    $blastn_keepers = GI::combine_blast_report($chunk,
 						       $blastn_keepers,
@@ -1759,6 +1796,9 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+		$next_level = 8;
+	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
@@ -2213,6 +2253,9 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+		$next_level = 12;
+	    }
 	    #-------------------------NEXT_LEVEL
 	 }
       }
