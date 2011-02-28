@@ -8,6 +8,7 @@ use Exporter;
 use PostData;
 use FileHandle;
 use Bit::Vector;
+use Carp;
 
 @ISA = qw(
           );
@@ -149,7 +150,7 @@ sub getPieces {
 
 	if(ref($sequence) eq 'SCALAR'){
 	    foreach my $p (@$pieces){
-		my $seq = substr($$sequence, $p->{b}-1, $p->{e}-$p->{b}+1);
+		my $seq = substr($$sequence, $p->{b}-1, ($p->{e}-$p->{b})+1);
 		$p->{piece} = $seq;
 	    }
 	}
@@ -166,6 +167,10 @@ sub getPieces {
 sub getVectorPieces {
         my $features = shift; #coordinates not objects
         my $flank    = shift;
+
+	if(ref($features) ne 'ARRAY'){
+	    confess "ERROR: Not an array reference - ref: ".ref($features)."\n";
+	}
 
 	$flank = 0 unless defined($flank);
 

@@ -51,7 +51,7 @@ sub prep_for_genefinder {
 	$n_set_coors,
 	$i_set_coors) = process_hints($seq, $set, $alt_splice);
     
-    my $p = Shadower::getPieces($span, $flank);
+    my $p = Shadower::getPieces($seq, $span, $flank);
     my $final_seq  = $p->[0]->{piece};
     my $offset = $p->[0]->{b} - 1;
     my $i_flank    = 2;
