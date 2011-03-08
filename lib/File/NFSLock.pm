@@ -323,7 +323,7 @@ sub DESTROY {
   shift()->unlock();
 }
 
-sub unlock ($) {
+sub unlock {
   my $self = shift;
 
   #remove any temporary files
@@ -385,7 +385,7 @@ sub unlock ($) {
 # took the concepts from Mail::Folder
 
 
-sub rand_file ($) {
+sub rand_file {
   my $file = shift;
   my $rand = "$file.tmp.". time()%10000 .'.'. $$ .'.'. int(rand()*10000);
   $rand =~ s/([^\/]+)$/\.NFSLock\.$1/;
@@ -393,7 +393,7 @@ sub rand_file ($) {
   return $rand;
 }
 
-sub create_magic ($;$) {
+sub create_magic {
   $errstr = undef;
   my $self = shift;
   my $append_file = shift || $self->{rand_file};
@@ -507,7 +507,7 @@ sub do_lock_shared {
   return 1;
 }
 
-sub do_unlock ($) {
+sub do_unlock {
   my $self = shift;
 
   my $stat = unlink($self->{lock_file}) if($self->still_mine);
@@ -515,7 +515,7 @@ sub do_unlock ($) {
   return $stat;
 }
 
-sub do_unlock_shared ($) {
+sub do_unlock_shared {
   $errstr = undef;
   my $self = shift;
   my $lock_file = $self->{lock_file};
@@ -572,7 +572,7 @@ sub do_unlock_shared ($) {
   }
 }
 
-sub uncache ($;$) {
+sub uncache {
   # allow as method call
   my $file = pop;
   ref $file && ($file = $file->{file});

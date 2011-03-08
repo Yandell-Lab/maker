@@ -42,18 +42,19 @@ sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
         my $the_void      = shift;
+        my $mia           = shift;
         my $set           = shift;
+	my $set_id        = shift;
         my $pred_flank    = shift;
         my $pred_command  = shift;
         my $hmm           = shift;
-        my $alt_splice    = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
 	my $q_id = Fasta::def2SeqID($def);
-        my $id = $set->{c_id}.'_'.$set->{set_id};
+        my $id = $set->{c_id}.'_'.$set_id;
         my ($shadow_seq, $strand, $offset, $xdef) =
-            prep_for_genefinder($seq, $set, $pred_flank, $alt_splice, $id, $q_id);
+            prep_for_genefinder($seq, $mia, $set, $pred_flank, $id, $q_id);
         my $end = $offset + length($$shadow_seq);
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,
@@ -84,9 +85,9 @@ sub get_pred_shot {
 #------------------------------------------------------------------------
 sub prep_for_genefinder {
         my $seq         = shift;
+        my $mia         = shift;
         my $set         = shift;
         my $flank       = shift;
-        my $alt_splice  = shift;
         my $seq_id      = shift;
         my $q_id        = shift;
 
@@ -94,7 +95,7 @@ sub prep_for_genefinder {
 	    $strand,
 	    $p_set_coors,
 	    $n_set_coors,
-	    $i_set_coors) = Widget::snap::process_hints($seq, $set, $alt_splice);
+	    $i_set_coors) = Widget::snap::process_hints($seq, $mia, $set);
 
         my $p = Shadower::getPieces($seq, $span, $flank);
         my $final_seq = $p->[0]->{piece};

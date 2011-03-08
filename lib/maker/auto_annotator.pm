@@ -170,7 +170,7 @@ sub prep_hits {
 	#==prep hint data
 	#my @bx_data;
 	foreach my $c (@{$hint_clusters}){
-	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type, $est_forward);
+	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
 	   push(@all_data, @{$bx}) if defined $bx;
 
 	   $c_id++;
@@ -538,7 +538,6 @@ sub prep_blastx_data {
 	my $c_id = shift;
 	my $seq  = shift;
 	my $org_type = shift || 'eukaryotic';
-	my $est_forward = shift;
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
@@ -553,38 +552,19 @@ sub prep_blastx_data {
 	# go ahead and inclde the proteion2genome data as well... why not?
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
-	# group of most informative alt splices
-	my $gomias = [];
-
-	if($est_forward){
-	    $gomias = $ests_in_cluster;
-	}
-	elsif($org_type eq 'eukaryotic'){
-	    $gomias = clean::purge_single_exon_hits($ests_in_cluster);
-	    $gomias = clean::get_best_alt_splices($gomias, 10);
-	}
-	else{
-	    $gomias = PhatHit_utils::make_flat_hits($ests_in_cluster, $seq);
-	}
-
 	my @data;
 	my $i = 0;
-	$gomias->[0] = undef if(! @{$gomias});
-	foreach my $mia (@{$gomias}){
-	    push(@data, {'gomiph'    => $gomiph,
-			 'preds'     => \@uniq_preds,
-			 'all_preds' => $preds_in_cluster,
-			 'ests'      => $ests_in_cluster,
-			 'alt_ests'  => $alt_ests_in_cluster,
-			 'mia'       => $mia,
-			 'model'     => undef,
-			 'gomod'     => $models_in_cluster,
-			 'c_id'      => $c_id,
-			 'set_id'    => $i++,
-			 'type'      => 'bx',
-			 }
-		 );
-	}
+	push(@data, {'gomiph'    => $gomiph,
+		     'preds'     => \@uniq_preds,
+		     'all_preds' => $preds_in_cluster,
+		     'ests'      => $ests_in_cluster,
+		     'alt_ests'  => $alt_ests_in_cluster,
+		     'model'     => undef,
+		     'gomod'     => $models_in_cluster,
+		     'c_id'      => $c_id,
+		     'type'      => 'bx'
+		     }
+	     );
 
 	return \@data;
 }
@@ -602,6 +582,11 @@ sub prep_gff_data {
 	my $seq  = shift;
 
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
+
+	return undef if(!@$models_in_cluster);
+	confess "ERROR: There should only be one model per cluster\n"
+	    if(@$models_in_cluster > 1);
+
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
@@ -614,22 +599,17 @@ sub prep_gff_data {
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
 	my @data;
-	my $i = 0;
-	foreach my $model (@{$models_in_cluster}){
-	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => \@uniq_preds,
-			'all_preds' => $preds_in_cluster,
-			'ests'      => $ests_in_cluster,
-			'alt_ests'  => $alt_ests_in_cluster,
-			'mia'       => undef,
-			'model'     => $model,
-			'gomod'     => undef,
-			'c_id'      => $c_id,
-			'set_id'    => $i++,
-			'type'      => 'gf'
-		       }
-	       );
-	}
+	push(@data, {'gomiph'    => $gomiph,
+		     'preds'     => \@uniq_preds,
+		     'all_preds' => $preds_in_cluster,
+		     'ests'      => $ests_in_cluster,
+		     'alt_ests'  => $alt_ests_in_cluster,
+		     'model'     => $models_in_cluster->[0],
+		     'gomod'     => undef,
+		     'c_id'      => $c_id,
+		     'type'      => 'gf'
+		     }
+	     );
 
 	return \@data;
 }
@@ -646,40 +626,36 @@ sub prep_pred_data {
 	my $c_id = shift;
 	my $seq  = shift;
 
+	#abinit model should always be first cluster entry
+	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
+					 'twinscan', 'genemark', 'pred_gff');
+	return undef if(!@$abinits);
+	confess "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
+	    if(@$abinits > 1);
+
+	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
+						  'twinscan', 'genemark', 'pred_gff');
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
-	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark', 'pred_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
-
-	#model is always first cluster entry
-	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
-					 'twinscan', 'genemark', 'pred_gff');
-	confess "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
-	    if(!@$abinits);
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
 	my @data;
-	my $i = 0;
-	foreach my $pred (@$abinits){
-	   push(@data, {'gomiph'    => $gomiph,
-			'preds'     => \@uniq_preds,
-			'all_preds' => $preds_in_cluster,
-			'model'     => $pred,
-			'gomod'     => undef,
-			'ests'      => $ests_in_cluster,
-			'alt_ests'  => $alt_ests_in_cluster,
-			'mia'       => undef,
-			'c_id'      => $c_id,
-			'set_id'    => $i++,
-			'type'      => 'pr'
-			}
-		);
-        }
+	push(@data, {'gomiph'    => $gomiph,
+		     'preds'     => \@uniq_preds,
+		     'all_preds' => $preds_in_cluster,
+		     'model'     => $abinits->[0],
+		     'gomod'     => undef,
+		     'ests'      => $ests_in_cluster,
+		     'alt_ests'  => $alt_ests_in_cluster,
+		     'c_id'      => $c_id,
+		     'type'      => 'pr'
+		     }
+	     );
 
 	return \@data;
 }
@@ -712,7 +688,6 @@ sub prep_pred_data {
 #			     'ests'   => $best_exts,
 #			     'mia'    => $mia,
 #			     'c_id'   => $c_id,
-#			     'set_id'    => $i++,
 #			     'type'   => 'pp'
 #			     });
 #	}
@@ -751,7 +726,6 @@ sub prep_pred_data {
 #			     'ests'   => [$alt_splice_est],
 #			     'mia'    => $alt_splice_est,
 #			     'c_id'   => $c_id,
-#			     'set_id'    => $i++,
 #			     'type'   => 'pe'
 #			     });
 #	}
@@ -1404,7 +1378,6 @@ sub run_it{
     my $q_id = Fasta::def2SeqID($def);
     my @transcripts;
     foreach my $set (@{$data}) {
-	my $mia      = $set->{mia};
 	my $ests     = $set->{ests};
 	my $model    = $set->{model};
 	my $gomiph   = $set->{gomiph};
@@ -1432,13 +1405,8 @@ sub run_it{
 	    my $remove;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
 		$remove = 1;
-		#make sure the spliced EST evidence actually overlaps
-		if($remove && defined $mia){
-		    my $mAED = shadow_AED::get_eAED([$mia],$model); #verifies at least a splice
-		    $remove = 0 if($mAED < 1);
-		}
 
-		#check all ESTs for splice support if $mia does not exist
+		#check all ESTs for splice support
 		if($remove && @$ests){
 		    my $mAED = shadow_AED::get_eAED($ests, $model);
 		    $remove = 0 if($mAED < 1);
@@ -1494,31 +1462,43 @@ sub run_it{
 
 	#------est2genome
 	if ($predictor eq 'est2genome') {
-	    next if (! defined $mia);
-
-	    my $transcript = $mia;
+	    my $gomias = [];
 	    if($CTL_OPT->{est_forward}){
-		my $select = $mia;
-		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
-		while(! compare::is_same_alt_form($select, $transcript, 0)){
-		    $select = $transcript;
+		$gomias = $ests;
+	    }
+	    elsif($CTL_OPT->{org_type} eq 'prokaryotic'){
+		$gomias = PhatHit_utils::make_flat_hits($ests, $seq);
+	    }
+	    else{
+		$gomias = clean::purge_single_exon_hits($ests);
+		$gomias = clean::get_best_alt_splices($gomias, 10);
+	    }
+
+	    foreach my $mia (@$gomias){
+		my $transcript = $mia;
+		if($CTL_OPT->{est_forward}){
+		    my $select = $mia;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    while(! compare::is_same_alt_form($select, $transcript, 0)){
+			$select = $transcript;
+			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    }
 		}
+		$transcript->{_HMM} = 'est2genome';
+
+		if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
+		    my $transcript_seq  = get_transcript_seq($transcript, $seq);
+		    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    #at least 60% of EST must be CDS to make a gene prediction
+		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
+		}
+		
+		next if !$transcript;
+
+		$transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
+		
+		push(@transcripts, [$transcript, $set->{index}, $mia]);
 	    }
-	    $transcript->{_HMM} = 'est2genome';
-
-	    if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
-		my $transcript_seq  = get_transcript_seq($transcript, $seq);
-		my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
-		#at least 60% of EST must be CDS to make a gene prediction
-		next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
-	    }
-
-	    next if !$transcript;
-
-	    $transcript->{_tran_name} = $mia->name if($CTL_OPT->{est_forward});
-
-	    push(@transcripts, [$transcript, $set->{index}, $mia]);
 
 	    next;
 	}
@@ -1528,8 +1508,6 @@ sub run_it{
 	    next if($CTL_OPT->{organism_type} eq 'eukaryotic');
 	    next if(! @$gomiph);
 
-	    my $utr = [];
-	    push(@$utr, $mia) if($mia);
 	    my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
 
 	    foreach my $miph (@$miphs){
@@ -1548,7 +1526,7 @@ sub run_it{
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
 
 		my $select = $copy;
-		my $transcript = pneu($utr, $select, $seq); #helps tile ESTs
+		my $transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		while(! compare::is_same_alt_form($select, $transcript, 0)){
 		    $select = $transcript;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
@@ -1563,104 +1541,119 @@ sub run_it{
 	    next;
 	}
 
+	#------default hint based behavior
 	#------genemark does not have hints enabled
 	return [] if ($predictor eq 'genemark');
 
-	#------default hint based behavior
-	my ($pred_shots, $strand) = get_pred_shot($seq,
-						  $def,
-						  $the_void,
-						  $set,
-						  $predictor,
-						  $CTL_OPT,
-						  $LOG
-						  );
+	my $gomias = []; #group of most informative alt splices
+	if($CTL_OPT->{alt_splice}){
+	    $gomias = clean::purge_single_exon_hits($ests);
+	    $gomias = clean::get_best_alt_splices($gomias, 10);
+	}
+	elsif($CTL_OPT->{organism_type} eq 'eukaryotic'){
+	}
+	$gomias->[0] = undef if(! @$gomias);
 
-	my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
+	my $i = 0;
+	foreach my $mia (@$gomias) {
+	    my ($pred_shots, $strand) = get_pred_shot($seq,
+						      $def,
+						      $the_void,
+						      $mia,
+						      $set,
+						      $i,
+						      $predictor,
+						      $CTL_OPT,
+						      $LOG
+						      );
+
+	    $i++;
+	    my $on_right_strand = get_best_pred_shots($strand, $pred_shots);
 	
-	#only keep multi-exon hint based predictions single exon prediction
-	#are more likely to be spurious if hint based, these are better
-	#derived from the ab initio predictions
-	@$on_right_strand = grep {$_->hsps > 1} @$on_right_strand if($CTL_OPT->{organism_type} eq 'eukaryotic');
-
-	#added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
-	if($CTL_OPT->{organism_type} eq 'eukaryotic' && @$on_right_strand){
-	    my @keepers;
+	    #only keep multi-exon hint based predictions single exon prediction
+	    #are more likely to be spurious if hint based, these are better
+	    #derived from the ab initio predictions
+	    @$on_right_strand = grep {$_->hsps > 1} @$on_right_strand if($CTL_OPT->{organism_type} eq 'eukaryotic');
 	    
-	    my $clean;
-	    my $pieces;
-	    foreach my $h (@$on_right_strand){
-		my $remove = 1;
-
-		#make sure the spliced EST evidence actually overlaps
-		if($remove && defined $mia){
-		    my $mAED = shadow_AED::get_eAED([$mia],$h);
-		    $remove = 0 if($mAED < 1);
-		}
-
-		#check all ESTs for splice support if $mia does not exist
-		if($remove && @$ests){
-		    my $mAED = shadow_AED::get_eAED($ests,$h);
-		    $remove = 0 if($mAED < 1);
-		}
+	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
+	    if($CTL_OPT->{organism_type} eq 'eukaryotic' && @$on_right_strand){
+		my @keepers;
 		
-		#make sure the polished protein evidence actually overlaps
-		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
-		    my $pAED = shadow_AED::get_eAED($pol_p, $h);
-		    $remove = 0 if($pAED < 1);
-		}
-		
-		#make sure the alt est evidence is not single exon and actually overlaps
-		if($remove && @$alt_ests){
-		    $clean  = clean::purge_single_exon_hits($alt_ests) if(! $clean); #only calculate once
-		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$h);
-		    $remove = 0 if ($aAED < 1);
-		}
-		
-		#make sure blastx evidence is sufficient
-		if($remove && @$blastx){
-		    if(! $pieces){ # only calculate once
-			my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
-			$pieces = Shadower::getVectorPieces($coors, 0);
+		my $clean;
+		my $pieces;
+		foreach my $h (@$on_right_strand){
+		    my $remove = 1;
+		    
+		    #make sure the spliced EST evidence actually overlaps
+		    if($remove && defined $mia){
+			my $mAED = shadow_AED::get_eAED([$mia],$h);
+			$remove = 0 if($mAED < 1);
 		    }
 		    
-		    if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
-			#make sure ab initio evidence can support a single exon alignment
-			#this step not needed in ab inits because the test model is an abinit model
-			if(grep {$_->hsps <= 2} @$all_preds){
-			    my $abAED = shadow_AED::get_abAED($all_preds, $h);
-			    
-			    if($abAED <= 0.25){
-				my $bAED = shadow_AED::get_eAED($blastx, $h);
-				$remove = 0 if($bAED <= 0.25);
+		    #check all ESTs for splice support if $mia does not exist
+		    if($remove && @$ests){
+			my $mAED = shadow_AED::get_eAED($ests,$h);
+			$remove = 0 if($mAED < 1);
+		    }
+		    
+		    #make sure the polished protein evidence actually overlaps
+		    if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
+			my $pAED = shadow_AED::get_eAED($pol_p, $h);
+			$remove = 0 if($pAED < 1);
+		    }
+		    
+		    #make sure the alt est evidence is not single exon and actually overlaps
+		    if($remove && @$alt_ests){
+			$clean  = clean::purge_single_exon_hits($alt_ests) if(! $clean); #only calculate once
+			my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$h);
+			$remove = 0 if ($aAED < 1);
+		    }
+		    
+		    #make sure blastx evidence is sufficient
+		    if($remove && @$blastx){
+			if(! $pieces){ # only calculate once
+			    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
+			    $pieces = Shadower::getVectorPieces($coors, 0);
+			}
+			
+			if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
+			    #make sure ab initio evidence can support a single exon alignment
+			    #this step not needed in ab inits because the test model is an abinit model
+			    if(grep {$_->hsps <= 2} @$all_preds){
+				my $abAED = shadow_AED::get_abAED($all_preds, $h);
+				
+				if($abAED <= 0.25){
+				    my $bAED = shadow_AED::get_eAED($blastx, $h);
+				    $remove = 0 if($bAED <= 0.25);
+				}
 			    }
 			}
+			elsif(@$pieces > 1){
+			    $remove = 0;
+			}
 		    }
-		    elsif(@$pieces > 1){
-			$remove = 0;
-		    }
+		    push(@keepers, $h) if(! $remove);
 		}
-		push(@keepers, $h) if(! $remove);
+		
+		@$on_right_strand = @keepers;
 	    }
-
-	    @$on_right_strand = @keepers;
-	}
-
-	#add transcripts
-	next if(!@{$on_right_strand});
-	foreach my $pred_shot (@{$on_right_strand}) {
-	    if (defined($pred_shot)){
-		my $transcript = $pred_shot;
-		if(defined($mia)){
-		    my $select = ($CTL_OPT->{alt_splice}) ? pneu([$mia], $transcript, $seq) : $transcript;
+	    
+	    #add transcripts
+	    next if(!@{$on_right_strand});
+	    foreach my $pred_shot (@{$on_right_strand}) {
+		if (defined($pred_shot)){
+		    my $transcript = $pred_shot;
+		    if($CTL_OPT->{alt_splice} && defined($mia)){
+			$transcript = pneu([$mia], $transcript, $seq);
+		    }
+		    my $select = $transcript;
 		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		    while(! compare::is_same_alt_form($select, $transcript, 0)){
 			$select = $transcript;
 			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
 		    }
+		    push(@transcripts, [$transcript, $set->{index}, $pred_shot]);
 		}
-
-		push(@transcripts, [$transcript, $set->{index}, $pred_shot]);
 	    }
 	}
     }
@@ -1673,9 +1666,11 @@ sub get_pred_shot {
    my $seq         = shift;
    my $def         = shift;
    my $the_void    = shift;
+   my $mia         = shift;
    my $set         = shift;
+   my $set_id      = shift;
    my $predictor   = shift;
-   my $CTL_OPT    = shift;
+   my $CTL_OPT     = shift;
    my $LOG         = shift;
 
    my $strand;
@@ -1688,11 +1683,12 @@ sub get_pred_shot {
 	   (my $preds, $strand) = Widget::snap::get_pred_shot($seq,
 							      $def,
 							      $the_void,
+							      $mia,
 							      $set,
+							      $set_id,
 							      $CTL_OPT->{pred_flank},
 							      $pred_command,
 							      $hmm,
-							      $CTL_OPT->{alt_splice},
 							      $CTL_OPT->{force},
 							      $LOG
 							      );
@@ -1712,11 +1708,12 @@ sub get_pred_shot {
 	   (my $preds, $strand) = Widget::augustus::get_pred_shot($seq,
 								  $def,
 								  $the_void,
+								  $mia,
 								  $set,
+								  $set_id,
 								  $CTL_OPT->{pred_flank},
 								  $pred_command,
 								  $hmm,
-								  $CTL_OPT->{alt_splice},
 								  $CTL_OPT->{force},
 								  $LOG
 								  );
@@ -1736,11 +1733,12 @@ sub get_pred_shot {
 	   (my $preds, $strand) = Widget::fgenesh::get_pred_shot($seq,
 								 $def,
 								 $the_void,
+								 $mia,
 								 $set,
+								 $set_id,
 								 $CTL_OPT->{pred_flank},
 								 $pred_command,
 								 $hmm,
-								 $CTL_OPT->{alt_splice},
 								 $CTL_OPT->{force},
 								 $LOG
 								 );
@@ -1924,7 +1922,7 @@ sub get_hits_overlapping_gene {
 
    my @keepers;
    foreach my $hit (@{$hits}){
-      next unless $hit->strand eq $g->{g_strand};
+      next unless $hit->strand('query') eq $g->{g_strand};
 
       my $comp = compare::compare ($B,
 				   $E,
@@ -2001,7 +1999,8 @@ sub group_transcripts {
    #cluster the transcripts to get genes
    my $careful_clusters = [];
 
-   if ($predictor =~ /^model_gff$|_abinit$|^pred_gff$/ ||
+   if (! $CTL_OPT->{alt_splice} ||
+       $predictor =~ /^model_gff$|_abinit$|^pred_gff$/ ||
        ($predictor =~ /^est2genome$/ && $CTL_OPT->{est_forward})
        ) {
        my @to_do;
@@ -2154,7 +2153,7 @@ sub group_transcripts {
 	 ){
 	  $g_name = $t_structs[0]->{t_name}."-gene";
 	  $g_id = $t_structs[0]->{t_id}."-gene";
-	  $SEEN->{$g_name};
+	  $SEEN->{$g_name}++;
       }
 
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
@@ -2743,7 +2742,8 @@ sub get_translation_seq {
 	    next;
 	}
 	elsif(!$coorB){
-	    $coorB = ($hsp->strand == 1) ? $hsp->nB('query') + $toffset : $hsp->nB('query') - $toffset;
+	    $coorB = ($hsp->strand('query') == 1) ?
+		$hsp->nB('query') + $toffset : $hsp->nB('query') - $toffset;
 	    $tend -= $l;
 	    $toffset = 0;
 	}
@@ -2753,7 +2753,8 @@ sub get_translation_seq {
 
         #find last bp coordinate
 	if($tend <= 1){ #end is always bp after last translated bp
-	    $coorE = ($hsp->strand == 1) ? $hsp->nE('query') + ($tend - 1) : $hsp->nE('query') - ($tend - 1);
+	    $coorE = ($hsp->strand('query') == 1) ?
+		$hsp->nE('query') + ($tend - 1) : $hsp->nE('query') - ($tend - 1);
 	    last;
 	}
     }

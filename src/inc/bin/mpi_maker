@@ -153,7 +153,7 @@ Options:
      -base    <string>   Set the base name MAKER uses to save output files.
                          MAKER uses the input genome file name by default.
 
-     -retry|r <integer>  Rerun failed contigs up to the specified count.
+     -tries|t <integer>  Run contigs up to the specified number of tries.
 
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
 
@@ -269,7 +269,7 @@ try{
 	       "genome|g=s" => \$OPT{genome},
 	       "cpus|c=i" => \$OPT{cpus},
 	       "predictor=s" =>\$OPT{predictor},
-	       "retry=i" =>\$OPT{retry},
+	       "tries=i" =>\$OPT{tries},
 	       "evaluate" =>\$OPT{evaluate},
 	       "again|a" =>\$OPT{again},
 	       "quiet|q" =>\$main::quiet,

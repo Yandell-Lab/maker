@@ -26,8 +26,8 @@ function toggleLog(iState, url) {
     if(iState == 1){CenterFloatingLayer()};
     ToggleFloatingLayer(DivID, iState);
 
-    if(iState == 1){
-      LoadURL('floating_content_area', url);
+    if(iState == 1){	
+        LoadURL('floating_content_area', url);
     }
 }
 // -->

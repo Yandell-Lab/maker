@@ -43,11 +43,15 @@ sub _initialize {
 
    my $gff_file = "$filename";
    my ($name) = $filename =~ /([^\/]+)$/;
+   my $def_file = "$t_dir/$name.def";
    my $ann_file = "$t_dir/$name.ann";
    my $seq_file = "$t_dir/$name.seq";
 
+   open(my $DEF, "> $def_file") || die "ERROR: Could not open file: $def_file\n";
+   print_txt($DEF, $self->header."\n");
+   close($DEF);
+
    open(my $ANN, "> $ann_file") || die "ERROR: Could not open file: $ann_file\n";
-   print_txt($ANN, $self->header."\n");
    close($ANN);
 
    open(my $SEQ, "> $seq_file") || die "ERROR: Could not open file: $seq_file\n";
@@ -55,6 +59,7 @@ sub _initialize {
    close($SEQ);
 
    $self->{gff_file} = $gff_file;
+   $self->{def_file} = $def_file;
    $self->{ann_file} = $ann_file;
    $self->{seq_file} = $seq_file;
 }
@@ -76,7 +81,7 @@ sub set_current_contig {
     my $flag = 0;
     $flag = 1 if (defined $self->{seq_id});
     my $id  = shift;
-    my $seq = shift;
+    my $seq = shift; #can be left blank and no fasta will be added
 
     #escape seqid per gff standards
     $self->{seq_id} = uri_escape($id, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|");
@@ -84,7 +89,7 @@ sub set_current_contig {
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
 
-    if(! ref($seq) || ref($seq) eq 'SCALAR'){
+    if(!$self->{SEEN}{$self->{seq_id}} && $seq && (! ref($seq) || ref($seq) eq 'SCALAR')){
 	$self->{seq_length} = length($$seq);
 
 	$$seq =~ s/(.{1,60})/$1\n/g; #make 60 width fasta
@@ -93,21 +98,23 @@ sub set_current_contig {
 	close($SEQ);
 	$$seq =~ s/[^A-Za-z]//g; #make single line
     }
-    else{
+    elsif(!$self->{SEEN}{$self->{seq_id}} && $seq){
 	$self->{seq_length} = $seq->length;	
 
 	open(my $SEQ, ">>", $self->{seq_file}) || die "ERROR: opening fasta for GFF3\n\n";
 	print $SEQ ${&Fasta::seq2fastaRef($id, \ ($seq->seq))};
 	close($SEQ);	
     }
+    $self->{SEEN}{$self->{seq_id}}++;
+
+    #open(my $DEF, ">>", $self->{def_file}) || die "ERROR: Can't open definition file\n\n";
+    #skip adding the optional sequence-region line because many programs
+    #do not handle it correctly or consistently - 06/05/2010
+    #print_txt($DEF, $self->contig_comment."\n");
+    #close($DEF);
 
     open(my $ANN, ">>", $self->{ann_file}) || die "ERROR: Can't open annotation file\n\n";
     print_txt($ANN, "###\n") if($flag);
-    
-    #skip adding the optional sequence-region line because many programs
-    #do not handle it correctly or consistently - 06/05/2010
-    #print_txt($ANN, $self->contig_comment."\n");
-    
     print_txt($ANN, $self->contig_line."\n"); 
     close($ANN);
 
@@ -127,38 +134,109 @@ sub seq_id {
     return $self->{seq_id} || undef;
 }
 #------------------------------------------------------------------------
+sub gff_file {
+    my $self = shift;
+
+    return $self->{gff_file};
+}
+#------------------------------------------------------------------------
 sub finalize {
     my $self = shift;
 
     my $gff_f = $self->{gff_file};
+    my $def_f = $self->{def_file};
     my $ann_f = $self->{ann_file};
     my $seq_f = $self->{seq_file};
 
+    open(my $DEF, ">> $def_f")|| die "ERROR: Can't open def file\n\n";
     open(my $SEQ, "< $seq_f")|| die "ERROR: Can't open seq file\n\n";
-    open(my $ANN, ">> $ann_f")|| die "ERROR: Can't open annotation file\n\n";
-    my $line = <$SEQ>;
-    if($line !~ /^\#\#FASTA/){
-	die "ERROR: There was a problem in the writing the fasta entry\n".
-	    "Either no sequence was given, or there was an error in writing\n\n";
-    }
-    print $ANN $line;
-    $line = <$SEQ>;
-    if($line !~ /^>/){
-	die "ERROR: There was a problem in the writing the fasta entry\n".
-	    "Either no sequence was given, or there was an error in writing\n\n";
-    }
-    print $ANN $line;
-    while(defined($line = <$SEQ>)){
-	print $ANN $line;
+    open(my $ANN, "< $ann_f")|| die "ERROR: Can't open annotation file\n\n";
+
+    while(defined(my $line = <$ANN>)){
+        print $DEF $line;
     }
     close($ANN);
+
+    my $buf = <$SEQ>;
+    if($buf !~ /^\#\#FASTA/){
+	die "ERROR: There was a problem in the writing the fasta entry\n".
+	    "Either no sequence was given, or there was an error in writing\n\n";
+    }
+    if((my $line = <$SEQ>) =~ /^>/){
+	print $DEF $buf . $line;
+	while(defined($line = <$SEQ>)){
+	    print $DEF $line;
+	}
+    }
     close($SEQ);
+    close($DEF);
 
     unlink($seq_f);
-    move($ann_f, $gff_f);
+    unlink($ann_f);
+    move($def_f, $gff_f);
 
     die "ERROR: GFF3 file not created\n" if(! -e $gff_f);
 }
+#------------------------------------------------------------------------
+sub merge {
+    my $self = shift;
+    my $files = shift;
+
+    return if(! @$files);
+
+    my $def_f = $self->{def_file};
+    my $ann_f = $self->{ann_file};
+    my $seq_f = $self->{seq_file};
+
+    open(my $DEF, ">> $def_f")|| die "ERROR: Can't open def file\n\n";
+    open(my $SEQ, ">> $seq_f")|| die "ERROR: Can't open seq file\n\n";
+    open(my $ANN, ">> $ann_f")|| die "ERROR: Can't open annotation file\n\n";
+
+    foreach  my $file (@$files){
+	my $FH = $ANN;
+	open(my $IN, "< $file") || die "ERROR: Could not open file \'$file\'\n";
+	print $ANN "\###\n";
+	while (defined(my $line = <$IN>)){
+	    if ($line =~ /^\#\#gff-version 3/){
+		next;
+	    }
+	    elsif($line =~ /^\#\#genome-build/){
+		next;
+	    }
+	    elsif($line =~ /^\#\#sequence-region\s+(^[\s]+)/){
+		next if($self->{SEEN}{$1});
+		$self->{SEEN}{$1}++;
+		print $DEF $line;
+		next;
+            }
+	    elsif($line =~ /^\#\#FASTA/){
+		$FH = $SEQ;
+		next;
+	    }
+	    elsif($line =~ /^>/){
+		$FH = $SEQ;
+	    }
+	    elsif($line =~ /^[^\s\t\#\>\n]+\t([^\t]+)\t/){
+		$FH = $ANN;
+
+		my ($source) = $line =~ /^([^\t]+)/;
+		my ($id) = $line =~ /ID\=([^\;\n]+)/;
+		if($id && $source eq $id){
+		    next if($self->{SEEN}{$id});
+		    $self->{SEEN}{$id}++;
+		}
+	    }
+
+	    chomp $line; #chomp to remove empty lines
+	    print $FH $line."\n" if($line);
+	}
+	close($IN);
+    }
+    close($DEF);
+    close($ANN);
+    close($SEQ);
+}
+
 #------------------------------------------------------------------------
 sub contig_line {
     my $self = shift;
@@ -596,8 +674,7 @@ sub get_exon_data {
 		
 		my $strand = $e->strand('query') == 1 ? '+': '-';
 
-		my $score = $e->score() || '.';
-		$score .= 0 if $score eq '0.';
+		my $score = '.'; #exon scores cause chado warnings/errors
 
 		my @data;
 		push(@data, $seq_id, $source, 'exon', $nB, $nE, $score, $strand, '.');
@@ -637,13 +714,12 @@ sub get_cds_data {
                 my $nB = $e->[0];
                 my $nE = $e->[1];
 
-                my $e_id = get_id_cds();
 		my $e_n  = $e->[3];
 		
                 my @t_ids = @{$cdss->{t_ids}->{$nB}->{$nE}};
 
                 my $p = join(',', @t_ids);
-		$e_id = join(":", $t_ids[0], $e_id);
+		my $e_id = join(":", $t_ids[0], 'cds');
                 ($nB, $nE) = ($nE, $nB) if $nB > $nE;
 
                 my $strand = $e->[2] == 1 ? '+' : '-';
@@ -782,7 +858,7 @@ sub get_transcript_data {
 	my $t_qi    = $t->{t_qi};
 	my $AED     = $t->{AED};
 	my $eAED    = $t->{eAED};
-	my $score   = $t->{score};
+	my $score   = '.'; #transcript scores causes chado errors/warning
 	
 	$t_name = uri_escape($t_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 	
@@ -863,7 +939,7 @@ sub get_hsp_data {
 	my $hsp_name = $hit_n;
 	$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
-	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
+	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
 	   $nine .= ' '.$t_strand if($hsp->strand('hit'));
 	   $nine .= ';';
@@ -910,7 +986,7 @@ sub get_repeat_hsp_data {
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
-	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id.';Name='.$hsp_name;
+	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand.';';
 	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
 	   $nine .= ';' if($nine !~ /\;$/);

@@ -48,6 +48,8 @@ my $build = MAKER::Build->new
 	 'SNAP'  => 'snap',
 	 'Augustus' => 'augustus',
      },
+     lib_requires => {
+     },
      build_requires => {
 	 'Test::More'         => '0',
 	 'ExtUtils::CBuilder' => '0',
@@ -80,69 +82,91 @@ my $build = MAKER::Build->new
      },
     );
 
-#see if threaded and supports MPI
-if(! $build->thread_support){
-    print "\nWARNING:  Your version of perl does not seem to have been compiled\n".
-	  "for threads; certain MAKER accessory scripts and features (such as\n".
-	  "MPI support) will be not be available to you.\n\n";
-
-    $build->feature(mpi_support => 0); #set mpi flag for Build
-}
-elsif(my @mpi = $build->mpi_support){
-    my $go = $build->y_n("\nYour system appears to be configured for MPICH2. Would\n".
-			 "you like to install the MPI version of MAKER?", 'Y');
-
+#see if threaded
+if($build->thread_support){
+    my $go = $build->y_n("MAKER supports high throughput parallelization via MPI.\n".
+			 "Would you like to install the MPI version of MAKER?", 'N');
+    
     if($go){
-	my $cc = shift @mpi;
-	my $mpidir = shift @mpi;
-	$build->feature(mpi_support => 1); #set mpi flag for Build
-	$build->extra_compiler_flags("-I$mpidir -DFLOAT_HACK"); #add mpidir to includes
-	$build->config('cc' => $cc); #mpicc now default compiler
-	$build->config('ld' => $cc);
-	$build->add_requires('threads' => '1.67');	#add threads to require
-	#$build->>add_to_cleanup();
+	$build->feature(mpi_support => 1);
     }
     else{
-	$build->feature(mpi_support => 0); #set mpi flag for Build
+	$build->feature(mpi_support => 0);
     }
 }
 else{
+    $build->log_info("\nWARNING: Your version of perl does not seem to have been compiled\n".
+		     "for threads; certain MAKER accessory scripts and features (such as\n".
+		     "MPI support) will be not be available to you.\n\n");
+
     $build->feature(mpi_support => 0); #set mpi flag for Build
 }
 
-if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
-    my $go = 0;
-#    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
-#			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'Y');
-    
-    if($go){
-	$build->feature(mwas_support => 1); #set mwas flag for Build
 
-	#add required CGI dependencies
-	$build->add_build_requires('Test::WWW::Mechanize' => '0');
-	$build->add_build_requires('Data::Random' => '0');
-	$build->add_build_requires('Date::Parse' => '0');
-	$build->add_build_requires('Net::OpenID::Consumer' => '0');
-	$build->add_build_requires('Archive::Zip' => '0');
-	$build->add_requires('CGI::Application' => '0');
-	$build->add_requires('CGI::Application::Plugin::Session' => '0');
-	$build->add_requires('CGI::Application::Plugin::Authentication' => '0');
-	$build->add_requires('CGI::Application::Plugin::CAPTCHA' => '0');
-	$build->add_requires('CGI::Application::Plugin::DBH' => '0');
-	$build->add_requires('CGI::Application::Plugin::TT' => '0');
-	$build->add_requires('CGI::Application::Plugin::Redirect' => '0');
-	$build->add_requires('Mail::Sender' => '0');
-	$build->add_requires('Bio::Graphics::Browser2' => '2.15');
-	$build->add_exe_requires('Apollo' => 'apollo');
-	$build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');
-    }
-    else{
-	$build->feature(mwas_support => 0); #set mpi flag for Build
-    }
+if($build->feature('mpi_support')){
+    my @mpi = $build->mpi_support();
+    $build->add_exe_requires('MPICH2' => "$mpi[0]");
+    $build->add_lib_requires('MPI' => "$mpi[1]/mpi.h");
+    $build->add_requires('threads' => '1.67'); #add threads to require
+    
+    my $cc = shift @mpi;
+    my $mpidir = shift @mpi;
+    $build->feature(mpi_support => 1); #set mpi flag for Build
+    $build->extra_compiler_flags("-I$mpidir -DFLOAT_HACK"); #add mpidir to includes
+    $build->config('cc' => $cc); #mpicc now default compiler
+    $build->config('ld' => $cc);
+    #$build->add_to_cleanup();
 }
 
+if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
+    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
+			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'N');
+
+    if($go){
+	$build->feature(mwas_support => 1); #set mwas flag for Build
+    }
+    else{
+	$build->feature(mwas_support => 0); #set mwas flag for Build
+    }    
+}
+else{
+    $build->log_info("\nWARNING: Apache cannot be located. The optional web based\n".
+                     "interface to MAKER will not be available to you.\n\n");
+
+    $build->feature(mpi_support => 0); #set mpi flag for Build  
+}
+
+if($build->feature('mwas_support')){
+    #add required CGI dependencies
+    $build->add_build_requires('Test::WWW::Mechanize' => '0');
+    $build->add_build_requires('Data::Random' => '0');
+    $build->add_build_requires('Date::Parse' => '0');
+    $build->add_build_requires('Net::OpenID::Consumer' => '0');
+    $build->add_build_requires('Archive::Zip' => '0');
+    $build->add_requires('CGI::Application' => '0');
+    $build->add_requires('CGI::Application::Plugin::Session' => '0');
+    $build->add_requires('CGI::Application::Plugin::Authentication' => '0');
+    $build->add_requires('CGI::Application::Plugin::CAPTCHA' => '0');
+    $build->add_requires('CGI::Application::Plugin::DBH' => '0');
+    $build->add_requires('CGI::Application::Plugin::TT' => '0');
+    $build->add_requires('CGI::Application::Plugin::Redirect' => '0');
+    $build->add_requires('CGI::Application::Plugin::Stream' => '0');
+    $build->add_requires('Mail::Sender' => '0');
+    $build->add_requires('Bio::Graphics::Browser2' => '2.15');
+    $build->add_requires('XML::Twig' => '0');
+    $build->add_exe_requires('Apollo' => 'apollo');
+    $build->add_exe_requires('Apache Ant' => 'ant');
+    $build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');
+    $build->add_lib_requires('LibPNG' => "png");
+    $build->add_lib_requires('LibGD' => "gd");
+
+
+    $build->set_gmod_locs();
+}
+
+$build->config_data(PATH => $ENV{PATH});
 $build->create_build_script;
 
-print "\n\nThe file 'Build' has been created for you to finish installing MAKER.\n";
+$build->log_info("\n\nThe file 'Build' has been created for you to finish installing MAKER.\n");
 
 $build->maker_status;

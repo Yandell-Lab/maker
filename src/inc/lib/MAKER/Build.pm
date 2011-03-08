@@ -7,6 +7,7 @@ use warnings;
 use POSIX;
 use Config;
 use FindBin;
+use DynaLoader;
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
@@ -21,6 +22,17 @@ BEGIN{
     chomp $Installed_MB;
     $Installed_MB = 0 if $?;
 
+    if (! $ENV{CGL_SO_SOURCE}) {
+	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../../lib/CGL/so.obo"
+	    if(! -f $ENV{CGL_SO_SOURCE});
+    }
+    if (! $ENV{CGL_GO_SOURCE}) {
+	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo";
+	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../../lib/CGL/gene_ontology.obo"
+	    if(! -f $ENV{CGL_GO_SOURCE});
+    }
+
     # Use the bundled copy of Module::Build if it's newer than the installed.
     if ($Bundled_MB > $Installed_MB){
 	unshift @INC, "$FindBin::Bin/inc/bundle" unless($INC[0] eq "$FindBin::Bin/inc/bundle");
@@ -34,6 +46,7 @@ BEGIN{
 
 use base qw(Module::Build);
 __PACKAGE__->add_property( 'exe_requires' );
+__PACKAGE__->add_property( 'lib_requires' );
 
 eval 'require LWP::Simple';
 eval 'require Archive::Tar';
@@ -50,15 +63,16 @@ sub new {
 
     #performs a check for eternal algorithm dependencies
     $self->check_exes;
+    $self->check_libs;
 
     return $self;
 }
 
-#returns MPI compiler and includes directory (undef when one not found)
+#returns MPI compiler and includes directory
 sub mpi_support {
     my $self = shift;
 
-    return if(! $self->thread_support );
+    return unless($self->thread_support);
     my $ebase = $self->install_destination('exe');
 
     my $cc = "$ebase/mpich2/bin/mpicc";
@@ -67,6 +81,15 @@ sub mpi_support {
     ($cc) = File::Which::which('mpicc') if(!$cc || ! -f $cc);
     
     $cc = $self->config('cc') if(! $cc);
+
+    while($cc !~ /mpicc$/ || ! -f $cc){
+	$cc = $self->prompt("\nCannot find 'mpicc' from MPICH2. Please specify a path:", '');
+	if(! $cc){
+	    $cc = "$ebase/mpich2/bin/mpicc";
+	    my $MPIDIR = "$ebase/mpich2/include";
+	    return ($cc, $MPIDIR);	    
+	}
+    }
 
     return unless($cc =~ /mpicc$/);
 
@@ -91,8 +114,16 @@ sub mpi_support {
 
     my ($MPIDIR) = grep {-f "$_/mpi.h" && is_mpich2("$_/mpi.h")} @includes;
 
-    return if(! $MPIDIR);
+    while(! -f "$MPIDIR/mpi.h" || ! is_mpich2("$MPIDIR/mpi.h")){
+	$MPIDIR = $self->prompt("\nCannot find 'mpi.h' from MPICH2.\n".
+				"Please specify the containing directory:", '');
+	if(! $MPIDIR){
+	    $MPIDIR = "$ebase/mpich2/include";
+	    $cc = "$ebase/mpich2/bin/mpicc";
+	}
+    }
 
+    return unless($MPIDIR);
     return ($cc, $MPIDIR);
 }
 
@@ -150,6 +181,24 @@ sub add_exe_requires {
     }
 }
 
+#add a Library to the lib_requires list
+sub add_lib_requires {
+    my $self = shift;
+    return unless(@_);
+
+    if (@_ > 1 && @_ % 2 == 0){
+	for (my $i = 0; $i < @_; $i += 2){
+	    $self->{properties}{lib_requires}{$_[$i]} = $_[$i+1]
+	}
+    }
+    elsif(ref $_[0] eq 'HASH'){
+	map {$self->{properties}{lib_requires}{$_} = $_[0]->{$_} } keys %{$_[0]}
+    }
+    else{
+	map {$self->{properties}{lib_requires}{$_} = 0} @_;
+    }
+}
+
 #replaces Module::Build's config method
 sub config {
     my $self = shift;
@@ -159,6 +208,107 @@ sub config {
     $self->{stash}->{_cbuilder} = undef;
 
     return $self->SUPER::config(@_);
+}
+
+#override default build
+sub ACTION_build {
+    my $self = shift;
+
+    my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
+    my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
+    my @libs = map {keys %{$_->{lib_requires}}} $self->lib_failures();
+    
+    if($self->feature('mpi_support')){
+	$self->log_info("Building " . $self->dist_name . " with MPI support\n");
+	die "\n* MISSING MAKER/MPI PREREQUISITES - CANNOT CONTINUE!!\n"
+	    if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl) ||
+	       scalar(grep {/^MPI/} @exes, @libs));
+    }
+    else{
+	$self->log_info("Building " . $self->dist_name . "\n");
+	die "\n* MISSING MAKER PREREQUISITES - CANNOT CONTINUE!!\n"
+	    if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl));
+    }
+    $self->depends_on('code');
+    $self->depends_on('docs');
+
+    if($self->feature('mwas_support')){
+	$self->log_info("Building MWAS\n");
+
+        die "\n* MISSING MWAS PREREQUISITES - CANNOT CONTINUE!!\n"
+            if(scalar(grep {!/^MPI/} @libs)||
+               scalar(grep {/^(CGI|Mail|Bio\:\:Graphics)/} @perl));
+    }
+
+    if($self->feature('mwas_support') && $self->invoked_action() eq 'build'){	
+	while(! -d $self->config_data('APOLLO_ROOT')){
+	    $self->set_gmod_locs('APOLLO_ROOT');
+	}
+	while(! -d $self->config_data('JBROWSE_ROOT')){
+	    $self->set_gmod_locs('JBROWSE_ROOT');
+	}
+	while(! -f $self->config_data('GBROWSE_MASTER')){
+	    $self->set_gmod_locs('GBROWSE_MASTER');
+	}
+
+	require GI;
+	
+	$main::server = 1;
+	my $c_dir = "$FindBin::RealBin/../MWAS/config/"; #configuration file directory
+	my @files = ("$c_dir/maker_opts.ctl",
+		     "$c_dir/maker_bopts.ctl",
+		     "$c_dir/maker_exe.ctl",
+		     "$c_dir/server.ctl",
+		     "$c_dir/menus.ctl",
+		     );
+
+	my @exists = grep {-f $_} @files;
+	my %O = GI::load_server_files(\@exists);
+
+	$O{apache_user} = $self->prompt("\nWho is your apache user?", $O{apache_user});
+	$O{web_address} = $self->prompt("\nWhat is the base URL to the server hosting MWAS?",
+					 $O{web_address});
+	$O{cgi_dir}     = $self->prompt("\nWeb accessible directory to install CGI files?",
+					 $O{cgi_dir});
+	$O{cgi_web}     = $self->prompt("\nURL to CGI directory (can be relative to base URL)?",
+					 $O{cgi_web});
+	$O{html_dir}    = $self->prompt("\nWeb accessible directory to install HTML files?",
+					 $O{html_dir});
+	$O{html_web}    = $self->prompt("\nURL to CGI directory (can be relative to base URL)?",
+					 $O{html_web});
+	$O{data_dir}    = $self->prompt("\nData directory for saving user files/results?",
+					 $O{data_dir});
+	$O{font_file}   = $self->prompt("\nFont file for webpage CAPTCHA?",
+					 $O{font_file});
+	$O{soba_url}    = $self->prompt("\nURL to Sequence Ontology SOBA CGI script?",
+					 $O{soba_url});
+	$O{DBI}         = $self->prompt("\nDBI interface type to use for database?",
+					 $O{DBI});
+	$O{dbname}      = $self->prompt("\nDatabase name?",
+					 $O{dbname});
+	$O{host}        = $self->prompt("\nDatabase host?",
+					 $O{host});
+	$O{port}        = $self->prompt("\nDatabase port?",
+					 $O{port});
+	$O{username}    = $self->prompt("\nDatabase username?",
+					 $O{username});
+	$O{password}    = $self->prompt("\nDatabase password?",
+					 $O{password});
+	$O{admin_email} = $self->prompt("\nAdministartive e-mail address for status/error information?",
+					 $O{admin_email});
+	$O{smtp_server} = $self->prompt("\nOutgoing e-mail SMTP server?",
+					 $O{smtp_server});
+
+	GI::generate_control_files($c_dir,'server', \%O);
+	GI::generate_control_files($c_dir,'all', \%O);
+	GI::generate_control_files($c_dir,'menus', \%O);
+
+	$self->log_info("\n==============================================================================\n".
+			"Finished configuring MWAS settings. You can later change these\n".
+			"settings and others by editing the MWAS configuration files:\n".
+			"     --> $FindBin::Bin/../MWAS/config/*.ctl\n".
+			"\n==============================================================================\n\n");
+    }
 }
 
 #commit current MAKER to subversion repository
@@ -260,6 +410,30 @@ sub ACTION_install {
     my $self = shift;
     
     $self->SUPER::ACTION_install();
+
+    if($self->feature('mwas_support')){
+	require GI;
+	require MWAS_util;
+	
+	my $c_dir = "$FindBin::RealBin/../MWAS/config/"; #configuration file directory
+	my @files = ("$c_dir/maker_opts.ctl",
+		     "$c_dir/maker_bopts.ctl",
+		     "$c_dir/maker_exe.ctl",
+		     "$c_dir/server.ctl",
+		     "$c_dir/menus.ctl",
+		     );
+
+	my @exists = grep {-f $_} @files;
+	my %O = GI::load_server_files(\@exists);
+    
+	$self->log_info("Intalling MWAS database and files\n");
+	MWAS_util::mwas_setup(\%O);
+	$self->log_info("Intalling Apollo - Java Web Start\n");
+	MWAS_util::apollo_setup(\%O);
+	$self->log_info("Setting GBrowse Configuration\n");
+	MWAS_util::gbrowse_setup(\%O);
+    }
+
     $self->maker_status();
 }
 
@@ -313,7 +487,23 @@ sub ACTION_blast{ shift->_exe_action('blast'); }
 sub ACTION_exonerate{ shift->_exe_action('exonerate'); }
 sub ACTION_snap{ shift->_exe_action('snap'); }
 sub ACTION_augustus{ shift->_exe_action('augustus'); }
+sub ACTION_jbrowse{ shift->_exe_action('jbrowse'); }
+sub ACTION_apollo{ shift->_exe_action('apollo'); }
 sub ACTION_mpich2{ shift->_exe_action('mpich2', 'mpich2version'); }
+sub ACTION_gbrowse{
+    my $self = shift;
+
+    if($self->check_installed_status('Bio::Graphics::Browser2', '0')->{ok}){
+        my $go = $self->y_n("WARNING: GBrowse was already found on this system.\n".
+                            "Do you still want MAKER to install GBrowse for you?", 'N');
+
+	$self->cpan_install('Bio::Graphics::Browser2', 0) if($go);
+    }
+    else{
+	$self->cpan_install('Bio::Graphics::Browser2', 0);
+    }
+}
+
 
 #runs all the algorithm installs that are missing
 sub ACTION_installexes{
@@ -322,7 +512,12 @@ sub ACTION_installexes{
     my $exe_failures = $self->exe_failures();
 
     return if(! $exe_failures || ! $exe_failures->{exe_requires});
-    foreach my $name (keys %{$exe_failures->{exe_requires}}){
+    foreach my $name (grep {!/jbrowse|apollo/i} keys %{$exe_failures->{exe_requires}}){
+	$name = lc($name); #all dispatch parameters are lower case
+	$self->dispatch($name);
+    }
+
+    foreach my $name (grep {/jbrowse|apollo/i} keys %{$exe_failures->{exe_requires}}){
 	$name = lc($name); #all dispatch parameters are lower case
 	$self->dispatch($name);
     }
@@ -360,12 +555,43 @@ sub check_exes{
 	"\nRun 'Build installexes' to install missing prerequisites.\n";
 }
 
+#checks external libraries to see if they're present. Anologous to check_prereqs
+sub check_libs{
+    my $self = shift;
+
+    my $lib_failures = $self->lib_failures();
+    return if(! $lib_failures);
+
+    print "Checking external library dependencies...\n";
+    while(my $cat = each %$lib_failures){
+	my $s = ($cat eq 'lib_requires') ? '!' : '*';
+	$cat =~ /exe_(.*)/;
+
+	print "  $1:\n";
+
+	while(my $name = each %{$lib_failures->{$cat}}){
+	    print "    $s  ".$lib_failures->{$cat}{$name}{message} ."\n";
+	}
+    }
+    print "\nERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the libraries\n".
+	"indicated above before proceeding with this installation\n".
+	"\nMAKER cannot do this for you.  You will have to do it manually.\n";
+}
+
 #returns missing exes, anologous to prereq_failures
+{
+my $set_PATH = 0;
 sub exe_failures {
     my $self = shift;
     my $other = shift || {};
     my %exes = (%{$self->exe_requires}, %{$other});
-    
+
+    if(! $set_PATH){
+	$ENV{PATH} = ($ENV{PATH}) ?
+	    $ENV{PATH}.":".$self->config_data('PATH') : $self->config_data('PATH');
+	$set_PATH = 1;
+    }
+
     my %exe_failures;
     while (my $name = each %exes){
 	my @cmds = map {$_ =~ s/\s+$|^\s+//g; $_} split(/,/, $exes{$name});
@@ -375,6 +601,7 @@ sub exe_failures {
 	my $loc;
 	foreach my $cmd (@cmds){
 	    last if(($loc) = grep {-f $_} ("$dest/$cmd", "$dest/bin/$cmd", File::Which::which($cmd)));
+	    last if(($loc) = grep {-f $_ && -x $_} ($cmd));
 	}
 
         if(! $loc){
@@ -386,6 +613,33 @@ sub exe_failures {
 
     return (keys %exe_failures) ? \%exe_failures : undef;
 }
+}
+
+#returns missing libs, anologous to prereq_failures
+sub lib_failures {
+    my $self = shift;
+    my $other = shift || {};
+    my %libs = (%{$self->lib_requires}, %{$other});
+    
+    my %lib_failures;
+    while (my $name = each %libs){
+	my @cmds = map {$_ =~ s/\s+$|^\s+//g; $_} split(/,/, $libs{$name});
+
+	my $loc;
+	foreach my $cmd (@cmds){
+	    last if(($loc) = grep {-f $_} (DynaLoader::dl_findfile($cmd), $cmd));
+	}
+
+        if(! $loc){
+	    $lib_failures{'lib_requires'}{$name}{have} = '<none>';
+	    $lib_failures{'lib_requires'}{$name}{message} = "$name is not installed";
+	    $lib_failures{'lib_requires'}{$name}{need} = $libs{$name};
+	}
+    }
+
+    return (keys %lib_failures) ? \%lib_failures : undef;
+}
+
 
 #hidden connection entry between ACTION_??? algorithm install
 #checks to see if already installed and then run the install method
@@ -639,6 +893,57 @@ sub _install_exe {
 	chdir($base);
 	File::Path::rmtree($dir) or return $self->fail($exe, $path);
     }
+    elsif($exe eq 'apache ant'){
+	#do nothing
+    }
+    elsif($exe eq 'apollo'){
+	#apollo
+	if(grep {/Apache Ant/} map {keys %{$_->{exe_requires}}} $self->exe_failures()){
+	    die "ERROR: Cannot install Apollo without Apache Ant\n".
+		"You will need to install it first manually.\n";
+	}
+
+	&File::Path::rmtree($path);
+	my $file = "$base/$exe.tar.gz"; #file to save to
+	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	print "Downloading $exe...\n";
+	$self->getstore($url, $file) or return $self->fail($exe, $path);
+	print "Unpacking $exe tarball...\n";
+	$self->extract_archive($file) or return $self->fail($exe, $path);
+	push (@unlink, $file);
+	my ($dir) = grep {-d $_} <trunk*>;
+	print "Configuring $exe...\n";
+	File::Copy::copy("$base/../GMOD/Apollo/gff3.tiers", "$dir/conf/gff3.tiers");
+	chdir("$dir/src/java");
+	$ENV{APOLLO_ROOT} = "$base/$dir";
+	$self->do_system("ant jar") or return $self->fail($exe, $path);
+	chdir($base);
+	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+    }
+    elsif($exe eq 'jbrowse'){
+	#jbrowse
+	if(grep {/LibPNG/} map {keys %{$_->{exe_requires}}} $self->lib_failures()){
+	    die "ERROR: Cannot install JBrowse without LibPNG\n".
+		"You will need to install it first manually.\n";
+	}
+
+	&File::Path::rmtree($path);
+	my $file = "$base/$exe.tar.gz"; #file to save to
+	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	print "Downloading $exe...\n";
+	$self->getstore($url, $file) or return $self->fail($exe, $path);
+	print "Unpacking $exe tarball...\n";
+	$self->extract_archive($file) or return $self->fail($exe, $path);
+	push (@unlink, $file);
+	my ($dir) = grep {-d $_} <jbrowse*>;
+	print "Configuring $exe...\n";
+	File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
+	chdir($dir);
+	$self->do_system('./configure') or return $self->fail($exe, $path);
+	$self->do_system('make') or return $self->fail($exe, $path);
+	chdir($base);
+	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+    }
     else{
 	die "ERROR: No install method defined for $exe in MAKER::Build::_install_exe.\n";
     }
@@ -833,16 +1138,23 @@ sub maker_status {
 
     my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
     my @exes = map {keys %{$_->{exe_requires}}} $self->exe_failures();
+    my @libs = map {keys %{$_->{lib_requires}}} $self->lib_failures();
 
     my $dist_name = $self->dist_name;
     my $dist_version = $self->dist_version;
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
+    $mpi = 'MISSING PREREQUISITES' if($self->feature('mpi_support') && scalar(grep {/^MPI/} @exes, @libs));
     $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
     my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-#    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
+    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
+    $mwas = 'MISSING PREREQUISITES' if($self->feature('mwas_support') &&
+				       (scalar(grep {!/^MPI/} @libs)||
+					scalar(grep {/JBrowse|Apollo/} @exes)||
+					scalar(grep {/^(CGI|Mail|Bio\:\:Graphics)/} @perl)));
     my $maker = (-f $self->base_dir."/../bin/maker") ? 'INSTALLED' : 'READY TO INSTALL';
-    $maker =  'MISSING PREREQUISITES' if(@perl || @exes);
+    $maker =  'MISSING PREREQUISITES' if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl) ||
+					 scalar(grep {!/^MPI|JBrowse|Apollo/} @exes));
 
     print "\n\n";
     print "==============================================================================\n";
@@ -856,12 +1168,16 @@ sub maker_status {
     print ((@exes) ? 'MISSING' : 'INSTALLED');
     print "\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @exes) ."\n\n" if(@exes);
+    print "External C Libraries:\t";
+    print ((@libs) ? 'MISSING' : 'INSTALLED');
+    print "\n";
+    print "\t\t  !  ". join("\n\t\t  !  ", @libs) ."\n\n" if(@libs);
     print "MPI SUPPORT:\t\t";
     print $mpi;
     print "\n";
-#    print "MWAS Web Interface:\t";
-#    print $mwas;
-#    print "\n";
+    print "MWAS Web Interface:\t";
+    print $mwas;
+    print "\n";
     print "MAKER:\t\t\t";
     print $maker;
     print "\n";
@@ -872,12 +1188,15 @@ sub maker_status {
         "\t./Build install\t\t\#installs MAKER\n".
         "\t./Build status\t\t\#Shows this status menu\n\n".
         "Other Commands:\n".
-        "\t./Build repeatmasker\t\#installs RepeatMasker (no RepBase)\n".
+        "\t./Build repeatmasker\t\#installs RepeatMasker (asks for RepBase)\n".
         "\t./Build blast\t\t\#installs BLAST (NCBI BLAST+)\n".
         "\t./Build exonerate\t\#installs Exonerate (v2 on UNIX / v1 on Mac OSX)\n".
         "\t./Build snap\t\t\#installs SNAP\n".
-        "\t./Build augustus\t\#installs Augustus\n";
-        "\t./Build mpich2\t\#installs MPICH2\n";
+        "\t./Build augustus\t\#installs Augustus\n".
+        "\t./Build apollo\t\t\#installs Apollo\n".
+        "\t./Build gbrowse\t\t\#installs GBrowse (must be root)\n".
+        "\t./Build jbrowse\t\t\#installs JBrowse (MAKER copy, not web accecible)\n".
+        "\t./Build mpich2\t\t\#installs MPICH2 (manual installation recommended)\n";
 }
 
 #test if there is another version of the module overriding the CPAN install
@@ -1176,6 +1495,45 @@ sub safe_prompt {
     ReadMode(0); #Reset the terminal once we are done
 
     return $r; #Return the response
+}
+
+sub set_gmod_locs {
+    my $self = shift;
+    my $type = shift || 'ALL';
+
+    if($type eq 'ALL' || $type eq 'APOLLO_ROOT'){
+	my $APOLLO_ROOT = "$FindBin::Bin/../exe/apollo";
+	$APOLLO_ROOT = $ENV{APOLLO_ROOT} if(! -d $APOLLO_ROOT && $ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
+	$APOLLO_ROOT = (File::Which::which('apollo') || '') =~ /^([^\n]+)\/bin\/apollo\n?$/ if(!-d $APOLLO_ROOT);
+	$APOLLO_ROOT = '/usr/local/gmod/apollo' if(! -d $APOLLO_ROOT);
+	$APOLLO_ROOT = '' if(! -d $APOLLO_ROOT);
+	$APOLLO_ROOT = $self->prompt("\nPlease provide the base directory for your Apollo installation?",
+				      $APOLLO_ROOT);
+	$self->config_data(APOLLO_ROOT => $APOLLO_ROOT);
+    }
+
+    if($type eq 'ALL' || $type eq 'JBROWSE_ROOT'){
+	my $JBROWSE_ROOT ="$FindBin::Bin/../exe/jbrowse";
+	$JBROWSE_ROOT = '/var/www/html/jbrowse' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = '/Library/WebServer/Documents/jbrowse' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = '/var/www/jbrowse' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = '/usr/local/gmod/jbrowse' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = '/data/var/www/jbrowse' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = '' if(! -d $JBROWSE_ROOT);
+	$JBROWSE_ROOT = $self->prompt("\nPlease provide the base directory for your JBrowse installation?",
+				       $JBROWSE_ROOT);
+	$self->config_data(JBROWSE_ROOT => $JBROWSE_ROOT);
+    }
+    
+    if($type eq 'ALL' || $type eq 'GBROWSE_MASTER'){
+	my $GBROWSE_MASTER = '/etc/gbrowse/GBrowse.conf';
+	$GBROWSE_MASTER = '/etc/gbrowse2/GBrowse.conf' if(! -f $GBROWSE_MASTER);
+	$GBROWSE_MASTER = '' if(! -f $GBROWSE_MASTER);
+
+	$GBROWSE_MASTER = $self->prompt("\nPlease provide the path to your GBrowse.conf file?",
+					 $GBROWSE_MASTER);
+	$self->config_data(GBROWSE_MASTER => $GBROWSE_MASTER);
+    }
 }
 
 1;

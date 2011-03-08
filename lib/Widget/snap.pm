@@ -40,16 +40,16 @@ sub new {
 #------------------------------------------------------------------------
 sub prep_for_genefinder {
     my $seq    = shift;
+    my $mia    = shift;
     my $set    = shift;
     my $flank  = shift;
-    my $alt_splice = shift;
     my $seq_id = shift;
     
     my ($span,
 	$strand,
 	$p_set_coors,
 	$n_set_coors,
-	$i_set_coors) = process_hints($seq, $set, $alt_splice);
+	$i_set_coors) = process_hints($seq, $mia, $set);
     
     my $p = Shadower::getPieces($seq, $span, $flank);
     my $final_seq  = $p->[0]->{piece};
@@ -72,10 +72,9 @@ sub prep_for_genefinder {
 #------------------------------------------------------------------------
 sub process_hints {
     my $seq    = shift;
+    my $mia    = shift;
     my $set    = shift;
-    my $alt_splice = shift;
     
-    my $mia    = $set->{mia} if($alt_splice);
     my $gomiph = $set->{gomiph}    || [];
     my $models = $set->{gomod}     || [];
     my $alts   = $set->{alt_ests}  || [];
@@ -362,7 +361,7 @@ sub process_hints {
 		
 		#make intron (won't override dually verified CDS)
 		foreach my $i ($si..$ei){
-		    $b_seq[$i] == -1 if($b_seq[$i] != 2 && $b_seq[$i] != 4 && $b_seq[$i] != -2);
+		    $b_seq[$i] = -1 if($b_seq[$i] != 2 && $b_seq[$i] != 4 && $b_seq[$i] != -2);
 		}
 	    }
 	    
@@ -457,18 +456,19 @@ sub get_pred_shot {
         my $seq           = shift;
         my $def           = shift;
         my $the_void      = shift;
+        my $mia           = shift;
         my $set           = shift;
+	my $set_id        = shift;
         my $snap_flank    = shift;
         my $snap_command  = shift;
         my $hmm           = shift;
-        my $alt_splice    = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
 
         my ($shadow_seq, $strand, $offset, $xdef) =
-            prep_for_genefinder($seq, $set, $snap_flank, $alt_splice);
-	my $id = $set->{c_id}.'_'.$set->{set_id};
+            prep_for_genefinder($seq, $mia, $set, $snap_flank);
+	my $id = $set->{c_id}.'_'.$set_id;
 	my $end = $offset + length($$shadow_seq);
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,

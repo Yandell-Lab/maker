@@ -775,7 +775,15 @@ function viewFile(section) {
 <br>
 [% END %]
 
-[% IF stat.predictor != 'DISABLED' %]
+[% IF stat.snap     != 'DISABLED' ||
+      stat.augustus != 'DISABLED' ||
+      stat.genemark != 'DISABLED' ||
+      stat.fgenesh  != 'DISABLED' ||
+      stat.est2genome != 'DISABLED' ||
+      stat.protein2genome != 'DISABLED' ||
+      stat.model_gff != 'DISABLED' ||
+      stat.pred_gff != 'DISABLED'
+%]
 <table width=90%  bgcolor=CACACA>
   <tr>
     <td colspan=3>
@@ -810,14 +818,7 @@ function viewFile(section) {
   [% IF stat.snaphmm != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
-      <input type="checkbox" name="go_snap" value="snap"
-      [% IF log_opt.predictor_hash.snap %]
-        checked
-      [% END %]
-      [% IF stat.predictor == 'STATIC' %]
-        disabled
-      [% END %]
-      />
+	<li type=disc>
     </td>
     <td colspan=3>
       SNAP
@@ -858,14 +859,7 @@ function viewFile(section) {
   [% IF stat.augustus_species != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
-      <input type="checkbox" name="go_augustus" value="augustus"
-      [% IF log_opt.predictor_hash.augustus %]
-        checked
-      [% END %]
-      [% IF stat.predictor == 'STATIC' %]
-        disabled
-      [% END %]
-      />
+	<li type=disc>
     </td>
     <td colspan=3>
       AUGUSTUS
@@ -910,14 +904,7 @@ function viewFile(section) {
   [% IF stat.fgenesh_par_file != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
-      <input type="checkbox" name="go_fgenesh" value="fgenesh"
-      [% IF log_opt.predictor_hash.fgenesh %]
-        checked
-      [% END %]
-      [% IF stat.predictor == 'STATIC' %]
-        disabled
-      [% END %]
-      />
+	<li type=disc>
     </td>
     <td colspan=3>
       FGENESH
@@ -958,14 +945,7 @@ function viewFile(section) {
   [% IF stat.gmhmm != 'DISABLED' %]  
   <tr bgcolor=white>
     <td align=right>
-      <input type="checkbox" name="go_genemark" value="genemark"
-      [% IF log_opt.predictor_hash.genemark %]
-        checked
-      [% END %]
-      [% IF stat.predictor == 'STATIC' %]
-        disabled
-      [% END %]
-      />
+	<li type=disc>
     </td>
     <td colspan=3>
       GeneMark
@@ -975,8 +955,7 @@ function viewFile(section) {
   <tr bgcolor=white>	 
     <td></td>
     <td>
-      <p>Select either a server provided or a user provided GeneMark model file. <!-- You can also select a fasta file from the drop down menu for self training.  At least 10 megabases of sequence is required.  GeneMark can take up tp 7 hours for self training, so this will significantaly add to computation time. The resulting model file will be saved in your file box. -->
-      </p>
+      Select either a server provided or a user provided GeneMark model file. <!-- You can also select a fasta file from the drop down menu for self training.  At least 10 megabases of sequence is required.  GeneMark can take up tp 7 hours for self training, so this will significantaly add to computation time. The resulting model file will be saved in your file box. -->
     </td>
     
     <td nowrap>
@@ -1004,12 +983,19 @@ function viewFile(section) {
   [% END %]
 
   <tr bgcolor=white>
+    <td colspan=4 align=left>
+      <h4>Evidence Prediction Methods:</h4>
+    </td>
+  </tr>
+
+  [% IF stat.est2genome != 'DISABLED' %]  
+  <tr bgcolor=white>
     <td align=right>
       <input type="checkbox" name="est2genome" value="est2genome"
-      [% IF log_opt.predictor_hash.est2genome %]
+      [% IF log_opt.est2genome %]
         checked
       [% END %]
-      [% IF stat.predictor == 'STATIC' %]
+      [% IF stat.est2genome == 'STATIC' %]
         disabled
       [% END %]
       />
@@ -1025,16 +1011,16 @@ function viewFile(section) {
       Make gene annotation directly from EST alignments built from the files provided as EST evidence.  This will produce rough/aproximate gene models in the absence of other gene predictors.
     </td>
   </tr>
-
+  [% END %]
   
-  [% IF o_type == 'prokaryotic' %]
+  [% IF o_type == 'prokaryotic' && stat.protein2genome != 'DISABLED'%]
   <tr bgcolor=white>
     <td align=right>
       <input type="checkbox" name="protein2genome" value="protein2genome" [% protein2genome %]
-      [% IF log_opt.predictor_hash.protein2genome %]
+      [% IF log_opt.protein2genome %]
         checked
       [% END %]
-      [% IF stat.predictor == 'STATIC' %]
+      [% IF stat.protein2genome == 'STATIC' %]
         disabled
       [% END %]
       />

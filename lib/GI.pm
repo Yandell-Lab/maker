@@ -11,6 +11,8 @@ use FileHandle;
 use File::Temp qw(tempfile tempdir);
 use File::Path;
 use File::Copy;
+use Carp;
+use Cwd qw(cwd);
 use File::NFSLock;
 use File::Which;
 use Dumper::GFF::GFFV3;
@@ -20,7 +22,6 @@ use Data::Dumper;
 use Getopt::Long;
 use FileHandle;
 use PostData;
-use Cwd qw(cwd abs_path);
 use Fasta;
 use Iterator::Fasta;
 use FastaChunker;
@@ -40,11 +41,7 @@ use maker::auto_annotator;
 use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
-use FastaDB;
-use FastaSeq;
 use Digest::MD5;
-use Bio::Root::Version 1.006; #force correct version of BioPerl
-use Carp;
 
 @ISA = qw(
 	);
@@ -94,6 +91,20 @@ sub set_global_temp {
 #------------------------------------------------------------------------
 sub LOCK {
     return $LOCK;
+}
+#------------------------------------------------------------------------
+sub s_abs_path {
+    my $path = shift;
+
+    if(-l $path){
+	my ($dir, $file) = $path =~ /(.*)([^\/]+)$/;
+	$path = Cwd::abs_path($dir)."/$file";
+	$path =~ s/\/+/\//g;
+	return $path;
+    }
+    else{
+	return Cwd::abs_path($path);
+    }
 }
 #------------------------------------------------------------------------
 sub get_preds_on_chunk {
@@ -257,7 +268,7 @@ sub reblast_merged_hits {
 			      $t_file,
 			      $the_void,
 			      $p_safe_id.".".$F.".".$L,
-			      {%CTL_OPT, split_hit => 0},
+			      \%CTL_OPT,
 			      $LOG
 			      );
 	 
@@ -270,7 +281,7 @@ sub reblast_merged_hits {
 			      $t_file,
 			      $the_void,
 			      $p_safe_id.".".$F.".".$L,
-			      {%CTL_OPT, split_hit => 0},
+			      \%CTL_OPT,
 			      $LOG
 			      );
 	 
@@ -283,7 +294,7 @@ sub reblast_merged_hits {
 			       $t_file,
 			       $the_void,
 			       $p_safe_id.".".$F.".".$L,
-			       {%CTL_OPT, split_hit => 0},
+			       \%CTL_OPT,
 			       $LOG
 			       );
 	 
@@ -1224,7 +1235,8 @@ sub polish_exonerate {
 	    my $go;
 	    $min_intron = 1;
 	    foreach my $coor (split(',', $1)){
-		if(my ($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
+		my ($bName, $bB, $bE);
+		if(($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
 		    next if($type eq 'e' && ref($hit));
 		    ($bB, $bE) = ($bE, $bB) if($bB > $bE);
 		    
@@ -1236,7 +1248,7 @@ sub polish_exonerate {
 		    $go++;
 		    last;
 		}
-		elsif((my ($bName) = $coor =~ /^([^\s\;]+)$/) && (ref($hit) ne '')){
+		elsif((($bName) = $coor =~ /^([^\s\;]+)$/) && (ref($hit) ne '')){
 		    next if($name ne $bName);
 		    $go++;
 		    last;
@@ -1490,6 +1502,7 @@ sub build_fasta_index {
        push(@files, $file);
    }
 
+   require FastaDB;
    my $index = new FastaDB(\@files);
 
    return $index;
@@ -1512,10 +1525,8 @@ sub build_all_indexes {
 #-----------------------------------------------------------------------------
 sub dbformat {
    my $command = shift;
-   my $file = shift;
+   my ($file) = shift =~ /^([^\:]+)\:?(.*)/; #peal off label
    my $type = shift;
-
-   my ($file) = $file =~ /^([^\:]+)\:?(.*)/; #peal off label
 
    confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $command);
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
@@ -1772,7 +1783,7 @@ sub blastn {
    $params{hsp_bit_min}   = $bit_blast;
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
-   $params{split_hit}     = $split_hit;
+   $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::blastn::parse($o_file,
@@ -2119,7 +2130,7 @@ sub blastx {
    $params{hsp_bit_min}   = $bit_blast;
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
-   $params{split_hit}     = $split_hit;
+   $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
    
    my $chunk_keepers = Widget::blastx::parse($o_file,
@@ -2402,7 +2413,7 @@ sub tblastx {
    $params{hsp_bit_min}   = $bit_blast;
    $params{percov}        = $pcov_blast;
    $params{percid}        = $pid_blast;
-   $params{split_hit}     = $split_hit;
+   $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
 
    my $chunk_keepers = Widget::tblastx::parse($o_file,
@@ -2720,7 +2731,8 @@ sub set_defaults {
       $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
-      $CTL_OPT{'retry'} = 1;
+      $CTL_OPT{'tries'} = 2;
+      $CTL_OPT{'retry'} = ''; #depricated
       $CTL_OPT{'clean_try'} = 0;
       $CTL_OPT{'TMP'} = '';
       $CTL_OPT{'TMP'} .= '=DISABLED' if($main::server);
@@ -2805,7 +2817,7 @@ sub set_defaults {
 	  if(! $loc && $exe eq 'blasta'){ #find blasta using blastx
 	      ($loc) = (map {Cwd::abs_path($_)} grep {Cwd::abs_path($_) =~ /blasta$/} (File::Which::where('blastx')));
 	  }
-	  elsif($loc && $exe =~ /^.?blast[nx]$/ && Cwd::abs_path($loc) =~ /blasta$/){ #verofy not blasta
+	  elsif($loc && $exe =~ /^.?blast[nx]$/ && Cwd::abs_path($loc) =~ /blasta$/){ #verify not blasta
 	      ($loc) = (grep {Cwd::abs_path($_) !~ /blasta$/} (@alts, File::Which::where($exe)));
 	  }
 	  $CTL_OPT{$exe} = $loc || '';
@@ -2862,19 +2874,23 @@ sub set_defaults {
       $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'font_file'} = '' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
-      $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/html/jbrowse';
+      $CTL_OPT{'JBROWSE_ROOT'} = "$FindBin::Bin/../exe/jbrowse";
+      $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/html/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/Library/WebServer/Documents/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/usr/local/gmod/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/data/var/www/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
-      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf';
-      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
+      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf';
+      $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
       $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
-      $CTL_OPT{'APOLLO_ROOT'} = File::Which::which('apollo') || '';
-      $CTL_OPT{'APOLLO_ROOT'} = $CTL_OPT{'APOLLO_ROOT'} =~ /^([^\n]+)\/bin\/apollo\n?$/;
-      $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if($ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
-      $CTL_OPT{'APOLLO_ROOT'} = '/usr/local/gmod/apollo' if(! $CTL_OPT{'APOLLO_ROOT'} || ! -d $CTL_OPT{'APOLLO_ROOT'});
+      $CTL_OPT{'APOLLO_ROOT'} = "$FindBin::Bin/../exe/apollo";
+      $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if(! -d $CTL_OPT{'APOLLO_ROOT'} &&
+						     $ENV{APOLLO_ROOT} &&
+						     -d $ENV{APOLLO_ROOT});
+      $CTL_OPT{'APOLLO_ROOT'} = (File::Which::which('apollo') || '') =~ /^([^\n]+)\/bin\/apollo\n?$/
+	  if(! -d $CTL_OPT{'APOLLO_ROOT'});
+      $CTL_OPT{'APOLLO_ROOT'} = '/usr/local/gmod/apollo' if(! -d $CTL_OPT{'APOLLO_ROOT'});
       $CTL_OPT{'APOLLO_ROOT'} = '' if(! -d $CTL_OPT{'APOLLO_ROOT'});
       $CTL_OPT{'ZOE'} = $ENV{'ZOE'} || '';
       $CTL_OPT{'AUGUSTUS_CONFIG_PATH'} = $ENV{'AUGUSTUS_CONFIG_PATH'} || '';
@@ -2896,11 +2912,11 @@ sub set_defaults {
       $CTL_OPT{'fgenesh_par_file'} = {};
       $CTL_OPT{'gmhmm_e'}          = {'P. ultimum' => "$server_ctl{data_dir}/maker/MWAS/data/pyu.mod"};
       $CTL_OPT{'gmhmm_p'}          = {'E. coli' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli.mod"};
-      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_transcripts.fasta",
+      $CTL_OPT{'est'}              = {'D. melanogaster : example cDNA' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_est.fasta",
 				      'De novo/Legacy/Pass-through : example ESTs' => "$server_ctl{data_dir}/maker/MWAS/data/pyu-est.fasta",
 				      'E. coli : example ESTs' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli-est.fasta"};
       $CTL_OPT{'altest'}           = {};
-      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_proteins.fasta",
+      $CTL_OPT{'protein'}          = {'D. melanogaster : example proteins' => "$server_ctl{data_dir}/maker/MWAS/../data/dpp_protein.fasta",
 				      'E. coli : example proteins' => "$server_ctl{data_dir}/maker/MWAS/data/ecoli-protein.fasta",
 				      'De novo/Legacy/Pass-through : example proteins' => "$server_ctl{data_dir}/maker/MWAS/data/pyu-protein.fasta"};
       $CTL_OPT{'est_gff'}          = {'Pass-through : example mRNAseq' => "$server_ctl{data_dir}/maker/MWAS/data/pass-mRNAseq.gff"};
@@ -3032,7 +3048,7 @@ sub collect_hmms {
     if(-d $exes{fgenesh}){
 	foreach my $file (<$exes{fgenesh}/*>){
 	    my ($name) = $file =~ /([^\/]+)$/;
-	    my $value =Cwd::abs_path("$file");
+	    my $value = Cwd::abs_path("$file");
 
 	    next if(!$name || !$value);
 
@@ -3476,13 +3492,13 @@ sub load_control_files {
 	  $error .= "ERROR: The \'$in\' file[s] ".join(', ', @files)." do not exist.\n".
 	      "Please check settings in the control files.\n\n"if(@non);
 
-	  @files = map {Cwd::abs_path($_)} @files unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
+	  @files = map {s_abs_path($_)} @files;
 	  $CTL_OPT{$in} = join(',', @files); #order entries for logging (lets run log work as is)
       }
       else{
 	  #set the absolute path to the file to reduce ambiguity
-	  #this breaks blast which requires symbolic links
-	  $CTL_OPT{$in} = Cwd::abs_path($CTL_OPT{$in}) unless ($in =~ /^_blastn$|^_blastx$|^_tblastx$|^_formater$/);
+	  #special s_abs_path doesn't break symbolic links
+	  $CTL_OPT{$in} = s_abs_path($CTL_OPT{$in});
       }
    }
 
@@ -3537,6 +3553,27 @@ sub load_control_files {
        else{
 	   #nothing to do
        }
+   }
+   if ($CTL_OPT{blast_type} =~ /^wublast$/i && -f $CTL_OPT{blasta}) {
+       (my $base = Cwd::abs_path($CTL_OPT{blasta})) =~ s/\/blasta$//;
+
+       #set both variable types
+       my $matrix = $ENV{WUBLASTMAT} || $ENV{BLASTMAT};
+       my $filter = $ENV{WUBLASTFILTER} || $ENV{BLASTFILTER};
+
+       if(!$matrix || ! -d $matrix){
+	   $matrix = "$base/matrix";
+       }
+       if(!$filter || ! -d $filter){
+	   $filter = "$base/filter";
+       }
+
+       die "ERROR: You must properly set the BLASTFILTER/WUBLASTFILTER and\n".
+	   "BLASTMAT/WUBLASTMAT environmental variables or WUBLAST will not\n".
+	   "function\n" if(! -d $matrix || ! -d $filter);
+
+       $ENV{BLASTMAT} = $ENV{WUBLASTMAT} = $matrix;
+       $ENV{BLASTFILTER} = $ENV{WUBLASTFILTER} = $filter;
    }
    if (grep {/^snaps$|^fathom$/} @{$CTL_OPT{_run}}){
        if(! -d $ENV{ZOE}){
@@ -3611,10 +3648,18 @@ sub load_control_files {
       "AED_threshold will be reset to 1\n\n";
       $CTL_OPT{AED_threshold} = 1;
    }
-   if ($CTL_OPT{retry} < 0) {
-      warn "WARNING: \'retry\' must be set to 0 or greater.\n".
+   #catch depricated parameter
+   if ($CTL_OPT{retry} ne ''){
+       $CTL_OPT{tries} = 1 + $CTL_OPT{retry};
+       delete($CTL_OPT{retry});
+   }
+   else{
+       delete($CTL_OPT{retry});
+   }
+   if ($CTL_OPT{tries} < 0) {
+      warn "WARNING: \'tries\' must be set to 0 or greater.\n".
 	   "It will now be set to 0\n\n";
-      $CTL_OPT{retry} = 0;
+      $CTL_OPT{tries} = 1;
    } 
    if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
        $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist.\n\n";
@@ -3682,7 +3727,7 @@ sub load_control_files {
       $CTL_OPT{mpi_blastdb} = $CTL_OPT{out_base}."/mpi_blastdb";
    }
    else{
-       $CTL_OPT{mpi_blastdb} = abs_path($CTL_OPT{mpi_blastdb});
+       $CTL_OPT{mpi_blastdb} = s_abs_path($CTL_OPT{mpi_blastdb});
    }
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
    confess "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
@@ -3884,7 +3929,7 @@ sub generate_control_files {
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
        print OUT "\n";
-       print OUT "retry=$O{retry} #number of times to retry a contig if there is a failure for some reason\n";
+       print OUT "tries=$O{tries} #number of times to try a contig if there is a failure for some reason\n";
        print OUT "clean_try=$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
        print OUT "clean_up=$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
        print OUT "TMP=$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";

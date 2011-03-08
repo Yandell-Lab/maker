@@ -35,7 +35,7 @@ sub sort_hits {
 		PostData($hit);
 		print STDERR "caller:".caller()."STRAND:".$hit->strand('query')."\n";
 
-                die "ERROR: not yet supported in PhatHit_utils::sort_hits\n";
+                confess "ERROR: not yet supported in PhatHit_utils::sort_hits\n";
         }
 
 	return $sorted;
@@ -60,8 +60,8 @@ sub separate_by_strand {
 	    my $strand = $obj->strand($what);
 	    
 	    unless($strand =~ /^\-?\d$/){
-		die "FATAL: Could not get stand correctly. Perhaps".
-		    "your using the wrong version of BioPerl.\n\n";
+		confess "FATAL: Could not get stand correctly. Perhaps".
+		        "your using the wrong version of BioPerl.\n\n";
 	    }	    
 
 	    $strand *= -1 if($exonerate_flag && $obj->{_exonerate_flipped});
@@ -139,7 +139,7 @@ sub splice_infer_exon_coors {
 	    next if($E - $B < 300); #min orf of 300 required (same as most prokaryotic gene finders)
 	    next if(compare::compare($iB, $iE, $jB, $jE) ne '0'); #ESTs overlap so there is no in between space
 	    next if($done{$B}{$E}); #skip if these coors already checked
-	    die "ERROR: Logic error in Widget:snap::get_xdef\n" if($B > $E);
+	    confess "ERROR: Logic error in Widget:snap::get_xdef\n" if($B > $E);
 	    $done{$B}{$E}++;
 	    
 	    my $L = abs($E - $B) + 1;
@@ -360,7 +360,7 @@ sub split_hit_by_strand {
 	    push(@{$pm_splits{minus}}, $hsp); #minus strand
 	 }
 	 else{
-	    die "ERROR: There is no strand for this HSP\n";
+	    confess "ERROR: There is no strand for this HSP\n";
 	 }
       }  
       
@@ -604,7 +604,7 @@ sub _clip {
     my $strand = $hit->strand('query');
 
     if(!$end || !defined($offset)){
-	die "ERROR: Need seq to determine translation in PhatHit_utils::_clip\n" if(!$seq);
+	confess "ERROR: Need seq to determine translation in PhatHit_utils::_clip\n" if(!$seq);
 	my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
 	(undef, $offset, $end, undef, undef) = maker::auto_annotator::get_translation_seq($transcript_seq, $hit);
     }
@@ -754,7 +754,7 @@ sub _clip {
 	$hit_start = $hit_start + $length;
     }
     
-    die "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
+    confess "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
 	if($hit_start == 1 || $new_hit->num_hsps == 0); #should change with each HSP
 
     #add hidden attributes that may be part of a gene prediction
@@ -792,7 +792,7 @@ sub _adjust {
     my $B = $hit->start;
     my $E = $hit->end;
 
-    die "ERROR: Need seq to determine translation adjustments in PhatHit_utils::_adjust\n" if(!$seq);
+    confess "ERROR: Need seq to determine translation adjustments in PhatHit_utils::_adjust\n" if(!$seq);
 
     my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
     my $slength = length_o($seq);
@@ -1179,7 +1179,7 @@ sub copy {
 	my $hit   = shift;
 	my $what  = shift;
 
-	die "PhatHit_utils::copy have what arg revq, revh, both, copy!\n"
+	confess "PhatHit_utils::copy have what arg revq, revh, both, copy!\n"
 	unless defined($what);
 
 	my $ref = ref($hit);
@@ -1355,6 +1355,8 @@ sub is_contigous {
 sub get_span_of_hit {
 	my $hit  = shift;
 	my $what = shift || 'query';
+
+	confess "ERROR: Incorrect reference type\n" if(ref($hit) !~ /Bio/);
 	
 	if ($hit->strand($what) eq '-1/1'){
 		print STDERR " mixed strand feature in PhatHit_utils\n";	

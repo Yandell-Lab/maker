@@ -244,6 +244,7 @@ sub _prepare {
       #-set up variables that are the result of chunk accumulation
       $VARS->{p_fastas} = {};
       $VARS->{t_fastas} = {};
+      $VARS->{gff3_files} = [];
    }
    elsif($tier_type == 1){
 
@@ -575,7 +576,8 @@ sub _go {
 
 		$next_level = 4;
 	    }
-	    elsif(-f $VARS->{the_void}."/query.masked.fasta"){
+	    elsif(-f $VARS->{the_void}."/query.masked.fasta" &&
+		  -f $VARS->{the_void}."/query.masked.gff"){
 		#make masked index
 		my $seq_id = $VARS->{seq_id};
 		my $masked_file = $VARS->{the_void}."/query.masked.fasta";
@@ -606,6 +608,9 @@ sub _go {
 		$VARS->{m_seq_obj} = $m_seq_obj;
 		$VARS->{fasta_chunker} = $fasta_chunker;
 
+		#GFF3 file with masking data
+		$VARS->{gff3_files} = [$VARS->{the_void}."/query.masked.gff"];
+
 		$next_level = 4;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -614,7 +619,16 @@ sub _go {
       elsif ($tier_type == 0 && $level == 2) {     #build masking tiers
 	 $level_status = 'builing masking tiers';
 	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER	    
+	    #-------------------------CHUNKER
+	    #local masked GFF3
+	    my $gff3_file = $VARS->{the_void}."/query.masked.gff";
+            my $GFF3_m = Dumper::GFF::GFFV3->new($gff3_file,
+						 '',
+						 $VARS->{the_void}
+						 );
+
+            $GFF3_m->set_current_contig($VARS->{seq_id});
+
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
 	       my %args = (chunk       => $fchunk,
@@ -624,7 +638,8 @@ sub _go {
 			   safe_seq_id => $VARS->{safe_seq_id},
 			   q_seq_obj   => $VARS->{q_seq_obj},
 			   GFF_DB      => $VARS->{GFF_DB},
-			   GFF3        => $VARS->{GFF3},
+			   GFF3_m      => $VARS->{GFF3_m},
+			   gff3_file   => $gff3_file,
 			   LOG         => $VARS->{LOG},
 			   DS_CTL      => $VARS->{DS_CTL},
 			   CTL_OPT     => $VARS->{CTL_OPT}
@@ -667,6 +682,10 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	    if(defined($VARS->{GFF3_m})){
+		$VARS->{GFF3_m}->finalize;
+		delete($VARS->{GFF3_m});
+	    }
 	    #-------------------------NEXT_LEVEL
 	 }	    
       }	  
@@ -943,7 +962,7 @@ sub _go {
 	    my $rm_rb_keepers = $VARS->{rm_rb_keepers};
 	    my $rm_sp_keepers = $VARS->{rm_sp_keepers};
 	    my $rm_blastx_keepers = $VARS->{rm_blastx_keepers};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3_m = $VARS->{GFF3_m};
 
 	    #-combine and cluster repeat hits for consensus
 	    my $rm_keepers = repeat_mask_seq::process($rm_gff_keepers, 
@@ -953,8 +972,8 @@ sub _go {
 						     );
       
 	    #-add repeats to GFF3
-	    my $uid = $chunk->number.':'.$self->id;
-	    $GFF3->add_repeat_hits($rm_keepers, $uid);
+	    my $uid = $chunk->number."_".$self->number;
+	    $GFF3_m->add_repeat_hits($rm_keepers, $uid);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -1104,10 +1123,10 @@ sub _go {
 
 	    #==ab initio predictions here
 	    #do masked predictions first
-	    my $id = ($CTL_OPT{_no_mask}) ? $safe_seq_id : $safe_seq_id.".masked";
+	    my $sid = ($CTL_OPT{_no_mask}) ? $safe_seq_id : $safe_seq_id.".masked";
 	    my $preds = GI::abinits($masked_file,
 				    $the_void,
-				    $id,
+				    $sid,
 				    \%CTL_OPT,
 				    $LOG,
 				    $unmasked_file #for genemark
@@ -1171,16 +1190,25 @@ sub _go {
 	       my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
 	       my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
 	       my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
+	       my $gff3_file = "$the_void/evidence_$order.gff";
 
 	       if(-f $section_file &&
+		  -f $gff3_file &&
 		  (-f $junction_start_file || $fchunk->is_first) &&
 		  (-f $junction_end_file || $fchunk->is_last)
 		 ){
 		  push(@{$VARS->{section_files}}, $section_file);
 		  push(@{$VARS->{section_files}}, $junction_start_file) if(!$fchunk->is_first);
 		  push(@{$VARS->{section_files}}, $junction_end_file) if(!$fchunk->is_last);
+		  push(@{$VARS->{gff3_files}}, $gff3_file);
 		  next;
 	       }
+
+	       my $GFF3_e = Dumper::GFF::GFFV3->new($gff3_file,
+						    '',
+						    $the_void
+						    );
+	       $GFF3_e->set_current_contig($VARS->{seq_id});
 
 	       #-get subset of predictions on each chunk
 	       my $preds_on_chunk = GI::get_preds_on_chunk($VARS->{preds},
@@ -1196,7 +1224,8 @@ sub _go {
 			   m_seq_obj    => $VARS->{m_seq_obj},
 			   q_seq_length => $VARS->{q_seq_length},
 			   GFF_DB       => $VARS->{GFF_DB},
-			   GFF3         => $VARS->{GFF3},
+			   GFF3_e       => $GFF3_e,
+			   gff3_file    => $gff3_file,
 			   LOG          => $VARS->{LOG},
 			   DS_CTL       => $VARS->{DS_CTL},
 			   CTL_OPT      => $VARS->{CTL_OPT},
@@ -1226,7 +1255,7 @@ sub _go {
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
             while (my $key = each %{$self->{RESULTS}}) {
-	       if($key eq 'section_files' || $key eq 'holdover_files'){
+	       if($key eq 'section_files' || $key eq 'holdover_files' || $key eq 'gff3_files'){
 		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
 	       }
 	       else{
@@ -1325,7 +1354,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+	    if(!$VARS->{res_dir} || !@{$VARS->{res_dir}}){
 		$next_level = 4;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -1557,7 +1586,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
-			GFF3
+			GFF3_e
 			LOG
 			CTL_OPT)
 		    );
@@ -1574,7 +1603,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish blastn hits with exonerate
 	    my $exonerate_e_data = [];
@@ -1626,9 +1655,9 @@ sub _go {
 						   1 #contiguity flag
 						   );
 
-	    my $uid = $chunk->number.':'.$self->id;
-	    $GFF3->add_phathits($blastn_keepers, $uid);
-	    $GFF3->add_phathits($exonerate_e_data, $uid);
+	    my $uid = $chunk->number."_".$self->number;
+	    $GFF3_e->add_phathits($blastn_keepers, $uid);
+	    $GFF3_e->add_phathits($exonerate_e_data, $uid);
 
 	    #blastn will be empty from this point on in the script if eukaryotic
 	    my $blastn_clusters = [];
@@ -1796,7 +1825,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+	    if(!$VARS->{res_dir} || !@{$VARS->{res_dir}}){
 		$next_level = 8;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -2019,7 +2048,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
-			GFF3
+			GFF3_e
 			LOG
 			CTL_OPT)
 		    );
@@ -2036,7 +2065,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish tblastx hits with exonerate
 	    my $exonerate_a_data = [];
@@ -2088,9 +2117,9 @@ sub _go {
 						    1 #contiguity flag
 						    );
 
-	    my $uid = $chunk->number.':'.$self->id;
-	    $GFF3->add_phathits($tblastx_keepers, $uid);
-	    $GFF3->add_phathits($exonerate_a_data, $uid);
+	    my $uid = $chunk->number."_".$self->number;
+	    $GFF3_e->add_phathits($tblastx_keepers, $uid);
+	    $GFF3_e->add_phathits($exonerate_a_data, $uid);
 
 	    my $tblastx_clusters = cluster::clean_and_cluster(10, $tblastx_keepers);
 	    my $exonerate_a_clusters = cluster::clean_and_cluster(10, $exonerate_a_data);
@@ -2253,7 +2282,7 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
-	    if(!$self->{RESULTS}->{res_dir} || !@{$self->{RESULTS}->{res_dir}}){
+	    if(!$VARS->{res_dir} || !@{$VARS->{res_dir}}){
 		$next_level = 12;
 	    }
 	    #-------------------------NEXT_LEVEL
@@ -2477,7 +2506,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
-			GFF3
+			GFF3_e
 			LOG
 			CTL_OPT)
 		    );
@@ -2494,7 +2523,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $LOG = $VARS->{LOG};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish blastx hits with exonerate
 	    my $exonerate_p_data = [];
@@ -2546,9 +2575,9 @@ sub _go {
 						   0 #contiguity flag
 						   );
 
-	    my $uid = $chunk->number.':'.$self->id;
-	    $GFF3->add_phathits($blastx_keepers, $uid);
-	    $GFF3->add_phathits($exonerate_p_data, $uid);
+	    my $uid = $chunk->number."_".$self->number;
+	    $GFF3_e->add_phathits($blastx_keepers, $uid);
+	    $GFF3_e->add_phathits($exonerate_p_data, $uid);
 
 	    #blastx will be empty from this point on in the script if eukaryotic
 	    my $blastx_clusters = cluster::clean_and_cluster(10, $blastx_keepers);
@@ -2650,7 +2679,7 @@ sub _go {
 			exonerate_a_data
 			exonerate_p_data
 			GFF_DB
-			GFF3
+			GFF3_e
 			LOG
 			CTL_OPT)
 		    );
@@ -2670,7 +2699,7 @@ sub _go {
 	    my $exonerate_a_data = $VARS->{exonerate_a_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
 	    my $GFF_DB = $VARS->{GFF_DB};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3_e = $VARS->{GFF3_e};
 	    my $LOG = $VARS->{LOG};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    
@@ -2681,43 +2710,44 @@ sub _go {
 	    my $model_gff_keepers = [];
 	    my $pred_gff_keepers = [];
 	    if ($CTL_OPT{go_gffdb}) {
-	       my $uid = $chunk->number.':'.$self->id;
+	       my $uid = $chunk->number."_".$self->number;
 
 	       #-protein evidence passthraough
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_obj,
 							      'protein'
 							      );
-	       $GFF3->add_phathits($prot_gff_keepers, $uid);
+	       $GFF3_e->add_phathits($prot_gff_keepers, $uid);
 
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							     $q_seq_obj,
 							     'est'
 							     );
-	       $GFF3->add_phathits($est_gff_keepers, $uid);
+	       $GFF3_e->add_phathits($est_gff_keepers, $uid);
 
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 								$q_seq_obj,
 								'altest'
 								);
-	       $GFF3->add_phathits($altest_gff_keepers, $uid);
+	       $GFF3_e->add_phathits($altest_gff_keepers, $uid);
 
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							       $q_seq_obj,
 							       'model'
 							       );
-	       #$GFF3->add_phathits($model_gff_keepers, $uid);
+	       #$GFF3_e->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_obj,
 							      'pred'
 							      );
-	       #$GFF3->add_phathits($pred_gff_keepers, $uid);
+	       #$GFF3_e->add_phathits($pred_gff_keepers, $uid);
 	    }
+	    $GFF3_e->finalize; #write_file
 
 	    #trim evidence down to size if specified
 	    my @sets = ($est_gff_keepers,
@@ -3499,10 +3529,9 @@ sub _go {
 	    my $scored_preds = $VARS->{scored_preds};
 	    my $GFF3 = $VARS->{GFF3};
 
-
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
-	    my $uid = $chunk->number.':'.$self->id;
+	    my $uid = $chunk->number."_".$self->number;
 	    $GFF3->add_genes($maker_anno);
 	    $GFF3->add_phathits($scored_preds, $uid);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
@@ -3572,6 +3601,7 @@ sub _go {
 			p_fastas
 			t_fastas
 			GFF3
+			gff3_files
 			DS_CTL
 			CTL_OPT
 			LOG
@@ -3589,6 +3619,7 @@ sub _go {
 	    my $p_fastas = $VARS->{p_fastas};
 	    my $t_fastas = $VARS->{t_fastas};
 	    my $GFF3 = $VARS->{GFF3};
+	    my $gff3_files = $VARS->{gff3_files};
 	    my $DS_CTL = $VARS->{DS_CTL};
 	    my $LOG = $VARS->{LOG};
 	    my $LOCK = $VARS->{LOCK};
@@ -3597,6 +3628,7 @@ sub _go {
 	    GI::write_p_and_t_fastas($p_fastas, $t_fastas, $safe_seq_id, $out_dir);
 	    
 	    #--- write GFF3 file
+	    $GFF3->merge($gff3_files);
 	    $GFF3->finalize();
 	    
 	    #--cleanup maker files created with each fasta sequence
@@ -3628,7 +3660,7 @@ sub _go {
    catch Error::Simple with{
       my $E = shift;
 
-      my $tag = ($flag eq 'run') ? 'handle' : 'throw';
+      my $tag = 'handle';
 
       $self->_handler($E, $level_status, $tag);
    };
@@ -3678,10 +3710,13 @@ sub _on_termination {
    }
    elsif($tier_type == 1){
       $tier->{RESULTS}->{chunk} = $tier->{VARS}{chunk};
+      $tier->{RESULTS}->{GFF3_m} = $tier->{VARS}{GFF3_m};
+      $tier->{RESULTS}->{gff3_files} = [$tier->{VARS}{gff3_file}];
    }
    elsif($tier_type == 2){
       $tier->{RESULTS}->{holdover_files} = $tier->{VARS}{holdover_files};
       $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
+      $tier->{RESULTS}->{gff3_files} = [$tier->{VARS}{gff3_file}];
    }
    elsif($tier_type == 3){
       $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
@@ -3800,6 +3835,16 @@ sub id {
    }
 
    return $self->{ID};
+}
+#--------------------------------------------------------------
+#returns the chunks number if part of a group
+sub number {
+   my $self = shift;
+   my $arg = shift;
+
+   my ($num) = $self->{ID} =~ /\:(\d+)$/;
+
+   return $num;
 }
 #--------------------------------------------------------------
 #returns the chunks rank

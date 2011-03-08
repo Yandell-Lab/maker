@@ -16,8 +16,8 @@ use warnings;
 use base qw(CGI::Application);
 use CGI::Application::Plugin::DBH (qw/dbh_config dbh/);
 use CGI::Application::Plugin::TT;
-use CGI::Application::Plugin::DevPopup;
-use CGI::Application::Plugin::DevPopup::HTTPHeaders;
+#use CGI::Application::Plugin::DevPopup;
+#use CGI::Application::Plugin::DevPopup::HTTPHeaders;
 use CGI::Application::Plugin::Redirect;
 use CGI::Application::Plugin::Stream (qw/stream_file/);
 
@@ -133,11 +133,23 @@ sub stream {
     #send file for requested file type
     if($type eq 'log'){
 	#-return the contents of the MAKER produced STDERR log file
-
 	return if(! $job_info || ! $user_id || $user_id != $job_info->{user_id});
 	my $file = "$data_dir/jobs/$job_id/job.log";
 
-	return $self->_stream($file) if(-e $file);
+	return '' if(! -e $file);
+
+	my $name = "job_$job_id.log";
+	my $new = "$html_dir/users/$user_id/$name";
+
+	my $url = ($html_web =~ /http\:\/\//) ?
+        "$html_web/users/$user_id/$name" :
+        "$web_address/$html_web/users/$user_id/$name";
+
+	File::Path::mkpath("$html_dir/users/$user_id/");
+
+	symlink($file, $new);
+
+	return $self->redirect($url);
     }
     elsif($type eq 'tarball'){
 	#-returns the tarball of MAKER results
@@ -171,7 +183,7 @@ sub stream {
 	my $new = "$html_dir/users/$user_id/$name";
 
 	my $url = ($html_web =~ /http\:\/\//) ?
-        "$html_web/users/$user_id/$new" :
+        "$html_web/users/$user_id/$name" :
         "$web_address/$html_web/users/$user_id/$name";
 
 	File::Path::mkpath("$html_dir/users/$user_id/");

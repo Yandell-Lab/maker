@@ -22,8 +22,8 @@ use CGI::Application::Plugin::Authentication;
 use CGI::Application::Plugin::CAPTCHA;
 use CGI::Application::Plugin::DBH (qw/dbh_config dbh/);
 use CGI::Application::Plugin::TT;
-use CGI::Application::Plugin::DevPopup;
-use CGI::Application::Plugin::DevPopup::HTTPHeaders;
+#use CGI::Application::Plugin::DevPopup;
+#use CGI::Application::Plugin::DevPopup::HTTPHeaders;
 use CGI::Application::Plugin::Redirect;
 use LWP::UserAgent;
 
@@ -870,12 +870,6 @@ sub job_create {
        ($old_id) = $self->dbh->selectrow_array(qq{SELECT old_id FROM jobs WHERE job_id=$job_id});
    }
 
-   #build predictor hash
-   my @predictors = split(",", $LOG_OPT{predictor});
-   my %preds;
-   @preds{@predictors} = map {1} @predictors;
-   $LOG_OPT{predictor_hash} = \%preds;
-   
    #reserve new job id value if needed (tutorials are started with new job_id)
    if(! $job_id || $job->{is_tutorial} || $job->{is_started}){
        ($job_id) = $self->dbh->selectrow_array(qq{SELECT last_job_id FROM id_store}); #get last job_id
@@ -981,25 +975,10 @@ sub submit_to_db {
    }
 
    #evaluate checkboxes
+   $CTL_OPT{est2genome} = ($q->param('est2genome')) ? 1 : 0;
+   $CTL_OPT{protein2genome} = 1 if(! $q->param('est2genome'));
    $CTL_OPT{repeat_protein} = '' if(! $q->param('go_runner'));
    $CTL_OPT{model_org} = '' if(! $q->param('go_masker'));
-   $CTL_OPT{snaphmm} = '' if(! $q->param('go_snap'));
-   $CTL_OPT{gmhmm} = '' if(! $q->param('go_genemark'));
-   $CTL_OPT{fgenesh_par_file} = '' if(! $q->param('go_fgenesh'));
-   $CTL_OPT{augustus_species} = '' if(! $q->param('go_augustus'));
-
-   #build predictors
-   my @predictors = ($q->param('go_snap'),
-		     $q->param('go_augustus'),
-		     $q->param('go_fgenesh'),
-		     $q->param('go_genemark'),
-		     $q->param('est2genome'),
-		     $q->param('protein2genome')
-		     );
-   @predictors = grep {$_} @predictors;
-   push(@predictors, 'model_gff') if($CTL_OPT{model_gff});
-   push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff});
-   $CTL_OPT{predictor} = join(",", @predictors);
 
    #get length of fasta file from db
    my $length = $self->get_length_for_value($CTL_OPT{genome});

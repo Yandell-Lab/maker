@@ -5,7 +5,7 @@ package FastaSeq;
 use strict;
 use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 use Exporter;
-use Bio::PrimarySeqI;
+use Bio::DB::Fasta;
 use GI;
 
 @ISA = qw(Bio::PrimarySeq::Fasta Exporter);

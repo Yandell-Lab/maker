@@ -127,6 +127,11 @@ function ToggleFloatingLayer(DivID, iState) // 1 visible, 0 hidden
         }
         document.all[DivID].style.visibility = iState ? "visible" : "hidden";
     }
+
+    if(iState == 0)
+    {
+        document.getElementById("floating_content_area").innerHTML = "";
+    }
 }
 
 function resize(big)
@@ -193,7 +198,7 @@ document.getElementById(DivID).innerHTML = 'Loading...';
             </td>
             <td style="cursor:hand" valign="top" align="right"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="black" size="2" face="arial" style="text-decoration:none">X</font></a></td>
           </tr>
-          <tr> 
+          <tr>
             <td width="100%" height="180" valign="top" bgcolor="#FFFFFF" style="padding:4px" colspan="2" id="content_table">
               <div id="floating_content_area" style="overflow:auto"> 
                 <!-- place your HTML content here-->

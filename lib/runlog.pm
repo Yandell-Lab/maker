@@ -270,12 +270,23 @@ sub _load_old_log {
 	    $self->{die_count} = 0; #reset the die count
 	    $continue_flag = 1; #re-run	    
 	}
-	elsif ($logged_vals{DIED}) {
+	elsif($logged_vals{DIED}) {
 	    $continue_flag = ($CTL_OPT{clean_try}) ? 2 : 3;	#rerun died
-	    $continue_flag = -1 if($self->{die_count} > $CTL_OPT{retry}); #only let die up to count
+	    $continue_flag = -1 if($self->{die_count} >= $CTL_OPT{tries}); #only let die up to count
 	    $continue_flag = -4 if($shared && $continue_flag == -1);
 	    $rm_key{force}++ if($continue_flag == 2);	    
 	}
+
+        #already belongs to another process
+        if($continue_flag == -3 || $continue_flag == 4){
+              $self->{continue_flag} = $continue_flag;
+              return;
+        }
+
+        #set to never try, so just let it init, cleanup, and then stop
+        if($CTL_OPT{tries} == 0 && $continue_flag != 0){
+             $continue_flag = -1;
+        }
 
 	my %skip;
 	if(!$rm_key{force}){
@@ -732,7 +743,9 @@ sub _load_old_log {
 		push (@files, @{[<$out_base/*.fasta>]});
 		push (@files, @{[<$the_void/*.holdover>]});
 		push (@files, @{[<$the_void/*.section>]});
+		push (@files, @{[<$the_void/evidence_*.gff>]});
 		push (@files, "$the_void/query.masked.fasta");
+		push (@files, "$the_void/query.masked.gff");
 		push (@dirs, "$out_base/evaluator");
 	    }
 	    else{
@@ -762,6 +775,11 @@ sub _load_old_log {
 	}    
     }
 
+    #just let it run init/cleanup and then stop
+    if($self->{CTL_OPT}->{tries} == 0 && $continue_flag != 0){
+        $self->{continue_flag} = -1;
+    }
+
     $self->{continue_flag} = $continue_flag;
 }
 #-------------------------------------------------------------------------------
@@ -776,10 +794,10 @@ sub _write_new_log {
    my $log_file = $self->{file_name};   
    my %CTL_OPT = %{$self->{CTL_OPT}};
    
-   open (LOG, "> $log_file");
+   open (my $LOG, "> $log_file");
    
    #log control file options
-   print LOG "SHARED_ID\t$CTL_OPT{_shared_id}\t\n";
+   print $LOG "SHARED_ID\t$CTL_OPT{_shared_id}\t\n";
    foreach my $key (@ctl_to_log) {
        my $ctl_val = '';
        if(defined $CTL_OPT{$key}){
@@ -791,10 +809,11 @@ sub _write_new_log {
 	       $ctl_val =~ s/[^\,]+\/data\/(te_proteins.fasta)(\,|\:|$)/$1$2/;
 	   }
        }	  
-       print LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
+       print $LOG "CTL_OPTIONS\t$key\t$ctl_val\n";
    }
-   $self->add_entry("DIED","COUNT",$self->get_die_count()) if($self->{continue_flag} == -1);
-   close(LOG);      
+   print $LOG join("\t", "DIED","COUNT",$self->get_die_count)."\n"
+       if($self->{continue_flag} == -1 && $self->get_die_count);
+   close($LOG);      
 }
 #-------------------------------------------------------------------------------
 #sets a log child to hold values seperate from the whole log
@@ -854,19 +873,20 @@ sub add_entry {
 sub get_die_count {
    my $self = shift;
 
-   return $self->{die_count};
+   return $self->{die_count} || 0;
 }
 #-------------------------------------------------------------------------------
 sub report_status {
    my $self = shift;
    my $flag = $self->{continue_flag};
-   my $die_count = $self->{die_count};
+   my $die_count = $self->get_die_count;
    my $seq_id = $self->{params}->{seq_id};
    my $seq_out_name = Fasta::seqID2SafeID($seq_id);
    my $out_dir = $self->{params}->{out_dir};
    my $the_void = $self->{params}->{the_void};
    my $length = $self->{params}->{seq_length};
-   my $CTL_OPT = $self->{params}->{CTL_OPT};
+   my $CTL_OPT = $self->{CTL_OPT};
+   my $tries = $die_count + 1;
 
    #maintain lock only if status id positive (possible race condition?)
    $self->{LOCK}->maintain(30) if($flag > 0);
@@ -895,7 +915,7 @@ sub report_status {
                    "All contig related data will be erased before continuing!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
-		   "Retry: $die_count!!\n",
+		   "Tries: $tries!!\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::qq);
    }
@@ -904,13 +924,13 @@ sub report_status {
                    "Now retrying the contig!!\n",
 		   "SeqID: $seq_id\n",
                    "Length: $length\n",
-		   "Retry: $die_count!!\n",
+		   "Tries: $tries!!\n",
                    "#---------------------------------------------------------------------\n\n\n"
 		       unless($main::qq);
    }
    elsif($flag == -1){
       print STDERR "#---------------------------------------------------------------------\n",
-                   "The contig failed $die_count time!!\n",
+                   "The contig failed $die_count times!!\n",
 		   "Maker will not try again!!\n",
 		   "The contig will be stored in a fasta file that you can use for debugging.\n",
 		   "SeqID: $seq_id\n",
