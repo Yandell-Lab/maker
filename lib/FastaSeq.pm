@@ -25,6 +25,14 @@ sub new {
 	bless($self, $class);
 
 	return $self;
+
+}
+#-------------------------------------------------------------------------------
+#override native method because it is so slow
+sub length {
+   my $self = shift;
+
+   return ($self->{stop} - $self->{start}) + 1;
 }
 #-------------------------------------------------------------------------------
 sub convert {

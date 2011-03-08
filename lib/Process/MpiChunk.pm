@@ -707,6 +707,7 @@ sub _go {
 			q_seq_obj
 			the_void
 			safe_seq_id
+			q_seq_length
 			GFF_DB
 			LOG
 			CTL_OPT)
@@ -722,13 +723,15 @@ sub _go {
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $q_seq_length = $VARS->{q_seq_length};
 
 	    #-- repeatmask with gff3 input
 	    my $rm_gff_keepers = [];
 	    if ($CTL_OPT{go_gffdb}) {
 	       $rm_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							    $q_seq_obj,
-							    'repeat'
+							    'repeat',
+							    $q_seq_length
 							   );
 	       #mask the chunk
 	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_gff_keepers)
@@ -2671,6 +2674,7 @@ sub _go {
                         the_void
 			safe_seq_id
                         q_seq_obj
+                        q_seq_length
 			preds_on_chunk
 			blastn_keepers
 			blastx_keepers
@@ -2691,6 +2695,7 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $preds_on_chunk = $VARS->{preds_on_chunk};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
@@ -2710,40 +2715,48 @@ sub _go {
 	    my $model_gff_keepers = [];
 	    my $pred_gff_keepers = [];
 	    if ($CTL_OPT{go_gffdb}) {
+	       print STDERR "Gathering GFF3 input into hits - chunk:".$chunk->number."\n"
+		   unless($main::quiet);
+
 	       my $uid = $chunk->number."_".$self->number;
 
 	       #-protein evidence passthraough
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_obj,
-							      'protein'
+							      'protein',
+							      $q_seq_length
 							      );
 	       $GFF3_e->add_phathits($prot_gff_keepers, $uid);
 
 	       #-est evidence passthrough
 	       $est_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							     $q_seq_obj,
-							     'est'
+							     'est',
+                                                              $q_seq_length
 							     );
 	       $GFF3_e->add_phathits($est_gff_keepers, $uid);
 
 	       #-altest evidence passthrough
 	       $altest_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 								$q_seq_obj,
-								'altest'
+								'altest',
+								$q_seq_length
 								);
 	       $GFF3_e->add_phathits($altest_gff_keepers, $uid);
 
 	       #-gff gene annotation passthrough here
 	       $model_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							       $q_seq_obj,
-							       'model'
+							       'model',
+							       $q_seq_length
 							       );
 	       #$GFF3_e->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
 							      $q_seq_obj,
-							      'pred'
+							      'pred',
+                                                              $q_seq_length
 							      );
 	       #$GFF3_e->add_phathits($pred_gff_keepers, $uid);
 	    }

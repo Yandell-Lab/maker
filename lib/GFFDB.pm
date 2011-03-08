@@ -168,7 +168,7 @@ sub add_maker {
 	    
 	    if($source ne $o_source){
 		$dbh->do(qq{DROP TABLE $table});
-		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+		$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, parent TEXT, start INT, end INT, line TEXT)});
 		$dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
 		}
 	    else{
@@ -176,7 +176,7 @@ sub add_maker {
 	    }
 	}
 	else{
-	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, parent TEXT, start INT, end INT, line TEXT)});
 	    $dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
 	}
     }
@@ -202,55 +202,67 @@ sub add_maker {
 	    next if ($line =~ /^\s*$/);
 	    next if ($line =~ /^\#/);
 	    
-	    my $l = $self->_parse_line(\$line);
+	    #for line with multiple parents
+	    my ($parent) = $line =~ /Parent=([^\;\n]+)/;
+	    my @parents = split(",", $parent);
 	    
-	    my $table;
-	    if($l->{source} =~ /^repeatmasker$|^blastx\:repeat|^repeat_gff\:/i){
-		next if (! $codes{rm_pass});
-		next if ($skip{repeat_maker});
-		$table = 'repeat_maker';
+	    my @lines;
+	    foreach my $p (@parents){
+	       $line =~ s/Parent=[^\;\n]+/Parent=$p/;
+	       push(@lines, $line);
 	    }
-	    elsif($l->{source} =~ /^blastn$|^est2genome$|^est_gff\:/i){
-		next if (! $codes{est_pass});
-		next if ($skip{est_maker});
-		$table = 'est_maker';
-	    }
-	    elsif($l->{source} =~ /^tblastx$|^altest_gff\:/i){
-		next if (! $codes{altest_pass});
-		next if ($skip{altest_maker});
-		$table = 'altest_maker';
-	    }
-	    elsif($l->{source} =~ /^blastx$|^protein2genome$|^protein_gff\:/i){
-		next if (! $codes{protein_pass});
-		next if ($skip{protein_maker});
-		$table = 'protein_maker';
-	    }
-	    elsif($l->{source} =~ /^snap\_*|^augustus\_*|^twinscan\_*|^fgenesh\_*|^genemark\_*|^pred_gff\:/i){
-		next if (! $codes{pred_pass});
-		next if ($skip{pred_maker});
-		$table = 'pred_maker';
-	    }
-	    elsif($l->{source} =~ /^maker$|^model_gff\:/i){
-		next if (! $codes{model_pass});
-		next if ($skip{model_maker});
-		$table = 'model_maker';
-	    }
-	    elsif($l->{source} =~/^\.$/){
-		next;  #this is just the contig line
-	    }
-	    else{
-		next if (! $codes{other_pass});
-		next if ($skip{other_maker});
-		$table = 'other_maker';
-	    }
-	    
-	    $self->_add_to_db($dbh, $table, $l);
-	    if($count == 10000){ #commit every 10000 entries
-		$dbh->commit;
-		$count = 0;
-		}
-	    else{
-		$count++;
+	    push(@lines, $line) if(!@lines);
+
+	    foreach my $ln (@lines){
+	       my $l = $self->_parse_line(\$ln);
+	       my $table;
+	       if($l->{source} =~ /^repeatmasker|^blastx\:repeat|^repeatrunner|^repeat_gff\:/i){
+		  next if (! $codes{rm_pass});
+		  next if ($skip{repeat_maker});
+		  $table = 'repeat_maker';
+	       }
+	       elsif($l->{source} =~ /^blastn|^est2genome|^est_gff\:/i){
+		  next if (! $codes{est_pass});
+		  next if ($skip{est_maker});
+		  $table = 'est_maker';
+	       }
+	       elsif($l->{source} =~ /^tblastx|^altest_gff\:/i){
+		  next if (! $codes{altest_pass});
+		  next if ($skip{altest_maker});
+		  $table = 'altest_maker';
+	       }
+	       elsif($l->{source} =~ /^blastx|^protein2genome|^protein_gff\:/i){
+		  next if (! $codes{protein_pass});
+		  next if ($skip{protein_maker});
+		  $table = 'protein_maker';
+	       }
+	       elsif($l->{source} =~ /^snap\_?|^augustus\_?|^fgenesh\_*?|^genemark\_?|^pred_gff\:/i){
+		  next if (! $codes{pred_pass});
+		  next if ($skip{pred_maker});
+		  $table = 'pred_maker';
+	       }
+	       elsif($l->{source} =~ /^maker|^model_gff\:/i){
+		  next if (! $codes{model_pass});
+		  next if ($skip{model_maker});
+		  $table = 'model_maker';
+	       }
+	       elsif($l->{source} =~/^\.$/){
+		  next;  #this is just the contig line
+	       }
+	       else{
+		  next if (! $codes{other_pass});
+		  next if ($skip{other_maker});
+		  $table = 'other_maker';
+	       }
+	       
+	       $self->_add_to_db($dbh, $table, $l);
+	       if($count == 10000){ #commit every 10000 entries
+		  $dbh->commit;
+		  $count = 0;
+	       }
+	       else{
+		  $count++;
+	       }
 	    }
 	}
 	close($IN);
@@ -341,7 +353,7 @@ sub _add_type {
 	if($source ne $o_source){
 	    my ($index) = $dbh->selectrow_array(qq{SELECT name FROM sqlite_master WHERE name = '$table\_inx'});
 	    $dbh->do(qq{DROP TABLE $table});
-	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	    $dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, parent TEXT, start INT, end INT, line TEXT)});
 	    $dbh->do(qq{UPDATE sources SET source = '$source' WHERE name = '$table'});
 	}
 	else{
@@ -349,7 +361,7 @@ sub _add_type {
 	}
     }
     else{
-	$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, start INT, end INT, line TEXT)});
+	$dbh->do(qq{CREATE TABLE $table (seqid TEXT, source TEXT, parent TEXT, start INT, end INT, line TEXT)});
 	$dbh->do(qq{INSERT INTO sources (name, source) VALUES ('$table', '$source')});
     }
     
@@ -365,15 +377,28 @@ sub _add_type {
 	    next if ($line =~ /^\s*$/);
 	    next if ($line =~ /^\#/);
 	    
-	    my $l = $self->_parse_line(\$line, $table);
-	    $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
+	    #for line with multiple parents
+	    my ($parent) = $line =~ /Parent=([^\;\n]+)/;
+	    my @parents = split(",", $parent);
 	    
-	    if($count == 10000){ #commit every 10000 entries
-		$dbh->commit;
-		$count = 0;
+	    my @lines;
+	    foreach my $p (@parents){
+	       $line =~ s/Parent=[^\;\n]+/Parent=$p/;
+	       push(@lines, $line);
 	    }
-	    else{
-		$count++;
+	    push(@lines, $line) if(!@lines);
+
+	    foreach my $ln (@lines){
+	       my $l = $self->_parse_line(\$ln, $table);
+	       $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
+	    
+	       if($count == 10000){ #commit every 10000 entries
+		  $dbh->commit;
+		  $count = 0;
+	       }
+	       else{
+		  $count++;
+	       }
 	    }
 	}
 	close($IN);
@@ -398,9 +423,11 @@ sub _parse_line{
 
     $data[1] = "$tag:$data[1]" if($tag && $data[1] !~ /^$tag\:/);
     $data[6] = '+' if($data[6] =~ /^\.$|^0$/); #fixes some repeat entries
+    my ($parent) = $data[8] =~ /Parent=([^\n\;]+)/;
 
     my %l = (seqid  => $data[0],
 	     source => $data[1],
+	     parent => ($parent || '.'),
 	     type   => $data[2], 
 	     start  => $data[3], 
 	     end    => $data[4], 
@@ -416,8 +443,8 @@ sub _add_to_db {
     my $table = shift;
     my $l = shift;
 
-    $dbh->do("INSERT INTO $table (seqid, source, start, end, line) ".
-	     "VALUES (\'".$l->{seqid}."\', \'".$l->{source}."\', ".
+    $dbh->do("INSERT INTO $table (seqid, source, parent, start, end, line) ".
+	     "VALUES (\'".$l->{seqid}."\', \'".$l->{source}."\', \'".$l->{parent}."\', ".
 	     $l->{start}.", ".$l->{end}.", \'".$l->{line}."\')"
 	    );
 }
@@ -427,13 +454,14 @@ sub phathits_on_chunk {
     my $chunk = shift;
     my $seq = shift;
     my $h_type = shift;
+    my $seq_len = shift || length_o($seq); #sometimes slow step
 
     return [] unless($self->{go_gffdb});
     
     my $dbfile = $self->{dbfile};
 
-    my $c_start = $chunk->offset + 1;
-    my $c_end = $chunk->offset + $chunk->length;
+    my $c_start = $chunk->start;
+    my $c_end = $chunk->end;
     my $seqid = $chunk->seqid;
 
     my $ref1 = [];
@@ -445,12 +473,74 @@ sub phathits_on_chunk {
     
     #get gff annotations
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
-    }
+	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					 qq{WHERE seqid = '$seqid' }.
+					 qq{AND start BETWEEN $c_start AND $c_end }.
+					 qq{AND parent = '.' });
+	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$seqid[\;\n]/} @$ref1; #removes contig/chromosome
+	
+	my %IDs;
+	foreach my $row (@$ref1){
+	   my $line = $row->[0];
+	   if($line =~ /ID=([^\;\n]+)/){
+	      $IDs{$1}++;
+	   }
+	}
+	my @check = keys %IDs;
+
+	while(@check){
+	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
+	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					      qq{WHERE seqid = '$seqid' }.
+					      qq{AND ( $dsn )});
+	   
+	   push(@$ref1, @$ref);
+
+	   %IDs = ();
+	   foreach my $row (@$ref){
+	      my $line = $row->[0];
+	      if($line =~ /ID=([^\;\n]+)/){
+		 $IDs{$1}++;
+	      }
+	   }
+	   @check = keys %IDs;
+	}
+     }
     
     #get maker annotations
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					 qq{WHERE seqid = '$seqid' }.
+					 qq{AND start BETWEEN $c_start AND $c_end }.
+					 qq{AND parent = '.' });
+	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$seqid[\;\n]/} @$ref2; #removes contig/chromosome
+
+	my %IDs;
+	foreach my $row (@$ref2){
+	   my $line = $row->[0];
+	   if($line =~ /ID=([^\;\n]+)/){
+	      $IDs{$1}++;
+	   }
+	}
+	my @check = keys %IDs;
+
+	while(@check){
+	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
+	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					      qq{WHERE seqid = '$seqid' }.
+					      qq{AND ( $dsn )});
+	   
+	   push(@$ref2, @$ref);
+
+	   %IDs = ();
+	   foreach my $row (@$ref){
+	      my $line = $row->[0];
+	      if($line =~ /ID=([^\;\n]+)/){
+		 $IDs{$1}++;
+	      }
+	   }
+	   @check = keys %IDs;
+	}
     }
     
     $dbh->disconnect;
@@ -459,23 +549,23 @@ sub phathits_on_chunk {
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq);
+	$structs = _get_genes($features, $seq, $seq_len);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_genes($features, $seq);
-	my $structs2 = _get_structs($features, $seq);
+	$structs = _get_genes($features, $seq, $seq_len);
+	my $structs2 = _get_structs($features, $seq, $seq_len);
 	push(@$structs, @$structs2); 
     }
     elsif($h_type eq 'other'){
@@ -488,7 +578,7 @@ sub phathits_on_chunk {
     my @phat_hits;    
     foreach my $s (@{$structs}){
 	next unless ($c_start <= $s->{start} && $s->{start} <= $c_end);
-	push(@phat_hits, @{_load_hits($s, $seq)});
+	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
     }
 
     return \@phat_hits;
@@ -499,6 +589,7 @@ sub phathits_on_contig {
     my $seqid = shift;
     my $seq = shift;
     my $h_type = shift;
+    my $seq_len = shift || length_o($seq); #sometimes slow step
 
     return [] unless($self->{go_gffdb});
 
@@ -526,35 +617,35 @@ sub phathits_on_contig {
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq);
+	$structs = _get_genes($features, $seq, $seq_len);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_structs($features, $seq);
-	my $structs2 = _get_genes($features, $seq);
+	$structs = _get_structs($features, $seq, $seq_len);
+	my $structs2 = _get_genes($features, $seq, $seq_len);
 	push(@{$structs}, @{$structs2});
     }
     elsif($h_type eq 'other'){
 	die "ERROR: Can not build phathits for type: \'other\'\n";
     }
     else{
-	die "ERROR: no recognized type in GFFDB::phathits_on_chunk\n";
+	die "ERROR: no recognized type in GFFDB::phathits_on_contig\n";
     }
     
     my @phat_hits;    
     foreach my $s (@{$structs}){
-	push(@phat_hits, @{_load_hits($s, $seq)});
+	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
     }
     
     return \@phat_hits;
@@ -707,7 +798,8 @@ sub _ary_to_features{
 sub _load_hits {
     my $g   = shift;
     my $seq = shift;
-        
+    my $seq_len = shift || length_o($seq);
+
     my $gene_id   = $g->{id};
     my $gene_name = $g->{name};
 
@@ -784,7 +876,7 @@ sub _load_hits {
 	    if($t_offset != -1){ #only happens on bad CDS entries
 		$f->{translation_offset} = $t_offset;
 		$f->{translation_end}    = $t_end;
-		my $cdss = _load_cdss($t, $seq);
+		my $cdss = _load_cdss($t, $seq, $seq_len);
 		$f->{cdss} = $cdss;
 	    }
 	    else{
@@ -794,9 +886,9 @@ sub _load_hits {
 	    }
 	}
 
-	$f->{seq} = $t->{seq};
+	#$f->{seq} = $t->{seq};
 
-	my $hsps = _load_hsps($t, $seq);
+	my $hsps = _load_hsps($t, $seq, $seq_len);
 
 	foreach my $hsp (@{$hsps}){
 	    $f->add_hsp($hsp);
@@ -826,6 +918,7 @@ sub _get_t_offset_and_end {
 sub _load_cdss {
     my $t   = shift;
     my $seq = shift;
+    my $seq_len = shift || length_o($seq);
 
     my @hsps;
     my $hit_start = 1;
@@ -891,7 +984,7 @@ sub _load_cdss {
 	push(@args, 0.0);
 	
 	push(@args, '-query_length');
-	push(@args, length_o($seq));
+	push(@args, $seq_len);
 
 	push(@args, '-query_end');
 	push(@args, $e->{f}->end);
@@ -936,6 +1029,7 @@ sub _load_cdss {
 sub _load_hsps {
     my $t   = shift;
     my $seq = shift;
+    my $seq_len = shift || length_o($seq);
 
     my @hsps;
     my $hit_start = 1;
@@ -1052,7 +1146,7 @@ sub _load_hsps {
 	push(@args, 0.0);
 	
 	push(@args, '-query_length');
-	push(@args, length_o($seq));
+	push(@args, $seq_len);
 
 	push(@args, '-query_end');
 	push(@args, $e->{f}->end);
@@ -1119,6 +1213,7 @@ sub _load_hsps {
 sub _get_genes {
     my $features = shift;
     my $seq    = shift;
+    my $seq_len = shift || length_o($seq);
 
     my $exons = _grab(['exon'], $features);
     my $cdss  = _grab(['CDS'],  $features);
@@ -1171,7 +1266,7 @@ sub _get_genes {
 	push @valid_genes, $gene if _validate_gene($gene);
     }
 
-    _load_seqs(\@valid_genes, $seq);
+    _load_seqs(\@valid_genes, $seq, $seq_len);
 
     return (\@valid_genes);
 }
@@ -1251,6 +1346,7 @@ sub _fix_wormbase {
 sub _get_structs {
     my $features = shift;
     my $seq    = shift;
+    my $seq_len = shift || length_o($seq);
 
     my @bases;
     my %index;
@@ -1309,7 +1405,7 @@ sub _get_structs {
 	     );
     }
 
-    _load_seqs(\@genes, $seq);
+    _load_seqs(\@genes, $seq, $seq_len);
 
     return (\@genes);
 }
@@ -1448,21 +1544,14 @@ sub _validate_gene {
 sub _get_gene_seq {
     my $g   = shift;
     my $seq = shift;
+    my $seq_len = shift || length_o($seq);
 
     my $g_b = $g->{f}->start();
     my $g_e = $g->{f}->end();
 
     my ($src_s, $src_e);
-    if (($g_b - 1) < 0){
-	$src_s = 1;
-	my $len = length_o($seq);
-	$src_e = $g_e > $len ? $len : $g_e; 
-    }
-    else {
-	$src_s = $g_b;
-	my $len = length_o($seq);
-	$src_e = $g_e > $len ? $len : $g_e; 
-    } 
+    $src_s = (($g_b - 1) < 0) ? 1 : $g_b;
+    $src_e = ($g_e > $seq_len) ? $seq_len : $g_e; 
 
     my $g_seq = substr_o($seq, $src_s-1, abs($src_e-$src_s)+1);
 
@@ -1472,9 +1561,10 @@ sub _get_gene_seq {
 sub _load_seqs {
     my $genes = shift;
     my $seq   = shift;
-    
+    my $seq_len = shift || length_o($seq);
+
     foreach my $g (@{$genes}){
-	my ($g_seg_seq, $src_start, $src_end) = _get_gene_seq($g, $seq);
+	my ($g_seg_seq, $src_start, $src_end) = _get_gene_seq($g, $seq, $seq_len);
 	
 	$g->{seq}     = $g_seg_seq;
 	$g->{src_s}   = $src_start;

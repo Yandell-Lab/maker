@@ -373,7 +373,8 @@ if ($rank == $root) {
     my $DS_CTL;
     my $GFF_DB;
     my $build;
-    
+    my $g_index;
+
     try{
 	#get arguments off the command line
 	my @ctlfiles = @ARGV;
@@ -400,7 +401,6 @@ if ($rank == $root) {
 	
 	#set up control options from control files
 	%CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-	my $g_index; #index of genome fasta
 	
 	#--send control files to all nodes
 	if($size > 1){
