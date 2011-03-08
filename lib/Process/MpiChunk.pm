@@ -3673,7 +3673,7 @@ sub _go {
    catch Error::Simple with{
       my $E = shift;
 
-      my $tag = 'handle';
+      my $tag = ($tag eq 'run') ? 'handle' : 'throw';
 
       $self->_handler($E, $level_status, $tag);
    };

@@ -401,8 +401,16 @@ sub _load_extra {
 
       #sort to specified order if any
       my $all = $self->{LEVEL}{ALL};
-      $all->{CHUNKS} = $self->{CHUNK_REF}->_sort_levels($all->{CHUNKS}, $level, $tier_type, $self)
-	if($self->{CHUNK_REF}->can('_sort_levels'));
+      
+      try{
+	  $all->{CHUNKS} = $self->{CHUNK_REF}->_sort_levels($all->{CHUNKS}, $level, $tier_type, $self)
+	      if($self->{CHUNK_REF}->can('_sort_levels'));
+      }
+      catch Error::Simple with {
+	  my $E = shift;
+	  
+	  $self->_handler($E, 'Failed sorting levels');
+      }
    }
 }
 #--------------------------------------------------------------
@@ -471,7 +479,15 @@ sub _result{
    $self->{CHUNK_REF}->{FINISHED} = 1;
 
    #run result in CHUNK_REF
-   my $stat = $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
+   my $stat;
+   try{
+       $stat = $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
+   }
+   catch Error::Simple with {
+       my $E = shift;
+       
+       $self->_handler($E, 'Failed gathering tier as chunk result');
+   }
 
    #clear memory
    $self->{CHUNK_REF}->{RESULTS} = {};
