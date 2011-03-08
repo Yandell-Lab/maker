@@ -6,11 +6,12 @@ use strict;
 use warnings;
 use POSIX;
 use Config;
-use FindBin;
 use DynaLoader;
 use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
+use vars qw($BIN);
+use Cwd ();
 
 BEGIN{
     #prepare correct version of Module Build for building everything
@@ -22,22 +23,23 @@ BEGIN{
     chomp $Installed_MB;
     $Installed_MB = 0 if $?;
 
+    $BIN = Cwd::cwd();
     if (! $ENV{CGL_SO_SOURCE}) {
-	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
-	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../../lib/CGL/so.obo"
+	$ENV{CGL_SO_SOURCE} = "$BIN/../lib/CGL/so.obo";
+	$ENV{CGL_SO_SOURCE} = "$BIN/../../lib/CGL/so.obo"
 	    if(! -f $ENV{CGL_SO_SOURCE});
     }
     if (! $ENV{CGL_GO_SOURCE}) {
-	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo";
-	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../../lib/CGL/gene_ontology.obo"
+	$ENV{CGL_GO_SOURCE} = "$BIN/../lib/CGL/gene_ontology.obo";
+	$ENV{CGL_GO_SOURCE} = "$BIN/../../lib/CGL/gene_ontology.obo"
 	    if(! -f $ENV{CGL_GO_SOURCE});
     }
 
     # Use the bundled copy of Module::Build if it's newer than the installed.
     if ($Bundled_MB > $Installed_MB){
-	unshift @INC, "$FindBin::Bin/inc/bundle" unless($INC[0] eq "$FindBin::Bin/inc/bundle");
+	unshift @INC, "$BIN/inc/bundle" unless($INC[0] eq "$BIN/inc/bundle");
 	my $PERL5LIB = $ENV{PERL5LIB} || '';
-	$PERL5LIB = "$FindBin::Bin/inc/bundle:$PERL5LIB";
+	$PERL5LIB = "$BIN/inc/bundle:$PERL5LIB";
 	$ENV{PERL5LIB} = $PERL5LIB;
     }
 
@@ -306,7 +308,7 @@ sub ACTION_build {
 	$self->log_info("\n==============================================================================\n".
 			"Finished configuring MWAS settings. You can later change these\n".
 			"settings and others by editing the MWAS configuration files:\n".
-			"     --> $FindBin::Bin/../MWAS/config/*.ctl\n".
+			"     --> $BIN/../MWAS/config/*.ctl\n".
 			"\n==============================================================================\n\n");
     }
 }
@@ -1331,7 +1333,7 @@ sub sync_bins {
     my $self = shift;
     my $cwd = $self->base_dir;
 
-    my $bin  = "$cwd/../bin";
+    my $BIN  = "$cwd/../bin";
     my $sbin = "$cwd/bin";
     my $ibin = "$cwd/inc/bin";
 
@@ -1339,7 +1341,7 @@ sub sync_bins {
     my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$sbin/*>;
 
     foreach my $file (@ifiles, @sfiles){
-	my $bfile = "$bin/$file";
+	my $bfile = "$BIN/$file";
 	my $rfile = (-e "$ibin/$file") ? "$ibin/$file" : "$sbin/$file";
 
 	next if(! -e $bfile);
@@ -1502,7 +1504,7 @@ sub set_gmod_locs {
     my $type = shift || 'ALL';
 
     if($type eq 'ALL' || $type eq 'APOLLO_ROOT'){
-	my $APOLLO_ROOT = "$FindBin::Bin/../exe/apollo";
+	my $APOLLO_ROOT = "$BIN/../exe/apollo";
 	$APOLLO_ROOT = $ENV{APOLLO_ROOT} if(! -d $APOLLO_ROOT && $ENV{APOLLO_ROOT} && -d $ENV{APOLLO_ROOT});
 	$APOLLO_ROOT = (File::Which::which('apollo') || '') =~ /^([^\n]+)\/bin\/apollo\n?$/ if(!-d $APOLLO_ROOT);
 	$APOLLO_ROOT = '/usr/local/gmod/apollo' if(! -d $APOLLO_ROOT);
@@ -1513,7 +1515,7 @@ sub set_gmod_locs {
     }
 
     if($type eq 'ALL' || $type eq 'JBROWSE_ROOT'){
-	my $JBROWSE_ROOT ="$FindBin::Bin/../exe/jbrowse";
+	my $JBROWSE_ROOT ="$BIN/../exe/jbrowse";
 	$JBROWSE_ROOT = '/var/www/html/jbrowse' if(! -d $JBROWSE_ROOT);
 	$JBROWSE_ROOT = '/Library/WebServer/Documents/jbrowse' if(! -d $JBROWSE_ROOT);
 	$JBROWSE_ROOT = '/var/www/jbrowse' if(! -d $JBROWSE_ROOT);

@@ -463,7 +463,7 @@ sub _go {
 		close ($FAS);
 
 		#make g_index be smaller file
-		GI::build_fasta_index($unmasked_file); #once to tie file
+		GI::build_fasta_index($unmasked_file)->_close_index; #once to tie file
 		$g_index = GI::build_fasta_index($unmasked_file);
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
 
@@ -581,6 +581,7 @@ sub _go {
 		#make masked index
 		my $seq_id = $VARS->{seq_id};
 		my $masked_file = $VARS->{the_void}."/query.masked.fasta";
+		GI::build_fasta_index($masked_file)->_close_index; #once to tie file
 		my $m_index = GI::build_fasta_index($masked_file);
 		my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
@@ -631,18 +632,19 @@ sub _go {
 
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
-	       my %args = (chunk       => $fchunk,
-			   order       => $order,
-			   the_void    => $VARS->{the_void},
-			   seq_id      => $VARS->{seq_id},
-			   safe_seq_id => $VARS->{safe_seq_id},
-			   q_seq_obj   => $VARS->{q_seq_obj},
-			   GFF_DB      => $VARS->{GFF_DB},
-			   GFF3_m      => $VARS->{GFF3_m},
-			   gff3_file   => $gff3_file,
-			   LOG         => $VARS->{LOG},
-			   DS_CTL      => $VARS->{DS_CTL},
-			   CTL_OPT     => $VARS->{CTL_OPT}
+	       my %args = (chunk        => $fchunk,
+			   order        => $order,
+			   the_void     => $VARS->{the_void},
+			   seq_id       => $VARS->{seq_id},
+			   safe_seq_id  => $VARS->{safe_seq_id},
+			   q_seq_obj    => $VARS->{q_seq_obj},
+			   q_seq_length => $VARS->{q_seq_length},
+			   GFF_DB       => $VARS->{GFF_DB},
+			   GFF3_m       => $GFF3_m,
+			   gff3_file    => $gff3_file,
+			   LOG          => $VARS->{LOG},
+			   DS_CTL       => $VARS->{DS_CTL},
+			   CTL_OPT      => $VARS->{CTL_OPT}
 			   );
 
 	       my $tier_type = 1;
@@ -651,8 +653,8 @@ sub _go {
 	    }
 
 	    #empty chunker to save memory
-	    my $c_array = $VARS->{fasta_chunker}->{chunks};
-	    @$c_array = map {undef} @$c_array;
+            my $c_array = $VARS->{fasta_chunker}->{chunks};
+            @$c_array = map {undef} @$c_array;
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -953,7 +955,7 @@ sub _go {
 			rm_rb_keepers
 			rm_sp_keepers
 			rm_blastx_keepers
-			GFF3
+			GFF3_m
 		       )
 		    );
 	    #------------------------ARGS_IN
@@ -1048,7 +1050,7 @@ sub _go {
 	    $seq = undef; #clear memory
 
 	    #make masked index and seq object
-	    GI::build_fasta_index($masked_file); #once to tie file
+	    GI::build_fasta_index($masked_file)->_close_index; #once to tie file
 	    my $m_index = GI::build_fasta_index($masked_file);
 	    my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
@@ -3673,7 +3675,7 @@ sub _go {
    catch Error::Simple with{
       my $E = shift;
 
-      my $tag = ($tag eq 'run') ? 'handle' : 'throw';
+      my $tag = ($flag eq 'run') ? 'handle' : 'throw';
 
       $self->_handler($E, $level_status, $tag);
    };

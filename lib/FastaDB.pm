@@ -115,6 +115,17 @@ sub reindex {
     return $self;
 }
 #-------------------------------------------------------------------------------
+sub _close_index {
+    my $self = shift;
+
+    my @index = @{$self->{index}};
+
+    foreach my $db (@index){
+	$db->_close_index;
+    }
+
+}
+#-------------------------------------------------------------------------------
 #uses hit info to search all indexes faster
 sub get_Seq_for_hit {
     my $self = shift;

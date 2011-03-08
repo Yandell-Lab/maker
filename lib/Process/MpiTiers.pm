@@ -410,7 +410,7 @@ sub _load_extra {
 	  my $E = shift;
 	  
 	  $self->_handler($E, 'Failed sorting levels');
-      }
+      };
    }
 }
 #--------------------------------------------------------------
@@ -480,14 +480,14 @@ sub _result{
 
    #run result in CHUNK_REF
    my $stat;
-   try{
+   try {
        $stat = $self->{CHUNK_REF}->_result($VARS, $level, $tier_type, $self);
    }
    catch Error::Simple with {
        my $E = shift;
        
        $self->_handler($E, 'Failed gathering tier as chunk result');
-   }
+   };
 
    #clear memory
    $self->{CHUNK_REF}->{RESULTS} = {};
