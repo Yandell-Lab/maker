@@ -391,7 +391,7 @@ sub copy_package{
     @files = (<$new_dir/*/$job_old*>,<$new_dir/$job_old*>);
     foreach my $f (@files){
 	my $new = $f;
-	$new =~ s/\/$job_old([\.\_][^\/]+)$/\/$job_new$1/;
+	$new =~ s/\/$job_old([\.\_][^\/]+)\/?$/\/$job_new$1/;
 	move($f, $new);
     }
 

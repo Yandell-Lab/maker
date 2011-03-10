@@ -999,31 +999,6 @@ sub submit_to_db {
    $self->dbh->do(qq{UPDATE id_store SET last_submit_id=$submit_id}); #record new value
    $self->dbh->commit();
 
-   #if job exist update else make a new one
-   if(my ($owner) = $self->dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id})){
-       die "ERROR: This job does not belong to you\n" if($owner != $user_id);
-
-       #update job
-       $self->dbh->do(qq{UPDATE jobs SET submit_id=$submit_id, length='$length', is_queued=$is_queued, }.
-		      qq{name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
-   }
-   else{
-       if($type eq 'functional'){
-	   MWAS_util::copy_package($self->dbh, $old_id, $job_id);
-	   $j_name .= " - Post Processing" if ($j_name !~ /Post Processing$/); 
-       }
-
-       #add job
-       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, type, is_queued, }.
-	    qq{is_started, is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
-	    qq{is_tutorial, cpus, start_time, finish_time, name) }.
-	    qq{VALUES ($job_id, $user_id, $submit_id, '$length', '$type', $is_queued, 0, }.
-	    qq{0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
-	   );
-
-       $self->dbh->do(qq{UPDATE jobs SET old_id = $old_id where job_id=$job_id}) if($type eq 'functional');
-   }
-
    #if ctl_opt exists update else make new entry
    if($self->dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$job_id})){
        #update control options for job
@@ -1038,6 +1013,28 @@ sub submit_to_db {
        $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @lc_defaults).qq{) }.
 		      qq{VALUES ($job_id, \'}.join("', '", @CTL_OPT{@defaults}).qq{\')}
 		      );
+   }
+
+   #if job exist update else make a new one
+   if(my ($owner) = $self->dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id})){
+       die "ERROR: This job does not belong to you\n" if($owner != $user_id);
+
+       #update job
+       $self->dbh->do(qq{UPDATE jobs SET submit_id=$submit_id, length='$length', is_queued=$is_queued, }.
+		      qq{name='$j_name', is_saved=$is_saved WHERE job_id=$job_id});
+   }
+   else{
+       $j_name .= " - Post Processing" if ($j_name !~ /Post Processing$/ && $type eq 'functional');
+
+       #add job
+       $self->dbh->do(qq{INSERT INTO jobs (job_id, user_id, submit_id, length, type, is_queued, }.
+	    qq{is_started, is_running, is_finished, is_error, is_packaged, is_saved, admin_block, }.
+	    qq{is_tutorial, cpus, start_time, finish_time, name) }.
+	    qq{VALUES ($job_id, $user_id, $submit_id, '$length', '$type', $is_queued, 0, }.
+	    qq{0, 0, 0, 0, $is_saved, 0, 0, 0, '', '', '$j_name')}
+	   );
+
+       $self->dbh->do(qq{UPDATE jobs SET old_id = $old_id where job_id=$job_id}) if($type eq 'functional');
    }
 
    #save and move to frontpage
@@ -1062,6 +1059,9 @@ sub submit_to_db {
 	   $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1, start_time='}.
 			  MWAS_util::date_time . qq{', finish_time='}.
 			  MWAS_util::date_time . qq{' WHERE job_id=$job_id});
+       }
+       elsif($type eq 'functional'){
+	   MWAS_util::copy_package($self->dbh, $old_id, $job_id);
        }
 
        $self->dbh->commit;

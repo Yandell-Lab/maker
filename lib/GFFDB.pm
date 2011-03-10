@@ -888,6 +888,7 @@ sub _load_hits {
 
 	#$f->{seq} = $t->{seq};
 
+	#next if(! $t->{exons}->[0] || ! $t->{exons}->[0]->{f}); #temp
 	my $hsps = _load_hsps($t, $seq, $seq_len);
 
 	foreach my $hsp (@{$hsps}){
