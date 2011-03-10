@@ -143,7 +143,7 @@ sub splice_infer_exon_coors {
 	    $done{$B}{$E}++;
 	    
 	    my $L = abs($E - $B) + 1;
-	    my $piece; ($sorted[$j]->[0]->strand('query') == 1) ?
+	    my $piece = ($sorted[$j]->[0]->strand('query') == 1) ?
 		substr_o($seq, $B-1, $L) : Fasta::revComp(substr_o($seq, $B-1, $L));
 
 	    my ($p_seq, $poffset) = $tM->longest_translation($piece);
