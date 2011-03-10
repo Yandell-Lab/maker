@@ -475,7 +475,7 @@ sub make_flat_hits {
 	my $strand = $hits->[0]->strand;
 
 	my $coors  = get_hit_coors($hits, 'query');
-	my $pieces = Shadower::getVecotrPieces($coors, 0);
+	my $pieces = Shadower::getVectorPieces($coors, 0);
 
 	my @new_hits;
 
@@ -944,7 +944,7 @@ sub _adjust {
 	if(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
 	    $hB = $B;
 	}
-	elsif(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
+	if(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
 	    $hE = $E;
 	}
 

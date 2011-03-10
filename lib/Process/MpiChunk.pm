@@ -2565,12 +2565,6 @@ sub _go {
 	    #complications from flipping on only one side of a split HSP
 	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
 		$blastx_keepers  = PhatHit_utils::shatter_all_hits($blastx_keepers);
-
-		#this checks the open reading frame and can flip the hit
-		foreach my $phat_hit (@$blastx_keepers){
-		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
-			if exonerate::splice_info::needs_to_be_revcomped($phat_hit);
-		}
 	    }
 
 	    $blastx_keepers = GI::clean_blast_hits($blastx_keepers,

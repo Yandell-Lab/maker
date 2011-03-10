@@ -389,6 +389,14 @@ sub launch {
 	return $self->redirect("$jnlp_url");       
     }
     elsif($q->param('soba')){
+        my ($base, $name) = $gff_file =~ /(.*\/)([^\/]+)$/;
+	if($name =~ /\%/){
+	   $name =~ s/\%/\_/g;
+	   my $link = $base . $name;
+	   symlink($gff_file, $link);
+	   $gff_file = $link;
+	}
+	
 	#post the file to SOBA
 	my $ua = LWP::UserAgent->new;
 	my $response = $ua->post($serv_opt{soba_url},
@@ -396,7 +404,6 @@ sub launch {
 				 Content      => [ rm  => 'upload_files',
 						   gff_file   => [$gff_file]]
 	    );
-	my ($name) = $gff_file =~ /([^\/]+)$/;
 
 	#fix the retunred content to remove relative URLs
 	#my $content = $response->content;

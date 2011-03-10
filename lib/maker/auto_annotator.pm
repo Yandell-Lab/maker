@@ -1112,8 +1112,8 @@ sub best_annotations {
 	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$m_list;
 	push(@$p_list, @p_est2g); #est2genome added to end, will only appear if nothing else overlaps
 	push(@$m_list, @m_est2g); #est2genome added to end, will only appear if nothing else overlaps
-	$p_list = _best($p_list);
-	$m_list = _best($m_list);
+	$p_list = _best($p_list, $CTL_OPT);
+	$m_list = _best($m_list, $CTL_OPT);
 
 	#almost final  sets
 	push(@p_keepers, @$p_list);
@@ -1121,7 +1121,13 @@ sub best_annotations {
     }
 
     #remove CDS competition on opposite strand
-    my $final = remove_CDS_competitors(\@p_keepers, \@m_keepers);
+    my $final;
+    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+       $final = remove_CDS_competitors(\@p_keepers, \@m_keepers);
+    }
+    else{
+       $final = [@p_keepers, @m_keepers];
+    }
 
     return $final;
 }
@@ -1303,6 +1309,7 @@ sub remove_CDS_competitors {
 #given to be from the same strand and will not double check this.
 sub _best{
     my $list = shift;
+    my $CTL_OPT = shift;
 
     my @keepers;
     foreach my $g (@$list){
@@ -1314,7 +1321,16 @@ sub _best{
 	    my $k_B = $k->{g_start};
 	    my $k_E = $k->{g_end};
 
-	    my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+	    my $class;	    
+	    if($CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
+	       my $f1 = $g->{t_structs}->[0]->{hit};
+	       my $f2 = $k->{t_structs}->[0]->{hit};
+	       my $AED = shadow_AED::get_eAED([$f1], $f2);
+	       $class = ($AED < .80) ? 1 : 0;
+	    }
+	    else{
+	       $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+	    }
 
 	    if($class ne '0'){
 		$bad = 1;
@@ -1508,7 +1524,8 @@ sub run_it{
 	    next if($CTL_OPT->{organism_type} eq 'eukaryotic');
 	    next if(! @$gomiph);
 
-	    my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
+	    my $miphs = clean::remove_redundant_alt_splices($gomiph, 10);
+	    #my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
 
 	    foreach my $miph (@$miphs){
 		my $transcript_seq  = get_transcript_seq($miph, $seq);
