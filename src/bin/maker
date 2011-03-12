@@ -48,7 +48,7 @@ BEGIN{
       }
 
       die $_[0]."\n".
-	  "FATAL ERROR\n";
+	  "--FAILURE--\n";
    };
 }
 
