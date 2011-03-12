@@ -149,8 +149,6 @@ sub _on_failure {
        $LOG->add_entry("DIED","COUNT",$die_count);
    }
 
-   $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
-
    if($tier->tier_type == 0){
        my $def = $tier->{VARS}->{q_def};
 
@@ -158,6 +156,7 @@ sub _on_failure {
        $tier->{RESULTS} = {};
 
        $tier->{VARS}->{q_def} = $q_def;
+       $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
    }
    else{
        $tier->{VARS} = {};

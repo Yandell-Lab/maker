@@ -3389,7 +3389,7 @@ sub load_control_files {
        }
 
        warn "WARNING: blast_type is set to '$CTL_OPT{blast_type}' but executables cannot be located\n" unless($main::qq);
-       confess "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
+       die "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
        warn "The blast_type '$new' will be used instead.\n\n" unless($main::qq);
 
        $CTL_OPT{blast_type} = $new;
