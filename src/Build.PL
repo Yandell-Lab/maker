@@ -133,7 +133,7 @@ else{
     $build->log_info("\nWARNING: Apache cannot be located. The optional web based\n".
                      "interface to MAKER will not be available to you.\n\n");
 
-    $build->feature(mpi_support => 0); #set mpi flag for Build  
+    $build->feature(mwas_support => 0); #set mpi flag for Build  
 }
 
 if($build->feature('mwas_support')){
