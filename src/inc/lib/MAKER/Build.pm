@@ -344,6 +344,9 @@ sub ACTION_update {
 	$self->dispatch('clean');
 	$self->dispatch('install');
     }
+
+    print "\nSVN STATUS:\n";
+    $self->svn_w_args('status');
 }
 
 #syncronize the maker/src/bin and maker/src/inc/bin directories
