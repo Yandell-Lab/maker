@@ -42,6 +42,7 @@ use cluster;
 use repeat_mask_seq;
 use maker::sens_spec;
 use Digest::MD5;
+use FastaDB;
 
 @ISA = qw(
 	);
@@ -592,35 +593,41 @@ sub write_p_and_t_fastas{
 sub create_blastdb {
    my $CTL_OPT = shift @_;
 
-   my $lock = new File::NFSLock($CTL_OPT->{mpi_blastdb}, 'EX', 1800, 50);
-   #rebuild all fastas when specified
-   File::Path::rmtree($CTL_OPT->{mpi_blastdb}) if ($CTL_OPT->{force} &&
-						   !$CTL_OPT->{_multi_chpc} &&
-						   !$CTL_OPT->{_not_root}
-						   );
-   $lock->unlock;
+   #rebuild all fastas when specified by removing all existing ones
+   if ($CTL_OPT->{force} &&
+       !$CTL_OPT->{_multi_chpc} &&
+       !$CTL_OPT->{_not_root}
+       ){       
+       my $lock = new File::NFSLock($CTL_OPT->{mpi_blastdb}, 'EX', 1800, 60);
+       File::Path::rmtree($CTL_OPT->{mpi_blastdb});
+       $lock->unlock;
+   }
    
-   my $mpi_size = $CTL_OPT->{_mpi_size} || 1;
    my $b_dir = $CTL_OPT->{mpi_blastdb};
    mkdir($b_dir) if(! -d $b_dir);
 
-   my @sets = (['_p_db', 'protein'],
-	       ['_e_db', 'est'],
-	       ['_a_db', 'altest'],
-	       ['_r_db', 'repeat_protein'],
-	       ['_g_db', 'genome']
+   my @sets = (['_p_db', 'protein', 10],
+	       ['_e_db', 'est', 10],
+	       ['_a_db', 'altest', 10],
+	       ['_r_db', 'repeat_protein', 10],
+	       ['_g_db', 'genome', 1]
 	       );
+
+   #fix db_split size for very large files
+   foreach my $set (grep {$_->[1] !~ /genome/} @sets){
+       $set->[2] = 30 if (-s $set->[0] > 1000000000);
+   }
+
    my %tries;
    my @check;
    while(my $set = shift @sets){
        my $count = @{[split(',', $CTL_OPT->{$set->[1]})]};
        $tries{$set->[1]}++;
-       my $l_name = "$b_dir/".$set->[1].".$mpi_size.".$tries{$set->[1]};
-       $l_name = "$b_dir/".$set->[1].".".$tries{$set->[1]} if($set->[1] eq 'genome');
+       my $l_name = "$b_dir/".$set->[1].".".$set->[2].".".$tries{$set->[1]};
        
        my $lock;
        if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
-           $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $mpi_size);
+           $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $set->[2]);
 	   $lock->unlock;
        }
        elsif($tries{$set->[1]} < $count){
@@ -631,10 +638,10 @@ sub create_blastdb {
        }
    }
    while(my $set = shift @check){
-       $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $mpi_size);
+       $CTL_OPT->{$set->[0]} = split_db($CTL_OPT, $set->[1], $set->[2]);
    }
 
-   #handle hints given in fasta headers
+   #handle maker_coor hints given in fasta headers
    if(!$CTL_OPT->{_not_root} & $CTL_OPT->{est_forward}){
        my %to_exonerate;
        foreach my $db (@{$CTL_OPT->{_e_db}}){
@@ -676,7 +683,7 @@ sub concatenate_files {
 sub split_db {
    my $CTL_OPT  = shift @_;
    my $key      = shift @_;
-   my $mpi_size = shift @_ || 1;
+   my $max      = shift @_ || 1;
    
    my @entries = split(',', $CTL_OPT->{$key});
    @entries = split(',', $CTL_OPT->{"$key\_gff"}) if($key eq 'genome' && ! @entries);
@@ -692,9 +699,9 @@ sub split_db {
       my ($f_name) = $file =~ /([^\/]+)$/;
       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
       my $b_dir = $CTL_OPT->{mpi_blastdb};
-      my $bins = ($mpi_size % 10 == 0) ? (int(($mpi_size/$f_count)/10))*10 : (int(($mpi_size/$f_count)/10)+1)*10;
-      $bins = 10 if($bins < 10);
-      $bins = 1 if($key eq 'genome');
+      my $bins = $max;
+      #$bins = ($bins % 10 == 0) ? (int(($bins/$f_count)/10))*10 : (int(($bins/$f_count)/10)+1)*10;
+      #$bins = 10 if($bins < 10);
       my $d_name = "$f_name\.mpi\.$bins";
       my $f_dir = "$b_dir/$d_name";
       my $t_dir = $TMP."/$d_name";
@@ -709,7 +716,7 @@ sub split_db {
 	    next;
 	 }
 	 else{ #maybe not finished
-	    if(($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)) && $lock->maintain(30)){
+	    if(($lock = new File::NFSLock($f_dir, 'NB', 1800, 60)) && $lock->maintain(30)){
 	       #check again if likely already finished
 	       if(-e "$f_dir"){ #on multi processors check if finished
 		  my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
@@ -729,7 +736,7 @@ sub split_db {
 	    }
 	 }
       }
-      elsif($lock = new File::NFSLock($f_dir, 'NB', 1800, 50)){
+      elsif($lock = new File::NFSLock($f_dir, 'NB', 1800, 60)){
 	 $lock = undef unless($lock->maintain(30));
       }
       else{
@@ -738,22 +745,30 @@ sub split_db {
       
       #set up a new database
       if($lock){
-	 #set up alternate names for short files
 	 my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
-	 my $num_fastas = $fasta_iterator->number_of_entries();
-	 die "ERROR: The fasta file $file appears to be empty.\n" if(! $num_fastas);
-	 
-	 my $max_bins = ($num_fastas > 10) ? int($num_fastas / 10) : 1; #min of ~10 seq per bin
-	 if ($max_bins < $bins){
-	    $bins = $max_bins;
+	 my $count = 0;
+	 while($fasta_iterator->nextDef){
+	     $count++;
+	     last if($count > $max * 10);
+	 }
+	 die "ERROR: The fasta file $file appears to be empty.\n" if(! $count);
+	 my $new_max = ($count > 10) ? int($count / 10) : 1; #min seq per bin
+	 $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #rebuild
+
+	 #set up alternate names for short files
+	 if ($new_max < $bins){
+	    $bins = $new_max;
 	    $d_name = "$f_name\.mpi\.$bins";
 	    $f_dir = "$b_dir/$d_name";
 	    $t_dir = $TMP."/$d_name";
 	    
 	    #fix lock
 	    $lock->unlock;
-	    unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 50)){
-	       confess "ERROR: Could not get lock to process $file.\n";
+	    unless($lock = new File::NFSLock($f_dir, 'EX', 1800, 60) && $lock->maintain(30)){
+		$lock = undef;
+		push(@entries, $entry);
+		sleep 5;
+		next;
 	    }
 	 }
 	 
@@ -849,11 +864,11 @@ sub split_db {
 	 }
 	 
 	 #move finished file directory into place
-	 system("mv $t_dir $f_dir"); #File::Copy cannot move directories
+	 system("mv $t_dir $f_dir"); #File::Copy::move cannot move directories
 	 
 	 #check if everything is ok
 	 if (-e $f_dir) { #multi processor
-	    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_} <$f_dir/$d_name\.*>;
+	    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
 	    
 	    confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
 	    
@@ -1502,7 +1517,6 @@ sub build_fasta_index {
        push(@files, $file);
    }
 
-   require FastaDB;
    my $index = new FastaDB(\@files);
 
    return $index;
@@ -1572,7 +1586,7 @@ sub dbformat {
 
    if($run){
        my $lock;
-       if(($lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 50)) && $lock->maintain(30)){
+       if(($lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 60)) && $lock->maintain(30)){
 	   my $w = new Widget::formater();
 	   print STDERR "formating database...\n" unless $main::quiet;
 	   $w->run($command);
@@ -1663,7 +1677,7 @@ sub blastn_as_chunks {
 	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
 	   ){
 	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
 	       open(my $L,"$tmp_db.copy");
 	       flock($L, 2); #try regular file lock for extra safety
 	       
@@ -1968,7 +1982,7 @@ sub blastx_as_chunks {
 	   ){
 	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
 	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
 	       open(my $L,"$tmp_db.copy");
 	       flock($L, 2); #try regular file lock for extra safety
 	       
@@ -2293,7 +2307,7 @@ sub tblastx_as_chunks {
 	   ){
 	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
 	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 50)) && $lock->still_mine){
+	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
 	       open(my $L,"$tmp_db.copy");
 	       flock($L, 2); #try regular file lock for extra safety
 	       
@@ -3302,15 +3316,17 @@ sub load_control_files {
    }
 
    #required for evaluator to work
-   $CTL_OPT{predictor} = 'model_gff' if($main::eva);
-   $CTL_OPT{model_pass} = 1 if($main::eva);
-   $CTL_OPT{evaluate} = 1 if($main::eva);
+   if($main::eva){
+       $CTL_OPT{predictor} = 'model_gff';
+       $CTL_OPT{model_pass} = 1;
+       $CTL_OPT{evaluate} = 1;
 
-   #evaluator only handles one or the other
-   if($main::eva && $CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){
-       $error .= "ERROR: In EVALUATOR you can have either models from a MAKER\n".
-	         "produced GFF3 file or models from an external GFF3 file, but\n".
-		 "not both (Check 'genome_gff' and 'model_gff' options)!\n\n"
+       #evaluator only handles one or the other
+       if($CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){
+	   $error .= "ERROR: In EVALUATOR you can have either models from a MAKER\n".
+	       "produced GFF3 file or models from an external GFF3 file, but\n".
+	       "not both (Check 'genome_gff' and 'model_gff' options)!\n\n";
+       }
    }
 
    #parse predictor and error check
@@ -3389,8 +3405,8 @@ sub load_control_files {
        }
 
        warn "WARNING: blast_type is set to '$CTL_OPT{blast_type}' but executables cannot be located\n" unless($main::qq);
-       die "ERROR: Please provide a valid loaction for a BLAST algorithm in the control files.\n\n" if(!$new);
-       warn "The blast_type '$new' will be used instead.\n\n" unless($main::qq);
+       warn "The blast_type '$new' will be used instead.\n\n" if($new && !$main::qq);
+       $error .= "ERROR: Please provide a valid locaction for a BLAST algorithm in the control files.\n\n" if(!$new);
 
        $CTL_OPT{blast_type} = $new;
    }
@@ -3550,9 +3566,6 @@ sub load_control_files {
        if(!$CTL_OPT{augustus_species}) {
 	   $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
        }
-       else{
-	   #nothing to do
-       }
    }
    if ($CTL_OPT{blast_type} =~ /^wublast$/i && -f $CTL_OPT{blasta}) {
        (my $base = Cwd::abs_path($CTL_OPT{blasta})) =~ s/\/blasta$//;
@@ -3568,9 +3581,9 @@ sub load_control_files {
 	   $filter = "$base/filter";
        }
 
-       die "ERROR: You must properly set the BLASTFILTER/WUBLASTFILTER and\n".
-	   "BLASTMAT/WUBLASTMAT environmental variables or WUBLAST will not\n".
-	   "function\n" if(! -d $matrix || ! -d $filter);
+       $error.= "ERROR: You must properly set the BLASTFILTER/WUBLASTFILTER and\n".
+	        "BLASTMAT/WUBLASTMAT environmental variables or WUBLAST will not\n".
+	        "function\n" if(! -d $matrix || ! -d $filter);
 
        $ENV{BLASTMAT} = $ENV{WUBLASTMAT} = $matrix;
        $ENV{BLASTFILTER} = $ENV{WUBLASTFILTER} = $filter;
@@ -3667,7 +3680,11 @@ sub load_control_files {
    if($main::eva && $CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){ #only for evaluator
        $error .= "You can only specify a GFF3 file for genome_gff or model_gff no both!!\n\n";
    }
+
+   #--if just parsing without error check stop here
+   return %CTL_OPT if($OPT{parse});
    
+   #--report errors
    die $error if ($error);   
 
    #--check genome fasta file
@@ -3676,24 +3693,25 @@ sub load_control_files {
 				     -gff => $fasta_gff
 				   );
 
-   if ($iterator->number_of_entries() == 0) {
+   unless($iterator->nextDef) {
       my $genome = (! $CTL_OPT{genome}) ? $fasta_gff : $CTL_OPT{genome};
       die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
    #--decide whether to force datastore, datastore will already be defined if selected by user 
-   if(! defined $CTL_OPT{datastore}){
-       if($iterator->number_of_entries() > 1000) {
-	   warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
-	       "A two depth datastore will be used to avoid overloading the data structure of\n".
-	       "the output directory.\n\n" unless($main::qq);
-	   
-	   $CTL_OPT{datastore} = 1;
-       }
-       else{
-	   $CTL_OPT{datastore} = 0;
-       }
-   }
+   $CTL_OPT{datastore} = 1 if(! defined $CTL_OPT{datastore}); #on by default
+   #if(! defined $CTL_OPT{datastore}){
+   #    if($iterator->number_of_entries() > 1000) {
+   #	   warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
+   #	       "A two depth datastore will be used to avoid overloading the data structure of\n".
+   #	       "the output directory.\n\n" unless($main::qq);
+   #	   
+   #	   $CTL_OPT{datastore} = 1;
+   #    }
+   #    else{
+   #	   $CTL_OPT{datastore} = 0;
+   #    }
+   #}
 
    #--decide if gff database should be created
    my @gffs = grep {/\_gff$/} @{[keys %CTL_OPT]};
@@ -3773,16 +3791,12 @@ sub load_control_files {
        }
    }
 
-   #--exit with status of 0 if just checking control files with -check fla
-   return %CTL_OPT if($OPT{parse});
-   exit(0) if($OPT{check});
-
    #--set an initialization lock so steps are locked to a single process
    #--take extra steps since lock is vulnerable to race conditions
    my $i_lock; #init lock, it is only a temporary blocking lock
    while(! $i_lock || ! $i_lock->still_mine){
        die "ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 90, 95));
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 120, 150));
    }
 
    #--check if MAKER is already running and lock the directory
@@ -3826,6 +3840,9 @@ sub load_control_files {
 	   $CTL_OPT{_multi_chpc}++; #multi process flag
        }
    }
+
+   #--exit with status of 0 if just checking control files with -check fla
+   exit(0) if($OPT{check});
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;

@@ -40,15 +40,8 @@ sub _set_number_of_entries {
 	my $fh = new FileHandle();
 	$fh->open($arg);
 	$fh->setpos($self->startPos) if($self->startPos);
-
-	my $i = 0;
-	my $line;
-	while ($line = <$fh>){
-		$i++ if $line =~ /^>/;
-	}
+	$self->{number_of_entries} = scalar grep {/^>/} <$fh>;
 	$fh->close();
-
-	$self->{number_of_entries} = $i;
 }
 #-------------------------------------------------------------------------------
 sub number_of_entries{
