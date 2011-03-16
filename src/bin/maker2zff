@@ -126,7 +126,7 @@ foreach my $file (@files) {
 	    my %annotation = split(/[;=]/, $annot);
 	    if ($tag eq "mRNA") {
 		my $id = $annotation{'ID'};
-		my $lname = $annotation{'Name'};
+		my $lname = $annotation{'Name'} || $annotation{'ID'};
 		my $parent = $annotation{'Parent'};
 		my ($name, $qi) = split(/\s+/, $lname);
 		if(! $qi){
