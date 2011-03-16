@@ -154,9 +154,9 @@ sub merge_resolve_hits{
    my $after = @$blast_keepers;
 
    #cluster merged hits
-   my $depth = $CTL_OPT{depth_blastn} if($type = 'blastn');
-   $depth = $CTL_OPT{depth_blastx} if($type = 'blastx');
-   $depth = $CTL_OPT{depth_tblastx}if($type = 'tblastx');
+   my $depth = $CTL_OPT{depth_blastn} if($type eq 'blastn');
+   $depth = $CTL_OPT{depth_blastx} if($type eq 'blastx');
+   $depth = $CTL_OPT{depth_tblastx}if($type eq 'tblastx');
 
    if($before - $after > $depth * 5){
       my @merged;
