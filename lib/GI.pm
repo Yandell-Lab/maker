@@ -644,7 +644,7 @@ sub create_blastdb {
    foreach my $p (@prot){
       my @list = split(',', $CTL_OPT->{$p->[2]});
       $CTL_OPT->{$p->[1]} = []; #initialize
-      if($p->[1] eq 'genome'){
+      if($p->[2] eq 'genome'){
 	 push(@sets, [$list[0], $p->[1], $p->[2], $p->[3]]);
 	 next;
       }
