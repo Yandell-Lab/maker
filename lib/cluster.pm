@@ -203,26 +203,33 @@ sub criteria_2 {
 sub criteria_3 {
         my $hit = shift;
 
-	my $score =  $hit->score();
-	$score = '' if(! defined $score);
-        #check if value is numerical and adjust if not
-	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
-	    $score = $hit->bits();
+	my $best = 0;
+
+	foreach my $hsp ($hit->hsps){
+	    my $score = $hsp->score();
+
 	    $score = '' if(! defined $score);
-	}
-	if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
-	    $score = $hit->significance;
-	    $score = '' if(! defined $score);
-	    if($score =~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
-		$score = 10000 - (10000 * $score);
-		$score = 0 if($score < 0);
+	    #check if value is numerical and adjust if not
+	    if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+		$score = $hsp->bits();
+		$score = '' if(! defined $score);
 	    }
-	    else{
-		$score = 0;
+	    if($score !~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+		$score = $hsp->significance;
+		$score = '' if(! defined $score);
+		if($score =~ /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/){
+		    $score = 10000 - (10000 * $score);
+		    $score = 0 if($score < 0);
+		}
+		else{
+		    $score = 0;
+		}
 	    }
+
+	    $best = $score if(! $best || $score > $best);
 	}
 
-	return $score;
+	return $best;
 }
 #------------------------------------------------------------------------
 sub shadow_cluster {
@@ -306,7 +313,7 @@ sub shadow_cluster {
 	}
 
 	#now sort clusters to depth
-	#this is very very ugly but the cleaner solution runs so much slower
+	#this is very very ugly but the cleaner solution runs soooo much slower
 	if($depth != 0){
 	    print STDERR " sorting hits in shadow cluster...\n" unless($main::quiet);
 	    my $j = 0;

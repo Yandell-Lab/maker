@@ -1431,7 +1431,7 @@ sub merge_hits {
 	       foreach my $h (@$c){
 		   push(@new_hsps, $h->hsps);
 	       }
-
+	       
 	       $c->[0]->hsps(\@new_hsps);
 	       $c->[0]->{'_sequenceschanged'} = 1;
 	       $c->[0]->{'_sequences_was_merged'} = 1;
