@@ -145,10 +145,35 @@ sub merge_resolve_hits{
    return $blast_keepers if(!@$blast_holdovers);
    return $blast_holdovers if(!@$blast_keepers);
 
+   my $before = @$blast_keepers + @$blast_holdovers;
    PhatHit_utils::merge_hits($blast_keepers,
 			     $blast_holdovers, 
 			     $CTL_OPT{split_hit},
 			    );
+
+   my $after = @$blast_keepers;
+
+   #cluster merged hits
+   my $depth = $CTL_OPT{depth_blastn} if($type = 'blastn');
+   $depth = $CTL_OPT{depth_blastx} if($type = 'blastx');
+   $depth = $CTL_OPT{depth_tblastx}if($type = 'tblastx');
+
+   if($before - $after > $depth * 5){
+      my @merged;
+      my @keepers;
+      foreach my $hit (@$blast_keepers){
+	 if($hit->{'_sequences_was_merged'}){
+	    push(@merged, $hit);
+	 }
+	 else{
+	    push(@keepers, $hit);
+	 }
+      }
+
+      my $clusters = cluster::shadow_cluster($depth * 3, \@merged);
+      push(@keepers, @{GI::flatten($clusters)});
+      @$blast_keepers = @keepers;
+   }
 
    $blast_keepers = reblast_merged_hits($q_seq_obj,
 					$def,
