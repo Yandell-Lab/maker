@@ -644,7 +644,10 @@ sub create_blastdb {
    foreach my $p (@prot){
       my @list = split(',', $CTL_OPT->{$p->[2]});
       $CTL_OPT->{$p->[1]} = []; #initialize
+
+      #genome will always be split size of 1
       if($p->[2] eq 'genome'){
+	 @list = split(',', $CTL_OPT->{$p->[2]."_gff"}) if(!@list);
 	 push(@sets, [$list[0], $p->[1], $p->[2], $p->[3]]);
 	 next;
       }
@@ -654,7 +657,6 @@ sub create_blastdb {
 
 	 #fix db_split size for very large files
 	 my $split = (-s $f < 1000000000) ? $p->[3] : 30;
-
 	 push(@sets, [$e, $p->[1], $p->[2], $split]);
       }
    }
@@ -667,7 +669,7 @@ sub create_blastdb {
        my $l_name = "$b_dir/$f_name";
        my $lock;
        if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
-	  push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3])});
+	  push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3], $set->[4])});
 	  $lock->unlock;
        }
        else{
@@ -682,7 +684,7 @@ sub create_blastdb {
       my $l_name = "$b_dir/$f_name";
       my $lock;
       if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
-	 push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3])});
+	 push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3], $set->[4])});
 	 $lock->unlock;
       }
       else{
@@ -881,7 +883,6 @@ sub split_db {
       confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
       
       push(@db_files, @t_db);
-      next;
    }
    else {
       confess "ERROR: Could not split db\n"; #not ok

@@ -430,24 +430,28 @@ sub process_hints {
     my $pfirst;
     my $ifirst;
     for (my $i = 0; $i < @b_seq; $i++){
-	$nfirst = $i if(!$nfirst && $b_seq[$i] > 0);
-	$pfirst = $i if(!$pfirst && $b_seq[$i] > 2);
-	$ifirst = $i if(!$ifirst && $b_seq[$i] < 0);
+	$nfirst = $i if(!defined($nfirst) && $b_seq[$i] > 0);
+	$pfirst = $i if(!defined($pfirst) && $b_seq[$i] > 2);
+	$ifirst = $i if(!defined($ifirst) && $b_seq[$i] < 0);
 	
-	my $last = $i == @b_seq-1; #flag
-	if(($b_seq[$i] <= 0 || $last) && $nfirst){
+	if($b_seq[$i] <= 0 && $nfirst){
 	    push(@n_set_coors, [$nfirst+$offset, $i-1+$offset]);
 	    $nfirst = undef;
 	}
-	if(($b_seq[$i] <= 2 || $last) && $pfirst){
+	if($b_seq[$i] <= 2 && $pfirst){
 	    push(@p_set_coors, [$pfirst+$offset, $i-1+$offset]);
 	    $pfirst = undef;
 	}
-	if(($b_seq[$i] >= 0 || $last) && $ifirst){
+	if($b_seq[$i] >= 0 && $ifirst){
 	    push(@i_set_coors, [$ifirst+$offset, $i-1+$offset]);
 	    $ifirst = undef;
 	}
     }
+    
+    my $j = @b_seq;
+    push(@n_set_coors, [$nfirst+$offset, $j-1+$offset]) if($nfirst);
+    push(@p_set_coors, [$pfirst+$offset, $j-1+$offset]) if($pfirst);
+    push(@i_set_coors, [$ifirst+$offset, $j-1+$offset]) if($ifirst);
     
     return (\@span_coors, $strand, \@p_set_coors, \@n_set_coors, \@i_set_coors);
 }

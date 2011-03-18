@@ -477,7 +477,8 @@ sub phathits_on_chunk {
 					 qq{WHERE seqid = '$seqid' }.
 					 qq{AND start BETWEEN $c_start AND $c_end }.
 					 qq{AND parent = '.' });
-	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$seqid[\;\n]/} @$ref1; #removes contig/chromosome
+	my $safe = quotemeta($seqid);
+	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref1; #removes contig/chromosome
 	
 	my %IDs;
 	foreach my $row (@$ref1){
@@ -513,7 +514,9 @@ sub phathits_on_chunk {
 					 qq{WHERE seqid = '$seqid' }.
 					 qq{AND start BETWEEN $c_start AND $c_end }.
 					 qq{AND parent = '.' });
-	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$seqid[\;\n]/} @$ref2; #removes contig/chromosome
+
+	my $safe = quotemeta($seqid);
+	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref2; #removes contig/chromosome
 
 	my %IDs;
 	foreach my $row (@$ref2){
@@ -526,7 +529,7 @@ sub phathits_on_chunk {
 
 	while(@check){
 	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
-	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
 					      qq{WHERE seqid = '$seqid' }.
 					      qq{AND ( $dsn )});
 	   
@@ -679,6 +682,7 @@ sub get_existing_gene_names {
 	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
     }
     
+    my $safe = quotemeta($seqid);
     my $features = _ary_to_features($ref1, $ref2);
     foreach my $f (@$features){
 	my $tag = $f->primary_tag();
@@ -694,7 +698,7 @@ sub get_existing_gene_names {
 	    $names{$name}++;
 	    
 	    #get old maker cluster ids
-	    my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+	    my ($c_id) = $name =~ /$safe\-[\-]+\-gene\-(\d+\.*\d*)/;
 	    $names{$c_id}++ if(defined $c_id);
 	}
     }
@@ -730,7 +734,7 @@ sub get_existing_gene_names {
 	    $names{$name}++;
 	    
 	    #get old maker cluster ids
-	    my ($c_id) = $name =~ /$seqid\-[\-]+\-gene\-(\d+\.*\d*)/;
+	    my ($c_id) = $name =~ /$safe\-[\-]+\-gene\-(\d+\.*\d*)/;
 	    $names{$c_id}++ if(defined $c_id);
 	}
     }

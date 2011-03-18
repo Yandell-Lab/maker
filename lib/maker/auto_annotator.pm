@@ -1325,8 +1325,8 @@ sub _best{
 	    if($CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 	       my $f1 = $g->{t_structs}->[0]->{hit};
 	       my $f2 = $k->{t_structs}->[0]->{hit};
-	       my $AED = shadow_AED::get_eAED([$f1], $f2);
-	       $class = ($AED < .80) ? 1 : 0;
+	       my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
+	       $class = ($sn >= .30 || $sp >= .30) ? 1 : 0;
 	    }
 	    else{
 	       $class = compare::compare($g_B, $g_E, $k_B, $k_E);

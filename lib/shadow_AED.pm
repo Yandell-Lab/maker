@@ -309,10 +309,17 @@ sub get_eAED {
 }
 
 sub get_AED {
+   my ($sn, $sp) = get_SN_SP(@_);
+   my $AED = 1 - ($sn + $sp)/2;
+
+   return $AED;
+}
+
+sub get_SN_SP {
    my $hits = shift;
    my $tran = shift;
 
-   return 1 if(! @{$hits} || ! $tran);
+   return (0, 0) if(! @{$hits} || ! $tran);
 
    my ($start, $end) = ($tran->start('query'), $tran->end('query'));
 
@@ -361,11 +368,10 @@ sub get_AED {
    #calculate AED
    my $inter = Bit::Vector->new($length);
    $inter->Intersection($t_vec, $h_vec);
-   my $spec = $inter->Norm()/$t_vec->Norm(); #specificity
    my $sens = $inter->Norm()/$h_vec->Norm(); #sensitivity
-   my $AED = 1 - ($spec + $sens)/2;
+   my $spec = $inter->Norm()/$t_vec->Norm(); #specificity
 
-   return $AED;
+   return ($sens, $spec);
 }
 
 1;

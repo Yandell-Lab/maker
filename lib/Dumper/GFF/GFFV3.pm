@@ -937,7 +937,7 @@ sub get_hsp_data {
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 
 	my $hsp_name = $hit_n;
-	$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	#$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
@@ -982,7 +982,7 @@ sub get_repeat_hsp_data {
 	$class = "repeatrunner" if ($class eq 'blastx');
 	
 	my $hsp_name = $hit_n;
-	$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	#$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
