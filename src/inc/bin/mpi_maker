@@ -80,6 +80,7 @@ use Process::MpiChunk;
 use Process::MpiTiers;
 use Parallel::MPIcar qw(:most);
 use Proc::Signal;
+use File::NFSLock;
 
 #--MPI_Init requires there to be arguments on @ARGV
 #--This is a logic problem by the Package Authors
@@ -337,7 +338,7 @@ unless($main::no_threads){
        }
        
        die $_[0]."\n".
-	   "FATAL ERROR\n";
+	   "--FAILURE--\n";
    };
 
     #set up sharing
@@ -400,28 +401,59 @@ if ($rank == $root) {
 	#--Control file processing
 	
 	#set up control options from control files
+	print STDERR "STATUS: Parsing control files...\n" unless($main::quiet);
 	%CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-	
-	#--send control files to all nodes
+
+	#--set up gff database
+	print STDERR "STATUS: Setting up database for any GFF3 input...\n" unless($main::quiet);
+	$GFF_DB = new GFFDB(\%CTL_OPT);
+	$build = $GFF_DB->next_build;
+
+	#---set up blast databases and indexes for analyisis
+	#communicate with other nodes to initialize TMP and databases
+	print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
 	if($size > 1){
-	   for(my $i = 1; $i < $size && $i <= 4; $i++){
+	   my $dbfile = GI::get_global_temp()."/gff3.db";
+	   if(-f $GFF_DB->dbfile){
+	       while(!-f $dbfile){
+		   my $lock;
+		   next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
+		   File::Copy::copy($GFF_DB->dbfile, $dbfile) if(!-f $dbfile);
+	       }
+	   }
+	   $GFF_DB = new GFFDB($dbfile);
+
+	   #--initialize TMP and GFFDB for all nodes
+	   my @TMPs = ($CTL_OPT{_TMP});
+	   for(my $i = 0; $i < $size; $i++){
+	      next if $i == $root;
+	      my $tmp;
+	      print "INITIALIZE CTL_OPT\t|  RCV2\t| mpi_data (TMP)\t|  $rank\t<--\t$i\n" if($main::debug);
+	      MPI_RecvII(\$tmp, $i, $mpi_data, MPI_COMM_WORLD);
+	      push(@TMPs, $tmp);
+	   }
+	   my $tdata = [\@TMPs, $CTL_OPT{_job_id}, $GFF_DB->dbfile];
+	   for(my $i = 0; $i < $size; $i++){
+	      next if $i == $root;
+	      print "INITIALIZE CTLOPT\t|  SND2\t| mpi_data (VAR_list)\t|  $rank\t-->\t$i\n" if($main::debug);
+	      MPI_SendII(\$tdata, $i, $mpi_data, MPI_COMM_WORLD);
+	   }
+	   
+	   #--send control files to nodes for help with splitting DBs
+	   for(my $i = 0; $i < $size && $i <= 4; $i++){
+	      next if $i == $root;
 	      my $data = \%CTL_OPT;
 	      print "INITIALIZE CTL_OPT\t|  SND2\t|  mpi_data (ctl_opt)\t|  $rank\t-->\t$i\n" if($main::debug);
 	      MPI_SendII(\$data, $i, $mpi_data, MPI_COMM_WORLD);
-	   }
-
-	   #---set up blast databases and indexes for analyisis
-	    GI::create_blastdb(\%CTL_OPT);
-	    GI::build_all_indexes(\%CTL_OPT);
-	    $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
-	}
+	   }	   
+        }
+	#root database setup
+	GI::create_blastdb(\%CTL_OPT);
+	GI::build_all_indexes(\%CTL_OPT);
+	$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 
 	#--open datastructure controller
 	$DS_CTL = ds_utility->new(\%CTL_OPT);
-	
-	#--set up gff database
-	$GFF_DB = new GFFDB(\%CTL_OPT);
-	$build = $GFF_DB->next_build;
 	
 	#---load genome multifasta/GFF3 file
 	$iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
@@ -447,10 +479,13 @@ if ($rank == $root) {
     $t_need_flag = ($main::no_threads || $size > 10) ? 0 : 1;
     my $thr = threads->create(\&node_thread) if($t_need_flag);
 
+    print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
+
     my $go_mpi_status = 1;
-    
     while($go_mpi_status){
 	#====INTERNAL TIER THREAD
+	#die "FATAL: Thread terminated, causing all processes to fail\n"
+	#    if($t_need_flag && (!$thr || !$thr->is_running));
 	#check on results from internal thread
 	if (defined($t_tier_result)){
 	    my $t_res = ${retrieve($t_tier_result)};
@@ -511,7 +546,7 @@ if ($rank == $root) {
 	    #                                    g_index => $g_index,
 	    #    				 CTL_OPT => \%CTL_OPT,
 	    #    				 DS_CTL  => $DS_CTL,
-	    #    				 GFF_DB  => $GFF_DB,
+	    #    				 dbfile  => $GFF_DB->dbfile,
 	    #    				 build   => $build},
 	    #    			        $root,
 	    #    			        'Process::MpiChunk'
@@ -580,7 +615,7 @@ if ($rank == $root) {
 						    g_index => $g_index,
 						    CTL_OPT => \%CTL_OPT,
 						    DS_CTL  => $DS_CTL,
-						    GFF_DB  => $GFF_DB,
+						    dbfile  => $GFF_DB->dbfile,
 						    build   => $build},
 						   $who,
 						   'Process::MpiChunk',
@@ -810,11 +845,31 @@ else {
     my $chunk_result;
     my $be_helper;
 
+    #--set up node TMP directories and GFFDB
+    my $tmp = GI::get_global_temp();
+    my $tdata;
+    print "INITIALIZE TMP\t|  SND2\t| mpi_data (TMP)\t|  $rank\t-->\t$root\n" if($main::debug);
+    MPI_SendII(\$tmp, $root, $mpi_data, MPI_COMM_WORLD);
+    print "INITIALIZE TMP\t|  RCV2\t| mpi_data (VAR_list)\t|  $rank\t<--\t$root\n" if($main::debug);
+    MPI_RecvII(\$tdata, $root, $mpi_data, MPI_COMM_WORLD);
+    GI::set_global_temp($tdata->[0], $tdata->[1]);
+
+    my $GFF_DB;
+    my $dbfile = GI::get_global_temp()."/gff3.db";
+    if(-f $tdata->[2]){
+	while(!-f $dbfile){
+	    my $lock;
+	    next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
+	    File::Copy::copy($tdata->[2], $dbfile) if(!-f $dbfile);
+	}
+    }
+    $GFF_DB = new GFFDB($dbfile);
+
     #--receive control files from root
     my $CTL_OPT;
     if($rank <= 4){ #only first 4 so as not to overdo it
-       print "INITIALIZE CTL_OPT\t|  RCV2\t|  mpi_data (ctl_opt)\t|  $rank\t<--\t$root\n" if($main::debug);
-       MPI_RecvII(\$CTL_OPT, $root, $mpi_data, MPI_COMM_WORLD);
+	print "INITIALIZE CTL_OPT\t|  RCV2\t|  mpi_data (ctl_opt)\t|  $rank\t<--\t$root\n" if($main::debug);
+	MPI_RecvII(\$CTL_OPT, $root, $mpi_data, MPI_COMM_WORLD);
 
        #---set up blast databases and indexes for analyisis
        $CTL_OPT->{_not_root} = 1;
@@ -825,10 +880,13 @@ else {
     }
     #set to true for threads false for no threads
     $t_need_flag = ($main::no_threads) ? 0 : 1;
-    my $thr = threads->create(\&node_thread) if($t_need_flag);
+    my $thr;
+    $thr = threads->create(\&node_thread) while($t_need_flag && (!$thr || !$thr->is_running));
 
     while ($go_mpi_status) {
 	#====INTERNAL CHUNK THREAD
+	#die "FATAL: Thread terminated, causing all processes to fail\n"
+	#    if($t_need_flag && (!$thr || !$thr->is_running));
 	#check on results from internal thread
 	if (defined($t_chunk_result)){
 	    my $c_res =  ${retrieve($t_chunk_result)};

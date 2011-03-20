@@ -222,18 +222,24 @@ try{
 	}
     }
     
-    #--Control file processing
-    
+    #--Control file processing    
     #set up control options from control files
+    print STDERR "STATUS: Parsing control files...\n" unless($main::quiet);
     %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
+
+    #--set up gff database
+    print STDERR "STATUS: Setting up database for any GFF3 input...\n" unless($main::quiet);
+    $GFF_DB = new GFFDB(\%CTL_OPT);
+    $build = $GFF_DB->next_build;
+
+    #---set up blast databases and indexes for analyisis
+    print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
+    GI::create_blastdb(\%CTL_OPT);
+    GI::build_all_indexes(\%CTL_OPT);
     $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
-    
-    #--set up gff database
-    $GFF_DB = new GFFDB(\%CTL_OPT);
-    $build = $GFF_DB->next_build;
     
     #---load genome multifasta/GFF3 file
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
@@ -251,6 +257,8 @@ catch Error::Simple with{
     exit($code);
 };
 
+print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
+
 my $tier;
 my $f_count = @failed;
 my $i_count = @interrupted;
@@ -259,7 +267,7 @@ while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
 				    g_index => $g_index,
 				    CTL_OPT => \%CTL_OPT,
 				    DS_CTL  => $DS_CTL,
-				    GFF_DB  => $GFF_DB,
+				    dbfile  => $GFF_DB->dbfile,
 				    build   => $build},
 				   '0',
 				   'Process::MpiChunk'

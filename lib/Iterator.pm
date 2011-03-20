@@ -7,6 +7,7 @@ use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use PostData;
 use FileHandle;
+use Carp;
 @ISA = qw(
        );
 
@@ -55,7 +56,7 @@ sub fileHandle {
 		return $self->{fileHandle};
 	}
 	else {
-		die "unknown event in Iterator::fileHandle\n";
+		confess "unknown event in Iterator::fileHandle\n";
 	}
 }
 #-------------------------------------------------------------------------------

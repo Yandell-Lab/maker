@@ -149,9 +149,9 @@ sub finalize {
     my $ann_f = $self->{ann_file};
     my $seq_f = $self->{seq_file};
 
-    open(my $DEF, ">> $def_f")|| confess "ERROR: Can't open def file\n\n";
-    open(my $SEQ, "< $seq_f")|| confess "ERROR: Can't open seq file\n\n";
-    open(my $ANN, "< $ann_f")|| confess "ERROR: Can't open annotation file\n\n";
+    open(my $DEF, ">> $def_f")|| confess "ERROR: Can't open def file: $def_f\n\n";
+    open(my $SEQ, "< $seq_f")|| confess "ERROR: Can't open seq file: $seq_f\n\n";
+    open(my $ANN, "< $ann_f")|| confess "ERROR: Can't open annotation file: $ann_f\n\n";
 
     while(defined(my $line = <$ANN>)){
         print $DEF $line;
@@ -189,9 +189,9 @@ sub merge {
     my $ann_f = $self->{ann_file};
     my $seq_f = $self->{seq_file};
 
-    open(my $DEF, ">> $def_f")|| confess "ERROR: Can't open def file\n\n";
-    open(my $SEQ, ">> $seq_f")|| confess "ERROR: Can't open seq file\n\n";
-    open(my $ANN, ">> $ann_f")|| confess "ERROR: Can't open annotation file\n\n";
+    open(my $DEF, ">> $def_f")|| confess "ERROR: Can't open def file: $def_f\n\n";
+    open(my $SEQ, ">> $seq_f")|| confess "ERROR: Can't open seq file: $seq_f\n\n";
+    open(my $ANN, ">> $ann_f")|| confess "ERROR: Can't open annotation file: $ann_f\n\n";
 
     foreach  my $file (@$files){
 	my $FH = $ANN;

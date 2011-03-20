@@ -53,44 +53,67 @@ print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dt
 #--------------------------- CLASS FUNCTIONS ----------------------------
 #------------------------------------------------------------------------
 sub set_global_temp {
-    my $dir = shift;
+    my $dirs = shift;
+    my $id  = shift;
+    
+    return if(! $dirs);
 
-    return if(! $dir);
+    $dirs = [$dirs] if(!ref($dirs));
 
-    #remove old tempdir if user supplied a new one
-    if($TMP ne $dir){
-	print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n"
-	    if($main::dtmp); ##debug
-	my $base = $dir;
-	$base =~ s/[^\/]+$//;
+    foreach my $dir (@$dirs){
+	#remove old tempdir if user supplied a new one
+	if($TMP ne $dir){
+	    print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n"
+		if($main::dtmp); ##debug
+	    my $base = $dir;
+	    $base =~ s/[^\/]+$//;
+	    
+	    if(! -d $base){
+		print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n"
+		    if($main::dtmp); ##debug
+		next;
+	    }
+	    
+	    if(! -d $dir){
+		print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n"
+		    if($main::dtmp); ##debug
+		mkdir($dir);
+	    }
+	    
+	    if(! -d $dir){
+		print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n"
+		    if($main::dtmp); ##debug
+		next;
+	    }
 
-	if(! -d $base){
-	    print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n"
+	    if($id && -f "$dir/.tempid"){
+		open(my $IN, "< $dir/.tempid");
+		my $line = <$IN>;
+		chomp $line;
+		close($IN);
+		next if($id ne $line);
+	    }
+	    elsif($id){
+		open(my $OUT, "> $dir/.tempid");
+		print $OUT $id."\n";
+		close($OUT);
+	    }
+
+	    File::Path::rmtree($TMP);
+	    
+	    $TMP = $dir;
+	    print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n"
 		if($main::dtmp); ##debug
 	    return;
 	}
-
-	if(! -d $dir){
-	    print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n"
-		if($main::dtmp); ##debug
-	    mkdir($dir);
-	}
-
-	if(! -d $dir){
-	    print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n"
-		if($main::dtmp); ##debug
-	    return;
-	}
-
-	File::Path::rmtree($TMP);
-
-	$TMP = $dir;
-	print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n"
-	    if($main::dtmp); ##debug
     }
 }
 #------------------------------------------------------------------------
-sub LOCK {
+sub get_global_temp {
+    return $TMP;
+}
+#------------------------------------------------------------------------
+    sub LOCK {
     return $LOCK;
 }
 #------------------------------------------------------------------------
@@ -3760,8 +3783,8 @@ sub load_control_files {
    else{
        $CTL_OPT{_TMP} = $TMP;
    }
-
-   set_global_temp($CTL_OPT{_TMP});
+   $CTL_OPT{_job_id} = (new File::NFSLock("$CTL_OPT{_TMP}/tempid", 'SH', 40, 40))->shared_id;
+   set_global_temp($CTL_OPT{_TMP}, $CTL_OPT{_job_id}); #wglobal for all nodes in this job
 
    #--make sure repbase is installed
    if($CTL_OPT{model_org}){
@@ -3846,8 +3869,8 @@ sub load_control_files {
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;
-   create_blastdb(\%CTL_OPT) if($mpi_size == 1);
-   build_all_indexes(\%CTL_OPT) if($mpi_size == 1);
+   #create_blastdb(\%CTL_OPT) if($mpi_size == 1);
+   #build_all_indexes(\%CTL_OPT) if($mpi_size == 1);
 
    return %CTL_OPT;
 }

@@ -6,7 +6,7 @@ use strict;
 
 use Error qw(:try);
 use Error::Simple;
-use Storable;
+use Storable qw(store);
 use Process::MpiTiers;
 use File::Copy;
 use Carp;
@@ -162,6 +162,10 @@ sub _on_failure {
        $tier->{VARS} = {};
        $tier->{RESULTS} = {};
    }
+
+   #restore logs
+   $tier->{VARS}{LOG} = $LOG;
+   $tier->{VARS}{DS_CTL} = $DS_CTL;
 
    return;
 }
@@ -638,7 +642,7 @@ sub _go {
 			   safe_seq_id  => $VARS->{safe_seq_id},
 			   q_seq_obj    => $VARS->{q_seq_obj},
 			   q_seq_length => $VARS->{q_seq_length},
-			   GFF_DB       => $VARS->{GFF_DB},
+			   dbfile       => $VARS->{dbfile},
 			   GFF3_m       => $GFF3_m,
 			   gff3_file    => $gff3_file,
 			   LOG          => $VARS->{LOG},
@@ -709,7 +713,7 @@ sub _go {
 			the_void
 			safe_seq_id
 			q_seq_length
-			GFF_DB
+			dbfile
 			LOG
 			CTL_OPT)
 		    );
@@ -719,7 +723,7 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $LOG = $VARS->{LOG};
-	    my $GFF_DB = $VARS->{GFF_DB};
+	    my $GFF_DB = new GFFDB($VARS->{dbfile});
 	    my $chunk = $VARS->{chunk};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $the_void = $VARS->{the_void};
@@ -1227,7 +1231,7 @@ sub _go {
 			   q_seq_obj    => $VARS->{q_seq_obj},
 			   m_seq_obj    => $VARS->{m_seq_obj},
 			   q_seq_length => $VARS->{q_seq_length},
-			   GFF_DB       => $VARS->{GFF_DB},
+			   dbfile       => $VARS->{dbfile},
 			   GFF3_e       => $GFF3_e,
 			   gff3_file    => $gff3_file,
 			   LOG          => $VARS->{LOG},
@@ -1443,8 +1447,7 @@ sub _go {
 	       $lock1 = new File::NFSLock($start_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $start_file, "");
 	       if(! -f $start_file){
-		  store (\@start, "$start_file.tmp");
-		  move("$start_file.tmp", $start_file);
+		  store (\@start, $start_file);
 	       }
 	       $LOG->add_entry("FINISHED", $start_file, "");
 
@@ -1472,8 +1475,7 @@ sub _go {
 	       $lock1 = new File::NFSLock($end_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $end_file, "");
 	       if(! -f $end_file){
-		  store (\@end, "$end_file.tmp");
-		  move("$end_file.tmp", $end_file);
+		  store (\@end, $end_file);
 	       }
 	       $LOG->add_entry("FINISHED", $end_file, "");
 
@@ -1914,8 +1916,7 @@ sub _go {
 	       $lock1 = new File::NFSLock($start_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $start_file, "");
 	       if(! -f $start_file){
-		  store (\@start, "$start_file.tmp");
-		  move("$start_file.tmp", $start_file);
+		  store (\@start, $start_file);
 	       }
 	       $LOG->add_entry("FINISHED", $start_file, "");
 
@@ -1943,8 +1944,7 @@ sub _go {
 	       $lock1 = new File::NFSLock($end_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $end_file, "");
 	       if(! -f $end_file){
-		  store (\@end, "$end_file.tmp");
-		  move("$end_file.tmp", $end_file);
+		  store (\@end, $end_file);
 	       }
 	       $LOG->add_entry("FINISHED", $end_file, "");
 
@@ -2371,8 +2371,7 @@ sub _go {
 	       $lock1 = new File::NFSLock($start_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $start_file, "");
 	       if(! -f $start_file){
-		   store (\@start, "$start_file.tmp");
-		   move("$start_file.tmp", $start_file);
+		   store (\@start, $start_file);
 	       }
 	       $LOG->add_entry("FINISHED", $start_file, "");
 	       
@@ -2400,8 +2399,7 @@ sub _go {
 		$lock1 = new File::NFSLock($end_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 		$LOG->add_entry("STARTED", $end_file, "");
 		if(! -f $end_file){
-		    store (\@end, "$end_file.tmp");
-		    move("$end_file.tmp", $end_file);
+		    store (\@end, $end_file);
 		}
 		$LOG->add_entry("FINISHED", $end_file, "");
 
@@ -2677,7 +2675,7 @@ sub _go {
 			exonerate_e_data
 			exonerate_a_data
 			exonerate_p_data
-			GFF_DB
+			dbfile
 			GFF3_e
 			LOG
 			CTL_OPT)
@@ -2698,7 +2696,7 @@ sub _go {
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $exonerate_a_data = $VARS->{exonerate_a_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
-	    my $GFF_DB = $VARS->{GFF_DB};
+	    my $GFF_DB = new GFFDB($VARS->{dbfile});
 	    my $GFF3_e = $VARS->{GFF3_e};
 	    my $LOG = $VARS->{LOG};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
@@ -2828,8 +2826,7 @@ sub _go {
 		$lock1 = new File::NFSLock($start_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 		$LOG->add_entry("STARTED", $start_file, "");
 		if(! -f $start_file){
-		    store (\%start_junction, "$start_file.tmp");
-		    move("$start_file.tmp", $start_file);
+		    store (\%start_junction, $start_file);
 		}
 		$LOG->add_entry("FINISHED", $start_file, "");
 
@@ -2863,7 +2860,6 @@ sub _go {
 		$LOG->add_entry("STARTED", $end_file, "");
 		if(! -f $end_file){
 		    store (\%end_junction, "$end_file.tmp");
-		    move("$end_file.tmp", $end_file);
 		}
 		$LOG->add_entry("FINISHED", $end_file, "");
 		
@@ -2953,16 +2949,27 @@ sub _go {
 	    while(my $chunk = $fasta_chunker->next_chunk){
 	       #get evidence alignments from chunk section files
 	       my $order = $chunk->number;
-	       my ($s_file) = grep{/\.$order\.raw\.section$/} @$section_files;
-	       my ($j_file) = grep{/\.$order\-\d+\.raw\.section$/} @$section_files;
+               my $s_file = "$the_void/$safe_seq_id.$order.raw.section";
+               my $j_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
+	       ($s_file) = grep{$_ eq $s_file} @$section_files;
+	       ($j_file) = grep{$_ eq $j_file} @$section_files;
 
 	       #missing junction
 	       if(!$chunk->is_last && (! $j_file || ! -f $j_file)){
+		   unlink($j_file) if($j_file);
+		   unlink($s_file) if($s_file);
 		   confess "ERROR: Missing junction file for $order\-".($order+1)."\n";
 	       }
 
 	       my $section = retrieve($s_file);
 	       my $junction = ($j_file) ? retrieve($j_file) : {};
+
+	       #fix weird storable is ARRAY not HASH error
+	       if (ref($junction) ne 'HASH'){
+		   unlink($junction);
+		   confess STDERR "ERROR: Storable retrieval error.\n".
+		                  "Must remove file before trying again.\n";
+	       }
 
 	       #merge the junction data onto the rest of the chunk section
 	       while(my $key = each %$junction){
@@ -3707,6 +3714,8 @@ sub _on_termination {
 
    #only reach this point if termination is due to success
    $self->{RESULTS} = {};
+   my $LOG = $tier->{VARS}{LOG};
+   my $DS_CTL = $tier->{VARS}{DS_CTL};
 
    if($tier_type == 0){
       $tier->{VARS}{DS_CTL}->add_entry($tier->{VARS}{seq_id},
@@ -3732,6 +3741,10 @@ sub _on_termination {
    }
 
    delete($tier->{VARS});
+
+   #restore
+   $tier->{VARS}{LOG} = $LOG;
+   $tier->{VARS}{DS_CTL} = $DS_CTL;
 
    return;
 }
@@ -3924,5 +3937,38 @@ sub _handler {
 }
 #-----------------------------------------------------------------------------
 #------------------------------------SUBS-------------------------------------
+#-----------------------------------------------------------------------------
+sub retrieve {
+    my @args = @_;
+    
+    try {
+	return Storable::retrieve(@args);
+    }
+    catch Error::Simple with {
+        my $E = shift;
+	
+	print STDERR "Removing file: $args[0]\n";
+	unlink($args[0]);
+	throw $E;
+    };
+}
+#-----------------------------------------------------------------------------
+sub store {
+    my @args = @_;
+
+    try {
+	my $file = $args[1];
+	$args[1] =~ s/([^\/]+)$/.storetmp.$1.storetmp/;
+	Storable::store(@args);
+	move($args[1], $file)
+	    or die "ERROR: Storable::store failed on $file\n";
+    }
+    catch Error::Simple with {
+        my $E = shift;
+	
+	unlink($args[1]);
+	throw $E;
+    };
+}
 #-----------------------------------------------------------------------------
 1;

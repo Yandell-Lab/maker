@@ -27,21 +27,20 @@ sub new {
         my $self = {};
         bless ($self, $class);
 
+	my $in = shift @args;
 	my $dbfile = 'dbfile.db';
-
-	my $in = shift @args;	
-	my %CTL_OPTIONS;
 	if(ref $in eq 'HASH'){
-	    %CTL_OPTIONS = %{$in};
-	    $dbfile = "$CTL_OPTIONS{out_base}/$CTL_OPTIONS{out_name}.db";
+	    my $CTL_OPT = $in;
+	    $dbfile = "$CTL_OPT->{out_base}/$CTL_OPT->{out_name}.db";
+	    $CTL_OPT->{_dbfile} = $dbfile;
 
 	    #rebuild database from scratch on force
-	    unlink($dbfile) if($CTL_OPTIONS{force} && !$CTL_OPTIONS{_multi_chpc});
+	    unlink($dbfile) if($CTL_OPT->{force} && !$CTL_OPT->{_multi_chpc});
 
 	    $self->{dbfile} = $dbfile;
 	    $self->{last_build} = undef;
-	    $self->{next_build} = $CTL_OPTIONS{out_name}."::1.00";
-	    $self->{go_gffdb} = $CTL_OPTIONS{go_gffdb};
+	    $self->{next_build} = $CTL_OPT->{out_name}."::1.00";
+	    $self->{go_gffdb} = $CTL_OPT->{go_gffdb};
 
 	    my $lock;
 	    while(! $lock || ! $lock->maintain(30)){
@@ -51,14 +50,14 @@ sub new {
 	    $self->initiate();
 	    return $self unless($self->{go_gffdb});
 	    
-	    $self->add_maker($CTL_OPTIONS{genome_gff},\%CTL_OPTIONS);
-	    $self->add_repeat($CTL_OPTIONS{rm_gff});
-	    $self->add_est($CTL_OPTIONS{est_gff});
-	    $self->add_altest($CTL_OPTIONS{altest_gff});
-	    $self->add_protein($CTL_OPTIONS{protein_gff});
-	    $self->add_pred($CTL_OPTIONS{pred_gff});
-	    $self->add_model($CTL_OPTIONS{model_gff});
-	    $self->add_other($CTL_OPTIONS{other_gff});
+	    $self->add_maker($CTL_OPT->{genome_gff},$CTL_OPT);
+	    $self->add_repeat($CTL_OPT->{rm_gff});
+	    $self->add_est($CTL_OPT->{est_gff});
+	    $self->add_altest($CTL_OPT->{altest_gff});
+	    $self->add_protein($CTL_OPT->{protein_gff});
+	    $self->add_pred($CTL_OPT->{pred_gff});
+	    $self->add_model($CTL_OPT->{model_gff});
+	    $self->add_other($CTL_OPT->{other_gff});
 	    $self->do_indexing();
 	    $lock->unlock;
 	}
@@ -754,6 +753,12 @@ sub next_build {
     my $self = shift;
 
     return $self->{next_build} || undef;
+}
+#-------------------------------------------------------------------------------
+sub dbfile {
+    my $self = shift;
+
+    return $self->{dbfile};
 }
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------

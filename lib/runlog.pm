@@ -776,8 +776,8 @@ sub _load_old_log {
     }
 
     #just let it run init/cleanup and then stop
-    if($self->{CTL_OPT}->{tries} == 0 && $continue_flag != 0){
-        $self->{continue_flag} = -1;
+    if($CTL_OPT{tries} == 0 && $continue_flag != 0){
+        $continue_flag = -1;
     }
 
     $self->{continue_flag} = $continue_flag;
