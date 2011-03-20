@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -20,6 +20,7 @@ Options:
 
 ";
 
+my $s;
 GetOptions ("s" => \$s,
 	    "help|?" => sub{print $usage; exit(0)});
 
@@ -27,7 +28,7 @@ my $COUNT = 1;
 my $NUM = 1;
 my %INDEX;
 
-
+my @files = @ARGV;
 if(! @files){
     print $usage;
     exit(1);
@@ -52,7 +53,7 @@ while(my $file = shift @files){
     my @CDSs;
     my @exons;
     my @UTRs;
-
+    my @stuff;
 
     while (defined(my $line = <IN>)){
 	#skip comments and fasta (add to header and footer)
@@ -85,9 +86,6 @@ while(my $file = shift @files){
     push(@stuff, $f) if($f->{type} eq 'three_prime_UTR');
 }
 close(IN);
-
-#print header
-print $header;
 
 #get fasta index
 my @data = grep {!/\#\#FASTA/} split("\n", $footer);

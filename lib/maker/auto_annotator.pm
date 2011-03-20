@@ -1321,15 +1321,12 @@ sub _best{
 	    my $k_B = $k->{g_start};
 	    my $k_E = $k->{g_end};
 
-	    my $class;	    
-	    if($CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
+	    my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+	    if($class ne '0' && $CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 	       my $f1 = $g->{t_structs}->[0]->{hit};
 	       my $f2 = $k->{t_structs}->[0]->{hit};
 	       my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
-	       $class = ($sn >= .30 || $sp >= .30) ? 1 : 0;
-	    }
-	    else{
-	       $class = compare::compare($g_B, $g_E, $k_B, $k_E);
+	       $class = ($sn >= .30 || $sp >= .30) ? 1 : 0; #allow overlap of up to 30%
 	    }
 
 	    if($class ne '0'){
@@ -1793,8 +1790,8 @@ sub load_transcript_struct {
 
 	if($predictor !~ /model_gff/ && !$CTL_OPT->{est_forward}){
 	    #fix for non-canonical (almost certainly bad) 5' and 3' UTR
-	    my $trim5 = (!$has_stop && $end != length($transcript_seq) + 1);
-	    my $trim3 = (!$has_start && $offset != 0);
+	    my $trim3 = (!$has_stop && $end != length($transcript_seq) + 1);
+	    my $trim5 = (!$has_start && $offset != 0);
 	    if($trim5 || $trim3){
 		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
 		$transcript_seq  = get_transcript_seq($f, $seq);
@@ -2058,7 +2055,7 @@ sub group_transcripts {
        
        #remove redundant transcripts in gene
        foreach my $c (@{$clusters}) {
-	   my $best_alt_forms = ($CTL_OPT->{est_forward}) ?
+	   my $best_alt_forms = ($CTL_OPT->{est_forward} && $predictor eq 'est2genome') ?
 	       $c : clean::remove_redundant_alt_splices($c, 10);
 	   push(@$careful_clusters, $best_alt_forms);
        }
@@ -2165,8 +2162,11 @@ sub group_transcripts {
       }
 
       #infer gene name for pass-through transcripts (no gene name but yes tran name)
-      if($CTL_OPT->{est_forward} && !$t_structs[0]->{hit}->{gene_name} &&
-	 !$t_structs[0]->{hit}->{gene_id} && $t_structs[0]->{hit}->{_tran_name}
+      if($predictor eq 'est2genome' &&
+	 $CTL_OPT->{est_forward} &&
+	 !$t_structs[0]->{hit}->{gene_name} &&
+	 !$t_structs[0]->{hit}->{gene_id} &&
+	 $t_structs[0]->{hit}->{_tran_name}
 	 ){
 	  $g_name = $t_structs[0]->{t_name}."-gene";
 	  $g_id = $t_structs[0]->{t_id}."-gene";
@@ -2782,6 +2782,8 @@ sub get_translation_seq {
     $f->{_TSTART}{hit} = $offset + 1;
     $f->{_TEND}{query} = $coorE;
     $f->{_TEND}{hit} = $end - 1;
+    $f->{_HAS_START} = $has_start;
+    $f->{_HAS_STOP} = $has_stop; 
 
     #return
     return ($p_seq , $offset, $end, $has_start, $has_stop);

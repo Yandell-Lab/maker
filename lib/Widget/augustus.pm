@@ -179,8 +179,8 @@ sub augustus {
         }
 
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
-        unlink($xdef_file) if(-f $xdef_file);
-        unlink($file_name) if(-f $file_name);
+        #unlink($xdef_file) if(-f $xdef_file);
+        #unlink($file_name) if(-f $file_name);
 
         my %params;
            $params{min_exon_score}  = -100;
@@ -239,7 +239,7 @@ sub get_xdef {
                 my $c_e = $p->[1] - $offset;
 
 		my $l  = "$q_id\tPROTEIN\tCDSpart";
-		   $l .= "\t".$c_b."\t".$c_e."\t"."1e-1000"."\t".$s;
+		   $l .= "\t".$c_b."\t".$c_e."\t"."1e-100"."\t".$s;
                    $l .= "\t".'.'."\t".'group=p_pieces;'."source=P";
 
                 push(@xdef, $l);
@@ -247,13 +247,11 @@ sub get_xdef {
 
         return \@xdef if(!@$i_coors);
 
-        my @intron;
+        foreach my $i (@$i_coors){
+	   my $i_b = ($i->[0] - $offset);# + ($i_flank-1);
+	   my $i_e = ($i->[1] - $offset);# - ($i_flank-1);
 
-       foreach my $i (@$i_coors){
-	   my $i_b = ($i->[0] - $offset) + ($i_flank-1);
-	   my $i_e = ($i->[1] - $offset) - ($i_flank-1);
-
-	   next if abs($i_b - $i_e) < 2*$i_flank;
+	   #next if abs($i_b - $i_e) < 2*$i_flank;
 	   next if abs($i_b - $i_e) < 25;
 	   
 	   my $l  = "$q_id\tEST-INTRON\tintronpart";

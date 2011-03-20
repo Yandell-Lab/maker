@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -167,7 +167,7 @@ foreach my $g (@genes){
 	my $seq_ref = \$fastas{$t->{seqid}};
 
 	my $start_stop = [];
-	@$start_stop = add_start_stop($t_CDS, $seq_ref);
+	#@$start_stop = add_start_stop($t_CDS, $seq_ref);
 
 	print_it(@$t_exons, @$t_stuff, @$start_stop);
     }
@@ -193,6 +193,7 @@ sub print_it {
 	print 'ID='.$COUNT;
 	print ';Name='.$f->{Name};
 	print ';Parent='.$INDEX{$f->{Parent}} if($f->{Parent});
+	print ';'.$f->{att} if($f->{att});
 	print "\n";
 
 	$COUNT++;
@@ -449,8 +450,9 @@ sub parse {
 	    phase => $F[7],
 	    ID => $att[0],
 	    Name => $att[1],
-	    Parent => $att[2]};
-
+	    Parent => $att[2],
+	    att => $att[3],};
+    
     return $f;
 }
 
@@ -465,8 +467,9 @@ sub attrib {
     $name = $ID if(! defined $name);
     $ID = $NUM++ if(! defined $ID);
     $name = $ID if(! defined $name);
+    $att =~ s/(ID|Name|Parent)\=([^\;\n]+)\;?//g;
 
-    return ($ID, $name, $parent);
+    return ($ID, $name, $parent, $att);
 }
 
 sub is_same {

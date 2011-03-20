@@ -756,7 +756,7 @@ sub split_db {
    
    #check if likely already finished
    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-      
+
    if(@t_db == $bins){ #use existing if right count
       push(@db_files, @t_db);
       return \@db_files;
@@ -792,7 +792,7 @@ sub split_db {
       
       if(@t_db == $bins){ #use existing if right count
 	 push(@db_files, @t_db);
-	 next;
+	 return \@db_files;
       }
       else{ #remove if there is an error
 	 &File::Path::rmtree($f_dir);
