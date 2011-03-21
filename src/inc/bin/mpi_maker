@@ -467,8 +467,8 @@ if ($rank == $root) {
 	   while(!-f "$gdbfile.index"){
 	       my $lock;
 	       next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	       File::Copy::copy($g_index, $gdbfile);
-	       File::Copy::copy("$g_index.index", "$gdbfile.index");
+	       File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
+	       File::Copy::copy("$g_index.index", "$gdbfile.index") if(!-f "$gdbfile.index");
 	   }
 
 	   $g_index = GI::build_fasta_index([$gdbfile]);
@@ -915,8 +915,8 @@ else {
     while(!-f "$gdbfile.index"){
 	my $lock;
 	next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	File::Copy::copy($g_index, $gdbfile);
-	File::Copy::copy("$g_index.index", "$gdbfile.index");
+	File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
+	File::Copy::copy("$g_index.index", "$gdbfile.index") if(!-f "$gdbfile.index");
     }
     $g_index = GI::build_fasta_index([$gdbfile]);
     $g_index->add_to_global_index();
