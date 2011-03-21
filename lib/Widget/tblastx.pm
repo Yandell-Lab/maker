@@ -153,6 +153,12 @@ sub keepers {
               my $s = $h->start('query');
               my $e = $h->end('query');
               if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){
+		  #clear a little memory (will I need this later?)
+		  $h->cigar_string; #holds alignment
+		  $h->{QUERY_SEQ} = '';
+		  $h->{HIT_SEQ} = '';
+		  $h->{HOMOLOGY_SEQ} = '';
+		  
                   push(@keepers, $h);
                   next;
 	      }

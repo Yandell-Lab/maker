@@ -1196,37 +1196,38 @@ sub copy {
 
 	my @new_hsps;
 	foreach my $hsp ($hit->hsps){
-		my $args  = load_args($hsp, $what);
-
-		my $ref = ref($hsp);
-		my $new_hsp = new $ref(@{$args});
-		
-
-		add_splice_data($new_hsp, $hsp, $what) if ref($hsp) =~ /est2genome$/;
-
-                $new_hsp->queryName($hsp->queryName)
+	    my $args  = load_args($hsp, $what);
+	    
+	    my $ref = ref($hsp);
+	    my $new_hsp = new $ref(@{$args});
+	    
+	    
+	    add_splice_data($new_hsp, $hsp, $what) if ref($hsp) =~ /est2genome$/;
+	    
+	    $new_hsp->queryName($hsp->queryName)
 		if defined($hsp->queryName);
-
-		my $n_q_s = $hsp->strand('query');
-		my $n_h_s = $hsp->strand('hit');
-
-		if    ($what eq 'both') {
-		   $n_q_s = -1*$n_q_s;
-		   $n_h_s = -1*$n_h_s;
-		}
-		elsif ($what eq 'revq'){
-		   $n_q_s = -1*$n_q_s;
-		}
-		elsif ($what eq 'revh'){
-		   $n_h_s = -1*$n_h_s;
-		}
-
-               $new_hsp->{_strand_hack}->{query} = $n_q_s;
-               $new_hsp->{_strand_hack}->{hit}   = $n_h_s;
-               $new_hsp->{_identical_hack}       = $hsp->frac_identical();
-	       $new_hsp->{_label}                = $hsp->{_label};
-
-	       push(@new_hsps, $new_hsp);
+	    
+	    my $n_q_s = $hsp->strand('query');
+	    my $n_h_s = $hsp->strand('hit');
+	    
+	    if ($what eq 'both') {
+		$n_q_s = -1*$n_q_s;
+		$n_h_s = -1*$n_h_s;		    
+	    }
+	    elsif ($what eq 'revq'){
+		$n_q_s = -1*$n_q_s;
+	    }
+	    elsif ($what eq 'revh'){
+		$n_h_s = -1*$n_h_s;
+	    }
+	    
+	    $new_hsp->{_strand_hack}->{query} = $n_q_s;
+	    $new_hsp->{_strand_hack}->{hit}   = $n_h_s;
+	    $new_hsp->{_identical_hack}       = $hsp->frac_identical();
+	    $new_hsp->{_label}                = $hsp->{_label};
+	    $new_hsp->{_CIGAR}                = $hsp->{_CIGAR} if($hsp->{_CIGAR});
+	    
+	    push(@new_hsps, $new_hsp);
 	}
 
 	my @sorted;
