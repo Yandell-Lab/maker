@@ -1,4 +1,7 @@
-#!\usr\bin\perl
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 
 use warnings;
 use strict "vars";
@@ -504,7 +507,8 @@ if ($rank == $root) {
     #no thread if size is > 10 as it starts to affect node management
     #also no thereads if not threaded perl
     $t_need_flag = ($main::no_threads || $size > 10) ? 0 : 1;
-    my $thr = threads->create(\&node_thread) if($t_need_flag);
+    my $thr;
+    $thr = threads->create(\&node_thread) while($t_need_flag && (!$thr || !$thr->is_running));
 
     print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
 
