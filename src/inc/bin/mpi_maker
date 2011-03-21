@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict "vars";
@@ -879,9 +876,9 @@ else {
     #--set up node TMP directories and GFFDB
     my $tmp = GI::get_global_temp();
     my $tdata;
-    print "INITIALIZE TMP\t|  SND2\t| mpi_data (TMP)\t|  $rank\t-->\t$root\n" if($main::debug);
+    print "INITIALIZE CTL_OPT\t|  SND2\t| mpi_data (TMP)\t|  $rank\t-->\t$root\n" if($main::debug);
     MPI_SendII(\$tmp, $root, $mpi_data, MPI_COMM_WORLD);
-    print "INITIALIZE TMP\t|  RCV2\t| mpi_data (VAR_list)\t|  $rank\t<--\t$root\n" if($main::debug);
+    print "INITIALIZE CTL_OPT\t|  RCV2\t| mpi_data (VAR_list)\t|  $rank\t<--\t$root\n" if($main::debug);
     MPI_RecvII(\$tdata, $root, $mpi_data, MPI_COMM_WORLD);
     GI::set_global_temp($tdata->[0], $tdata->[1]);
 
