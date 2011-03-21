@@ -2859,7 +2859,7 @@ sub _go {
 		$lock1 = new File::NFSLock($end_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 		$LOG->add_entry("STARTED", $end_file, "");
 		if(! -f $end_file){
-		    store (\%end_junction, "$end_file.tmp");
+		    store (\%end_junction, $end_file);
 		}
 		$LOG->add_entry("FINISHED", $end_file, "");
 		

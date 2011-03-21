@@ -134,6 +134,12 @@ sub keepers {
 	  #iterate HSP
 	  my @hsps;
 	  while(my $hsp = $hit->next_hsp) {
+	      #clear a little memory (will I need this later?)
+	      $hsp->cigar_string; #holds alignment
+	      $hsp->{QUERY_SEQ} = '';
+	      $hsp->{HIT_SEQ} = '';
+	      $hsp->{HOMOLOGY_SEQ} = '';
+
 	      $hsp->query_name($q_name);
 	      push(@hsps, $hsp) if($hsp->bits > $hsp_bit_min);
 	  }
@@ -153,12 +159,6 @@ sub keepers {
 	      my $s = $h->start('query');
 	      my $e = $h->end('query');
 	      if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){
-		  #clear a little memory (will I need this later?)
-		  $h->cigar_string; #holds alignment
-		  $h->{QUERY_SEQ} = '';
-		  $h->{HIT_SEQ} = '';
-		  $h->{HOMOLOGY_SEQ} = '';
-
 		  push(@keepers, $h);
 		  next;
 	      }
