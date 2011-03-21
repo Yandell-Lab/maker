@@ -302,6 +302,12 @@ sub get_exon_coors_r {
 	}
 	$data[$exon]{q}{strand} = $v->{q_strand};
 	$data[$exon]{t}{strand} = $v->{t_strand};
+
+        #fix 0 length exons in report
+        if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+           delete($data[$exon]);
+           $exon--; #undo iteration
+        }
         
         #my $new_data = fix_exon_coors(\@data);
         #return $new_data;
@@ -550,6 +556,12 @@ sub get_exon_coors_f {
         }
         $data[$exon]{q}{strand} = $v->{q_strand};
         $data[$exon]{t}{strand} = $v->{t_strand};
+
+        #fix 0 length exons in report
+        if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+           delete($data[$exon]);
+           $exon--; #undo iteration
+        }
 	
 	#my $new_data = fix_exon_coors(\@data);
 	#return $new_data;

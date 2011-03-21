@@ -281,7 +281,7 @@ sub get_exon_coors {
 		}
 
         }
-
+	
         if ($v->{q_b} < $v->{q_e}){
             $data[$exon]{q}{e} = $pos_q;
         }
@@ -297,6 +297,12 @@ sub get_exon_coors {
         }
         $data[$exon]{q}{strand} = $v->{q_strand};
         $data[$exon]{t}{strand} = $v->{t_strand};
+
+	#fix 0 length exons in report
+	if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+	   delete($data[$exon]);
+	   $exon--; #undo iteration
+	}
 	
 	#my $new_data = fix_exon_coors(\@data);
 	#return $new_data;
@@ -572,7 +578,6 @@ sub load_args {
 
 	my $q_b = $exon->{q}->{b};
 	my $q_e = $exon->{q}->{e};
-
 
         my @args;
 
