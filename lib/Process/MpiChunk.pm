@@ -466,20 +466,20 @@ sub _go {
 		close ($FAS);
 
 		#make g_index be smaller file
-		GI::build_fasta_index($unmasked_file)->_close_index; #once to tie file
-		$g_index = GI::build_fasta_index($unmasked_file);
-		$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
-
+		#GI::build_fasta_index($unmasked_file)->_close_index; #once to tie file
+		#$g_index = GI::build_fasta_index($unmasked_file);
+		#$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
+                #
 		#still no sequence? try rebuilding the index and try again
-		if (not $q_seq_obj) {
-		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		    $g_index->reindex();
-		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		    if (not $q_seq_obj) {
-			print STDERR "stop here: $seq_id\n";
-			confess "ERROR: Fasta index error\n";
-		    }
-		}
+		#if (not $q_seq_obj) {
+		#    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
+		#    $g_index->reindex();
+		#    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		#    if (not $q_seq_obj) {
+		#	print STDERR "stop here: $seq_id\n";
+		#	confess "ERROR: Fasta index error\n";
+		#    }
+		#}
 	    }
 	    #-------------------------CODE
 	    

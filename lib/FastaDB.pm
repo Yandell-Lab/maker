@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------------
 package FastaDB;
 use strict;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION %G_DB);
 use Exporter;
 use PostData;
 use FileHandle;
@@ -36,6 +36,15 @@ sub new {
 
     #build indexes
     while (my $file = shift @files){ 
+	my ($title) = $file =~ /([^\/]+)$/;
+	if($G_DB{$title}){
+	    push(@{$self->{index}}, $G_DB{$title});
+
+	    #build reverse index to get the correct index based on file name
+	    $self->{file2index}{$title} = $self->{index}->[-1];
+	    next;
+	}
+
 	my $lock; #do non blocking lock to skip over active
 	if (! -e "$file.index" || -e ".NFSLock.$file.index.NFSLock"){ #index is not ready to use
 	    if(($lock = new File::NFSLock("$file.index", 'NB', undef, 50))){
@@ -58,7 +67,6 @@ sub new {
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
 	
 	#build reverse index to get the correct index based on file name
-	my ($title) = $file =~ /([^\/]+)$/;
 	$self->{file2index}{$title} = $self->{index}->[-1];
 	
 	$lock->unlock if($lock);
@@ -355,6 +363,24 @@ sub STORABLE_thaw {
 	#build reverse index to get the correct index based on file name
 	my ($title) = $file =~ /([^\/]+)$/;
 	$self->{file2index}{$title} = $self->{index}->[-1];
+    }
+}
+#-------------------------------------------------------------------------------
+sub add_to_global_index{
+    my $self = shift;
+
+    while(my $key = each %{$self->{file2index}}){
+	my ($name) = $key =~ /([^\/]+)$/;
+        $G_DB{$name} = $self->{file2index}->{$key};
+    }
+}
+#-------------------------------------------------------------------------------
+sub drop_from_global_index{
+    my $self = shift;
+
+    while(my $key = each %{$self->{file2index}}){
+	my ($name) = $key =~ /([^\/]+)$/;
+        delete($G_DB{$name});
     }
 }
 #-------------------------------------------------------------------------------

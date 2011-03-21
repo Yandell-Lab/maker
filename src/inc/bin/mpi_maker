@@ -413,7 +413,9 @@ if ($rank == $root) {
 	#communicate with other nodes to initialize TMP and databases
 	print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
 	if($size > 1){
+	   #global GFFDB for root
 	   my $dbfile = GI::get_global_temp()."/gff3.db";
+
 	   if(-f $GFF_DB->dbfile){
 	       while(!-f $dbfile){
 		   my $lock;
@@ -447,10 +449,35 @@ if ($rank == $root) {
 	      MPI_SendII(\$data, $i, $mpi_data, MPI_COMM_WORLD);
 	   }	   
         }
+
 	#root database setup
 	GI::create_blastdb(\%CTL_OPT);
 	GI::build_all_indexes(\%CTL_OPT);
-	$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+
+	#--setup global g_index for all nodes
+	$g_index = $CTL_OPT{_g_db}[0];
+	if($size > 1){
+	   for(my $i = 0; $i < $size; $i++){
+	       next if $i == $root;
+	       print "INITIALIZE CTLOPT\t|  SND2\t| mpi_data (g_index)\t|  $rank\t-->\t$i\n" if($main::debug);
+	       MPI_SendII(\$g_index, $i, $mpi_data, MPI_COMM_WORLD);
+	   }
+	   my ($name) = $g_index =~ /([^\/]+)$/;
+	   my $gdbfile = GI::get_global_temp()."/$name";
+	   while(!-f "$gdbfile.index"){
+	       my $lock;
+	       next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
+	       File::Copy::copy($g_index, $gdbfile);
+	       File::Copy::copy("$g_index.index", "$gdbfile.index");
+	   }
+
+	   $g_index = GI::build_fasta_index([$gdbfile]);
+        }
+	else{
+	    $g_index = GI::build_fasta_index($g_index);
+	}
+
+	$g_index->add_to_global_index();
 
 	#--open datastructure controller
 	$DS_CTL = ds_utility->new(\%CTL_OPT);
@@ -878,6 +905,22 @@ else {
 	  GI::build_all_indexes($CTL_OPT);
        }
     }
+
+    #--setup global g_index for all nodes
+    my $g_index;
+    print "INITIALIZE CTLOPT\t|  RCV2\t| mpi_data (g_index)\t|  $rank\t<--\t$root\n" if($main::debug);
+    MPI_RecvII(\$g_index, $root, $mpi_data, MPI_COMM_WORLD);
+    my ($name) = $g_index =~ /([^\/]+)$/;
+    my $gdbfile = GI::get_global_temp()."/$name";
+    while(!-f "$gdbfile.index"){
+	my $lock;
+	next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
+	File::Copy::copy($g_index, $gdbfile);
+	File::Copy::copy("$g_index.index", "$gdbfile.index");
+    }
+    $g_index = GI::build_fasta_index([$gdbfile]);
+    $g_index->add_to_global_index();
+
     #set to true for threads false for no threads
     $t_need_flag = ($main::no_threads) ? 0 : 1;
     my $thr;

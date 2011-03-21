@@ -1382,7 +1382,7 @@ sub crit4 {
 sub run_it{
     my $data         = shift;
     my $the_void     = shift;
-    my $seq          = shift;
+    my $m_seq          = shift;
     my $v_seq        = shift;
     my $def          = shift;
     my $predictor    = shift;
@@ -1459,10 +1459,10 @@ sub run_it{
 
 	    #add UTR to ab-inits
 	    my $select = $model;
-	    my $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+	    my $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 	    while(! compare::is_same_alt_form($select, $transcript, 0)){
 		$select = $transcript;
-		$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 	    }
 
 	    #don't filter imediately just mark for downstream filtering
@@ -1480,7 +1480,7 @@ sub run_it{
 		$gomias = $ests;
 	    }
 	    elsif($CTL_OPT->{org_type} eq 'prokaryotic'){
-		$gomias = PhatHit_utils::make_flat_hits($ests, $seq);
+		$gomias = PhatHit_utils::make_flat_hits($ests, $v_seq);
 	    }
 	    else{
 		$gomias = clean::purge_single_exon_hits($ests);
@@ -1491,16 +1491,16 @@ sub run_it{
 		my $transcript = $mia;
 		if($CTL_OPT->{est_forward}){
 		    my $select = $mia;
-		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		    while(! compare::is_same_alt_form($select, $transcript, 0)){
 			$select = $transcript;
-			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+			$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		    }
 		}
 		$transcript->{_HMM} = 'est2genome';
 
 		if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
-		    my $transcript_seq  = get_transcript_seq($transcript, $seq);
+		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
 		    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
 		    #at least 60% of EST must be CDS to make a gene prediction
 		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
@@ -1522,10 +1522,10 @@ sub run_it{
 	    next if(! @$gomiph);
 
 	    my $miphs = clean::remove_redundant_alt_splices($gomiph, 10);
-	    #my $miphs = PhatHit_utils::make_flat_hits($gomiph, $seq);
+	    #my $miphs = PhatHit_utils::make_flat_hits($gomiph, $v_seq);
 
 	    foreach my $miph (@$miphs){
-		my $transcript_seq  = get_transcript_seq($miph, $seq);
+		my $transcript_seq  = get_transcript_seq($miph, $v_seq);
 		my ($translation_seq,
 		    $offset,
 		    $end,
@@ -1540,10 +1540,10 @@ sub run_it{
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
 
 		my $select = $copy;
-		my $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		my $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		while(! compare::is_same_alt_form($select, $transcript, 0)){
 		    $select = $transcript;
-		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		}
 		$transcript->{_HMM} = 'protein2genome';
 
@@ -1570,7 +1570,7 @@ sub run_it{
 
 	my $i = 0;
 	foreach my $mia (@$gomias) {
-	    my ($pred_shots, $strand) = get_pred_shot($seq,
+	    my ($pred_shots, $strand) = get_pred_shot($m_seq,
 						      $def,
 						      $the_void,
 						      $mia,
@@ -1658,13 +1658,13 @@ sub run_it{
 		if (defined($pred_shot)){
 		    my $transcript = $pred_shot;
 		    if($CTL_OPT->{alt_splice} && defined($mia)){
-			$transcript = pneu([$mia], $transcript, $seq);
+			$transcript = pneu([$mia], $transcript, $v_seq);
 		    }
 		    my $select = $transcript;
-		    $transcript = pneu($ests, $select, $seq); #helps tile ESTs
+		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		    while(! compare::is_same_alt_form($select, $transcript, 0)){
 			$select = $transcript;
-			$transcript = pneu($ests, $select, $seq); #helps tile ESTs
+			$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		    }
 		    push(@transcripts, [$transcript, $set->{index}, $pred_shot]);
 		}
