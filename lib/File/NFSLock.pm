@@ -29,7 +29,7 @@ use Exporter ();
 use vars qw(@ISA @EXPORT_OK $VERSION $TYPES
             $LOCK_EXTENSION $SHARE_BIT $HOSTNAME $errstr
             $graceful_sig @CATCH_SIGS);
-use Carp qw(croak confess);
+use Carp qw(croak confess cluck);
 use File::Copy;
 use File::Temp;
 use Storable;
@@ -655,8 +655,8 @@ sub refresh {
 
   #make sure the lock really is still mine (also refreshes NFS cache)
   if(! $self->still_mine){
-      warn "ERROR: Cannot refresh the lock as it has apparently been broken\n".
-	   "lockfile: ".$self->{file}."\n";
+      cluck "ERROR: Cannot refresh the lock as it has apparently been broken\n".
+	    "lockfile: ".$self->{file}."\n";
       return 0;
   }
 

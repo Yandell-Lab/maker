@@ -1592,6 +1592,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
+			seq_id
 			GFF3_e
 			LOG
 			CTL_OPT)
@@ -1608,12 +1609,19 @@ sub _go {
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $seq_id = $VARS->{seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish blastn hits with exonerate
 	    my $exonerate_e_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		#handle mising db in seq (IO error)
+		if(! $q_seq_obj->{db}){
+		    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		}
+
 		$exonerate_e_data = GI::polish_exonerate($chunk,
 							 $q_seq_obj,
 							 $q_seq_length,
@@ -2052,6 +2060,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
+			seq_id
 			GFF3_e
 			LOG
 			CTL_OPT)
@@ -2068,12 +2077,18 @@ sub _go {
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $seq_id = $VARS->{seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish tblastx hits with exonerate
 	    my $exonerate_a_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+	       #handle mising db in seq (IO error)
+	       #if(! $q_seq_obj->{db}){
+	       #    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+	       #    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+	       #}
 	       #$exonerate_a_data = GI::polish_exonerate($chunk,
 	       #                                         $q_seq_obj,
 	       #					 $q_seq_length,
@@ -2508,6 +2523,7 @@ sub _go {
 			q_seq_length
 			q_def
 			q_seq_obj
+			seq_id
 			GFF3_e
 			LOG
 			CTL_OPT)
@@ -2524,12 +2540,19 @@ sub _go {
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
+	    my $seq_id = $VARS->{seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $GFF3_e = $VARS->{GFF3_e};
 
 	    #-polish blastx hits with exonerate
 	    my $exonerate_p_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+		#handle mising db in seq (IO error)
+		if(! $q_seq_obj->{db}){
+		    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		}
+
 		$exonerate_p_data = GI::polish_exonerate($chunk,
 							 $q_seq_obj,
 							 $q_seq_length,
@@ -3942,6 +3965,7 @@ sub retrieve {
     my @args = @_;
     
     try {
+	confess "ERROR: No such file or directory at $args[0]\n" if(! -e $args[0]);
 	return Storable::retrieve(@args);
     }
     catch Error::Simple with {

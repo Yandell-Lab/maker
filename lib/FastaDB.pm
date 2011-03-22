@@ -25,6 +25,7 @@ sub new {
 
     bless ($self, $class);
 
+    $self->{index} = [];
     $self->{locs} = $locs;
     my @args = @_;
     push (@args, ('-makeid' => \&makeid));

@@ -64,8 +64,13 @@ sub STORABLE_thaw {
     $id = $$id while(ref($id) eq 'REF' || ref($id) eq 'SCALAR');
 
     my $index = GI::build_fasta_index($locs);
-
     my $seq = $index->get_Seq_by_id($id);
+
+    if(! $seq->{db}){
+	sleep 2;
+	$index = GI::build_fasta_index($locs);
+	$seq = $index->get_Seq_by_id($id);
+    }
 
     while(my $key = each %$seq){
 	$self->{$key} = $seq->{$key};
