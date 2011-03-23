@@ -121,7 +121,8 @@ sub s_abs_path {
     my $path = shift;
 
     if(-l $path){
-	my ($dir, $file) = $path =~ /(.*)([^\/]+)$/;
+	my ($dir, $file) = $path =~ /(.*\/)?([^\/]+)$/;
+	$dir = '.' if(!$dir);
 	$path = Cwd::abs_path($dir)."/$file";
 	$path =~ s/\/+/\//g;
 	return $path;
