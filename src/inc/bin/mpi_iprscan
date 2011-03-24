@@ -12,7 +12,7 @@ use Config;
 use File::Which;
 
 BEGIN{
-   $VERSION = '2.09';
+   $VERSION = '2.10';
    @CMD_ARGS = @ARGV;
 
    #find iprscan
