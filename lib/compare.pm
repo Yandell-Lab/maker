@@ -46,6 +46,9 @@ sub is_same_alt_form {
 
                 return 0;
         }
+	elsif($a_to_b_str =~ /^(0+|Z+|z+)$/){
+	   return 0;
+	}
 	else {
 	        #print STDERR "not caught s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str ".$a->name." ".$b->name."\n";
 		#sleep 3;

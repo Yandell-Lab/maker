@@ -40,7 +40,7 @@ sub clean_and_cluster {
     my @clusters = (@$p_clusters, @$m_clusters);
     my $num_c = @clusters;
     print STDERR "cleaning clusters....\n" unless $main::quiet;
-    foreach my $c (@$p_clusters, @$m_clusters){
+    foreach my $c (@clusters){
 	print STDERR "total clusters:$num_c now processing $counter\n" unless($main::quiet);
 	$c = clean::get_best_alt_splices($c, 10);
 

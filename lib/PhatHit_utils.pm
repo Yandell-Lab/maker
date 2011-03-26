@@ -407,7 +407,7 @@ sub shatter_hit {
             my $new_hit = new $ref('-name'         => $hit->name,
                                    '-description'  => $hit->description,
                                    '-algorithm'    => $hit->algorithm,
-                                   '-length'       => $hit->length,
+                                   '-length'       => $hsp->length,
 				   '-score'        => $hsp->score,
 				   '-bits'         => $hsp->bits,
 				   '-significance' => $hsp->significance
@@ -440,7 +440,7 @@ sub shatter_all_hits {
 		my $new_hit = new $ref('-name'         => $hit->name,
 				       '-description'  => $hit->description,
 				       '-algorithm'    => $hit->algorithm,
-				       '-length'       => $hit->length,
+				       '-length'       => $hsp->length,
 				       '-score'        => $hsp->score,
 				       '-bits'         => $hsp->bits,
 				       '-significance' => $hsp->significance

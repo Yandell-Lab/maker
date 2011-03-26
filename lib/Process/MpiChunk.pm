@@ -1514,7 +1514,7 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim combined clusters
+	    #trim combined clusters
 	    $blastn_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastn}, $blastn_keepers);
 	    $blastn_keepers = GI::flatten($blastn_keepers);
 	    #-------------------------CODE
@@ -1676,11 +1676,12 @@ sub _go {
 	    #blastn will be empty from this point on in the script if eukaryotic
 	    my $blastn_clusters = [];
 	    my $exonerate_e_clusters = [];
-	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
-	       $blastn_clusters = cluster::clean_and_cluster(10, $blastn_keepers);
+	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
+	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
+	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_data)
 	    }
 	    else{
-	       $exonerate_e_clusters = cluster::clean_and_cluster(10, $exonerate_e_data)
+	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_keepers);
 	    }
 	    #-------------------------CODE
 
@@ -1727,9 +1728,10 @@ sub _go {
 	    my $flag = $VARS->{_clust_flag};	    
 
 	    #further combine and cluster
+	    my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    if($flag){
-	       $blastn_clusters = cluster::clean_and_cluster(10, $blastn_clusters);
-	       $exonerate_e_clusters = cluster::clean_and_cluster(10, $exonerate_e_clusters);
+	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_clusters);
+	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_clusters);
 	    }
 
 	    my $blastn_keepers = GI::flatten($blastn_clusters);
@@ -1991,7 +1993,7 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim combined clusters
+	    #trim combined clusters
 	    $tblastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_tblastx}, $tblastx_keepers);
 	    $tblastx_keepers = GI::flatten($tblastx_keepers);
 	    #-------------------------CODE
@@ -2140,8 +2142,9 @@ sub _go {
 	    $GFF3_e->add_phathits($tblastx_keepers, $uid);
 	    $GFF3_e->add_phathits($exonerate_a_data, $uid);
 
-	    my $tblastx_clusters = cluster::clean_and_cluster(10, $tblastx_keepers);
-	    my $exonerate_a_clusters = cluster::clean_and_cluster(10, $exonerate_a_data);
+	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
+	    my $tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_keepers);
+	    my $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_data);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2187,9 +2190,10 @@ sub _go {
 	    my $flag = $VARS->{_clust_flag};
 
 	    #further combine and cluster
+            my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    if($flag){
-	       $tblastx_clusters = cluster::clean_and_cluster(10, $tblastx_clusters);
-	       $exonerate_a_clusters = cluster::clean_and_cluster(10, $exonerate_a_clusters);
+	       $tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_clusters);
+	       $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_clusters);
 	    }
 
 	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
@@ -2453,7 +2457,7 @@ sub _go {
 						     $LOG
 						     );
 
-	    #quick trim combined clusters
+	    #trim combined clusters
 	    $blastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastx}, $blastx_keepers);
 	    $blastx_keepers = GI::flatten($blastx_keepers);
 	    #-------------------------CODE
@@ -2599,8 +2603,9 @@ sub _go {
 	    $GFF3_e->add_phathits($exonerate_p_data, $uid);
 
 	    #blastx will be empty from this point on in the script if eukaryotic
-	    my $blastx_clusters = cluster::clean_and_cluster(10, $blastx_keepers);
-	    my $exonerate_p_clusters = cluster::clean_and_cluster(10, $exonerate_p_data);
+	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
+	    my $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_keepers);
+	    my $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_data);
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2646,9 +2651,10 @@ sub _go {
 	    my $flag = $VARS->{_clust_flag};
 
 	    #further combine and cluster
+            my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    if($flag){
-	       $blastx_clusters = cluster::clean_and_cluster(20, $blastx_clusters);
-	       $exonerate_p_clusters = cluster::clean_and_cluster(20, $exonerate_p_clusters);
+	       $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_clusters);
+	       $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_clusters);
 	    }
 
 	    my $blastx_keepers = GI::flatten($blastx_clusters);
@@ -2784,9 +2790,10 @@ sub _go {
 			$prot_gff_keepers);
 	    
 	    #replace actual values
+	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    foreach my $set (@sets) {
 		if(@$set > 50){
-		    @$set = map {@$_} @{cluster::clean_and_cluster(20, $set)};
+		    @$set = map {@$_} @{cluster::clean_and_cluster($depth, $set)};
 		}
 	    }
 

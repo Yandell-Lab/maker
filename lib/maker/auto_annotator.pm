@@ -1526,14 +1526,13 @@ sub run_it{
 
 	    foreach my $miph (@$miphs){
 		my $transcript_seq  = get_transcript_seq($miph, $v_seq);
-		my ($translation_seq,
-		    $offset,
-		    $end,
-		    $has_start,
-		    $has_stop) = get_translation_seq($transcript_seq, $miph);
+		my ($translation_seq) = get_longest_translation($transcript_seq);
 
 		#at least 80% of protein must be CDS to make a gene prediction
 		next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
+
+		#now get best translation and adjust
+		get_translation_seq($transcript_seq, $miph); #just setting values
 
 		#adjust CDS pre-UTR identification
 		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
@@ -2624,6 +2623,13 @@ sub get_longest_m_seq {
 	my $best = shift(@sorted);
 
 	return ($best->[1], $best->[0]) if($best);
+}
+#------------------------------------------------------------------------
+sub get_longest_translation {
+   my $seq    = shift;
+
+   my $tM = new CGL::TranslationMachine();
+   return $tM->longest_translation_plus_stop($seq);
 }
 #------------------------------------------------------------------------
 #takes a hit and an array of phathits.  Returns all hits in the array

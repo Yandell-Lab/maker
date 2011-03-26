@@ -177,12 +177,12 @@ sub merge_resolve_hits{
 
    my $after = @$blast_keepers;
 
-   #cluster merged hits
+   #cluster merged hits to save memory
    my $depth = $CTL_OPT{depth_blastn} if($type eq 'blastn');
    $depth = $CTL_OPT{depth_blastx} if($type eq 'blastx');
    $depth = $CTL_OPT{depth_tblastx}if($type eq 'tblastx');
-
-   if($before - $after > $depth * 5){
+   $depth = $depth * 3;
+   if($before - $after > $depth){
       my @merged;
       my @keepers;
       foreach my $hit (@$blast_keepers){
@@ -194,7 +194,7 @@ sub merge_resolve_hits{
 	 }
       }
 
-      my $clusters = cluster::shadow_cluster($depth * 3, \@merged);
+      my $clusters = cluster::shadow_cluster($depth, \@merged);
       push(@keepers, @{GI::flatten($clusters)});
       @$blast_keepers = @keepers;
    }
@@ -2799,12 +2799,12 @@ sub set_defaults {
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
       $CTL_OPT{'bit_blastn'} = 40;
-      $CTL_OPT{'depth_blastn'} = 20;
+      $CTL_OPT{'depth_blastn'} = 0;
       $CTL_OPT{'pcov_blastx'} = 0.50;
       $CTL_OPT{'pid_blastx'} = 0.40;
       $CTL_OPT{'eval_blastx'} = 1e-6;
       $CTL_OPT{'bit_blastx'} = 30;
-      $CTL_OPT{'depth_blastx'} = 20;
+      $CTL_OPT{'depth_blastx'} = 0;
       $CTL_OPT{'pcov_rm_blastx'} = 0.50;
       $CTL_OPT{'pid_rm_blastx'} = 0.40;
       $CTL_OPT{'eval_rm_blastx'} = 1e-6;
@@ -2813,7 +2813,7 @@ sub set_defaults {
       $CTL_OPT{'pid_tblastx'} = 0.85;
       $CTL_OPT{'eval_tblastx'} = 1e-10;
       $CTL_OPT{'bit_tblastx'} = 40;
-      $CTL_OPT{'depth_tblastx'} = 20;
+      $CTL_OPT{'depth_tblastx'} = 0;
       $CTL_OPT{'en_score_limit'} = 20;
       $CTL_OPT{'ep_score_limit'} = 20;
       #evaluator below here
@@ -3996,19 +3996,19 @@ sub generate_control_files {
        print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
        print OUT "eval_blastn=$O{eval_blastn} #Blastn eval cutoff\n";
        print OUT "bit_blastn=$O{bit_blastn} #Blastn bit cutoff\n";
-       print OUT "depth_blastn=$O{depth_blastn} #Blastn depth cutoff\n";
+       print OUT "depth_blastn=$O{depth_blastn} #Blastn depth cutoff (0 to disable cutoff)\n";
        print OUT "\n";
        print OUT "pcov_blastx=$O{pcov_blastx} #Blastx Percent Coverage Threhold Protein-Genome Alignments\n";
        print OUT "pid_blastx=$O{pid_blastx} #Blastx Percent Identity Threshold Protein-Genome Aligments\n";
        print OUT "eval_blastx=$O{eval_blastx} #Blastx eval cutoff\n";
        print OUT "bit_blastx=$O{bit_blastx} #Blastx bit cutoff\n";
-       print OUT "depth_blastx=$O{depth_blastx} #Blastx depth cutoff\n";
+       print OUT "depth_blastx=$O{depth_blastx} #Blastx depth cutoff (0 to disable cutoff)\n";
        print OUT "\n";
        print OUT "pcov_tblastx=$O{pcov_tblastx} #tBlastx Percent Coverage Threhold alt-EST-Genome Alignments\n";
        print OUT "pid_tblastx=$O{pid_tblastx} #tBlastx Percent Identity Threshold alt-EST-Genome Aligments\n";
        print OUT "eval_tblastx=$O{eval_tblastx} #tBlastx eval cutoff\n";
        print OUT "bit_tblastx=$O{bit_tblastx} #tBlastx bit cutoff\n";
-       print OUT "depth_tblastx=$O{depth_tblastx} #tBlastx depth cutoff\n";
+       print OUT "depth_tblastx=$O{depth_tblastx} #tBlastx depth cutoff (0 to disable cutoff)\n";
        print OUT "\n";
        print OUT "pcov_rm_blastx=$O{pcov_rm_blastx} #Blastx Percent Coverage Threhold For Transposable Element Masking\n";
        print OUT "pid_rm_blastx=$O{pid_rm_blastx} #Blastx Percent Identity Threshold For Transposbale Element Masking\n";
