@@ -965,6 +965,15 @@ sub snap {
 
    my @entries = split(',', $CTL_OPT->{snaphmm});
 
+   #make sure ZOE is set or snap can fail
+   $ENV{ZOE} = $CTL_OPT->{ZOE} if($CTL_OPT->{ZOE} && -d $CTL_OPT->{ZOE});
+   if(!$ENV{ZOE} || ! -d $ENV{ZOE}){
+       #try and find it
+       my ($path) = Cwd::abs_path($CTL_OPT->{snap});
+       $path =~ s/snap$//;
+       $ENV{ZOE} = $path;
+   }
+
    my @keepers;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
@@ -1094,6 +1103,16 @@ sub augustus {
    my $exe = $CTL_OPT->{augustus};
 
    my @entries = split(',', $CTL_OPT->{augustus_species});
+
+   #make sure AUGUSTUS_CONFIG_PATH is set or augustus can fail
+   $ENV{AUGUSTUS_CONFIG_PATH} = $CTL_OPT->{AUGUSTUS_CONFIG_PATH} if($CTL_OPT->{AUGUSTUS_CONFIG_PATH} &&
+								    ! -f $CTL_OPT->{AUGUSTUS_CONFIG_PATH}."/extrinsic/extrinsic.MPE.cfg");
+   if (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg") {
+       #try and find it
+       my ($path) = Cwd::abs_path($CTL_OPT->{augustus});
+       $path =~ s/bin\/augustus$/config/;
+       $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+   }
 
    my @keepers;
    foreach my $entry (@entries){

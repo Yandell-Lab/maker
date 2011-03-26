@@ -1690,6 +1690,15 @@ sub get_pred_shot {
    my @all_preds;
 
    if($predictor eq 'snap'){
+       #make sure ZOE is set or snap can fail
+       $ENV{ZOE} = $CTL_OPT->{ZOE} if($CTL_OPT->{ZOE} && -d $CTL_OPT->{ZOE});
+       if(!$ENV{ZOE} || ! -d $ENV{ZOE}){
+	   #try and find it
+	   my ($path) = Cwd::abs_path($CTL_OPT->{snap});
+	   $path =~ s/snap$//;
+	   $ENV{ZOE} = $path;
+       }
+
        foreach my $entry (split(',', $CTL_OPT->{snaphmm})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
 	   my $pred_command = $CTL_OPT->{snap}.' '.$hmm;
@@ -1715,6 +1724,16 @@ sub get_pred_shot {
        }
    }
    elsif($predictor eq 'augustus'){
+       #make sure AUGUSTUS_CONFIG_PATH is set or augustus can fail
+       $ENV{AUGUSTUS_CONFIG_PATH} = $CTL_OPT->{AUGUSTUS_CONFIG_PATH} if($CTL_OPT->{AUGUSTUS_CONFIG_PATH} && 
+									! -f $CTL_OPT->{AUGUSTUS_CONFIG_PATH}."/extrinsic/extrinsic.MPE.cfg");
+       if (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg") {
+	   #try and find it
+	   my ($path) = Cwd::abs_path($CTL_OPT->{augustus});
+	   $path =~ s/bin\/augustus$/config/;
+	   $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+       }
+
        foreach my $entry (split(',', $CTL_OPT->{augustus_species})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
 	   my $pred_command = $CTL_OPT->{augustus}.' --species='.$hmm;
