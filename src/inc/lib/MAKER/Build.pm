@@ -1082,14 +1082,15 @@ sub extract_archive {
 	my $u = scalar getpwuid($>);
 	my $g = scalar getgrgid($));
 	if($file =~ /\.gz$|\.tgz$/){
-	    $command = "tar -zxm --owner $u --group $g -f $file";
+	    $command = "tar -zxm -f $file";
 	}
 	elsif($file =~ /\.bz2?$|\.tbz2?$/){
-	    $command = "tar -jxm --owner $u --group $g -f $file";
+	    $command = "tar -jxm -f $file";
 	}
 	else{
-	    $command = "tar -xm --owner $u --group $g -f $file";
+	    $command = "tar -xm -f $file";
 	}
+	$command .= " --owner $u --group $g" unless((POSIX::uname())[0] =~ /darwin/i);
 
 	return $self->do_system($command); #fast
     }
@@ -1112,7 +1113,7 @@ sub getstore {
     my $pass = shift;
 
     if(File::Which::which('wget')){ #Linux
-	my $command = "wget $url -c -O $file";
+	my $command = "wget $url -c -O $file --no-check-certificate";
 	$command .= " --user $user --password $pass" if(defined($user) && defined($pass));
 	return $self->do_system($command); #gives status and can continue partial
     }
