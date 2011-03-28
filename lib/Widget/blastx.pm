@@ -31,38 +31,39 @@ sub new {
 }
 #------------------------------------------------------------------------------
 sub run {
-	my $self    = shift;
-	my $command = shift;
-
-	if (defined($command)){
-		$self->print_command($command);
-		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-		local $/ = \1;
-		my $all_err;
-		while (my $line = <$CHLD_ERR>){
-		   $all_err .= $line;
-		   print STDERR $line unless($main::quiet);
-		}
-		waitpid $pid, 0;
-		if ($? != 0 && $all_err !~ /There are no valid contexts/){
-		    #try again a second time
-                    $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-                    $all_err = '';
-                    while (my $line = <$CHLD_ERR>){
-                        $all_err .= $line;
-                        print STDERR $line unless($main::quiet);
-                    }
-                    waitpid $pid, 0;
-
-                    if ($? != 0 && $all_err !~ /There are no valid contexts/){
-                        die "ERROR: BLASTX failed\n";
-                    }
-		}
-	}
-	else {
-		die "you must give Widget::blastx a command to run!\n";
-	}
+   my $self    = shift;
+   my $command = shift;
+   
+   if (defined($command)){
+      $self->print_command($command);
+      my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
+      my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+      local $/ = \1;
+      my $all_err;
+      while (my $line = <$CHLD_ERR>){
+	 $all_err .= $line;
+	 print STDERR $line unless($main::quiet);
+      }
+      waitpid $pid, 0;
+      if ($? != 0 && $all_err !~ /There are no valid contexts/){
+	 #try again a second time
+	 sleep 15;
+	 $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	 $all_err = '';
+	 while (my $line = <$CHLD_ERR>){
+	    $all_err .= $line;
+	    print STDERR $line unless($main::quiet);
+	 }
+	 waitpid $pid, 0;
+	 
+	 if ($? != 0 && $all_err !~ /There are no valid contexts/){
+	    die "ERROR: BLASTX failed\n";
+	 }
+      }
+   }
+   else {
+      die "you must give Widget::blastx a command to run!\n";
+   }
 }
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------

@@ -284,6 +284,9 @@ try{
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "no_threads" =>\$main::no_threads, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
+               "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); MPI_Finalize(); exit(0);},
+               "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); MPI_Finalize(); exit(0);},
+               "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); MPI_Finalize(); exit(0);},
 	       "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );

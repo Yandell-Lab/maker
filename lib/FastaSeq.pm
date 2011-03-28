@@ -45,7 +45,7 @@ sub convert {
 
     bless($obj, $class);
     
-    if(!$locs){
+    if(!$locs && $obj->{db}){
 	$locs = [keys %{$obj->{db}->{cacheseq}}];
 	$locs = [$obj->{db}->{dirname}."/".$obj->{db}->{offsets}->{__file_0}] if(!@$locs);
     }

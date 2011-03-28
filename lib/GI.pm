@@ -17,6 +17,8 @@ use File::NFSLock;
 use File::Which;
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
+use Error qw(:try);
+use Error::Simple;
 use URI::Escape;
 use Data::Dumper;
 use Getopt::Long;
@@ -1670,7 +1672,8 @@ sub blastn_as_chunks {
    my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;   
-   
+   my $retry      = shift || 1;
+
    my $blast      = $CTL_OPT->{_blastn};
    my $depth_blast = $CTL_OPT->{depth_blastn};
    my $bit_blast  = $CTL_OPT->{bit_blastn};
@@ -1767,9 +1770,30 @@ sub blastn_as_chunks {
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
 
-   my $chunk_keepers = Widget::blastn::parse($o_file,
+   my $chunk_keepers;
+   try{
+      $chunk_keepers = Widget::blastn::parse($o_file,
 					     \%params,
 					     );
+   }
+   catch Error::Simple with {
+      my $E = shift;
+
+      if($retry){
+	 return blastn_as_chunks( $chunk,
+				  $entry,
+				  $the_void,
+				  $seq_id,
+				  $CTL_OPT,
+				  $rank,
+				  $LOG,
+				  $LOG_FLAG,
+				  0 );
+      }
+      else{
+	 throw $E;
+      }
+   };
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
@@ -1791,6 +1815,7 @@ sub blastn {
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
+   my $retry      = shift || 1;
 
    my $blast      = $CTL_OPT->{_blastn};
    my $depth_blast = $CTL_OPT->{depth_blastn};
@@ -1843,9 +1868,28 @@ sub blastn {
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
 
-   my $chunk_keepers = Widget::blastn::parse($o_file,
+   my $chunk_keepers;
+   try{
+      $chunk_keepers = Widget::blastn::parse($o_file,
 					     \%params,
-					    );
+					     );
+   }
+   catch Error::Simple with {
+      my $E = shift;
+
+      if($retry){
+         return blastn( $chunk,
+			$entry,
+			$the_void,
+			$seq_id,
+			$CTL_OPT,
+			$LOG,
+			0 );
+      }
+      else{
+         throw $E;
+      }
+   };
 
    $LOG->add_entry("FINISHED", $o_file, "");
 
@@ -1973,6 +2017,7 @@ sub blastx_as_chunks {
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
    my $rflag      = shift; #am I running repeatrunner?
+   my $retry      = shift || 1;
 
    my $blast       = $CTL_OPT->{_blastx};
    my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
@@ -2072,10 +2117,32 @@ sub blastx_as_chunks {
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
 
-   my $chunk_keepers = Widget::blastx::parse($o_file,
+   my $chunk_keepers;
+   try{
+      $chunk_keepers = Widget::blastx::parse($o_file,
 					     \%params,
 					     );
-   
+   }
+   catch Error::Simple with {
+      my $E = shift;
+
+      if($retry){
+         return blastx_as_chunks( $chunk,
+				  $entry,
+				  $the_void,
+				  $seq_id,
+				  $CTL_OPT,
+				  $rank,
+				  $LOG,
+				  $LOG_FLAG,
+				  $rflag,
+				  0 );
+      }
+      else{
+         throw $E;
+      }
+   };   
+
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
 			    );
@@ -2136,7 +2203,8 @@ sub blastx {
    my $CTL_OPT    = shift;
    my $LOG        = shift;
    my $rflag      = shift;
-
+   my $retry      = shift || 1;
+ 
    my $blast      = $CTL_OPT->{_blastx};
    my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
    my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
@@ -2190,9 +2258,29 @@ sub blastx {
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
    
-   my $chunk_keepers = Widget::blastx::parse($o_file,
+   my $chunk_keepers;
+   try{
+      $chunk_keepers = Widget::blastx::parse($o_file,
 					     \%params,
-					    );
+					     );
+   }
+   catch Error::Simple with {
+      my $E = shift;
+      
+      if($retry){
+         return blastx( $chunk,
+                        $entry,
+                        $the_void,
+                        $seq_id,
+                        $CTL_OPT,
+                        $LOG,
+			$rflag,
+                        0 );
+      }
+      else{
+         throw $E;
+      }
+   };
 
    $LOG->add_entry("FINISHED", $o_file, "");
 
@@ -2299,17 +2387,18 @@ sub tblastx_as_chunks {
    my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
+   my $retry      = shift || 1;
 
-   my $blast      = $CTL_OPT->{_tblastx};
+   my $blast       = $CTL_OPT->{_tblastx};
    my $depth_blast = $CTL_OPT->{depth_tblastx};
-   my $bit_blast  = $CTL_OPT->{bit_tblastx};
-   my $eval_blast = $CTL_OPT->{eval_tblastx};
-   my $pcov_blast = $CTL_OPT->{pcov_tblastx};
-   my $pid_blast  = $CTL_OPT->{pid_tblastx};
-   my $split_hit    = $CTL_OPT->{split_hit};
-   my $cpus         = $CTL_OPT->{cpus};
-   my $formater     = $CTL_OPT->{_formater};
-   my $softmask     = $CTL_OPT->{softmask};
+   my $bit_blast   = $CTL_OPT->{bit_tblastx};
+   my $eval_blast  = $CTL_OPT->{eval_tblastx};
+   my $pcov_blast  = $CTL_OPT->{pcov_tblastx};
+   my $pid_blast   = $CTL_OPT->{pid_tblastx};
+   my $split_hit   = $CTL_OPT->{split_hit};
+   my $cpus        = $CTL_OPT->{cpus};
+   my $formater    = $CTL_OPT->{_formater};
+   my $softmask    = $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
    #finished blast report name
@@ -2397,9 +2486,30 @@ sub tblastx_as_chunks {
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
 
-   my $chunk_keepers = Widget::tblastx::parse($o_file,
+   my $chunk_keepers;
+   try {
+      $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
 					      );
+   }
+   catch Error::Simple with {
+      my $E = shift;
+      
+      if($retry){
+         return tblastx_as_chunks( $chunk,
+				   $entry,
+				   $the_void,
+				   $seq_id,
+				   $CTL_OPT,
+				   $rank,
+				   $LOG,
+				   $LOG_FLAG,
+				   0 );
+      }
+      else{
+	 throw $E;
+      }
+   };
    
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset(),
@@ -2421,6 +2531,7 @@ sub tblastx {
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
+   my $retry      = shift || 1;
 
    my $blast      = $CTL_OPT->{_tblastx};
    my $depth_blast = $CTL_OPT->{depth_tblastx};
@@ -2473,9 +2584,29 @@ sub tblastx {
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
 
-   my $chunk_keepers = Widget::tblastx::parse($o_file,
+   my $chunk_keepers;
+   try {
+      $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
-					     );
+					      );
+      
+   }
+   catch Error::Simple with {
+      my $E = shift;
+      
+      if($retry){
+         return tblastx( $chunk,
+			 $entry,
+			 $the_void,
+			 $seq_id,
+			 $CTL_OPT,
+			 $LOG,
+			 0 );
+      }
+      else{
+	 throw $E;
+      }
+   };
 
    $LOG->add_entry("FINISHED", $o_file, "");
 
