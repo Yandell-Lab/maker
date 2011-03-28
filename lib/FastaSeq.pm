@@ -23,12 +23,7 @@ sub new {
 	$class = 'FastaSeq' if(ref($class));
 
 	my $self = $class->SUPER::new(@args);
-	my $locs = [];
-	if($self->{db}){
-	    $locs = [keys %{$self->{db}->{cacheseq}}];
-	    $locs = [$self->{db}->{dirname}."/".$self->{db}->{offsets}->{__file_0}] if(!@$locs);
-	}
-	$self->{LOCS} = $locs;
+	$self->{LOCS} = [];
 	bless($self, $class);
 
 	return $self;
@@ -44,15 +39,14 @@ sub length {
 sub convert {
     my $class = shift;
     my $obj = shift;
-    my $locs = shift || [];
+    my $locs = shift;
 
     return if(!$obj);
 
     bless($obj, $class);
     
-    if(!@$locs){
-	$locs = $obj->{LOCS} || [];
-	$locs = [keys %{$obj->{db}->{cacheseq}}] if(!@$locs);
+    if(!$locs){
+	$locs = [keys %{$obj->{db}->{cacheseq}}];
 	$locs = [$obj->{db}->{dirname}."/".$obj->{db}->{offsets}->{__file_0}] if(!@$locs);
     }
     $obj->{LOCS} = $locs;
@@ -63,9 +57,7 @@ sub convert {
 sub STORABLE_freeze {
     my ($self, $cloning) = @_;
 
-    my $locs = $self->{LOCS} || [];
-    $locs = [keys %{$self->{db}->{cacheseq}}] if(!@$locs);
-    $locs = [$self->{db}->{dirname}."/".$self->{db}->{offsets}->{__file_0}] if(!@$locs);
+    my $locs = $self->{LOCS};
 
     my $id = $self->id;
 
@@ -100,7 +92,7 @@ sub STORABLE_thaw {
     while(defined(my $key = each %$seq)){
 	$self->{$key} = $seq->{$key};
     }
-    $self->{LOCS} = $locs if(!@{$self->{LOCS}} && @$locs);
+    $self->{LOCS} = $locs if(! $self->{LOCS});
 }
 #-------------------------------------------------------------------------------
 #convinience function to allow substring type context on seq object 

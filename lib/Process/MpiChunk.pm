@@ -462,7 +462,8 @@ sub _go {
 		}
 
 		open (my $FAS, "> $the_void/query.fasta");
-		print $FAS ${&Fasta::seq2fastaRef($seq_id, \ ($q_seq_obj->seq))};
+		my $seq = $q_seq_obj->seq;
+		print $FAS ${&Fasta::seq2fastaRef($seq_id, \$seq)};
 		close ($FAS);
 
 		#make g_index be smaller file
