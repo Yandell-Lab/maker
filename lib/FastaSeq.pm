@@ -7,6 +7,7 @@ use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 use Exporter;
 use Bio::DB::Fasta;
 use GI;
+use Carp;
 
 @ISA = qw(Bio::PrimarySeq::Fasta Exporter);
 @EXPORT = qw(substr_o length_o);
@@ -22,10 +23,15 @@ sub new {
 	$class = 'FastaSeq' if(ref($class));
 
 	my $self = $class->SUPER::new(@args);
+	my $locs = [];
+	if($self->{db}){
+	    $locs = [keys %{$self->{db}->{cacheseq}}];
+	    $locs = [$self->{db}->{dirname}."/".$self->{db}->{offsets}->{__file_0}] if(!@$locs);
+	}
+	$self->{LOCS} = $locs;
 	bless($self, $class);
 
 	return $self;
-
 }
 #-------------------------------------------------------------------------------
 #override native method because it is so slow
@@ -38,21 +44,29 @@ sub length {
 sub convert {
     my $class = shift;
     my $obj = shift;
+    my $locs = shift || [];
 
     return if(!$obj);
 
     bless($obj, $class);
     
+    if(!@$locs){
+	$locs = $obj->{LOCS} || [];
+	$locs = [keys %{$obj->{db}->{cacheseq}}] if(!@$locs);
+	$locs = [$obj->{db}->{dirname}."/".$obj->{db}->{offsets}->{__file_0}] if(!@$locs);
+    }
+    $obj->{LOCS} = $locs;
+
     return $obj;
 }
 #-------------------------------------------------------------------------------
 sub STORABLE_freeze {
     my ($self, $cloning) = @_;
 
-    my $locs = [keys %{$self->{db}->{cacheseq}}];
-    if(!@$locs){
-	$locs = [$self->{db}->{dirname}."/".$self->{db}->{offsets}->{__file_0}];
-    }
+    my $locs = $self->{LOCS} || [];
+    $locs = [keys %{$self->{db}->{cacheseq}}] if(!@$locs);
+    $locs = [$self->{db}->{dirname}."/".$self->{db}->{offsets}->{__file_0}] if(!@$locs);
+
     my $id = $self->id;
 
     return '', $locs, \$id;
@@ -66,15 +80,27 @@ sub STORABLE_thaw {
     my $index = GI::build_fasta_index($locs);
     my $seq = $index->get_Seq_by_id($id);
 
+    #retry because of weird NFS
     if(! $seq->{db}){
-	sleep 2;
+	sleep 10;
 	$index = GI::build_fasta_index($locs);
 	$seq = $index->get_Seq_by_id($id);
     }
 
-    while(my $key = each %$seq){
+    #try one more time
+    if(! $seq->{db}){
+	sleep 10;
+	$index = GI::build_fasta_index($locs);
+	$seq = $index->get_Seq_by_id($id);
+    }
+
+    confess "ERROR: Could not reestablish DB to thaw FastaSeq for Storable\n"
+	if(! $seq->{db});
+
+    while(defined(my $key = each %$seq)){
 	$self->{$key} = $seq->{$key};
     }
+    $self->{LOCS} = $locs if(!@{$self->{LOCS}} && @$locs);
 }
 #-------------------------------------------------------------------------------
 #convinience function to allow substring type context on seq object 

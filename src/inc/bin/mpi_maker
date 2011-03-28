@@ -375,6 +375,7 @@ if ($rank == $root) {
     my $GFF_DB;
     my $build;
     my $g_index;
+    my $gdbfile;
 
     try{
 	#get arguments off the command line
@@ -420,7 +421,8 @@ if ($rank == $root) {
 	       while(!-f $dbfile){
 		   my $lock;
 		   next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-		   File::Copy::copy($GFF_DB->dbfile, $dbfile) if(!-f $dbfile);
+		   File::Copy::copy($GFF_DB->dbfile, "$dbfile.tmp") if(!-f $dbfile);
+		   File::Copy::move("$dbfile.tmp", $dbfile) if(!-f $dbfile);
 	       }
 	   }
 	   $GFF_DB = new GFFDB($dbfile);
@@ -463,17 +465,19 @@ if ($rank == $root) {
 	       MPI_SendII(\$g_index, $i, $mpi_data, MPI_COMM_WORLD);
 	   }
 	   my ($name) = $g_index =~ /([^\/]+)$/;
-	   my $gdbfile = GI::get_global_temp()."/$name";
+	   $gdbfile = GI::get_global_temp()."/$name";
 	   while(!-f "$gdbfile.index"){
 	       my $lock;
 	       next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
 	       File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
-	       File::Copy::copy("$g_index.index", "$gdbfile.index") if(!-f "$gdbfile.index");
+	       File::Copy::copy("$g_index.index", "$gdbfile.index.tmp") if(!-f "$gdbfile.index");
+	       File::Copy::move("$gdbfile.index.tmp", "$gdbfile.index") if(!-f "$gdbfile.index");
 	   }
 
 	   $g_index = GI::build_fasta_index([$gdbfile]);
         }
 	else{
+	    $gdbfile = $CTL_OPT{_g_db}[0];
 	    $g_index = GI::build_fasta_index($g_index);
 	}
 
@@ -505,7 +509,7 @@ if ($rank == $root) {
     #also no thereads if not threaded perl
     $t_need_flag = ($main::no_threads || $size > 10) ? 0 : 1;
     my $thr;
-    $thr = threads->create(\&node_thread) while($t_need_flag && (!$thr || !$thr->is_running));
+    $thr = threads->create(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
 
     print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
 
@@ -888,7 +892,8 @@ else {
 	while(!-f $dbfile){
 	    my $lock;
 	    next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	    File::Copy::copy($tdata->[2], $dbfile) if(!-f $dbfile);
+	    File::Copy::copy($tdata->[2], "$dbfile.tmp") if(!-f $dbfile);
+	    File::Copy::move("$dbfile.tmp", $dbfile) if(!-f $dbfile);
 	}
     }
     $GFF_DB = new GFFDB($dbfile);
@@ -917,7 +922,8 @@ else {
 	my $lock;
 	next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
 	File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
-	File::Copy::copy("$g_index.index", "$gdbfile.index") if(!-f "$gdbfile.index");
+	File::Copy::copy("$g_index.index", "$gdbfile.index.tmp") if(!-f "$gdbfile.index");
+	File::Copy::move("$gdbfile.index.tmp", "$gdbfile.index") if(!-f "$gdbfile.index");
     }
     $g_index = GI::build_fasta_index([$gdbfile]);
     $g_index->add_to_global_index();
@@ -925,7 +931,7 @@ else {
     #set to true for threads false for no threads
     $t_need_flag = ($main::no_threads) ? 0 : 1;
     my $thr;
-    $thr = threads->create(\&node_thread) while($t_need_flag && (!$thr || !$thr->is_running));
+    $thr = threads->create(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
 
     while ($go_mpi_status) {
 	#====INTERNAL CHUNK THREAD
@@ -1341,6 +1347,7 @@ exit(0);
 #other things for root node to do
 #(thread allows root to process tiers like a secondary node)
 sub node_thread {
+   my $gdbfile = shift @_;
    my $tier;
    my $chunk;
 
@@ -1351,7 +1358,15 @@ sub node_thread {
 
    #set up thread signal to exit gracefully
    $SIG{'KILL'} = sub { threads->exit(); };
+   $SIG{'INT'}  = sub { threads->exit(); };
+   $SIG{'QUIT'} = sub { threads->exit(); };
+   $SIG{'STOP'} = sub { threads->exit(); };
 
+   #setup global index because of weird NFS failure in thread
+   my $g_index = GI::build_fasta_index([$gdbfile]);
+   $g_index->add_to_global_index();
+
+   #thread initialized and waiting
    $t_need_flag = 1;
 
    while(! $t_terminate){

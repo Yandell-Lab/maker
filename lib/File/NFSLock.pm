@@ -639,7 +639,7 @@ sub maintain {
     $self->{_IN} = $IN;
     $self->{_maintain} = $pid;
 
-    return 1 if($pid);
+    return 1 if($pid && $self->still_mine);
 }
 
 sub refresh {

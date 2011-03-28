@@ -35,12 +35,14 @@ sub seq {
 
 	$self->{seq} = $seq_ref;
     }
-
-    if(ref($self->{seq}) eq 'SCALAR'){
-	return $self->{seq};
-    }
-    elsif($self->{seq}){
-	return \ ($self->{seq}->subseq($self->start, $self->end));
+    else{
+	if(! ref($self->{seq}) || ref($self->{seq}) eq 'SCALAR'){
+	    return $self->{seq};
+	}
+	else{
+	    my $seq = $self->{seq}->subseq($self->start, $self->end);
+	    return \$seq;
+	}
     }
 }
 #-------------------------------------------------------------------------------
@@ -74,7 +76,7 @@ sub fasta {
 	my $def = $self->def();
 	my $seq = $self->seq();
 
-	return Fasta::toFasta($def, \$seq);
+	return Fasta::toFasta($def, $seq);
 }
 #-------------------------------------------------------------------------------
 sub fasta_ref {

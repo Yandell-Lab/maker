@@ -59,6 +59,22 @@ sub _initialize {
    print_txt($SEQ, "##FASTA\n");
    close($SEQ);
 
+   #retry because of weird NFS behavior with false success
+   while(! -f $def_file){
+       open(my $DEF, "> $def_file") || confess "ERROR: Could not open file: $def_file\n";
+       print_txt($DEF, $self->header."\n");
+       close($DEF);
+   }
+   while(! -f $ann_file){
+       open(my $ANN, "> $ann_file") || confess "ERROR: Could not open file: $ann_file\n";
+       close($ANN);
+   }
+   while(! -f $seq_file){
+       open(my $SEQ, "> $seq_file") || confess "ERROR: Could not open file: $seq_file\n";
+       print_txt($SEQ, "##FASTA\n");
+       close($SEQ);
+   }
+
    $self->{gff_file} = $gff_file;
    $self->{def_file} = $def_file;
    $self->{ann_file} = $ann_file;
@@ -149,9 +165,13 @@ sub finalize {
     my $ann_f = $self->{ann_file};
     my $seq_f = $self->{seq_file};
 
-    open(my $DEF, ">> $def_f")|| confess "ERROR: Can't open def file: $def_f\n\n";
-    open(my $SEQ, "< $seq_f")|| confess "ERROR: Can't open seq file: $seq_f\n\n";
-    open(my $ANN, "< $ann_f")|| confess "ERROR: Can't open annotation file: $ann_f\n\n";
+    #already finalized
+    return if(-f $gff_f && ! -f $def_f && ! -f $ann_f && ! -f $seq_f);
+    sleep 10 if(! -f $def_f && ! -f $ann_f && ! -f $seq_f); # wait because of slow NFS
+
+    open(my $DEF, ">> $def_f") || confess "ERROR: Can't open def file: $def_f\n\n";
+    open(my $SEQ, "< $seq_f") || confess "ERROR: Can't open seq file: $seq_f\n\n";
+    open(my $ANN, "< $ann_f") || confess "ERROR: Can't open annotation file: $ann_f\n\n";
 
     while(defined(my $line = <$ANN>)){
         print $DEF $line;
