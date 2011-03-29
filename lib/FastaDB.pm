@@ -158,14 +158,14 @@ sub get_Seq_for_hit {
     my $fastaObj;
     if(exists $r_ind->{$dbf}){
 	my $db = $r_ind->{$dbf};
-	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	$fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
     }
     
     if(! $fastaObj){
 	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
 	foreach my $dbf (@files){
 	    my $db = $r_ind->{$dbf};
-	    $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	    $fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 	    last if($fastaObj);
 	}
     }
@@ -197,7 +197,7 @@ sub header_for_hit {
     my $header;
     if(exists $r_ind->{$dbf}){
 	my $db = $r_ind->{$dbf};
-	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	$fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 	$header = $db->header($id) if($fastaObj);
     }
     
@@ -205,7 +205,7 @@ sub header_for_hit {
 	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
 	foreach my $dbf (@files){
 	    my $db = $r_ind->{$dbf};
-	    $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	    $fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 
 	    if($fastaObj){
 		$header = $db->header($id);
@@ -232,7 +232,7 @@ sub get_Seq_by_id {
 
     my $fastaObj;
     foreach my $db (@index){
-	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	$fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 	last if($fastaObj);
     }
 
@@ -295,7 +295,7 @@ sub header {
     my $h;
     foreach my $db (@index){
 	#do it this way first to avoid warnings
-	my $fastaObj = FastaSeq->convert($db->get_Seq_by_id($id), $self->{locs});
+	my $fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 	next if (!$fastaObj);
 	$h = $db->header($id);
 	last;
@@ -325,7 +325,7 @@ sub header_by_alias {
     my $h;
     foreach my $db (@index){
 	#do it this way first to avoid warnings
-	my $fastaObj = FastaSeq->convert($db->get_Seq_by_id($alias), $self->{locs});
+	my $fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($alias));
 	next if (!$fastaObj);
 	$h = $db->header($alias);
 	last;

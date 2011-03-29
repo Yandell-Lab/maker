@@ -243,9 +243,21 @@ try{
 
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
-    
+
     #---load genome multifasta/GFF3 file
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
+
+    if(1){
+	while(my $q_def = $iterator->nextDef()){
+	    my $id = Fasta::def2SeqID($q_def);
+	    my $safe_id = Fasta::seqID2SafeID($id);
+	    my $dir = $DS_CTL->id_to_dir($id);
+	    my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
+	    $DS_CTL->add_entry($id, $dir, $message);
+	}
+	exit;
+    }
+
     $iterator->step($CTL_OPT{'_step'});
     $iterator->skip_file($DS_CTL->{log});
 }

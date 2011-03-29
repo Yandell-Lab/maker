@@ -8,6 +8,8 @@ use Exporter;
 use Bio::DB::Fasta;
 use GI;
 use Carp;
+use Error qw(:try);
+use Error::Simple;
 
 @ISA = qw(Bio::PrimarySeq::Fasta Exporter);
 @EXPORT = qw(substr_o length_o);
@@ -36,12 +38,71 @@ sub length {
    return ($self->{stop} - $self->{start}) + 1;
 }
 #-------------------------------------------------------------------------------
+#override native method because it can break on NFS
+sub seq {
+   my $self = shift;
+
+   my $seq;
+   my $fail = 0;
+   my $ok = 0;
+   while(!$ok && $fail < 5){
+       try {
+	   $seq = $self->SUPER::seq();
+	   $ok++;
+       }
+       catch Error::Simple with {
+	   my $E = shift;
+
+	   $fail++;
+	   throw $E if($fail == 5);
+
+	   sleep 10;
+
+	   if($fail == 3){
+	       my $id = $self->id;
+	       my $locs = $self->{LOCS};
+	       my $index = GI::build_fasta_index($locs);
+	       $index->drop_from_global_index();
+	       $index = GI::build_fasta_index($locs);
+	       my $obj = $index->get_Seq_by_id($id);
+
+	       #retry because of weird NFS
+	       if(! $obj->{db}){
+		   sleep 10;
+		   $index = GI::build_fasta_index($locs);
+		   $obj = $index->get_Seq_by_id($id);
+	       }
+
+	       #try one more time
+	       if(! $obj->{db}){
+		   sleep 10;
+		   $index = GI::build_fasta_index($locs);
+		   $obj = $index->get_Seq_by_id($id);
+	       }
+	       
+	       $index->add_to_global_index();
+	       next if(! $obj->{db});
+
+	       while(defined(my $key = each %$obj)){
+		   $self->{$key} = $obj->{$key};
+ 	       }
+	       $self->{LOCS} = $locs if(! $self->{LOCS});
+	   }
+       };
+   }
+
+   return $seq;
+}
+#-------------------------------------------------------------------------------
 sub convert {
     my $class = shift;
-    my $obj = shift;
     my $locs = shift;
+    my $obj = shift;
 
     return if(!$obj);
+
+    confess "ERROR: Object is not a Bio::PrimarySeq::Fasta\n".
+	"It is ".ref($obj)."\n"	if(ref($obj) ne 'Bio::PrimarySeq::Fasta');
 
     bless($obj, $class);
     
