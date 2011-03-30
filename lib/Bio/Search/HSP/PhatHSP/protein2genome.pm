@@ -219,6 +219,12 @@ sub cigar_string {
 	}
     }
     
+    if($self->strand('query') eq '-1'){
+       my @set = $cigar =~ /([A-Z]\d+)/g;
+       @set = reverse(@set);
+       $cigar = join('', @set);
+    }
+
     return ($self->{_CIGAR} = $cigar);
 }
 #-------------------------------------------------------------------------------

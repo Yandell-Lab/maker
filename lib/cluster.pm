@@ -42,9 +42,6 @@ sub clean_and_cluster {
     print STDERR "cleaning clusters....\n" unless $main::quiet;
     foreach my $c (@clusters){
 	print STDERR "total clusters:$num_c now processing $counter\n" unless($main::quiet);
-	$c = clean::get_best_alt_splices($c, 10);
-
-	next if($depth == 0 || @$c <= $depth);
 	    
 	if($t_sep_flag){
 	   my %types;
@@ -55,13 +52,15 @@ sub clean_and_cluster {
 	   my @keepers;
 	   while(my $key = each %types){
 	       my $s = $types{$key};
-	       $s = @{$s}[0..$depth-1] if(@$s > $depth);
+	       $s = clean::get_best_alt_splices($s, 10);
+	       $s = @{$s}[0..$depth-1] if($depth && @$s > $depth);
 	       push(@keepers, @$s);
 	   }
 	   $c = \@keepers;
        }
        else{
-	   $c = @{$c}[0..$depth-1];
+	  $c = clean::get_best_alt_splices($c, 10);
+	  $c = @{$c}[0..$depth-1] if($depth && @$c > $depth);
        }	
     }
     

@@ -247,7 +247,7 @@ try{
     #---load genome multifasta/GFF3 file
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
 
-    if(1){
+    if(0){
 	while(my $q_def = $iterator->nextDef()){
 	    my $id = Fasta::def2SeqID($q_def);
 	    my $safe_id = Fasta::seqID2SafeID($id);
