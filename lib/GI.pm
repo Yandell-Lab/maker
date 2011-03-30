@@ -1778,8 +1778,9 @@ sub blastn_as_chunks {
    }
    catch Error::Simple with {
       my $E = shift;
-
+      
       if($retry){
+	 unlink($o_file);
 	 return blastn_as_chunks( $chunk,
 				  $entry,
 				  $the_void,
@@ -1878,6 +1879,7 @@ sub blastn {
       my $E = shift;
 
       if($retry){
+	 unlink($o_file);
          return blastn( $chunk,
 			$entry,
 			$the_void,
@@ -2127,6 +2129,7 @@ sub blastx_as_chunks {
       my $E = shift;
 
       if($retry){
+	 unlink($o_file);
          return blastx_as_chunks( $chunk,
 				  $entry,
 				  $the_void,
@@ -2268,6 +2271,7 @@ sub blastx {
       my $E = shift;
       
       if($retry){
+	 unlink($o_file);
          return blastx( $chunk,
                         $entry,
                         $the_void,
@@ -2496,6 +2500,7 @@ sub tblastx_as_chunks {
       my $E = shift;
       
       if($retry){
+	 unlink($o_file);
          return tblastx_as_chunks( $chunk,
 				   $entry,
 				   $the_void,
@@ -2595,7 +2600,8 @@ sub tblastx {
       my $E = shift;
       
       if($retry){
-         return tblastx( $chunk,
+	 unlink($o_file);
+	 return tblastx( $chunk,
 			 $entry,
 			 $the_void,
 			 $seq_id,
@@ -3431,6 +3437,7 @@ sub load_control_files {
 
 	       #set value
 	       $CTL_OPT{$key} = defined($value) ? $value : '';
+	       $CTL_OPT{retry} = '' if($key eq 'tries');
 	    }
 	    else {
 	       warn "WARNING: Invalid option \'$key\' in control file $ctlfile\n\n";
@@ -3442,6 +3449,7 @@ sub load_control_files {
    #--load command line options
    while (my $key = each %OPT){
        $CTL_OPT{$key} = $OPT{$key} if(defined $OPT{$key});
+       $CTL_OPT{retry} = '' if($key eq 'tries');
    }
 
    #check organism type values

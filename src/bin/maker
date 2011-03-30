@@ -255,9 +255,9 @@ try{
 	    my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
 	    $DS_CTL->add_entry($id, $dir, $message);
 	}
-	exit;
     }
 
+    $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
     $iterator->step($CTL_OPT{'_step'});
     $iterator->skip_file($DS_CTL->{log});
 }

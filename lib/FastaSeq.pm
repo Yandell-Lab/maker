@@ -7,7 +7,6 @@ use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 use Exporter;
 use Bio::DB::Fasta;
 use GI;
-use Carp;
 use Error qw(:try);
 use Error::Simple;
 
@@ -54,7 +53,10 @@ sub seq {
 	   my $E = shift;
 
 	   $fail++;
-	   throw $E if($fail == 5);
+	   if($fail == 5){
+	       print STDERR $E->stacktrace;
+	       throw $E;
+	   }
 
 	   sleep 10;
 
@@ -101,7 +103,7 @@ sub convert {
 
     return if(!$obj);
 
-    confess "ERROR: Object is not a Bio::PrimarySeq::Fasta\n".
+    die "ERROR: Object is not a Bio::PrimarySeq::Fasta\n".
 	"It is ".ref($obj)."\n"	if(ref($obj) ne 'Bio::PrimarySeq::Fasta');
 
     bless($obj, $class);
@@ -147,7 +149,7 @@ sub STORABLE_thaw {
 	$seq = $index->get_Seq_by_id($id);
     }
 
-    confess "ERROR: Could not reestablish DB to thaw FastaSeq for Storable\n"
+    die "ERROR: Could not reestablish DB to thaw FastaSeq for Storable\n"
 	if(! $seq->{db});
 
     while(defined(my $key = each %$seq)){

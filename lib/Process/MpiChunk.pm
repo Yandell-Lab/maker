@@ -2793,9 +2793,7 @@ sub _go {
 	    #replace actual values
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    foreach my $set (@sets) {
-		if(@$set > 50){
-		    @$set = map {@$_} @{cluster::clean_and_cluster($depth, $set)};
-		}
+		@$set = map {@$_} @{cluster::clean_and_cluster($depth, $set, 0, 1)};
 	    }
 
 	    my %section = (est_gff_keepers => $est_gff_keepers,
