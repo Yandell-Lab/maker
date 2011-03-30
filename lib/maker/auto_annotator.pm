@@ -1445,10 +1445,13 @@ sub run_it{
 
 		    if(@$pieces <= 1 && $model->hsps <= 2){ # if single exon evidence model should be close
 			my $abAED = shadow_AED::get_abAED($all_preds, $model);
+			my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
 
-			if($abAED <= 0.25){
-			    my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
-			    $remove = 0 if($bAED <= 0.25);
+			if($abAED <= 0.4){
+			   $remove = 0 if($bAED <= 0.5);
+			}
+			else{
+			   $remove = 0 if($bAED <= 0.2); #stricter threshold when no abinit
 			}
 		    }
 		    elsif(@$pieces > 1){
@@ -1634,10 +1637,13 @@ sub run_it{
 			    #this step not needed in ab inits because the test model is an abinit model
 			    if(grep {$_->hsps <= 2} @$all_preds){
 				my $abAED = shadow_AED::get_abAED($all_preds, $h);
+				my $bAED = shadow_AED::get_eAED($blastx, $h);
 				
-				if($abAED <= 0.25){
-				    my $bAED = shadow_AED::get_eAED($blastx, $h);
-				    $remove = 0 if($bAED <= 0.25);
+				if($abAED <= 0.4){
+				   $remove = 0 if($bAED <= 0.5);
+				}
+				else{
+				   $remove = 0 if($bAED <= 0.2); #stricter threshold when no abinit
 				}
 			    }
 			}
