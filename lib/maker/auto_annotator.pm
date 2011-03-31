@@ -1084,22 +1084,22 @@ sub best_annotations {
 		next if($g->{t_structs}->[0]->{hit}->{_REMOVE}); #added to filter low support abinits
 
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
-		    push(@$p_list, $g) if(($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold})
+		    push(@$p_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold})
 					  || $p eq 'model_gff'
 					  );
 		}
 		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
-		    push(@$m_list, $g) if(($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold})
+		    push(@$m_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold})
 					  || $p eq 'model_gff'
 					  );
 		}
 		elsif($g->{g_strand} == 1){
 		    #separate est2genome and protein2genome genes
-		    push(@p_est2g, $g) if($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold});
+		    push(@p_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold});
 		}
 		elsif($g->{g_strand} == -1){
 		    #separate est2genome and protein2genome genes
-		    push(@m_est2g, $g) if($g->{eAED} < 1 && $g->{eAED} <= $CTL_OPT->{AED_threshold});
+		    push(@m_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold});
 		}
 		else{
 		    confess "ERROR: Logic error in auto_annotator::best_annotations\n";
