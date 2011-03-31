@@ -1340,6 +1340,8 @@ unless($main::no_threads){
 }
 
 GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock           
+Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
+Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
 MPI_Finalize(); #terminate MPI
 
 exit(0);

@@ -450,15 +450,24 @@ sub _go {
 		$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 		
+		#no sequence, try again
+		if (not $q_seq_obj) {
+		    sleep 5;
+		    $g_index->drop_from_global_index();
+		    $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+		    $g_index->add_to_global_index();
+		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		}
+
 		#still no sequence? try rebuilding the index and try again
 		if (not $q_seq_obj) {
-		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		    $g_index->reindex();
-		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		    if (not $q_seq_obj) {
-			print STDERR "stop here: $seq_id\n";
-			confess "ERROR: Fasta index error\n";
-		    }
+		    print STDERR "WARNING: Cannot find >$seq_id\n";#", trying to re-index the fasta.\n";
+		    #$g_index->reindex();
+		    #$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    #if (not $q_seq_obj) {
+		    print STDERR "stop here: $seq_id\n";
+		    confess "ERROR: Fasta index error\n";
+		    #}
 		}
 
 		open (my $FAS, "> $the_void/query.fasta");
