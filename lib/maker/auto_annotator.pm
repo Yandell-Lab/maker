@@ -1445,7 +1445,7 @@ sub run_it{
 		    my $coors  = PhatHit_utils::get_hsp_coors($blastx, 'query');
 		    my $pieces = Shadower::getVectorPieces($coors, 0);
 
-		    if(@$pieces <= 1 && $model->hsps <= 2){ # if single exon evidence model should be close
+		    if(@$pieces <= 1){ # if single exon evidence model should be close
 			my $abAED = shadow_AED::get_abAED($all_preds, $model);
 			my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
 

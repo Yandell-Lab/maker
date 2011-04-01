@@ -173,8 +173,8 @@ try{
 	       "check" =>\$OPT{check},
 	       "base=s" =>\$OPT{out_name},
 	       "datastore!" =>\$OPT{datastore},
-	       "fast" =>\$OPT{fast},
 	       "dtmp" =>\$main::dtmp,
+	       "dbindex" =>\$OPT{dbindex},
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
 	       "OPTS" => sub {GI::generate_control_files('', 'opts'); exit(0);},
@@ -247,7 +247,7 @@ try{
     #---load genome multifasta/GFF3 file
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
 
-    if(0){
+    if($OPT{dbindex}){
 	while(my $q_def = $iterator->nextDef()){
 	    my $id = Fasta::def2SeqID($q_def);
 	    my $safe_id = Fasta::seqID2SafeID($id);
@@ -255,6 +255,7 @@ try{
 	    my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
 	    $DS_CTL->add_entry($id, $dir, $message);
 	}
+	exit(0);
     }
 
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
