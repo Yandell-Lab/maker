@@ -482,6 +482,8 @@ sub throw_out_bad_splicers_in_cluster{
 
 	push(@new_c, @$ests);
 
+	#keeps me from creating evidence clusters when there is no evidence
+	#just a gene prediction
 	if(@new_c){
 	    push(@new_c, @$preds);
 	    push(@c_keepers, \@new_c);

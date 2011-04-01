@@ -31,10 +31,10 @@ sub get_eAED {
    my @others;
 
    foreach my $h (@$hits){
-       if($h->algorithm =~ /protein2genome|^protein_gff|^blastx/){
+       if($h->algorithm =~ /protein2genome|^protein_gff|^blastx/i){
 	   push(@prots, $h);
        }
-       elsif($h->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/){
+       elsif($h->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/i){
    	   push(@ests, $h);
        }
        else{
@@ -123,12 +123,12 @@ sub get_eAED {
 	   
 	   #splice site matches so keep EST HSP
 	   if($i != 0 && $splices{start}{$aB}){ #a first splice site in EST also first splice site in gene
-	       $splices{start}{$aB} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/); #flag for verified
+	       $splices{start}{$aB} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/i); #flag for verified
 	       push(@keepers, $ehsp);
 	       next EHSP;
 	   }
 	   elsif($i != @hsps - 1 && $splices{end}{$aE}){ #a last splice site in EST also last splice site in gene
-	       $splices{end}{$aE} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/); #flag for verified
+	       $splices{end}{$aE} = 2 if($e->algorithm =~ /est2genome|^est_gff|^altest_gff|^blastn|^tblastx/i); #flag for verified
 	       push(@keepers, $ehsp);
 	       next EHSP;
 	   }

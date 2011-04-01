@@ -137,14 +137,14 @@ sub cigar_string {
 	    
 	    #cigar buffer was reverse frame shift which simultaneously itterates the match
 	    if($type eq 'R'){
-		$cigar .= $type.$value if($value);
+		$cigar .= $type.$value if($value && $type);
 		$type = 'M';
 		$value = 1;
 	    }
 	    
 	    #cigar type different than current so process cigar buffer
 	    if($found ne $type || $type eq 'F'){
-		$cigar .= $type.$value if($value);
+		$cigar .= $type.$value if($value && $type);
 		$type = $found;
 		$value = 0;
 	    }
@@ -195,14 +195,14 @@ sub cigar_string {
 	    
 	    #cigar buffer was reverse frame shift which simultaneously itterates the match
 	    if($type eq 'R'){
-		$cigar .= $type.$value if($value);
+		$cigar .= $type.$value if($value && $type);
 		$type = 'M';
 		$value = 1;
 	    }
 	    
 	    #cigar type different than current so process cigar buffer
 	    if($found ne $type || $type eq 'F'){
-		$cigar .= $type.$value if($value);
+		$cigar .= $type.$value if($value && $type);
 		$type = $found;
 		$value = 0;
 	    }
@@ -214,7 +214,7 @@ sub cigar_string {
 	    
 	    #this was the last character so process cigar buffer
 	    if($i == @aa - 1){
-		$cigar .= $type.$value if($value);
+		$cigar .= $type.$value if($value && $type);
 	    }
 	}
     }

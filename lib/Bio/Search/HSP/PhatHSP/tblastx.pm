@@ -586,14 +586,14 @@ sub cigar_string {
             $value++;
         }
         else{
-            $cigar .= "$type$value";
+            $cigar .= "$type$value" if($type);
             $type = $found;
             $value = 1;
         }
     }
 
     if($value){
-        $cigar .= "$type$value";
+        $cigar .= "$type$value" if($type);
     }
 
     return ($self->{_CIGAR} = $cigar);

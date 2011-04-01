@@ -873,13 +873,13 @@ sub cigar_string {
 	    $value += $1;
 	}
 	else{
-	    $cigar .= "$type$value" if($value);
+	    $cigar .= "$type$value" if($value && $type);
 	    $type = $2;
 	    $value = $1;
 	}
     }
 
-    $cigar .=  "$type$value" if($value);
+    $cigar .=  "$type$value" if($value && $type);
 
     return ($self->{_CIGAR} = $cigar);
 }
