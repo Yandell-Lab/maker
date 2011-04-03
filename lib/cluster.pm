@@ -53,7 +53,7 @@ sub clean_and_cluster {
 	   while(my $key = each %types){
 	       my $s = $types{$key};
 
-	       $s = clean::get_best_alt_splices($s, 10);
+	       $s = clean::remove_redundant_alt_splices($s, 10);
 	       @$s = @{$s}[0..$depth-1] if($depth && @$s > $depth);
 
 	       push(@keepers, @$s);
@@ -61,7 +61,7 @@ sub clean_and_cluster {
 	   $c = \@keepers;
        }
        else{
-	  $c = clean::get_best_alt_splices($c, 10);
+	  $c = clean::remove_redundant_alt_splices($c, 10);
 	  @$c = @{$c}[0..$depth-1] if($depth && @$c > $depth);
        }	
     }

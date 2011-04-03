@@ -864,12 +864,12 @@ sub annotate_stats {
 	    my @t_structs;
 	    foreach my $s (@{$g->{t_structs}}) {
 		my $t_struct = load_transcript_stats($s, $g_name, $i, $evidence, $seq, $CTL_OPT);
-		
+		my $low = ($t_struct->{AED} < $t_struct->{eAED}) ? $t_struct->{AED} : $t_struct->{eAED};
 		my $bad = 1 if($t_struct->{p_length} <= $CTL_OPT->{min_protein} ||
-			       $t_struct->{eAED} > $CTL_OPT->{AED_threshold}
+			       $low > $CTL_OPT->{AED_threshold}
 			       );
 
-		next if($bad && $key !~ /_abinit$/);
+		next if($bad && $key !~ /_abinit$/); #removes multiple transcripts where only some are bad
 
 		push(@t_structs, $t_struct);
 
@@ -1077,6 +1077,7 @@ sub best_annotations {
 	my $m_list = [];
 	my @p_est2g;
 	my @m_est2g;
+	my $thresh = $CTL_OPT->{AED_threshold};
 	foreach my $p (@predictors){
 	    my $pa = "$p\_abinit";
 	    my @hints = @{$annotations->{$p}} if($annotations->{$p});
@@ -1084,24 +1085,23 @@ sub best_annotations {
 
 	    foreach my $g (@hints, @abinits){
 		next if($g->{t_structs}->[0]->{hit}->{_REMOVE}); #added to filter low support abinits
+		my $AED = $g->{AED};
+		my $eAED = $g->{eAED};
+		my $low = ($AED < $eAED) ? $AED : $eAED;
 
 		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
-		    push(@$p_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold})
-					  || $p eq 'model_gff'
-					  );
+		    push(@$p_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
 		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
-		    push(@$m_list, $g) if(($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold})
-					  || $p eq 'model_gff'
-					  );
+		    push(@$m_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
 		elsif($g->{g_strand} == 1){
 		    #separate est2genome and protein2genome genes
-		    push(@p_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold});
+		    push(@p_est2g, $g) if($AED < 1 && $low <= $thresh);
 		}
 		elsif($g->{g_strand} == -1){
 		    #separate est2genome and protein2genome genes
-		    push(@m_est2g, $g) if($g->{AED} < 1 && $g->{AED} <= $CTL_OPT->{AED_threshold});
+		    push(@m_est2g, $g) if($AED < 1 && $low <= $thresh);
 		}
 		else{
 		    confess "ERROR: Logic error in auto_annotator::best_annotations\n";
@@ -1432,6 +1432,10 @@ sub run_it{
 		    my $pAED = shadow_AED::get_eAED($pol_p, $model); #veifies reading frame
 		    $remove = 0 if($pAED < 1);
 		}
+		elsif($remove && @$pol_p){
+		    my $pAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
+		    $remove = 0 if($pAED <= 0.5);
+		}
 
 		#make sure the alt est evidence is not single exon and actually overlaps
 		if($remove && @$alt_ests){
@@ -1446,15 +1450,8 @@ sub run_it{
 		    my $pieces = Shadower::getVectorPieces($coors, 0);
 
 		    if(@$pieces <= 1){ # if single exon evidence model should be close
-			my $abAED = shadow_AED::get_abAED($all_preds, $model);
 			my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
-
-			if($abAED <= 0.3){
-			   $remove = 0 if($bAED <= 0.5);
-			}
-			else{
-			   $remove = 0 if($bAED <= 0.25); #stricter threshold when no abinit
-			}
+			$remove = 0 if($bAED <= 0.5);
 		    }
 		    elsif(@$pieces > 1){
 			$remove = 0;
@@ -1468,6 +1465,7 @@ sub run_it{
 	    while(! compare::is_same_alt_form($select, $transcript, 0)){
 		$select = $transcript;
 		$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+		$remove = 0; #I just added EST support
 	    }
 
 	    #don't filter imediately just mark for downstream filtering
@@ -1615,10 +1613,23 @@ sub run_it{
 		    }
 		    
 		    #make sure the polished protein evidence actually overlaps
+		    my $abAED;
 		    if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
 			my $pAED = shadow_AED::get_eAED($pol_p, $h);
 			$remove = 0 if($pAED < 1);
 		    }
+		    elsif($remove && @$pol_p){
+			$abAED = shadow_AED::get_abAED($all_preds, $model) if(!defined $abAED);
+			my $pAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
+		    
+			if($abAED <= 0.3){
+			    $remove = 0 if($pAED <= 0.5);
+			}
+			else{
+			    $remove = 0 if($pAED <= 0.25); #stricter threshold when no abinit
+			}
+		    }
+
 		    
 		    #make sure the alt est evidence is not single exon and actually overlaps
 		    if($remove && @$alt_ests){
@@ -1634,11 +1645,11 @@ sub run_it{
 			    $pieces = Shadower::getVectorPieces($coors, 0);
 			}
 			
-			if(@$pieces <= 1 && $h->hsps <= 2){ # if single exon evidence then model should be close
+			if(@$pieces <= 1 && $h->hsps <= 2){# if single exon evidence then model should be close
 			    #make sure ab initio evidence can support a single exon alignment
 			    #this step not needed in ab inits because the test model is an abinit model
 			    if(grep {$_->hsps <= 2} @$all_preds){
-				my $abAED = shadow_AED::get_abAED($all_preds, $h);
+				$abAED = shadow_AED::get_abAED($all_preds, $h) if(!defined $abAED);
 				my $bAED = shadow_AED::get_eAED($blastx, $h);
 				
 				if($abAED <= 0.3){
@@ -1852,6 +1863,23 @@ sub load_transcript_struct {
 			'p_length'  => length($translation_seq)
 		    };
 
+	#also determine these values for the unmodified abinit
+	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
+	    my $transcript_seq  = get_transcript_seq($p_base, $seq);
+	    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $p_base);
+
+	    my $p_struct = {'t_seq'     => $transcript_seq,
+			    'p_seq'     => $translation_seq,
+			    't_offset'  => $offset,
+			    't_end'     => $end,
+			    'has_start' => $has_start,
+			    'has_stop'  => $has_stop,
+			    'p_length'  => length($translation_seq)
+			    };
+
+	    $t_struct->{p_struct} = $p_struct;
+	}
+
 	return $t_struct;
 }
 #------------------------------------------------------------------------
@@ -1896,10 +1924,13 @@ sub load_transcript_stats {
 	$f->{_AED}  = $AED;
 	$f->{_eAED} = $eAED;
 
-	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
+	    my $p_struct = $struct->{p_struct}; 
 	    $p_base->name($f->name);
 	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
 	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
+	    $p_struct->{_AED} = $p_base->{_AED};
+	    $p_struct->{_eAED} = $p_base->{_eAED};
 	}
 
 	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm

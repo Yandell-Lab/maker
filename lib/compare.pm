@@ -26,6 +26,8 @@ sub is_same_alt_form {
 	die "only one feature in is_same_alt_form!\n"
 	unless defined($a) && defined($b);
 
+	return 0 if($a->num_hsps != $b->num_hsps);
+
 	my ($s_to_a_str, $s_to_b_str) = compare_by_shadow($a, $b, $flank);
 
 	my $a_to_b_str = compare_phat_hits($a, $b, 'query', $flank);

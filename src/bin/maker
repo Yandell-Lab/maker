@@ -248,6 +248,7 @@ try{
     $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
 
     if($OPT{dbindex}){
+	$iterator->skip_file($DS_CTL->{log});
 	while(my $q_def = $iterator->nextDef()){
 	    my $id = Fasta::def2SeqID($q_def);
 	    my $safe_id = Fasta::seqID2SafeID($id);

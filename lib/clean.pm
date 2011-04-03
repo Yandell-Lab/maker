@@ -151,7 +151,6 @@ sub get_best_alt_splices {
 			}
 			if (compare::is_same_alt_form($hit_i, $hit_j, $flank)){
 				$dead{$j}++;
-
 			}
                 }
         }
