@@ -483,7 +483,7 @@ sub add_align_strs {
 		    #exon and replace it with gap characters, then add spaces to the next
 		    #exon's nucleotide sequence to account for the moved amino acid
 		    $q_aa_strs->[$i] =~ /\{([A-Za-z]+)\}$/;
-		    if(my $rep = $1){
+		    if((my $rep = $1) && $i != @{$q_aa_strs} - 1){
 			$q_aa_strs->[$i + 1] = $rep . $q_aa_strs->[$i + 1];
 			$rep =~ s/./-/g;
 			$q_aa_strs->[$i] =~ s/\{([A-Za-z]+)\}$/$rep/;
@@ -492,7 +492,7 @@ sub add_align_strs {
 
 		    #also move amino acid for translated target string
 		    $t_aa_strs->[$i] =~ /\{([A-Za-z]+)\}$/;
-                    if(my $rep = $1){
+                    if((my $rep = $1) && $i != @{$q_aa_strs} - 1){
                         $t_aa_strs->[$i + 1] = $rep . $t_aa_strs->[$i + 1];
                         $rep =~ s/./-/g;
                         $t_aa_strs->[$i] =~ s/\{([A-Za-z]+)\}$/$rep/;
@@ -501,7 +501,7 @@ sub add_align_strs {
 		    #now duplicate homology string crossing the splice site to the next exon
 		    #to account for the moved amino acid
 		    $m_strs->[$i] =~ /\{(\|+)\}$/;
-		    if(my $rep = $1){
+		    if((my $rep = $1) && $i != @{$q_aa_strs} - 1){
 			$m_strs->[$i + 1] = $rep . $m_strs->[$i + 1];
 		    }
 
