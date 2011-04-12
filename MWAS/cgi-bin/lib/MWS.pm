@@ -878,7 +878,7 @@ sub job_create {
    }
 
    #reserve new job id value if needed (tutorials are started with new job_id)
-   if(! $job_id || $job->{is_tutorial} || $job->{is_started}){
+   if(! $job_id || $job->{is_tutorial} || $job->{is_started} || $job->{is_finished}){
        ($job_id) = $self->dbh->selectrow_array(qq{SELECT last_job_id FROM id_store}); #get last job_id
        $job_id++; #iterate the value
        $self->dbh->do(qq{UPDATE id_store SET last_job_id=$job_id}); #record new value
@@ -1056,8 +1056,8 @@ sub submit_to_db {
 	   File::Path::mkpath($job_dir) if(! -d $job_dir);
 
 	   MWAS_util::copy_package($self->dbh, $other_job_id, $job_id);
-	   $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1, start_time='}.
-			  MWAS_util::date_time . qq{', finish_time='}.
+	   $self->dbh->do(qq{UPDATE jobs SET is_queued=0, is_started=1, is_finished=1, is_packaged=1,}.
+			  qq{ start_time='}.MWAS_util::date_time . qq{', finish_time='}.
 			  MWAS_util::date_time . qq{' WHERE job_id=$job_id});
        }
        elsif($type eq 'functional'){

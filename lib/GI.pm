@@ -314,6 +314,8 @@ sub reblast_merged_hits {
       }
       
       #==run the blast search
+      my $entry = $t_file;
+      $t_file .= ':'.$hit->{_label} if($hit->{_label}); #add label if there was one
       if ($type eq 'blastx') {
 	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
 	 my $keepers = blastx($chunk, 
