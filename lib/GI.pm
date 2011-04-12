@@ -604,7 +604,7 @@ sub get_p_and_t_fastas {
    my $t_off  = "offset:".$t_struct->{t_offset};
    my $AED    = "AED:".sprintf('%.2f', $t_struct->{AED});
    my $eAED   = "eAED:".sprintf('%.2f', $t_struct->{eAED});
-   my $QI     = "QI:".sprintf('%.2f', $t_struct->{t_qi});
+   my $QI     = "QI:".$t_struct->{t_qi};
 
    #for ab initio annotations use the stats from the unmodified model 
    if($type eq 'abinit'){
