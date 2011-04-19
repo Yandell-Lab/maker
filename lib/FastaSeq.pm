@@ -169,7 +169,7 @@ sub substr_o {
     my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
 
     if(ref($seq_ref) eq 'SCALAR'){
-	$len = length($$seq_ref) - $off if(! defined($len));
+	$len = CORE::length($$seq_ref) - $off if(! defined($len));
 	return substr($$seq_ref, $off, $len);
     }
     else{
@@ -187,7 +187,7 @@ sub length_o {
     my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
 
     if(ref($seq_ref) eq 'SCALAR'){
-	return length($$seq_ref);
+	return CORE::length($$seq_ref);
     }
     else{
 	return $seq_ref->length;

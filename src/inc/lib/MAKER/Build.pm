@@ -450,7 +450,11 @@ sub ACTION_installdeps{
     my $prereq = $self->prereq_failures();
     if($prereq && $prereq->{requires}){
 	my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
-	my $access = (-w $Config{installsitelib} && -w $Config{installsitearch});
+	my $access = 1 if(-w $Config{installsitelib});
+	if(!$access){
+	    my ($root_id, $grp_id) = (getpwnam('root'))[2,3];
+	    $access = 1 if($< == $root_id || $> == $root_id); 
+	}
 
 	my $local;
 	if(! $access && ! grep {/Bio\:\:Graphics\:\:Browser2/} @perl){
@@ -1025,7 +1029,10 @@ sub cpan_install {
 
     # Save this because CPAN will chdir all over the place.
     my $cwd = getcwd();
-    
+
+    #update CPAN if needed to avoid other installation issues with prereqs
+    CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
+
     #set up a non-global local module library for MAKER
     if($local){
 	my $base = $self->base_dir;
@@ -1049,7 +1056,7 @@ sub cpan_install {
     }
 
     #install YAML if needed to avoid other installation issues with prereqs
-    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});
+    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});    
 
     #CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16;
     #CPAN::Shell->install($desired);

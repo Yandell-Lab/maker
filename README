@@ -2,10 +2,13 @@
 ALSO SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
 #---------------------------------------------------------------------
 
-INSTALLATION INSTUCTIONS FOR MAKER
+INSTALLATION INSTRUCTIONS FOR MAKER
 
 *Step by step instructions are also available in the INSTALL text
 file.
+
+*If you are using Mac OS X you will need to install developer tools
+and Rosetta from your install disk first.
 
 MAKER is an annotation pipeline.  In other words it links together
 many steps and programs to produce final annotations.  For this
@@ -15,12 +18,12 @@ on.  MAKER works on both eukaryotic and prokaryotic genomes.
 Installing MAKER may be as easy as running MAKER's Build.PL script
 followed by ./Build install
     cd maker/src/
-    perl ./Build.PL
-    ./Build install    
+    perl Build.PL
+    ./Build install
 
 If you need to do any additional system configuration, Build.PL will
 provide you with insuctions. If installation fails, you will need to
-follow the detailed instructions for manual configration bellow
+follow the detailed instructions for manual configuration bellow
 or in the bundled INSTALL file.
 
 

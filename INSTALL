@@ -2,12 +2,18 @@
 
 How to Install Standard MAKER
 
+*If you are using Mac OS X you will need to install developer tools
+and Rosetta from your install disk first.
+
 EASY INSTALL
 
-1.  Go to the .../maker/src/ directory and run 'perl Build.PL' to configure
-    the install and then './Build install' to complete the installation.
+1.  Go to the .../maker/src/ directory and run 'perl Build.PL' to configure.
 
-5.  If anything fails, either use the ./Build file commands to retry the
+2.  Accept default options by just pressing enter.
+
+3.  type './Build install' to complete the installation.
+
+4.  If anything fails, either use the ./Build file commands to retry the
     failed section or follow the detailed install instructions below to
     manually install missing modules or programs.
 

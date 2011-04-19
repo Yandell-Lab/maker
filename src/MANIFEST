@@ -1,5 +1,3 @@
-bin/add_utr_start_stop_gff
-bin/add_utr_to_gff3
 bin/cegma2zff
 bin/chado2gff3
 bin/compare
@@ -7,18 +5,16 @@ bin/cufflinks2gff3
 bin/evaluator
 bin/fasta_merge
 bin/fasta_tool
-bin/fix_fasta
 bin/genemark_gtf2gff3
 bin/gff3_2_gtf
 bin/gff3_merge
 bin/gff3_preds2models
-bin/gff3_to_eval_gtf
 bin/ipr_update_gff
 bin/iprscan2gff3
-bin/iprscan_batch
 bin/iprscan_wrap
 bin/maker
 bin/maker2chado
+bin/maker2eval
 bin/maker2jbrowse
 bin/maker2zff
 bin/maker_functional
@@ -29,6 +25,9 @@ bin/map2assembly
 bin/map_data_ids
 bin/map_fasta_ids
 bin/map_gff_ids
+bin/mpi_evaluator
+bin/mpi_iprscan
+bin/mpi_maker
 bin/mpi_scripts.PL
 bin/split_fasta
 bin/tophat2gff3
@@ -79,7 +78,13 @@ inc/src/Parallel/MPIcar.pm
 inc/src/Parallel/MPIcar.xs
 inc/src/Parallel/typemap
 inc/src/Parallel/utils.c
+lib/Parallel/MPIcar.c
+lib/Parallel/MPIcar.o
 lib/Parallel/MPIcar.PL
+lib/Parallel/MPIcar.pm
+lib/Parallel/MPIcar.xs
+lib/Parallel/typemap
+lib/Parallel/utils.c
 locations
 MANIFEST			This list of files
 version
