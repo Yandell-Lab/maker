@@ -11,7 +11,7 @@ use vars qw($RANK $LOG $CMD_ARGS $VERSION);
 use Carp;
 
 BEGIN{
-   $VERSION = '2.10';
+   $VERSION = '2.11';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
