@@ -289,9 +289,9 @@ sub ACTION_build {
 	$O{dbname}      = $self->prompt("\nDatabase name?",
 					 $O{dbname});
 	$O{host}        = $self->prompt("\nDatabase host?",
-					 $O{host});
+					 $O{host}) unless($O{DBI} eq 'SQLite');
 	$O{port}        = $self->prompt("\nDatabase port?",
-					 $O{port});
+					 $O{port}) unless($O{DBI} eq 'SQLite');
 	$O{username}    = $self->prompt("\nDatabase username?",
 					 $O{username});
 	$O{password}    = $self->prompt("\nDatabase password?",
@@ -431,12 +431,18 @@ sub ACTION_install {
 	my @exists = grep {-f $_} @files;
 	my %O = GI::load_server_files(\@exists);
     
-	$self->log_info("Intalling MWAS database and files\n");
+	$self->log_info("Installing MWAS database and files\n");
 	MWAS_util::mwas_setup(\%O);
-	$self->log_info("Intalling Apollo - Java Web Start\n");
+	$self->log_info("Installing Apollo - Java Web Start\n");
 	MWAS_util::apollo_setup(\%O);
 	$self->log_info("Setting GBrowse Configuration\n");
 	MWAS_util::gbrowse_setup(\%O);
+	$self->log_info("Setting JBrowse Configuration\n");
+	MWAS_util::jbrowse_setup(\%O);
+
+	print "\n\nMWAS must be started using the following command\n".
+	      "before jobs submitted to the server will run:\n".
+	      "     sudo maker -MWAS START\n\n";
     }
 
     $self->maker_status();
@@ -450,7 +456,7 @@ sub ACTION_installdeps{
     my $prereq = $self->prereq_failures();
     if($prereq && $prereq->{requires}){
 	my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
-	my $access = 1 if(-w $Config{installsitelib});
+	my $access = 1 if(-w $Config{installsitelib} && -w $Config{installarchlib});
 	if(!$access){
 	    my ($root_id, $grp_id) = (getpwnam('root'))[2,3];
 	    $access = 1 if($< == $root_id || $> == $root_id); 
@@ -630,6 +636,9 @@ sub lib_failures {
     my $other = shift || {};
     my %libs = (%{$self->lib_requires}, %{$other});
     
+    #for libpng
+    push(@DynaLoader::dl_library_path, '/usr/X11/include', '/usr/X11/include', '/sw/lib', '/sw/include');
+
     my %lib_failures;
     while (my $name = each %libs){
 	my @cmds = map {$_ =~ s/\s+$|^\s+//g; $_} split(/,/, $libs{$name});
@@ -686,6 +695,14 @@ sub _install_exe {
 
     ($OS, $ARC) = ('src', '') if(! $os_ok{"$OS\_$ARC"}); #use source code for unknown architectures
 
+    #add fink paths just in case
+    if($OS eq 'Darwin'){
+	$ENV{C_INCLUDE_PATH} .= ":" if($ENV{C_INCLUDE_PATH});
+	$ENV{LIBRARY_PATH} .= ":" if($ENV{LIBRARY_PATH});
+	$ENV{C_INCLUDE_PATH} .= "/sw/include:/usr/X11/include";
+	$ENV{LIBRARY_PATH} .= "/sw/lib:/usr/X11/lib";
+    }
+
     #get url for exectuable to be installed
     my $data;
     open(LOC, '<', $self->base_dir()."/locations")
@@ -721,7 +738,7 @@ sub _install_exe {
 	my $req = 'RepBase';
 	my $go = $self->y_n("\nIf are a registered user of RepBase, then MAKER can\n".
 			    "download and install RepBase for RepeatMasker for you.\n".
-			    "Do you want to do this?", 'N');
+			    "Do you want to do this?", 'Y');
 
 	if($go){
 	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
@@ -741,6 +758,9 @@ sub _install_exe {
 	    print "Unpacking $exe tarball...\n";
 	    $self->extract_archive($file) or return $self->fail($req, $path);
 	    push(@unlink, $file);
+	}
+	else{
+	    print "\n\n*You will have to install RepBase manually.\n\n";
 	}
 
 	#TRF
@@ -946,9 +966,15 @@ sub _install_exe {
 	push (@unlink, $file);
 	my ($dir) = grep {-d $_} <jbrowse*>;
 	print "Configuring $exe...\n";
-	File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
+	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
-	$self->do_system('./configure') or return $self->fail($exe, $path);
+	if($OS eq 'Darwin'){
+	    $self->do_system('./configure CXXFLAGS=-I/usr/X11/include LDFLAGS=-L/usr/X11/lib')
+		or return $self->fail($exe, $path);
+	}
+	else{
+	    $self->do_system('./configure') or return $self->fail($exe, $path);
+	}
 	$self->do_system('make') or return $self->fail($exe, $path);
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
@@ -983,6 +1009,12 @@ sub fail {
 # borrowed and modified from BioPerl, has flag for local install
 sub cpan_install {
     my ($self, $desired, $local) = @_;
+
+    unless(File::Which::which('make')){
+	die "\n\nERROR: Cannot find 'make' on your system. If this is a Mac you\n".
+	    "will need to install xcode developer tools before you can\n".
+	    "continue. This can be done from the OS X installation disk.\n\n";
+    }
 
     if($desired eq 'Bio::Graphics::Browser2' && $local){
 	print "\nWARNING: Bio::Graphics::Browser2 can only be installed globally so\n".
@@ -1032,6 +1064,20 @@ sub cpan_install {
 
     #update CPAN if needed to avoid other installation issues with prereqs
     CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
+    die "\n\nERROR: Cannot load correct CPAN version or related modules\n".
+	"Try running 'install Bundle::CPAN' from CPAN manually as either\n".
+	"the root user or using sudo\n\n"
+	if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
+
+    #fix weird Mac compilation errors
+    my ($OS, $ARC) = (POSIX::uname())[0,4];
+    if($OS eq 'Darwin'){
+	#$ENV{CFLAGS} .= ($ENV{CFLAGS}) ? ' -m32' : '-m32';
+	#$ENV{CCFLAGS} .= ($ENV{CCFLAGS}) ? ' -m32' : '-m32';
+	#$ENV{CPPFLAGS} .= ($ENV{CPPFLAGS}) ? ' -m32' : '-m32';
+	#$ENV{LDFLAGS} .= ($ENV{LDFLAGS}) ? ' -m32' : '-m32';
+	#$ENV{LDDLFLAGS} .= ($ENV{LDDLFLAGS}) ? ' -m32' : '-m32';
+    }
 
     #set up a non-global local module library for MAKER
     if($local){
@@ -1209,7 +1255,7 @@ sub maker_status {
         "\t./Build apollo\t\t\#installs Apollo\n".
         "\t./Build gbrowse\t\t\#installs GBrowse (must be root)\n".
         "\t./Build jbrowse\t\t\#installs JBrowse (MAKER copy, not web accecible)\n".
-        "\t./Build mpich2\t\t\#installs MPICH2 (manual installation recommended)\n";
+        "\t./Build mpich2\t\t\#installs MPICH2 (but manual install recommended)\n";
 }
 
 #test if there is another version of the module overriding the CPAN install

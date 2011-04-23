@@ -84,9 +84,10 @@ glyph              = processed_transcript
 bgcolor            = rgb(51,102,255)
 utr_color          = rgb(176,224,230)
 thin_utr           = 1
+one_cds            = 1
 label_transcripts  = 1
 draw_translation   = 1
-implied_utrs       = 1
+implied_utrs       = 0
 description        = 1
 #link               = [% base_url_cgi %]/gene_page.cgi?seq_id=$ref&name=$name
 link_target        = _blank

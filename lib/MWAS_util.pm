@@ -145,7 +145,7 @@ sub mwas_setup {
     mkdir("$cgi_dir/config/") if(! -d "$cgi_dir/config/");
     system("cp -R $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
-    system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    #system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     if(-d $p_lib){ #only exists when MPI is installed
         system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
@@ -200,13 +200,21 @@ sub mwas_setup {
 	}
     }
 
-    if($CTL_OPT{JBROWSE_ROOT} =~ /\/exe\/([^\/]+\/[^\/]+|[^\/]+\/bin\/[^\/]+)$/ &&
-           -e "$data_dir/maker/exe/$1"
+    if($CTL_OPT{JBROWSE_ROOT} =~ /\/exe\/jbrowse$/ &&
+           -e "$data_dir/maker/exe/jbrowse"
        ){
-	$CTL_OPT{JBROWSE_ROOT} = "$data_dir/maker/exe/$1";
+	$CTL_OPT{JBROWSE_ROOT} = "$data_dir/maker/exe/jbrowse";
     }
 
-    GI::generate_control_files("$data_dir/maker/MWAS/config/",'exe', \%E);
+    #generate the control files stored with website executables
+    GI::generate_control_files("$data_dir/maker/MWAS/config/",'all', \%E);
+    GI::generate_control_files("$data_dir/maker/MWAS/config/",'server', \%E);
+    GI::generate_control_files("$data_dir/maker/MWAS/config/",'menus', \%E);
+
+    GI::generate_control_files("$cgi_dir/config/",'all', \%E);
+    GI::generate_control_files("$cgi_dir/config/",'server', \%E);
+    GI::generate_control_files("$cgi_dir/config/",'menus', \%E);
+
     %CTL_OPT = (%CTL_OPT, %E);
 
     #build redirection page (so user can see directories if apache is not configured)
@@ -281,7 +289,9 @@ sub apollo_setup {
 
     #go the extra mile and try and setup apollo webstart
     if($CTL_OPT{APOLLO_ROOT}){
+	my $cgi_dir  = $CTL_OPT{cgi_dir};
         my $html_dir = $CTL_OPT{html_dir};
+	my $data_dir = $CTL_OPT{data_dir};
 
         #set up directory for web
         my (undef, $t_xml) = File::Temp::tempfile();
@@ -289,7 +299,7 @@ sub apollo_setup {
 
         #create generate Apollo webstart
 	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
-        my $tt_xml = "$b_dir/../cgi-bin/tt_templates/apollo_webstart.tt";
+        my $tt_xml = "$b_dir/../../GMOD/Apollo/apollo_webstart.xml.tt";
 	my $c_dir = "$b_dir/../config";
         $ENV{APOLLO_ROOT} = $CTL_OPT{APOLLO_ROOT};
 	$ENV{PERL5LIB} = ($CTL_OPT{PERL5LIB}) ?
@@ -297,6 +307,10 @@ sub apollo_setup {
         system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
                "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp -D $html_dir/jars") &&
                die "ERROR: Generating Apollo webstart jars and jnlp file failed\n";
+	system("cp $c_dir/apollo.jnlp $data_dir/maker/MWAS/config/") &&
+	    die "ERROR: Preparing Apollo configuration file failed\n";
+	system("cp $c_dir/apollo.jnlp $cgi_dir/config/")
+	    && die "ERROR: Preparing Apollo configuration file failed\n";
     }
     else{
         die "ERROR: You must suply a value for APOLLO_ROOT in server.ctl to\n".
@@ -339,10 +353,53 @@ sub gbrowse_setup {
 
         #now replace old file
         system("mv $new $old") && die "ERROR: Could not replace existing GBrowse configuration file\n";
+
+	#place configuration file
+	my $cgi_dir  = $CTL_OPT{cgi_dir};
+        my $html_dir = $CTL_OPT{html_dir};
+	my $data_dir = $CTL_OPT{data_dir};
+
+	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+        my $tt_conf = "$b_dir/../../GMOD/GBrowse/gbrowse.conf.tt";
+	my $c_dir = "$b_dir/../config";
+
+	if(! -f "$c_dir/gbrowse.conf.tt"){
+	    system("cp $tt_conf $c_dir")
+		&& die "ERROR: Preparing GBrowse configuration file failed\n";
+	    system("cp $c_dir/gbrowse.conf.tt $data_dir/maker/MWAS/config/")
+                && die "ERROR: Preparing GBrowse configuration file failed\n";
+	    system("cp $c_dir/gbrowse.conf.tt $cgi_dir/config/")
+                && die "ERROR: Preparing GBrowse configuration file failed\n";
+	}
     }
     else{
         die "ERROR: You must suply a value for GBROWSE_MASTER in server.ctl to\n".
             "setup GBROWSE for use with the MAKER web interface\n\n";
+    }
+}
+#-----------------------------------------------------------------------------
+sub jbrowse_setup {
+    my %CTL_OPT= %{shift @_};
+
+    #configure GBROWSE
+    if($CTL_OPT{JBROWSE_ROOT}){
+        #copy JBrowse configuration file
+	my $cgi_dir  = $CTL_OPT{cgi_dir};
+	my $data_dir = $CTL_OPT{data_dir};
+        (my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+        my $c_dir = "$b_dir/../config";
+	if(! -f "$c_dir/genome.css"){
+	    system("cp $b_dir/../../GMOD/JBrowse/genome.css $c_dir")
+		&& die "ERROR: Preparing JBrowse configuration file failed\n";
+	    system("cp $c_dir/genome.css $data_dir/maker/MWAS/config/")
+                && die "ERROR: Preparing JBrowse configuration file failed\n";
+	    system("cp $c_dir/genome.css $cgi_dir/config/")
+                && die "ERROR: Preparing JBrowse configuration file failed\n";
+	}
+    }
+    else{
+        die "ERROR: You must suply a value for JBROWSE_ROOT in server.ctl to\n".
+            "setup JBROWSE for use with the MAKER web interface\n\n";
     }
 }
 #-----------------------------------------------------------------------------

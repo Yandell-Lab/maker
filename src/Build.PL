@@ -46,7 +46,7 @@ my $build = MAKER::Build->new
 	 'RepeatMasker' => 'RepeatMasker',
 	 'Exonerate' => 'exonerate',
 	 'SNAP'  => 'snap',
-	 'Augustus' => 'augustus',
+	 #'Augustus' => 'augustus',
      },
      lib_requires => {
      },
@@ -154,6 +154,10 @@ if($build->feature('mwas_support')){
     $build->add_requires('Mail::Sender' => '0');
     $build->add_requires('Bio::Graphics::Browser2' => '2.15');
     $build->add_requires('XML::Twig' => '0');
+    $build->add_requires('GD' => '0');
+    $build->add_requires('Devel::Size' => '0');
+    $build->add_requires('Heap::Simple' => '0');
+    $build->add_requires('Heap::Simple::XS' => '0');
     $build->add_exe_requires('Apollo' => 'apollo');
     $build->add_exe_requires('Apache Ant' => 'ant');
     $build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');

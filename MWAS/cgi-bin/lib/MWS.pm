@@ -72,7 +72,7 @@ sub cgiapp_init {
    @serv_opt{keys %serv_opt} = @CTL_OPT{keys %serv_opt}; #just get server options
 
    #setup template params
-   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => "$FindBin::Bin/tt_templates/",
+   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => ["$FindBin::Bin/tt_templates/", "$FindBin::Bin/config/"],
 				         EVAL_PERL => 1});
 
    #setup authentication
@@ -268,7 +268,7 @@ sub delete_job {
        $self->dbh->do(qq{DELETE FROM jobs WHERE job_id=$job_id});
        $self->dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$job_id});
        $self->dbh->commit();
-       my %serv_opt = $self->param('server_opt');
+       my %serv_opt = %{$self->param('server_opt')};
        File::Path::rmtree("$serv_opt{data_dir}/job/$job_id");
    }
 
@@ -344,6 +344,7 @@ sub launch {
     my ($name) = $value =~ /([^\/]+)$/;   
     my %serv_opt = %{$self->param('server_opt')};
     my $data_dir = $serv_opt{data_dir};
+    my $cgi_dir = $serv_opt{cgi_dir};
     
     #build a safename with '%' character escaped to avoid issues with browser interpretation of %
     my $safe_name = uri_escape($name, '_');
@@ -451,7 +452,7 @@ sub launch {
 							       twiki);
 
 	#get MAKER specific configuration file
-	my $conf = "$data_dir/maker/JBrowse/genome.css";
+	my $conf = "$cgi_dir/config/genome.css";
 	system("cp -R $conf ".join(' ', @to_copy)." $dir");
     
 	#add tracks if not currently added
@@ -490,8 +491,10 @@ sub results {
        chomp $line;
        my @data = split("\t", $line);
 
+       next unless(@data >= 3);
+
        $values{$data[0]} = $data[1] if($data[2] eq 'FINISHED');
-       $status{$data[0]} = $data[2] unless($status{$data[0]} eq 'FINISHED');
+       $status{$data[0]} = $data[2] unless($status{$data[0]} && $status{$data[0]} eq 'FINISHED');
    }
    close($IN);
    
@@ -934,7 +937,7 @@ sub job_create {
 					     job_id  => $job_id,
 					     old_id  => $old_id,
 					     func    => $func,
-					     $job    => $job});
+					     job     => $job});
 }
 #------------------------------------------------------------------------------
 sub submit_to_db {
