@@ -580,6 +580,20 @@ sub clean_and_package {
     }
     close($IN);
 
+    my $t_dir = "$job_dir/$r_dir/snap.training";
+    my $t_file = "$t_dir/$job_id.hmm";
+    if(-f $t_file){
+	my ($user_id) = $dbh->selectrow_array(qq{SELECT user_id FROM jobs WHERE job_id=$job_id});
+	my ($name) = $dbh->selectrow_array(qq{SELECT name FROM jobs WHERE job_id=$job_id});
+	$name =~ s/\- Post Processing$//;
+	File::Path::mkpath("$data_dir/users/$user_id");
+	my $n_file = "$data_dir/users/$user_id/$job_id.hmm";
+	system("cp $t_file $n_file");
+	my $length = @{[stat($n_file)]}[7];
+
+	$dbh->do(qq{INSERT INTO files (name, value, type, length, contig_count, user_id) }.
+		 qq{VALUES ('$name job:$job_id', '$n_file', 'snaphmm', '$length', '0', $user_id)});
+    }
 
     my $date = MWAS_util::date_time();
     dbh_do_commit($dbh, qq{UPDATE jobs SET is_packaged=1, finish_time='$date' WHERE job_id=$job_id});
@@ -688,7 +702,7 @@ sub start_job {
 		$command = "$FindBin::RealBin/../../bin/maker -qq -base $job_id";
 	    }
 	    elsif($type eq 'functional'){
-		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{short_name}";
+		my $args = "$job_id $CTL_OPT{domain} $CTL_OPT{function} $CTL_OPT{snap_train} $CTL_OPT{short_name}";
 		$command = "$FindBin::RealBin/../../bin/maker_functional $args";
 	    }
 

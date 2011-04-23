@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -11,9 +11,11 @@ BEGIN{
 	$ENV{BLASTDB} = '/data/blastdb' if(! -d $ENV{BLASTDB});
 	$ENV{BLASTDB} = '' if(! -d $ENV{BLASTDB});
     }
+
+    $ENV{PATH} .= ":$FindBin::Bin/../exe/snap";
 }
 
-my ($job, $d, $f, $n) = @ARGV;
+my ($job, $d, $f, $t, $n) = @ARGV;
 die "ERROR: Job ID is missing\n" if(!$job);
 
 my $cwd = Cwd::cwd();
@@ -33,6 +35,30 @@ while(my $line = <IN>){
 }
 close(IN);
 
+if(defined $t){
+    my $t_dir = "$cwd/$job.maker.output/snap.training";
+    my $index = "$cwd/$job.maker.output/$job\_master_datastore_index.log";
+
+    mkdir($t_dir) if(! -d $t_dir);
+
+    my @commands = ("$FindBin::Bin/maker2zff -d $index",
+		    "fathom genome.ann genome.dna -categorize 1000",
+		    "fathom uni.ann uni.dna -export 1000 -plus",
+		    "mkdir params; cd params; forge ../export.ann ../export.dna; cd ..",
+		    "hmm-assembler.pl $job params > $job.hmm"
+		    );
+
+    chdir($t_dir);
+    foreach my $cmd (@commands){
+	my $stat = system($cmd);
+	
+	if($stat){
+	    die "ERROR: Could not train SNAP\n";
+	}
+    }
+    chdir($cwd);
+}
+
 if(defined $n){
     my $all = "$cwd/$job.maker.output/$job.all.gff";
     my $out = "$cwd/$job.maker.output/$job.all.id.map";
@@ -46,7 +72,6 @@ if(defined $n){
 		die "ERROR: Could not make new names\n";
 	    }
 	}
-
     }
 }
 

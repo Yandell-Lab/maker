@@ -982,6 +982,7 @@ sub submit_to_db {
        my @values = $q->param($key);
        @values = grep {$_ ne ''} @values; #filter empty values
        $CTL_OPT{$key} = join(',', @values) if(@values);
+       $CTL_OPT{$key} = '' if(!defined($CTL_OPT{$key}))
    }
 
    #evaluate checkboxes
