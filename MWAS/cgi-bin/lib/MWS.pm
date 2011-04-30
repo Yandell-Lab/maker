@@ -41,20 +41,21 @@ sub cgiapp_init {
 
    #load the server control files
    my %serv_opt;
+   my $c_dir = MWAS_util::config_loc();
 
-   if(-f "$FindBin::Bin/config/server.ctl"){
-       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/config/server.ctl"])});
+   if(-f "$c_dir/server.ctl"){
+       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$c_dir/server.ctl"])});
    }
    else{
-       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["$FindBin::Bin/../config/server.ctl"])});
+       %serv_opt = GI::set_defaults('server', {GI::parse_ctl_files(["c_dir/server.ctl"])});
    }
 
    #make sure required database values are setup
    if (! $serv_opt{DBI}) {
-      die "ERROR: You must specify a DBI connection method in: $FindBin::Bin/config/server.ctl\n\n";
+      die "ERROR: You must specify a DBI connection method in: $c_dir/server.ctl\n\n";
    }
    if (! $serv_opt{dbname}) {
-      die "ERROR: You must specify a database to connect to in: $FindBin::Bin/config/server.ctl\n\n";
+      die "ERROR: You must specify a database to connect to in: $c_dir/server.ctl\n\n";
    }
     
    #connect to the database
@@ -72,7 +73,7 @@ sub cgiapp_init {
    @serv_opt{keys %serv_opt} = @CTL_OPT{keys %serv_opt}; #just get server options
 
    #setup template params
-   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => ["$FindBin::Bin/tt_templates/", "$FindBin::Bin/config/"],
+   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => ["$FindBin::Bin/tt_templates/", "$c_dir/"],
 				         EVAL_PERL => 1});
 
    #setup authentication
@@ -345,6 +346,7 @@ sub launch {
     my %serv_opt = %{$self->param('server_opt')};
     my $data_dir = $serv_opt{data_dir};
     my $cgi_dir = $serv_opt{cgi_dir};
+    my $c_dir = MWAS_util::config_loc();
     
     #build a safename with '%' character escaped to avoid issues with browser interpretation of %
     my $safe_name = uri_escape($name, '_');
@@ -452,7 +454,7 @@ sub launch {
 							       twiki);
 
 	#get MAKER specific configuration file
-	my $conf = "$cgi_dir/config/genome.css";
+	my $conf = "$c_dir/genome.css";
 	system("cp -R $conf ".join(' ', @to_copy)." $dir");
     
 	#add tracks if not currently added

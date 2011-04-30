@@ -3037,10 +3037,10 @@ sub set_defaults {
    #server
    if ($type eq 'server') {
       $CTL_OPT{'DBI'} = 'SQLite';
-      $CTL_OPT{'dbname'} = 'makerweb';
+      $CTL_OPT{'dbname'} = 'mwas_db';
       $CTL_OPT{'host'} = '';
       $CTL_OPT{'port'} = '';
-      $CTL_OPT{'username'} = 'maker';
+      $CTL_OPT{'username'} = 'mwas';
       $CTL_OPT{'password'} = '';
       $CTL_OPT{'admin_email'} = '';
       $CTL_OPT{'smtp_server'} = '';
@@ -3063,17 +3063,17 @@ sub set_defaults {
       $CTL_OPT{'cgi_dir'} = '/usr/lib/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '/data/var/www/cgi-bin' if(! -d $CTL_OPT{'cgi_dir'});
       $CTL_OPT{'cgi_dir'} = '' if(! -d $CTL_OPT{'cgi_dir'});
-      $CTL_OPT{'cgi_dir'} .= '/maker' if(-d $CTL_OPT{'cgi_dir'});
-      $CTL_OPT{'cgi_web'} = '/cgi-bin/maker';
+      $CTL_OPT{'cgi_dir'} .= '/mwas' if(-d $CTL_OPT{'cgi_dir'});
+      $CTL_OPT{'cgi_web'} = '/cgi-bin/mwas';
       $CTL_OPT{'html_dir'} = '/var/www/html';
       $CTL_OPT{'html_dir'} = '/Library/WebServer/Documents' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} = '/var/www' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} = '/data/var/www/html' if(! -d $CTL_OPT{'html_dir'});
       $CTL_OPT{'html_dir'} = '' if(! -d $CTL_OPT{'html_dir'});
-      $CTL_OPT{'html_dir'} .= '/maker' if(-d $CTL_OPT{'html_dir'});
-      $CTL_OPT{'html_web'} = '/maker';
+      $CTL_OPT{'html_dir'} .= '/mwas' if(-d $CTL_OPT{'html_dir'});
+      $CTL_OPT{'html_web'} = '/mwas';
       $CTL_OPT{'data_dir'} = '';
-      $CTL_OPT{'data_dir'} = "$CTL_OPT{html_dir}/data" if($CTL_OPT{html_dir});
+      $CTL_OPT{'data_dir'} = "/var/lib/mwas";
       $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
       $CTL_OPT{'apache_user'} = '';
       $CTL_OPT{'apache_user'} = 'apache' if(@{[getpwnam('apache')]});

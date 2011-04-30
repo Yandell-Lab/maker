@@ -243,6 +243,8 @@ sub ACTION_build {
     }
 
     if($self->feature('mwas_support') && $self->invoked_action() eq 'build'){	
+	require MWAS_util;
+
 	while(! -d $self->config_data('APOLLO_ROOT')){
 	    $self->set_gmod_locs('APOLLO_ROOT');
 	}
@@ -256,7 +258,7 @@ sub ACTION_build {
 	require GI;
 	
 	$main::server = 1;
-	my $c_dir = "$FindBin::RealBin/../MWAS/config/"; #configuration file directory
+	my $c_dir = MWAS_util::config_loc(); #configuration file directory
 	my @files = ("$c_dir/maker_opts.ctl",
 		     "$c_dir/maker_bopts.ctl",
 		     "$c_dir/maker_exe.ctl",
@@ -308,7 +310,7 @@ sub ACTION_build {
 	$self->log_info("\n==============================================================================\n".
 			"Finished configuring MWAS settings. You can later change these\n".
 			"settings and others by editing the MWAS configuration files:\n".
-			"     --> $BIN/../MWAS/config/*.ctl\n".
+			"     --> $c_dir/*.ctl\n".
 			"\n==============================================================================\n\n");
     }
 }

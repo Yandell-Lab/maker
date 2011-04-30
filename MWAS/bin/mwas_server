@@ -37,9 +37,6 @@ BEGIN{
     #get my own name
     $EXE = $FindBin::Script;
 
-    #LOG file
-    $LOG = "$FindBin::Bin/../MWAS.log";
-
     #must give group members access i.e. apache group
     umask 0002;
 
@@ -222,7 +219,7 @@ elsif($opt eq 'RESTART'){
 
     if(! $exists){
 	print STDERR "STATUS:  is not currently running\n";
-	exec(Cwd::abs_path($0), 'Start');
+	exec(Cwd::abs_path($0), 'START');
     }
     elsif(! $signalable){
 	die "ERROR: you do not have the correct permissions to restart $EXE\n";
@@ -360,6 +357,7 @@ sub start_daemon {
 	my $date = MWAS_util::date_time();
 	
 	#rediret STDERR to the log file since there will be no terminal
+	$LOG = "$CTL_OPT{data_dir}/mwas_error.log";
 	close(STDERR);
 	open(STDERR, ">> $LOG"); #append
 
