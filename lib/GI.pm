@@ -3963,7 +3963,8 @@ sub load_control_files {
 
    #--make sure repbase is installed
    if($CTL_OPT{model_org}){
-       my ($lib) = $CTL_OPT{RepeatMasker} =~ /(.*\/)RepeatMasker$/;
+       my $exe = Cwd::abs_path($CTL_OPT{RepeatMasker});
+       my ($lib) = $exe =~ /(.*\/)RepeatMasker$/;
        die "ERROR: Could not determine if RepBase is installed\n" if(! $lib);
 
        $lib .= "Libraries/RepeatMaskerLib.embl";

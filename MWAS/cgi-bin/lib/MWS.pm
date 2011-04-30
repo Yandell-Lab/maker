@@ -781,6 +781,9 @@ sub frontpage {
        elsif($job->{admin_block}){
 	   $job->{status} = 'blocked';
        }
+       elsif($job->{is_error}){
+	   $job->{status} = 'idle';
+       }
        elsif($job->{is_running}){
 	   $job->{status} = 'running';
        }
@@ -819,6 +822,9 @@ sub queue {
        }
        elsif($job->{admin_block}){
 	   $job->{status} = 'blocked';
+       }
+       elsif($job->{is_error}){
+	   $job->{status} = 'idle';
        }
        elsif($job->{is_running}){
 	   $job->{status} = 'running';

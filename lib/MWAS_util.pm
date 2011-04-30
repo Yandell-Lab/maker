@@ -78,18 +78,21 @@ sub get_files_from_user_id{
 }
 =cut
 #-----------------------------------------------------------------------------
+sub config_loc {
+    return '/etc/mwas';
+}
+#-----------------------------------------------------------------------------
 #setup method for MWAS server and files
 sub mwas_setup {
     my %CTL_OPT = %{shift @_};
 
-    (my $c_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/config/;
-
+    my $c_dir = config_loc();
     my $cgi_dir  = $CTL_OPT{cgi_dir};  #get directory to build CGI files
     my $html_dir = $CTL_OPT{html_dir}; #get directory to build HTML files
     my $data_dir = $CTL_OPT{data_dir}; #get directory for storing data
 
     #make directories if they don't exist
-    foreach my $dir ($cgi_dir, $html_dir, $data_dir){
+    foreach my $dir ($c_dir, $cgi_dir, $html_dir, $data_dir){
         my $base = $dir;
         $base =~ s/[^\/]+\/?$//;
         if(-d $base && ! -d $dir){
@@ -142,10 +145,8 @@ sub mwas_setup {
     my $ho_dir = "$b_dir/../html/"; #original direcory
     my $m_lib = "$b_dir/../../lib/"; #/maker/lib
     my $p_lib = "$b_dir/../../perl/lib/"; #/maker/perl/lib
-    mkdir("$cgi_dir/config/") if(! -d "$cgi_dir/config/");
     system("cp -R $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
-    #system("cp -R $c_dir/* $cgi_dir/config/") && die("ERROR: Copying files to $cgi_dir failed\n");
     system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     if(-d $p_lib){ #only exists when MPI is installed
         system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
@@ -169,7 +170,7 @@ sub mwas_setup {
 	"You may need to log in as 'root' for setup\n\n";
 
     #set correct exe location for moved files in maker/exe
-    my %E = GI::parse_ctl_files(["$data_dir/maker/MWAS/config/maker_exe.ctl"]);
+    my %E = GI::parse_ctl_files([config_loc()."/maker_exe.ctl"]);
     while(my $key = each %E){
 	$E{$key} = GI::s_abs_path($E{$key});
 	if($E{$key} =~ /\/exe\/([^\/]+\/[^\/]+|[^\/]+\/bin\/[^\/]+)$/ &&
@@ -206,16 +207,13 @@ sub mwas_setup {
 	$CTL_OPT{JBROWSE_ROOT} = "$data_dir/maker/exe/jbrowse";
     }
 
-    #generate the control files stored with website executables
-    GI::generate_control_files("$data_dir/maker/MWAS/config/",'all', \%E);
-    GI::generate_control_files("$data_dir/maker/MWAS/config/",'server', \%E);
-    GI::generate_control_files("$data_dir/maker/MWAS/config/",'menus', \%E);
-
-    GI::generate_control_files("$cgi_dir/config/",'all', \%E);
-    GI::generate_control_files("$cgi_dir/config/",'server', \%E);
-    GI::generate_control_files("$cgi_dir/config/",'menus', \%E);
-
+    #fixed values
     %CTL_OPT = (%CTL_OPT, %E);
+
+    #generate the control files stored with website executables
+    GI::generate_control_files(config_loc(),'all', \%CTL_OPT);
+    GI::generate_control_files(config_loc(),'server', \%CTL_OPT);
+    GI::generate_control_files(config_loc(),'menus', \%CTL_OPT);
 
     #build redirection page (so user can see directories if apache is not configured)
     open(OUT, "> $html_dir/index.html");
@@ -300,17 +298,13 @@ sub apollo_setup {
         #create generate Apollo webstart
 	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
         my $tt_xml = "$b_dir/../../GMOD/Apollo/apollo_webstart.xml.tt";
-	my $c_dir = "$b_dir/../config";
+	my $c_dir = config_loc();
         $ENV{APOLLO_ROOT} = $CTL_OPT{APOLLO_ROOT};
 	$ENV{PERL5LIB} = ($CTL_OPT{PERL5LIB}) ?
 	    $CTL_OPT{PERL5LIB}.":$b_dir/../../perl/lib" : ":$b_dir/../../perl/lib";
         system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
                "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp -D $html_dir/jars") &&
                die "ERROR: Generating Apollo webstart jars and jnlp file failed\n";
-	system("cp $c_dir/apollo.jnlp $data_dir/maker/MWAS/config/") &&
-	    die "ERROR: Preparing Apollo configuration file failed\n";
-	system("cp $c_dir/apollo.jnlp $cgi_dir/config/")
-	    && die "ERROR: Preparing Apollo configuration file failed\n";
     }
     else{
         die "ERROR: You must suply a value for APOLLO_ROOT in server.ctl to\n".
@@ -361,15 +355,11 @@ sub gbrowse_setup {
 
 	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
         my $tt_conf = "$b_dir/../../GMOD/GBrowse/gbrowse.conf.tt";
-	my $c_dir = "$b_dir/../config";
+	my $c_dir = config_loc();
 
 	if(! -f "$c_dir/gbrowse.conf.tt"){
 	    system("cp $tt_conf $c_dir")
 		&& die "ERROR: Preparing GBrowse configuration file failed\n";
-	    system("cp $c_dir/gbrowse.conf.tt $data_dir/maker/MWAS/config/")
-                && die "ERROR: Preparing GBrowse configuration file failed\n";
-	    system("cp $c_dir/gbrowse.conf.tt $cgi_dir/config/")
-                && die "ERROR: Preparing GBrowse configuration file failed\n";
 	}
     }
     else{
@@ -387,14 +377,10 @@ sub jbrowse_setup {
 	my $cgi_dir  = $CTL_OPT{cgi_dir};
 	my $data_dir = $CTL_OPT{data_dir};
         (my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
-        my $c_dir = "$b_dir/../config";
+        my $c_dir = config_loc();
 	if(! -f "$c_dir/genome.css"){
 	    system("cp $b_dir/../../GMOD/JBrowse/genome.css $c_dir")
 		&& die "ERROR: Preparing JBrowse configuration file failed\n";
-	    system("cp $c_dir/genome.css $data_dir/maker/MWAS/config/")
-                && die "ERROR: Preparing JBrowse configuration file failed\n";
-	    system("cp $c_dir/genome.css $cgi_dir/config/")
-                && die "ERROR: Preparing JBrowse configuration file failed\n";
 	}
     }
     else{
@@ -712,7 +698,7 @@ sub check_table_structure {
              "will be updated accordingly\n";
 
         $O{admin_email} = '';
-      GI::generate_control_files("$FindBin::RealBin/../config/", 'server', \%O)
+      GI::generate_control_files(config_loc(), 'server', \%O)
       }
     else{
         $dbh->do(qq{UPDATE users SET e_mail='$O{admin_email}' WHERE user_id=1}); #update admin e-mail address
@@ -1054,7 +1040,10 @@ sub reset_queue {
     my $dbh = shift;
     my $dir = shift;
 
-    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_finished=0, cpus=0 }.
-                  qq{WHERE is_started=1 and is_packaged=0 and is_error=0}, $dir);
+    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_started=1; is_finished=0, cpus=0 }.
+                  qq{WHERE (is_started=1 OR is_running=1) and is_packaged=0 and is_error=0}, $dir);
+
+    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_started=1, cpus=0 }.
+                  qq{WHERE is_running=1}, $dir);
 }
 1;

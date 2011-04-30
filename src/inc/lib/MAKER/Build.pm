@@ -601,7 +601,7 @@ sub exe_failures {
     my $other = shift || {};
     my %exes = (%{$self->exe_requires}, %{$other});
 
-    if(! $set_PATH){
+    if(! $set_PATH && $self->config_data('PATH')){
 	$ENV{PATH} = ($ENV{PATH}) ?
 	    $ENV{PATH}.":".$self->config_data('PATH') : $self->config_data('PATH');
 	$set_PATH = 1;
