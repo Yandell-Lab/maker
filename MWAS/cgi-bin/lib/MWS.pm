@@ -65,7 +65,7 @@ sub cgiapp_init {
    $dsn .= "host=$serv_opt{host};" if($serv_opt{host});
    $dsn .= "port=$serv_opt{port};" if($serv_opt{host} && $serv_opt{port});
 
-   $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {AutoCommit => 0, RaiseError => 1}) 
+   $self->dbh_config($dsn, $serv_opt{username}, $serv_opt{password}, {RaiseError => 1}) 
      or die "Got error $DBI::errstr when connecting to database\n";
 
    #reload default server options from server
@@ -1022,8 +1022,9 @@ sub submit_to_db {
        #add control options for job
        my @defaults = (keys %CTL_OPT); #keys to add
        my @lc_defaults = map {lc($_)} @defaults;
-       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @lc_defaults).qq{) }.
-		      qq{VALUES ($job_id, \'}.join("', '", @CTL_OPT{@defaults}).qq{\')}
+       my $ver = GI::version();
+       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, maker_v, }.join(", ", @lc_defaults).qq{) }.
+		      qq{VALUES ($job_id, \'$ver\', \'}.join("', '", @CTL_OPT{@defaults}).qq{\')}
 		      );
    }
 

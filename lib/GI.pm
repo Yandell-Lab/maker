@@ -54,6 +54,11 @@ print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dt
 #------------------------------------------------------------------------
 #--------------------------- CLASS FUNCTIONS ----------------------------
 #------------------------------------------------------------------------
+sub version {
+    $VERSION = '2.11';
+    return $VERSION;
+}
+#------------------------------------------------------------------------
 sub set_global_temp {
     my $dirs = shift;
     my $id  = shift;
@@ -2874,7 +2879,7 @@ sub build_the_void {
 sub set_defaults {
    my $type = shift || 'all';
    my $user_default = shift; #hash ref
-   
+
    if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$/) {
       warn "WARNING: Invalid type \'$type\' in S_Func ::set_defaults";
       $type = 'all';
@@ -3149,7 +3154,6 @@ sub set_defaults {
 				      'Vertibrates' => 'vertibrates',
 				      'Plants' => 'plants'};
 
-
       #auto add uniprot if user downloaded it into data directory
       $CTL_OPT{'protein'}{'UniProt'} = "$server_ctl{data_dir}/maker/MWAS/data/uniprot_sprot.fasta"
 	  if(-f "$server_ctl{data_dir}/maker/MWAS/data/uniprot_sprot.fasta");
@@ -3163,13 +3167,13 @@ sub set_defaults {
       }
 
       #restore any user supplied values
-#      if($user_default->{menus}){
-#	  my %user_ctl = %{$user_default->{menus}};
-#	  while(my $key = each %user_ctl){
-#	      $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
-#	      %{$CTL_OPT{$key}} = (%{$CTL_OPT{$key}}, %{$user_ctl{$key}});
-#	  }
-#      }
+      if($user_default->{menus}){
+	  my %user_ctl = %{$user_default->{menus}};
+	  while(my $key = each %user_ctl){
+	      $CTL_OPT{$key} = {} if(! $CTL_OPT{$key});
+	      %{$CTL_OPT{$key}} = %{$user_ctl{$key}} if($user_ctl{$key});
+	  }
+      }
    }
    #reset values with user supplied defaults
    if($user_default && $type ne 'menus'){
@@ -3191,6 +3195,11 @@ sub collect_hmms {
 
     #find augustus HMMs
     if(-f $exes{augustus}){
+	if(!$ENV{AUGUSTUC_CONFIG_PATH}){
+	    $exes{augustus} = Cwd::abs_path($exes{augustus});
+	    ($ENV{AUGUSTUC_CONFIG_PATH} = $exes{augustus}) =~ s/\/(bin|src)\/augustus/\/config/;
+	}
+
 	open(my $EXE, "$exes{augustus} --species=help 2>&1|");
 	my $flag;
 	while(my $line = <$EXE>){
@@ -3217,6 +3226,7 @@ sub collect_hmms {
 	$exes{snap} = "$ENV{ZOE}/HMM/";
     }
     elsif($exes{snap}){
+	$exes{snap} = Cwd::abs_path($exes{snap});
 	$exes{snap} =~ s/[^\/]+$//;
 	$exes{snap} = "$exes{snap}/HMM/";
     }
@@ -3235,6 +3245,7 @@ sub collect_hmms {
 
     #find genemark Eukaryotic HMMs
     if($exes{gmhmme3}){
+	$exes{gmhmme3} = Cwd::abs_path($exes{gmhmme3});
 	$exes{gmhmme3} =~ s/[^\/]+$//;
 	$exes{gmhmme3} = "$exes{gmhmme3}/HMM/";
     }
@@ -3253,6 +3264,7 @@ sub collect_hmms {
 
     #find fgenesh HMMs
     if($exes{fgenesh}){
+	$exes{fgenesh} = Cwd::abs_path($exes{fgenesh});
 	$exes{fgenesh} =~ s/[^\/]+$//;
     }
     if(-d $exes{fgenesh}){

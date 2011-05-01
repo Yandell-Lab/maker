@@ -422,7 +422,7 @@ sub ACTION_install {
 	require GI;
 	require MWAS_util;
 	
-	my $c_dir = "$FindBin::RealBin/../MWAS/config/"; #configuration file directory
+	my $c_dir = MWAS_util::config_loc(); #configuration file directory
 	my @files = ("$c_dir/maker_opts.ctl",
 		     "$c_dir/maker_bopts.ctl",
 		     "$c_dir/maker_exe.ctl",
@@ -1495,7 +1495,8 @@ sub check_update_version {
 			 "$cwd/bin/iprscan_wrap",
 			 "$cwd/inc/bin/mpi_maker",
 			 "$cwd/inc/bin/mpi_evaluator",
-			 "$cwd/inc/bin/mpi_iprscan"
+			 "$cwd/inc/bin/mpi_iprscan",
+			 "$cwd/../lib/GI.pm"
 			 );
 
 	    #changing script version here

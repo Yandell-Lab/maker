@@ -240,7 +240,7 @@ sub mwas_setup {
                 "permission issues. Please make the necessary changes to server.ctl.\n\n";
         }
 
-        my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0, RaiseError => 1})
+        my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {RaiseError => 1})
             or die "<br>Got error $DBI::errstr when connecting to database\n";
 
         #fix permissions on SQLite database
@@ -549,9 +549,10 @@ sub dbh_do_commit {
     my $do_string = shift || return;
     my $dir = shift; #for lock
 
-    my $lock = lockDB($dir) || ((print STDERR lock_error()) && (return));
+    #my $lock = lockDB($dir) || ((print STDERR lock_error()) && (return));
     $dbh->do($do_string);
-    $dbh->commit;
+    #$dbh->commit;
+    #$lock->unlock;
 
     return 1;
 }
@@ -581,7 +582,7 @@ sub check_table_structure {
 
     #if an expected table is not found, create it
     ####===lock the database so no changes are made until all tables are in place
-    my $lock = lockDB($O{data_dir}) || die lock_error();
+    #my $lock = lockDB($O{data_dir}) || die lock_error();
 
     #use different datatypes depending on type of SQL used in DBI
     my $t_type = ($dbh->{Driver}->{Name} =~ /mysql/i) ? 'VARCHAR(100)' : 'TEXT';
@@ -613,7 +614,7 @@ sub check_table_structure {
 
     #create ctl_opt table
     my @defaults = map {lc($_)." $t_type"} keys %def_opt; #get table column names and datatype
-    $dsn = 'CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, '.join(', ', @defaults).')';
+    $dsn = "CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, maker_v $t_type,".join(', ', @defaults).')';
     $dbh->do($dsn) if(! grep {/ctl_opt/} @tables);
     add_missing_columns($dbh, $dsn, 'ctl_opt');
 
@@ -996,8 +997,8 @@ sub check_table_structure {
     ### END ADD TUTORIAL JOBS ###
 
     #commit changes
-    $dbh->commit;
-    $lock->unlock;
+    #$dbh->commit;
+    #$lock->unlock;
     ####===unlock
 }
 #------------------------------------------------------------------------
@@ -1040,7 +1041,7 @@ sub reset_queue {
     my $dbh = shift;
     my $dir = shift;
 
-    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_started=1; is_finished=0, cpus=0 }.
+    dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_queued=1, is_started=1, is_finished=0, cpus=0 }.
                   qq{WHERE (is_started=1 OR is_running=1) and is_packaged=0 and is_error=0}, $dir);
 
     dbh_do_commit($dbh, qq{UPDATE jobs SET is_running=0, is_started=1, cpus=0 }.

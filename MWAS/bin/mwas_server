@@ -324,7 +324,7 @@ elsif($opt eq 'START'){
 		"permission issues. Please make the necessary changes to server.ctl.\n\n";
 	}
 
-	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 	    or die "<br>Got error $DBI::errstr when connecting to database\n";
 	$dbh->disconnect;
 
@@ -412,7 +412,7 @@ sub run_server {
     $dsn .= "host=$CTL_OPT{host};" if($CTL_OPT{host});
     $dsn .= "port=$CTL_OPT{port};" if($CTL_OPT{host} && $CTL_OPT{port});
     
-    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 	or die "<br>Got error $DBI::errstr when connecting to database\n";
 
     #correct everything in db tables on startup
@@ -435,7 +435,7 @@ sub run_server {
     #connect to database
 
     while(1){
-	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 	    or die "<br>Got error $DBI::errstr when connecting to database\n";
 	#========check on jobs and package data for finished jobs
 	
@@ -484,8 +484,8 @@ sub run_server {
 
 	#if no resources are available just wait
 	if($cpus >= $CTL_OPT{max_cpus}){
-	    sleep 20;
 	    $dbh->disconnect;
+	    sleep 20;
 	    next;
 	}
 	
@@ -586,8 +586,8 @@ sub clean_and_package {
 	system("cp $t_file $n_file");
 	my $length = @{[stat($n_file)]}[7];
 
-	$dbh->do(qq{INSERT INTO files (name, value, type, length, contig_count, user_id) }.
-		 qq{VALUES ('$name job:$job_id', '$n_file', 'snaphmm', '$length', '0', $user_id)});
+	dbh_do_commit($dbh, qq{INSERT INTO files (name, value, type, length, contig_count, user_id) }.
+		      qq{VALUES ('$name job:$job_id', '$n_file', 'snaphmm', '$length', '0', $user_id)}, $CTL_OPT{data_dir});
     }
 
     my $date = MWAS_util::date_time();
@@ -614,6 +614,7 @@ sub start_job {
 	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$job_id});
 	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$job_id});
 	$dbh->commit;
+	$lock->unlock;
 	return 0;
     }
     
@@ -629,6 +630,7 @@ sub start_job {
 	$dbh->commit;
     }
     else{ #job is finished or deleted
+	$lock->unlock;
 	return 0;
     }
 
@@ -646,9 +648,8 @@ sub start_job {
 
     #check if a finished job used these exact same settings
     if(my $other_job_id = MWAS_util::package_already_exists($dbh, $job_ctl, $user_id)){
-	$dbh->do(qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id});
 	MWAS_util::copy_package($dbh, $other_job_id, $job_id);
-	$dbh->commit;
+	dbh_do_commit($dbh, qq{UPDATE jobs SET is_queued=0, is_finished=1, is_packaged=1 WHERE job_id=$job_id}, $CTL_OPT{data_dir});
 	return;
     }
 
@@ -672,13 +673,13 @@ sub start_job {
 			 # everything below here is either the child or a very major 
 	                 # system failure
 
-	    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 		or die "<br>Got error $DBI::errstr when connecting to database\n";	    
 
 	    return $pid;
 	}
 	elsif ($DEBUG || defined $pid){ #this is the child
-	    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	    my $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 		or die "<br>Got error $DBI::errstr when connecting to database\n";
 
 	    ####===lock the database so no changes are made until the job is started
@@ -720,7 +721,7 @@ sub start_job {
 	    chdir($CWD);
 
 	    #job is finished reconnect to DB to set values
-	    $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password}, {AutoCommit => 0})
+	    $dbh = DBI->connect($dsn, $CTL_OPT{username}, $CTL_OPT{password})
 		or die "<br>Got error $DBI::errstr when connecting to database\n";
 
 	    ####===lock the database so no changes are made while I'm writing
@@ -745,6 +746,7 @@ sub start_job {
 	    $lock->unlock;
 	    ####===unlock
 
+	    return if($DEBUG);
 	    exit(0); #finished
 	}
 	elsif ($! == EAGAIN)  {
