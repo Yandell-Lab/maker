@@ -177,7 +177,7 @@ sub seqID2SafeID {
     my $seq_id = shift;
     
     my $safe_id = uri_escape($seq_id,
-			     '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.'
+			     '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+'
 			     );
     
     return $safe_id;

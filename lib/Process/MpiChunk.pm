@@ -80,7 +80,6 @@ sub _initialize_vars{
    my $level      = $self->{LEVEL};
    my $tier_type  = $self->{TIER_TYPE};
 
-
    my @args = @{$self->_go('init', $VARS, $level, $tier_type)};
 
    foreach my $key (@args) {

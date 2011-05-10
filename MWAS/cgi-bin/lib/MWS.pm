@@ -342,12 +342,19 @@ sub launch {
     my $user_id =  $q->param('user_id') || $self->get_user_id();
     my $value = $q->param('contig'); #datastore direcory for contig 
     $value =~ s/\/+$//;
-    my ($name) = $value =~ /([^\/]+)$/;   
+    my ($name) = $value =~ /([^\/]+)$/;
     my %serv_opt = %{$self->param('server_opt')};
     my $data_dir = $serv_opt{data_dir};
     my $cgi_dir = $serv_opt{cgi_dir};
     my $c_dir = MWAS_util::config_loc();
-    
+
+    #GFF3 file
+    my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
+    if(! -f $gff_file){
+	$name = uri_escape($name, '.');
+	$gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
+    }    
+
     #build a safename with '%' character escaped to avoid issues with browser interpretation of %
     my $safe_name = uri_escape($name, '_');
     $safe_name =~ s/\%/\_/g;
@@ -361,7 +368,6 @@ sub launch {
     #fix // in direcory structure
     $gff_url =~ s/([^\:])\/+/$1\//g;
     
-    my $gff_file = "$data_dir/jobs/$job_id/$job_id.maker.output/$value/$name.gff";
     my $slink = "$serv_opt{html_dir}/users/$user_id/$job_id/$safe_name.gff";
     symlink($gff_file, $slink) if(! -e $slink);
     
@@ -1023,8 +1029,8 @@ sub submit_to_db {
        my @defaults = (keys %CTL_OPT); #keys to add
        my @lc_defaults = map {lc($_)} @defaults;
        my $ver = GI::version();
-       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, maker_v, }.join(", ", @lc_defaults).qq{) }.
-		      qq{VALUES ($job_id, \'$ver\', \'}.join("', '", @CTL_OPT{@defaults}).qq{\')}
+       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @lc_defaults).qq{) }.
+		      qq{VALUES ($job_id, '}.join("\', \'", @CTL_OPT{@defaults}).qq{\')}
 		      );
    }
 

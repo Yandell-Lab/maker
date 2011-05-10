@@ -1,4 +1,7 @@
-#!\usr\bin\perl
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 
 use warnings;
 use strict "vars";
@@ -72,20 +75,7 @@ use Error::Simple;
 use Perl::Unsafe::Signals;
 use Process::IPRchunk;
 use Process::MpiTiers;
-use Parallel::MPIcar qw(:most);
 use Proc::Signal;
-
-#--MPI_Init requires there to be arguments on @ARGV
-#--This is a logic problem by the Package Authors
-#--This is a hack to solve the problem
-if (not @ARGV) {
-   push (@ARGV, 'null');
-   MPI_Init();			#initiate the MPI
-   shift @ARGV;
-}
-else {
-   MPI_Init();			#initiate the MPI
-}
 
 select((select(STDOUT), $|=1)[0]); #make STDOUT buffer flush immediately
 
@@ -321,7 +311,7 @@ while (my $fasta = $iterator->nextFasta() || shift @failed || shift @interrupted
     #to maker process overlap
     sleep 1 if($f_count != @failed);
 
-    $tier->run_all;
+    $tier->run_all(0);
 
     push(@failed, $tier->fasta) if ($tier->failed);
     push(@interrupted, $tier->fasta) if ($tier->interrupt && $i_count == @interrupted);

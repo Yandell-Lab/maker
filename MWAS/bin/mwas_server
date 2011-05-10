@@ -613,7 +613,7 @@ sub start_job {
 	print STDERR "ERROR: Job '$job_id' from inactive user '$user_id' must be deleted.\t".MWAS_util::date_time();
 	$dbh->do(qq{DELETE FROM jobs WHERE job_id=$job_id});
 	$dbh->do(qq{DELETE FROM ctl_opt WHERE job_id=$job_id});
-	$dbh->commit;
+	#$dbh->commit;
 	$lock->unlock;
 	return 0;
     }
@@ -627,7 +627,7 @@ sub start_job {
 
 	$dbh->do(qq{UPDATE jobs SET start_time='$date' WHERE job_id=$job_id and is_started=0});	
 	$dbh->do(qq{UPDATE jobs SET is_queued=0, is_started=1 WHERE job_id=$job_id}); #for existing jobs
-	$dbh->commit;
+	#$dbh->commit;
     }
     else{ #job is finished or deleted
 	$lock->unlock;
@@ -706,7 +706,7 @@ sub start_job {
 	    my $pid = open3(undef, undef, \*CHLD_ERR, $command);
 	    open(my $OUT, "> $job_log");
 
-	    $dbh->commit;
+	    #$dbh->commit;
 	    $dbh->disconnect; #disconnect from DB while job runs
 	    $lock->unlock;
     	    ####===unlock
@@ -741,7 +741,7 @@ sub start_job {
 		print STDERR "Finished job: $job_id for user: $user_id\t$date\n";
 	    }
 
-	    $dbh->commit;
+	    #$dbh->commit;
 	    $dbh->disconnect;
 	    $lock->unlock;
 	    ####===unlock

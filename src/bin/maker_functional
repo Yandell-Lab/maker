@@ -1,4 +1,10 @@
-#!\usr\bin\perl
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 
 use warnings;
 use strict;
@@ -35,7 +41,7 @@ while(my $line = <IN>){
 }
 close(IN);
 
-if(defined $t){
+if($t){
     my $t_dir = "$cwd/$job.maker.output/snap.training";
     my $index = "$cwd/$job.maker.output/$job\_master_datastore_index.log";
 

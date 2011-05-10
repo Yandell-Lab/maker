@@ -711,7 +711,7 @@ sub create_blastdb {
    while(my $set = shift @sets){
        my ($f, $l) = split(':', $set->[0]);
        my ($f_name) = $f =~ /([^\/]+)$/;
-       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $l_name = "$b_dir/$f_name";
        my $lock;
        if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
@@ -726,7 +726,7 @@ sub create_blastdb {
    while(my $set = shift @check){
       my ($f, $l) = split(':', $set->[0]);
       my ($f_name) = $f =~ /([^\/]+)$/;
-      $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+      $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
       my $l_name = "$b_dir/$f_name";
       my $lock;
       if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
@@ -791,7 +791,7 @@ sub split_db {
    my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    
    my ($f_name) = $file =~ /([^\/]+)$/;
-   $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+   $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
    my $b_dir = $CTL_OPT->{mpi_blastdb};
    my $bins = $max;
    #$bins = ($bins % 10 == 0) ? (int(($bins/$f_count)/10))*10 : (int(($bins/$f_count)/10)+1)*10;
@@ -1000,7 +1000,7 @@ sub snap {
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
-       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
        my %params;
        my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.snap";
@@ -1067,7 +1067,7 @@ sub genemark {
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
-       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
        my %params;
        my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.genemark";
@@ -1140,7 +1140,7 @@ sub augustus {
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
-       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
        my %params;
        my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.augustus";
@@ -1202,7 +1202,7 @@ sub fgenesh {
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
-       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+       $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
        my %params;
        my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.fgenesh";
@@ -1674,7 +1674,7 @@ sub get_blast_finished_name {
     #peal off label and build names for files to use and copy
     my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
     my ($db_n) = $db =~ /([^\/]+)$/;
-    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
     my $db_old_n = $db_n;
     $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
     
@@ -1691,8 +1691,10 @@ sub blastn_as_chunks {
    my $CTL_OPT    = shift;
    my $rank       = shift;
    my $LOG        = shift;
-   my $LOG_FLAG   = shift;   
-   my $retry      = shift || 1;
+   my $LOG_FLAG   = shift;
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry);
 
    my $blast      = $CTL_OPT->{_blastn};
    my $depth_blast = $CTL_OPT->{depth_blastn};
@@ -1712,7 +1714,7 @@ sub blastn_as_chunks {
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
    my $chunk_number = $chunk->number();
 
    my $t_dir = $TMP."/rank".$rank;
@@ -1836,7 +1838,9 @@ sub blastn {
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
-   my $retry      = shift || 1;
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry);
 
    my $blast      = $CTL_OPT->{_blastn};
    my $depth_blast = $CTL_OPT->{depth_blastn};
@@ -1852,7 +1856,7 @@ sub blastn {
 
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
@@ -2039,7 +2043,9 @@ sub blastx_as_chunks {
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
    my $rflag      = shift; #am I running repeatrunner?
-   my $retry      = shift || 1;
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry);
 
    my $blast       = $CTL_OPT->{_blastx};
    my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
@@ -2060,7 +2066,7 @@ sub blastx_as_chunks {
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
    my $chunk_number = $chunk->number();
 
    my $t_dir = $TMP."/rank".$rank;
@@ -2226,8 +2232,10 @@ sub blastx {
    my $CTL_OPT    = shift;
    my $LOG        = shift;
    my $rflag      = shift;
-   my $retry      = shift || 1;
- 
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry); 
+
    my $blast      = $CTL_OPT->{_blastx};
    my $depth_blast = ($rflag) ? undef : $CTL_OPT->{depth_blastx};
    my $bit_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{bit_blastx};
@@ -2242,7 +2250,7 @@ sub blastx {
 
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
    my $q_length = $chunk->parent_seq_length();
    my $chunk_number = $chunk->number();
@@ -2411,7 +2419,9 @@ sub tblastx_as_chunks {
    my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
-   my $retry      = shift || 1;
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry);
 
    my $blast       = $CTL_OPT->{_tblastx};
    my $depth_blast = $CTL_OPT->{depth_tblastx};
@@ -2431,7 +2441,7 @@ sub tblastx_as_chunks {
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
    my $chunk_number = $chunk->number();
  
    my $t_dir = $TMP."/rank".$rank;
@@ -2556,7 +2566,9 @@ sub tblastx {
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
    my $LOG        = shift;
-   my $retry      = shift || 1;
+   my $retry      = shift;
+
+   $retry = 1 if(! defined $retry);
 
    my $blast      = $CTL_OPT->{_tblastx};
    my $depth_blast = $CTL_OPT->{depth_tblastx};
@@ -2572,7 +2584,7 @@ sub tblastx {
 
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 	
    my $chunk_number = $chunk->number();
    my $q_length = $chunk->parent_seq_length();
@@ -2776,7 +2788,7 @@ sub repeatmask {
    #peal off label and build names for files to use and copy
    my ($rmlib, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $rmlib =~ /([^\/]+)$/;
-   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.');
+   $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 
    my $chunk_number = $chunk->number();
    my $file_name = "$the_void/$seq_id\.$chunk_number";
@@ -2966,6 +2978,7 @@ sub set_defaults {
       $CTL_OPT{'enable_fathom'} = 0;
       $CTL_OPT{'enable_fathom'} = 1 if($main::eva);
       $CTL_OPT{'datastore'} = 1;
+      $CTL_OPT{'maker_v'} = version();
    }
 
    #maker_bopts

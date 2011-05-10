@@ -13,6 +13,7 @@ use File::Temp qw(tempfile);
 use Widget::iprscan;
 use URI::Escape;
 use iprscan::runlog;
+use Carp;
 
 #--set object variables for serialization of data
 #this is needed when cloning an IPRchunk object
@@ -34,17 +35,18 @@ sub new {
 	 $self = $arg->clone();
       }
       else {
-	 $self->{LEVEL} = $arg;
-	 my $VARS       = shift @args;
-	 $self->{ID}    = shift @args || "0:".$self->{LEVEL}.":0";
-	 $self->{RANK}  = shift @args || 0;
-	 $self->{FINISHED} = 0;
-	 $self->{FAILED}   = 0;
-	 $self->{VARS}     = {};
-	 $self->{RESULTS} = {};
+         my $VARS           = $arg;
+         $self->{LEVEL}     = shift @args;
+         $self->{TIER_TYPE} = shift @args || 0;
+         $self->{ID}        = shift @args || "0:".$self->{LEVEL}.":".$self->{TIER_TYPE}.":0";
+         $self->{RANK}      = 0;
+         $self->{FINISHED}  = 0;
+         $self->{FAILED}    = 0;
+         $self->{VARS}      = {};
+         $self->{RESULTS}   = {};
 
-	 $self->_initialize();
-	 $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
+         $self->_initialize();
+         $self->_initialize_vars($VARS) if(ref($VARS) eq 'HASH');
       }
    }
 
@@ -76,19 +78,48 @@ sub _initialize{
 
 sub _initialize_vars{
    my $self       = shift;
-   my $level      = $self->{LEVEL};
    my $VARS       = shift;	#this should be a hash reference
+   my $level      = $self->{LEVEL};
+   my $tier_type  = $self->{TIER_TYPE};
 
-   my @args = @{$self->_go('init', $level, $VARS)};
+   my @args = @{$self->_go('init', $VARS, $level, $tier_type)};
 
    foreach my $key (@args) {
       if (! exists $VARS->{$key}) {
-	 die "FATAL: argument \`$key\` does not exist in IPRtier object\n";
+	  confess "FATAL: argument \`$key\` does not exist in IPRtier object\n";
       }
       else {
 	 $self->{VARS}{$key} = $VARS->{$key};
       }
    }
+}
+#--------------------------------------------------------------
+#gets called by MpiTiers after result is processed
+
+sub _finalize {
+    my $self = shift;
+    my $tier = shift;
+    
+    return if(! defined $tier->{VARS}->{extra_chunks});
+    
+    my $chunks = $tier->{VARS}->{extra_chunks};
+    my $level = $tier->{LEVEL}{CURRENT};
+    my $new_level = $tier->{VARS}->{extra_level};
+    
+    #initialize up to newest level
+    $tier->go_to_level($new_level) if($new_level > $level);
+    $tier->{LEVEL}{$new_level}{STARTED} = 1;
+    $tier->{LEVEL}{EXTRA} = 1;
+    
+    #add chunks to appropriate level
+    foreach my $c (@$chunks){
+	push(@{$tier->{LEVEL}{$c->level}{CHUNKS}}, $c);
+	$tier->{LEVEL}{$c->level}{CHUNK_COUNT}++;
+    }
+
+    #clear temporary variables
+    delete($tier->{VARS}->{extra_chunks});
+    delete($tier->{VARS}->{extra_level});
 }
 
 #--------------------------------------------------------------
@@ -104,11 +135,12 @@ sub _on_failure {
     }
     
     my $level = $tier->current_level;
+    my $q_def = $tier->{VARS}{q_def};
     my $seq_id = $tier->{VARS}{seq_id};
     my $out_dir = $tier->{VARS}{out_dir};
     my $LOG = $tier->{VARS}{LOG};
     my $DS_CTL = $tier->{VARS}{DS_CTL};
-    
+
     print STDERR "FAILED CONTIG:$seq_id\n\n" if(defined $seq_id);
     
    if(defined $LOG){
@@ -117,8 +149,24 @@ sub _on_failure {
        $LOG->add_entry("DIED","RANK", $tier->id);
        $LOG->add_entry("DIED","COUNT",$die_count);
    }
-    
-    $DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
+
+    if($tier->tier_type == 0){
+	my $def = $tier->{VARS}->{q_def};
+
+	$tier->{VARS} = {};
+	$tier->{RESULTS} = {};
+
+	$tier->{VARS}->{q_def} = $q_def;
+	$DS_CTL->add_entry($seq_id, $out_dir, "FAILED");
+    }
+    else{
+	$tier->{VARS} = {};
+	$tier->{RESULTS} = {};
+    }
+
+   #restore logs
+    $tier->{VARS}{LOG} = $LOG;
+    $tier->{VARS}{DS_CTL} = $DS_CTL;
     
     return;
 }
@@ -128,6 +176,7 @@ sub _on_failure {
 sub _on_termination {
     my $self = shift;
     my $tier = shift;
+    my $tier_type = $tier->{TIER_TYPE};
 
     #handle case of calling as function rather than method
     if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
@@ -181,6 +230,7 @@ sub _should_continue {
 sub _prepare {
    my $self = shift;
    my $VARS = shift;
+   my $tier_type = shift || 0;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
@@ -215,21 +265,26 @@ sub _prepare {
 
 sub _loader {
    my $self = shift;
-   my $level = shift;
    my $VARS = shift;
-   my $tID  = shift;
+   my $level = shift;
+   my $tier_type = shift;
+   my $tier  = shift;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
-      $tID = $VARS;
-      $VARS = $level;
-      $level = $self;
-      $self = new Process::IPRchunk();
+       $tier = $tier_type;
+       $tier_type = $level;
+       $level = $VARS;
+       $VARS = $self;
+       $self = new Process::IPRchunk();
    }
 
-   my $chunks = $self->_go('load', $level, $VARS);
+   my $rank = $tier->rank;
+
+   my $chunks = $self->_go('load', $VARS, $level, $tier_type);
    for (my $i = 0; $i < @{$chunks}; $i++){
-      $chunks->[$i]->id("$tID:$level:$i");
+       $chunks->[$i]->id("$rank:$level:$tier_type:$i");
+       $chunks->[$i]->parent($tier->id);
    }
 
    return $chunks;
@@ -239,8 +294,11 @@ sub _loader {
 
 sub run {
    my $self = shift;
+   my $rank = shift;
+
    my $level = $self->{LEVEL};
    my $VARS = $self->{VARS};
+   my $tier_type = $self->{TIER_TYPE};
 
    $self->{RANK} = shift || $self->{RANK};
 
@@ -248,7 +306,7 @@ sub run {
       return undef;
    }
 
-   my $results = $self->_go('run', $level, $VARS);
+   my $results = $self->_go('run', $VARS, $level, $tier_type);
 
    $self->{VARS} = {};
    $self->{RESULTS} = $results;
@@ -262,22 +320,30 @@ sub run {
    }
 }
 #--------------------------------------------------------------
+#for syntactic sugar, same as run
+
+sub run_all {shift->run(@_);}
+#--------------------------------------------------------------
 #this funcion is called by MakerTiers.  It returns the flow of
 #levels, i.e. order control, looping, etc.
 
 sub _flow {
-   my $self = shift;
-   my $level = shift;
-   my $VARS = shift;
+    my $self = shift;
+    my $VARS = shift;
+    my $level = shift;
+    my $tier_type = shift;
+    my $tier = shift;
 
    #handle case of calling as function rather than method
    if ($self ne "Process::IPRchunk" && ref($self) ne "Process::IPRchunk") {
-      $VARS = $level;
-      $level = $self;
+       $tier = $tier_type;
+       $tier_type = $level;
+       $level = $VARS;
+       $VARS = $self;
       $self = new Process::IPRchunk();
    }
 
-   return $self->_go('flow', $level, $VARS);
+   return $self->_go('flow', $VARS, $level, $tier_type);
 }
 #--------------------------------------------------------------
 #initializes chunk variables, runs code, or returns flow
@@ -287,8 +353,9 @@ sub _flow {
 sub _go {
    my $self = shift;
    my $flag = shift;
-   my $level = shift @_;
    my $VARS = shift @_;
+   my $level = shift @_;
+   my $tier_type = shift;
 
    my $next_level = $level + 1;
    my $result_stat = 1;
@@ -303,7 +370,7 @@ sub _go {
 	 $level_status = 'initialization and checking run log';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::IPRchunk($level, $VARS);
+	    my $chunk = new Process::IPRchunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -405,7 +472,7 @@ sub _go {
 	 $level_status = 'fixing fasta';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::IPRchunk($level, $VARS);
+	    my $chunk = new Process::IPRchunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -465,7 +532,7 @@ sub _go {
 	    #-------------------------CHUNKER
 	     foreach my $app (@{$VARS->{CTL_OPT}{_appl}}) {
 		 $VARS->{app} = $app;
-		 my $chunk = new Process::IPRchunk($level, $VARS);
+		 my $chunk = new Process::IPRchunk($VARS, $level, $tier_type);
 		 push(@chunks, $chunk);
 	     }
 	    #-------------------------CHUNKER
@@ -557,7 +624,7 @@ sub _go {
 	 $level_status = 'collecting iprscan results';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::IPRchunk($level, $VARS);
+	    my $chunk = new Process::IPRchunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
 	    #-------------------------CHUNKER
 	 }
@@ -663,12 +730,45 @@ sub _result {
    my $self = shift;
    my $VARS = shift;		#this ia a hash reference;
    my $level = $self->{LEVEL};
+   my $tier_type = shift;
+   my $tier = shift;
+
+   $level = $self->{LEVEL} if(!defined($level));
+   $tier_type = $self->{TIER_TYPE} if(!defined($tier_type));
 
    #only return results for finished/succesful chunks
    return if (! $self->finished || $self->failed);
 
    #do level specific result processing
-   return $self->_go('result', $level, $VARS);
+   return $self->_go('result', $VARS, $level, $tier_type);
+}
+#--------------------------------------------------------------
+#sorts chunks for the tier into a more convenient order (optional)
+sub _sort_levels{
+    my $self = shift;
+    my $chunks = shift;
+    my $level = shift;
+    my $tier_type = shift;
+    my $tier = shift;
+    
+    #sorts by fasta chunk order then by level
+    #so all levels on fasta chunk 1 get processed before chunk 2
+    #but they can also be processed simultaneously
+    @$chunks = sort {crit1($a) <=> crit1($b) || $a->level <=> $b->level || $a->id cmp $b->id} @$chunks;
+    
+    return $chunks;
+}
+#--------------------------------------------------------------
+#first sort criteria
+sub crit1 {
+    my $chunk = shift;
+
+    if(defined $chunk->{VARS}->{order}){
+	return $chunk->{VARS}->{order};
+    }
+    else{
+	return -1;
+    }
 }
 #--------------------------------------------------------------
 #returns true if failed
@@ -686,6 +786,9 @@ sub finished {
 
    return $self->{FINISHED} || undef;
 }
+#--------------------------------------------------------------
+#alias to finished (syntactic sugar)
+sub terminated {return shift->finished;}
 #--------------------------------------------------------------
 #returns Error::Simple exception object
 #this is created after a failure
@@ -722,6 +825,51 @@ sub id {
 
    return $self->{ID};
 }
+#--------------------------------------------------------------
+#returns the chunks number if part of a group
+
+sub number {
+    my $self = shift;
+    my $arg = shift;
+
+    my ($num) = $self->{ID} =~ /\:(\d+)$/;
+
+    return $num;
+}
+#--------------------------------------------------------------
+#returns the chunks rank
+#i.e. on what MPI node the chunk ran
+
+sub rank {
+    my $self = shift;
+    my $arg = shift;
+
+    if (defined($arg)) {
+	$self->{RANK} = $arg;
+    }
+
+    return $self->{RANK};
+}
+#--------------------------------------------------------------
+#returns the parent id
+#use this to identify correct tier to add to
+
+sub parent {
+    my $self = shift;
+    my $arg = shift;
+
+    if (defined($arg)) {
+	$self->{PARENT} = $arg;
+    }
+
+    return $self->{PARENT};
+}
+#--------------------------------------------------------------
+#return level the chunk is working on
+sub level {
+    my $self = shift;
+    return $self->{LEVEL};
+}
 
 #--------------------------------------------------------------
 #deep clone of self
@@ -748,6 +896,8 @@ sub _handler {
    
    if($tag eq 'handle'){
       $self->{FAILED} = 1;
+      $self->{RESULTS} = {};
+      $self->{VARS} = {};
       $self->{EXCEPTION} = $E;
    }
    else{
