@@ -567,7 +567,7 @@ sub maker_p_and_t_fastas {
    my $t_fastas = shift @_;
 
    my $abinit = [];
-   my @ab_keys = grep {/_abinit$/} keys %$all;
+   my @ab_keys = grep {/^(pred|model)_gff|_abinit$/} keys %$all;
    
    foreach my $key (@ab_keys){
        push(@$abinit, @{$all->{$key}});
@@ -593,7 +593,7 @@ sub maker_p_and_t_fastas {
        foreach my $a (@{$an->{t_structs}}) {
 	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a, 'abinit');
 	   my $source = $a->{hit}->algorithm;
-	   $source =~ s/pred_gff\://;
+	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 	   $p_fastas->{$source} .= $p_fasta;
 	   $t_fastas->{$source} .= $t_fasta;
        }

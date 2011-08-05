@@ -1065,7 +1065,7 @@ sub cpan_install {
     my $cwd = getcwd();
 
     #update CPAN if needed to avoid other installation issues with prereqs
-    CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
+    CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '5.5003')->{ok});
     die "\n\nERROR: Cannot load correct CPAN version or related modules\n".
 	"Try running 'install Bundle::CPAN' from CPAN manually as either\n".
 	"the root user or using sudo\n\n"

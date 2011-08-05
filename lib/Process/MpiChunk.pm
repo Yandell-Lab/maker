@@ -3516,11 +3516,17 @@ sub _go {
 	    #get AED scored preds for GFF3
 	    my @scored_preds;
 	    while(my $key = each %$annotations){
-		next unless($key =~ /_abinit$|^pred_gff$/);
+		next unless($key =~ /^(pred|model)_gff|_abinit$/);
 		
 		foreach my $g (@{$annotations->{$key}}){
-		    my @p_bases = map {$_->{p_base}} @{$g->{t_structs}};
-		    push(@scored_preds, @p_bases);
+		    if($key =~ /^model_gff/){
+			my @models = map {$_->{hit}} @{$g->{t_structs}};
+			push(@scored_preds, @models);
+		    }
+		    else{
+			my @p_bases = map {$_->{p_base}} @{$g->{t_structs}};
+			push(@scored_preds, @p_bases);
+		    }
 		}
 	    }
 	    #-------------------------CODE

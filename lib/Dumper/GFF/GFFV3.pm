@@ -444,7 +444,7 @@ sub gene_data {
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
     my $attributes = 'ID='.$g_id.';Name='.$g_name.';';
     $attributes .= $g->{g_attrib} if($g->{g_attrib});
-    $attributes .= ';' if($attributes !~ /\;$/);
+    #$attributes .= ';' if($attributes !~ /\;$/);
     push(@g_data, $attributes); 
     
     my $g_l = join("\t", @g_data)."\n";
@@ -510,7 +510,7 @@ sub hit_data {
    $attributes .= '_eAED='.$eAED.';' if(defined($eAED));
    $attributes .= '_QI='.$QI.';' if(defined($QI));
    $attributes .= $h->{-attrib} if($h->{-attrib});
-   $attributes .= ';' if($attributes !~ /\;$/);
+   #$attributes .= ';' if($attributes !~ /\;$/);
    my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
@@ -564,7 +564,7 @@ sub repeat_data {
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
    my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand.';';
    $attributes .= $h->{-attrib} if($h->{-attrib});
-   $attributes .= ';' if($attributes !~ /\;$/);
+   #$attributes .= ';' if($attributes !~ /\;$/);
    my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
@@ -643,6 +643,9 @@ sub get_class_and_type {
     elsif($class =~ /^pred_gff\:/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
+    elsif($class =~ /^model_gff\:/i){
+	$type = $k eq 'hit' ? 'match' : 'match_part' ;
+    }
     elsif($class =~ /^repeat_gff\:/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
@@ -701,7 +704,7 @@ sub get_exon_data {
 		push(@data, $seq_id, $source, 'exon', $nB, $nE, $score, $strand, '.');
 		my $nine = 'ID='.$e_id.';Parent='.$p .';';
 		   $nine .= $e->{-attrib} if($e->{-attrib});
-		   $nine .= ';' if($nine !~ /\;$/);
+		   #$nine .= ';' if($nine !~ /\;$/);
 		push(@data, $nine); 
 
 		#make sure exon lines are ordered relative top plus strand
@@ -766,7 +769,7 @@ sub get_cds_data {
 	 push(@data, $seq_id, $source, $label, $nB, $nE, $score, $strand, $phase);
 	 my $nine = 'ID='.$e_id.';Parent='.$p.';';
 	 #$nine .= $e->{-attrib} if($e->{-attrib});
-	 $nine .= ';' if($nine !~ /\;$/);
+	 #$nine .= ';' if($nine !~ /\;$/);
 	 push(@data, $nine);
 	 
 	 #make sure CDS lines are ordered relative top plus strand
@@ -1024,7 +1027,7 @@ sub get_transcript_data {
 	   $nine .= '_eAED='.$eAED.';' if(defined($eAED));
 	   $nine .= '_QI='.$t_qi.';' if(defined($t_qi));
 	   $nine .= $t_hit->{-attrib} if($t_hit->{-attrib});
-	   $nine .= ';' if($nine !~ /\;$/);
+	   #$nine .= ';' if($nine !~ /\;$/);
 	if($t->{hit}->{_Alias}){
 	    if($nine =~ /Alias\=([^\;\n]+)/){
 		my @keepers = (@{[split(',', $1)]}, @{$t->{hit}->{_Alias}});
@@ -1090,7 +1093,7 @@ sub get_hsp_data {
 	   $nine .= ';';
 	   $nine .= 'Gap='.join(' ', @gap).';' if(@gap);
 	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
-	   $nine .= ';' if($nine !~ /\;$/);
+	   #$nine .= ';' if($nine !~ /\;$/);
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
         push(@data, $nine);
@@ -1134,7 +1137,7 @@ sub get_repeat_hsp_data {
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand.';';
 	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
-	   $nine .= ';' if($nine !~ /\;$/);
+	   #$nine .= ';' if($nine !~ /\;$/);
         push(@data, $nine);
 
         my $l = join("\t", @data);
