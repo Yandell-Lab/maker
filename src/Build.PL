@@ -38,8 +38,9 @@ my $build = MAKER::Build->new
 	 'IO::Prompt'         => '0',
 	 'DBD::SQLite'        => '0',
 	 'Perl::Unsafe::Signals' => '0',
-	 'Bit::Vector'         => '0',
-	 'PerlIO::gzip'        => '0',
+	 'Bit::Vector'        => '0',
+	 'Inline::C'          => '0.48',
+	 'PerlIO::gzip'       => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {
@@ -73,52 +74,17 @@ my $build = MAKER::Build->new
 	 bindoc => [qw(perl/man)],
 	 libdoc => [qw(perl/man)],
      },
-     PL_files => {'lib/Parallel/MPIcar.PL' => ['lib/Parallel/MPIcar.pm',
-						'lib/Parallel/MPIcar.xs',
-						'lib/Parallel/utils.c',
-						'lib/Parallel/typemap',],
-		  'bin/mpi_scripts.PL' => ['bin/mpi_maker',
-					   'bin/mpi_evaluator',
-					   'bin/mpi_iprscan',],
-     },
     );
 
-#see if threaded
-if($build->thread_support){
-    my $go = $build->y_n("MAKER supports high throughput parallelization via MPI.\n".
-			 "Would you like to install the MPI version of MAKER?", 'N');
-    
-    if($go){
-	$build->feature(mpi_support => 1);
-    }
-    else{
-	$build->feature(mpi_support => 0);
-    }
-}
-else{
-    $build->log_info("\nWARNING: Your version of perl does not seem to have been compiled\n".
-		     "for threads; certain MAKER accessory scripts and features (such as\n".
-		     "MPI support) will be not be available to you.\n\n");
+#ask for MPI
+my $go = $build->y_n("MAKER supports distributed parallelization via MPI.\n".
+		     "Would you like to configure MAKER for MPI (This\n".
+		     "requires that you have an MPI client installed)?", 'N');
 
-    $build->feature(mpi_support => 0); #set mpi flag for Build
-}
+$build->config_mpi() if($go);
 
 
-if($build->feature('mpi_support')){
-    my @mpi = $build->mpi_support();
-    $build->add_exe_requires('MPICH2' => "$mpi[0]");
-    $build->add_lib_requires('MPI' => "$mpi[1]/mpi.h");
-    $build->add_requires('threads' => '1.67'); #add threads to require
-    
-    my $cc = shift @mpi;
-    my $mpidir = shift @mpi;
-    $build->feature(mpi_support => 1); #set mpi flag for Build
-    $build->extra_compiler_flags("-I$mpidir -DFLOAT_HACK"); #add mpidir to includes
-    $build->config('cc' => $cc); #mpicc now default compiler
-    $build->config('ld' => $cc);
-    #$build->add_to_cleanup();
-}
-
+#ask for MWAS
 if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
     my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
 			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'N');
@@ -164,7 +130,6 @@ if($build->feature('mwas_support')){
     $build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');
     $build->add_lib_requires('LibPNG' => "png");
     $build->add_lib_requires('LibGD' => "gd");
-
 
     $build->set_gmod_locs();
 }

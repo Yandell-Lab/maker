@@ -71,31 +71,23 @@ sub new {
 }
 
 #returns MPI compiler and includes directory
-sub mpi_support {
+sub config_mpi {
     my $self = shift;
 
-    return unless($self->thread_support);
     my $ebase = $self->install_destination('exe');
+    my $mpicc = "$ebase/mpich2/bin/mpicc" if(-f "$ebase/mpich2/bin/mpicc");
+    $mpicc = $self->config('cc') if(! $mpicc && $self->config('cc') =~ /(^|[\/])mpicc$/);
+    ($mpicc) = File::Which::where('mpicc') if(!$mpicc || ! -f $mpicc);
 
-    my $cc = "$ebase/mpich2/bin/mpicc";
-    ($cc) = grep {is_mpich2($_)} File::Which::where('mpicc') if(!$cc || ! -f $cc);
-    ($cc) = grep {/mpich2/} File::Which::where('mpicc') if(!$cc || ! -f $cc);
-    ($cc) = File::Which::which('mpicc') if(!$cc || ! -f $cc);
-    
-    $cc = $self->config('cc') if(! $cc);
+    $mpicc = $self->prompt("\nPlease specify the path to 'mpicc' on your system:", $mpicc);
 
-    while($cc !~ /mpicc$/ || ! -f $cc){
-	$cc = $self->prompt("\nCannot find 'mpicc' from MPICH2. Please specify a path:", '');
-	if(! $cc){
-	    $cc = "$ebase/mpich2/bin/mpicc";
-	    my $MPIDIR = "$ebase/mpich2/include";
-	    return ($cc, $MPIDIR);	    
-	}
+    while($mpicc !~ /(^|[\/])mpicc$/ || ! -f $mpicc){
+	$mpicc = $self->prompt("\nCannot find 'mpicc'.\n".
+			    "Please specify the path (leave blank to cancel):", '');
+	return if(! $mpicc);
     }
 
-    return unless($cc =~ /mpicc$/);
-
-    my $ccdir = $cc;
+    my $ccdir = $mpicc;
     $ccdir =~ s/[^\/]+\/[^\/]+$/include/;
 
     #directories to search for mpi.h
@@ -114,19 +106,22 @@ sub mpi_support {
 		    </usr/local/lib/include/mpi*>,
 		    </usr/local/lib/mpi*/include>);
 
-    my ($MPIDIR) = grep {-f "$_/mpi.h" && is_mpich2("$_/mpi.h")} @includes;
+    my ($MPIDIR) = grep {-f "$_/mpi.h"} @includes;
 
-    while(! -f "$MPIDIR/mpi.h" || ! is_mpich2("$MPIDIR/mpi.h")){
-	$MPIDIR = $self->prompt("\nCannot find 'mpi.h' from MPICH2.\n".
-				"Please specify the containing directory:", '');
-	if(! $MPIDIR){
-	    $MPIDIR = "$ebase/mpich2/include";
-	    $cc = "$ebase/mpich2/bin/mpicc";
-	}
+    $MPIDIR = $self->prompt("\nPlease specify the path to the directory containing 'mpi.h':", $MPIDIR);
+
+    while(! -f "$MPIDIR/mpi.h"){
+	$MPIDIR = $self->prompt("\nCannot find 'mpi.h'\n.".
+				"Please specify the containing directory path (leave blank to cancel):", '');
+	return if(! $MPIDIR);
     }
 
-    return unless($MPIDIR);
-    return ($cc, $MPIDIR);
+    $self->feature(mpi_support => 1);
+    $self->feature(MPIDIR => $MPIDIR);
+    $self->feature(MPICC => $mpicc);
+
+    $self->add_exe_requires(mpicc => $mpicc);
+    $self->add_lib_requires(MPI => "$MPIDIR/mpi.h");
 }
 
 #add a Module to the requires list
@@ -1217,7 +1212,6 @@ sub maker_status {
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     $mpi = 'MISSING PREREQUISITES' if($self->feature('mpi_support') && scalar(grep {/^MPI/} @exes, @libs));
-    $mpi = 'PERL NOT COMPILED FOR THREADS' if (! $self->thread_support);
     my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
     $mwas = 'MISSING PREREQUISITES' if($self->feature('mwas_support') &&
@@ -1309,43 +1303,6 @@ sub module_loc {
     $desired .= ".pm";
 
     return $INC{$desired};
-}
-
-sub thread_support {
-    my $self = shift;
-    require Config;
-
-    return $Config::Config{useithreads};
-}
-
-sub is_mpich2 {
-    my $file = shift;
-    
-    $file = shift if(ref($file) eq 'MAKER::Build');
-
-    my $ok;
-    if($file =~ /mpicc$/){
-	open(IN, "$file -v 2> /dev/null |");
-	while(my $line = <IN>){
-            if($line =~ /for MPICH2 version/){
-                $ok = 1;
-                last;
-            }
-        }
-	close(IN);
-    }
-    else{
-	open(IN, "< $file");
-	while(my $line = <IN>){
-	    if($line =~ /^\#define\s+MPICH2_VERSION/){
-		$ok = 1;
-		last;
-	    }
-	}
-	close(IN);
-    }
-
-    return $ok;
 }
 
 sub svn_w_args {

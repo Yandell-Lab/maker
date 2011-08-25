@@ -2847,12 +2847,24 @@ sub runRepeatMasker {
    my $rmlib = shift;
    my $cpus = shift;
    my $no_low   = shift;
-	
+
+   if (-e $o_file) {
+      print STDERR "re reading repeat masker report.\n" unless $main::quiet;
+      print STDERR "$o_file\n" unless $main::quiet;
+      return;
+   }
+
+   my $t_file;	
    my $command  = $RepeatMasker;
 
    if ($rmlib) {
-      $command .= " $q_file -dir $dir -pa $cpus";
-      $command .= " -lib $rmlib" if($rmlib ne 'simple'); #skip organism for simple masking tag
+      $command .= " $q_file -dir $dir -pa $cpus -lib $rmlib";
+   }
+   elsif($species eq 'simple'){
+       (my $tFH, $t_file) = tempfile(DIR => $TMP);
+       print $tFH ">(N)n#Dummy_repeat \@root  [S:25]\nnnnnnnnnnnnnnnnnnn\n";
+       close($tFH);
+       $command .= " $q_file -dir $dir -pa $cpus -lib $t_file";
    }
    else {
       $command .= " $q_file -species $species -dir $dir -pa $cpus";
@@ -2860,14 +2872,10 @@ sub runRepeatMasker {
    $command .= " -nolow" if defined($no_low);
 	
    my $w = new Widget::RepeatMasker();
-   if (-e $o_file) {
-      print STDERR "re reading repeat masker report.\n" unless $main::quiet;
-      print STDERR "$o_file\n" unless $main::quiet;
-   }
-   else {
-      print STDERR "running  repeat masker.\n" unless $main::quiet;
-      $w->run($command);
-   }
+
+   print STDERR "running  repeat masker.\n" unless $main::quiet;
+   $w->run($command);
+   unlink($t_file) if($t_file);
 }
 
 #-----------------------------------------------------------------------------
