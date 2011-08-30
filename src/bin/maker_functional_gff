@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use strict;
 use warnings;
@@ -152,8 +149,8 @@ sub parse_blast{
 
 	my (%blast, %seen);
 	while (<$IN>) {
-
-		my ($qid, $sid, $e_val) = split;
+	        my @F = split;
+		my ($qid, $sid, $e_val) = (@F == 12 && $F[3] =~ /^\d+$/) ? (@F[0..1],$F[10]) : @F[0..2];
 
 		if (! $seen{$qid}) {
 			$blast{$qid} = $fasta{$sid} || '';

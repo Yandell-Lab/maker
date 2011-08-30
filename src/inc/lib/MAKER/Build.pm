@@ -855,12 +855,15 @@ sub _install_exe {
 	if(-d "$dir/src"){ #this is the source code and must be compiled
 	    chdir($dir);
 	    print "Configuring $exe...\n";
-	    $self->do_system("./configure --prefix=$dir") or return $self->fail($exe, $path);
+	    $self->do_system("./configure --prefix=$path") or return $self->fail($exe, $path);
 	    $self->do_system("make") or return $self->fail($exe, $path);
 	    $self->do_system("make install") or return $self->fail($exe, $path);
+	    chdir($base);
 	}
-        chdir($base);
-	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+	else{
+	    chdir($base);
+	    File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+	}
 
 	return $self->fail($exe, $path) if(! -f "$path/bin/$exe");
     }

@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use strict;
 use warnings;
@@ -30,7 +27,7 @@ QI:0|-1|0|1|-1|1|1|0|255
 
 to this:
 
->PYU1_T015316 transcript name:\"Serine-aspartate repeat-containing protein I \
+>PYU1_T015316 transcript Name:\"Similar to Serine-aspartate repeat-containing protein I \
 (Staphylococcus saprophyticus)\" offset:0 AED:0.0476397966594044             \
 QI:0|-1|0|1|-1|1|1|0|255
 
@@ -102,7 +99,7 @@ sub parse_blast{
 		}
 
 		my $func = '';
-		$func .= "Similar to $name: " if $name;
+		$func .= "Similar to $name " if $name;
 		if ($func =~ /Similar to/) {
 			$func .= "$desc "  if $desc;
 		}
@@ -123,8 +120,8 @@ sub parse_blast{
 
 	my (%blast, %seen);
 	while (<$IN>) {
-
-		my ($qid, $sid, $e_val) = split;
+	        my @F = split;
+		my ($qid, $sid, $e_val) = (@F == 12 && $F[3] =~ /^\d+$/) ? (@F[0..1],$F[10]) : @F[0..2];
 
 		next if $seen{$qid};
 
