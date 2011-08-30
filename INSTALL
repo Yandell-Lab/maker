@@ -2,20 +2,26 @@
 
 How to Install Standard MAKER
 
-*If you are using Mac OS X you will need to install developer tools
-and Rosetta from your install disk first.
+**IMPORTANT FOR MAC OS X USERS**
+You will need to install developer tools (i.e. Xcode) from your installation
+disk. If you are on a 32-bit system also install Rosetta from your instalation
+disk. If you are using a 64-bit system, install fink (http://www.finkproject.org/)
+and then install glib2-dev via fink (i.e. fink install glib2-dev). Make sure to
+install fink as 64-bit when asked (32-bit is the default).
+
 
 EASY INSTALL
 
 1.  Go to the .../maker/src/ directory and run 'perl Build.PL' to configure.
 
-2.  Accept default options by just pressing enter.
+2.  Accept default configuration options by just pressing enter.
 
 3.  type './Build install' to complete the installation.
 
 4.  If anything fails, either use the ./Build file commands to retry the
     failed section or follow the detailed install instructions below to
-    manually install missing modules or programs.
+    manually install missing modules or programs. Use ./Build status to see
+    available commands.
 
 
 DETAILED INSTALL
@@ -30,6 +36,11 @@ DETAILED INSTALL
       *threads (Required by MPI and accessory scripts)
       *IO::All (Required by accessory scripts)
       *IO::Prompt (Required by accessory scripts)
+      *File::Which
+      *Perl::Unsafe::Signals
+      *Bit::Vector
+      *Inline::C
+      *PerlIO::gzip
 
     a. Type 'perl -MCPAN -e shell' to access the CPAN shell.  You may
        have to answer some configuration questions if this is your first time
@@ -50,12 +61,12 @@ DETAILED INSTALL
   (with this option, not all of bioperl will work, but what MAKER uses will)
 
   a.  Download and unpack the most recent BioPerl package to a directory of your
-      choice, or use Subversion to get the most current version of BioPerl. See
-      http://www.bioperl.org for details on how to download using Subversion.
+      choice, or use Git to access the most current version of BioPerl. See
+      http://www.bioperl.org for details on how to download using Git.
       You will then need to set PERL5LIB in your .bash_profile to the location
       of bioperl (i.e. export PERL5LIB="/usr/local/bioperl-live:$PERL5LIB").
 
-  -full BioPerl instalation-
+  -full BioPerl instalation via CPAN-
   (you will need sudo privileges, root access, or CPAN configured for local
    installation to continue with this option)
 
@@ -69,22 +80,21 @@ DETAILED INSTALL
       press enter to accept default installation options.
   d.  Type install Bundle::BioPerl on the cpan command line.  Once again press
       enter to accept default installation options.
-  e.  Unpack the downloaded bioperl tar file to the directory of your choice or
-      use Subversion to get the most up to date version.  Then use the terminal
+
+  -full BioPerl instalation from download-
+  a.  Unpack the downloaded bioperl tar file to the directory of your choice or
+      use Git to get the most up to date version.  Then use the terminal
       to find the directory and type perl Build.PL in the command line, then
       type ./Build test, then if all tests pass, type ./Build install.  This
       will install BioPerl where perl is installed.  Press enter to accept all
-      defaults. For Mac OS-X BioPerl will install to /Library/Perl/5.8.6/.
+      defaults.
 
 3.  Install either WuBlast or NCBI-BLAST using instruction in 3a and 3b
 
 3a.  Install WuBlast 2.0 or higher (Alternatively install NCBI-BLAST in 3b)
     (WuBlast has become AB-Blast and is no longer freely available, so if you
     are not lucky enough to have an existing copy of WuBlast, you can use NCBI
-    BLAST instead.  See NCBI BLAST documentation for installation instructions.
-    It is important to note that WuBlast is a prerequisite for RepeatMasker
-    installation, so if you do not have WuBlast, then you will have to install
-    RMBlast to get RepeatMasker to work.  See RepeatMasker documentation.)
+    BLAST or BLAST+ instead)
 
   a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
   b.  Add the following in your .bash_profile (value depend on where you chose
@@ -99,15 +109,6 @@ DETAILED INSTALL
   a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
   b.  Add the location where you installed NCBI-BLAST to your PATH variable in
       .bash_profile (i.e. PATH="/usr/local/ncbi-blast:$PATH").
-  c.  If you are installing the new BLAST+ rather than legacy BLAST from NACBI,
-      MAKER does not yet natively support BLAST+ and installing BLAST is
-      recommended; however, there is a work around that sometimes works if you
-      are determined to use BLAST+ (be warned this does not work for all
-      versions of BLAST+). You will need to copy maker/NCBI/blastall and
-      maker/NCBI/formatdb to the ncbi-blast+/bin/ directory.  BLAST+ uses a
-      completely different command line structure than legacy BLAST, and these
-      two files help convert command lines to maintian compatability. 
-
 
 4.  Install SNAP.  Download from http://homepage.mac.com/iankorf/
 
@@ -129,9 +130,8 @@ DETAILED INSTALL
   c.  Make TRF executable by typing chmod +x+u trf.  You can then move this file
       wherever you want.  I just put it in the /RepeatMasker directory.
   d.  Unpack RepeatMasker to the directory of your choice (i.e. /usr/local).
-  e.  If you do not have WuBlast installed, you will need to install the program
-      RMBlast.  We do not recomend using cross_match, as RepeatMasker
-      performance will suffer.
+  e.  If you do not have WuBlast installed, you will need to install RMBlast.
+      We do not recomend using cross_match, as RepeatMasker performance will suffer.
   f.  Now in the RepeatMasker directory type perl ./configure in the command
       line. You will be asked to identify the location of perl, wublast, and
       trf.  The script expects the paths to the folders containing the
@@ -151,11 +151,9 @@ DETAILED INSTALL
   a.  Exonerate has pre-comiled binaries for many systems; however, for Mac OS-X
       you will have to download the source code and complile it yourself by
       following steps b though d.
-  b.  You need to have Glib and Glib 2.0 installed.  The easiest way to do this
-      on a Mac is to install fink and then type fink install glib and fink
-      install glib2-dev. For 64 bit processor Macs set the environmental
-      variables CC and GCC to 'gcc -m32' before installing anything.
-      i.e. export CC='gcc -m32'
+  b.  You need to have Glib 2.0 installed.  The easiest way to do this on a Mac
+      is to install fink and then type fink install glib2-dev. For 64-bit systems
+      make sure fink is in 64-bit mode (which is not the default).
   c.  Change to the directory containing the Exonerate package to be compiled.
   d.  To install exonerate in the directory /usr/local/exonerate, type:
       ./configure -prefix=/usr/local/exonerate -> then type make -> then type
@@ -168,7 +166,10 @@ DETAILED INSTALL
 
   a.  Unpack the MAKER tar file into the directory of your choice (i.e.
       /usr/local).
-  b.  Now add the following to your .bash_profile if you haven't already:
+  b.  Go to the MAKER src/ directory.
+  c.  Configure using --> perl Build.PL
+  D.  Install using --> ./Build install
+  b.  Remember to add the following to your .bash_profile if you haven't already:
 	export ZOE="where_snap_is/Zoe"
 	export AUGUSTUS_CONFIG_PATH="where_augustus_is/config
   c.  Add the location where you installed MAKER to your PATH variable in
@@ -179,7 +180,7 @@ DETAILED INSTALL
 (OPTIONAL COMPONENTS)
 
 1.  If you want to install the MPI version of MAKER, you need to have Perl
-    compiled for threads.
+    compiled for threads and install threads 1.67 or higher.
 
   a. Install standard MAKER and verify that it runs.
   b. Install MPICH2 with the --enable-sharedlibs flag set to the
