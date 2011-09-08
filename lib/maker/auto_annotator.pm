@@ -1851,20 +1851,20 @@ sub load_transcript_struct {
 	$f->name($t_name);
 
 	my $t_struct = {'hit'       => $f,
+			'p_base'    => $p_base,
+			't_name'    => $t_name,
+			't_id'      => $t_id,
 			't_seq'     => $transcript_seq,
 			'p_seq'     => $translation_seq,
 			't_offset'  => $offset,
 			't_end'     => $end,
-			't_name'    => $t_name,
-			't_id'      => $t_id,
 			'has_start' => $has_start,
 			'has_stop'  => $has_stop,
-			'p_base'    => $p_base,
 			'p_length'  => length($translation_seq)
 		    };
 
 	#also determine these values for the unmodified abinit
-	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
+	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/ && $CTL_OPT->{pred_stats}){
 	    my $transcript_seq  = get_transcript_seq($p_base, $seq);
 	    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $p_base);
 
@@ -1921,16 +1921,34 @@ sub load_transcript_stats {
 	my $AED  = shadow_AED::get_AED(\@bag, $f);
 	my $eAED = shadow_AED::get_eAED(\@bag, $f, $seq);
 	my $qi   = maker::quality_index::get_transcript_qi($f,$evi,$offset,$len_3_utr,$l_trans);
-	$f->{_AED}  = $AED;
-	$f->{_eAED} = $eAED;
 
-	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
-	    my $p_struct = $struct->{p_struct}; 
+	#put stats in hit for match processing
+	if($CTL_OPT->{pred_stats}){
+	    $f->{_AED}  = $AED;
+	    $f->{_eAED} = $eAED;
+	    $f->{_QI} = $qi;
+	}
+
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
+	    my $p_struct = $struct->{p_struct};
 	    $p_base->name($f->name);
-	    $p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
-	    $p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
-	    $p_struct->{_AED} = $p_base->{_AED};
-	    $p_struct->{_eAED} = $p_base->{_eAED};
+
+	    #put stats in hit for match processing
+	    if($CTL_OPT->{pred_stats}){
+		my $p_offset          = $p_struct->{t_offset};
+		my $p_end             = $p_struct->{t_end};
+		my $p_transcript_seq  = $p_struct->{t_seq};
+		my $p_translation_seq = $p_struct->{p_seq};
+		my $p_len_3_utr = length($p_transcript_seq) - $p_end + 1;
+		my $p_l_trans   = length($p_translation_seq);
+
+		$p_base->{_AED} = shadow_AED::get_AED(\@bag, $p_base);
+		$p_base->{_eAED} = shadow_AED::get_eAED(\@bag, $p_base, $seq);
+		$p_base->{_QI} = maker::quality_index::get_transcript_qi($p_base,$evi,$p_offset,$p_len_3_utr,$p_l_trans);
+		$p_struct->{AED} = $p_base->{_AED};
+		$p_struct->{eAED} = $p_base->{_eAED};
+		$p_struct->{t_qi} = $p_base->{_QI};
+	    }
 	}
 
 	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm

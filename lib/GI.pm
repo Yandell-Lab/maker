@@ -567,11 +567,17 @@ sub maker_p_and_t_fastas {
    my $t_fastas = shift @_;
 
    my $abinit = [];
-   my @ab_keys = grep {/^(pred|model)_gff|_abinit$/} keys %$all;
+   my $mod_gff = [];
+   my @ab_keys = grep {/^pred_gff|_abinit$/} keys %$all;
+   my @mod_keys = grep {/^model_gff/} keys %$all;
    
    foreach my $key (@ab_keys){
        push(@$abinit, @{$all->{$key}});
    }   
+
+   foreach my $key (@mod_keys){
+       push(@$mod_gff, @{$all->{$key}});
+   }
 
    foreach my $an (@$maker) {
       foreach my $a (@{$an->{t_structs}}) {
@@ -598,12 +604,22 @@ sub maker_p_and_t_fastas {
 	   $t_fastas->{$source} .= $t_fasta;
        }
    }
+
+   foreach my $an (@$mod_gff) {
+       foreach my $a (@{$an->{t_structs}}) {
+	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a, 'model_gff');
+	   my $source = $a->{hit}->algorithm;
+	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
+	   $p_fastas->{$source} .= $p_fasta;
+	   $t_fastas->{$source} .= $t_fasta;
+       }
+   }
 }
 
 #-----------------------------------------------------------------------------
 sub get_p_and_t_fastas {
    my $t_struct = shift;
-   my $type     = shift || '';
+   my $type     = shift || 'maker';
 	
    my $t_seq  = $t_struct->{t_seq};
    my $p_seq  = $t_struct->{p_seq};
@@ -614,15 +630,15 @@ sub get_p_and_t_fastas {
    my $QI     = "QI:".$t_struct->{t_qi};
 
    #for ab initio annotations use the stats from the unmodified model 
-   if($type eq 'abinit'){
+   if($type ne 'maker'){
        my $h = $t_struct->{hit};
-       my $p_struct = $t_struct->{p_struct};
+       my $p_struct = ($type eq 'abinit') ? $t_struct->{p_struct} : $t_struct;
        $t_seq = $p_struct->{t_seq};
        $p_seq = $p_struct->{p_seq};
        $t_off = "offset:".$p_struct->{t_offset};
        $AED = "AED:".sprintf('%.2f', $h->{_AED}) if($h->{_AED});
        $eAED = "eAED:".sprintf('%.2f', $h->{_eAED}) if($h->{_eAED});
-       $QI = '';
+       $QI = "QI:".$h->{_QI} if($h->{_QI});
    }
 
    my $p_def = ">$t_name protein $AED $eAED $QI";
@@ -2926,7 +2942,7 @@ sub set_defaults {
       $CTL_OPT{'protein'} = '';
       $CTL_OPT{'protein_gff'} = '';
       $CTL_OPT{'model_org'} = 'all';
-      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta");
+      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta") || '';
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
@@ -2961,6 +2977,7 @@ sub set_defaults {
       $CTL_OPT{'est_forward'} = 0; #only used to map old annotations to new assembly
       $CTL_OPT{'always_complete'} = 0;
       $CTL_OPT{'pred_flank'} = 200;
+      $CTL_OPT{'pred_stats'} = 0;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'split_hit'} = 10000;
       $CTL_OPT{'softmask'} = 1;
@@ -3107,6 +3124,7 @@ sub set_defaults {
       $CTL_OPT{'apache_user'} = 'www-data' if(@{[getpwnam('www-data')]});
       $CTL_OPT{'font_file'} = '/usr/share/fonts/bitstream-vera/VeraMono.ttf';
       $CTL_OPT{'font_file'} = '/Library/Fonts/Verdana.ttf' if(! -f $CTL_OPT{'font_file'});
+      $CTL_OPT{'font_file'} = '/Library/Fonts/Georgia.ttf' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'font_file'} = '' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
@@ -4102,7 +4120,8 @@ sub generate_control_files {
 
    #--build opts.ctl file
    if($type eq 'all' || $type eq 'opts'){
-       open (OUT, "> $dir/$app\_opts.$ext");
+       open (OUT, "> $dir/$app\_opts.$ext") or
+	   die "ERROR: Could not create $dir/$app\_opts.$ext\n";
        print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
        print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
        print OUT "genome=$O{genome} #genome sequence file in fasta format\n";
@@ -4165,6 +4184,7 @@ sub generate_control_files {
        print OUT "min_contig=$O{min_contig} #skip genome contigs below this length (under 10kb are often useless)\n" if(!$ev);
        print OUT "\n";
        print OUT "pred_flank=$O{pred_flank} #flank for extending evidence clusters sent to gene predictors\n";
+       print OUT "pred_stats=$O{pred_stats} #report AED and QI statistics for all predictions as well as models\n";
        print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed (bound by 0 and 1)\n" if(!$ev);
        print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
        print OUT "alt_splice=$O{alt_splice} #Take extra steps to try and find alternative splicing, 1 = yes, 0 = no\n" if(!$ev);
@@ -4196,7 +4216,8 @@ sub generate_control_files {
     
    #--build bopts.ctl file
    if($type eq 'all' || $type eq 'bopts'){
-       open (OUT, "> $dir/$app\_bopts.$ext");
+       open (OUT, "> $dir/$app\_bopts.$ext") or
+	   die "ERROR: Could not create $dir/$app\_bopts.$ext\n";
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
        print OUT "blast_type=$O{blast_type} #set to 'wublast' or 'ncbi'\n";
        print OUT "\n";
@@ -4235,7 +4256,8 @@ sub generate_control_files {
 
    #--build maker_exe.ctl file
    if($type eq 'all' || $type eq 'exe'){
-       open (OUT, "> $dir/$app\_exe.$ext");
+       open (OUT, "> $dir/$app\_exe.$ext") or
+	   die "ERROR: Could not create $dir/$app\_exe.$ext\n";
        print OUT "#-----Location of Executables Used by MAKER/EVALUATOR\n";
        print OUT "makeblastdb=$O{makeblastdb} #location of NCBI+ makeblastdb executable\n";
        print OUT "blastn=$O{blastn} #location of NCBI+ blastn executable\n";
@@ -4263,7 +4285,8 @@ sub generate_control_files {
 
    #--build server.ctl file
    if($type eq 'server'){
-       open (OUT, "> $dir/server.$ext");
+       open (OUT, "> $dir/server.$ext") or
+	   die "ERROR: Could not create $dir/server.$ext\n";
        print OUT "#-----Database Setup\n";
        print OUT "DBI=$O{DBI} #interface type to database\n";
        print OUT "dbname=$O{dbname} #database name\n";
@@ -4317,7 +4340,8 @@ sub generate_control_files {
 
    #--build menus.ctl file
    if($type eq 'menus'){
-       open (OUT, "> $dir/menus.$ext");
+       open (OUT, "> $dir/menus.$ext") or
+	   die "ERROR: Could not create $dir/menus.$ext\n";
        print OUT "##Menus from Data::Dumper\n";
        print OUT Data::Dumper->Dump([\%O], [qw(menus)]);
        close(OUT);    

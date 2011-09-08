@@ -107,17 +107,49 @@ sub exists_kill {
 sub get_name_by_id {
     my $id = shift;
 
-    require Proc::ProcessTable;
-    my $obj = new Proc::ProcessTable;
+    my $p = get_proc_by_id($id);
     my $name = '';
-    foreach my $p (@{$obj->table}) {
-	#now check for the id
-	if ($p->pid == $id){
-	    $name   = $p->fname() || '';
-	}
+    if($p){
+	$name   = $p->fname() || '';
     }
 
     return $name;
+}
+#-----------------------------------------------------------------
+#returns parent process name for a given child ID
+sub get_pname_by_id {
+    my $id = shift;
+
+    my $p = get_pproc_by_id($id);
+    my $name = '';
+    if($p){
+	$name   = $p->fname() || '';
+    }
+
+    return $name;
+}
+#-----------------------------------------------------------------
+#returns process table for a given process id
+sub get_proc_by_id {
+    my $id = shift;
+
+    require Proc::ProcessTable;
+    my $obj = new Proc::ProcessTable;
+    foreach my $p (@{$obj->table}) {
+	#now check for the id
+	return $p if ($p->pid == $id);
+    }
+
+    return undef;
+}
+#-----------------------------------------------------------------
+#returns parent process table for a given child id
+sub get_pproc_by_id {
+    my $id = shift;
+    my $p = get_proc_by_id($id);
+
+    return get_proc_by_id($p->ppid) if($p);
+    return undef;
 }
 #-----------------------------------------------------------------
 #this function is used by killall and exists_proc_by_name. it

@@ -494,9 +494,9 @@ sub hit_data {
    my $name = $h->name();
    $name = uri_escape($name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
 
-   my $AED .= sprintf '%.2f', $h->{_AED} if($h->{_AED});
-   my $eAED .= sprintf '%.2f', $h->{_eAED} if($h->{_eAED});
-   my $QI .= $h->{_QI} if($h->{_QI});
+   my $AED = sprintf '%.2f', $h->{_AED} if(defined ($h->{_AED}));
+   my $eAED = sprintf '%.2f', $h->{_eAED} if(defined ($h->{_eAED}));
+   my $QI = $h->{_QI} if(defined($h->{_QI}));
 
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id, $uid);
@@ -649,7 +649,7 @@ sub get_class_and_type {
     elsif($class =~ /^repeat_gff\:/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
-    elsif($class =~ /^blastx\:repeat/i){
+    elsif($class =~ /^blastx\:repeat|repeatrunner/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
     elsif ($class =~ /^repeatmasker$/i){

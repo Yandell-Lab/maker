@@ -298,14 +298,22 @@ sub ACTION_build {
 	$O{smtp_server} = $self->prompt("\nOutgoing e-mail SMTP server?",
 					 $O{smtp_server});
 
-	GI::generate_control_files($c_dir,'server', \%O);
-	GI::generate_control_files($c_dir,'all', \%O);
-	GI::generate_control_files($c_dir,'menus', \%O);
+	if(! -f '_mwas'){
+	    mkdir('_mwas') or die "ERROR: Cannot save configuration for Build\n".
+		"Please check you user prvleges and/or drive space.\n";
+	}
+	GI::generate_control_files('_mwas','server', \%O);
+	GI::generate_control_files('_mwas','all', \%O);
+	GI::generate_control_files('_mwas','menus', \%O);
 
 	$self->log_info("\n==============================================================================\n".
-			"Finished configuring MWAS settings. You can later change these\n".
+			"Finished configuring MWAS settings. Following installation you can change these\n".
 			"settings and others by editing the MWAS configuration files:\n".
-			"     --> $c_dir/*.ctl\n".
+			"     --> $c_dir/server.ctl\n".
+			"     --> $c_dir/menus.ctl\n".
+			"     --> $c_dir/maker_opts.ctl\n".
+			"     --> $c_dir/maker_bopts.ctl\n".
+			"     --> $c_dir/maker_exe.ctl\n".
 			"\n==============================================================================\n\n");
     }
 }
@@ -418,16 +426,25 @@ sub ACTION_install {
 	require MWAS_util;
 	
 	my $c_dir = MWAS_util::config_loc(); #configuration file directory
-	my @files = ("$c_dir/maker_opts.ctl",
-		     "$c_dir/maker_bopts.ctl",
-		     "$c_dir/maker_exe.ctl",
-		     "$c_dir/server.ctl",
-		     "$c_dir/menus.ctl",
+	my @files = ("_mwas/maker_opts.ctl",
+		     "_mwas/maker_bopts.ctl",
+		     "_mwas/maker_exe.ctl",
+		     "_mwas/server.ctl",
+		     "_mwas/menus.ctl",
 		     );
 
 	my @exists = grep {-f $_} @files;
 	my %O = GI::load_server_files(\@exists);
-    
+	
+	if(! -e $c_dir){
+	    mkdir($c_dir) or die "ERROR: Could not create directory $c_dir\n".
+		"Please check your user permisions and/or drive space.\n";
+	}
+
+	GI::generate_control_files($c_dir,'server', \%O);
+	GI::generate_control_files($c_dir,'all', \%O);
+	GI::generate_control_files($c_dir,'menus', \%O);    
+
 	$self->log_info("Installing MWAS database and files\n");
 	MWAS_util::mwas_setup(\%O);
 	$self->log_info("Installing Apollo - Java Web Start\n");
