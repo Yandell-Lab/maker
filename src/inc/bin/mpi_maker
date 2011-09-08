@@ -12,7 +12,7 @@ use Config;
 use Carp;
 
 BEGIN{
-   $VERSION = '2.13';
+   $VERSION = '2.14';
 
    if (not ($ENV{CGL_SO_SOURCE})) {
       $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
