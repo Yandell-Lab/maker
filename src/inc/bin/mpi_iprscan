@@ -15,7 +15,7 @@ use File::Which;
 use Cwd;
 
 BEGIN{
-    $VERSION = '2.12';
+    $VERSION = '2.13';
 
     #find iprscan
     $EXE = File::Which::which('iprscan');

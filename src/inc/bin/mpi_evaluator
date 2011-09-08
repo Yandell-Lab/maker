@@ -13,7 +13,7 @@ use threads;
 use threads::shared;
 
 BEGIN{
-   $VERSION = '2.12';
+   $VERSION = '2.13';
 
    $main::eva = 1; #signals that this is evaluator
 
