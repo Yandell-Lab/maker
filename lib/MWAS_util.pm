@@ -614,7 +614,7 @@ sub check_table_structure {
 
     #create ctl_opt table
     my @defaults = map {lc($_)." $t_type"} keys %def_opt; #get table column names and datatype
-    $dsn = "CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, maker_v $t_type,".join(', ', @defaults).')';
+    $dsn = "CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, ".join(', ', @defaults).')';
     $dbh->do($dsn) if(! grep {/ctl_opt/} @tables);
     add_missing_columns($dbh, $dsn, 'ctl_opt');
 
