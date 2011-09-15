@@ -74,6 +74,11 @@ my $build = MAKER::Build->new
 	 bindoc => [qw(perl/man)],
 	 libdoc => [qw(perl/man)],
      },
+     PL_files => {'lib/Parallel/Application/MPI.PL' => 'lib/Parallel/Application/MPI.pm',
+                  'bin/mpi_scripts.PL' => ['bin/mpi_maker',
+                                           'bin/mpi_evaluator',
+                                           'bin/mpi_iprscan',],
+     },
     );
 
 #ask for MPI

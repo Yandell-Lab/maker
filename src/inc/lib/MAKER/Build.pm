@@ -1230,10 +1230,10 @@ sub maker_status {
     my $dist_name = $self->dist_name;
     my $dist_version = $self->dist_version;
     my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
+    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::Application::MPI', '0')->{ok});
     $mpi = 'MISSING PREREQUISITES' if($self->feature('mpi_support') && scalar(grep {/^MPI/} @exes, @libs));
     my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::MPIcar', '0')->{ok});
+    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::Application::MPI', '0')->{ok});
     $mwas = 'MISSING PREREQUISITES' if($self->feature('mwas_support') &&
 				       (scalar(grep {!/^MPI/} @libs)||
 					scalar(grep {/JBrowse|Apollo/} @exes)||
