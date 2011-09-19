@@ -117,8 +117,8 @@ sub config_mpi {
     }
 
     $self->feature(mpi_support => 1);
-    $self->feature(MPIDIR => $MPIDIR);
-    $self->feature(MPICC => $mpicc);
+    $self->config_data(MPIDIR => $MPIDIR);
+    $self->config_data(MPICC => $mpicc);
 
     $self->add_exe_requires(mpicc => $mpicc);
     $self->add_lib_requires(MPI => "$MPIDIR/mpi.h");

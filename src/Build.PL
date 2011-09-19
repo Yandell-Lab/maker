@@ -40,6 +40,7 @@ my $build = MAKER::Build->new
 	 'Perl::Unsafe::Signals' => '0',
 	 'Bit::Vector'        => '0',
 	 'Inline::C'          => '0.48',
+	 'Inline::Files'      => '0.68',
 	 'PerlIO::gzip'       => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
