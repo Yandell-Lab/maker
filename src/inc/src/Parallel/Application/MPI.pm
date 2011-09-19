@@ -5,7 +5,6 @@ use Carp;
 use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK);
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
-require Parallel::Application;
 require Exporter;
 
 @ISA = qw(Exporter);

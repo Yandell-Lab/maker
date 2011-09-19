@@ -824,7 +824,7 @@ sub split_db {
       return \@db_files;
    }
    else{
-      &File::Path::rmtree($f_dir);
+      File::Path::rmtree($f_dir);
    }
    
    #set up a new database
@@ -857,7 +857,7 @@ sub split_db {
 	 return \@db_files;
       }
       else{ #remove if there is an error
-	 &File::Path::rmtree($f_dir);
+	 File::Path::rmtree($f_dir);
       }
    }
       
@@ -2215,10 +2215,10 @@ sub combine_blast_report {
        my ($ext) = $blast_finished =~ /([^\.]+)$/;
 
        #merge blast reports
-       if ( -e $dir && ! -e $blast_finished) {
+       if ( -d $dir && ! -e $blast_finished) {
 	   system ("cat $dir/\*\.$ext > $blast_finished")
 	       && confess "ERROR: Could not colapse BLAST reports\n";
-	   rmtree ("$dir");
+	   File::Path::rmtree ("$dir");
        }
        $LOG->add_entry("FINISHED", $blast_finished, ""); 
    }
