@@ -56,11 +56,13 @@ sub new {
 		elsif(! $lock->maintain(30)){ #can't get maintainer to lock
 		    push(@files, $file);
 		    $lock->unlock();
+		    sleep 1;
 		    next;
 		}
 	    }
 	    else{
 		push(@files, $file);
+		sleep 1;
 		next;
 	    }
 	}
