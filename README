@@ -58,7 +58,7 @@ You might want to also install these optional external programs:
     *FGENESH 2.6 or higher (www.softberry.com) - requires licence
     *GeneMarkS for prokaryotic genomes (exon.biology.gatech.edu)
 
-To install mpi_maker, you must have an mpi package installed, MAKER
+To install MPI support, you must have an mpi package installed, MAKER
 supports MPICH2:
     *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
 
@@ -66,7 +66,7 @@ Note: Remember to install MPICH2 with the --enable-sharedlibs flag set
 to the appropriate value.  See MPICH2 Installer's Guide at:
 http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
 
-Also see the mpi_maker installation instructions found further bellow.
+Also see the MPI configuration instructions found further bellow.
 
 Notes:
 
@@ -158,16 +158,13 @@ MPI version of MAKER by doing the following:
      MPI MAKER.  Select 'yes'.
   f. run ./Build install
 
-A new version of MAKER called mpi_maker should now be installed under
-maker/bin.
-
-To run mpi_maker, first verify that your mpi environment is initiated,
-(i.e. using the mpdboot or mpd command). Now start mpi_maker via
-mpiexec.
+To run with MPI, first verify that your MPI environment is initiated,
+(i.e. using the mpdboot or mpd command if necessary). Now start MAKER
+via mpiexec.
 
 Example: (This will run MAKER on 4 nodes or processors)
 
-mpiexec -n 4 mpi_maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+mpiexec -n 4 maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
 
 Please see the documentation of the MPI environment you use for
 instructions on how to initiate an MPI process.
