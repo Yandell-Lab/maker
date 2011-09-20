@@ -25,9 +25,6 @@ bin/map2assembly
 bin/map_data_ids
 bin/map_fasta_ids
 bin/map_gff_ids
-bin/mpi_evaluator
-bin/mpi_iprscan
-bin/mpi_maker
 bin/mpi_scripts.PL
 bin/split_fasta
 bin/tophat2gff3
@@ -70,21 +67,8 @@ inc/bundle/Module/Build/PPMMaker.pm
 inc/bundle/Module/Build/Version.pm
 inc/bundle/Module/Build/YAML.pm
 inc/lib/MAKER/Build.pm
-inc/src/Parallel/docs/MPI/MPI-C-Bindings.txt
-inc/src/Parallel/docs/MPI/paper.tex
-inc/src/Parallel/docs/MPI/README
-inc/src/Parallel/docs/MPI/TODO
-inc/src/Parallel/MPIcar.pm
-inc/src/Parallel/MPIcar.xs
-inc/src/Parallel/typemap
-inc/src/Parallel/utils.c
-lib/Parallel/MPIcar.c
-lib/Parallel/MPIcar.o
-lib/Parallel/MPIcar.PL
-lib/Parallel/MPIcar.pm
-lib/Parallel/MPIcar.xs
-lib/Parallel/typemap
-lib/Parallel/utils.c
+inc/src/Parallel/Application/MPI.pm
+lib/Parallel/Application/MPI.PL
 locations
 MANIFEST			This list of files
 version

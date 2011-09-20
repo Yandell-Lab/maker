@@ -75,7 +75,9 @@ sub config_mpi {
     my $self = shift;
 
     my $ebase = $self->install_destination('exe');
+    my @exes = grep {/(^|[\/])mpicc$/} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>);
     my $mpicc = "$ebase/mpich2/bin/mpicc" if(-f "$ebase/mpich2/bin/mpicc");
+    ($mpicc) = grep {/(^|[\/])mpicc$/} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>) if(!$mpicc);
     $mpicc = $self->config('cc') if(! $mpicc && $self->config('cc') =~ /(^|[\/])mpicc$/);
     ($mpicc) = File::Which::where('mpicc') if(!$mpicc || ! -f $mpicc);
 
@@ -88,11 +90,12 @@ sub config_mpi {
     }
 
     my $ccdir = $mpicc;
-    $ccdir =~ s/[^\/]+\/[^\/]+$/include/;
+    $ccdir =~ s/\/+[^\/]+\/[^\/]+$//;
 
     #directories to search for mpi.h
-    my @includes = (<$ebase/mpich2/include>,
-		    <$ccdir/>,
+    my @includes = (<$ccdir/include>,
+		    <$ebase/mpich2/include>,
+		    <$ebase/*/include>,
 		    </usr/include>,
 		    </usr/include/mpi*>,
 		    </usr/mpi*/include>,
@@ -216,7 +219,7 @@ sub ACTION_build {
     my @libs = map {keys %{$_->{lib_requires}}} $self->lib_failures();
     
     if($self->feature('mpi_support')){
-	$self->log_info("Building " . $self->dist_name . " with MPI support\n");
+	$self->log_info("Configuring " . $self->dist_name . " with MPI support\n");
 	die "\n* MISSING MAKER/MPI PREREQUISITES - CANNOT CONTINUE!!\n"
 	    if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl) ||
 	       scalar(grep {/^MPI/} @exes, @libs));
@@ -235,7 +238,7 @@ sub ACTION_build {
         die "\n* MISSING MWAS PREREQUISITES - CANNOT CONTINUE!!\n"
             if(scalar(grep {!/^MPI/} @libs)||
                scalar(grep {/^(CGI|Mail|Bio\:\:Graphics)/} @perl));
-    }
+    }    
 
     if($self->feature('mwas_support') && $self->invoked_action() eq 'build'){	
 	require MWAS_util;
@@ -1229,8 +1232,7 @@ sub maker_status {
 
     my $dist_name = $self->dist_name;
     my $dist_version = $self->dist_version;
-    my $mpi = ($self->feature('mpi_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-    $mpi = 'INSTALLED' if ($self->check_installed_status('Parallel::Application::MPI', '0')->{ok});
+    my $mpi = ($self->feature('mpi_support')) ? 'CONFIGURED' : 'DISABLED';
     $mpi = 'MISSING PREREQUISITES' if($self->feature('mpi_support') && scalar(grep {/^MPI/} @exes, @libs));
     my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
     $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::Application::MPI', '0')->{ok});

@@ -86,7 +86,7 @@ my $build = MAKER::Build->new
 my $go = $build->y_n("MAKER supports distributed parallelization via MPI.\n".
 		     "Would you like to configure MAKER for MPI (This\n".
 		     "requires that you have an MPI client installed)?", 'N');
-
+$build->feature(mpi_support => $go);
 $build->config_mpi() if($go);
 
 
