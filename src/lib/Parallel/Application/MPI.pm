@@ -201,8 +201,7 @@ sub _bind {
     my $err = $@;
     $lock->unlock() if($lock);
 
-    if($err =~ /cannot open shared object file/){
-	
+    if($err =~ /cannot open shared object file|mca_base_param_reg_int/){	
 	$err .= "\n\n".
 	    "** If you are running using OpenMPI, you may have to preload object files\n".
 	    "** for shared libraries to work. For bash, try executing a command\n".
