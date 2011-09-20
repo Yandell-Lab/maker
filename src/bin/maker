@@ -26,6 +26,7 @@ BEGIN{
    #what to do on ^C
    $SIG{'INT'} = sub {
       print STDERR "\n\nMaker aborted by user!!\n\n" unless($main::qq);
+      #MPI_Finalize();
       exit (1);
    };
 
@@ -234,31 +235,35 @@ my $gdbfile;
 my @failed;
 my @interrupted;
 
+#--get files off the command line
+my @ctlfiles = @ARGV;
+
+if (not @ctlfiles) {
+    if (-e "maker_opts.ctl" &&
+	-e "maker_bopts.ctl" &&
+	-e "maker_exe.ctl"
+	) {
+	
+	@ctlfiles = ("maker_opts.ctl",
+		     "maker_bopts.ctl",
+		     "maker_exe.ctl"
+	    );
+    }
+    elsif($rank == $root) {
+	print STDERR  "ERROR: Control files not found\n";
+	print $usage;
+	MPI_Finalize();
+	exit(0);
+    }
+    else{
+	MPI_Finalize();
+	exit(0);
+    }
+}
+
+#--Control file processing
 if($rank == $root){
     try{
-	#get arguments off the command line
-	my @ctlfiles = @ARGV;
-	
-	if (not @ctlfiles) {
-	    if (-e "maker_opts.ctl" &&
-		-e "maker_bopts.ctl" &&
-		-e "maker_exe.ctl"
-		) {
-		
-		@ctlfiles = ("maker_opts.ctl",
-			     "maker_bopts.ctl",
-			     "maker_exe.ctl"
-			     );
-	    }
-	    else {
-		print STDERR  "ERROR: Control files not found\n";
-		print $usage;
-		exit(0);
-	    }
-	}
-
-	#--Control file processing
-	
 	#set up control options from control files
 	print STDERR "STATUS: Parsing control files...\n" unless($main::quiet);
 	%CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
@@ -358,6 +363,7 @@ if($rank == $root){
 	my $code = 2;
 	$code = $E->{-value} if (defined($E->{-value}));
 	
+	#MPI_Finalize();
 	exit($code);
     };
 }
@@ -499,6 +505,8 @@ unless($main::no_threads){
 		$thr->kill('KILL')->join();
 	    }
 	}
+
+	#MPI_Finalize();
 	exit (2);
     };
 
@@ -1381,7 +1389,6 @@ Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
 Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
 
 MPI_Finalize(); #terminate MPI
-
 exit(0);
 
 #-----------------------------------------------------------------------------

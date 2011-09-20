@@ -2,7 +2,7 @@ package Parallel::Application::MPI;
 
 use strict;
 use Carp;
-use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $LOC $CODE $LOADED);
+use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $LOC $CODE $LOADED $WARNED);
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
 require Exporter;
@@ -159,6 +159,18 @@ sub _load {
     require Proc::Signal;
     my $name = Proc::Signal::get_pname_by_id($$);
     if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|orted)$/){	    
+	if(! MAKER::ConfigData->feature('mpi_support')){
+	    warn "** WARNING: You have not configured MAKER to run under MPI.\n".
+		 "** Yet you are attempting to do so!!\n".
+		 "**\n".
+		 "** You need to configure MAKER by executing -->\n".
+		 "**     perl $FindBin::Bin/../src/Build.PL\n".
+		 "** Then run -->\n".
+		 "**     $FindBin::Bin/../src/Build install\n\n" unless($WARNED);
+	    $WARNED = 1; #turn this warning off now
+	    return 0;
+	}
+
 	_bind();
 	$LOADED = 1;
 	return 1;

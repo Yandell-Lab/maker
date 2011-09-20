@@ -1483,7 +1483,6 @@ sub check_update_version {
 	    my @files = ("$cwd/bin/maker",
 			 "$cwd/bin/evaluator",
 			 "$cwd/bin/iprscan_wrap",
-			 "$cwd/inc/bin/mpi_maker",
 			 "$cwd/inc/bin/mpi_evaluator",
 			 "$cwd/inc/bin/mpi_iprscan",
 			 "$cwd/../lib/GI.pm"
