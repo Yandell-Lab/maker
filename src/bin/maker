@@ -10,6 +10,7 @@ use lib "$FindBin::Bin/../perl/lib";
 use vars qw($RANK $LOG @CMD_ARGS $VERSION);
 use Config;
 use Carp;
+use MAKER::ConfigData;
 
 BEGIN{
    $VERSION = '2.14';

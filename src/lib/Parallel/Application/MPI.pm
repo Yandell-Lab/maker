@@ -200,6 +200,17 @@ sub _bind {
 
     my $err = $@;
     $lock->unlock() if($lock);
+
+    if($err =~ /cannot open shared object file/){
+	
+	$err .= "\n\n".
+	    "** If you are running using OpenMPI, you may have to preload object files\n".
+	    "** for shared libraries to work. For bash, try executing a command\n".
+	    "** similar to the following with the appropriate file location.\n".
+	    "** Example --> export LD_PRELOAD=.../openmpi/lib/libmpi.so\n".
+	    "** Please do this before trying to run MAKER again!!\n\n";
+    }
+
     die $err if($err);
 
     return 1;
