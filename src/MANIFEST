@@ -31,7 +31,6 @@ bin/tophat2gff3
 Build.PL
 inc/bin/mpi_evaluator
 inc/bin/mpi_iprscan
-inc/bin/mpi_maker
 inc/bundle/auto/Module/Build/.packlist
 inc/bundle/bin/config_data
 inc/bundle/inc/latest.pm
@@ -67,8 +66,7 @@ inc/bundle/Module/Build/PPMMaker.pm
 inc/bundle/Module/Build/Version.pm
 inc/bundle/Module/Build/YAML.pm
 inc/lib/MAKER/Build.pm
-inc/src/Parallel/Application/MPI.pm
-lib/Parallel/Application/MPI.PL
+lib/Parallel/Application/MPI.pm
 locations
 MANIFEST			This list of files
 version
