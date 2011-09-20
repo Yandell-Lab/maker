@@ -158,7 +158,7 @@ sub _load {
 
     require Proc::Signal;
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|orted)$/){	    
+    if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|mpd|orted|hydra_pmi_proxy)$/){	    
 	if(! MAKER::ConfigData->feature('mpi_support')){
 	    warn "** WARNING: You have not configured MAKER to run under MPI.\n".
 		 "** Yet you are attempting to do so!!\n".
@@ -175,7 +175,7 @@ sub _load {
 	$LOADED = 1;
 	return 1;
     }
-
+    die $name;
     return 0;
 }
 
