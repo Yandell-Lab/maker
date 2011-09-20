@@ -641,9 +641,6 @@ sub get_p_and_t_fastas {
        $QI = "QI:".$h->{_QI} if($h->{_QI});
    }
 
-   #added to help debug
-   #if(){}
-
    my $p_def = ">$t_name protein $AED $eAED $QI";
    my $t_def = ">$t_name transcript $t_off $AED $eAED $QI";
 

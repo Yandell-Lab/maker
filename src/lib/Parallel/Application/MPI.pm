@@ -175,7 +175,7 @@ sub _load {
 	$LOADED = 1;
 	return 1;
     }
-    die $name;
+
     return 0;
 }
 

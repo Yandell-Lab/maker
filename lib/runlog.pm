@@ -156,8 +156,6 @@ sub _load_old_log {
 	       
 	       my ($type, $key, $value) = split ("\t", $line);
 
-	       $value =~ s/\/uufs\/chpc.utah.edu\/common\/home\/u0292084\/Projects\/Megachile_Genome\///g; #temp
-  
 	       if($type eq 'FINISHED' && defined $stat{STARTED}{$key}){
 		   #delete or hash can become very large
 		   delete($stat{STARTED}{$key});
