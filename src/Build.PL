@@ -8,6 +8,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
+use lib "$FindBin::Bin/lib"; #libary just needed for configuration
 use MAKER::Build;
 
 chdir($FindBin::Bin); #alway go here for safety
@@ -74,8 +75,7 @@ my $build = MAKER::Build->new
 	 bindoc => [qw(perl/man)],
 	 libdoc => [qw(perl/man)],
      },
-     PL_files => {'bin/mpi_scripts.PL' => ['bin/mpi_maker',
-                                           'bin/mpi_evaluator',
+     PL_files => {'bin/mpi_scripts.PL' => ['bin/mpi_evaluator',
                                            'bin/mpi_iprscan',],
      },
     );

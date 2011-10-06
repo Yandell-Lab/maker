@@ -119,7 +119,6 @@ sub config_mpi {
 	return if(! $MPIDIR);
     }
 
-    $self->feature(mpi_support => 1);
     $self->config_data(MPIDIR => $MPIDIR);
     $self->config_data(MPICC => $mpicc);
 
@@ -238,6 +237,17 @@ sub ACTION_build {
         die "\n* MISSING MWAS PREREQUISITES - CANNOT CONTINUE!!\n"
             if(scalar(grep {!/^MPI/} @libs)||
                scalar(grep {/^(CGI|Mail|Bio\:\:Graphics)/} @perl));
+    }    
+
+    #compile MPI module
+    if($self->feature('mpi_support')){
+        use Parallel::Application::MPI;
+	my $loc = $self->blib();
+	mkdir($loc) if(!$loc);
+        Parallel::Application::MPI::_bind($self->config_data('MPICC'),
+                                          $self->config_data('MPIDIR'),
+					  $loc);	
+	File::Path::rmtree($self->blib()."/build");
     }    
 
     if($self->feature('mwas_support') && $self->invoked_action() eq 'build'){	

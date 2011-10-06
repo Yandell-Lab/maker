@@ -10,13 +10,12 @@ require Exporter;
 BEGIN {
     #Find self location so inline can use it
     $LOC = $INC{'Parallel/Application/MPI.pm'};
-    $LOC =~ s/(\/lib)?\/Parallel\/Application\/MPI\.pm$//;
+    $LOC =~ s/\/*(lib\/)?Parallel\/Application\/MPI\.pm$//;
 }
 
 @ISA = qw(Exporter);
 $VERSION = '0.01';
 
-use MAKER::ConfigData;
 use Inline;
 
 #for Parallel::Application specific interface
@@ -157,9 +156,13 @@ sub _load {
     return 1 if($LOADED);
 
     require Proc::Signal;
+
     my $name = Proc::Signal::get_pname_by_id($$);
     if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|mpd|orted|hydra_pmi_proxy)$/){	    
-	if(! MAKER::ConfigData->feature('mpi_support')){
+	require MAKER::ConfigData;
+	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
+
+	if(! $mpi_support){
 	    warn "** WARNING: You have not configured MAKER to run under MPI.\n".
 		 "** Yet you are attempting to do so!!\n".
 		 "**\n".
@@ -171,8 +174,20 @@ sub _load {
 	    return 0;
 	}
 
-	_bind();
+	#lock for first compilation only
+	my $lock;
+	if(! -f "$LOC/lib/auto/Parallel/Application/MPI/MPI.bundle"){
+	    require File::NFSLock;
+	    $lock = new File::NFSLock("$LOC/_MPI", 'EX', 300, 40) while(!$lock);
+	}
+
+	_bind(MAKER::ConfigData->config('MPICC'),
+	      MAKER::ConfigData->config('MPIDIR'),
+	      $LOC);
+
 	$LOADED = 1;
+	$lock->unlock() if($lock);
+
 	return 1;
     }
 
@@ -180,26 +195,20 @@ sub _load {
 }
 
 sub _bind {
-    require File::NFSLock;
-
-    #lock for first compilation only
-    my $lock; #must be predefined
-    my $lock_f = "$LOC/Parallel_Application_MPI";
-    if(! -f "$LOC/lib/auto/Parallel/Application/MPI/MPI.bundle"){
-	$lock = new File::NFSLock($lock_f, 'EX', 300, 40) while(!$lock);
-    }
+    my $mpicc = shift;
+    my $mpidir = shift;
+    my $loc = shift;
 
     eval{
 	Inline->bind(C => $CODE,
 		     NAME => 'Parallel::Application::MPI',
-		     DIRECTORY => $LOC,
-		     CC => MAKER::ConfigData->config('MPICC'),
-		     LD => MAKER::ConfigData->config('MPICC'),
-		     INC => '-I'.MAKER::ConfigData->config('MPIDIR'));
+		     DIRECTORY => $loc,
+		     CC => $mpicc,
+		     LD => $mpicc,
+		     INC => '-I'.$mpidir,);
     };
-
+    
     my $err = $@;
-    $lock->unlock() if($lock);
 
     if($err =~ /cannot open shared object file|mca_base_param_reg_int/){	
 	$err .= "\n\n".
@@ -209,9 +218,9 @@ sub _bind {
 	    "** Example --> export LD_PRELOAD=.../openmpi/lib/libmpi.so\n".
 	    "** Please do this before trying to run MAKER again!!\n\n";
     }
-
+    
     die $err if($err);
-
+    
     return 1;
 }
 

@@ -26,6 +26,7 @@ sub new {
     bless ($self, $class);
 
     $self->{index} = [];
+    $self->{stream} = [];
     $self->{locs} = $locs;
     my @args = @_;
     push (@args, ('-makeid' => \&makeid));
@@ -40,6 +41,7 @@ sub new {
 	my ($title) = $file =~ /([^\/]+)$/;
 	if($G_DB{$title}){
 	    push(@{$self->{index}}, $G_DB{$title});
+	    push(@{$self->{stream}}, $G_DB{$title}->get_PrimarySeq_stream);
 
 	    #build reverse index to get the correct index based on file name
 	    $self->{file2index}{$title} = $self->{index}->[-1];
@@ -68,7 +70,8 @@ sub new {
 	}
 
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-	
+	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
+
 	#build reverse index to get the correct index based on file name
 	$self->{file2index}{$title} = $self->{index}->[-1];
 	
@@ -93,6 +96,7 @@ sub reindex {
 
     #clear old index array
     $self->{index} = [];
+    $self->{stream} = [];
     $self->{file2index} = {};
 
     #nothing to index
@@ -105,7 +109,8 @@ sub reindex {
 	    my $lock;
 	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
 		push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-		
+		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);		
+
 		#build reverse index to get the correct index based on file name
 		my ($title) = $file =~ /([^\/]+)$/;
 		$self->{file2index}{$title} = $self->{index}->[-1];
@@ -261,8 +266,25 @@ sub get_Seq_by_alias {
 
     my $fastaObj;
     foreach my $db (@index){
-	$fastaObj = FastaSeq->convert($db->get_Seq_by_id($alias), $self->{locs});
+	$fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($alias));
 	last if($fastaObj);
+    }
+
+    return $fastaObj;
+}
+#-------------------------------------------------------------------------------
+sub next_seq {
+    my $self = shift;
+
+    my $fastaObj;
+    while(my $stream = $self->{stream}[0]){
+	if($fastaObj = $stream->next_seq){
+	    $fastaObj = FastaSeq->convert($self->{locs}, $fastaObj);
+	    last if($fastaObj);
+	}
+	else{
+	    shift @{$self->{stream}}
+	}
     }
 
     return $fastaObj;
@@ -362,7 +384,8 @@ sub STORABLE_thaw {
     #build indexes
     while (my $file = shift @files){ 
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
-	
+	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);	
+
 	#build reverse index to get the correct index based on file name
 	my ($title) = $file =~ /([^\/]+)$/;
 	$self->{file2index}{$title} = $self->{index}->[-1];
