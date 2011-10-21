@@ -14,7 +14,7 @@ use vars qw($RANK $LOG $EXE $TMP $LOCK @CMD_ARGS $VERSION);
 use File::Which;
 
 BEGIN{
-   $VERSION = '2.15';
+   $VERSION = '2.16';
    @CMD_ARGS = @ARGV;
 
    #find iprscan
