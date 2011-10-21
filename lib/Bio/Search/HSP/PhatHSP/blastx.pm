@@ -508,7 +508,8 @@ sub cigar_string {
     }
 
     die "ERROR: query and hit string lengths do not match correctly\n".
-        "in Bio::Search:HSP::PhatHSP::blastx\n" if(@q != @h);
+        "in Bio::Search:HSP::PhatHSP::blastx\n".
+	"for hit ".$self->name()."\n" if(@q != @h);
 
     my $cigr = '';
     my $type = ''; # M, I, D

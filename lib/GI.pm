@@ -2871,7 +2871,7 @@ sub runRepeatMasker {
    }
 
    my $t_file;	
-   my $command  = $RepeatMasker;
+   my $command  = "cd $TMP; $RepeatMasker";
 
    if ($rmlib) {
       $command .= " $q_file -dir $dir -pa $cpus -lib $rmlib";
@@ -2935,7 +2935,7 @@ sub set_defaults {
       $CTL_OPT{'pred_pass'} = 0;
       $CTL_OPT{'other_pass'} = 0;
       $CTL_OPT{'est'} = '';
-      $CTL_OPT{'est_reads'} = '';
+      $CTL_OPT{'est_reads'} = ''; #depricated
       $CTL_OPT{'altest'} = '';
       $CTL_OPT{'est_gff'} = '';
       $CTL_OPT{'altest_gff'} = '';
@@ -3688,21 +3688,18 @@ sub load_control_files {
    #decide if require
    if($CTL_OPT{blast_type} =~ /^wublast$/i){
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{est});
-       push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{est_reads}); 
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{protein}); 
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{altest});
    }
    elsif($CTL_OPT{blast_type} =~ /^ncbi$/i){
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est});
-       push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{est_reads}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{protein}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'blastall', 'formatdb') if($CTL_OPT{altest});
    }
    elsif($CTL_OPT{blast_type} =~ /^ncbi\+$/i){
        push (@infiles, 'blastn', 'makeblastdb') if($CTL_OPT{est});
-       push (@infiles, 'blastn', 'makeblastdb') if($CTL_OPT{est_reads}); 
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{protein}); 
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'tblastx', 'makeblastdb') if($CTL_OPT{altest});
@@ -3713,7 +3710,6 @@ sub load_control_files {
    push (@infiles, 'est') if($CTL_OPT{est}); 
    push (@infiles, 'protein') if($CTL_OPT{protein}); 
    push (@infiles, 'altest') if($CTL_OPT{altest}); 
-   push (@infiles, 'est_reads') if($CTL_OPT{est_reads}); 
    push (@infiles, 'probuild') if (grep {/genemark/} @{$CTL_OPT{_run}});
    push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom} && $CTL_OPT{evaluate});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
@@ -4144,7 +4140,6 @@ sub generate_control_files {
        print OUT "\n"if($ev);
        print OUT "#-----EST Evidence (for best results provide a file for at least one)\n";
        print OUT "est=$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
-       print OUT "est_reads=$O{est_reads} #unassembled nextgen mRNASeq in fasta format (not fully implemented)\n";
        print OUT "altest=$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
        print OUT "est_gff=$O{est_gff} #EST evidence from an external gff3 file\n";
        print OUT "altest_gff=$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";

@@ -66,28 +66,43 @@ sub get_numbers {
 #------------------------------------------------------------------------
 sub needs_to_be_revcomped {
 	my $hit = shift;
+	my $seq_o = shift;
 
 	if ($hit->num_hsps == 1){
-	        my $seq = [$hit->hsps()]->[0]->seq('query')->seq();
-		$seq =~ s/[\-\_\+\=\|]//g;
-
-		my $r_seq = [$hit->hsps()]->[0]->seq('query')->revcom()->seq;
-		$r_seq =~ s/[\-\_\+\=\|]//g;
-		
-		my $tM = new CGL::TranslationMachine();
-		(my $p_seq , undef) = $tM->longest_translation($seq);
-		(my $r_p_seq , undef) = $tM->longest_translation($r_seq);
-
-		my $p_len = length($p_seq);
-		my $r_len = length($r_p_seq);
-		if( $p_len >= $r_len){
-		        return 0 if $hit->strand('hit') ==  1;
-		        return 1 if $hit->strand('hit') == -1;
-		}
-		else{
-		        return 1 if $hit->strand('hit') ==  1;
-		        return 0 if $hit->strand('hit') == -1;
-		}
+	    my $seq;
+	    my $r_seq;
+	    
+	    if($seq_o){
+		my $B = [$hit->hsps()]->[0]->nB('query') - 1; #make array space value
+		my $E = [$hit->hsps()]->[0]->nE('query') - 1; #make array space value
+		my $strand = $hit->strand('query');
+		my $length = abs($E - $B) +1; #substr length
+		$seq = FastaSeq::substr_o($seq_o, $B, $length);
+		$r_seq = Fasta::revComp($seq);
+		($seq, $r_seq) = ($r_seq, $seq) if($strand == -1);
+	    }
+	    else{
+		$seq = [$hit->hsps()]->[0]->seq('query')->seq();
+		$r_seq = [$hit->hsps()]->[0]->seq('query')->revcom()->seq;
+	    }
+	    
+	    $seq =~ s/[\-\_\+\=\|]//g;
+	    $r_seq =~ s/[\-\_\+\=\|]//g;
+	    
+	    my $tM = new CGL::TranslationMachine();
+	    (my $p_seq , undef) = $tM->longest_translation($seq);
+	    (my $r_p_seq , undef) = $tM->longest_translation($r_seq);
+	    
+	    my $p_len = length($p_seq);
+	    my $r_len = length($r_p_seq);
+	    if( $p_len >= $r_len){
+		return 0 if $hit->strand('hit') ==  1;
+		return 1 if $hit->strand('hit') == -1;
+	    }
+	    else{
+		return 1 if $hit->strand('hit') ==  1;
+		return 0 if $hit->strand('hit') == -1;
+	    }
 	}
 
 	my $str = get_splice_str($hit);

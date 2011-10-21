@@ -92,7 +92,8 @@ sub cigar_string {
     my @aa = $self->hit_string() =~ /(.)/g;
     
     die "ERROR: query and hit string lengths do not match correctly\n".
-	"in Bio::Search:HSP::PhatHSP::protein2genome\n" if(@nt != @aa);
+	"in Bio::Search:HSP::PhatHSP::protein2genome\n".
+	"for hit ".$self->name()."\n"  if(@nt != @aa);
     
     my $type = ''; # M, I, R, F, R
     my $value = 0;
