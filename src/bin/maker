@@ -86,55 +86,49 @@ use File::NFSLock;
 
 select((select(STDOUT), $|=1)[0]); #make STDOUT buffer flush immediately
 
-my $usage = "
+my $usage = "MAKER version $VERSION
+
 Usage:
 
      maker [options] <maker_opts> <maker_bopts> <maker_exe>
 
-     Maker is a program that produces gene annotations in GFF3 file format using
-     evidence such as EST alignments and protein homology.  Maker can be used to
+
+Description:
+
+     MAKER is a program that produces gene annotations in GFF3 file format using
+     evidence such as EST alignments and protein homology.  MAKER can be used to
      produce gene annotations for new genomes as well as update annotations from
      existing genome databases.
 
-     The three input arguments are user control files that specify how maker
-     should behave. All options for maker should be set in the control files,
+     The three input arguments are user control files that specify how MAKER
+     should behave. All options for MAKER should be set in the control files,
      but a few can also be set on the command line. Command line options provide
      a convenient machanism to override commonly altered control file values.
+     MAKER will automatically search for the control files in the current working
+     directory if they are not specified on the command line.
 
      Input files listed in the control options files must be in fasta format
-     unless otherwise specified. Please see maker documentation to learn more
-     about control file  configuration.  Maker will automatically try and locate
+     unless otherwise specified. Please see MAKER documentation to learn more
+     about control file  configuration.  MAKER will automatically try and locate
      the user control files in the current working directory if these arguments
-     are not supplied when initializing maker.
+     are not supplied when initializing MAKER.
 
-     It is important to note that maker does not try and recalculated data that
+     It is important to note that MAKER does not try and recalculated data that
      it has already calculated.  For example, if you run an analysis twice on
-     the same dataset file you will notice that maker does not rerun any of the
-     blast analyses, but instead uses the blast analyses stored from the
-     previous run.  To force maker to rerun all analyses, use the -f flag.
+     the same dataset you will notice that MAKER does not rerun any of the BLAST
+     analyses, but instead uses the blast analyses stored from the previous run.
+     To force MAKER to rerun all analyses, use the -f flag.
 
+     MAKER also supports parallelization via MPI on computer clusters. Just
+     launch MAKER via mpiexec (Example: mpiexec -n 40 maker). MPI support must be
+     configured during the MAKER installation process for this to work though.
+     
 
 Options:
 
-     -genome|g <filename> Specify the genome file.
+     -genome|g <file>    Overrides the genome file location in the control files.
 
-     -predictor|p <type>  Selects the predictor(s) to use when building
-                          annotations.  Defines a pool of gene models for
-                          annotation selection.
-
-                          types: snap
-                                 augustus
-                                 fgenesh
-                                 genemark
-                                 est2genome (Uses EST's directly)
-                                 protein2genome (For Prokaryotic annotation only)
-                                 model_gff (Pass through GFF3 annotations)
-                                 pred_gff (Uses passed through GFF3 predictions)
-
-                          Use a ',' to separate types (nospaces)
-                          i.e. -predictor=snap,augustus,fgenesh
-
-     -RM_off|R           Turns all repeat masking off.
+     -RM_off|R           Turns all repeat masking options off.
 
      -datastore/         Forcably turn on/off MAKER's use of a two deep datastore
       nodatastore        directory structure for output.  By default this option
@@ -147,20 +141,36 @@ Options:
      -tries|t <integer>  Run contigs up to the specified number of tries.
 
      -cpus|c  <integer>  Tells how many cpus to use for BLAST analysis.
+                         Note: this is for BLAST and not for MPI!
 
-     -force|f            Forces maker to delete old files before running again.
+     -force|f            Forces MAKER to delete old files before running again.
 			 This will require all blast analyses to be rerun.
 
      -again|a            Caculate all annotations and output files again even if
 			 no settings have changed. Does not delete old analyses.
 
-     -evaluate|e         Run Evaluator on final annotations (under development).
+     -quiet|q            Regular quiet. Only a handlful of status messages.
 
-     -quiet|q            Silences most of maker's status messages.
+     -qq                 Even more quit. There are no status messages.
 
-     -qq                 Really quit. Silences everything but major errors.
+     -dsindex            Quickly generate datastore index file. Note that this
+                         will not check if run settings have changed on contigs.
 
      -CTL                Generate empty control files in the current directory.
+
+     -OPTS               Generates just the maker_opts.ctl file.
+
+     -BOPTS              Generates just the maker_bopts.ctl file.
+
+     -EXE                Generates just the maker_exe.ctl file.
+
+     -MWAS    <option>   Easy way to control mwas_server daemon for web-based GUI
+
+                              options:  STOP
+                                        START
+                                        RESTART
+
+     -version            Prints the MAKER version.
 
      -help|?             Prints this usage statement.
 
@@ -192,24 +202,22 @@ try{
 	       "force|f" => \$OPT{force},
 	       "genome|g=s" => \$OPT{genome},
 	       "cpus|c=i" => \$OPT{cpus},
-	       "predictor=s" =>\$OPT{predictor},
 	       "tries=i" =>\$OPT{tries},
-	       "evaluate" =>\$OPT{evaluate},
+	       "dsindex" =>\$OPT{dsindex},
 	       "again|a" =>\$OPT{again},
 	       "quiet|q" =>\$main::quiet,
 	       "qq"    =>\$main::qq,
                "check" =>\$OPT{check},
                "base=s" =>\$OPT{out_name},
                "datastore!" =>\$OPT{datastore},
-	       "fast" => \$OPT{fast},
-	       "dtmp" => \$main::dtmp,
-	       "debug" => \$main::debug,
+	       #"fast" => \$OPT{fast},
                "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); MPI_Finalize(); exit(0);},
-	       "no_threads" =>\$main::no_threads, #for debugging
 	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
                "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); MPI_Finalize(); exit(0);},
                "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); MPI_Finalize(); exit(0);},
                "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); MPI_Finalize(); exit(0);},
+	       "no_threads" =>\$main::no_threads, #for debugging
+	       "debug" => \$main::debug,
 	       "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
 	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
 	       );
@@ -354,8 +362,19 @@ if($rank == $root){
 	
 	#---load genome multifasta/GFF3 file
 	$iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
-	$iterator->step($CTL_OPT{'_step'});
 	$iterator->skip_file($DS_CTL->{log});
+	if($OPT{dbindex}){
+	    $iterator->skip_file($DS_CTL->{log});
+	    while(my $q_def = $iterator->nextDef()){
+		my $id = Fasta::def2SeqID($q_def);
+		my $safe_id = Fasta::seqID2SafeID($id);
+		my $dir = $DS_CTL->id_to_dir($id);
+		my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
+		$DS_CTL->add_entry($id, $dir, $message);
+	    }
+	    exit(0);
+	}
+	$iterator->step($CTL_OPT{'_step'});
     }
     catch Error::Simple with{
 	my $E = shift;
