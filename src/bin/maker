@@ -86,7 +86,8 @@ use File::NFSLock;
 
 select((select(STDOUT), $|=1)[0]); #make STDOUT buffer flush immediately
 
-my $usage = "MAKER version $VERSION
+my $usage = "
+MAKER version $VERSION
 
 Usage:
 
@@ -363,7 +364,8 @@ if($rank == $root){
 	#---load genome multifasta/GFF3 file
 	$iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
 	$iterator->skip_file($DS_CTL->{log});
-	if($OPT{dbindex}){
+	$iterator->step($CTL_OPT{'_step'});
+	if($OPT{dsindex}){
 	    $iterator->skip_file($DS_CTL->{log});
 	    while(my $q_def = $iterator->nextDef()){
 		my $id = Fasta::def2SeqID($q_def);
@@ -374,7 +376,6 @@ if($rank == $root){
 	    }
 	    exit(0);
 	}
-	$iterator->step($CTL_OPT{'_step'});
     }
     catch Error::Simple with{
 	my $E = shift;
