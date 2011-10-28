@@ -241,7 +241,7 @@ sub ACTION_build {
 
     #compile MPI module
     if($self->feature('mpi_support')){
-        use Parallel::Application::MPI;
+        require Parallel::Application::MPI;
 	my $loc = $self->blib();
 	mkdir($loc) if(!$loc);
         Parallel::Application::MPI::_bind($self->config_data('MPICC'),
