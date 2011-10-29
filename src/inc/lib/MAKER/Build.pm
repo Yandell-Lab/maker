@@ -59,7 +59,18 @@ eval 'require Archive::Tar';
 sub new {
     my $class = shift @_;
 
+    my %hash = @_;
     my $self = $class->SUPER::new(@_);
+
+    #fix weird override bug on systems with local::lib
+    if($hash{install_base}){
+	$self->install_base($hash{install_base});
+	$self->config_data(install_base => $hash{install_base});
+    }
+    elsif($self->config_data('install_base')){
+	$self->install_base($self->config_data('install_base'));
+    }
+
     $self->install_base_relpaths('exe' => 'exe');
     bless($self, $class);
 
@@ -70,14 +81,27 @@ sub new {
     return $self;
 }
 
+sub resume {
+    my $class = shift @_;
+    my $self = $class->SUPER::resume(@_);
+
+    #fix weird override bug on systems with local::lib
+    if($self->config_data('install_base')){
+	$self->install_base($self->config_data('install_base'));
+    }
+
+    return $self;
+}
+
 #returns MPI compiler and includes directory
 sub config_mpi {
     my $self = shift;
 
+    my $base = $self->base_dir;
     my $ebase = $self->install_destination('exe');
-    my @exes = grep {/(^|[\/])mpicc$/} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>);
+    my @exes = grep {/(^|[\/])mpicc$/} (<$base/../exe/*/*>, <$base/../exe/*/bin/*>);
     my $mpicc = "$ebase/mpich2/bin/mpicc" if(-f "$ebase/mpich2/bin/mpicc");
-    ($mpicc) = grep {/(^|[\/])mpicc$/} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>) if(!$mpicc);
+    ($mpicc) = grep {/(^|[\/])mpicc$/} (<$base/../exe/*/*>, <$base/../exe/*/bin/*>) if(!$mpicc);
     $mpicc = $self->config('cc') if(! $mpicc && $self->config('cc') =~ /(^|[\/])mpicc$/);
     ($mpicc) = File::Which::where('mpicc') if(!$mpicc || ! -f $mpicc);
 
@@ -486,7 +510,7 @@ sub ACTION_installdeps{
 	my $access = 1 if(-w $Config{installsitelib} && -w $Config{installarchlib});
 	if(!$access){
 	    my ($root_id, $grp_id) = (getpwnam('root'))[2,3];
-	    $access = 1 if($< == $root_id || $> == $root_id); 
+	    $access = 1 if($< == $root_id || $> == $root_id);
 	}
 
 	my $local;
@@ -496,11 +520,18 @@ sub ACTION_installdeps{
 				"in the .../maker/perl/lib directory, or you can run\n".
 				"'./Build installdeps' as root or using sudo and try again.\n".
 				"Do want MAKER to try and build a local installation?", 'N');
+
 	}	
 
-	die "\n\nERROR: You do not have write access to install missing Modules.\n".
-	    "Please run './Build installdeps' as root or using sudo.\n\n" if(!$access && !$local);
+	if(!$access && !$local){
+	    print "\n\nWARNING: You do not appear to have write access to install missing\n".
+		  "Modules. Please run './Build installdeps' as root or using sudo.\n\n";
 
+	    my $go = $self->y_n("Do you want to continue anyway?", 'N');
+
+	    exit(0) unless($go);
+	}
+	
 	foreach my $m (keys %{$prereq->{build_requires}}){    
 	    $self->cpan_install($m, $local);
 	}

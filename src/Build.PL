@@ -14,8 +14,7 @@ use MAKER::Build;
 chdir($FindBin::Bin); #alway go here for safety
 
 #configure Build
-my $build = MAKER::Build->new
-    (
+my $build = MAKER::Build->new(
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
      dist_version_from  => "$FindBin::Bin/version",
