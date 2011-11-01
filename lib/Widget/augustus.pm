@@ -211,6 +211,17 @@ sub run {
 	      print STDERR $line unless($main::quiet);
 	   }
 	   waitpid $pid, 0;
+
+	   #try one more time
+	   if ($? != 0){
+	       ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
+	       $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	       while (my $line = <$CHLD_ERR>){
+		   print STDERR $line unless($main::quiet);
+	       }
+	       waitpid $pid, 0;
+	   }
+
 	   die "ERROR: Augustus failed\n" if $? != 0;
 	}
 	else {
