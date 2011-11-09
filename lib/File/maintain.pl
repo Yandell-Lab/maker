@@ -48,6 +48,12 @@ while(-f $LOCK->{lock_file}){
 	$LOCK->unlock if($LOCK);
 	exit(0);
     }
+    elsif(my $p = Proc::Signal::get_proc_by_id($pid)){
+	if($p->state eq 'zombie'){
+	    $LOCK->unlock if($LOCK);
+	    exit(0);
+	}
+    }
     if($LOCK && ! $LOCK->still_mine){
 	exit(1);
     }

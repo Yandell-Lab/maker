@@ -595,7 +595,11 @@ sub maintain {
     return 0 if(!$self->refresh); #refresh once on it's own
 
     #clean up old maintainers
-    if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
+    my $p = Proc::Signal::get_proc_by_id($self->{_maintain}) if(defined $self->{_maintain});
+    if($p && $p->state ne 'zombie'){
+	return 1;
+    }
+    elsif($p){
 	kill(2, $self->{_maintain});
 	close($self->{_OUT});
 	close($self->{_IN});

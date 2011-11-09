@@ -128,12 +128,18 @@ sub new
 		$self->source($ENV{'CGL_GO_SOURCE'});
 	}
 	else {
+            (my $file = $INC{'CGL/Ontology/GO.pm'}) =~ s/Ontology\/GO\.pm/gene_ontology.obo/;
+            if(-f $file){
+		$self->source($file);
+            }
+            else{
 		print "\n#######################################################\n";
 		print "Error in CGL::Ontology::GO.pm.\n";
 		print "You must either set the GO_OBO_FILE environment varible\n";
 		print "or provide a go.obo file.\n";
 		print "#######################################################\n\n";
 		die;
+	    }
 	}
 
 	# might want to instantiate a variety of parsers, depending on

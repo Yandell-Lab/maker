@@ -128,12 +128,18 @@ sub new
 		$self->source($ENV{'CGL_SO_SOURCE'});
 	}
 	else {
+	    (my $file = $INC{'CGL/Ontology/SO.pm'}) =~ s/Ontology\/SO\.pm/so.obo/;
+	    if(-f $file){
+		$self->source($file);
+	    }
+	    else{
 		print "\n#######################################################\n";
 		print "Error in CGL::Ontology::SO.pm.\n";
 		print "You must either set the CGL_SO_SOURCE environment varible\n";
 		print "or provide a so.obo file.\n";
 		print "#######################################################\n\n";
 		die;
+	    }
 	}
 
 	# might want to instantiate a variety of parsers, depending on
