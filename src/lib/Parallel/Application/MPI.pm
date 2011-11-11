@@ -2,16 +2,10 @@ package Parallel::Application::MPI;
 
 use strict;
 use Carp;
-use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $LOC $CODE $LOADED $WARNED);
+use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $CODE $LOADED $WARNED);
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
 require Exporter;
-
-BEGIN {
-    #Find self location so inline can use it
-    $LOC = $INC{'Parallel/Application/MPI.pm'};
-    $LOC =~ s/\/*(lib\/)?Parallel\/Application\/MPI\.pm$//;
-}
 
 @ISA = qw(Exporter);
 $VERSION = '0.01';
@@ -158,10 +152,9 @@ sub _load {
     require Proc::Signal;
 
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|mpd|orted|hydra_pmi_proxy)$/){	    
+    if($name =~ /^(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|hydra_pmi_proxy)$/){
 	require MAKER::ConfigData;
 	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
-
 	if(! $mpi_support){
 	    warn "** WARNING: You have not configured MAKER to run under MPI.\n".
 		 "** Yet you are attempting to do so!!\n".
@@ -174,16 +167,20 @@ sub _load {
 	    return 0;
 	}
 
+        #Find self location so inline can use it
+        my $loc = $INC{'Parallel/Application/MPI.pm'};
+	$loc =~ s/\/*(lib\/)?Parallel\/Application\/MPI\.pm$//;
+
 	#lock for first compilation only
 	my $lock;
-	if(! -f "$LOC/lib/auto/Parallel/Application/MPI/MPI.bundle"){
+	if(! -f "$loc/lib/auto/Parallel/Application/MPI/MPI.bundle"){
 	    require File::NFSLock;
-	    $lock = new File::NFSLock("$LOC/_MPI", 'EX', 300, 40) while(!$lock);
+	    $lock = new File::NFSLock("$loc/_MPI", 'EX', 300, 40) while(!$lock);
 	}
 
 	_bind(MAKER::ConfigData->config('MPICC'),
 	      MAKER::ConfigData->config('MPIDIR'),
-	      $LOC);
+	      $loc);
 
 	$LOADED = 1;
 	$lock->unlock() if($lock);
@@ -200,7 +197,9 @@ sub _bind {
     my $loc = shift;
 
     eval{
-	Inline->bind(C => $CODE,
+	#this comment is just a way to force Inline::C to recompile on changing MPICC and MPIDIR
+	my $comment = "void _comment() {\nchar comment[] = \"MPICC=$mpicc, MPIDIR=$mpidir\";\n}\n"; 
+	Inline->bind(C => $CODE . $comment,
 		     NAME => 'Parallel::Application::MPI',
 		     DIRECTORY => $loc,
 		     CC => $mpicc,
@@ -225,6 +224,7 @@ sub _bind {
 }
 
 $CODE = <<END;
+
 #include <mpi.h>
 
 double _MPI_ANY_SOURCE () {

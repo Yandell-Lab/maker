@@ -3008,7 +3008,7 @@ sub set_defaults {
 
    #maker_bopts
    if ($type eq 'all' || $type eq 'bopts') {
-      $CTL_OPT{'blast_type'} = 'wublast';
+      $CTL_OPT{'blast_type'} = 'ncbi+';
       $CTL_OPT{'blast_type'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
@@ -3633,9 +3633,9 @@ sub load_control_files {
    if ($CTL_OPT{blast_type} !~ /^wublast$|^ncbi$|^ncbi\+$/) {
       warn "WARNING: blast_type must be set to 'wublast', 'ncbi', or 'ncbi+'.\n",
       "The value $CTL_OPT{blast_type} is invalid.\n",
-      "This will now be reset to the default 'wublast'.\n\n" unless($main::qq);
+      "This will now be reset to the default 'ncbi+'.\n\n" unless($main::qq);
       
-      $CTL_OPT{blast_type} = 'wublast';
+      $CTL_OPT{blast_type} = 'ncbi+';
    }
    
    if (($CTL_OPT{blast_type} =~ /^wublast$/ && ! -f $CTL_OPT{xdformat}) ||
@@ -3643,14 +3643,14 @@ sub load_control_files {
        ($CTL_OPT{blast_type} =~ /^ncbi\+$/ && ! -f $CTL_OPT{makeblastdb})
       ) {
        my $new;
-       if(-f $CTL_OPT{xdformat}){
-	   $new = 'wublast';
+       if(-f $CTL_OPT{makeblastdb}){
+	   $new = 'ncbi+';
        }
        elsif(-f $CTL_OPT{formatdb}){
 	   $new = 'ncbi';
        }
-       elsif(-f $CTL_OPT{makeblastdb}){
-	   $new = 'ncbi+';
+       elsif(-f $CTL_OPT{xdformat}){
+	   $new = 'wublast';
        }
 
        warn "WARNING: blast_type is set to '$CTL_OPT{blast_type}' but executables cannot be located\n" unless($main::qq);
