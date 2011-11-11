@@ -4214,7 +4214,7 @@ sub generate_control_files {
        open (OUT, "> $dir/$app\_bopts.$ext") or
 	   die "ERROR: Could not create $dir/$app\_bopts.$ext\n";
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
-       print OUT "blast_type=$O{blast_type} #set to 'wublast' or 'ncbi'\n";
+       print OUT "blast_type=$O{blast_type} #set to 'ncbi+', 'ncbi' or 'wublast'\n";
        print OUT "\n";
        print OUT "pcov_blastn=$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
        print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
