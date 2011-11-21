@@ -22,7 +22,7 @@ use Carp;
 $VERSION = 0.1;
 
 #===make list of internal variables to log
-my @ctl_to_log = ('genome_gff',
+my @ctl_to_log = ('maker_gff',
 		  'other_gff',
 		  'est',
 		  'est_reads',
@@ -179,6 +179,7 @@ sub _load_old_log {
 		   $stat{$type}{$key} = defined($value) ? $value : '';
 	       }
 	       else{
+		   $key = 'maker_gff' if($key eq 'genome_gff'); #for backwards compatability
 		   $logged_vals{$type}{$key} = defined($value) ? $value : '';
 	       }
 	       
@@ -301,12 +302,11 @@ sub _load_old_log {
 		if($key =~ /^est_pass$|^altest_pass$|^protein_pass$|^rm_pass$/ ||
 		   $key =~ /^pred_pass$|^model_pass$|^other_pass$/
 		   ){
-		    next unless($CTL_OPT{genome_gff});
-		    my $old = (exists $logged_vals{CTL_OPTIONS}{genome_gff}) ? 
-			$logged_vals{CTL_OPTIONS}{genome_gff} : '';
+		    next unless($CTL_OPT{maker_gff});
+		    my $old = $logged_vals{CTL_OPTIONS}{maker_gff} || '';
 		    $old =~ s/(^|\,)$CWD\/*/$1/g;
 		    $old = join(',', sort split(',', $old));
-		    my $new = $CTL_OPT{genome_gff};
+		    my $new = $CTL_OPT{maker_gff};
 		    $new =~ s/(^|\,)$CWD\/*/$1/g;
 		    $new = join(',', sort split(',', $new));
 
@@ -317,7 +317,7 @@ sub _load_old_log {
 
                 #these are only sometimes important
                 if($key =~ /^map_forward$/){
-                    next unless($CTL_OPT{genome_gff} || $CTL_OPT{model_gff});
+                    next unless($CTL_OPT{maker_gff} || $CTL_OPT{model_gff});
                 }
 		
 		my $log_val = '';

@@ -50,7 +50,7 @@ sub new {
 	    $self->initiate();
 	    return $self unless($self->{go_gffdb});
 	    
-	    $self->add_maker($CTL_OPT->{genome_gff},$CTL_OPT);
+	    $self->add_maker($CTL_OPT->{maker_gff},$CTL_OPT);
 	    $self->add_repeat($CTL_OPT->{rm_gff});
 	    $self->add_est($CTL_OPT->{est_gff});
 	    $self->add_altest($CTL_OPT->{altest_gff});

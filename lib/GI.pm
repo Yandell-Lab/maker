@@ -45,6 +45,8 @@ use repeat_mask_seq;
 use maker::sens_spec;
 use Digest::MD5;
 use FastaDB;
+use List::Util;
+use Sys::Hostname;
 
 @ISA = qw(
 	);
@@ -59,68 +61,82 @@ sub version {
     return $VERSION;
 }
 #------------------------------------------------------------------------
-sub set_global_temp {
-    my $dirs = shift;
-    my $id  = shift;
-    
-    return if(! $dirs);
+sub new_instance_temp {
+    my $base = shift;
 
-    $dirs = [$dirs] if(!ref($dirs));
-
-    foreach my $dir (@$dirs){
-	#remove old tempdir if user supplied a new one
-	if($TMP ne $dir){
-	    print STDERR "\nTMP_STAT: Trying to change TMP from $TMP to $dir: PID=$$\n"
-		if($main::dtmp); ##debug
-	    my $base = $dir;
-	    $base =~ s/[^\/]+$//;
-	    
-	    if(! -d $base){
-		print STDERR "TMP_STAT: base directory $base does not exist, keeping TMP as $TMP: PID=$$\n"
-		    if($main::dtmp); ##debug
-		next;
-	    }
-	    
-	    if(! -d $dir){
-		print STDERR "TMP_STAT: base directory $base exists but directory $dir does not, trying to create: PID=$$\n"
-		    if($main::dtmp); ##debug
-		mkdir($dir);
-	    }
-	    
-	    if(! -d $dir){
-		print STDERR "TMP_STAT: directory $dir does not exist, keeping TMP as $TMP: PID=$$\n\n"
-		    if($main::dtmp); ##debug
-		next;
-	    }
-
-	    if($id && -f "$dir/.tempid"){
-		open(my $IN, "< $dir/.tempid");
-		my $line = <$IN>;
-		chomp $line;
-		close($IN);
-		next if($id ne $line);
-	    }
-	    elsif($id){
-		open(my $OUT, "> $dir/.tempid");
-		print $OUT $id."\n";
-		close($OUT);
-	    }
-
-	    File::Path::rmtree($TMP);
-	    
-	    $TMP = $dir;
-	    print STDERR "TMP_STAT: Success TMP is now $dir: PID=$$\n\n"
-		if($main::dtmp); ##debug
-	    return;
-	}
+    if($base && -d $base){
+	my $dir = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $base);
+	set_global_temp($dir);
     }
+
+    return get_global_temp();
+}
+#------------------------------------------------------------------------
+sub mount_check {
+    my $path = shift;
+    return undef if(! -e $path);
+
+    $path = Cwd::abs_path($path);
+    my $host = Sys::Hostname::hostname();
+    my $p = quotemeta($path); #handles escapable characters
+
+    #get only line with mount point
+    open(DF, "df -P $p |");
+    my @F;
+    while(my $line = <DF>){
+        chomp $line;
+        @F = split(/\s+/, $line);
+
+        last if grep {/\%/} @F;
+    }
+
+    #accept mount points with spaces
+    my $mounted_on = '';
+    my $filesystem = '';
+    for(my $i = $#F; $i >= 0; $i--){
+        if($F[$i] =~ /^\d+\%$/ &&
+           -e $mounted_on &&
+         Cwd::abs_path($mounted_on) eq $mounted_on
+            ){
+            $filesystem = join(' ', @F[0..$i-4]);
+            last;
+        }
+
+        $mounted_on = ($mounted_on) ? "$F[$i] $mounted_on" : $F[$i];
+    }
+    $mounted_on = Cwd::abs_path($mounted_on);
+
+    #build new mount point
+    if($filesystem =~ /\:/){
+        $mounted_on = quotemeta($mounted_on);
+        $path =~ s/^$mounted_on//;
+        $path = "$filesystem/$path";
+        $path =~ s/\/\/+/\//g;
+        return $path;
+    }
+
+    return "$host:$path";
+}
+#------------------------------------------------------------------------
+sub set_global_temp {
+    my $dir = shift;
+    
+    return if(! $dir || ! -d $dir);
+
+    #remove old tempdir if user supplied a new one
+    if(Cwd::abs_path($TMP) ne Cwd::abs_path($dir)){
+	File::Path::rmtree($TMP);
+    }
+
+    $TMP = $dir;
 }
 #------------------------------------------------------------------------
 sub get_global_temp {
+    
     return $TMP;
 }
 #------------------------------------------------------------------------
-    sub LOCK {
+sub LOCK {
     return $LOCK;
 }
 #------------------------------------------------------------------------
@@ -677,85 +693,83 @@ sub write_p_and_t_fastas{
     }
 }
 #----------------------------------------------------------------------------
+sub get_split_args {
+    my $CTL_OPT = shift;
+    my @set = @_ || qw(genome est altest protein repeat_protein);
+
+    my @to_split;
+    foreach my $in (@set){
+	my @files = split(/\,/, $CTL_OPT->{$in});
+	my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
+	@files = map {($uniq{$_}) ? s_abs_path($_).":$_" : $_} keys %uniq;
+	
+	foreach my $file (@files){
+	    my $bins = ($in eq 'genome') ? 1 : 10;
+	    my $alt  = ($in =~ /protein/) ? $CTL_OPT->{mpi_blastdb} : undef;
+	    my @args = ($file, $CTL_OPT->{mpi_blastdb}, $bins, $alt);
+	    push(@to_split, \@args);
+	}
+    }
+
+    return @to_split;
+}
+#----------------------------------------------------------------------------
+sub localize_file {
+    my $file = shift;
+    croak "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
+    
+    my ($name) = $file =~ /([^\/]+)$/;
+    my $tmp = GI::get_global_temp();
+    
+    my $lock;
+    while(! $lock || ! $lock->still_mine){
+	$lock = new File::NFSLock("$tmp/$name", 'EX', 1800, 60);
+	$lock->maintain(30);
+    }
+    
+    if(!-f "$tmp/$name"){
+	File::Copy::copy($file, "$tmp/$name.tmp");
+	link("$tmp/$name.tmp", "$tmp/$name");
+	unlink("$tmp/$name.tmp");
+    }
+    
+    $lock->unlock;
+    
+    return "$tmp/$name";
+}
+#----------------------------------------------------------------------------
 sub create_blastdb {
    my $CTL_OPT = shift @_;
 
-   #rebuild all fastas when specified by removing all existing ones
-   if ($CTL_OPT->{force} &&
-       !$CTL_OPT->{_multi_chpc} &&
-       !$CTL_OPT->{_not_root}
-       ){       
-       my $lock = new File::NFSLock($CTL_OPT->{mpi_blastdb}, 'EX', 1800, 60);
-       File::Path::rmtree($CTL_OPT->{mpi_blastdb});
-       $lock->unlock;
-   }
-   
-   my $b_dir = $CTL_OPT->{mpi_blastdb};
-   mkdir($b_dir) if(! -d $b_dir);
+   my $bdir = $CTL_OPT->{mpi_blastdb};
+   mkdir($bdir) if(! -d $bdir);
 
-   #prototype
-   my @prot = (['', '_p_db', 'protein', 10],
-	       ['', '_e_db', 'est', 10],
-	       ['', '_a_db', 'altest', 10],
-	       ['', '_r_db', 'repeat_protein', 10],
-	       ['', '_g_db', 'genome', 1]
-	       );
-   
-   #sets built on prototype
-   my @sets;
-   foreach my $p (@prot){
-      my @list = split(',', $CTL_OPT->{$p->[2]});
-      $CTL_OPT->{$p->[1]} = []; #initialize
+   my %source2dest = (genome         => '_g_db',
+		      protein        => '_p_db',
+		      est            => '_e_db',
+		      altest         => '_a_db',
+		      repeat_protein => '_r_db');
 
-      #genome will always be split size of 1
-      if($p->[2] eq 'genome'){
-	 @list = split(',', $CTL_OPT->{$p->[2]."_gff"}) if(!@list);
-	 push(@sets, [$list[0], $p->[1], $p->[2], $p->[3]]);
-	 next;
-      }
+   foreach my $in (List::Util::shuffle(keys %source2dest)){
+       $CTL_OPT->{$source2dest{$in}} = [];
+       my @files = split(/\,/, $CTL_OPT->{$in});
+       my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
+       @files = map {($uniq{$_}) ? s_abs_path($_).":$_" : $_} keys %uniq;
 
-      foreach my $e (@list){
-	 my ($f, $l) = split(':', $e);
+       my $key  = ($in =~ /protein/) ? 'protein' : 'nucleotide';
+       my $bins = ($in eq 'genome') ? 1 : 10;
+       my $bdir = $CTL_OPT->{mpi_blastdb};
+       my $alt  = $CTL_OPT->{alt_peptide};
 
-	 #fix db_split size for very large files
-	 my $split = (-s $f < 1000000000) ? $p->[3] : 30;
-	 push(@sets, [$e, $p->[1], $p->[2], $split]);
-      }
-   }
-
-   my @check;
-   while(my $set = shift @sets){
-       my ($f, $l) = split(':', $set->[0]);
-       my ($f_name) = $f =~ /([^\/]+)$/;
-       $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-       my $l_name = "$b_dir/$f_name";
-       my $lock;
-       if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
-	  push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3], $set->[4])});
-	  $lock->unlock;
+       my @to_do = map {[$_, $key, $bins, $bdir, $alt]} @files;
+       foreach my $args (@to_do){
+	   my $db = split_db(@$args);
+	   push(@{$CTL_OPT->{$source2dest{$in}}}, @$db);
        }
-       else{
-	  push(@check, $set);
-       }
-   }
-
-   while(my $set = shift @check){
-      my ($f, $l) = split(':', $set->[0]);
-      my ($f_name) = $f =~ /([^\/]+)$/;
-      $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-      my $l_name = "$b_dir/$f_name";
-      my $lock;
-      if(($lock = new File::NFSLock("$l_name", 'NB', 1800, 50)) && $lock->maintain(30)){
-	 push(@{$CTL_OPT->{$set->[1]}}, @{split_db($CTL_OPT,$set->[0], $set->[2], $set->[3], $set->[4])});
-	 $lock->unlock;
-      }
-      else{
-	 push(@check, $set);
-      }
    }
 
    #handle maker_coor hints given in fasta headers
-   if(!$CTL_OPT->{_not_root} & $CTL_OPT->{est_forward}){
+   if($CTL_OPT->{est_forward}){
        my %to_exonerate;
        foreach my $db (@{$CTL_OPT->{_e_db}}){
 	   open(IN, "< $db");
@@ -794,163 +808,164 @@ sub concatenate_files {
 }
 #----------------------------------------------------------------------------
 sub split_db {
-   my $CTL_OPT  = shift @_;
-   my $entry    = shift @_ || 1;
-   my $key      = shift @_;
-   my $max      = shift;
+    my $entry = shift;
+    my $key   = shift;
+    my $bins  = shift;
+    my $b_dir = shift;
+    my $alt   = shift;
 
-   my $alt = $CTL_OPT->{alt_peptide} if($key =~ /protein/);
+    mkdir($b_dir) if(! -d $b_dir);
    
-   return ([]) if (! $entry);
-   
-   my @db_files;
-   my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-   
-   my ($f_name) = $file =~ /([^\/]+)$/;
-   $f_name = uri_escape($f_name, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-   my $b_dir = $CTL_OPT->{mpi_blastdb};
-   my $bins = $max;
-   #$bins = ($bins % 10 == 0) ? (int(($bins/$f_count)/10))*10 : (int(($bins/$f_count)/10)+1)*10;
-   #$bins = 10 if($bins < 10);
-   my $d_name = "$f_name\.mpi\.$bins";
-   my $f_dir = "$b_dir/$d_name";
-   my $t_dir = $TMP."/$d_name";
-   
-   #check if likely already finished
-   my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+    my @db_files;
+    my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;    
+    my ($f_name) = $file =~ /([^\/]+)$/;
+    $f_name = uri_escape($f_name, '^a-zA-Z0-9\-\_');
+    my $d_name = "$f_name\.mpi\.$bins";
+    my $f_dir = "$b_dir/$d_name";
+    my $t_dir = $TMP."/$d_name";
+    $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
-   if(@t_db == $bins){ #use existing if right count
-      push(@db_files, @t_db);
-      return \@db_files;
-   }
-   else{
-      File::Path::rmtree($f_dir);
-   }
+    my $lock;
+    while(! $lock || ! $lock->still_mine){
+	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
+	$lock->maintain(30);
+    }
+
+    #check if already finished
+    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+    if(@t_db == $bins){ #use existing if right count
+	push(@db_files, @t_db);
+	$lock->unlock if($lock);
+	return \@db_files;
+    }
+    else{
+	File::Path::rmtree($f_dir);
+    }
+    
+    #set up a new database
+    my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
+    my $count = 0;
+    while($fasta_iterator->nextDef){
+	$count++;
+	last if($count > $bins * 10 || $bins == 1);
+    }
+    die "ERROR: The fasta file $file appears to be empty.\n" if(! $count);
+    my $max = ($count > 10) ? int($count / 10) : 1; #min seq per bin
+    $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #rebuild
+    
+    if ($max < $bins){
+	$bins = $max;
+	$d_name = "$f_name\.mpi\.$bins";
+	$f_dir = "$b_dir/$d_name";
+	$t_dir = $TMP."/$d_name";
+    }
    
-   #set up a new database
-   my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
-   my $count = 0;
-   while($fasta_iterator->nextDef){
-      $count++;
-      last if($count > $max * 10);
-   }
-   die "ERROR: The fasta file $file appears to be empty.\n" if(! $count);
-   my $new_max = ($count > 10) ? int($count / 10) : 1; #min seq per bin
-   $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #rebuild
-   
-   if ($new_max < $bins){
-      $bins = $new_max;
-      $d_name = "$f_name\.mpi\.$bins";
-      $f_dir = "$b_dir/$d_name";
-      $t_dir = $TMP."/$d_name";
-   }
-   
-   #make needed output directories
-   mkdir($t_dir);
-   mkdir($b_dir) unless (-e $b_dir);
-   
-   if(-e "$f_dir"){ #on multi processors check if finished
-      my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-      
-      if(@t_db == $bins){ #use existing if right count
-	 push(@db_files, @t_db);
-	 return \@db_files;
-      }
-      else{ #remove if there is an error
-	 File::Path::rmtree($f_dir);
-      }
-   }
-      
-   #open filehandles for  pieces on multi processors
-   my @fhs;
-   
-   for (my $i = 0; $i < $bins; $i++) {
-      my $name = "$t_dir/$d_name\.$i";
-      my $fh;
-      open ($fh, "> $name");
-      
-      push (@fhs, $fh);
-   }
-   
-   #write fastas here
-   my %alias;
-   
-   my $wflag = 1; #flag set so warnings gets printed only once 
-   while (my $fasta = $fasta_iterator->nextFastaRef()) {
-      my $def = Fasta::getDef($fasta);
-      my $seq_id = Fasta::def2SeqID($def);
-      my $seq_ref = Fasta::fasta2seqRef($fasta);
-      
-      #fix non standard peptides
-      if (defined $alt) {
-	 $$seq_ref =~ tr/[a-z]/[A-Z]/;
-	 $$seq_ref =~ s/[\*\-]//g;
-	 $$seq_ref =~ s/[^ACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
-      }
-      #fix nucleotide sequences
-      elsif($key !~ /protein/){
-	 #most programs use N for masking but for some reason the NCBI decided to
-	 #use X to mask their sequence, which causes many many programs to fail
-	 $$seq_ref =~ tr/[a-z]/[A-Z]/;
-	 $$seq_ref =~ s/\-//g;
-	 $$seq_ref =~ s/X/N/g;
-	 die "ERROR: The nucleotide sequence file \'$file\'\n".
-	     "appears to contain protein sequence or unrecognized characters.\n".
-	     "Please check/fix the file before continuing.\n".
-	     "Invalid Character: $1\n\n"
-	     if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/);
-      }
-      
-      #Skip empty fasta entries
-      next if($$seq_ref eq '');
-      
-      #fix weird blast trimming error for long seq IDs by replacing them
-      if(length($seq_id) > 78){
-	 warn "WARNING: The fasta file contains sequences with names longer\n".
-	     "than 78 characters.  Long names get trimmed by BLAST, making\n".
-	     "it harder to identify the source of an alignmnet. You might\n".
-	     "want to reformat the fasta file with shorter IDs.\n".
-	     "File_name:$file\n\n" if($wflag-- > 0);
-	 
-	 my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
-	 
-	 die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
-	     if($alias{$new_id});
-	 
-	 $alias{$new_id}++;
-	 $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
-      }
-      
-      #reformat fasta, just incase
-      my $fasta_ref = Fasta::seq2fastaRef($def, $seq_ref);
-      
-      #build part files
-      my $fh = shift @fhs;
-      print $fh $$fasta_ref;
-      push (@fhs, $fh);
-   }
-      
-   #close part file handles
-   foreach my $fh (@fhs) {
-      close ($fh);
-   }
-   
-   #move finished file directory into place
-   system("mv $t_dir $f_dir"); #File::Copy::move cannot move directories
-   
-   #check if everything is ok
-   if (-e $f_dir) { #multi processor
-      my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
-      
-      confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
-      
-      push(@db_files, @t_db);
-   }
-   else {
-      confess "ERROR: Could not split db\n"; #not ok
-   }
-   
-   return \@db_files;
+    #make needed output directories
+    mkdir($t_dir);
+    mkdir($b_dir) unless (-e $b_dir);
+    
+    if(-e "$f_dir"){ #on multi processors check if finished
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	
+	if(@t_db == $bins){ #use existing if right count
+	    push(@db_files, @t_db);
+	    $lock->unlock if($lock);
+	    return \@db_files;
+	}
+	else{ #remove if there is an error
+	    File::Path::rmtree($f_dir);
+	}
+    }
+    
+    #open filehandles for  pieces on multi processors
+    my @fhs;    
+    for (my $i = 0; $i < $bins; $i++) {
+	my $name = "$t_dir/$d_name\.$i";
+	my $fh;
+	open ($fh, "> $name");
+	push (@fhs, $fh);
+    }
+    
+    #write fastas here
+    my %alias;
+    
+    my $wflag = 1; #flag set so warnings gets printed only once 
+    while (my $fasta = $fasta_iterator->nextFastaRef()) {
+	my $def = Fasta::getDef($fasta);
+	my $seq_id = Fasta::def2SeqID($def);
+	my $seq_ref = Fasta::fasta2seqRef($fasta);
+	
+	#fix non standard peptides
+	if ($key =~ /protein/ && defined $alt) {
+	    $$seq_ref =~ tr/[a-z]/[A-Z]/;
+	    $$seq_ref =~ s/[\*\-]//g;
+	    $$seq_ref =~ s/[^ACDEFGHIKLMNPQRSTVWYX\-\n]/$alt/g;
+	}
+	#fix nucleotide sequences
+	elsif($key !~ /protein/){
+	    #most programs use N for masking but for some reason the NCBI decided to
+	    #use X to mask their sequence, which causes many many programs to fail
+	    $$seq_ref =~ tr/[a-z]/[A-Z]/;
+	    $$seq_ref =~ s/\-//g;
+	    $$seq_ref =~ s/X/N/g;
+	    die "ERROR: The nucleotide sequence file \'$file\'\n".
+		"appears to contain protein sequence or unrecognized characters.\n".
+		"Please check/fix the file before continuing.\n".
+		"Invalid Character: $1\n\n"
+		if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/);
+	}
+	
+	#Skip empty fasta entries
+	next if($$seq_ref eq '');
+	
+	#fix weird blast trimming error for long seq IDs by replacing them
+	if(length($seq_id) > 78){
+	    warn "WARNING: The fasta file contains sequences with names longer\n".
+		"than 78 characters.  Long names get trimmed by BLAST, making\n".
+		"it harder to identify the source of an alignmnet. You might\n".
+		"want to reformat the fasta file with shorter IDs.\n".
+		"File_name:$file\n\n" if($wflag-- > 0);
+	    
+	    my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
+	    
+	    die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+		if($alias{$new_id});
+	    
+	    $alias{$new_id}++;
+	    $def =~ s/^(>\S+)/$1 MD5_alias=$new_id/;
+	}
+	
+	#reformat fasta, just incase
+	my $fasta_ref = Fasta::seq2fastaRef($def, $seq_ref);
+	
+	#build part files
+	my $fh = shift @fhs;
+	print $fh $$fasta_ref;
+	push (@fhs, $fh);
+    }
+    
+    #close part file handles
+    foreach my $fh (@fhs) {
+	close ($fh);
+    }
+    
+    #move finished file directory into place
+    system("mv $t_dir $f_dir"); #File::Copy::move cannot move directories
+    
+    #check if everything is ok
+    if (-e $f_dir) { #multi processor
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	
+	confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
+	
+	push(@db_files, @t_db);
+    }
+    else {
+	confess "ERROR: Could not split db\n"; #not ok
+    }
+    
+    $lock->unlock() if $lock;
+    return \@db_files;
 }
 #-----------------------------------------------------------------------------
 sub flatten {
@@ -1613,9 +1628,6 @@ sub build_all_indexes {
 	     );
 
    my $index = build_fasta_index(\@dbs);
-   $index->reindex() if($CTL_OPT->{force} &&
-			!$CTL_OPT->{_not_root} &&
-			!$CTL_OPT->{_multi_chpc});
 }
 #-----------------------------------------------------------------------------
 sub dbformat {
@@ -2926,7 +2938,7 @@ sub set_defaults {
    #maker_opts
    if ($type eq 'all' || $type eq 'opts') {
       $CTL_OPT{'genome'} = '';
-      $CTL_OPT{'genome_gff'} = '';
+      $CTL_OPT{'maker_gff'} = '';
       $CTL_OPT{'est_pass'} = 0;
       $CTL_OPT{'altest_pass'} = 0;
       $CTL_OPT{'protein_pass'} = 0;
@@ -3558,7 +3570,7 @@ sub load_control_files {
        $CTL_OPT{rmlib} eq '' &&
        $CTL_OPT{rm_gff} eq '' &&
        ($CTL_OPT{rm_pass} == 0 ||
-	$CTL_OPT{genome_gff} eq '')
+	$CTL_OPT{maker_gff} eq '')
       ) {
        $CTL_OPT{unmask} = 0;
        $CTL_OPT{_no_mask} = 1; #no masking options found
@@ -3571,10 +3583,10 @@ sub load_control_files {
        $CTL_OPT{evaluate} = 1;
 
        #evaluator only handles one or the other
-       if($CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){
+       if($CTL_OPT{maker_gff} && $CTL_OPT{model_gff}){
 	   $error .= "ERROR: In EVALUATOR you can have either models from a MAKER\n".
 	       "produced GFF3 file or models from an external GFF3 file, but\n".
-	       "not both (Check 'genome_gff' and 'model_gff' options)!\n\n";
+	       "not both (Check 'maker_gff' and 'model_gff' options)!\n\n";
        }
    }
 
@@ -3590,8 +3602,8 @@ sub load_control_files {
    
    if(! @predictors){ #build predictors if not provided
        push(@predictors, @run);
-       push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff} || ($CTL_OPT{genome_gff} && $CTL_OPT{pred_pass}));
-       push(@predictors, 'model_gff') if($CTL_OPT{model_gff} || ($CTL_OPT{genome_gff} && $CTL_OPT{model_pass}));
+       push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff} || ($CTL_OPT{maker_gff} && $CTL_OPT{pred_pass}));
+       push(@predictors, 'model_gff') if($CTL_OPT{model_gff} || ($CTL_OPT{maker_gff} && $CTL_OPT{model_pass}));
    }
    push(@predictors, 'est2genome') if($CTL_OPT{est2genome} && ! $main::eva);
    push(@predictors, 'protein2genome') if($CTL_OPT{protein2genome} && ! $main::eva);
@@ -3599,8 +3611,8 @@ sub load_control_files {
    $CTL_OPT{_predictor} = {}; #temporary hash
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
-       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^model_gff$|^pred_gff$/
+       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$/ &&
+	   $p !~ /^fgenesh$|^genemark$|^model_gff$|^pred_gff$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -3681,11 +3693,7 @@ sub load_control_files {
    }
    
    #--validate existence of required values from control files
-
-   #required files in here
    my @infiles;
-
-   #decide if require
    if($CTL_OPT{blast_type} =~ /^wublast$/i){
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{est});
        push (@infiles, 'blasta', 'xdformat') if($CTL_OPT{protein}); 
@@ -3705,8 +3713,7 @@ sub load_control_files {
        push (@infiles, 'tblastx', 'makeblastdb') if($CTL_OPT{altest});
    }
 
-   push (@infiles, 'genome') if($CTL_OPT{genome});
-   push (@infiles, 'genome') if(!$CTL_OPT{genome_gff});
+   push (@infiles, 'genome');
    push (@infiles, 'est') if($CTL_OPT{est}); 
    push (@infiles, 'protein') if($CTL_OPT{protein}); 
    push (@infiles, 'altest') if($CTL_OPT{altest}); 
@@ -3714,7 +3721,7 @@ sub load_control_files {
    push (@infiles, 'fathom') if ($CTL_OPT{enable_fathom} && $CTL_OPT{evaluate});
    push (@infiles, 'est_gff') if($CTL_OPT{est_gff});
    push (@infiles, 'protein_gff') if($CTL_OPT{protein_gff});
-   push (@infiles, 'genome_gff') if($CTL_OPT{genome_gff});
+   push (@infiles, 'maker_gff') if($CTL_OPT{maker_gff});
    push (@infiles, 'pred_gff') if($CTL_OPT{pred_gff});
    push (@infiles, 'model_gff') if ($CTL_OPT{model_gff});
    push (@infiles, 'snap') if (grep {/snap/} @{$CTL_OPT{_run}});
@@ -3746,33 +3753,28 @@ sub load_control_files {
 	 $error .= "ERROR: You have failed to provide a value for \'$in\' in the control files.\n\n";
 	 next;
       }
-      elsif ((my @files = split(/\,/, $CTL_OPT{$in}))){#handle comma separated list
-	  my %uniq; #make files uniq
-	  @files = grep {! $uniq{$_}++} @files;
-	  my @non = grep {/^([^\:]+)/ && ! -f $1} @files;
-	  $error .= "ERROR: The \'$in\' file[s] ".join(', ', @files)." do not exist.\n".
+      else{
+	  my @files = split(/\,/, $CTL_OPT{$in}); #handle comma separated list
+	  my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
+	  my @non = grep {! -f $_} keys %uniq;
+	  $error .= "ERROR: The \'$in\' file[s] ".join(', ', @non)." do not exist.\n".
 	      "Please check settings in the control files.\n\n"if(@non);
 
-	  @files = map {s_abs_path($_)} @files;
-	  $CTL_OPT{$in} = join(',', @files); #order entries for logging (lets run log work as is)
-      }
-      else{
-	  #set the absolute path to the file to reduce ambiguity
-	  #special s_abs_path doesn't break symbolic links
-	  $CTL_OPT{$in} = s_abs_path($CTL_OPT{$in});
+	  @files = map {($uniq{$_}) ? s_abs_path($_).":$uniq{$_}" : s_abs_path($_)} keys %uniq;
+	  $CTL_OPT{$in} = join(',', @files); #order entries for logging
       }
    }
 
    #--error check sometimes required values
    if ((grep {/model_gff/} @{$CTL_OPT{_predictor}}) &&
        !$CTL_OPT{model_gff} &&
-       (!$CTL_OPT{genome_gff} || !$CTL_OPT{model_pass})
+       (!$CTL_OPT{maker_gff} || !$CTL_OPT{model_pass})
       ){
        $error .= "ERROR: You must provide gene models in a GFF3 file to use model_gff as a predictor.\n\n";
    }
    if ((grep {/pred_gff/} @{$CTL_OPT{_predictor}}) &&
        !$CTL_OPT{pred_gff} &&
-       (!$CTL_OPT{genome_gff} || !$CTL_OPT{pred_pass})
+       (!$CTL_OPT{maker_gff} || !$CTL_OPT{pred_pass})
       ){
        $error .= "ERROR: You must provide gene predictions in a GFF3 file to use pred_gff as a predictor.\n\n";
    }
@@ -3781,14 +3783,14 @@ sub load_control_files {
        !$CTL_OPT{altest} &&
        !$CTL_OPT{est_gff} &&
        !$CTL_OPT{altest_gff} &&
-       (!$CTL_OPT{est_pass} || !$CTL_OPT{genome_gff})
+       (!$CTL_OPT{est_pass} || !$CTL_OPT{maker_gff})
       ){
        $error .= "ERROR: You must provide some form of EST evidence to use est2genome as a predictor.\n\n";
    } 
    if ((grep {/protein2genome/} @{$CTL_OPT{_predictor}}) &&
        !$CTL_OPT{protein} &&
        !$CTL_OPT{protein_gff} &&
-       (!$CTL_OPT{protein_pass} || !$CTL_OPT{genome_gff})
+       (!$CTL_OPT{protein_pass} || !$CTL_OPT{maker_gff})
        ){
        $error .= "ERROR: You must provide some form of protein evidence to use protein2genome as a predictor.\n\n";
    }
@@ -3918,12 +3920,12 @@ sub load_control_files {
       warn "WARNING: \'tries\' must be set to 0 or greater.\n".
 	   "It will now be set to 0\n\n";
       $CTL_OPT{tries} = 1;
-   } 
+   }
    if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
        $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist.\n\n";
    }
-   if($main::eva && $CTL_OPT{genome_gff} && $CTL_OPT{model_gff}){ #only for evaluator
-       $error .= "You can only specify a GFF3 file for genome_gff or model_gff no both!!\n\n";
+   if($main::eva && $CTL_OPT{maker_gff} && $CTL_OPT{model_gff}){ #only for evaluator
+       $error .= "You can only specify a GFF3 file for maker_gff or model_gff no both!!\n\n";
    }
 
    #--if just parsing without error check stop here
@@ -3932,31 +3934,18 @@ sub load_control_files {
    #--report errors
    die $error if ($error);   
 
-   #--check genome fasta file
-   my $fasta_gff = ($CTL_OPT{genome_gff}) ? $CTL_OPT{genome_gff} : $CTL_OPT{model_gff};
+   #--check genome file for fasta entries
    my $iterator = new Iterator::Any( -fasta => $CTL_OPT{genome},
-				     -gff => $fasta_gff
+				     -gff => $CTL_OPT{genome}
 				   );
-
+   
    unless($iterator->nextDef) {
-      my $genome = (! $CTL_OPT{genome}) ? $fasta_gff : $CTL_OPT{genome};
+      my $genome = $CTL_OPT{genome};
       die "ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
    #--decide whether to force datastore, datastore will already be defined if selected by user 
    $CTL_OPT{datastore} = 1 if(! defined $CTL_OPT{datastore}); #on by default
-   #if(! defined $CTL_OPT{datastore}){
-   #    if($iterator->number_of_entries() > 1000) {
-   #	   warn "WARNING:  There are more than 1000 fasta entries in the input file.\n".
-   #	       "A two depth datastore will be used to avoid overloading the data structure of\n".
-   #	       "the output directory.\n\n" unless($main::qq);
-   #	   
-   #	   $CTL_OPT{datastore} = 1;
-   #    }
-   #    else{
-   #	   $CTL_OPT{datastore} = 0;
-   #    }
-   #}
 
    #--decide if gff database should be created
    my @gffs = grep {/\_gff$/} @{[keys %CTL_OPT]};
@@ -3977,7 +3966,6 @@ sub load_control_files {
 
    #--set values for datastructure
    my $genome = $CTL_OPT{genome};
-   $genome = $CTL_OPT{genome_gff} if (not $genome);
    $CTL_OPT{CWD} = Cwd::cwd();
    if(! $CTL_OPT{out_name}){
        ($CTL_OPT{out_name}) = $genome =~ /([^\/]+)$/;
@@ -3995,18 +3983,6 @@ sub load_control_files {
    mkdir($CTL_OPT{out_base}) if(! -d $CTL_OPT{out_base});
    confess "ERROR: Could not build output directory $CTL_OPT{out_base}\n"
         if(! -d $CTL_OPT{out_base});
-
-   #--set up optional global TMP (If TMP is not accessible from other nodes
-   #they will default back to /tmp)
-   if($CTL_OPT{TMP}){
-       print STDERR "\nTMP_STAT: User specified TMP is $CTL_OPT{TMP}: PID=$$-root\n" if($main::dtmp); ##temp
-       $CTL_OPT{_TMP} = tempdir("maker_XXXXXX", CLEANUP => 1, DIR => $CTL_OPT{TMP});
-   }
-   else{
-       $CTL_OPT{_TMP} = $TMP;
-   }
-   $CTL_OPT{_job_id} = (new File::NFSLock("$CTL_OPT{_TMP}/tempid", 'SH', 40, 40))->shared_id;
-   set_global_temp($CTL_OPT{_TMP}, $CTL_OPT{_job_id}); #wglobal for all nodes in this job
 
    #--make sure repbase is installed
    if($CTL_OPT{model_org}){
@@ -4092,8 +4068,8 @@ sub load_control_files {
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;
-   #create_blastdb(\%CTL_OPT) if($mpi_size == 1);
-   #build_all_indexes(\%CTL_OPT) if($mpi_size == 1);
+   
+   
 
    return %CTL_OPT;
 }
@@ -4120,20 +4096,20 @@ sub generate_control_files {
 	   die "ERROR: Could not create $dir/$app\_opts.$ext\n";
        print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
        print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
-       print OUT "genome=$O{genome} #genome sequence file in fasta format\n";
+       print OUT "genome=$O{genome} #genome sequence (fasta format or fasta embeded in GFF3)\n";
        print OUT "organism_type=$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
        print OUT "\n";
        print OUT "#-----Re-annotation Using MAKER Derived GFF3\n" if(!$ev);
-       print OUT "#-----MAKER Derived GFF3 Annotations to Evaluate (genome fasta is internal to GFF3)\n" if($ev);
-       print OUT "genome_gff=$O{genome_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
-       print OUT "genome_gff=$O{genome_gff} #MAKER derived gff3 file\n" if($ev);
-       print OUT "est_pass=$O{est_pass} #use ests in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "altest_pass=$O{altest_pass} #use alternate organism ests in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "protein_pass=$O{protein_pass} #use proteins in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "rm_pass=$O{rm_pass} #use repeats in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "model_pass=$O{model_pass} #use gene models in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "pred_pass=$O{pred_pass} #use ab-initio predictions in genome_gff: 1 = yes, 0 = no\n";
-       print OUT "other_pass=$O{other_pass} #passthrough everything else in genome_gff: 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "#-----MAKER Derived GFF3 Annotations to Evaluate\n" if($ev);
+       print OUT "maker_gff=$O{maker_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
+       print OUT "maker_gff=$O{maker_gff} #MAKER derived gff3 file\n" if($ev);
+       print OUT "est_pass=$O{est_pass} #use ests in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "altest_pass=$O{altest_pass} #use alternate organism ests in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "protein_pass=$O{protein_pass} #use proteins in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "rm_pass=$O{rm_pass} #use repeats in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "model_pass=$O{model_pass} #use gene models in maker_gff: 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "pred_pass=$O{pred_pass} #use ab-initio predictions in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "other_pass=$O{other_pass} #passthrough everything else in maker_gff: 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
        print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file\n" if($ev);

@@ -48,25 +48,10 @@ sub new {
 	    next;
 	}
 
-	my $lock; #do non blocking lock to skip over active
-	if (! -e "$file.index" || -e ".NFSLock.$file.index.NFSLock"){ #index is not ready to use
-	    if(($lock = new File::NFSLock("$file.index", 'NB', undef, 50))){
-		if(-e "$file.index"){ #release lock because index is ready to use
-		    $lock->unlock();
-		    $lock = undef;
-		}
-		elsif(! $lock->maintain(30)){ #can't get maintainer to lock
-		    push(@files, $file);
-		    $lock->unlock();
-		    sleep 1;
-		    next;
-		}
-	    }
-	    else{
-		push(@files, $file);
-		sleep 1;
-		next;
-	    }
+	my $lock;
+	while(! $lock || ! $lock->still_mine){
+	    $lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
+	    $lock->maintain(30);
 	}
 
 	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));

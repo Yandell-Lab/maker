@@ -40,6 +40,8 @@ my $build = MAKER::Build->new(
 	 'Bit::Vector'        => '0',
 	 'Inline::C'          => '0.48',
 	 'PerlIO::gzip'       => '0',
+	 'forks'              => '0.34',
+	 'forks::shared'       => '0.34',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {
@@ -63,7 +65,6 @@ my $build = MAKER::Build->new(
 	 'Term::ReadKey'      => '0',
      },
      recommends => {
-	 'threads'  => '1.67',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      install_base => "$FindBin::Bin/../",

@@ -455,7 +455,8 @@ sub ACTION_release {
 #replacement for Module::Build's ACTION_install
 sub ACTION_install {
     my $self = shift;
-    
+
+    $self->log_info("Installing " . $self->dist_name . "...\n");    
     $self->SUPER::ACTION_install();
 
     if($self->feature('mwas_support')){
@@ -495,8 +496,6 @@ sub ACTION_install {
 	      "before jobs submitted to the server will run:\n".
 	      "     sudo maker -MWAS START\n\n";
     }
-
-    $self->maker_status();
 }
 
 #replaces Module::Build's ACTION_installdeps
@@ -1130,31 +1129,26 @@ sub cpan_install {
 
     # Here we use CPAN to actually install the desired module
     require CPAN;
+    import MyModule;
 
     # Save this because CPAN will chdir all over the place.
     my $cwd = getcwd();
 
     #update CPAN if needed to avoid other installation issues with prereqs
-    CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '5.5003')->{ok});
-    die "\n\nERROR: Cannot load correct CPAN version or related modules\n".
-	"Try running 'install Bundle::CPAN' from CPAN manually as either\n".
-	"the root user or using sudo\n\n"
-	if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
-
-    #fix weird Mac compilation errors
-    my ($OS, $ARC) = (POSIX::uname())[0,4];
-    if($OS eq 'Darwin'){
-	#$ENV{CFLAGS} .= ($ENV{CFLAGS}) ? ' -m32' : '-m32';
-	#$ENV{CCFLAGS} .= ($ENV{CCFLAGS}) ? ' -m32' : '-m32';
-	#$ENV{CPPFLAGS} .= ($ENV{CPPFLAGS}) ? ' -m32' : '-m32';
-	#$ENV{LDFLAGS} .= ($ENV{LDFLAGS}) ? ' -m32' : '-m32';
-	#$ENV{LDDLFLAGS} .= ($ENV{LDDLFLAGS}) ? ' -m32' : '-m32';
-    }
+    #CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '5.5003')->{ok});
+    #die "\n\nERROR: Cannot load correct CPAN version or related modules\n".
+    #    "Try running 'install Bundle::CPAN' from CPAN manually as either\n".
+    #    "the root user or using sudo\n\n"
+    #	if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
 
     #set up a non-global local module library for MAKER
+    my %bak;
     if($local){
 	my $base = $self->base_dir;
+
 	CPAN::HandleConfig->load;
+	%bak = (makepl_arg => $CPAN::Config->{makepl_arg},
+		mbuildpl_arg => $CPAN::Config->{mbuildpl_arg});
 	$CPAN::Config->{makepl_arg} = "DESTDIR=$base/../perl/ INSTALLDIRS=site INSTALLSITEMAN1DIR=man INSTALLSITEMAN3DIR=man".
 	    " INSTALLSITEARCH=lib INSTALLSITELIB=lib INSTALLSITEBIN=lib/bin INSTALLSITESCRIPT=lib/bin";
 	$CPAN::Config->{mbuildpl_arg} = "--install_base $base/../perl/ --installdirs site".
@@ -1167,6 +1161,8 @@ sub cpan_install {
     }
     else{
 	CPAN::HandleConfig->load;
+	%bak = (makepl_arg => $CPAN::Config->{makepl_arg},
+		mbuildpl_arg => $CPAN::Config->{mbuildpl_arg});
 	$CPAN::Config->{makepl_arg} = "INSTALLDIRS=site";
 	$CPAN::Config->{mbuildpl_arg} = "--installdirs site";
 	CPAN::Shell::setup_output();
@@ -1174,11 +1170,16 @@ sub cpan_install {
     }
 
     #install YAML if needed to avoid other installation issues with prereqs
-    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});    
+    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});
 
     #CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16;
     #CPAN::Shell->install($desired);
     CPAN::Shell->force('install', $desired);
+
+    #restore pld CPAN settings
+    $CPAN::Config->{makepl_arg} = $bak{makepl_arg};
+    $CPAN::Config->{mbuildpl_arg} = $bak{mbuildpl_arg};
+    CPAN::Shell::setup_output();
 
     my $ok;
     my $expanded = CPAN::Shell->expand("Module", $desired);
@@ -1273,32 +1274,26 @@ sub maker_status {
 
     my $dist_name = $self->dist_name;
     my $dist_version = $self->dist_version;
-    my $mpi = ($self->feature('mpi_support')) ? 'CONFIGURED' : 'DISABLED';
-    $mpi = 'MISSING PREREQUISITES' if($self->feature('mpi_support') && scalar(grep {/^MPI/} @exes, @libs));
-    my $mwas = ($self->feature('mwas_support')) ? 'READY TO INSTALL' : 'NOT CONFIGURED';
-    $mwas = 'INSTALLED' if ($self->check_installed_status('Parallel::Application::MPI', '0')->{ok});
-    $mwas = 'MISSING PREREQUISITES' if($self->feature('mwas_support') &&
-				       (scalar(grep {!/^MPI/} @libs)||
-					scalar(grep {/JBrowse|Apollo/} @exes)||
-					scalar(grep {/^(CGI|Mail|Bio\:\:Graphics)/} @perl)));
-    my $maker = (-f $self->base_dir."/../bin/maker") ? 'INSTALLED' : 'READY TO INSTALL';
-    $maker =  'MISSING PREREQUISITES' if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl) ||
-					 scalar(grep {!/^MPI|JBrowse|Apollo/} @exes));
+
+    my $mpi = ($self->feature('mpi_support')) ? 'ENABLED' : 'DISABLED';
+    my $mwas = ($self->feature('mwas_support')) ? 'ENABLED' : 'DISABLED';
+    my $maker = 'CONFIGURATION OK';
+    $maker = 'MISSING PREREQUISITES' if(@perl || @exes || @libs);
 
     print "\n\n";
     print "==============================================================================\n";
     print "STATUS $dist_name $dist_version\n";
     print "==============================================================================\n";
     print "PERL Dependencies:\t";
-    print ((@perl) ? 'MISSING' : 'INSTALLED');
+    print ((@perl) ? 'MISSING' : 'VERIFIED');
     print"\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @perl) ."\n\n" if(@perl);
     print "External Programs:\t";
-    print ((@exes) ? 'MISSING' : 'INSTALLED');
+    print ((@exes) ? 'MISSING' : 'VERIFIED');
     print "\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @exes) ."\n\n" if(@exes);
     print "External C Libraries:\t";
-    print ((@libs) ? 'MISSING' : 'INSTALLED');
+    print ((@libs) ? 'MISSING' : 'VERIFIED');
     print "\n";
     print "\t\t  !  ". join("\n\t\t  !  ", @libs) ."\n\n" if(@libs);
     print "MPI SUPPORT:\t\t";
@@ -1307,7 +1302,7 @@ sub maker_status {
     print "MWAS Web Interface:\t";
     print $mwas;
     print "\n";
-    print "MAKER:\t\t\t";
+    print "MAKER PACKAGE:\t\t";
     print $maker;
     print "\n";
 

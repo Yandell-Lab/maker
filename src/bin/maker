@@ -1,66 +1,26 @@
 #!\usr\bin\perl
 
-use warnings;
+#always load forks before anything else
+use forks;
+use forks::shared;
+
+#now load everyting else
 use strict "vars";
 use strict "refs";
-
-use FindBin;
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
-use vars qw($RANK $LOG @CMD_ARGS $VERSION);
-use Config;
+use warnings;
 use Carp;
-use MAKER::ConfigData;
-
-BEGIN{
-   $VERSION = '2.16';
-
-   if (not ($ENV{CGL_SO_SOURCE})) {
-      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
-   }
-   if (not ($ENV{CGL_GO_SOURCE})) {
-      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo"
-   }
-
-   @CMD_ARGS = @ARGV;
-
-   #what to do on ^C
-   $SIG{'INT'} = sub {
-      print STDERR "\n\nMaker aborted by user!!\n\n" unless($main::qq);
-      #MPI_Finalize();
-      exit (1);
-   };
-
-   #supress warnings from storable module
-   $SIG{'__WARN__'} = sub {
-      warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
-		      $_[0] !~ /Can\'t store item / &&
-		      $_[0] !~ /Find\:\:skip_pattern|File\/Find\.pm/
-		    );
-   };
-
-   #output to log file of seq that caused rank to die
-   $SIG{'__DIE__'} =
-   sub {
-      if (defined ($LOG) && defined $_[0]) {
-	 my $die_count = $LOG->get_die_count();
-	 $die_count++;
-
-	 $LOG->add_entry("DIED","RANK",$RANK);
-	 $LOG->add_entry("DIED","COUNT",$die_count);
-      }
-      
-      die $_[0]."\n".
-	  "--FAILURE--\n";
-   };
-}
-
+use vars qw($LOG $VERSION);
 use Cwd;
+use List::Util;
 use Storable qw(freeze thaw store retrieve);
 use FileHandle;
 use File::Path;
 use Getopt::Long qw(:config no_ignore_case);
 use File::Temp qw(tempfile tempdir);
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+use MAKER::ConfigData;
 use Bio::DB::Fasta;
 use GI;
 use Dumper::GFF::GFFV3;
@@ -82,10 +42,47 @@ use Process::MpiChunk;
 use Process::MpiTiers;
 use Parallel::Application::MPI qw(:all);
 use Proc::Signal;
+use Proc::ProcessTable;
 use File::NFSLock;
 
+BEGIN{
+   $VERSION = '2.16';
+
+   #what to do on ^C
+   $SIG{'INT'}  = sub { &exit(2); };
+   $SIG{'QUIT'} = sub { &exit(3); };
+   $SIG{'ABRT'} = sub { &exit(6); };
+   $SIG{'KILL'} = sub { &exit(9); };
+   $SIG{'TERM'} = sub { &exit(15); };
+   
+   #output to log file of seq that caused rank to die
+   $SIG{'__DIE__'} = sub {
+       $LOG->add_entry("DIED","COUNT",$LOG->get_die_count+1) if($LOG && defined $_[0]);
+       map {$_->kill('KILL')->join()} threads->list();
+       GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
+       Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
+       Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
+       die $_[0];
+   };
+   
+   #supress warnings from storable module
+   $SIG{'__WARN__'} = sub {
+       warn $_[0] if($_[0] !~ /Not a CODE reference/ &&
+		     $_[0] !~ /Can\'t store item/ &&
+		     $_[0] !~ /Find\:\:skip_pattern/ &
+		     $_[0] !~ /File\/Find\.pm/);
+   };
+}
+
+#--keep STDOUT from buffering
 select((select(STDOUT), $|=1)[0]); #make STDOUT buffer flush immediately
 
+#--set object variables for serialization of data
+$Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
+$Storable::Deparse = 1; #now serializes CODE refs
+$Storable::Eval = 1; #now serializes CODE refs
+
+#--usage statement
 my $usage = "
 MAKER version $VERSION
 
@@ -182,263 +179,54 @@ Options:
 #------------------------------------ MAIN -------------------------------------
 #-------------------------------------------------------------------------------
 
-#--set object variables for serialization of data
-$Storable::forgive_me = 1; #allows serializaion of objects with GLOBs
-$Storable::Deparse = 1; #now serializes CODE refs
-$Storable::Eval = 1; #now serializes CODE refs
-
-#------INITIATE MPI VARIABLES------
+#--Start MPI
 MPI_Init();
 my $rank = MPI_Comm_rank(); #my proccess number
 my $size = MPI_Comm_size(); #how many proccesses
 my $root = 0; #define root node (only changed for debugging)
-$RANK = $rank;
-
-#---global variables
-my %OPT;
 
 #---Process options on the command line
-try{
-    GetOptions("RM_off|R" => \$OPT{R},
-	       "force|f" => \$OPT{force},
-	       "genome|g=s" => \$OPT{genome},
-	       "cpus|c=i" => \$OPT{cpus},
-	       "tries=i" =>\$OPT{tries},
-	       "dsindex" =>\$OPT{dsindex},
-	       "again|a" =>\$OPT{again},
-	       "quiet|q" =>\$main::quiet,
-	       "qq"    =>\$main::qq,
-               "check" =>\$OPT{check},
-               "base=s" =>\$OPT{out_name},
-               "datastore!" =>\$OPT{datastore},
-	       #"fast" => \$OPT{fast},
-               "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); MPI_Finalize(); exit(0);},
-	       "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
-               "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); MPI_Finalize(); exit(0);},
-               "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); MPI_Finalize(); exit(0);},
-               "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); MPI_Finalize(); exit(0);},
-	       "no_threads" =>\$main::no_threads, #for debugging
-	       "debug" => \$main::debug,
-	       "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
-	       "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
-	       );
-
-    $main::quiet = 1 if($main::qq);
-    $main::no_threads = 1 if(!$Config::Config{useithreads});
-}
-catch Error::Simple with{
-    my $E = shift;
-
-    print STDERR $E->{-text};
-    confess "\n\nMaker failed parsing command line options!!\n\n";
-};
-
-#---Process the control files
-#varibles that are persistent outside of try
-my %CTL_OPT;
-my $iterator;
-my $DS_CTL;
-my $GFF_DB;
-my $build;
-my $g_index;
-my $gdbfile;
-my @failed;
-my @interrupted;
+my %OPT;
+GetOptions("RM_off|R" => \$OPT{R},
+	   "force|f" => \$OPT{force},
+	   "genome|g=s" => \$OPT{genome},
+	   "cpus|c=i" => \$OPT{cpus},
+	   "tries=i" =>\$OPT{tries},
+	   "dsindex" =>\$OPT{dsindex},
+	   "again|a" =>\$OPT{again},
+	   "quiet|q" =>\$main::quiet,
+	   "qq"    =>\$main::qq,
+           "check" =>\$OPT{check},
+	   "base=s" =>\$OPT{out_name},
+	   "datastore!" =>\$OPT{datastore},
+	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); MPI_Finalize(); exit(0);},
+	   "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
+	   "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); MPI_Finalize(); exit(0);},
+	   "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); MPI_Finalize(); exit(0);},
+	   "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); MPI_Finalize(); exit(0);},
+	   "debug" => \$main::debug,
+	   "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
+	   "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
+    );
+$main::quiet = 1 if($main::qq);
 
 #--get files off the command line
 my @ctlfiles = @ARGV;
-
-if (not @ctlfiles) {
-    if (-e "maker_opts.ctl" &&
-	-e "maker_bopts.ctl" &&
-	-e "maker_exe.ctl"
-	) {
-	
-	@ctlfiles = ("maker_opts.ctl",
-		     "maker_bopts.ctl",
-		     "maker_exe.ctl"
-	    );
+if (! @ctlfiles) {
+    if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {	
+	@ctlfiles = qw(maker_opts.ctl maker_bopts.ctl maker_exe.ctl);
     }
     elsif($rank == $root) {
 	print STDERR  "ERROR: Control files not found\n";
 	print $usage;
-	MPI_Finalize();
 	exit(0);
     }
     else{
-	MPI_Finalize();
 	exit(0);
     }
 }
 
-#--Control file processing
-if($rank == $root){
-    try{
-	#set up control options from control files
-	print STDERR "STATUS: Parsing control files...\n" unless($main::quiet);
-	%CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
-
-	#--set up gff database
-	print STDERR "STATUS: Setting up database for any GFF3 input...\n" unless($main::quiet);
-	$GFF_DB = new GFFDB(\%CTL_OPT);
-	$build = $GFF_DB->next_build;
-
-	#---set up blast databases and indexes for analyisis
-	#communicate with other nodes to initialize TMP and databases
-	print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
-
-	my $mpi_data = 9999; #tag for mpi_data message
-	if($size > 1){
-	   #global GFFDB for root
-	   my $dbfile = GI::get_global_temp()."/gff3.db";
-
-	   if(-f $GFF_DB->dbfile){
-	       while(!-f $dbfile){
-		   my $lock;
-		   next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-		   File::Copy::copy($GFF_DB->dbfile, "$dbfile.tmp") if(!-f $dbfile);
-		   File::Copy::move("$dbfile.tmp", $dbfile) if(!-f $dbfile);
-	       }
-	   }
-	   $GFF_DB = new GFFDB($dbfile);
-
-	   #--initialize TMP and GFFDB for all nodes
-	   my @TMPs = ($CTL_OPT{_TMP});
-	   for(my $i = 0; $i < $size; $i++){
-	      next if $i == $root;
-	      my $tmp;
-	      print "INITIALIZE CTL_OPT\t|  RCV2\t| mpi_data (TMP)\t|  $rank\t<--\t$i\n" if($main::debug);
-	      MPI_Recv(\$tmp, $i, $mpi_data);
-	      push(@TMPs, $tmp);
-	   }
-	   my $tdata = [\@TMPs, $CTL_OPT{_job_id}, $GFF_DB->dbfile];
-	   for(my $i = 0; $i < $size; $i++){
-	      next if $i == $root;
-	      print "INITIALIZE CTLOPT\t|  SND2\t| mpi_data (VAR_list)\t|  $rank\t-->\t$i\n" if($main::debug);
-	      MPI_Send(\$tdata, $i, $mpi_data);
-	   }
-	   
-	   #--send control files to nodes for help with splitting DBs
-	   for(my $i = 0; $i < $size && $i <= 4; $i++){
-	      next if $i == $root;
-	      my $data = \%CTL_OPT;
-	      print "INITIALIZE CTL_OPT\t|  SND2\t|  mpi_data (ctl_opt)\t|  $rank\t-->\t$i\n" if($main::debug);
-	      MPI_Send(\$data, $i, $mpi_data);
-	   }	   
-        }
-
-	#root database setup
-	GI::create_blastdb(\%CTL_OPT);
-	GI::build_all_indexes(\%CTL_OPT);
-
-	#--setup global g_index for all nodes
-	$g_index = $CTL_OPT{_g_db}[0];
-	if($size > 1){
-	   for(my $i = 0; $i < $size; $i++){
-	       next if $i == $root;
-	       print "INITIALIZE CTLOPT\t|  SND2\t| mpi_data (g_index)\t|  $rank\t-->\t$i\n" if($main::debug);
-	       MPI_Send(\$g_index, $i, $mpi_data);
-	   }
-	   my ($name) = $g_index =~ /([^\/]+)$/;
-	   $gdbfile = GI::get_global_temp()."/$name";
-	   while(!-f "$gdbfile.index"){
-	       my $lock;
-	       next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	       File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
-	       File::Copy::copy("$g_index.index", "$gdbfile.index.tmp") if(!-f "$gdbfile.index");
-	       File::Copy::move("$gdbfile.index.tmp", "$gdbfile.index") if(!-f "$gdbfile.index");
-	   }
-
-	   $g_index = GI::build_fasta_index([$gdbfile]);
-        }
-	else{
-	    $gdbfile = $CTL_OPT{_g_db}[0];
-	    $g_index = GI::build_fasta_index($g_index);
-	}
-
-	$g_index->add_to_global_index();
-
-	#--open datastructure controller
-	$DS_CTL = ds_utility->new(\%CTL_OPT);
-	
-	#---load genome multifasta/GFF3 file
-	$iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
-	$iterator->skip_file($DS_CTL->{log});
-	$iterator->step($CTL_OPT{'_step'});
-	if($OPT{dsindex}){
-	    $iterator->skip_file($DS_CTL->{log});
-	    while(my $q_def = $iterator->nextDef()){
-		my $id = Fasta::def2SeqID($q_def);
-		my $safe_id = Fasta::seqID2SafeID($id);
-		my $dir = $DS_CTL->id_to_dir($id);
-		my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
-		$DS_CTL->add_entry($id, $dir, $message);
-	    }
-	    exit(0);
-	}
-    }
-    catch Error::Simple with{
-	my $E = shift;
-	print STDERR $E->{-text};
-	
-	my $code = 2;
-	$code = $E->{-value} if (defined($E->{-value}));
-	
-	#MPI_Finalize();
-	exit($code);
-    };
-}
-
-#---------------------------
-#------RUN WITHOUT MPI------
-#---------------------------
-if($size == 1){
-    print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
-
-    my $tier;
-    my $f_count = @failed;
-    my $i_count = @interrupted;
-    while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
-	$tier = Process::MpiTiers->new({q_def   => $q_def,
-                                    g_index => $g_index,
-                                    CTL_OPT => \%CTL_OPT,
-                                    DS_CTL  => $DS_CTL,
-                                    dbfile  => $GFF_DB->dbfile,
-					build   => $build},
-                                   '0',
-                                   'Process::MpiChunk'
-	    );
-
-	next if($tier->terminated);
-
-    #take a short break before processing previously failed contigs
-    #this handles heavy processor usage when failure is related
-    #to maker process overlap
-	sleep 1 if($f_count != @failed);
-
-	$tier->run_all(0);
-
-	push(@failed, $tier->q_def) if ($tier->failed);
-	push(@interrupted, $tier->q_def) if ($tier->interrupt && $i_count == @interrupted);
-
-	$f_count = @failed; #reset failure count
-	$i_count = @interrupted; #reset interrupt count
-    }
-
-    print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
-
-    #clean up all chilren processes
-    Proc::Signal::reap_children_by_name(9, 'maintain.pl');
-
-    MPI_Finalize();
-    exit(0);
-}
-
-#---------------------------
-#-------RUN WITH MPI--------
-#---------------------------
-
-#MPI SIGNAL CODES
+#------INITIATE MPI VARIABLES AND SIGNAL CODES------
 #--mpi message tags
 my $who_I_am       = 1111;
 my $what_I_want    = 2222;
@@ -464,7 +252,7 @@ my $need_c_res  = 4;
 
 #--request_status signals
 my $wait_as_helper = 5;
-my $yes_tier       = 6;
+my $yes_work       = 6;
 my $yes_helper     = 7;
 my $no_helper      = 8;
 my $reset          = 9;
@@ -494,74 +282,252 @@ my @c_results;
 my @res_loc;
 my @limbo_stack;
 my @active;
-my @chunks;
-my @returned_chunks;
-my $t_need_flag;
-my $t_tier;
-my $t_tier_result;
-my $t_chunk;
-my $t_chunk_result;
-my $t_terminate;
+my @chunks :shared;
+my @returned_chunks :shared;
+my $t_need_flag :shared;
+my $t_tier :shared;
+my $t_tier_result :shared;
+my $t_chunk :shared;
+my $t_chunk_result :shared;
+my $t_terminate :shared;
 my $empty;
 
+#---Process the control files
+#varibles that are persistent outside of try blocks
+my %CTL_OPT;
+my $iterator;
+my $DS_CTL;
+my $GFF_DB;
+my $build;
+my $g_index;
+my $gdbfile;
+my @failed;
+my @interrupted;
 
-#---set up thread support
-unless($main::no_threads){
-    require threads;
-    require threads::shared;
-    threads::shared->import();
+#--parse options from control files
+if($rank == $root){
+    print STDERR "STATUS: Parsing control files...\n" unless($main::quiet);
+    %CTL_OPT = GI::load_control_files(\@ctlfiles, \%OPT, $size);
+    $CTL_OPT{_is_root} = 1;
+}
 
-    unless($threads::VERSION >= 1.67){
-	croak "For MPI MAKER requires threads version 1.67 or greater\n",
-	"You have version ". $threads::VERSION ."\n";
+#--syncronize TMP for all nodes
+if($rank == $root) {
+    for(my $i = 0; $i < $size; $i++){
+	next if $i == $root;
+	MPI_Send(\$CTL_OPT{TMP}, $i, $mpi_data);
     }
+    my $tmp = GI::new_instance_temp($CTL_OPT{TMP});
+    my $mount = GI::mount_check($tmp =~ /(.*\/)[^\/]*$/);
 
-    #--change signal handling for threads
-    #what to do on ^C
-    $SIG{'INT'} = sub {
-	print STDERR "\n\nMaker aborted by user!!\n\n";
-	unless($main::no_threads){
-	    my @threads = threads->list();
-	    foreach my $thr (@threads){
-		$thr->kill('KILL')->join();
-	    }
-	}
+    my %temp_list;
+    my @index;
+    ($index[$rank]) = $mount;
+    $temp_list{$index[$rank]} = $tmp;
 
-	#MPI_Finalize();
-	exit (2);
-    };
-
-   #output to log file of seq that caused rank to die
-   $SIG{'__DIE__'} = sub {
-       if (defined ($LOG) && defined $_[0]) {
-	   my $die_count = $LOG->get_die_count();
-	   $die_count++;
-	   
-	   $LOG->add_entry("DIED","RANK",$RANK);
-	   $LOG->add_entry("DIED","COUNT",$die_count);
-       }
-       
-       my @threads = threads->list();
-       foreach my $thr (@threads){
-	   $thr->detach;
-       }
-       
-       die $_[0]."\n".
-	   "--FAILURE--\n";
-   };
-
-    #set up sharing
-    share(\@chunks);
-    share(\@returned_chunks);
-    share(\$t_need_flag);
-    share(\$t_tier);
-    share(\$t_tier_result);
-    share(\$t_chunk);
-    share(\$t_chunk_result);
-    share(\$t_terminate);
+    for(my $i = 0; $i < $size; $i++){
+	next if($i == $root);
+	my $list;
+	MPI_Recv(\$list,  $i, $mpi_list);
+	my ($mount, $tmp) = @$list; #mount is ip:directory
+	$index[$i] = $mount;
+	$temp_list{$index[$i]} = $tmp;
+    }
+    
+    #send final tmp to all nodes
+    GI::set_global_temp($temp_list{$index[$root]}); #for root    
+    for(my $i = 0; $i < $size; $i++){
+	next if($i == $root);
+	MPI_Send(\$temp_list{$index[$i]}, $i, $mpi_data);
+    }
 }
 else{
-    $main::no_threads = 1;
+    my $tmp;
+    MPI_Recv(\$tmp, $root, $mpi_data);
+    $tmp = GI::new_instance_temp($tmp);
+    my ($mount) = GI::mount_check($tmp =~ /(.*\/)[^\/]*$/);
+    my $list = [$mount, $tmp];
+    MPI_Send(\$list, $root, $mpi_list);
+    MPI_Recv(\$tmp, $root, $mpi_data);
+    GI::set_global_temp($tmp);
+}
+
+#--process and index BLAST databases
+if($rank == $root){
+    #---set up blast databases and indexes for analyisis
+    print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
+    if ($CTL_OPT{force} && !$CTL_OPT{_multi_chpc}){
+	File::Path::rmtree($CTL_OPT{mpi_blastdb});
+    }
+
+    my @to_do;
+    my @ins = qw(genome protein est altest repeat_protein);
+    foreach my $in (@ins){
+	my @files = split(/\,/, $CTL_OPT{$in});
+	my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
+	@files = map {($uniq{$_}) ? s_abs_path($_).":$_" : $_} keys %uniq;
+
+	my $key  = ($in =~ /protein/) ? 'protein' : 'nucleotide';
+	my $bins = ($in eq 'genome') ? 1 : 10;
+	my $bdir = $CTL_OPT{mpi_blastdb};
+	my $alt  = $CTL_OPT{alt_peptide};
+	
+	push(@to_do, map {['split_db', $_, $key, $bins, $bdir, $alt]} @files);
+    }
+    @to_do = List::Util::shuffle(@to_do); #shuffle the order (multiple instance efficiency)
+
+    my $split_count = @to_do;
+    while((my $args = shift @to_do) || $split_count > 0){
+	if($size == 1){
+	    shift @$args;
+	    my $split = GI::split_db(@$args);
+	    GI::build_fasta_index($split);
+	    $split_count--;
+	    next;
+	}
+
+	my $who;
+	my $res_stat;
+	MPI_Recv(\$who, MPI_ANY_SOURCE, $who_I_am);
+	MPI_Recv(\$res_stat, $who, $result_status);
+	if($res_stat == $yes_result){
+	    my $data;
+	    MPI_Recv(\$data, $who, $mpi_data);
+	    push(@to_do, @$data);
+	    @to_do = List::Util::shuffle(@to_do);  #shuffle the order (efficiency)
+	    $split_count--;
+	}
+
+	if($args){
+	    MPI_Send(\$yes_work, $who, $request_status);
+	    MPI_Send(\$args, $who, $mpi_data);
+	}
+	else{
+	    MPI_Send(\$wait_ask_again, $who, $request_status);
+	}
+    }
+
+    GI::create_blastdb(\%CTL_OPT);
+    $gdbfile = $CTL_OPT{_g_db}[0];
+    for(my $i = 0; $i < $size; $i++){
+	next if($i == $root);
+	MPI_Recv(\$empty, $i, $who_I_am);
+	MPI_Recv(\$empty, $i, $result_status);
+	MPI_Send(\$reset, $i, $request_status);
+	MPI_Send(\$gdbfile, $i, $mpi_data);
+    }
+}
+else{
+    my $split;
+    while(1){
+	my $res_stat = ($split) ? $yes_result: $no_result;
+	MPI_Send(\$rank, $root, $who_I_am);
+	MPI_Send(\$res_stat, $root, $result_status);
+	if($split){
+	    MPI_Send(\$split, $root, $mpi_data);
+	    undef $split;
+	}
+
+	my $req_stat;
+	MPI_Recv(\$req_stat, $root, $request_status);
+	
+	if($req_stat == $reset){
+	    MPI_Recv(\$gdbfile, $root, $mpi_data);
+	    last;
+	}
+
+	if($req_stat == $wait_ask_again){
+	    sleep 1;
+	    next;
+	}
+
+	my $args;
+	MPI_Recv(\$args, $root, $mpi_data);
+	my $type = shift @$args;
+	if($type eq 'split_db'){
+	    $split = GI::split_db(@$args);
+	    foreach my $e (@$split){
+		$e = ['index', $e];
+	    }
+	}
+	else{
+	    GI::build_fasta_index($args)
+	}
+    }
+}
+if($size > 1){
+    GI::localize_file("$gdbfile.index");
+    $gdbfile = GI::localize_file($gdbfile);
+}
+$g_index = GI::build_fasta_index([$gdbfile]);
+$g_index->add_to_global_index();          
+
+if($rank == $root){
+#--set up GFF3 DB
+    print STDERR "STATUS: Setting up database for any GFF3 input...\n" unless($main::quiet);
+    $GFF_DB = new GFFDB(\%CTL_OPT);
+    $build = $GFF_DB->next_build;
+
+    #--open datastructure controller
+    $DS_CTL = ds_utility->new(\%CTL_OPT);
+
+    #---load genome file into iterator
+    $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
+    $iterator->skip_file($DS_CTL->{log});
+    $iterator->step($CTL_OPT{'_step'});
+
+    if($OPT{dsindex}){
+	$iterator->skip_file($DS_CTL->{log});
+	while(my $q_def = $iterator->nextDef()){
+	    my $id = Fasta::def2SeqID($q_def);
+	    my $safe_id = Fasta::seqID2SafeID($id);
+	    my $dir = $DS_CTL->id_to_dir($id);
+	    my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
+	    $DS_CTL->add_entry($id, $dir, $message);
+	}
+	exit(0);
+    }
+}
+
+#---------------------------
+#------RUN WITHOUT MPI------
+#---------------------------
+if($size == 1){
+    print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
+
+    my $tier;
+    my $f_count = @failed;
+    my $i_count = @interrupted;
+    while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
+	$tier = Process::MpiTiers->new({q_def   => $q_def,
+                                    g_index => $g_index,
+                                    CTL_OPT => \%CTL_OPT,
+                                    DS_CTL  => $DS_CTL,
+                                    dbfile  => $GFF_DB->dbfile,
+					build   => $build},
+                                   '0',
+                                   'Process::MpiChunk'
+	    );
+
+	next if($tier->terminated);
+
+	#take a short break before processing previously failed contigs
+	#this handles heavy processor usage when failure is related
+	#to maker process overlap
+	sleep 1 if($f_count != @failed);
+
+	$tier->run_all(0);
+
+	push(@failed, $tier->q_def) if ($tier->failed);
+	push(@interrupted, $tier->q_def) if ($tier->interrupt && $i_count == @interrupted);
+
+	$f_count = @failed; #reset failure count
+	$i_count = @interrupted; #reset interrupt count
+    }
+
+    print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
+
+    exit(0);
 }
 
 #--------------------------------------
@@ -578,7 +544,7 @@ if ($rank == $root) {
     #also no thereads if not threaded perl
     $t_need_flag = ($main::no_threads || $size > 10) ? 0 : 1;
     my $thr;
-    $thr = threads->create(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
+    $thr = threads->new(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
 
     print STDERR "STATUS: Now running MAKER...\n" unless($main::quiet);
 
@@ -655,13 +621,13 @@ if ($rank == $root) {
 	    #
 	    #    last if(! $tier->terminated);
 	    #}
-	    
-	    $tier->{_seen}++ if(defined $tier && $i_count != @interrupted); #tag tier (easy to do it this way)
-	    
+	    #
+	    #$tier->{_seen}++ if(defined $tier && $i_count != @interrupted); #tag tier (easy to do it this way)
+	    #
 	    #take a short break before processing failed contigs
 	    #this handles heavy processor usage when failure is related
 	    #to maker process overlap
-	    sleep 1 if($f_count != @failed);
+	    #sleep 1 if($f_count != @failed);
 
 	    if(defined $tier && ! $tier->terminated){
 		$t_need_flag = 0;
@@ -735,8 +701,8 @@ if ($rank == $root) {
 		
 		if(defined $tier && ! $tier->terminated){
 		    #say tier is available and send it
-		    print "COMM TIER REQUESTED\t|  SEND\t|  req_stat (yes_tier)\t\t|  $rank\t-->\t$who\n" if($main::debug);
-		    MPI_Send(\$yes_tier, $who, $request_status);
+		    print "COMM TIER REQUESTED\t|  SEND\t|  req_stat (yes_work)\t\t|  $rank\t-->\t$who\n" if($main::debug);
+		    MPI_Send(\$yes_work, $who, $request_status);
 		    print "COMM TIER REQUESTED\t|  SND2\t|  mpi_data (tier)\t\t|  $rank\t-->\t$who\n" if($main::debug);
 		    MPI_Send(\$tier, $who, $mpi_data);
 		    $tier = undef;
@@ -946,61 +912,10 @@ else {
     my $chunk_result;
     my $be_helper;
 
-    #--set up node TMP directories and GFFDB
-    my $tmp = GI::get_global_temp();
-    my $tdata;
-    print "INITIALIZE CTL_OPT\t|  SND2\t| mpi_data (TMP)\t|  $rank\t-->\t$root\n" if($main::debug);
-    MPI_Send(\$tmp, $root, $mpi_data);
-    print "INITIALIZE CTL_OPT\t|  RCV2\t| mpi_data (VAR_list)\t|  $rank\t<--\t$root\n" if($main::debug);
-    MPI_Recv(\$tdata, $root, $mpi_data);
-    GI::set_global_temp($tdata->[0], $tdata->[1]);
-
-    my $GFF_DB;
-    my $dbfile = GI::get_global_temp()."/gff3.db";
-    if(-f $tdata->[2]){
-	while(!-f $dbfile){
-	    my $lock;
-	    next unless(($lock = new File::NFSLock($dbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	    File::Copy::copy($tdata->[2], "$dbfile.tmp") if(!-f $dbfile);
-	    File::Copy::move("$dbfile.tmp", $dbfile) if(!-f $dbfile);
-	}
-    }
-    $GFF_DB = new GFFDB($dbfile);
-
-    #--receive control files from root
-    my $CTL_OPT;
-    if($rank <= 4){ #only first 4 so as not to overdo it
-	print "INITIALIZE CTL_OPT\t|  RCV2\t|  mpi_data (ctl_opt)\t|  $rank\t<--\t$root\n" if($main::debug);
-	MPI_Recv(\$CTL_OPT, $root, $mpi_data);
-
-       #---set up blast databases and indexes for analyisis
-       $CTL_OPT->{_not_root} = 1;
-       if(! $CTL_OPT->{_multi_chpc}){
-	  GI::create_blastdb($CTL_OPT);
-	  GI::build_all_indexes($CTL_OPT);
-       }
-    }
-
-    #--setup global g_index for all nodes
-    my $g_index;
-    print "INITIALIZE CTLOPT\t|  RCV2\t| mpi_data (g_index)\t|  $rank\t<--\t$root\n" if($main::debug);
-    MPI_Recv(\$g_index, $root, $mpi_data);
-    my ($name) = $g_index =~ /([^\/]+)$/;
-    my $gdbfile = GI::get_global_temp()."/$name";
-    while(!-f "$gdbfile.index"){
-	my $lock;
-	next unless(($lock = new File::NFSLock($gdbfile, 'EX', 1200, 60)) && $lock->maintain(30));
-	File::Copy::copy($g_index, $gdbfile) if(!-f $gdbfile);
-	File::Copy::copy("$g_index.index", "$gdbfile.index.tmp") if(!-f "$gdbfile.index");
-	File::Copy::move("$gdbfile.index.tmp", "$gdbfile.index") if(!-f "$gdbfile.index");
-    }
-    $g_index = GI::build_fasta_index([$gdbfile]);
-    $g_index->add_to_global_index();
-
     #set to true for threads false for no threads
-    $t_need_flag = ($main::no_threads) ? 0 : 1;
+    $t_need_flag = 1;
     my $thr;
-    $thr = threads->create(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
+    $thr = threads->new(\&node_thread, $gdbfile) while($t_need_flag && (!$thr || !$thr->is_running));
 
     while ($go_mpi_status) {
 	#====INTERNAL CHUNK THREAD
@@ -1202,7 +1117,7 @@ else {
 	    MPI_Recv(\$req_status, $root, $request_status);
 	    
 	    #get tier and run if it if there is one
-	    if($req_status == $yes_tier){
+	    if($req_status == $yes_work){
 	       my $tier;
 	       print "COMM TIER REQUESTED\t|  RCV2\t|  mpi_data (tier)\t\t|  $rank\t<--\t$root\n" if($main::debug);
 	       MPI_Recv(\$tier, $root, $mpi_data);
@@ -1407,27 +1322,24 @@ unless($main::no_threads){
     }
 }
 
-GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock           
-Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
-Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
-
 exit(0);
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
-sub exit {
+sub exit {    
     File::Temp::cleanup();
-    unless($main::no_threads){
-	my @threads = threads->list();
-	foreach my $thr (@threads){
-	    $thr->kill('KILL')->join();
-	}
+    my @threads = threads->list();
+    foreach my $thr (@threads){
+	$thr->kill('KILL');
+	$thr->join() unless($thr->is_detached);
     }
 
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
     Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
     Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
+
+    MPI_Finalize() if($_[0] == 0);
 
     CORE::exit(@_);
 }
@@ -1439,16 +1351,12 @@ sub node_thread {
    my $tier;
    my $chunk;
 
-   if($main::no_threads){ #pause and return if no thread is needed
-       $t_need_flag = 0;
-       return;
-   }
-
    #set up thread signal to exit gracefully
    $SIG{'KILL'} = sub { threads->exit(0); };
    $SIG{'INT'}  = sub { threads->exit(0); };
    $SIG{'QUIT'} = sub { threads->exit(0); };
    $SIG{'STOP'} = sub { threads->exit(0); };
+   $SIG{'TERM'} = sub { threads->exit(0); };
 
    #setup global index because of weird NFS failure in thread
    my $g_index = GI::build_fasta_index([$gdbfile]);
