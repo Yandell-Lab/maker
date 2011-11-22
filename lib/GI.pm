@@ -3497,6 +3497,9 @@ sub load_control_files {
 	    my $key = $1;
 	    my $value = $2;
 
+	    #backwards compatability fix
+	    $key = 'maker_gff' if($key eq 'genome_gff');
+
 	    #remove preceding and trailing whitespace
 	    $value =~ s/^[\s\t]+|[\s\t]+$//g;
 	    

@@ -18,7 +18,7 @@ BEGIN{
     my $Bundled_MB = 0.3607;  #version included in my distribution
 
     # Find out what version of Module::Build is installed or fail quietly.
-    # This should be cross-platform.
+   # This should be cross-platform.
     my $Installed_MB =`$^X -e "eval q{require Module::Build; print Module::Build->VERSION} or exit 1"`;
     chomp $Installed_MB;
     $Installed_MB = 0 if $?;
@@ -458,6 +458,14 @@ sub ACTION_install {
 
     $self->log_info("Installing " . $self->dist_name . "...\n");    
     $self->SUPER::ACTION_install();
+
+    my $blib = $self->blib();
+    my $pdir = $self->base_dir."/../perl";
+    my @files = grep {-f $_} <$blib/config-*>;
+    foreach my $file (@files){
+	my ($name) = $file =~ /([^\/]+)$/;
+	ExtUtils::Install::pm_to_blib({$file => "$pdir/$name"}, $pdir);
+    }
 
     if($self->feature('mwas_support')){
 	require GI;
