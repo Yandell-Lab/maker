@@ -3758,6 +3758,10 @@ sub load_control_files {
       }
       else{
 	  my @files = split(/\,/, $CTL_OPT{$in}); #handle comma separated list
+	  foreach my $file (@files){
+	      $file =~ s/^\s+|\s+$//g;
+	      $file =~ s/\s+\:|\:\s+$//g;
+	  }
 	  my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
 	  my @non = grep {! -f $_} keys %uniq;
 	  $error .= "ERROR: The \'$in\' file[s] ".join(', ', @non)." do not exist.\n".
