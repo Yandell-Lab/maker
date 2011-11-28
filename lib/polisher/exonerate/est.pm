@@ -35,6 +35,7 @@ sub polish {
 	my $exe        = shift;
 	my $percent    = shift;
 	my $min_intron = shift;
+	my $max_intron = shift;
 	my $matrix     = shift;
 
 	$e_len = polisher::prep($e_file) if(!$e_len);
@@ -49,6 +50,7 @@ sub polish {
 			       $exe,
 			       $percent,
 			       $min_intron,
+			       $max_intron,
 			       $matrix,
 			      );
 
@@ -71,10 +73,11 @@ sub e_exonerate {
 	my $exe      = shift;
 	my $percent  = shift;
 	my $min_intron = shift;
+	my $max_intron = shift;
 	my $matrix   = shift;
 
 
-        runExonerate($g_file, $e_file, $o_file, $exe, $percent, $min_intron, $matrix);
+        runExonerate($g_file, $e_file, $o_file, $exe, $percent, $min_intron, $max_intron, $matrix);
 
         return Widget::exonerate::est2genome::parse($o_file, $e_len, $g_len);
 }
@@ -86,12 +89,13 @@ sub runExonerate {
 	my $exe     = shift;
 	my $percent = shift;
 	my $min_intron = shift || 20;
+	my $max_intron = shift || 200000;
 	my $matrix  = shift;
 
 
         my $command  = "$exe  -q $q_file -t $t_file -Q dna -T dna";
 	   $command .= " --model est2genome ";
-	   $command .= " --minintron $min_intron --showcigar";
+	   $command .= " --minintron $min_intron --maxintron $max_intron --showcigar";
 	   $command .= " --percent $percent";
 	if ($matrix) {
 	    $command .= " --dnasubmat $matrix";	

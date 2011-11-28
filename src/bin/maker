@@ -3,6 +3,8 @@
 #always load forks before anything else
 use forks;
 use forks::shared;
+#use threads;
+#use threads::shared;
 
 #now load everyting else
 use strict "vars";

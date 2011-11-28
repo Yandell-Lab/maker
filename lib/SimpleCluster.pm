@@ -21,7 +21,7 @@ sub cluster_hits {
     my @clusters;
     for(my $i = 0; $i < @$cMap; $i++){
         my $members = $cMap->[$i];
-        next if(!@$members);
+        next if(!$members || !@$members);
 
         my @array = map {$hits->[$_]} @{$members};
 

@@ -753,8 +753,6 @@ sub create_blastdb {
    foreach my $in (List::Util::shuffle(keys %source2dest)){
        $CTL_OPT->{$source2dest{$in}} = [];
        my @files = split(/\,/, $CTL_OPT->{$in});
-       my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
-       @files = map {($uniq{$_}) ? s_abs_path($_).":$_" : $_} keys %uniq;
 
        my $key  = ($in =~ /protein/) ? 'protein' : 'nucleotide';
        my $bins = ($in eq 'genome') ? 1 : 10;
@@ -1292,6 +1290,7 @@ sub polish_exonerate {
     my $pcov         = shift;
     my $pid          = shift;
     my $score_limit  = shift;
+    my $max_intron   = shift;
     my $matrix       = shift;
     my $pred_flank   = shift;
     my $est_forward  = shift;
@@ -1345,6 +1344,7 @@ sub polish_exonerate {
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $go;
 	    $min_intron = 1;
+	    $max_intron = 200000;
 	    foreach my $coor (split(',', $1)){
 		my ($bName, $bB, $bE);
 		if(($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
@@ -1427,6 +1427,7 @@ sub polish_exonerate {
 					 $exe,
 					 $score_limit,
 					 $min_intron,
+					 $max_intron,
 					 $matrix
 					 );
 	File::Copy::move($o_tfile, $o_file) if($o_tfile ne $o_file);
@@ -1451,6 +1452,23 @@ sub polish_exonerate {
 
 	    #add gene_id if specified
 	    $e->{gene_id} = $gene_id if($gene_id);
+
+	    #trim poly-A tails
+	    if($type eq 'e' && ! $est_forward){
+		my @hsps = reverse @{$e->sortedHSPs()};
+		while(my $hsp = shift @hsps){
+		    my $eseq = $hsp->seq('hit')->seq;
+		    my $len = length($eseq);
+		    my $a_count = $eseq =~ tr/Aa/Aa/;
+		    if($a_count/$len >= 0.8){
+			$e->hsps(\@hsps); #make new referece rather than direct reference
+			next;
+		    }
+		    else{
+			last;
+		    }
+		}
+	    }
 
 	    #make sure hit overlaps blast input (for large pred_flanks)
 	    my ($eB, $eE) = PhatHit_utils::get_span_of_hit($e,'query');
@@ -1539,6 +1557,7 @@ sub to_polisher {
    my $exe      = shift;
    my $score_limit = shift;
    my $min_intron = shift;
+   my $max_intron = shift;
    my $matrix = shift;
 
    if ($type eq 'p') {
@@ -1552,6 +1571,7 @@ sub to_polisher {
 						  $exe,
 						  $score_limit,
 						  $min_intron,
+						  $max_intron,
 						  $matrix
 						 );
    }
@@ -1566,6 +1586,7 @@ sub to_polisher {
 					      $exe,
 					      $score_limit,
 					      $min_intron,
+					      $max_intron,
 					      $matrix
 					     );
    }
@@ -2021,14 +2042,15 @@ sub runBlastn {
       $command .= " -o $out_file";
    }
    elsif ($command =~ /blastn$/) {
+      #NCBI BLAST+ needs to be more restrictive or it overaligns
       #$command .= " -task blastn";
       $command .= " -db $db -query $q_file";
       $command .= " -num_alignments 10000 -num_descriptions 10000 -evalue $eval_blast";
-      $command .= " -gapextend 3";
-      $command .= " -word_size 15";
+      $command .= " -word_size 28";
       $command .= " -reward 1";
-      $command .= " -penalty -3";
-      $command .= " -gapopen 3";
+      $command .= " -penalty -5";
+      $command .= " -gapopen 5";
+      $command .= " -gapextend 5";
       $command .= " -dbsize 1000";
       $command .= ($org_type eq 'eukaryotic') ? " -searchsp 500000000" : " -searchsp 20000000";
       $command .= " -num_threads $cpus";
@@ -3629,11 +3651,6 @@ sub load_control_files {
 	       "and will be ignored.\n\n";
 	   next;
        }
-       if($p =~ /^protein2genome$/ && $CTL_OPT{organism_type} eq 'eukaryotic'){
-	   warn "WARNING: protein2genome is currently not supported for eukaryotic organisms\n".
-	       "and will be ignored.\n\n";
-	   next;
-       }
 
        $CTL_OPT{_predictor}{$p}++;
        $CTL_OPT{_run}{$p}++ unless($p =~ /est2genome|protein2genome|model_gff|pred_gff/);
@@ -4147,7 +4164,7 @@ sub generate_control_files {
        print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external GFF3 file\n";
        print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
        print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "protein2genome=$O{protein2genome} #gene prediction from protein homology (prokaryotes only), 1 = yes, 0 = no\n"  if(!$ev);
+       print OUT "protein2genome=$O{protein2genome} #gene prediction from protein homology, 1 = yes, 0 = no\n"  if(!$ev);
        print OUT "unmask=$O{unmask} #Also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);

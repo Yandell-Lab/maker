@@ -944,7 +944,7 @@ sub _adjust {
 	if(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
 	    $hB = $B;
 	}
-	if(($i == 0 && $strand == 1) || ($i == @hsps - 1 && $strand == -1)){
+	if(($i == 0 && $strand == -1) || ($i == @hsps - 1 && $strand == 1)){
 	    $hE = $E;
 	}
 

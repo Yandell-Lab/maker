@@ -549,7 +549,9 @@ sub hsps {
       $self->throw("Can't get HSPs: data not collected.");
    }
    elsif (defined($hsps)) {
-      $self->{'_hsps'} = $hsps;
+      $self->{'_hsps'} = [@$hsps]; #creates copy of the array reference
+      delete $self->{nB};
+      delete $self->{nE};
    }
    return wantarray ? @{$self->{'_hsps'}} : scalar(@{$self->{'_hsps'}});
 
@@ -953,7 +955,7 @@ sub sortedHSPs
    my $self = shift;
    my $who  = 'query';
 
-   my @subfeatures = ($self->strand eq '+') ? sort {$a->start($who) <=> $b->start($who)} $self->hsps :
+   my @subfeatures = ($self->strand == 1) ? sort {$a->start($who) <=> $b->start($who)} $self->hsps :
        sort {$b->end($who) <=> $a->end($who)} $self->hsps;
 
    return \@subfeatures;

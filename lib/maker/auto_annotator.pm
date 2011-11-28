@@ -1521,7 +1521,6 @@ sub run_it{
 
 	#------protein2genome
 	if ($predictor eq 'protein2genome') {
-	    next if($CTL_OPT->{organism_type} eq 'eukaryotic');
 	    next if(! @$gomiph);
 
 	    my $miphs = clean::remove_redundant_alt_splices($gomiph, 10);

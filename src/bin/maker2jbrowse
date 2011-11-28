@@ -1,10 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -161,6 +155,7 @@ foreach my $file (@files){
 
     open(IN, "< $file");
     my $ff; #fasta flag
+    my %seen;
     while(defined(my $line = <IN>)){
 	if($ff){
 	    $fasta .= $line;
@@ -177,6 +172,16 @@ foreach my $file (@files){
 	    if($line !~ /^\#/ && $line =~ /[^\t]*\t([^\t]*)\t/){
 		$tracks{$1}++;
 		$tracks{gene}++ if($1 eq 'maker'); #add gene locus track
+	    }
+	    if($line =~ /\tCDS\t|\tfive_prime_UTR\t|\tthree_prime_UTR\t/ && $line =~ /ID\=([^\;\n]+)/){
+		my $id = $1;
+		if($seen{$id}){
+		    my $i = 0;
+		    $i++ while($seen{"$id:$i"});
+		    $id = "$id:$i";
+		    $line =~ s/ID\=[^\;\n]+/ID\=$id/;
+		}
+		$seen{$id}++
 	    }
 
 	    $gff .= $line;
