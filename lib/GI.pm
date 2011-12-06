@@ -847,7 +847,7 @@ sub split_db {
 	$count++;
 	last if($count > $bins * 10 || $bins == 1);
     }
-    die "ERROR: The fasta file $file appears to be empty.\n" if(! $count);
+    croak"ERROR: The fasta file $file appears to be empty.\n" if(! $count);
     my $max = ($count > 10) ? int($count / 10) : 1; #min seq per bin
     $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #rebuild
     
@@ -906,7 +906,7 @@ sub split_db {
 	    $$seq_ref =~ tr/[a-z]/[A-Z]/;
 	    $$seq_ref =~ s/\-//g;
 	    $$seq_ref =~ s/X/N/g;
-	    die "ERROR: The nucleotide sequence file \'$file\'\n".
+	    croak"ERROR: The nucleotide sequence file \'$file\'\n".
 		"appears to contain protein sequence or unrecognized characters.\n".
 		"Please check/fix the file before continuing.\n".
 		"Invalid Character: $1\n\n"
@@ -926,7 +926,7 @@ sub split_db {
 	    
 	    my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
 	    
-	    die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+	    croak"ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
 		if($alias{$new_id});
 	    
 	    $alias{$new_id}++;
@@ -3956,7 +3956,7 @@ sub load_control_files {
    return %CTL_OPT if($OPT{parse});
    
    #--report errors
-   die $error if ($error);   
+   croak$error if ($error);   
 
    #--check genome file for fasta entries
    my $iterator = new Iterator::Any( -fasta => $CTL_OPT{genome},
@@ -3965,7 +3965,7 @@ sub load_control_files {
    
    unless($iterator->nextDef) {
       my $genome = $CTL_OPT{genome};
-      die "ERROR:  The file $genome contains no fasta entries\n\n";
+      croak"ERROR:  The file $genome contains no fasta entries\n\n";
    }
 
    #--decide whether to force datastore, datastore will already be defined if selected by user 
@@ -4012,10 +4012,10 @@ sub load_control_files {
    if($CTL_OPT{model_org}){
        my $exe = Cwd::abs_path($CTL_OPT{RepeatMasker});
        my ($lib) = $exe =~ /(.*\/)RepeatMasker$/;
-       die "ERROR: Could not determine if RepBase is installed\n" if(! $lib);
+       croak"ERROR: Could not determine if RepBase is installed\n" if(! $lib);
 
        $lib .= "Libraries/RepeatMaskerLib.embl";
-       die "ERROR: Could not determine if RepBase is installed\n" if(! -f $lib);
+       croak"ERROR: Could not determine if RepBase is installed\n" if(! -f $lib);
 
        open(my $IN, "< $lib");
        my $rb_flag;
@@ -4041,14 +4041,14 @@ sub load_control_files {
    #--take extra steps since lock is vulnerable to race conditions
    my $i_lock; #init lock, it is only a temporary blocking lock
    while(! $i_lock || ! $i_lock->still_mine){
-       die "ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 120, 150));
+       croak"ERROR: Cannot get initialization lock.\n\n"
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 150, 120));
    }
 
    #--check if MAKER is already running and lock the directory
    #lock must be global or it will be destroyed outside of block
    unless(($LOCK = new File::NFSLock($CTL_OPT{out_base}."/gi_lock", 'SH', 40, 40)) && $LOCK->maintain(30)){
-       die "ERROR: The directory is locked.  Perhaps by an instance of MAKER or EVALUATOR.\n\n";
+       croak"ERROR: The directory is locked.  Perhaps by an instance of MAKER or EVALUATOR.\n\n";
    }
 
    #check who else is also sharing the lock and if running same settings
@@ -4071,12 +4071,14 @@ sub load_control_files {
 		       );
 
        unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
+	   $LOCK->unlock;
 	   confess "ERROR: Could not query control option logs\n\n";
        }
 
        #should be same
        if(! runlog::are_same_opts(\%CTL_OPT, \@ctl_logs)){
-	   die "ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
+	   $LOCK->unlock;
+	   croak"ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
 	       "with different settings in this same directory.\n\n";
        }
        else{#start a second MAKER process, but give a warning
@@ -4092,8 +4094,6 @@ sub load_control_files {
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;
-   
-   
 
    return %CTL_OPT;
 }
@@ -4117,7 +4117,7 @@ sub generate_control_files {
    #--build opts.ctl file
    if($type eq 'all' || $type eq 'opts'){
        open (OUT, "> $dir/$app\_opts.$ext") or
-	   die "ERROR: Could not create $dir/$app\_opts.$ext\n";
+	   croak"ERROR: Could not create $dir/$app\_opts.$ext\n";
        print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
        print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
        print OUT "genome=$O{genome} #genome sequence (fasta format or fasta embeded in GFF3)\n";
@@ -4212,7 +4212,7 @@ sub generate_control_files {
    #--build bopts.ctl file
    if($type eq 'all' || $type eq 'bopts'){
        open (OUT, "> $dir/$app\_bopts.$ext") or
-	   die "ERROR: Could not create $dir/$app\_bopts.$ext\n";
+	   croak"ERROR: Could not create $dir/$app\_bopts.$ext\n";
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
        print OUT "blast_type=$O{blast_type} #set to 'ncbi+', 'ncbi' or 'wublast'\n";
        print OUT "\n";
@@ -4252,7 +4252,7 @@ sub generate_control_files {
    #--build maker_exe.ctl file
    if($type eq 'all' || $type eq 'exe'){
        open (OUT, "> $dir/$app\_exe.$ext") or
-	   die "ERROR: Could not create $dir/$app\_exe.$ext\n";
+	   croak"ERROR: Could not create $dir/$app\_exe.$ext\n";
        print OUT "#-----Location of Executables Used by MAKER/EVALUATOR\n";
        print OUT "makeblastdb=$O{makeblastdb} #location of NCBI+ makeblastdb executable\n";
        print OUT "blastn=$O{blastn} #location of NCBI+ blastn executable\n";
@@ -4281,7 +4281,7 @@ sub generate_control_files {
    #--build server.ctl file
    if($type eq 'server'){
        open (OUT, "> $dir/server.$ext") or
-	   die "ERROR: Could not create $dir/server.$ext\n";
+	   croak"ERROR: Could not create $dir/server.$ext\n";
        print OUT "#-----Database Setup\n";
        print OUT "DBI=$O{DBI} #interface type to database\n";
        print OUT "dbname=$O{dbname} #database name\n";
@@ -4336,7 +4336,7 @@ sub generate_control_files {
    #--build menus.ctl file
    if($type eq 'menus'){
        open (OUT, "> $dir/menus.$ext") or
-	   die "ERROR: Could not create $dir/menus.$ext\n";
+	   croak"ERROR: Could not create $dir/menus.$ext\n";
        print OUT "##Menus from Data::Dumper\n";
        print OUT Data::Dumper->Dump([\%O], [qw(menus)]);
        close(OUT);    

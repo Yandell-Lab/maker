@@ -792,9 +792,9 @@ sub _ary_to_features{
 	 my @groups = split(/\s*;\s*/, $groups);
 	 
 	 for my $group (@groups) {
-	    my ($tag,$value) = split /=/,$group;
+	    my ($tag,$value) = split (/=/,$group);
 	    $tag             = uri_unescape($tag);
-	    my @values       = map {uri_unescape($_)} split /,/,$value;
+	    my @values       = map {uri_unescape($_)} split(/,/,$value);
 	    for my $v ( @values ) {  $feat->add_tag_value($tag,$v); }
 	 }
 	 push (@features, $feat);

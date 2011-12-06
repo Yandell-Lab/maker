@@ -177,7 +177,7 @@ sub parse {
 
 		my $q_gaps    = (1 - $fields[2]/100) * abs($q_end - $q_begin);
 		my $h_gaps    = (1 - $fields[3]/100) * abs($h_end - $h_begin);
-		my $h_name = "species:$fields[9] genus:$fields[10]";
+		my $h_name = "species:$fields[9]|genus:$fields[10]";
                 my @args;
 
                 push(@args, '-query_start');

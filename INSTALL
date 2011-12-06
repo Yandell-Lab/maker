@@ -23,6 +23,15 @@ EASY INSTALL
     manually install missing modules or programs. Use ./Build status to see
     available commands.
 
+       ./Build status           #Shows a status menu
+       ./Build installdeps      #installs missing PERL dependencies
+       ./Build installexes      #installs missing external programs
+       ./Build install          #installs MAKER
+
+   Note: When using ./Build to install missig external programs, MAKER will use
+   the maker/src/locations file to identify download URLs. You can edit this file
+   to point at alternate locations.
+
 
 DETAILED INSTALL
 

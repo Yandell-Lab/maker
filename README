@@ -378,10 +378,10 @@ If you have data from a source that MAKER does not support, and you
 wish to use the data in annotating a genome, then you can pass the
 data to MAKER as an aligned GFF3 file.  This is done by supplying the
 files location to the appropriate value in the maker_opt.ctl file
-(i.e. est_gff:input\est.gff).  Note that MAKER expects all data sent
+(i.e. est_gff=some_file.gff).  Note that MAKER expects all data sent
 to it to be of the type specified, so don't put mixed data in a file
 (i.e. don't mix EST and other data in the file pointed to by est_gff,
-otherwise it all gets used as EST data).  Also the genome_gff option
+otherwise it all gets used as EST data).  Also the maker_gff option
 is only for MAKER produced GFF3 files.  Other GFF3 files of mixed data
 must be split by type and identified by the appropriate control file
 option (i.e. rm_gff for repeat data, pred_gff for ab-initio prediction
@@ -394,26 +394,6 @@ comply with all GFF3 specifications before running MAKER:
 
 #---------------------------------------------------------------------
 
-ADDING EXPLICT UTR FEATURES
-
-When using APOLLO to visualize gene annotations, UTRs are inferred
-based on exon and CDS locations.  However some programs do not infer
-the UTR, so to visualize the UTR, you will have to run add_utr_gff.pl
-with the following command:
-
-     add_utr_gff.pl <directory>
-
-     <directory> is the directory containing all of your GFF3 files.
-
-Each GFF3 file will have a sister file called sequence.wutr.gff3.
-
-There is also another script called add_utr_start_stop that adds start
-and stop codon entries as well as UTR entries.
-
-     add_utr_start_stop <GFF3 file>
-
-#---------------------------------------------------------------------
-
 APOLLO
 
 MAKER is bundled with a configuration file that improves the color and
@@ -421,7 +401,12 @@ display of MAKER annotations and evidence in the Apollo genome
 browser.  The configuration file is called "gff3.tiers" and is located
 in the maker/GMOD/Apollo/ directory.  The file should be copied to the
 ~/.apollo sub_directory in your home directory. You may have to create
-ths directory if it doesn't exist.
+ths directory if it doesn't exist.  You will need to use a terminal
+window to do this.
+
+Example:
+    mkdir ~/.apollo
+    cp maker/GMOD/Apollo/gff3.tiers ~/.apollo
 
 #---------------------------------------------------------------------
 

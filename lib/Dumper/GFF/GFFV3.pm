@@ -101,7 +101,7 @@ sub set_current_contig {
     my $seq = shift; #can be left blank and no fasta will be added
 
     #escape seqid per gff standards
-    $self->{seq_id} = uri_escape($id, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|");
+    $self->{seq_id} = uri_escape($id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|');
 
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
@@ -438,7 +438,8 @@ sub gene_data {
     my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
     my $t_structs  = $g->{t_structs};
 
-    $g_name = uri_escape($g_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+    $g_name = uri_escape($g_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
+    $g_id = uri_escape($g_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 
     my @g_data;
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
@@ -492,7 +493,7 @@ sub hit_data {
    my ($class, $type) = get_class_and_type($h, 'hit');
    
    my $name = $h->name();
-   $name = uri_escape($name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+   $name = uri_escape($name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 
    my $AED = sprintf '%.2f', $h->{_AED} if(defined ($h->{_AED}));
    my $eAED = sprintf '%.2f', $h->{_eAED} if(defined ($h->{_eAED}));
@@ -553,7 +554,7 @@ sub repeat_data {
    $class = "repeatrunner" if ($class eq 'blastx');
    
    my $h_n = $h->name();
-   $h_n = uri_escape($h_n, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+   $h_n = uri_escape($h_n, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
    
    my $h_id = get_id_hit();
    $h_id = join(":", $seq_id, $h_id, $uid);
@@ -1008,7 +1009,8 @@ sub get_transcript_data {
 	my $eAED    = $t->{eAED};
 	my $score   = '.'; #transcript scores causes chado errors/warning
 	
-	$t_name = uri_escape($t_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	$t_name = uri_escape($t_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standard
+	$t_id = uri_escape($t_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 	
 	#format informative name for GFF3
 	$AED = sprintf '%.2f', $AED; # two decimal places
@@ -1085,7 +1087,7 @@ sub get_hsp_data {
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 
 	my $hsp_name = $hit_n;
-	#$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	#$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
@@ -1130,7 +1132,7 @@ sub get_repeat_hsp_data {
 	$class = "repeatrunner" if ($class eq 'blastx');
 	
 	my $hsp_name = $hit_n;
-	#$hsp_name = uri_escape($hsp_name, "^a-zA-Z0-9\.\:\^\*\\\$\@\!\+\_\?\\-\|"); #per gff standards
+	#$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');

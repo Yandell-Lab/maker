@@ -243,7 +243,7 @@ sub ACTION_build {
     
     if($self->feature('mpi_support')){
 	$self->log_info("Configuring " . $self->dist_name . " with MPI support\n");
-	die "\n* MISSING MAKER/MPI PREREQUISITES - CANNOT CONTINUE!!\n"
+	die "\n* MISSING PREREQUISITES - CANNOT CONTINUE!!\n"
 	    if(scalar(grep {!/^(CGI|Mail|Bio\:\:Graphics)/} @perl) ||
 	       scalar(grep {/^MPI/} @exes, @libs));
     }
@@ -826,6 +826,11 @@ sub _install_exe {
 	}
 	else{
 	    print "\n\n*You will have to install RepBase manually.\n\n";
+	    print "Go to http://www.girinst.org/ to download RepBase.\n".
+		"Install it into this path --> $path\n\n".
+		"Example:\n".
+		"     cd $path\n".
+		"     tar -zxvf repeatmaskerlibraries-xxx.tar.gz\n\n";
 	}
 
 	#TRF

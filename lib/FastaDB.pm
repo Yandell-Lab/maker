@@ -11,6 +11,7 @@ use URI::Escape;
 use Bio::DB::Fasta;
 use File::NFSLock;
 use FastaSeq;
+use Error qw(:try);
 
 @ISA = qw(
           );
@@ -54,7 +55,7 @@ sub new {
 	    $lock->maintain(30);
 	}
 
-	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	push(@{$self->{index}}, _safe_new($file, @args));
 	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
 
 	#build reverse index to get the correct index based on file name
@@ -64,6 +65,28 @@ sub new {
     }
     
     return $self;
+}
+#-------------------------------------------------------------------------------
+#handles version issues that arise with AnyDBM
+sub _safe_new {
+    my ($file, @args) = @_;
+
+    my $db;
+    try {
+	local $SIG{'__WARN__'} = sub {
+	    die $_[0];
+	};
+
+	$db = new Bio::DB::Fasta($file, @args);
+    }
+    catch Error::Simple with {
+        my $E = shift;
+
+	unlink("$file.index");
+	$db = new Bio::DB::Fasta($file, @args);
+    };
+
+    return $db;
 }
 #-------------------------------------------------------------------------------
 sub reindex {
@@ -93,7 +116,7 @@ sub reindex {
 	foreach my $file (@files){
 	    my $lock;
 	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
-		push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+		push(@{$self->{index}}, _safe_new($file, @args));
 		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);		
 
 		#build reverse index to get the correct index based on file name
@@ -368,7 +391,7 @@ sub STORABLE_thaw {
     
     #build indexes
     while (my $file = shift @files){ 
-	push(@{$self->{index}}, new Bio::DB::Fasta($file, @args));
+	push(@{$self->{index}}, _safe_new($file, @args));
 	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);	
 
 	#build reverse index to get the correct index based on file name

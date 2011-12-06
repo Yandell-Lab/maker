@@ -2060,7 +2060,7 @@ sub group_transcripts {
    my $CTL_OPT      = shift;
 
    #fix weird sequence names
-   $seq_id = Fasta::seqID2SafeID($seq_id);
+   my $safe_id = quotemeta($seq_id);
 
    #place evidence and p_bases in index for easy retrieval
    my @transcripts;
@@ -2176,7 +2176,7 @@ sub group_transcripts {
 		  $SEEN->{$1}++;
 	      }
 	  }
-	  elsif ($c->[0]->name =~ /^maker-$seq_id|$seq_id-abinit/) {
+	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
 	      $g_id = $g_name;
