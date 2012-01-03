@@ -90,7 +90,9 @@ sub new {
 
     ### choose the lock filename
     my $lock_file = $self->{file}.$LOCK_EXTENSION;
-    $lock_file =~ s/([^\/]+)$/\.NFSLock\.$1/;
+    if($LOCK_EXTENSION eq '.NFSLock'){
+	$lock_file =~ s/([^\/]+)$/\.NFSLock\.$1/;
+    }
     $self->{lock_file} = $lock_file;
     $self->{rand_file} = $self->_rand_name($self->{file});
     
@@ -366,14 +368,11 @@ sub _new_NB {
 		last if (@mine && !@them && !$self->_check_shared);
 	    }
 	    
-	    unlink($self->{rand_file});
+	    unlink($rand_file);
 	    return undef;
 	}
 	else{
-	    unless($self->_create_magic($rand_file) && $self->_do_lock){
-		unlink($self->{rand_file});
-		return undef;
-	    }
+	    return undef unless($self->_create_magic($rand_file) && $self->_do_lock);
 	}	
     }
        
@@ -538,7 +537,7 @@ sub unlock {
     return 1 if($self->{unlocked});    
 
     #remove any temporary files
-    unlink($self->{rand_file}) if(-f $self->{rand_file});
+    unlink($self->{rand_file});
 
     #remove maintainer if running
     my $m_pid = $self->{_maintain};
@@ -645,32 +644,35 @@ sub _create_magic {
 }
 #-------------------------------------------------------------------------------
 sub _do_lock {
-  my $self = shift;
-  my $lock_file = $self->{lock_file};
-  my $rand_file = $self->{rand_file};
-
-  return if(! -f $rand_file);
-
-  my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
-  unlink ($rand_file) if($success);
-
-  return $success;
+    my $self = shift;
+    my $lock_file = $self->{lock_file};
+    my $rand_file = $self->{rand_file};
+    
+    return if(! -f $rand_file);
+    
+    my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
+    unlink ($rand_file);
+    
+    return $success;
 }
 #-------------------------------------------------------------------------------
 sub _do_lock_shared {
     my $self = shift;
     my $lock_file  = $self->{lock_file};
     my $rand_file  = $self->{rand_file};
-    
-    ### lock the locking process
-    local $LOCK_EXTENSION = ".share";
-    my $lock = new File::NFSLock($lock_file, LOCK_EX, 62, 60);
-    
+
     ### Try to create $lock_file from the special
     ### file with the magic SHAREBIT set.
-    my $success = link($rand_file, $lock_file);
-    unlink($rand_file);
-    
+    my $success;
+    if(-f $rand_file){
+	$success = link($rand_file, $lock_file) && (stat($lock_file))[3] == 2;
+	unlink($rand_file);
+    }    
+
+    ### lock the locking process
+    local $LOCK_EXTENSION = ".share";
+    my $lock = new File::NFSLock($lock_file, LOCK_EX, 62, 60);    
+
     if(!$success && -f $lock_file && !$self->_check_shared){
 	#lock exists as exclusive
 	return undef;
