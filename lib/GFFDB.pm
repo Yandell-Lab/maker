@@ -586,6 +586,103 @@ sub phathits_on_chunk {
     return \@phat_hits;
 }
 #-------------------------------------------------------------------------------
+sub lines_for_chunk {
+    my $self = shift;
+    my $chunk = shift;
+    my $h_type = shift;
+
+    return [] unless($self->{go_gffdb});
+    
+    my $dbfile = $self->{dbfile};
+
+    my $c_start = $chunk->start;
+    my $c_end = $chunk->end;
+    my $seqid = $chunk->seqid;
+
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    
+    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+    
+    #get gff annotations
+    my @lines;
+    if (grep(/^$h_type\_gff$/, @{$tables})){
+	my $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					    qq{WHERE seqid = '$seqid' }.
+					    qq{AND start BETWEEN $c_start AND $c_end }.
+					    qq{AND parent = '.' });
+	my $safe = quotemeta($seqid);
+	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref1; #removes contig/chromosome
+	
+	my %IDs;
+	foreach my $row (@$ref1){
+	   my $line = $row->[0];
+	   push(@lines, $line);
+	   if($line =~ /ID=([^\;\n]+)/){
+	      $IDs{$1}++;
+	   }
+	}
+	my @check = keys %IDs;
+
+	while(@check){
+	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
+	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					      qq{WHERE seqid = '$seqid' }.
+					      qq{AND ( $dsn )});
+	   
+	   %IDs = ();
+	   foreach my $row (@$ref){
+	      my $line = $row->[0];
+	      push(@lines, $line);
+	      if($line =~ /ID=([^\;\n]+)/){
+		 $IDs{$1}++;
+	      }
+	   }
+	   @check = keys %IDs;
+	}
+     }
+    
+    #get maker annotations
+    if (grep(/^$h_type\_maker$/, @{$tables})){
+	my $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					    qq{WHERE seqid = '$seqid' }.
+					    qq{AND start BETWEEN $c_start AND $c_end }.
+					    qq{AND parent = '.' });
+
+	my $safe = quotemeta($seqid);
+	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref2; #removes contig/chromosome
+
+	my %IDs;
+	foreach my $row (@$ref2){
+	   my $line = $row->[0];
+	   push(@lines, $line);
+	   if($line =~ /ID=([^\;\n]+)/){
+	      $IDs{$1}++;
+	   }
+	}
+	my @check = keys %IDs;
+
+	while(@check){
+	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
+	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					      qq{WHERE seqid = '$seqid' }.
+					      qq{AND ( $dsn )});	   
+	   %IDs = ();
+	   foreach my $row (@$ref){
+	      my $line = $row->[0];
+	      push(@lines, $line);
+	      if($line =~ /ID=([^\;\n]+)/){
+		 $IDs{$1}++ if($line =~ /ID=([^\;\n]+)/);
+	      }
+	   }
+	   @check = keys %IDs;
+	}
+    }
+    
+    $dbh->disconnect;
+
+    return \@lines;
+}
+#-------------------------------------------------------------------------------
 sub phathits_on_contig {
     my $self = shift;
     my $seqid = shift;

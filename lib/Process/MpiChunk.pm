@@ -2793,6 +2793,10 @@ sub _go {
                                                               $q_seq_length
 							      );
 	       #$GFF3_e->add_phathits($pred_gff_keepers, $uid);
+
+	       #-other passthrough
+	       my $lines = $GFF_DB->lines_for_chunk($chunk, 'other');
+	       $GFF3_e->add_lines($lines);
 	    }
 	    $GFF3_e->finalize; #write_file
 
@@ -2801,7 +2805,7 @@ sub _go {
 			$altest_gff_keepers,
 			$prot_gff_keepers);
 	    
-	    #replace actual values
+	    #replaces actual values
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    foreach my $set (@sets) {
 		@$set = map {@$_} @{cluster::clean_and_cluster($depth, $set, 0, 1)};

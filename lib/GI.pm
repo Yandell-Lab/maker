@@ -722,9 +722,8 @@ sub localize_file {
     my $tmp = GI::get_global_temp();
     
     my $lock;
-    while(! $lock || ! $lock->still_mine){
+    while(! $lock || ! $lock->maintain(30)){
 	$lock = new File::NFSLock("$tmp/$name", 'EX', 1800, 60);
-	$lock->maintain(30);
     }
     
     if(!-f "$tmp/$name"){
@@ -824,9 +823,8 @@ sub split_db {
     $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
     my $lock;
-    while(! $lock || ! $lock->still_mine){
+    while(! $lock || ! $lock->maintain(30)){
 	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
-	$lock->maintain(30);
     }
 
     #check if already finished
@@ -4042,7 +4040,7 @@ sub load_control_files {
    my $i_lock; #init lock, it is only a temporary blocking lock
    while(! $i_lock || ! $i_lock->still_mine){
        croak"ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/.init_lock", 'EX', 150, 120));
+	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/init_lock", 'EX', 150, 120));
    }
 
    #--check if MAKER is already running and lock the directory
@@ -4154,6 +4152,7 @@ sub generate_control_files {
        print OUT "repeat_protein=$O{repeat_protein} #provide a fasta file of transposable element proteins for RepeatRunner\n";
        print OUT "rm_gff=$O{rm_gff} #repeat elements from an external GFF3 file\n";
        print OUT "prok_rm=$O{prok_rm} #forces MAKER to run repeat masking on prokaryotes (don't change this), 1 = yes, 0 = no\n";
+       print OUT "softmask=$O{softmask} #use soft-masking rather than hard-masking in BLAST (i.e. seg and dust filtering)\n";
        print OUT "\n";
        print OUT "#-----Gene Prediction\n" if(!$ev);
        print OUT "#-----EVALUATOR Ab-Initio Comparison Options\n" if($ev);
@@ -4189,7 +4188,6 @@ sub generate_control_files {
        print OUT "keep_preds=$O{keep_preds} #Add unsupported gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
-       print OUT "softmask=$O{softmask} #use soft-masked rather than hard-masked (seg filtering for wublast)\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
        print OUT "\n";

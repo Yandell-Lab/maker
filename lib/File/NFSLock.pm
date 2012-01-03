@@ -1,593 +1,817 @@
-# -*- perl -*-
-#
-#  File::NFSLock - bdpO - NFS compatible (safe) locking utility
-#
-#  $Id: NFSLock.pm,v 1.34 2003/05/13 18:06:41 hookbot Exp $
-#
-#  Copyright (C) 2002, Paul T Seamons
-#                      paul@seamons.com
-#                      http://seamons.com/
-#
-#                      Rob B Brown
-#                      bbb@cpan.org
-#
-#  This package may be distributed under the terms of either the
-#  GNU General Public License
-#    or the
-#  Perl Artistic License
-#
-#  All rights reserved.
-#
-#  Please read the perldoc File::NFSLock
-#
-################################################################
-
 package File::NFSLock;
 
 use strict;
-use Exporter ();
-use vars qw(@ISA @EXPORT_OK $VERSION $TYPES
-            $LOCK_EXTENSION $SHARE_BIT $HOSTNAME $errstr
-            $graceful_sig @CATCH_SIGS);
-use Carp qw(croak confess cluck);
 use File::Copy;
 use File::Temp;
 use Storable;
 use IPC::Open2;
 use POSIX qw(:sys_wait_h);
 use Proc::Signal;
-use Time::HiRes qw(usleep);
 use URI::Escape;
+use Sys::Hostname;
+use Digest::MD5;
+use vars qw(@ISA @EXPORT $VERSION %TYPES %LOCK_LIST
+            $LOCK_EXTENSION $HOSTNAME @CATCH_SIGS);
+
+require Exporter;
 
 @ISA = qw(Exporter);
-@EXPORT_OK = qw(uncache);
-
+@EXPORT = qw(&LOCK_SH &LOCK_EX &LOCK_NB);
 $VERSION = '1.20';
 
-#Get constants, but without the bloat of
-#use Fcntl qw(LOCK_SH LOCK_EX LOCK_NB);
+#Constants
 sub LOCK_SH {1}
 sub LOCK_EX {2}
 sub LOCK_NB {4}
 
-### Convert lock_type to a number
-$TYPES = {
-  BLOCKING    => LOCK_EX,
-  BL          => LOCK_EX,
-  EXCLUSIVE   => LOCK_EX,
-  EX          => LOCK_EX,
-  NONBLOCKING => LOCK_EX | LOCK_NB,
-  NB          => LOCK_EX | LOCK_NB,
-  SHARED      => LOCK_SH,
-  SH          => LOCK_SH,
-};
 $LOCK_EXTENSION = '.NFSLock'; # customizable extension
-$HOSTNAME = undef;
-$SHARE_BIT = 1;
+$HOSTNAME = &Sys::Hostname::hostname();
 
-###----------------------------------------------------------------###
+### Number converion for lock_type
+%TYPES = (LOCK_EX     => LOCK_EX,
+	  BLOCKING    => LOCK_EX,
+	  BL          => LOCK_EX,
+	  EXCLUSIVE   => LOCK_EX,
+	  EX          => LOCK_EX,
+	  LOCK_NB     => LOCK_NB,
+	  NONBLOCKING => LOCK_NB,
+	  NB          => LOCK_NB,
+	  LOCK_SH     => LOCK_SH,
+	  SHARED      => LOCK_SH,
+	  SH          => LOCK_SH,);
 
-my $graceful_sig = sub {
-  print STDERR "Received SIG$_[0]\n" if @_;
-  # Perl's exit should safely DESTROY any objects
-  # still "alive" before calling the real _exit().
-  exit;
-};
+#signals to catch and replace
+@CATCH_SIGS = qw(TERM INT QUIT KILL TERM STOP);
+my $graceful_sig = sub{ exit; };#ensures that DESTROY and END are called
 
-@CATCH_SIGS = qw(TERM INT);
-
+#-------------------------------------------------------------------------------
+#----------------------------------- METHODS -----------------------------------
+#-------------------------------------------------------------------------------
 sub new {
-  $errstr = undef;
-    
-  my $type  = shift;
-  my $class = ref($type) || $type || __PACKAGE__;
-  my $self  = {};
+    my $self = {};
+    my $class = shift;
 
-  ### allow for arguments by hash ref or serially
-  if( @_ && ref $_[0] ){
-      $self = shift;
-  }
-  else{
-      $self->{file}      = shift;
-      $self->{lock_type} = shift;
-      $self->{blocking_timeout}   = shift;
-      $self->{stale_lock_timeout} = shift;
-  }
-  $self->{file}       ||= "";
-  $self->{lock_type}  ||= 0;
-  $self->{blocking_timeout}   ||= -1;
-  $self->{stale_lock_timeout} ||= 0;
-  $self->{lock_pid} = $$;
-  $self->{unlocked} = 1;
-  $self->{id} = int(rand()*10000);
-  foreach my $signal (@CATCH_SIGS) {
-      if (!$SIG{$signal} ||
-	  $SIG{$signal} eq "DEFAULT"
-	  ) {
-	  $SIG{$signal} = $graceful_sig;
-      }
-  }
-  
-  ### force lock_type to be numerical
-  if( $self->{lock_type} &&
-      $self->{lock_type} !~ /^\d+/ &&
-      exists $TYPES->{$self->{lock_type}}
-    ){
-      $self->{lock_type} = $TYPES->{$self->{lock_type}};
-  }
-  
-  ### need the hostname
-  if( !$HOSTNAME ){
-      require Sys::Hostname;
-      $HOSTNAME = &Sys::Hostname::hostname();
-  }
-  
-  ### quick usage check
-  croak ($errstr = "Usage: my \$f = $class->new('/pathtofile/file',\n"
-         ."'BLOCKING|EXCLUSIVE|NONBLOCKING|SHARED', [blocking_timeout, stale_lock_timeout]);\n"
-         ."(You passed \"$self->{file}\" and \"$self->{lock_type}\")")
-      unless length($self->{file});
-  
-  croak ($errstr = "Unrecognized lock_type operation setting [$self->{lock_type}]")
-      unless $self->{lock_type} && $self->{lock_type} =~ /^\d+$/;
-  
-  ### Input syntax checking passed, ready to bless
-  bless $self, $class;
-  
-  ### choose a random filename
-  unlink($self->{rand_file}) if($self->{rand_file} && -f $self->{rand_file});
-  $self->{rand_file} = rand_file( $self->{file} );
-  
-  ### choose the lock filename
-  $self->{lock_file} = $self->{file} . $LOCK_EXTENSION;
-  $self->{lock_file} =~ s/([^\/]+)$/\.NFSLock\.$1/;
+    bless($self, $class);
 
-  my $quit_time = ($self->{blocking_timeout} >= 0 &&
-      $self->{lock_type} != LOCK_NB) ?
-      time() + $self->{blocking_timeout} : 0;
-
-  while (1) {
-      ### remove an old lockfile if it is older than the stale_timeout
-      if( -f $self->{lock_file} &&
-	  $self->{stale_lock_timeout} > 0 &&
-	  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-	){
-	  #unlink ($self->{lock_file}); 
-	  #lock the lock file
-	  local $LOCK_EXTENSION = '.shared';
-	  if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
-	      #always check twice that this is still the file
-	      if( -f $self->{lock_file} &&
-		  $self->{stale_lock_timeout} > 0 &&
-		  time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-		){
-		  unlink ($self->{lock_file});
-	      }
-	      $share->unlock;
-         }
-      }
-      
-      ### open the temporary file
-      $self->create_magic
-	  or do{unlink($self->{rand_file}); return undef};
-
-      if ( $self->{lock_type} & LOCK_EX ) {
-	  last if ($self->do_lock);
-      }
-      elsif ( $self->{lock_type} & LOCK_SH ) {
-	  last if ($self->do_lock_shared);
-      }
-      else {
-	  $errstr = "Unknown lock_type [$self->{lock_type}]";
-	  unlink($self->{rand_file});
-	  return undef;
-      }
-      
-      ### Lock failed!
-      
-      ### I know this may be a race condition, but it's okay.  It is just a
-      ### stab in the dark to possibly find long dead processes.
-      
-      ### If lock exists and is readable, see who is mooching on the lock      
-      if ( -f $self->{lock_file} && open (_FH,"+<$self->{lock_file}") ){
-	  my @mine = ();
-	  my @them = ();
-	  my @dead = ();
-	  
-	  my $has_lock_exclusive = !((stat $self->{lock_file})[2] && $SHARE_BIT);
-	  my $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
-	  
-	  while(defined(my $line=<_FH>)){
-	      if ($line =~ /^$HOSTNAME (\d+) /) {
-		  my $pid = $1;
-		  if ($pid == $$) {       # This is me.
-		      push @mine, $line;
-		  }
-		  elsif(kill 0, $pid) {  # Still running on this host.
-		      push @them, $line;
-		  }
-		  else{                  # Finished running on this host.
-		      push @dead, $line;
-		  }
-	      }
-	      else {                  # Running on another host, so
-		  push @them, $line;      #  assume it is still running.
-	      }
-	  }
-	  
-	  ### If there was at least one stale lock discovered...
-	  if (@dead) {
-	      # Lock lock_file to avoid a race condition.
-	      local $LOCK_EXTENSION = ".shared";
-	      if(my $share = new File::NFSLock ($self->{lock_file},LOCK_EX,62,60)){
-		  ### Rescan in case lock contents were modified between time stale lock
-		  ###  was discovered and lockfile lock was acquired.
-		  if(-f $self->{lock_file} && open (_FH,"+<$self->{lock_file}")){
-		      @mine = ();
-		      @them = ();
-		      @dead = ();
-		      
-		      $has_lock_exclusive = !((stat $self->{lock_file})[2] && $SHARE_BIT);
-		      $try_lock_exclusive = !($self->{lock_type} && LOCK_SH);
-		      
-		      my $id_line = '';
-		      my $content = '';
-		      seek     _FH, 0, 0;
-		      while(defined(my $line=<_FH>)){
-			  if ($line =~ /^$HOSTNAME (\d+) /) {
-			      my $pid = $1;
-			      if ($pid == $$) {       # This is me.
-				  push @mine, $line;
-				  $content .= $line;
-			      }
-			      elsif(kill 0, $pid) {  # Still running on this host.
-				  push @them, $line;
-				  $content .= $line;
-			      }
-			      else{                  # Finished running on this host.
-				  push @dead, $line;
-			      }
-			  }
-			  elsif($line !~ / /){
-			      $id_line = $line;
-			  }
-			  else {                  # Running on another host, so
-			      push @them, $line;      #  assume it is still running.
-			      $content .= $line;
-			  }
-		      }
-		      
-		      ### Save any valid locks or wipe file.
-		      if( length($content) ){
-			  seek     _FH, 0, 0;
-			  print    _FH $id_line;
-			  print    _FH $content;
-			  truncate _FH, length($id_line.$content);
-			  close    _FH;
-		      }else{
-			  close _FH;
-			  unlink ($self->{lock_file});
-		      }
-		  }
-		  
-		  $share->unlock;
-	      }
-	  }
-	  else { ### No "dead" or stale locks found.
-	      close _FH;
-	  }
-	  
-	  ### If attempting to acquire the same type of lock
-	  ###  that it is already locked with, and I've already
-	  ###  locked it myself, then it is safe to lock again.
-	  ### Just kick out successfully without really locking.
-	  ### Assumes locks will be released in the reverse
-	  ###  order from how they were established.
-	  if ($try_lock_exclusive eq $has_lock_exclusive && @mine){
-	      unlink($self->{rand_file});
-	      last;
-	  }
-      }
-      
-      ### If non-blocking, then kick out now.
-      ### ($errstr might already be set to the reason.)
-      if ($self->{lock_type} & LOCK_NB) {
-	  $errstr ||= "NONBLOCKING lock failed!";
-	  unlink($self->{rand_file});
-	  return undef;
-      }
-      
-      ### wait a moment
-      sleep(1);
-  
-      ### but don't wait past the time out
-      if($quit_time && (time > $quit_time) ){
-	  $errstr = "Timed out waiting for blocking lock";
-	  unlink($self->{rand_file});
-	  return undef;
-      }
-      
-      # BLOCKING Lock, So Keep Trying
-  }
-  
-  ### clear up the NFS cache
-  $self->uncache;
-  
-  ### Yes, the lock has been aquired.
-  delete $self->{unlocked};
-
-  return ($self->still_mine) ? $self : $self->new($self);
-}
-
-sub DESTROY {
-  shift()->unlock();
-}
-
-sub unlock {
-  my $self = shift;
-
-  #remove any temporary files
-  unlink($self->{rand_file}) if(-f $self->{rand_file});
-
-  #remove maintainer if running
-  if(defined $self->{_maintain} && Proc::Signal::id_matches_pattern($self->{_maintain}, 'maintain\.pl|\<defunct\>')){
-      kill(2, $self->{_maintain});
-      close($self->{_OUT}) if(ref $self->{_OUT} eq 'GLOB');
-      close($self->{_IN}) if(ref $self->{_OUT} eq 'GLOB');
-      
-      #attempt kill multiple times if still running
-      my $stat = waitpid($self->{_maintain}, WNOHANG);
-      my $count = 0;
-      while($stat == 0 && $count < 200){
-	  kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
-	  usleep(100000) if($stat == 0);
-	  $stat = waitpid($self->{_maintain}, WNOHANG);
-	  $count++;
-      }
-      
-      #if still running, do this
-      if($stat == 0){
-	  waitpid($self->{_maintain}, 0) if($stat == 0);
-	  #die "ERROR: Could not destroy lock maintainer\n";
-      }
-      
-      $self->{_maintain} = undef;
-  }
-
-  if (!$self->{unlocked}) {
-    my $stat;
-    if( $self->{lock_type} & LOCK_SH ){
-      $stat = $self->do_unlock_shared;
-    }else{
-      $stat = $self->do_unlock;
-    }
-
+    $self->{file}               = shift || '';
+    $self->{lock_type}          = shift || '';
+    $self->{blocking_timeout}   = shift || 0;
+    $self->{stale_lock_timeout} = shift || 0;
+    $self->{lock_pid} = $$;
+    $self->{hostname} = $HOSTNAME;
     $self->{unlocked} = 1;
-    foreach my $signal (@CATCH_SIGS) {
-      if ($SIG{$signal} &&
-          ($SIG{$signal} eq $graceful_sig)) {
-        # Revert handler back to how it used to be.
-        # Unfortunately, this will restore the
-        # handler back even if there are other
-        # locks still in tact, but for most cases,
-        # it will still be an improvement.
-        delete $SIG{$signal};
-      }
+    ($self->{id} = rand()) =~ s/\.//;
+    $self->{quit_time} = ($self->{blocking_timeout}) ? time+$self->{blocking_timeout} : 0;
+
+    if(ref($self->{file}) eq 'HASH'){
+	my $h = $self->{file};
+	$self->{file}               = $h->{file} || '';
+        $self->{lock_type}          = $h->{lock_type} || '';
+        $self->{stale_lock_timeout} = $h->{stale_lock_timeout} || 0;
+
+	if($h->{blocking_timeout}){
+	    $self->{blocking_timeout} = $h->{blocking_timeout};
+	    $self->{quit_time} = time + $self->{blocking_timeout};
+	}
+	elsif($h->{quit_time}){
+	    $self->{quit_time} = $h->{quit_time};
+	    $self->{blocking_timeout} = $self->{quit_time} - time || 1;
+	    return if($self->{blocking_timeout} < 0); #already finished
+	}
+	else{
+	    $self->{blocking_timeout} = 0;
+	    $self->{quit_time} = 0;
+	}
     }
+
+    $self->{lock_type} = $TYPES{$self->{lock_type}} if($self->{lock_type} !~ /^\d+/);
+
+    die "ERROR: You must specify a file to lock.\n"unless(length($self->{file}));
+
+    ### choose the lock filename
+    my $lock_file = $self->{file}.$LOCK_EXTENSION;
+    $lock_file =~ s/([^\/]+)$/\.NFSLock\.$1/;
+    $self->{lock_file} = $lock_file;
+    $self->{rand_file} = $self->_rand_name($self->{file});
+    
+    #replace signals
+    foreach my $signal (@CATCH_SIGS) {
+	$SIG{$signal} = $graceful_sig if(!$SIG{$signal} || $SIG{$signal} eq 'DEFAULT');
+    }
+    
+    #make lock
+    if($self->{lock_type} == LOCK_SH){
+	$self->_new_SH;
+    }
+    elsif($self->{lock_type} == LOCK_EX){
+	$self->_new_EX;
+    }
+    elsif($self->{lock_type} == LOCK_NB){
+	delete($self->{blocking_timeout});
+	delete($self->{quit_time});
+	$self->_new_NB;
+    }
+    else{
+	die "ERROR: Invalid lock type\n";
+    }
+
+    if($self->{unlocked}){
+	# Revert handler
+	foreach my $signal (@CATCH_SIGS) {
+	    delete $SIG{$signal} if($SIG{$signal} && $SIG{$signal} eq $graceful_sig);
+	}
+
+	return undef;
+    }
+
+    return $self;
+}
+
+#-------------------------------------------------------------------------------
+sub _new_EX {
+    my $self       = shift;
+    my $lock_file  = $self->{lock_file};
+    my $rand_file  = $self->{rand_file};
+    my $pid        = $self->{lock_pid};
+    my $hostname   = $self->{hostname};
+    my $quit_time  = $self->{quit_time};
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
+ 
+    my $stack;
+    while (1) {
+	if($quit_time && time > $quit_time){
+	    unlink($rand_file);
+	    return undef;
+	}
+	
+	if(-f $lock_file){
+	    #create lock stack in IO
+	    if($LOCK_LIST{"$lock_file\_EX"} && $self->still_mine){
+		last if($self->_create_magic($lock_file));
+		next;
+	    }
+	    elsif(! $stack){
+		local $LOCK_EXTENSION = '.STACK';
+		$stack = new File::NFSLock({file      => $lock_file,
+					    lock_type => LOCK_EX,
+					    quit_time => $quit_time,
+					    stale_lock_timeout => $stale_lock_timeout});
+		next if(! $stack);
+	    }
+	    
+	    ### remove an old lockfile if it is older than the stale_timeout
+	    if($stale_lock_timeout && (stat($lock_file))[9] + $stale_lock_timeout < time){
+		if(!$stack->still_mine){
+		    undef $stack;
+		    next;
+		}
+		
+		#get the lock before releasing the stack
+		last if($self->_create_magic($lock_file));
+	    }
+
+	    ### If lock exists and is readable, see who is mooching on the lock
+	    if(open (my $FH,"+<$lock_file")){
+		my @mine;
+		my @them;
+		my @dead;
+		while(defined(my $line=<$FH>)){
+		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+		    
+		    my $l_host = $1;
+		    my $l_pid  = $2;
+		    my $l_time = $3;
+		    my $l_id   = $4;   
+		    my $l_kind = $5;
+		    
+		    if($l_host eq $hostname){
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			elsif ($l_pid == $pid) { # This is me.
+			    push(@mine, $line);
+			    last;
+			}
+			elsif(kill(0, $l_pid)) { # Still running on this host.
+			    push(@them, $line);
+			    last;
+			}
+			else{ # Finished running on this host.
+			    push(@dead, $line);
+			    next;
+			}
+		    }
+		    else{
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			else{
+			    push(@them, $line);
+			    last;
+			}
+		    }
+		}
+		close($FH);
+		
+		### If there was a stale lock discovered...
+		if(!@them && !@mine){
+		    last if($self->_create_magic($lock_file));
+		}
+		
+		### If attempting to acquire the same type of lock
+		### that it is already locked with, and I've already
+		### locked it myself, then it is safe to lock again.
+		### Just kick out successfully without really locking.
+		### Assumes locks will be released in the reverse
+		### order from how they were established.
+		if (@mine && !@them && !$self->_check_shared){
+		    last if($self->_create_magic($lock_file));
+		}
+	    }
+	}
+	else{
+	    last if($self->_create_magic($rand_file) && $self->_do_lock);
+	}
+
+	### wait a moment or timeout
+	my $time = time();
+	my $dob = (stat($lock_file))[9];
+	next if(!defined $dob); #file no longer exists
+
+	my $age = $time - $dob;
+	my $sleep_max = $age/100; #1% of current lock time
+	$sleep_max = 1 if($sleep_max < 1);
+	$sleep_max = 10 if($sleep_max > 10);
+	$sleep_max = 1 if($quit_time && $quit_time - $time < $sleep_max);
+	$sleep_max = 1 if($stale_lock_timeout && $stale_lock_timeout - $age < $sleep_max);
+	
+	if($quit_time && $time > $quit_time){
+	    unlink($rand_file);
+	    return undef;
+	}
+	else{
+	    sleep $sleep_max;
+	    next;
+	}
+    }
+
+    $self->uncache; #trick for NFS to update cache   
+    
+    if($self->still_mine){
+	unlink($rand_file);
+	$LOCK_LIST{"$lock_file\_EX"}++;
+	delete($self->{unlocked});
+	return $self;
+    }
+    else{
+	return $self->_new_EX();
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub _new_NB {
+    my $self       = shift;
+    my $lock_file  = $self->{lock_file};
+    my $rand_file  = $self->{rand_file};
+    my $pid        = $self->{lock_pid};
+    my $hostname   = $self->{hostname};
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
+
+    my $stack;
+    { #single iteration block (so last will work))
+	if(-f $lock_file){
+	    if($LOCK_LIST{"$lock_file\_EX"} && $self->still_mine){
+		last if($self->_create_magic($lock_file));		
+	    }
+	    else{
+		#create lock stack in IO
+		local $LOCK_EXTENSION = '.STACK';
+		$stack = new File::NFSLock($lock_file, LOCK_NB, 0, $stale_lock_timeout);
+		if(! $stack){
+		    unlink($rand_file);
+		    return undef;
+		}
+	    }
+	    
+	    ### remove an old lockfile if it is older than the stale_timeout
+	    if($stale_lock_timeout && (stat($lock_file))[9] + $stale_lock_timeout < time){
+		if(!$stack->still_mine){
+		    unlink($rand_file);
+		    return undef;
+		}
+		
+		#get the lock before releasing the stack
+		last if($self->_create_magic($lock_file));
+	    }
+
+	    if(open (my $FH,"+<$lock_file")){
+		my @mine;
+		my @them;
+		my @dead;		
+		while(defined(my $line=<$FH>)){
+		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+		    
+		    my $l_host = $1;
+		    my $l_pid  = $2;
+		    my $l_time = $3;
+		    my $l_id   = $4;   
+		    my $l_kind = $5;
+		    
+		    if($l_host eq $hostname){
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			elsif ($l_pid == $pid) { # This is me.
+			    push(@mine, $line);
+			    last;
+			}
+			elsif(kill(0, $l_pid)) { # Still running on this host.
+			    push(@them, $line);
+			    last;
+			}
+			else{ # Finished running on this host.
+			    push(@dead, $line);
+			    next;
+			}
+		    }
+		    else{
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			else{ # assume it is still running.
+			    push(@them, $line);
+			    last;
+			}
+		    }
+		}
+		close($FH);
+		
+		### If there was a stale lock discovered...
+		last if(!@them && !@mine && $self->_create_magic($lock_file));
+		
+		### If attempting to acquire the same type of lock
+		### that it is already locked with, and I've already
+		### locked it myself, then it is safe to lock again.
+		### Just kick out successfully without really locking.
+		### Assumes locks will be released in the reverse
+		### order from how they were established.
+		last if (@mine && !@them && !$self->_check_shared);
+	    }
+	    
+	    unlink($self->{rand_file});
+	    return undef;
+	}
+	else{
+	    unless($self->_create_magic($rand_file) && $self->_do_lock){
+		unlink($self->{rand_file});
+		return undef;
+	    }
+	}	
+    }
+       
+    $self->uncache; #trick for NFS to update cache
+ 
+    if($self->still_mine){
+	unlink($rand_file);
+	$LOCK_LIST{"$lock_file\_EX"}++;
+	delete($self->{unlocked});
+	return $self;
+    }
+    else{
+	return $self->_new_NB();
+    }
+}
+#-------------------------------------------------------------------------------
+sub _new_SH {
+    my $self       = shift;
+    my $lock_file  = $self->{lock_file};
+    my $rand_file  = $self->{rand_file};
+    my $pid        = $self->{lock_pid};
+    my $hostname   = $self->{hostname};
+    my $quit_time  = $self->{quit_time};
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
+ 
+    my $stack;
+    while (1) {
+	if($quit_time && time > $quit_time){
+	    unlink($rand_file);
+	    return undef
+	}
+
+	my $exists;
+	my $shared;
+	if(-f $lock_file){
+	    $exists = 1;
+	    $shared = $self->_check_shared;
+	}
+
+	if($exists && $shared){ #this is a shared lock so just join in
+	    last if($self->_do_lock_shared);
+	}
+	elsif($exists && !$shared){ #exclusive lock, see if I can take it
+	    #create lock stack in IO
+	    local $LOCK_EXTENSION = '.STACK';
+	    if(!$stack){
+		$stack = new File::NFSLock({file      => $lock_file,
+					    lock_type => LOCK_EX,
+					    quit_time => $quit_time,
+					    stale_lock_timeout => $stale_lock_timeout});
+		
+		next if(! $stack);
+	    }
+
+	    ### remove an old lockfile if it is older than the stale_timeout
+	    if($stale_lock_timeout && (stat($lock_file))[9] + $stale_lock_timeout < time){
+		if(!$stack->still_mine){
+		    unlink($rand_file);
+		    return undef;
+		}
+		
+		#get the lock before releasing the stack
+		last if($self->_create_magic($lock_file));
+	    }
+
+	    if(open (my $FH,"+<$lock_file")){
+		my @mine;
+		my @them;
+		my @dead;		
+		while(defined(my $line=<$FH>)){
+		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+		    
+		    my $l_host = $1;
+		    my $l_pid  = $2;
+		    my $l_time = $3;
+		    my $l_id   = $4;   
+		    my $l_kind = $5;
+		    
+		    if($l_host eq $hostname){
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			elsif ($l_pid == $pid) { # This is me.
+			    push(@mine, $line);
+			    last;
+			}
+			elsif(kill(0, $l_pid)) { # Still running on this host.
+			    push(@them, $line);
+			    last;
+			}
+			else{ # Finished running on this host.
+			    push(@dead, $line);
+			    next;
+			}
+		    }
+		    else{
+			# see if I can break it
+			if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+			    push(@dead, $line);
+			    next;
+			}
+			else{ # assume it is still running.
+			    push(@them, $line);
+			    last;
+			}
+		    }
+		}
+		close($FH);
+		
+		### If there was a stale lock discovered...
+		last if(!@them && !@mine && $self->_create_magic($lock_file));
+	    }
+	}
+	else{
+	    last if($self->_create_magic($rand_file) && $self->_do_lock_shared);
+	}
+
+	### wait a moment or timeout
+	my $time = time();
+	my $dob = (stat($lock_file))[9];
+	next if(!defined $dob); #file no longer exists
+
+	my $age = $time - $dob;
+	my $sleep_max = $age/100; #1% of current lock time
+	$sleep_max = 1 if($sleep_max < 1);
+	$sleep_max = 10 if($sleep_max > 10);
+	$sleep_max = 1 if($quit_time && $quit_time - $time < $sleep_max);
+	$sleep_max = 1 if($stale_lock_timeout && $stale_lock_timeout - $age < $sleep_max);
+	
+	if($quit_time && $time > $quit_time){
+	    unlink($rand_file);
+	    return undef;
+	}
+	else{
+	    sleep $sleep_max;
+	    next;
+	}
+    }
+
+    $self->uncache; #trick for NFS to update cache   
+    
+    if($self->still_mine){
+	unlink($rand_file);
+	$LOCK_LIST{"$lock_file\_SH"}++;
+	delete($self->{unlocked});
+	return $self;
+    }
+    else{
+	return $self->_new_SH();
+    }
+}
+
+#-------------------------------------------------------------------------------
+sub unlock {
+    my $self = shift;
+    my $force = shift;
+
+    $self->_unlink_block(0) if($force);
+
+    return 1 if($self->{unlocked});    
+
+    #remove any temporary files
+    unlink($self->{rand_file}) if(-f $self->{rand_file});
+
+    #remove maintainer if running
+    my $m_pid = $self->{_maintain};
+    if(defined($m_pid) && Proc::Signal::id_matches_pattern($m_pid, 'maintain\.pl|\<defunct\>')){
+	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
+
+	#clean up any children that are floating around
+	my $stat;
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;
+
+	#signal maintainer
+	kill(2, $self->{_maintain});
+	my $stat = waitpid($self->{_maintain}, WNOHANG);
+
+	#attempt kill multiple times if still running
+	my $count = 0;
+	while($stat == 0 && $count < 200){
+	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    usleep(0.1) if($stat == 0);
+	    $stat = waitpid($self->{_maintain}, WNOHANG);
+	    $count++;
+	}
+	
+	#if still running, do this
+	if($stat == 0){
+	    waitpid($self->{_maintain}, 0);
+	}
+	
+	$self->{_maintain} = undef;
+    }
+    
+    my $stat = ($self->{lock_type} == LOCK_SH) ? $self->_do_unlock_shared : $self->_do_unlock;
+    $self->{unlocked} = 1;
+    
+    # Revert handler once all locks are finished
+    if(! grep {$_ > 0} values %LOCK_LIST){
+	foreach my $signal (@CATCH_SIGS) {
+	    delete $SIG{$signal} if($SIG{$signal} && $SIG{$signal} eq $graceful_sig);
+	}
+    }
+    
     return $stat;
-  }
-  return 1;
+}
+#-------------------------------------------------------------------------------
+sub _check_shared {
+    my $self = shift;
+    my $lock_file = $self->{lock_file};    
+    return ((stat($lock_file))[2] & 1); 
 }
 
-###----------------------------------------------------------------###
+#-------------------------------------------------------------------------------
+sub _rand_name {
+    my $self = shift;
+    my $file = shift;
+    
+    my $rand;
+    while(!$rand || -f $rand){
+	$rand = "$file.tmp.".(time % 10000).".$$.".(rand()*10000);
+	$rand =~ s/([^\/]+)$/\.NFSLock\.$1/;
+    }
 
-# concepts for these routines were taken from Mail::Box which
-# took the concepts from Mail::Folder
-
-
-sub rand_file {
-  my $file = shift;
-  my $rand = "$file.tmp.". time()%10000 .'.'. $$ .'.'. int(rand()*10000);
-  $rand =~ s/([^\/]+)$/\.NFSLock\.$1/;
-  return(rand_file($file)) if(-f $rand);
-  return $rand;
+    return $rand;
 }
-
-sub create_magic {
-  $errstr = undef;
+#-------------------------------------------------------------------------------
+sub _create_magic {
   my $self = shift;
-  my $append_file = shift || $self->{rand_file};
+  my $append_file = shift;
+  my $shared = ($self->{lock_type} == LOCK_SH) ? 1 : 0;
+  my $pid = $self->{lock_pid};
+  my $hostname   = $self->{hostname};
   my $id = $self->{id};
 
-  ### need the hostname
-  if( !$HOSTNAME ){
-    require Sys::Hostname;
-    $HOSTNAME = &Sys::Hostname::hostname();
-  }
+  $self->{lock_line} = "$hostname $pid ".time()." $id $shared\n";
+  my $first  = ($append_file eq $self->{rand_file});
 
-  $self->{lock_line} ||= "$HOSTNAME $self->{lock_pid} ".time()." $id\n";
-  local *_FH;
+  if($shared){
+      open(my $FH,"+>>$append_file") or return undef;
 
-  my $exists = -f $append_file;
-  my $shared = ($self->{lock_type} && $self->{lock_type} == LOCK_SH);
-  my $first  = $append_file eq $self->{rand_file};
-  my $set_id = ($shared && $first && !$exists);
-  if($shared || ! $exists){
-      $self->{_id_line} = Digest::MD5::md5_hex($self->{lock_line})."\n" if($set_id); 
-
-      open (_FH,">>$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
-      print _FH $self->{_id_line} if($set_id);
-      print _FH $self->{lock_line};
-      close _FH;
-      
-
-      if(! $first && $shared){
-	  open (_FH,"<$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
-	  my $line = <_FH>; #should always be first line
-	  close(_FH);
+      #reading
+      if(! $first){
+	  seek $FH, 0, 0;
+	  my $line = <$FH>; #should always be first line
 	  $self->{id_line} = $line if($line !~ / /);
+	  $self->{id_line} ||= Digest::MD5::md5_hex($self->{lock_line})."\n";
       }
 
-      if(! $exists){
-	  my $chmod = 0600;
-	  $chmod |= $SHARE_BIT if($self->{lock_type} == LOCK_SH);
-	  chmod( $chmod, $append_file)
-	      || die "I need ability to chmod files to adequatetly perform locking";
-      }
+      #writing
+      print $FH $self->{id_line} if($first);
+      print $FH $self->{lock_line};
+      close($FH);
+
+      chmod((0600 | 1), $append_file) or die "ERROR: I can't chmod files for locking";
   }
   else{
-      open (_FH,"+<$append_file") or do { $errstr = "Couldn't open \"$append_file\" [$!]"; return undef; };
-      seek     _FH, 0, 0;
-      print    _FH $self->{lock_line};
-      truncate _FH, length($self->{lock_line});
-      close    _FH;
+      open(my $FH,">$append_file") or return undef;      
+      print $FH $self->{lock_line};
+      close($FH);
+      chmod(0600, $append_file)
   }
 
   return 1;
 }
-
-sub do_lock {
-  $errstr = undef;
+#-------------------------------------------------------------------------------
+sub _do_lock {
   my $self = shift;
   my $lock_file = $self->{lock_file};
   my $rand_file = $self->{rand_file};
 
-  ### try a hard link, if it worked
-  ### two files are pointing to $rand_file
-  my $success = link( $rand_file, $lock_file )
-      && -e $rand_file && (stat $self->{lock_file})[3] == 2;
+  return if(! -f $rand_file);
+
+  my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
   unlink ($rand_file) if($success);
 
   return $success;
 }
-
-sub do_lock_shared {
-  $errstr = undef;
-  my $self = shift;
-  my $lock_file  = $self->{lock_file};
-  my $rand_file  = $self->{rand_file};
-
-  ### lock the locking process
-  local $LOCK_EXTENSION = ".shared";
-  my $lock = new File::NFSLock {
-    file => $lock_file,
-    lock_type => LOCK_EX,
-    blocking_timeout => 62,
-    stale_lock_timeout => 60,
-  };
-  # The ".shared" lock will be released as this status
-  # is returned, whether or not the status is successful.
-
-  ### If I didn't have exclusive and the shared bit is not
-  ### set, I have failed
-
-  ### Try to create $lock_file from the special
-  ### file with the magic $SHARE_BIT set.
-  my $success = link( $rand_file, $lock_file);
-  unlink ($rand_file);
-  if ( !$success &&
-       -e $lock_file &&
-       ((stat $self->{lock_file})[2] & $SHARE_BIT) != $SHARE_BIT
-     ){
-
-    $errstr = 'Exclusive lock exists.';
-    return undef;
-
-  }
-  elsif ( !$success ) {
-    ### Shared lock exists, append my lock
-    $self->create_magic ($self->{lock_file});
-  }
-  elsif($success){
-      $self->{id_line} = $self->{_id_line};
-      delete $self->{_id_line};
-  }
-
-  # Success
-  return 1;
+#-------------------------------------------------------------------------------
+sub _do_lock_shared {
+    my $self = shift;
+    my $lock_file  = $self->{lock_file};
+    my $rand_file  = $self->{rand_file};
+    
+    ### lock the locking process
+    local $LOCK_EXTENSION = ".share";
+    my $lock = new File::NFSLock($lock_file, LOCK_EX, 62, 60);
+    
+    ### Try to create $lock_file from the special
+    ### file with the magic SHAREBIT set.
+    my $success = link($rand_file, $lock_file);
+    unlink($rand_file);
+    
+    if(!$success && -f $lock_file && !$self->_check_shared){
+	#lock exists as exclusive
+	return undef;
+    }
+    elsif(!$success) {
+	### it's already shared or is yet to exist so append my lock
+	$self->_create_magic($lock_file);
+    }
+    elsif($success){
+	return 1;
+    }
 }
-
-sub do_unlock {
+#-------------------------------------------------------------------------------
+sub _do_unlock {
   my $self = shift;
 
-  my $stat = unlink($self->{lock_file}) if($self->still_mine);
+  return 1 if($self->{unlocked});
+
+  $LOCK_LIST{$self->{lock_file}."_EX"}--;
+  $self->{unlocked} = 1;
+
+  return 1 if(! -f $self->{lock_file});
+  return 1 if($self->_check_shared);
+  return 1 unless($LOCK_LIST{$self->{lock_file}."_EX"} <= 0);
+
+  $LOCK_LIST{$self->{lock_file}."_EX"} = 0; # just in case it's less than 0
+  my $stat = unlink($self->{lock_file}) if(!$self->_unlink_block && $self->still_mine);
 
   return $stat;
 }
+#-------------------------------------------------------------------------------
+sub _do_unlock_shared {
+    my $self = shift;
+    my $lock_file = $self->{lock_file};
+    my $lock_line = $self->{lock_line};
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
+    my $hostname   = $self->{hostname};
+    my $pid = $self->{lock_pid};
+    my $id = $self->{id};    
 
-sub do_unlock_shared {
-  $errstr = undef;
-  my $self = shift;
-  my $lock_file = $self->{lock_file};
-  my $lock_line = $self->{lock_line};
-  my $pid = $self->{lock_pid};
-  my $id = $self->{id};
+    return 1 if($self->{unlocked});
 
-  ### lock the locking process
-  local $LOCK_EXTENSION = '.shared';
-  my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    $LOCK_LIST{$self->{lock_file}."_SH"}--;
+    $self->{unlocked} = 1;
 
-  ### get the handle on the lock file
-  local *_FH;
-  if( ! open (_FH,"+<$lock_file") ){
-    if( ! -e $lock_file || $! =~ /No such file or directory/){
-      return 1;
-    }else{
-      die "Could not open for writing shared lock file $lock_file ($!)";
+    return 1 if(! -f $self->{lock_file});
+    return 1 if(! $self->_check_shared);
+
+    ### lock the unlocking process
+    local $LOCK_EXTENSION = '.share';
+    my $lock = new File::NFSLock ($lock_file, LOCK_EX, 62, 60);
+
+    ### get the handle on the lock file
+    my $FH;
+    if( ! open ($FH,"+<$lock_file") ){
+	if( ! -f $lock_file || $! =~ /No such file or directory/){
+	    return 1;
+	}else{
+	    die "Could not open for writing shared lock file $lock_file ($!)";
+	}
     }
-  }
+    
+    ### read existing file
+    my $id_line = '';
+    my $content = '';
+    my $time = time();
+    while(defined(my $line=<$FH>)){
+	if($line !~ / /){
+	    $id_line .= $line;
+	    next;
+	}
 
-  ### read existing file
-  my $id_line = '';
-  my $content = '';
-  while(defined(my $line=<_FH>)){
-    next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/;
-    #ignore shared hosts where lock appears to be stale
-    next if ($self->{stale_lock_timeout} > 0 &&
-	     time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-	     );
-    #ignore processes that appear to be dead on this host
-    next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
+	next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+	my $l_host = $1;
+	my $l_pid  = $2;
+	my $l_time = $3;
+	my $l_id   = $4;
+	my $l_kind = $5;
 
-    if($line !~ / /){
-	$id_line .= $line;
-	next
+	if($l_host eq $hostname){
+	    if($l_pid == $pid){
+		next if($LOCK_LIST{$lock_file."_SH"} <= 0);
+		next if($l_id == $id);
+	    }
+	    elsif(!kill(0, $l_pid)){
+		next;
+	    }
+	    $content .= $line;
+	}
+	else{
+	    #see if it's old
+	    next if($stale_lock_timeout && $l_time + $stale_lock_timeout < $time);
+	    $content .=$line;
+	}
     }
+    
+    ### other shared locks exist
+    if(length($content)){
+	seek     $FH, 0, 0;
+	print    $FH $id_line;
+	print    $FH $content;
+	truncate $FH, length($id_line.$content);
+	close($FH);
 
-    $content .= $line;
-  }
-
-  ### other shared locks exist
-  if( length($content) ){
-    seek     _FH, 0, 0;
-    print    _FH $id_line;
-    print    _FH $content;
-    truncate _FH, length($id_line.$content);
-    close    _FH;
-  }
-  else{  ### only I exist
-    close _FH;
-    my $stat = unlink($self->{lock_file});
-    return $stat;
-  }
+	return 1;
+    }
+    else{  ### only I exist
+	close($FH);
+	$LOCK_LIST{$self->{lock_file}."_SH"} = 0; # just in case it's less than 0
+	my $stat = unlink($self->{lock_file}) unless($self->_unlink_block);
+	return $stat;
+    }
 }
+#-------------------------------------------------------------------------------
+sub _unlink_block {
+    my $self = shift;
+    my $arg = shift;
 
+    if(defined $arg){
+	$self->{_unlink_block} = $arg;
+    }
+
+    return $self->{_unlink_block};
+}
+#-------------------------------------------------------------------------------
 sub uncache {
-  # allow as method call
-  my $file = pop;
-  ref $file && ($file = $file->{file});
-  my $rand_file = rand_file( $file );
+    my $self = shift;
+    my $file = shift || $self->{lock_file};
+    my $rand_file = $self->_rand_name($file);
 
-  ### hard link to the actual file which will bring it up to date
-  my $stat = link( $file, $rand_file);
-  unlink($rand_file);
+    ### hard link and rm trigger NFS to refresh
+    my $stat = link($file, $rand_file);
+    unlink($rand_file);
 
-  return $stat;
+    return $stat;
 }
-
+#-------------------------------------------------------------------------------
 sub maintain {
     my $self = shift;
     my $time = shift; #refresh interval
+    my $pid = $self->{lock_pid};
 
     die "ERROR: No time interval given to maintain lock\n\n"
 	if(! $time || $time < 1);
@@ -600,26 +824,33 @@ sub maintain {
 	return 1;
     }
     elsif($p){
+	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
+
+	#clean up any children that are floating around
+	my $stat;
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;
+
+	#signal maintainer
 	kill(2, $self->{_maintain});
-	close($self->{_OUT});
-	close($self->{_IN});
+	my $stat = waitpid($self->{_maintain}, WNOHANG);
 
 	#attempt kill multiple times if still running
-	my $stat = waitpid($self->{_maintain}, WNOHANG);
 	my $count = 0;
 	while($stat == 0 && $count < 200){
 	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
-	    usleep(100000) if($stat == 0);
+	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
 	}
 	
 	#if still running, do this
 	if($stat == 0){
-	    waitpid($self->{_maintain}, 0) if($stat == 0);
-	    #die "ERROR: Could not destroy lock maintainer\n";
+	    waitpid($self->{_maintain}, 0);
 	}
 	
+	$self->{_IN} = undef;
 	$self->{_maintain} = undef;
     }
 
@@ -632,103 +863,157 @@ sub maintain {
     die "ERROR: NFSLock does not appear to be loaded via use File::NFSLock\n\n"
 	if(! $exe || ! -f $exe);
 
-    #run maintainer with unsafe signals (I want imediate responses)
-    $ENV{PERL_SIGNALS} = 'unsafe';
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
-    my $pid = open2(my $OUT, my $IN, "$^X $exe $$ $time $serial");
-    $ENV{PERL_SIGNALS} = 'safe';
+    my $m_pid = open3(my $IN, '>&STDOUT', '>&STDERR', "$^X $exe $pid $time $serial");
 
     #attach maintainer
-    $self->{_OUT} = $OUT;
-    $self->{_IN} = $IN;
-    $self->{_maintain} = $pid;
-
-    return 1 if($pid && $self->still_mine);
-}
-
-sub refresh {
-  $errstr = undef;
-  my $self = shift;
-  my $lock_file = $self->{lock_file};
-  my $old_lock_line = $self->{lock_line};
-  my $id = $self->{id};
-
-  ### lock the locking process
-  local $LOCK_EXTENSION = '.shared';
-  my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
-
-  #make sure the lock really is still mine (also refreshes NFS cache)
-  if(! $self->still_mine){
-      cluck "ERROR: Cannot refresh the lock as it has apparently been broken\n".
-	    "lockfile: ".$self->{file}."\n";
-      return 0;
-  }
-
-  ### need the hostname
-  if( !$HOSTNAME ){
-    require Sys::Hostname;
-    $HOSTNAME = &Sys::Hostname::hostname();
-  }
-
-  $self->{lock_line} = "$HOSTNAME $self->{lock_pid} ".time()." $id\n";
-
-  ### get the handle on the lock file
-  local *_FH;
-  if( ! open (_FH,"+<$lock_file") ){
-    if( ! -e $lock_file || $! =~ /No such file or directory/){
-      return 1;
-    }else{
-      die "Could not open for writing lock file $lock_file ($!)";
+    if($m_pid && $self->still_mine){
+	$self->{_maintain} = $m_pid;
+	$self->{_IN} = $IN;
+	
+	return 1;
     }
-  }
+    else{
+	close($IN);
 
-  my $id_line = '';
-  my $content = '';
-  ### read existing file
-  if($self->{lock_type} & LOCK_SH){
-     while(defined(my $line=<_FH>)){
-	next if $line eq $old_lock_line;
-	#ignore re-adding shared line if they appear to be stale 
-	next if($self->{stale_lock_timeout} > 0 &&
-		time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-		);
-	if($line !~ / /){
-	    $id_line .= $line;
-	    next;
+	#clean up any children that are floating around
+	my $stat;
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;
+	
+	#signal maintainer
+	kill(2, $self->{_maintain});
+	my $stat = waitpid($self->{_maintain}, WNOHANG);
+	
+	#attempt kill multiple times if still running
+	my $count = 0;
+	while($stat == 0 && $count < 200){
+	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    usleep(0.1) if($stat == 0);
+	    $stat = waitpid($self->{_maintain}, WNOHANG);
+	    $count++;
 	}
+	
+	#if still running, do this
+	if($stat == 0){
+	    waitpid($self->{_maintain}, 0);
+	}
+	
+	$self->{_IN} = undef;
+	$self->{_maintain} = undef;
 
-	$content .= $line;
-     }
-  }
-  ### add new tag
-  $content .= $self->{lock_line};
-
-  ### fix file contents
-  seek     _FH, 0, 0;
-  print    _FH $id_line;
-  print    _FH $content;
-  truncate _FH, length($id_line.$content);
-  close    _FH;
-
-  return 1;
+	return 0;
+    }
 }
+#-------------------------------------------------------------------------------
+sub refresh {
+    my $self = shift;
+    my $lock_file = $self->{lock_file};
+    my $old_lock_line = $self->{lock_line};
+    my $id = $self->{id};
+    my $pid = $self->{lock_pid};
+    my $hostname   = $self->{hostname};
+    my $shared = ($self->{lock_type} == LOCK_SH) ? 1 : 0;
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
 
+    ### lock the locking process
+    local $LOCK_EXTENSION = '.share';
+    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    
+    #make sure the lock really is still mine (also refreshes NFS cache)
+    return undef if(! $self->still_mine);
+
+    $self->{lock_line} = "$hostname $pid ".time()." $id $shared\n";
+    
+    ### get the handle on the lock file
+    my $FH;
+    if(! open ($FH,"+<$lock_file") ){
+	if( ! -f $lock_file || $! =~ /No such file or directory/){
+	    return 0;
+	}else{
+	    die "Could not open for writing lock file $lock_file ($!)";
+	}
+    }
+    
+    my $id_line = '';
+    my $content = '';
+    ### read existing file
+    if($shared){
+	while(defined(my $line=<$FH>)){
+	    if($line !~ / /){
+		$id_line .= $line;
+		next;
+	    }
+
+	    next if($line eq $old_lock_line);
+	    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+	    
+	    my $l_host = $1;
+	    my $l_pid  = $2;
+	    my $l_time = $3;
+	    my $l_id   = $4;   
+	    my $l_kind = $5;
+	    
+	    if($l_host eq $hostname){
+		if ($l_pid == $pid) { # This is me.
+		    $content .= $line;
+		}
+		elsif(kill(0, $l_pid)) { # Still running on this host.
+		    $content .=$line;
+		}
+		else{ # Finished running on this host.
+		    next;
+		}
+	    }
+	    else{
+		# see if it's stale
+		if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+		    next;
+		}
+		else{ # assume it is still running.
+		    $content .= $line;
+		}
+	    }	    
+	    
+	    $content .= $line;
+	}
+    }
+    ### add new tag
+    $content .= $self->{lock_line};
+    
+    ### fix file contents
+    seek     $FH, 0, 0;
+    print    $FH $id_line;
+    print    $FH $content;
+    truncate $FH, length($id_line.$content);
+    close    $FH;
+    
+    return 1;
+}
+#-------------------------------------------------------------------------------
 sub still_mine {
     my $self = shift;
     my $lock_file = $self->{lock_file};
+    my $lock_type = $self->{lock_type};
     my $lock_line = $self->{lock_line};
     my $pid = $self->{lock_pid};
+    my $hostname   = $self->{hostname};
     my $id = $self->{id};
 
-    return 0 if( ! -e $lock_file );
+    return 0 if(!-f $lock_file);
+
+    my $shared = $self->_check_shared;
+    return 0 if(!$shared && $lock_type == LOCK_SH);
+    return 0 if($shared && $lock_type != LOCK_SH);
 
     #refresh NFS cache on the lock file
     $self->uncache($self->{lock_file});
 
     ### get the handle on the lock file
-    local *_FH;
-    if( ! open (_FH,"+< $lock_file") ){
-	if( ! -e $lock_file || $! =~ /No such file or directory/){
+    my $FH;
+    if(! open($FH,"+< $lock_file")){
+	if(!-f $lock_file || $! =~ /No such file or directory/){
 	    return 0;
 	}else{
 	    die "Could not open for reading the lock file $lock_file ($!)";
@@ -737,92 +1022,110 @@ sub still_mine {
 
     ### read existing file
     my $mine = 0;
-    while(defined(my $line = <_FH>)){
-	if ($line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/){
+    while(defined(my $line = <$FH>)){
+	if ($line =~ /^$hostname $pid \d+/){
 	    $mine = 1;
 	    last;
 	}
     }
 
-    close(_FH);
+    close($FH);
 
     return $mine;
 }
-
+#-------------------------------------------------------------------------------
 #checks that lock is still yours when executing a command
 sub do_safe {
     my $self = shift;
-    my $sub = shift;
-    my $lock_file = $self->{lock_file};
+    my $subr = shift;
     
-    if(ref $sub ne 'CODE'){
+    if(ref $subr ne 'CODE'){
 	die "ERROR: You must supply a CODE glob to File::NFSLock::do_safe\n"
     }
 
     if($self->still_mine){
-	&{$sub}; #execute
+	&{$subr}; #execute
     }
     else{
 	die "ERROR: The lock is not yours to run the CODE glob\n";
     }
 }
-
+#-------------------------------------------------------------------------------
 sub owners {
     my $self = shift;
     my $lock_file = $self->{lock_file};
     my $lock_line = $self->{lock_line};
+    my $stale_lock_timeout = $self->{stale_lock_timeout};
+    my $hostname   = $self->{hostname};
     my $pid = $self->{lock_pid};
     my $id = $self->{id};
 
-    return 1 unless ($self->{lock_type} & LOCK_SH);
+    return 1 unless ($self->{lock_type} eq LOCK_SH);
 
     ### lock the parsing process
-    local $LOCK_EXTENSION = '.shared';
+    local $LOCK_EXTENSION = '.share';
     my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
 
     #refresh NFS cache on the lock file
     $self->uncache( $self->{lock_file});
 
+    #ignore other shared hosts where lock appears to be stale
+    if ($stale_lock_timeout && time()-(stat($lock_file))[9] > $stale_lock_timeout){
+	return $self->still_mine;
+    }
+
     ### get the handle on the lock file
-    local *_FH;
-    if( ! open (_FH,"+< $lock_file") ){
-	if( ! -e $lock_file || $! =~ /No such file or directory/){
+    my $FH;
+    if( ! open ($FH,"+< $lock_file") ){
+	if( ! -f $lock_file || $! =~ /No such file or directory/){
 	    return 0;
 	}else{
 	    die "Could not open for reading the lock file $lock_file ($!)";
 	}
     }
 
-    ### read existing file
-    my $count = 0;
-    $count++ if($self->still_mine); #I am almost always an owner
-
     my %seen;
-    while(defined(my $line=<_FH>)){
-	next if $line eq $lock_line || $line =~ /^$HOSTNAME $pid \d+/;
-	#ignore shared hosts where lock appears to be stale
-	next if ($self->{stale_lock_timeout} > 0 &&
-		 time() - (stat $self->{lock_file})[9] > $self->{stale_lock_timeout}
-		 );
-
-	$line =~ /^([^\s]+\s+\d+)\s+\d+/;
-	next if($seen{$1});
-	$seen{$1}++;
-
-	#ignore processes that appear to be dead on this host
-	next if ($line =~ /^$HOSTNAME (\d+) / && $1 != $pid && !kill(0, $1));
-	#ignore id line
-	next if ($line !~ / /);
-
-	$count++;
+    while(defined(my $line=<$FH>)){
+	next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
+	
+	my $l_host = $1;
+	my $l_pid  = $2;
+	my $l_time = $3;
+	my $l_id   = $4;   
+	my $l_kind = $5;
+	
+	if($l_host eq $hostname){
+	    if ($l_pid == $pid) { # This is me.
+		$seen{"$l_host\_$l_pid"}++;
+		next;
+	    }
+	    elsif($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+		next;
+	    }
+	    elsif(kill(0, $l_pid)) { # Still running on this host.
+		$seen{"$l_host\_$l_pid"}++;
+		next;
+	    }
+	    else{ # Finished running on this host.
+		next;
+	    }
+	}
+	else{
+	    # see if it's old
+	    if($stale_lock_timeout && $l_time + $stale_lock_timeout < time){
+		next;
+	    }
+	    else{
+		$seen{"$l_host\_$l_pid"}++;
+		next;
+	    }
+	}
     }
+    close($FH);
 
-    close(_FH);
-    $lock->unlock;
-
-    return $count;
+    return scalar(keys %seen);
 }
-
+#-------------------------------------------------------------------------------
 sub shared_id {
     my $self = shift;
     my $line = $self->{id_line};
@@ -831,323 +1134,66 @@ sub shared_id {
     chomp $line;
     return $line
 }
-
+#-------------------------------------------------------------------------------
 sub newpid {
-  my $self = shift;
-  # Detect if this is the parent or the child
-  if ($self->{lock_pid} == $$) {
-    # This is the parent
-
-    # Must wait for child to call newpid before processing.
-    # A little patience for the child to call newpid
-    my $patience = time + 10;
-    while (time < $patience) {
-      if (rename("$self->{lock_file}.fork",$self->{rand_file})) {
-        # Child finished its newpid call.
-        # Wipe the signal file.
-        unlink ($self->{rand_file});
-        last;
-      }
-      # Brief pause before checking again
-      # to avoid intensive IO across NFS.
-      select(undef,undef,undef,0.1);
+    my $self = shift;
+    # Detect if this is the parent or the child
+    if ($self->{lock_pid} == $$) {
+	# This is the parent
+	
+	# Must wait for child to call newpid before processing.
+	# A little patience for the child to call newpid
+	my $patience = time + 10;
+	while (time < $patience) {
+	    if (rename("$self->{lock_file}.fork",$self->{rand_file})) {
+		# Child finished its newpid call.
+		# Wipe the signal file.
+		unlink ($self->{rand_file});
+		last;
+	    }
+	    # Brief pause before checking again
+	    # to avoid intensive IO across NFS.
+	    usleep(0.1);
+	}
+	
+	# Fake the parent into thinking it is already
+	# unlocked because the child will take care of it.
+	$self->{unlocked} = 1;
+    } else {
+	# This is the new child
+	
+	# The lock_line found in the lock_file contents
+	# must be modified to reflect the new pid.
+	
+	# Fix lock_pid to the new pid.
+	$self->{lock_pid} = $$;
+	# Backup the old lock_line.
+	my $old_line = $self->{lock_line};
+	# Clear lock_line to create a fresh one.
+	delete $self->{lock_line};
+	# Append a new lock_line to the lock_file.
+	$self->_create_magic($self->{lock_file});
+	# Remove the old lock_line from lock_file.
+	local $self->{lock_line} = $old_line;
+	$self->_do_unlock_shared;
+	# Create signal file to notify parent that
+	# the lock_line entry has been delegated.
+	open (_FH, ">$self->{lock_file}.fork");
+	close(_FH);
     }
-
-    # Fake the parent into thinking it is already
-    # unlocked because the child will take care of it.
-    $self->{unlocked} = 1;
-  } else {
-    # This is the new child
-
-    # The lock_line found in the lock_file contents
-    # must be modified to reflect the new pid.
-
-    # Fix lock_pid to the new pid.
-    $self->{lock_pid} = $$;
-    # Backup the old lock_line.
-    my $old_line = $self->{lock_line};
-    # Clear lock_line to create a fresh one.
-    delete $self->{lock_line};
-    # Append a new lock_line to the lock_file.
-    $self->create_magic($self->{lock_file});
-    # Remove the old lock_line from lock_file.
-    local $self->{lock_line} = $old_line;
-    $self->do_unlock_shared;
-    # Create signal file to notify parent that
-    # the lock_line entry has been delegated.
-    open (_FH, ">$self->{lock_file}.fork");
-    close(_FH);
-  }
 }
-
+#-------------------------------------------------------------------------------
+sub usleep {
+    my $time = shift;
+    select(undef,undef,undef,$time);
+}
+#-------------------------------------------------------------------------------
+sub DESTROY {
+    shift()->unlock();
+}
+#-------------------------------------------------------------------------------
+END {
+    
+}
+#-------------------------------------------------------------------------------
 1;
-
-
-=head1 NAME
-
-File::NFSLock - perl module to do NFS (or not) locking
-
-=head1 SYNOPSIS
-
-  use File::NFSLock qw(uncache);
-  use Fcntl qw(LOCK_EX LOCK_NB);
-
-  my $file = "somefile";
-
-  ### set up a lock - lasts until object looses scope
-  if (my $lock = new File::NFSLock {
-    file      => $file,
-    lock_type => LOCK_EX|LOCK_NB,
-    blocking_timeout   => 10,      # 10 sec
-    stale_lock_timeout => 30 * 60, # 30 min
-  }) {
-
-    ### OR
-    ### my $lock = File::NFSLock->new($file,LOCK_EX|LOCK_NB,10,30*60);
-
-    ### do write protected stuff on $file
-    ### at this point $file is uncached from NFS (most recent)
-    open(FILE, "+<$file") || die $!;
-
-    ### or open it any way you like
-    ### my $fh = IO::File->open( $file, 'w' ) || die $!
-
-    ### update (uncache across NFS) other files
-    uncache("someotherfile1");
-    uncache("someotherfile2");
-    # open(FILE2,"someotherfile1");
-
-    ### unlock it
-    $lock->unlock();
-    ### OR
-    ### undef $lock;
-    ### OR let $lock go out of scope
-  }else{
-    die "I couldn't lock the file [$File::NFSLock::errstr]";
-  }
-
-
-=head1 DESCRIPTION
-
-Program based of concept of hard linking of files being atomic across
-NFS.  This concept was mentioned in Mail::Box::Locker (which was
-originally presented in Mail::Folder::Maildir).  Some routine flow is
-taken from there -- particularly the idea of creating a random local
-file, hard linking a common file to the local file, and then checking
-the nlink status.  Some ideologies were not complete (uncache
-mechanism, shared locking) and some coding was even incorrect (wrong
-stat index).  File::NFSLock was written to be light, generic,
-and fast.
-
-
-=head1 USAGE
-
-Locking occurs by creating a File::NFSLock object.  If the object
-is created successfully, a lock is currently in place and remains in
-place until the lock object goes out of scope (or calls the unlock
-method).
-
-A lock object is created by calling the new method and passing two
-to four parameters in the following manner:
-
-  my $lock = File::NFSLock->new($file,
-                                $lock_type,
-                                $blocking_timeout,
-                                $stale_lock_timeout,
-                                );
-
-Additionally, parameters may be passed as a hashref:
-
-  my $lock = File::NFSLock->new({
-    file               => $file,
-    lock_type          => $lock_type,
-    blocking_timeout   => $blocking_timeout,
-    stale_lock_timeout => $stale_lock_timeout,
-  });
-
-=head1 PARAMETERS
-
-=over 4
-
-=item Parameter 1: file
-
-Filename of the file upon which it is anticipated that a write will
-happen to.  Locking will provide the most recent version (uncached)
-of this file upon a successful file lock.  It is not necessary
-for this file to exist.
-
-=item Parameter 2: lock_type
-
-Lock type must be one of the following:
-
-  BLOCKING
-  BL
-  EXCLUSIVE (BLOCKING)
-  EX
-  NONBLOCKING
-  NB
-  SHARED
-  SH
-
-Or else one or more of the following joined with '|':
-
-  Fcntl::LOCK_EX() (BLOCKING)
-  Fcntl::LOCK_NB() (NONBLOCKING)
-  Fcntl::LOCK_SH() (SHARED)
-
-Lock type determines whether the lock will be blocking, non blocking,
-or shared.  Blocking locks will wait until other locks are removed
-before the process continues.  Non blocking locks will return undef if
-another process currently has the lock.  Shared will allow other
-process to do a shared lock at the same time as long as there is not
-already an exclusive lock obtained.
-
-=item Parameter 3: blocking_timeout (optional)
-
-Timeout is used in conjunction with a blocking timeout.  If specified,
-File::NFSLock will block up to the number of seconds specified in
-timeout before returning undef (could not get a lock).
-
-
-=item Parameter 4: stale_lock_timeout (optional)
-
-Timeout is used to see if an existing lock file is older than the stale
-lock timeout.  If do_lock fails to get a lock, the modified time is checked
-and do_lock is attempted again.  If the stale_lock_timeout is set to low, a
-recursion load could exist so do_lock will only recurse 10 times (this is only
-a problem if the stale_lock_timeout is set too low -- on the order of one or two
-seconds).
-
-=head1 METHODS
-
-After the $lock object is instantiated with new,
-as outlined above, some methods may be used for
-additional functionality.
-
-=head2 unlock
-
-  $lock->unlock;
-
-This method may be used to explicitly release a lock
-that is aquired.  In most cases, it is not necessary
-to call unlock directly since it will implicitly be
-called when the object leaves whatever scope it is in.
-
-=head2 uncache
-
-  $lock->uncache;
-  $lock->uncache("otherfile1");
-  uncache("otherfile2");
-
-This method is used to freshen up the contents of a
-file across NFS, ignoring what is contained in the
-NFS client cache.  It is always called from within
-the new constructor on the file that the lock is
-being attempted.  uncache may be used as either an
-object method or as a stand alone subroutine.
-
-=head2 newpid
-
-  my $pid = fork;
-  if (defined $pid) {
-    # Fork Failed
-  } elsif ($pid) {
-    $lock->newpid; # Parent
-  } else {
-    $lock->newpid; # Child
-  }
-
-If fork() is called after a lock has been aquired,
-then when the lock object leaves scope in either
-the parent or child, it will be released.  This
-behavior may be inappropriate for your application.
-To delegate ownership of the lock from the parent
-to the child, both the parent and child process
-must call the newpid() method after a successful
-fork() call.  This will prevent the parent from
-releasing the lock when unlock is called or when
-the lock object leaves scope.  This is also
-useful to allow the parent to fail on subsequent
-lock attempts if the child lock is still aquired.
-
-=head1 FAILURE
-
-On failure, a global variable, $File::NFSLock::errstr, should be set and should
-contain the cause for the failure to get a lock.  Useful primarily for debugging.
-
-=head1 LOCK_EXTENSION
-
-By default File::NFSLock will use a lock file extenstion of ".NFSLock".  This is
-in a global variable $File::NFSLock::LOCK_EXTENSION that may be changed to
-suit other purposes (such as compatibility in mail systems).
-
-=head1 BUGS
-
-Notify paul@seamons.com or bbb@cpan.org if you spot anything.
-
-=head2 FIFO
-
-Locks are not necessarily obtained on a first come first serve basis.
-Not only does this not seem fair to new processes trying to obtain a lock,
-but it may cause a process starvation condition on heavily locked files.
-
-
-=head2 DIRECTORIES
-
-Locks cannot be obtained on directory nodes, nor can a directory node be
-uncached with the uncache routine because hard links do not work with
-directory nodes.  Some other algorithm might be used to uncache a
-directory, but I am unaware of the best way to do it.  The biggest use I
-can see would be to avoid NFS cache of directory modified and last accessed
-timestamps.
-
-=head1 INSTALL
-
-Download and extract tarball before running
-these commands in its base directory:
-
-  perl Makefile.PL
-  make
-  make test
-  make install
-
-For RPM installation, download tarball before
-running these commands in your _topdir:
-
-  rpm -ta SOURCES/File-NFSLock-*.tar.gz
-  rpm -ih RPMS/noarch/perl-File-NFSLock-*.rpm
-
-=head1 AUTHORS
-
-Paul T Seamons (paul@seamons.com) - Performed majority of the
-programming with copious amounts of input from Rob Brown.
-
-Rob B Brown (bbb@cpan.org) - In addition to helping in the
-programming, Rob Brown provided most of the core testing to make sure
-implementation worked properly.  He is now the current maintainer.
-
-Also Mark Overmeer (mark@overmeer.net) - Author of Mail::Box::Locker,
-from which some key concepts for File::NFSLock were taken.
-
-Also Kevin Johnson (kjj@pobox.com) - Author of Mail::Folder::Maildir,
-from which Mark Overmeer based Mail::Box::Locker.
-
-=head1 COPYRIGHT
-
-  Copyright (C) 2001
-  Paul T Seamons
-  paul@seamons.com
-  http://seamons.com/
-
-  Copyright (C) 2002-2003,
-  Rob B Brown
-  bbb@cpan.org
-
-  This package may be distributed under the terms of either the
-  GNU General Public License
-    or the
-  Perl Artistic License
-
-  All rights reserved.
-
-=cut

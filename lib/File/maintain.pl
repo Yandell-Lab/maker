@@ -12,11 +12,11 @@ use URI::Escape;
 use Perl::Unsafe::Signals;
 
 BEGIN {
-    $SIG{QUIT} = sub{$LOCK->unlock if($LOCK); exit(0)};
-    $SIG{KILL} = sub{$LOCK->unlock if($LOCK); exit(0)};
-    $SIG{TERM} = sub{$LOCK->unlock if($LOCK); exit(0)};
-    $SIG{STOP} = sub{$LOCK->unlock if($LOCK); exit(0)};
-    $SIG{INT}  = sub{$LOCK->unlock if($LOCK); exit(0)};
+    $SIG{QUIT} = sub{exit()};
+    $SIG{KILL} = sub{exit()};
+    $SIG{TERM} = sub{exit()};
+    $SIG{STOP} = sub{exit()};
+    $SIG{INT}  = sub{exit()};
 
     $SIG{'__WARN__'} = sub {
 	warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&
@@ -43,28 +43,20 @@ $LOCK = Storable::thaw($serial);
 
 die "ERROR: Could not retrieve lock" if(! $LOCK);
 
+$LOCK->_unlinker(0);
 while(-f $LOCK->{lock_file}){
     if(! Proc::Signal::exists_proc_by_id($pid)){
-	$LOCK->unlock if($LOCK);
+	$LOCK->unlock(1) if($LOCK);
 	exit(0);
     }
     elsif(my $p = Proc::Signal::get_proc_by_id($pid)){
 	if($p->state eq 'zombie'){
-	    $LOCK->unlock if($LOCK);
+	    $LOCK->unlock(1) if($LOCK);
 	    exit(0);
 	}
-    }
-    if($LOCK && ! $LOCK->still_mine){
-	exit(1);
     }
     exit (1) unless($LOCK->refresh);
     sleep $time;
 }
 
-$LOCK->unlock if($LOCK);
-exit(0);
-    
-
-DESTROY {
-    $LOCK->unlock if($LOCK);
-}
+exit(1);

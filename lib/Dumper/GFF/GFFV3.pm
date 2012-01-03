@@ -315,10 +315,26 @@ sub header {
 	return $h;
     }
 #------------------------------------------------------------------------
+sub add_lines {
+    my $self  = shift;
+    my $lines = shift;
+
+    return if(! $lines || ! @$lines);
+
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
+    open(my $ANN, '>>', $self->{ann_file})|| confess "ERROR: Can't open annotation file\n\n";
+    print_txt($ANN, join("\n", @$lines));    
+    close($ANN);
+    $lock->unlock;
+}
+#------------------------------------------------------------------------
 sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
     my $uid   = shift;
+
+    return if(! $hits || ! @$hits);
 
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
@@ -335,6 +351,8 @@ sub add_phathits {
    my $hits  = shift;
    my $uid   = shift;
 
+   return if(! $hits || ! @$hits);
+
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file})|| confess "ERROR: Can't open annotation file\n\n";
@@ -349,7 +367,9 @@ sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
    my $uid   = shift;
-  
+
+   return if(! $hits || ! @$hits);  
+
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file}) || confess "ERROR: Can't open annotation file\n\n";
@@ -363,7 +383,9 @@ sub add_repeat_hits {
 sub add_genes {
     my $self  = shift;
     my $genes = shift;
-    
+
+    return if(! $genes || ! @$genes);    
+
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, '>>', $self->{ann_file}) || confess "ERROR: Can't open annotation file\n\n";
@@ -551,8 +573,9 @@ sub repeat_data {
    
    my ($class, $type) = get_class_and_type($h, 'hit');
 
-   $class = "repeatrunner" if ($class eq 'blastx');
-   
+   $class =~ s/^blastx\:repeat.*?$/repeatrunner/;
+   $class =~ s/^blastx/repeatrunner/;
+
    my $h_n = $h->name();
    $h_n = uri_escape($h_n, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
    
@@ -593,70 +616,62 @@ sub get_class_and_type {
     $class =~ s/^exonerate\:*\_*protein2genome$/protein2genome/;
 
     my $type;
-    if($class =~ /^blastx$/i){
+    if($class =~ /^blastx(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
-    elsif($class =~ /^protein2genome$/i){
+    elsif($class =~ /^protein2genome(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part'; 
     }
-    elsif($class =~ /^protein_gff\:/i){
+    elsif($class =~ /^protein_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
-    elsif($class =~ /^tblastx$/i){
+    elsif($class =~ /^tblastx(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
     }
-    elsif($class =~ /^altest_gff/i){
+    elsif($class =~ /^altest_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
     }
-    elsif($class =~ /^est2genome$/i){
+    elsif($class =~ /^est2genome(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
-    elsif($class =~ /^blastn$/i){
+    elsif($class =~ /^blastn(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part' ;
     }
-    elsif($class =~ /^est_gff\:/i){
+    elsif($class =~ /^est_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
-    elsif($class =~ /^snap_*/i){
+    elsif($class =~ /^snap(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^genemark_*/i){
+    elsif($class =~ /^genemark(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^augustus_*/i){
+    elsif($class =~ /^augustus(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^fgenesh_*/i){
+    elsif($class =~ /^fgenesh(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^twinscan_*/i){
-	$class = lc($h->algorithm);
+    elsif($class =~ /^pred_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^jigsaw_*/i){
-	$class = lc($h->algorithm);
+    elsif($class =~ /^model_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
-    elsif($class =~ /^pred_gff\:/i){
-	$type = $k eq 'hit' ? 'match' : 'match_part' ;
-    }
-    elsif($class =~ /^model_gff\:/i){
-	$type = $k eq 'hit' ? 'match' : 'match_part' ;
-    }
-    elsif($class =~ /^repeat_gff\:/i){
+    elsif($class =~ /^repeat_gff(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
-    elsif($class =~ /^blastx\:repeat|repeatrunner/i){
+    elsif($class =~ /^repeatrunner(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
-    elsif ($class =~ /^repeatmasker$/i){
+    elsif ($class =~ /^repeatmasker(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
-    elsif ($class =~ /^maker$/i){ #pasthrough maker annotation as evidence
+    elsif ($class =~ /^maker(\:.*)?$/i){ #pasthrough maker annotation as evidence
 	$type = $k eq 'hit' ? 'match' : 'match_part';
     }
     else {
