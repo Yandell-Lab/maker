@@ -34,7 +34,7 @@ sub new {
 	 $self = $arg->clone();
       }
       else {
-	  $self->{VARS}      = $arg; #this should be a hash ref
+	  $self->{VARS}      = {%$arg}; #forces copy of hash (1 level deep)
 	  $self->{TIER_ID}   = shift @args || 0;
 	  $self->{RANK}      = undef;
 	  $self->{PARENT}    = $self->{TIER_ID};

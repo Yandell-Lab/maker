@@ -4,7 +4,7 @@ use strict;
 use File::Copy;
 use File::Temp;
 use Storable;
-use IPC::Open2;
+use IPC::Open3;
 use POSIX qw(:sys_wait_h);
 use Proc::Signal;
 use URI::Escape;
@@ -557,7 +557,7 @@ sub unlock {
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -565,6 +565,7 @@ sub unlock {
 	
 	#if still running, do this
 	if($stat == 0){
+	    kill(9, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	
@@ -623,8 +624,9 @@ sub _create_magic {
 	  seek $FH, 0, 0;
 	  my $line = <$FH>; #should always be first line
 	  $self->{id_line} = $line if($line !~ / /);
-	  $self->{id_line} ||= Digest::MD5::md5_hex($self->{lock_line})."\n";
       }
+
+      $self->{id_line} ||= Digest::MD5::md5_hex($self->{lock_line})."\n";
 
       #writing
       print $FH $self->{id_line} if($first);
@@ -841,7 +843,7 @@ sub maintain {
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -849,6 +851,7 @@ sub maintain {
 	
 	#if still running, do this
 	if($stat == 0){
+	    kill(9, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	
@@ -891,7 +894,7 @@ sub maintain {
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(9, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -899,6 +902,7 @@ sub maintain {
 	
 	#if still running, do this
 	if($stat == 0){
+	    kill(9, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	

@@ -1863,7 +1863,7 @@ sub load_transcript_struct {
 		    };
 
 	#also determine these values for the unmodified abinit
-	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/ && $CTL_OPT->{pred_stats}){
+	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
 	    my $transcript_seq  = get_transcript_seq($p_base, $seq);
 	    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $p_base);
 
@@ -1930,7 +1930,8 @@ sub load_transcript_stats {
 
 	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
 	    my $p_struct = $struct->{p_struct};
-	    $p_base->name($f->name);
+	    (my $name = $f->name) =~ s/\-processed\-/\-abinit\-/;
+	    $p_base->name($name);
 
 	    #put stats in hit for match processing
 	    if($CTL_OPT->{pred_stats}){
@@ -2176,7 +2177,7 @@ sub group_transcripts {
 		  $SEEN->{$1}++;
 	      }
 	  }
-	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit/) {
+	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit|$safe_id-processed/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-mRNA-\d.*//;
 	      $g_id = $g_name;
@@ -2186,7 +2187,7 @@ sub group_transcripts {
 	      }
 	  }
 	  else{
-	      $g_name = "$sources-$seq_id-abinit-gene-$chunk_number"; #affects GFFV3.pm
+	      $g_name = "$sources-$seq_id-processed-gene-$chunk_number"; #affects GFFV3.pm
 	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
 	      $g_id = $g_name;

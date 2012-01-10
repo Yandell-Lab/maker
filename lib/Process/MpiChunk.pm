@@ -33,7 +33,7 @@ sub new { #do not change or edit this
 	 $self = $arg->clone();
       }
       else {
-	 my $VARS           = $arg;
+	 my $VARS           = {%$arg}; #forces copy of hash (1 level deep)	 
 	 $self->{LEVEL}     = shift @args;
 	 $self->{TIER_TYPE} = shift @args || 0;
 	 $self->{ID}        = shift @args || "0:".$self->{LEVEL}.":".$self->{TIER_TYPE}.":0";
@@ -710,6 +710,7 @@ sub _go {
 	 $level_status = 'doing repeat masking';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG} = Storable::dclone($VARS->{LOG}); #ensures independent log for each chunk
 	    $VARS->{LOG}->set_child($VARS->{order});
 	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);
@@ -1290,10 +1291,11 @@ sub _go {
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG} = Storable::dclone($VARS->{LOG}); #ensures independent log for each chunk
 	    $VARS->{LOG}->set_child($VARS->{order});
 	    $VARS->{blastn_keepers} = []; #reset
 	    $VARS->{res_dir} = []; #reset
-	    
+
 	    #only create all chunks if not already finished
 	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_e_db}}){
@@ -3155,6 +3157,7 @@ sub _go {
 	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    $VARS->{LOG} = Storable::dclone($VARS->{LOG}); #ensures independent log for each chunk
 	    $VARS->{LOG}->set_child($VARS->{order});
 	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
 	    push(@chunks, $chunk);

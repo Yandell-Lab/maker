@@ -43,7 +43,7 @@ $LOCK = Storable::thaw($serial);
 
 die "ERROR: Could not retrieve lock" if(! $LOCK);
 
-$LOCK->_unlinker(0);
+$LOCK->_unlink_block(1);
 while(-f $LOCK->{lock_file}){
     if(! Proc::Signal::exists_proc_by_id($pid)){
 	$LOCK->unlock(1) if($LOCK);
