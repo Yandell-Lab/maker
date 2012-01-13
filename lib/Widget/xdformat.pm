@@ -37,9 +37,11 @@ sub run {
 		$self->print_command($command);
 		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
 		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-		local $/ = \1;
-		while (my $line = <$CHLD_ERR>){
-		   print STDERR $line unless($main::quiet);
+		{
+		    local $/ = \1;
+		    while (my $line = <$CHLD_ERR>){
+			print STDERR $line unless($main::quiet);
+		    }
 		}
 		waitpid $pid, 0;
 		die "ERROR: xdformat failed\n" if $? != 0;

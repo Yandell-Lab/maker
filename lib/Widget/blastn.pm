@@ -38,11 +38,14 @@ sub run {
       $self->print_command($command);
       my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
       my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-      local $/ = \1;
+
       my $all_err;
-      while (my $line = <$CHLD_ERR>){
-	 $all_err .= $line;
-	 print STDERR $line unless($main::quiet);
+      {
+	  local $/ = \1;
+	  while (my $line = <$CHLD_ERR>){
+	      $all_err .= $line;
+	      print STDERR $line unless($main::quiet);
+	  }
       }
       waitpid $pid, 0;
       if ($? != 0 && $all_err !~ /There are no valid contexts/){
@@ -50,9 +53,12 @@ sub run {
 	 sleep 15;
 	 $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	 $all_err = '';
-	 while (my $line = <$CHLD_ERR>){
-	    $all_err .= $line;
-	    print STDERR $line unless($main::quiet);
+	 { 
+	     local $/ = \1;
+	     while (my $line = <$CHLD_ERR>){
+		 $all_err .= $line;
+		 print STDERR $line unless($main::quiet);
+	     }
 	 }
 	 waitpid $pid, 0;
 	 

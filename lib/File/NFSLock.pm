@@ -90,7 +90,8 @@ sub new {
 
     ### choose the lock filename
     my $lock_file = $self->{file}.$LOCK_EXTENSION;
-    if($LOCK_EXTENSION eq '.NFSLock'){
+    my ($name) = $lock_file =~ /([^\/]+)$/;
+    if($name !~ /^\.NFSLock/){
 	$lock_file =~ s/([^\/]+)$/\.NFSLock\.$1/;
     }
     $self->{lock_file} = $lock_file;
@@ -154,7 +155,7 @@ sub _new_EX {
 	    }
 	    elsif(! $stack){
 		local $LOCK_EXTENSION = '.STACK';
-		$stack = new File::NFSLock({file      => $lock_file,
+		$stack = new File::NFSLock({file      => _fix_name($lock_file),
 					    lock_type => LOCK_EX,
 					    quit_time => $quit_time,
 					    stale_lock_timeout => $stale_lock_timeout});
@@ -177,6 +178,7 @@ sub _new_EX {
 		my @mine;
 		my @them;
 		my @dead;
+		local $/ = "\n"; #just incase the user changed this
 		while(defined(my $line=<$FH>)){
 		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
 		    
@@ -292,7 +294,7 @@ sub _new_NB {
 	    else{
 		#create lock stack in IO
 		local $LOCK_EXTENSION = '.STACK';
-		$stack = new File::NFSLock($lock_file, LOCK_NB, 0, $stale_lock_timeout);
+		$stack = new File::NFSLock(_fix_name($lock_file), LOCK_NB, 0, $stale_lock_timeout);
 		if(! $stack){
 		    unlink($rand_file);
 		    return undef;
@@ -314,6 +316,7 @@ sub _new_NB {
 		my @mine;
 		my @them;
 		my @dead;		
+		local $/ = "\n"; #just incase the user changed this		
 		while(defined(my $line=<$FH>)){
 		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
 		    
@@ -419,7 +422,7 @@ sub _new_SH {
 	    #create lock stack in IO
 	    local $LOCK_EXTENSION = '.STACK';
 	    if(!$stack){
-		$stack = new File::NFSLock({file      => $lock_file,
+		$stack = new File::NFSLock({file      => _fix_name($lock_file),
 					    lock_type => LOCK_EX,
 					    quit_time => $quit_time,
 					    stale_lock_timeout => $stale_lock_timeout});
@@ -442,6 +445,7 @@ sub _new_SH {
 		my @mine;
 		my @them;
 		my @dead;		
+		local $/ = "\n"; #just incase the user changed this
 		while(defined(my $line=<$FH>)){
 		    next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
 		    
@@ -618,6 +622,7 @@ sub _create_magic {
 
   if($shared){
       open(my $FH,"+>>$append_file") or return undef;
+      local $/ = "\n"; #just incase the user changed this
 
       #reading
       if(! $first){
@@ -673,7 +678,7 @@ sub _do_lock_shared {
 
     ### lock the locking process
     local $LOCK_EXTENSION = ".share";
-    my $lock = new File::NFSLock($lock_file, LOCK_EX, 62, 60);    
+    my $lock = new File::NFSLock(_fix_name($lock_file), LOCK_EX, 62, 60);    
 
     if(!$success && -f $lock_file && !$self->_check_shared){
 	#lock exists as exclusive
@@ -725,7 +730,7 @@ sub _do_unlock_shared {
 
     ### lock the unlocking process
     local $LOCK_EXTENSION = '.share';
-    my $lock = new File::NFSLock ($lock_file, LOCK_EX, 62, 60);
+    my $lock = new File::NFSLock (_fix_name($lock_file), LOCK_EX, 62, 60);
 
     ### get the handle on the lock file
     my $FH;
@@ -741,6 +746,7 @@ sub _do_unlock_shared {
     my $id_line = '';
     my $content = '';
     my $time = time();
+    local $/ = "\n"; #just incase the user changed this    
     while(defined(my $line=<$FH>)){
 	if($line !~ / /){
 	    $id_line .= $line;
@@ -925,7 +931,7 @@ sub refresh {
 
     ### lock the locking process
     local $LOCK_EXTENSION = '.share';
-    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    my $lock = new File::NFSLock (_fix_name($lock_file),LOCK_EX,62,60);
     
     #make sure the lock really is still mine (also refreshes NFS cache)
     return undef if(! $self->still_mine);
@@ -946,6 +952,7 @@ sub refresh {
     my $content = '';
     ### read existing file
     if($shared){
+	local $/ = "\n"; #just incase the user changed this
 	while(defined(my $line=<$FH>)){
 	    if($line !~ / /){
 		$id_line .= $line;
@@ -1028,6 +1035,7 @@ sub still_mine {
 
     ### read existing file
     my $mine = 0;
+    local $/ = "\n"; #just incase the user changed this
     while(defined(my $line = <$FH>)){
 	if ($line =~ /^$hostname $pid \d+/){
 	    $mine = 1;
@@ -1070,7 +1078,7 @@ sub owners {
 
     ### lock the parsing process
     local $LOCK_EXTENSION = '.share';
-    my $lock = new File::NFSLock ($lock_file,LOCK_EX,62,60);
+    my $lock = new File::NFSLock (_fix_name($lock_file),LOCK_EX,62,60);
 
     #refresh NFS cache on the lock file
     $self->uncache( $self->{lock_file});
@@ -1091,6 +1099,7 @@ sub owners {
     }
 
     my %seen;
+    local $/ = "\n"; #just incase the user changed this
     while(defined(my $line=<$FH>)){
 	next unless($line =~ /^([^\s]+) (\d+) (\d+) (\d+) (\d+)/);
 	
@@ -1192,6 +1201,16 @@ sub newpid {
 sub usleep {
     my $time = shift;
     select(undef,undef,undef,$time);
+}
+#-------------------------------------------------------------------------------
+sub _fix_name {
+    my $file = shift;
+    my ($name) = $file =~ /([^\/]+)$/;
+    if(length($name) > 150){	
+	$name = Digest::MD5::md5_hex($name);
+	$file =~ s/([^\/]+)$/$name/;
+    }
+    return($file);
 }
 #-------------------------------------------------------------------------------
 sub DESTROY {

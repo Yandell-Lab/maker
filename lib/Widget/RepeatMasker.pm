@@ -43,12 +43,15 @@ sub run {
 		$self->print_command($command);
 		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
 		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-		local $/ = \1;
+
 		my $err;
-		while (my $line = <$CHLD_ERR>){
-		   print STDERR $line unless($main::quiet);
-		   $err .= $line;
-		   kill (9, $pid) if ($err =~ /refinelib\) does not exist/); #kill rather than wait for failure
+		{
+		    local $/ = \1;
+		    while (my $line = <$CHLD_ERR>){
+			print STDERR $line unless($main::quiet);
+			$err .= $line;
+			kill (9, $pid) if ($err =~ /refinelib\) does not exist/); #kill rather than wait for failure
+		    }
 		}
 		waitpid $pid, 0;
 		

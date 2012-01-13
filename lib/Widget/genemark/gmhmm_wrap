@@ -149,6 +149,29 @@ system($command) && die "ERROR: Could not parse fasta for GeneMark\n";
 my @files = <$tempdir/gm_dna.fa_*>;
 
 if(! @files){
+    open(IN, "<$s_in");
+    my $fasta;
+    while(my $line = <IN>){
+	next if($line =~ />/);
+	chomp($line);
+	$fasta .= $line;
+    }
+    close(IN);
+
+    #too small (create dummy file to get genemark to generate empty output);
+    if(length($fasta) < 10){
+	if($fasta){
+	    $fasta .= $fasta while(length($fasta) < 10);
+	}
+	else{
+	    $fasta = 'AAAAAAAAAA';
+	}
+	unlink($s_in);
+	open(my $OUT, "> $s_in") || die "ERROR: Can't open $s_in.\n";
+	print $OUT $fasta;
+	close($OUT);
+    }
+
     push(@files, $s_in);
 }
 
@@ -231,7 +254,17 @@ foreach my $file ( @lst_files ){
 
 	    next;
 	}
-	
+
+	#set mod file loactionin header
+	if($line =~ /^Matrices file\:/){	
+	    if($header_flag){
+		$line =~ s/^(Matrices file:\s*)[^\s]+(\s*\n)$/$1$mod$2/;
+		print $OUT $line;
+	    }
+
+	    next;
+	}
+
 	#set correct length in header (not needed in prokaryotic)
 	if($line !~ /^\s*\d+\s+\d+\s+[\+\-]/ && $line !~ /^\s*\d+\s+[\+\-]\s+\d+\s+\d+/){
 	    if($header_flag){

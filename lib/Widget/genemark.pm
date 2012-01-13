@@ -44,13 +44,15 @@ sub run {
 	if (defined($command)){
 	        $self->print_command($command);
 		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-		local $/ = \1;
-		while (my $line = <$CHLD_ERR>){
-		   print STDERR $line unless($main::quiet);
+		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, "$command 1>&2");		
+		{		
+		    local $/ = \1;
+		    while (my $line = <$CHLD_ERR>){
+			print STDERR $line unless($main::quiet);
+		    }
 		}
 		waitpid $pid, 0;
-		die "ERROR: Genemark failed\n" if $? != 0;
+		die "ERROR: Genemark failed\n" if($? != 0);
 	}
 	else {
 		die "you must give Widget::genemark a command to run!\n";

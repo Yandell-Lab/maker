@@ -58,10 +58,6 @@ BEGIN{
    #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} = sub {
        $LOG->add_entry("DIED","COUNT",$LOG->get_die_count+1) if($LOG && defined $_[0]);
-       map {$_->kill('KILL')->join()} threads->list();
-       GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
-       Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
-       Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
        die $_[0];
    };
    
@@ -72,6 +68,20 @@ BEGIN{
 		     $_[0] !~ /Find\:\:skip_pattern/ &
 		     $_[0] !~ /File\/Find\.pm/);
    };
+}
+
+END {
+    File::Temp::cleanup();
+    my @threads = threads->list();
+    foreach my $thr (@threads){
+	$thr->kill('KILL');
+	$thr->join() unless($thr->is_detached);
+    }
+
+    map {$_->kill('KILL')->join()} threads->list();
+    GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
+    Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
+    Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
 }
 
 #--keep STDOUT from buffering

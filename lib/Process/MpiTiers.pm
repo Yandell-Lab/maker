@@ -442,7 +442,7 @@ sub update_chunk {
    #check run status
    if($chunk->failed){
       my $E = $chunk->exception;
-      $self->_handler($E, "Chunk failed at level:$level_num, tier_type:$tier_type\n");
+      $self->_handler($E, "Chunk failed at level:$level_num, tier_type:$tier_type");
    }
    elsif($chunk->terminated){
       #let the chunk add results to $self->{VARS}
@@ -809,7 +809,7 @@ sub _handler {
    my $level = $self->current_level;
 
    print STDERR $E->{-text};
-   print STDERR "ERROR: ".$extra."!!\n" if($extra);
+   print STDERR "ERROR: ".$extra."\n" if($extra);
 
    #clear queue on error
    while(my $chunk = $self->next_chunk){

@@ -43,20 +43,22 @@ sub run {
 	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 
-	   local $/ = \1;
 	   my $err;
 	   my $fail;
 
-	   #run with alarm to correct for program hanging
-	   eval{
-	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
-	       alarm 1800;
-	       while (my $line = <$CHLD_ERR>){
-		   print STDERR $line unless($main::quiet);
-		   $err .= $line;
-	       }
-	       alarm 0;
-	   };
+	   {
+	       local $/ = \1;
+	       #run with alarm to correct for program hanging
+	       eval{
+		   local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
+		   alarm 1800;
+		   while (my $line = <$CHLD_ERR>){
+		       print STDERR $line unless($main::quiet);
+		       $err .= $line;
+		   }
+		   alarm 0;
+	       };
+	   }
 
 	   if($@){
 	       #warn $@; #removed - don't report first round errors
@@ -109,16 +111,19 @@ sub run {
 	   undef $err;
 	   undef $fail;
 
-	   #run with alarm to correct for program hanging
-	   eval{
-	       local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
-	       alarm 600;
-	       while (my $line = <$CHLD_ERR>){
-		   print STDERR $line unless($main::quiet);
-		   $err .= $line;
-	       }
-	       alarm 0;
-	   };
+	   {
+	       local $/ = \1;
+	       #run with alarm to correct for program hanging
+	       eval{
+		   local $SIG{ALRM} = sub { die "ERROR: The iprscan instance is frozen\n" };
+		   alarm 600;
+		   while (my $line = <$CHLD_ERR>){
+		       print STDERR $line unless($main::quiet);
+		       $err .= $line;
+		   }
+		   alarm 0;
+	       };
+	   }
 
 	   if($@){
 	       warn $@;
