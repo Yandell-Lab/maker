@@ -6,15 +6,13 @@ bin/evaluator
 bin/fasta_merge
 bin/fasta_tool
 bin/genemark_gtf2gff3
-bin/gff3_2_gtf
 bin/gff3_merge
-bin/gff3_preds2models
 bin/ipr_update_gff
 bin/iprscan2gff3
 bin/iprscan_wrap
 bin/maker
 bin/maker2chado
-bin/maker2eval
+bin/maker2eval_gtf
 bin/maker2jbrowse
 bin/maker2zff
 bin/maker_functional
@@ -26,7 +24,6 @@ bin/map_data_ids
 bin/map_fasta_ids
 bin/map_gff_ids
 bin/mpi_scripts.PL
-bin/split_fasta
 bin/tophat2gff3
 Build.PL
 inc/bin/mpi_evaluator

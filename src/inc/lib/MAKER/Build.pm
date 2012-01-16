@@ -512,7 +512,7 @@ sub ACTION_installdeps{
     my $self = shift;
 
     my $prereq = $self->prereq_failures();
-    if($prereq && $prereq->{requires}){
+    if($prereq && ($prereq->{requires} || $prereq->{recommends})){
 	my @perl = map {keys %{$_->{requires}}} $self->prereq_failures();
 	my $access = 1 if(-w $Config{installsitelib} && -w $Config{installarchlib});
 	if(!$access){
@@ -538,27 +538,42 @@ sub ACTION_installdeps{
 
 	    exit(0) unless($go);
 	}
-	
+
+	my %errors;
 	foreach my $m (keys %{$prereq->{build_requires}}){    
 	    $self->cpan_install($m, $local);
 	}
 	foreach my $m (keys %{$prereq->{requires}}){    
 	    $self->cpan_install($m, $local);
 	}
+
+	print "Checking optional dependencies:\n";
+	foreach my $m (keys %{$prereq->{recommends}}){    
+	    my $go = $self->y_n("Install $m?", 'Y');
+	    if($go){
+		$errors{$m}++ unless($self->cpan_install($m, $local));
+	    }
+	}
 	
 	print "\nRechecking dependencies to see if installation was successful\n";
 	$self->check_prereq;
-
-	$self->maker_status;
 	
-	if($self->prereq_failures()){
-	    my ($usr_id) = (getpwnam('root'))[2];
-	    print "WARNING: Installation failed (please review any previous errors).\n";
-	    print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
-	    print "You may need to configure and install these packages manually.\n";
-	    return 0;
+	if($self->prereq_failures() && keys %errors){
+	    if(! keys %{$prereq->{requires}}){
+		print "\nWARNING: You have all required dependencies, but some optional components\n".
+		    "failed to install.\n";
+	    }
+	    else{
+		my ($usr_id) = (getpwnam('root'))[2];
+		print "\nWARNING: Installation failed (please review any previous errors).\n";
+		print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
+		print "You may need to configure and install these packages manually.\n";
+		return 0;
+	    }
 	}
     }
+
+    $self->maker_status;
 }
 
 #these install individual external algorithms
@@ -567,21 +582,44 @@ sub ACTION_blast{ shift->_exe_action('blast'); }
 sub ACTION_exonerate{ shift->_exe_action('exonerate'); }
 sub ACTION_snap{ shift->_exe_action('snap'); }
 sub ACTION_augustus{ shift->_exe_action('augustus'); }
-sub ACTION_jbrowse{ shift->_exe_action('jbrowse'); }
-sub ACTION_apollo{ shift->_exe_action('apollo'); }
 sub ACTION_mpich2{ shift->_exe_action('mpich2', 'mpich2version'); }
+sub ACTION_jbrowse{
+    my $self = shift;
+
+    my $lib_failures = $self->lib_failures({'LibPNG' => 'png'});
+    if($lib_failures && (grep {/libpng/i} keys %{$lib_failures->{lib_requires}})){
+        print "\nERRORS/WARNINGS FOUND IN PREREQUISITES. You must have LibPNG installed first.\n";
+	exit(0);
+    }
+
+    $self->_exe_action('jbrowse', 'flatfile-to-json.pl');       
+}
+sub ACTION_apollo{
+    my $self = shift;
+
+    my $exe_failures = $self->exe_failures({'Apache Ant' => 'ant'});
+    if($exe_failures && (grep {/apache ant/i} keys %{$exe_failures->{exe_requires}})){
+	print "\nERRORS/WARNINGS FOUND IN PREREQUISITES. You must have Apache Ant installed first.\n";
+	    exit(0);
+    }
+    $self->_exe_action('apollo', 'apollo');
+}
 sub ACTION_gbrowse{
     my $self = shift;
 
     if($self->check_installed_status('Bio::Graphics::Browser2', '0')->{ok}){
         my $go = $self->y_n("WARNING: GBrowse was already found on this system.\n".
                             "Do you still want MAKER to install GBrowse for you?", 'N');
+	exit(0) unless($go);
+    }
 
-	$self->cpan_install('Bio::Graphics::Browser2', 0) if($go);
+    my $lib_failures = $self->lib_failures({'LibGD' => 'gd'});
+    if($lib_failures && (grep {/libgd/i} keys %{$lib_failures->{lib_requires}})){
+        print "\nERRORS/WARNINGS FOUND IN PREREQUISITES. You must have LibGD installed first.\n";
+	exit(0);
     }
-    else{
-	$self->cpan_install('Bio::Graphics::Browser2', 0);
-    }
+
+    $self->cpan_install('Bio::Graphics::Browser2', 0);
 }
 
 
@@ -631,8 +669,8 @@ sub check_exes{
 	}
     }
     print "\nERRORS/WARNINGS FOUND IN PREREQUISITES.  You may wish to install the programs\n".
-	"indicated above before proceeding with this installation\n".
-	"\nRun 'Build installexes' to install missing prerequisites.\n";
+	"indicated above before proceeding with this installation.\n".
+	"Run 'Build installexes' to install missing prerequisites.\n\n";
 }
 
 #checks external libraries to see if they're present. Anologous to check_prereqs
@@ -730,6 +768,10 @@ sub _exe_action{
     my $self = shift;
     my $label = shift;
     my $script = shift;
+
+    if(! $script && ! $self->exe_requires->{$label}){
+	$script = $label;
+    }
 
     my $fail = ($script) ? $self->exe_failures({$label => $script}) : $self->exe_failures();
     my @list = keys %{$fail->{exe_requires}} if($fail->{exe_requires});
@@ -1048,7 +1090,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} <jbrowse*>;
+	my ($dir) = grep {-d $_} <*jbrowse*>;
 	print "Configuring $exe...\n";
 	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
@@ -1189,7 +1231,7 @@ sub cpan_install {
     #CPAN::Shell->install($desired);
     CPAN::Shell->force('install', $desired);
 
-    #restore pld CPAN settings
+    #restore old CPAN settings
     $CPAN::Config->{makepl_arg} = $bak{makepl_arg};
     $CPAN::Config->{mbuildpl_arg} = $bak{mbuildpl_arg};
     CPAN::Shell::setup_output();
@@ -1235,7 +1277,7 @@ sub extract_archive {
     }
     else{
 	die "ERROR: Archive::Tar required to unpack missing executables.\n".
-	    "Try running ./Build installdeps first.\n"
+	    "Try running ./Build installdeps first.\n\n"
 	    if(!$self->check_installed_status('Archive::Tar', '0')->{ok});
 
 	return (Archive::Tar->extract_archive($file)) ? 1 : 0; #slow
@@ -1269,7 +1311,7 @@ sub getstore {
     }
     else{
 	die "ERROR: LWP::Simple required to download missing executables\n".
-	    "Try running ./Build installdeps first.\n"
+	    "Try running ./Build installdeps first.\n\n"
 	    if(!$self->check_installed_status('LWP::Simple', '0')->{ok});
 
 	$url =~ s/^([^\:]\;\/\/)/$1\:\/\/$user\:$pass\@/ if(defined($user) && defined($pass));

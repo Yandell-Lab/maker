@@ -7,6 +7,7 @@ use warnings;
 use FindBin;
 use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/lib"; #libary just needed for configuration
+use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
 use MAKER::Build;
 
@@ -39,9 +40,9 @@ my $build = MAKER::Build->new(
 	 'Perl::Unsafe::Signals' => '0',
 	 'Bit::Vector'        => '0',
 	 'Inline::C'          => '0.48',
-	 'PerlIO::gzip'       => '0',
 	 'forks'              => '0.34',
-	 'forks::shared'       => '0.34',
+	 'forks::shared'      => '0.34',
+	 'Want'               => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {
@@ -65,6 +66,8 @@ my $build = MAKER::Build->new(
 	 'Term::ReadKey'      => '0',
      },
      recommends => {
+	 'DBD::Pg'            => '0',
+	 'Acme::Damn'            => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      install_base => "$FindBin::Bin/../",
@@ -131,8 +134,8 @@ if($build->feature('mwas_support')){
     $build->add_exe_requires('Apollo' => 'apollo');
     $build->add_exe_requires('Apache Ant' => 'ant');
     $build->add_exe_requires('JBrowse' => 'flatfile-to-json.pl');
-    $build->add_lib_requires('LibPNG' => "png");
-    $build->add_lib_requires('LibGD' => "gd");
+    $build->add_lib_requires('LibPNG' => 'png');
+    $build->add_lib_requires('LibGD' => 'gd');
 
     $build->set_gmod_locs();
 }
