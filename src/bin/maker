@@ -882,13 +882,16 @@ else {
 	}
 	elsif((num_chunks(\@tiers) > 1) || (!$t_need_flag && num_chunks(\@tiers) > 0)){
 	    #gets chunk or tier
-	    my $r_chunk = next_chunk(\@tiers) if($t_need_flag);
+	    my $r_chunk;
+	    if($t_need_flag){
+		$r_chunk = next_chunk(\@tiers);
+	    }
 
 	    #if chunk is tier, treat as such
 	    if(ref($r_chunk) eq 'Process::MpiTiers'){
-		push(@tiers, $r_chunk);
-		run(\@tiers, $rank);
-		next;
+	    	push(@tiers, $r_chunk);
+	    	run(\@tiers, $rank);
+	    	next;
 	    }
 	    
 	    $chunk = $r_chunk;
@@ -1023,11 +1026,11 @@ else {
 		MPI_Send(\$rank, $helper, $who_I_am); #say I'm the one who needs help
 
 		#send chunk if available
-		my $r_chunk = next_chunk(\@tiers);
-		while(ref($r_chunk) eq 'Process::MpiTiers'){
+		my $r_chunk = next_chunk(\@tiers, 'chunk') || next_chunk(\@tiers, 'tier');
+		while(ref($r_chunk) eq 'Process::MpiTiers' && @tiers < 3){
 		    push(@tiers, $r_chunk);
 		    actualize(\@tiers, $rank);
-		    $r_chunk = next_chunk(\@tiers)
+		    $r_chunk = next_chunk(\@tiers, 'chunk') || next_chunk(\@tiers, 'tier');
 		}
 
 		if($r_chunk){
@@ -1054,11 +1057,11 @@ else {
 		MPI_Send(\$rank,  $loc, $who_I_am); #restablish relationship
 
 		#send something else or release helper
-		my $r_chunk = next_chunk(\@tiers);
-		while(ref($r_chunk) eq 'Process::MpiTiers'){
+		my $r_chunk = next_chunk(\@tiers, 'chunk') || next_chunk(\@tiers, 'tier');
+		while(ref($r_chunk) eq 'Process::MpiTiers' && @tiers < 3){
 		    push(@tiers, $r_chunk);
 		    actualize(\@tiers, $rank);
-		    $r_chunk = next_chunk(\@tiers)
+		    $r_chunk = next_chunk(\@tiers, 'chunk') || next_chunk(\@tiers, 'tier');
 		}
 
 		if($r_chunk){

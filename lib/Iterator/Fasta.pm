@@ -102,45 +102,44 @@ sub nextEntryRef {
     if (! @{$self->{BUF}} && ! openhandle($fh)){ #checks to see if file handle is open
 	return undef; 
     }
-    
-    local $/ = "\n>";
 
     my $line;
-    while($line = shift @{$self->{BUF}} || <$fh>){
-	$self->{COUNT}++;
-
-	$line =~ s/>//;
-	$line =~ s/>$//;
-	$line = ">".$line;
-
-	if($line =~ /^M\n?|\cM\n?/){
-	    $line =~ s/^M\n?|\cM\n?/\n/g;
-	    my @set = grep {$_ ne "\n" } split(/\n>/, $line);
-	    foreach my $s (@set){
-		$s = ">".$s if($s !~ /^>/);
+    {    
+	local $/ = "\n>";
+	while($line = shift @{$self->{BUF}} || <$fh>){
+	    $self->{COUNT}++;
+	    
+	    $line =~ s/>//;
+	    $line =~ s/>$//;
+	    $line = ">".$line;
+	    
+	    if($line =~ /^M\n?|\cM\n?/){
+		$line =~ s/^M\n?|\cM\n?/\n/g;
+		my @set = grep {$_ ne "\n" } split(/\n>/, $line);
+		foreach my $s (@set){
+		    $s = ">".$s if($s !~ /^>/);
+		}
+		$line = shift @set;
+		push(@{$self->{BUF}}, @set);
 	    }
-	    $line = shift @set;
-	    push(@{$self->{BUF}}, @set);
+	    
+	    #already seen so skip
+	    next if($self->{SEEN}->[$self->{COUNT}]);
+	    
+	    #step forward in jumps if indicated
+	    if($self->{step} && $self->{step} != 1){
+		next if($self->{COUNT} < $self->{step} || $self->{COUNT} % $self->{step} != 0);
+	    }
+	    
+	    $self->{SEEN}->[$self->{COUNT}]++;
+	    
+	    $line =~ /^>([^\s\n]+)/;
+	    next if(defined ($self->{SKIP}{$1}));
+	    
+	    local $/ = "\n"; #just in case
+	    return \$line;
 	}
-
-	#already seen so skip
-	next if($self->{SEEN}->[$self->{COUNT}]);
-
-	#step forward in jumps if indicated
-	if($self->{step} && $self->{step} != 1){
-	    next if($self->{COUNT} < $self->{step} || $self->{COUNT} % $self->{step} != 0);
-	}
-
-	$self->{SEEN}->[$self->{COUNT}]++;
-
-	$line =~ /^>([^\s\n]+)/;
-	next if(defined ($self->{SKIP}{$1}));
-
-	local $/ = "\n";
-	return \$line;
     }
-    
-    local $/ = "\n";
 
     #end of file but I was jumping using a step, so go back to start
     if($self->{step} && $self->{step} != 1){

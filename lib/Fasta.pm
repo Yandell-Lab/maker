@@ -108,20 +108,20 @@ sub getWantedFromMulti {
         my $multiFasta = shift;
         my $wanted     = shift;
 
-        local $/ = "\n>";
-
         my $fh = new FileHandle;
            $fh->open("$multiFasta");
 
 	my @fastas;
-        while(my $line = <$fh>){
+	{
+	    local $/ = "\n>";
+	    while(my $line = <$fh>){
                 $line =~ s/>//;
                 $line = ">".$line;
 		if (!defined($wanted) || $line =~ /$wanted/){
-			push(@fastas, $line);
+		    push(@fastas, $line);
                 }
-        }
-        local $/ = "\n";
+	    }
+	}
         $fh->close;
 
 	return \@fastas;

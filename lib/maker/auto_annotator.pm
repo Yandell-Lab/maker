@@ -1845,8 +1845,17 @@ sub load_transcript_struct {
 	my $len_3_utr = length($transcript_seq) - $end + 1;
 	my $l_trans =  length($translation_seq);
 
-	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
-	my $t_id = ($f->{_tran_id}) ? $f->{_tran_id} : $t_name; #affects GFFV3.pm
+	#remove data that should not be carred over into certain transcripts
+	if($f->{_HMM} =~ /^(est2genome|protein2genome)/){
+	    $f->{_tran_name} = undef;
+	    $f->{_tran_id} = undef;
+	    $f->{-attrib} = undef;
+	}
+
+	my $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
+	my $t_id = $t_name; #affects GFFV3.pm
+	$t_name = $f->{_tran_name} if($f->{_tran_name}); #affects GFFV3.pm
+	$t_id = $f->{_tran_id} if($f->{_tran_id}); #affects GFFV3.pm
 	$f->name($t_name);
 
 	my $t_struct = {'hit'       => $f,
@@ -2249,7 +2258,8 @@ sub group_transcripts {
       }
 
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
-      my $g_attrib = (exists $t_structs[0]->{hit}->{gene_attrib}) ? $t_structs[0]->{hit}->{gene_attrib} : undef;
+      my $g_attrib = $t_structs[0]->{hit}->{gene_attrib} if(exists $t_structs[0]->{hit}->{gene_attrib});
+
 
       my $annotation = { 't_structs'  => \@t_structs, 
 			 'g_name'     => $g_name,

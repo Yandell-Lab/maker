@@ -647,14 +647,13 @@ sub get_p_and_t_fastas {
 
    #for ab initio annotations use the stats from the unmodified model 
    if($type ne 'maker'){
-       my $h = $t_struct->{hit};
        my $p_struct = ($type eq 'abinit') ? $t_struct->{p_struct} : $t_struct;
        $t_seq = $p_struct->{t_seq};
        $p_seq = $p_struct->{p_seq};
        $t_off = "offset:".$p_struct->{t_offset};
-       $AED = (defined $h->{_AED}) ? "AED:".sprintf('%.2f', $h->{_AED}) : '';
-       $eAED = (defined $h->{_eAED}) ? "eAED:".sprintf('%.2f', $h->{_eAED}) : '';
-       $QI = ($h->{_QI}) ? "QI:".$h->{_QI} : '';
+       $AED = (defined $p_struct->{AED}) ? "AED:".sprintf('%.2f', $p_struct->{AED}) : '';
+       $eAED = (defined $p_struct->{eAED}) ? "eAED:".sprintf('%.2f', $p_struct->{eAED}) : '';
+       $QI = ($p_struct->{t_qi}) ? "QI:".$p_struct->{t_qi} : '';
    }
 
    my $p_def = ">$t_name protein $AED $eAED $QI";

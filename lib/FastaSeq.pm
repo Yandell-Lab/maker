@@ -164,6 +164,8 @@ sub substr_o {
     my $off = shift;
     my $len = shift;
 
+    return '' if($len == 0);
+
     #always work with references
     $seq = $$seq while(ref($seq) eq 'REF');
     my $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
