@@ -556,7 +556,7 @@ sub unlock {
 
 	#signal maintainer
 	kill(2, $self->{_maintain});
-	my $stat = waitpid($self->{_maintain}, WNOHANG);
+	$stat = waitpid($self->{_maintain}, WNOHANG);
 
 	#attempt kill multiple times if still running
 	my $count = 0;
@@ -844,7 +844,7 @@ sub maintain {
 
 	#signal maintainer
 	kill(2, $self->{_maintain});
-	my $stat = waitpid($self->{_maintain}, WNOHANG);
+	$stat = waitpid($self->{_maintain}, WNOHANG);
 
 	#attempt kill multiple times if still running
 	my $count = 0;
@@ -895,7 +895,7 @@ sub maintain {
 	
 	#signal maintainer
 	kill(2, $self->{_maintain});
-	my $stat = waitpid($self->{_maintain}, WNOHANG);
+	$stat = waitpid($self->{_maintain}, WNOHANG);
 	
 	#attempt kill multiple times if still running
 	my $count = 0;

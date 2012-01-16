@@ -67,7 +67,6 @@ my $build = MAKER::Build->new(
      },
      recommends => {
 	 'DBD::Pg'            => '0',
-	 'Acme::Damn'            => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      install_base => "$FindBin::Bin/../",
@@ -141,6 +140,7 @@ if($build->feature('mwas_support')){
 }
 
 $build->config_data(PATH => $ENV{PATH});
+$build->config_data(build_done => 0);
 $build->create_build_script;
 
 $build->log_info("\n\nThe file 'Build' has been created for you to finish installing MAKER.\n");

@@ -335,9 +335,9 @@ sub ACTION_build {
 	$O{smtp_server} = $self->prompt("\nOutgoing e-mail SMTP server?",
 					 $O{smtp_server});
 
-	if(! -f '_mwas'){
+	if(! -d '_mwas'){
 	    mkdir('_mwas') or die "ERROR: Cannot save configuration for Build\n".
-		"Please check you user prvleges and/or drive space.\n";
+		"Please check you user privileges and/or drive space.\n";
 	}
 	GI::generate_control_files('_mwas','server', \%O);
 	GI::generate_control_files('_mwas','all', \%O);
@@ -353,6 +353,8 @@ sub ACTION_build {
 			"     --> $c_dir/maker_exe.ctl\n".
 			"\n==============================================================================\n\n");
     }
+
+    $self->config_data(build_done => 1);
 }
 
 #commit current MAKER to subversion repository
@@ -455,6 +457,10 @@ sub ACTION_release {
 #replacement for Module::Build's ACTION_install
 sub ACTION_install {
     my $self = shift;
+
+    unless($self->config_data('build_done')){
+	$self->dispatch('build');
+    }
 
     $self->log_info("Installing " . $self->dist_name . "...\n");    
     $self->SUPER::ACTION_install();

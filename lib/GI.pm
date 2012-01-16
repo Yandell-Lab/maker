@@ -3311,7 +3311,8 @@ sub collect_hmms {
 	$exes{snap} =~ s/[^\/]+$//;
 	$exes{snap} = "$exes{snap}/HMM/";
     }
-    if(-d $exes{snap}){
+
+    if($exes{snap} && -d $exes{snap}){
 	foreach my $file (grep {!/README/} <$exes{snap}/*>){
 	    my ($name) = $file =~ /([^\/]+)$/;
 	    $name =~ s/\.hmm$//;
@@ -3329,17 +3330,18 @@ sub collect_hmms {
 	$exes{gmhmme3} = Cwd::abs_path($exes{gmhmme3});
 	$exes{gmhmme3} =~ s/[^\/]+$//;
 	$exes{gmhmme3} = "$exes{gmhmme3}/HMM/";
-    }
-    if(-d $exes{gmhmme3}){
-	foreach my $file (<$exes{gmhmme3}/*.mod>){
-	    my ($name) = $file =~ /([^\/]+)\.mod$/;
-	    $name =~ s/_/\. /;
-	    $name = ucfirst($name);
-	    my $value = Cwd::abs_path("$file");
-
-	    next if(!$name || !$value);
-
-	    $hmms{gmhmm_e}{$name} = $value;
+ 
+	if(-d $exes{gmhmme3}){
+	    foreach my $file (<$exes{gmhmme3}/*.mod>){
+		my ($name) = $file =~ /([^\/]+)\.mod$/;
+		$name =~ s/_/\. /;
+		$name = ucfirst($name);
+		my $value = Cwd::abs_path("$file");
+		
+		next if(!$name || !$value);
+		
+		$hmms{gmhmm_e}{$name} = $value;
+	    }
 	}
     }
 
@@ -3347,18 +3349,19 @@ sub collect_hmms {
     if($exes{fgenesh}){
 	$exes{fgenesh} = Cwd::abs_path($exes{fgenesh});
 	$exes{fgenesh} =~ s/[^\/]+$//;
-    }
-    if(-d $exes{fgenesh}){
-	foreach my $file (<$exes{fgenesh}/*>){
-	    my ($name) = $file =~ /([^\/]+)$/;
-	    my $value = Cwd::abs_path("$file");
-
-	    next if(!$name || !$value);
-
-	    my $filesize = [stat($file)]->[7]; #size in bytes
-
-        #rough size of all parameter files
-	    $hmms{fgenesh_par_file}{$name} = $value if($filesize >= 200000);
+    
+	if(-d $exes{fgenesh}){
+	    foreach my $file (<$exes{fgenesh}/*>){
+		my ($name) = $file =~ /([^\/]+)$/;
+		my $value = Cwd::abs_path("$file");
+		
+		next if(!$name || !$value);
+		
+		my $filesize = [stat($file)]->[7]; #size in bytes
+		
+		#rough size of all parameter files
+		$hmms{fgenesh_par_file}{$name} = $value if($filesize >= 200000);
+	    }
 	}
     }
 
