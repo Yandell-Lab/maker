@@ -3976,7 +3976,7 @@ sub _handler {
    my $extra = shift;
    my $tag = shift || 'throw';
 
-   $E->{-text} .= "ERROR: Failed while ".$extra."!!\n\n" if($extra);
+   $E->{-text} .= "ERROR: Failed while ".$extra."\n" if($extra);
    
    if($tag eq 'handle'){
       $self->{FAILED} = 1;

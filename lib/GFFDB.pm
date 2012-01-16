@@ -242,7 +242,7 @@ sub add_maker {
 	       }
 	       elsif($l->{source} =~ /^maker|^model_gff\:/i){
 		  next if (! $codes{model_pass});
-		  next if ($skip{model_maker});
+		  next if ($skip{model_maker});		  
 		  $table = 'model_maker';
 	       }
 	       elsif($l->{source} =~/^\.$/){
@@ -419,8 +419,16 @@ sub _parse_line{
     foreach my $d (@data){
 	$d = uri_escape($d,'\'\"\%');
     }
+    
+    #add tag to source
+    if($tag && $data[1] !~ /^$tag\:/){
+	$data[1] = "$tag:$data[1]";
+    }
+    elsif($data[1] eq 'maker' && !$tag){
+	$data[1] = ($self->{last_build}) ?
+	    "model_gff:maker_".$self->{last_build} : 'model_gff:maker';
+    }
 
-    $data[1] = "$tag:$data[1]" if($tag && $data[1] !~ /^$tag\:/);
     $data[6] = '+' if($data[6] =~ /^\.$|^0$/); #fixes some repeat entries
     my ($parent) = $data[8] =~ /Parent=([^\n\;]+)/;
 
