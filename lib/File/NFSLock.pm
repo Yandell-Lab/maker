@@ -1150,54 +1150,6 @@ sub shared_id {
     return $line
 }
 #-------------------------------------------------------------------------------
-sub newpid {
-    my $self = shift;
-    # Detect if this is the parent or the child
-    if ($self->{lock_pid} == $$) {
-	# This is the parent
-	
-	# Must wait for child to call newpid before processing.
-	# A little patience for the child to call newpid
-	my $patience = time + 10;
-	while (time < $patience) {
-	    if (rename("$self->{lock_file}.fork",$self->{rand_file})) {
-		# Child finished its newpid call.
-		# Wipe the signal file.
-		unlink ($self->{rand_file});
-		last;
-	    }
-	    # Brief pause before checking again
-	    # to avoid intensive IO across NFS.
-	    usleep(0.1);
-	}
-	
-	# Fake the parent into thinking it is already
-	# unlocked because the child will take care of it.
-	$self->{unlocked} = 1;
-    } else {
-	# This is the new child
-	
-	# The lock_line found in the lock_file contents
-	# must be modified to reflect the new pid.
-	
-	# Fix lock_pid to the new pid.
-	$self->{lock_pid} = $$;
-	# Backup the old lock_line.
-	my $old_line = $self->{lock_line};
-	# Clear lock_line to create a fresh one.
-	delete $self->{lock_line};
-	# Append a new lock_line to the lock_file.
-	$self->_create_magic($self->{lock_file});
-	# Remove the old lock_line from lock_file.
-	local $self->{lock_line} = $old_line;
-	$self->_do_unlock_shared;
-	# Create signal file to notify parent that
-	# the lock_line entry has been delegated.
-	open (_FH, ">$self->{lock_file}.fork");
-	close(_FH);
-    }
-}
-#-------------------------------------------------------------------------------
 sub usleep {
     my $time = shift;
     select(undef,undef,undef,$time);

@@ -31,6 +31,28 @@ sub cluster_hits {
     return \@clusters;
 }
 #-------------------------------------------------------------------------------
+#generic form - requires an array of hashes or other features with the keys
+#start, end, and stand (optional) defined
+sub cluster {
+    my $array = shift;
+    my $flank = shift;
+
+    my $pairs = build_pairs($array, $flank);
+    my $cMap = cluster_pairs($pairs);
+
+    my @clusters;
+    for(my $i = 0; $i < @$cMap; $i++){
+        my $members = $cMap->[$i];
+        next if(!$members || !@$members);
+
+        my @set = map {$array->[$_]} @{$members};
+
+	push(@clusters, \@set);
+    }
+    
+    return \@clusters;
+}
+#-------------------------------------------------------------------------------
 sub build_hit_pairs {
     my $hits = shift;
     my $flank = shift;
@@ -49,6 +71,37 @@ sub build_hit_pairs {
 	    my $bSt = $hits->[$j]->strand('query');
 
 	    next if($aSt ne $bSt);
+
+	    my $code = (abs($aB - $bE) + 1 <= $flank ||
+			abs($aB - $bB) + 1 <= $flank ||
+			abs($aE - $bE) + 1 <= $flank ||
+			abs($aE - $bB) + 1 <= $flank);
+
+	    $code = compare::compare($aB, $aE, $bB, $bE, $flank) if(!$code);
+	    push(@pairs, [$i, $j]) if($code);
+	}
+    }
+
+    return \@pairs;
+}
+#-------------------------------------------------------------------------------
+sub build_pairs {
+    my $array = shift;
+    my $flank = shift;
+
+    my @pairs;
+    for (my $i = 0; $i < @$array; $i++) {
+	my $aB = $array->[$i]->{start};
+	my $aE = $array->[$i]->{end};
+	my $aSt = $array->[$i]->{strand};
+	push(@pairs, [$i, $i]);
+
+	for (my $j = $i+1; $j < @$array; $j++) {
+	    my $bB = $array->[$j]->{start};
+	    my $bE = $array->[$j]->{end};
+	    my $bSt = $array->[$j]->{strand};
+
+	    next if(defined($aSt) && defined ($bSt) && ($aSt ne $bSt));
 
 	    my $code = (abs($aB - $bE) + 1 <= $flank ||
 			abs($aB - $bB) + 1 <= $flank ||
