@@ -418,13 +418,18 @@ if($rank == $root){
 	}
     }
 
-    GI::create_blastdb(\%CTL_OPT);
-    $gdbfile = $CTL_OPT{_g_db}[0];
     for(my $i = 0; $i < $size; $i++){
 	next if($i == $root);
 	MPI_Recv(\$empty, $i, $who_I_am);
 	MPI_Recv(\$empty, $i, $result_status);
 	MPI_Send(\$reset, $i, $request_status);
+    }
+
+    #separte the final send from the others to create a barrier
+    GI::create_blastdb(\%CTL_OPT);
+    $gdbfile = $CTL_OPT{_g_db}[0];
+    for(my $i = 0; $i < $size; $i++){
+        next if($i == $root);
 	MPI_Send(\$gdbfile, $i, $mpi_data);
     }
 }

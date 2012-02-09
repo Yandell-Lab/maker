@@ -926,7 +926,7 @@ sub split_db {
 	    
 	    my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
 	    
-	    die "ERROR: The id $seq_id is too long for BLAST, and I can'y uniquely fix it\n"
+	    die "ERROR: The id $seq_id is too long for BLAST, and I can't uniquely fix it\n"
 		if($alias{$new_id});
 	    
 	    $alias{$new_id}++;
