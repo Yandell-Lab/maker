@@ -347,7 +347,7 @@ sub compare {
                 $class = $s == 1 ? 'z' : 'Z'; # z for Zig-zag
         }
 
-	return $class;	
+	return $class;
 }
 #------------------------------------------------------------------------
 1;

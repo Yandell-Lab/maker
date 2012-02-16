@@ -64,6 +64,7 @@ sub new {
 	elsif(defined $in){
 	    $dbfile = $in;
 	    $self->{dbfile} = $dbfile;
+	    $self->{in_memory} = shift @args;
 	    $self->{last_build} = undef;
 	    $self->{next_build} = "Build::1.00";
 	    $self->{go_gffdb} = 1;
@@ -86,17 +87,24 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-	my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	my $dbh;
+	if($self->{in_memory}){
+	    $dbh = DBI->connect("dbi:SQLite::memory:", "", "", {sqlite_use_immediate_transaction => 1});
+	    $self->{DBH} = $dbh;
+	}
+	else{
+	    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	}
 	
 	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
 	if (! grep( /^sources$/, @{$tables})){
 	    $dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
 	}
 	
-	$dbh->commit;
-	$dbh->disconnect;
+	$dbh->commit unless($self->{in_memory});
+	$dbh->disconnect unless($self->{in_memory});
     }
     elsif($dbfile && -e $dbfile){
        unlink($dbfile);
@@ -109,9 +117,15 @@ sub do_indexing {
     return unless($self->{go_gffdb});
     my $dbfile = $self->{dbfile};
 
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
+    my $dbh;
+    if($self->{in_memory}){
+	$dbh = $self->{DBH};
+    }
+    else{
+	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+    }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     my $indices = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'index'});
@@ -123,8 +137,8 @@ sub do_indexing {
 	}
     }
 	
-    $dbh->commit;
-    $dbh->disconnect;
+    $dbh->commit unless($self->{in_memory});
+    $dbh->disconnect unless($self->{in_memory});
 }
 #-------------------------------------------------------------------------------
 sub add_maker {
@@ -145,9 +159,15 @@ sub add_maker {
 
     my $dbfile = $self->{dbfile};
 
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance 
+    my $dbh;
+    if($self->{in_memory}){
+	$dbh = $self->{DBH};
+    }
+    else{
+	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+    }
     
     #check to see if tables need to be created, erased, or skipped
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -256,7 +276,7 @@ sub add_maker {
 	       
 	       $self->_add_to_db($dbh, $table, $l);
 	       if($count == 10000){ #commit every 10000 entries
-		  $dbh->commit;
+		  $dbh->commit unless($self->{in_memory});
 		  $count = 0;
 	       }
 	       else{
@@ -268,8 +288,8 @@ sub add_maker {
     }
     
     #commit changes
-    $dbh->commit;
-    $dbh->disconnect;
+    $dbh->commit unless($self->{in_memory});
+    $dbh->disconnect unless($self->{in_memory});
 }
 #-------------------------------------------------------------------------------
 sub add_repeat {
@@ -338,9 +358,15 @@ sub _add_type {
 
     my $dbfile = $self->{dbfile};
 
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    my $dbh;
+    if($self->{in_memory}){
+        $dbh = $self->{DBH};
+    }
+    else{
+        $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+    }
     
     #see if table needs to be created, erased or skipped
     my $source = ($gff_file) ? $gff_file : 'empty';
@@ -392,7 +418,7 @@ sub _add_type {
 	       $self->_add_to_db($dbh, $table, $l) unless($l->{type} eq 'contig');
 	    
 	       if($count == 10000){ #commit every 10000 entries
-		  $dbh->commit;
+		  $dbh->commit unless($self->{in_memory});
 		  $count = 0;
 	       }
 	       else{
@@ -404,8 +430,8 @@ sub _add_type {
     }
     
     #commit changes
-    $dbh->commit();
-    $dbh->disconnect();
+    $dbh->commit unless($self->{in_memory});
+    $dbh->disconnect unless($self->{in_memory});
 }
 #-------------------------------------------------------------------------------
 sub _parse_line{
@@ -474,7 +500,15 @@ sub phathits_on_chunk {
     my $ref1 = [];
     my $ref2 = [];
 
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    my $dbh;
+    if($self->{in_memory}){
+        $dbh = $self->{DBH};
+    }
+    else{
+        $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+    }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
@@ -553,7 +587,7 @@ sub phathits_on_chunk {
 	}
     }
     
-    $dbh->disconnect;
+    $dbh->disconnect unless($self->{in_memory});
     
     my $features = _ary_to_features($ref1, $ref2);
     
@@ -607,7 +641,15 @@ sub lines_for_chunk {
     my $c_end = $chunk->end;
     my $seqid = $chunk->seqid;
 
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    my $dbh;
+    if($self->{in_memory}){
+        $dbh = $self->{DBH};
+    }
+    else{
+        $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
+        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
@@ -686,7 +728,7 @@ sub lines_for_chunk {
 	}
     }
     
-    $dbh->disconnect;
+    $dbh->disconnect unless($self->{in_memory});
 
     return \@lines;
 }
@@ -704,7 +746,15 @@ sub phathits_on_contig {
     my $ref2 = [];
 
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    my $dbh;
+    if($self->{in_memory}){
+        $dbh = $self->{DBH};
+    }
+    else{
+        $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
+        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
@@ -718,7 +768,7 @@ sub phathits_on_contig {
 	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
     }
     
-    $dbh->disconnect;
+    $dbh->disconnect unless($self->{in_memory});
     
     my $features = _ary_to_features($ref1, $ref2);
     
@@ -767,7 +817,15 @@ sub get_existing_gene_names {
     my %names;
 
     my $dbfile = $self->{dbfile};
-    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","");
+    my $dbh;
+    if($self->{in_memory}){
+        $dbh = $self->{DBH};
+    }
+    else{
+        $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
+        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
+    }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
@@ -843,7 +901,7 @@ sub get_existing_gene_names {
 	}
     }
     
-    $dbh->disconnect;
+    $dbh->disconnect unless($self->{in_memory});
 
     return \%names;
 }
