@@ -1,0 +1,495 @@
+[% WRAPPER main_gff3_stats.tt %]
+<style type="text/css">
+
+</style>
+
+<script type="text/javascript" charset="utf-8">
+   // When the page is ready
+
+   $(document).ready(function(){
+	jQuery('#navigation').accordion({ 
+    		active: false, 
+    		header: '.head', 
+    		navigation: true, 
+    		//event: 'mouseover', 
+    		//fillSpace: true, 
+		autoheight: false,
+    		animated: 'easeslide',
+		alwaysOpen: false,
+		collapsible: true
+	});
+
+	$('#selectall_file').click(function()
+	{
+	    $("input[@type=checkbox][@name=files_count]").each(function(){
+            	$(this).attr("checked", true);
+            });
+	});
+
+        $('#deselectall_file').click(function()
+        {
+	    $("input[@type=checkbox][@name=files_count]").each(function(){
+                $(this).attr("checked", false);
+            });
+        });
+
+        $('#invertselect_file').click(function()
+        {
+            $("input[@type=checkbox][@name=files_count]").each(function(){
+		$(this).attr("checked", $(this).attr("checked")==true?false:true);
+            });
+        });
+
+        $('#selectall_source').click(function()
+        {
+            $("input[@type=checkbox][@name=sources_count]").each(function(){
+                $(this).attr("checked", true);
+            });
+        });
+
+        $('#deselectall_source').click(function()
+        {
+            $("input[@type=checkbox][@name=sources_count]").each(function(){
+                $(this).attr("checked", false);
+            });
+        });
+
+        $('#invertselect_source').click(function()
+        {
+            $("input[@type=checkbox][@name=sources_count]").each(function(){
+		$(this).attr("checked", $(this).attr("checked")==true?false:true);
+            });
+        });
+
+        $('#selectall_type').click(function()
+        {
+            $("input[@type=checkbox][@name=types_count]").each(function(){
+                $(this).attr("checked", true);
+            });
+        });
+        $('#deselectall_type').click(function()
+        {
+            $("input[@type=checkbox][@name=types_count]").each(function(){
+                $(this).attr("checked", false);
+            });
+        });
+
+        $('#invertselect_type').click(function()
+        {
+            $("input[@type=checkbox][@name=types_count]").each(function(){
+		$(this).attr("checked", $(this).attr("checked")==true?false:true);
+            });
+        });
+
+	$('#show_counts').click(function()
+	{
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF types.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=types_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&types_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+
+	 	if(str1){
+		 	$.ajax({
+   				type: "POST",
+   				url: "/cgi-bin/gff3_stats.cgi",
+  				data: "rm=show_counts" + "[% str %]" + str1,
+  				success: function(msg){
+    				//alert( "Data Saved: " + msg );
+    					$("#display_counts").html(msg);
+					$('#example').dataTable({
+						"sPaginationType": "full_numbers"
+					});
+   				}
+			});
+  		}else{
+			$("#display_counts").html("no select!");
+		}
+	});	
+
+	$('#show_lengths').click(function()
+	{
+		//alert("hello");
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF types.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=types_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&types_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		//alert(str1);
+		if(str1){	 	
+		 	$.ajax({
+   				type: "POST",
+   				url: "/cgi-bin/gff3_stats.cgi",
+  				data: "rm=show_lengths" + "[% str %]" + str1,
+  				success: function(msg){
+    					//alert( "Data Saved: " + msg );
+    					$("#display_lengths").html(msg);
+					$('#example1').dataTable({
+						"sPaginationType": "full_numbers"
+					});
+   				}
+			});
+		}else{
+			$("#display_lengths").html("no select!");
+		}
+
+	});
+	$('#show_distribution').click(function()
+	{
+		//alert("hello");
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF types.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=types_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&types_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		//alert(str1);
+		if(str1){
+		 	$.ajax({
+   				type: "POST",
+   				url: "/cgi-bin/gff3_stats.cgi",
+  				data: "rm=show_distribution" + "[% str %]" + str1,
+  				success: function(msg){
+    					//alert( "Data Saved: " + msg );
+    					$("#display_distribution").html(msg);
+ 					$('#distribution a').lightBox({fixedNavigation:true});
+					$('#example2').dataTable({
+						"sPaginationType": "full_numbers"
+					});
+   				}
+			});
+		}else{
+			$("#display_distribution").html("no select!");
+		}
+
+	});
+	$('#show_graphs').click(function()
+	{
+		//alert("hello");
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		//alert(str1);
+		if(str1){
+		 	$.ajax({
+   				type: "POST",
+   				url: "/cgi-bin/gff3_stats.cgi",
+  				data: "rm=show_graphs" + "[% str %]" + str1,
+  				success: function(msg){
+    					//alert( "Data Saved: " + msg );
+    					$("#display_graphs").html(msg);
+ 					$('#graphs a').lightBox({fixedNavigation:true});
+					$('#example3').dataTable({
+						"sPaginationType": "full_numbers"
+					});
+   				}
+			});
+		}else{
+			$("#display_graphs").html("no source selected!");
+		}
+
+	});
+	$('#show_density').click(function()
+	{
+		//alert("hello");
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		//alert(str1);
+		if(str1){	 	
+		 	$.ajax({
+   				type: "POST",
+   				url: "/cgi-bin/gff3_stats.cgi",
+  				data: "rm=show_density" + "[% str %]" + str1,
+  				success: function(msg){
+    					//alert( "Data Saved: ");
+    					$("#display_density").html(msg);
+ 					$('#density a').lightBox({fixedNavigation:true});
+					$('#example4').dataTable({
+						"sPaginationType": "full_numbers"
+					});
+   				}
+			});
+		}else{
+			$("#display_density").html("no source selected!");
+		}
+	});
+	$('#reports').click(function(){
+		//alert("hello");
+		$("#display_file").html("");
+		[% IF files.size > 0 %]
+			[% str = '' %]
+			[% FOREACH file=files %]
+				[% str = str _ '&files=' _ file %]
+			[% END %]
+		[% END %]		
+                var str1 = '';
+		[% IF types.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=types_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&types_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		[% IF sources.size > 0 %]
+		    	//str1 = '';	
+                	$("input[@type=checkbox][@name=sources_count]").each(function(){
+                        	if ($(this).attr("checked") == true){
+                                	str1 = str1 + '&sources_count=' + $(this).val();
+                        	}
+                	});
+		[% END %]
+		//$("input[@type=radio][@name=reports]").each(function(){
+        	//        $(this).attr("checked") = false;
+                //});
+
+		var item = $('input[@name=reports][@checked]').val();
+		if(item && str1){
+			$.ajax({
+                                type: "POST",
+                                url: "/cgi-bin/gff3_stats.cgi",
+                                data: "rm=generate_report&file_type=" + item + "[% str %]" + str1,
+                                success: function(msg){
+                                        //alert( "Data Saved: " + msg);
+                                        $("#display_file").html(msg);
+                                        //$('#density a').lightBox({fixedNavigation:true});
+                                        //$('#example4').dataTable({
+                                         //       "sPaginationType": "full_numbers"
+                                        //});
+                                }
+                        });
+
+		}else{
+			if(item){
+				//alert("no select");
+				$("#display_file").html("no source and type selected!");
+			}else if(str1){
+				$("#display_file").html("no file type selected!");
+			}else{
+				$("#display_file").html("no source and type selected, and no file type selected!");
+			}
+
+		} 
+	});
+
+   });
+
+</script>
+<script type="text/javascript">
+
+</script>
+
+<!-- ==================== BEGIN MAIN CONTENT AREA ====================== -->
+
+
+<div class="main_padding">
+
+[% IF files.size > 0 or type.size > o or source.size > 0 %]
+<form name="form2" id="form2" enctype="multipart/form-data" method="post" action="/cgi-bin/gff3_stats.cgi">
+<input type="hidden" name="rm" value="show_counts">
+[% FOREACH file=files %]
+<input type="hidden" name="files" value="[% file %]">
+[% END %]
+[% FOREACH source=sources %]
+<input type="hidden" name="sources" value="[% source %]">
+[% END %]
+[% FOREACH type=types %]
+<input type="hidden" name="types" value="[% type %]">
+[% END %]
+<table id="searching_table" style="width: 100%; border: 0;">
+  <tbody>
+  <tr>
+   <th colspan="3" style="border: 0; background: #eef3f9;" align="left">
+    Genome Summary<br>
+    For file(s):&nbsp;&nbsp;
+      [% FOREACH file=files.sort %]
+        <u style="font-weight: normal; color: #971903;">[% file %]</u>;&nbsp;
+      [% END %]
+   </th>
+  </tr>
+  <tr>
+    <th align="left" style="border: 0;background: #eef3f9;">
+      Features
+    </th>
+    <th align="left" style="border: 0; background: #eef3f9;">
+       Sources
+    </th>
+  </tr>
+  <tr>
+    <th valign="top" align="left" style="border: 0;vertical-align: top; font-weight: normal; background: lightyellow">
+        [% FOREACH type=types.sort %]
+            <input type="checkbox" name="types_count" value="[% type %]">[% type %]<br>
+        [% END%]
+	<a href="javascript:;" id="selectall_type" >Select All</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:;" id="deselectall_type">Deselect All</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:;" id="invertselect_type">Invert Selection</a>
+    </th>
+
+    <th align="left" valign="top" style="border: 0;vertical-align: top; font-weight: normal;background: lightyellow">
+      	[% FOREACH source=sources.sort %]
+	    <input type="checkbox" name="sources_count" value="[% source %]" >[% source %]<br>
+        [% END%]
+
+	<a href="javascript:;" id="selectall_source" >Select All</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:;" id="deselectall_source">Deselect All</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="javascript:;" id="invertselect_source">Invert Selection</a>
+    </th>
+    </tr>
+  </tbody>
+</table>
+</form>
+
+
+		<div id="calculate_result">
+			<ul id="navigation">
+				<li>
+					<a class="head" href="javascript:;" id="show_counts">Counts</a>
+					<ul class="dt_example">
+<div class="container">
+<div id="display_counts" style="border: 0; vertical-align: middle; padding: 3px;overflow: auto;">
+</div>
+</div>
+					</ul> 
+				</li>
+				<li>
+				<a class="head" href="javascript:;" id="show_lengths">Feature Lengths</a>
+					<ul class="dt_example">
+
+		<div class="container">
+<div id="display_lengths" style="border: 0; vertical-align: middle; padding: 3px;overflow: auto;">
+</div>
+</div>
+				</ul> 
+				</li>
+				<li>
+					<a class="head" href="javascript:;" id="show_distribution" >Feature Distribution</a>
+<ul class="dt_example">
+<div class="container">
+<div id="distribution">
+<div id="display_distribution" style="border: 0; vertical-align: middle; padding: 3px;overflow: auto;">
+</div>
+</div>
+</div>
+</ul>
+
+				</li>
+				<li>
+					<a class="head" href="javascript:;" id="show_graphs" >Ontology Graphs</a>
+<ul class="dt_example">
+<div class="container">
+<div id="graphs">
+<div id="display_graphs" style="border: 0; vertical-align: middle; padding: 3px;overflow: auto;">
+</div>
+</div>
+</ul>
+				</li>
+				<li>
+					<a class="head" href="javascript:;" id="show_density">Density</a>
+<ul class="dt_example">
+<div class="container">
+<div id="density">
+<div id="display_density">
+</div>
+</div>
+</ul>
+
+				</li>
+				<li>
+					<a class="head" href="?p=1.1.3">Generate Reports</a>
+<ul class="dt_example">
+<div class="container">
+					<table>
+					<tr>
+						<td><input type="radio" value="pdf" name="reports">PDF File</td>
+						<td><input type="radio" value="txt" name="reports">TXT File</td>
+						<td><input type="radio" value="html" name="reports">HTML File</td>
+						<td><input type="button" value="    Generate Report    " id="reports"></td>
+					</tr>
+					</table>
+<div id="display_file">
+<div>
+</div>
+</ul>
+				</li>
+			</ul>
+		</div>
+[% END %]
+<!-- ==================== END MAIN CONTENT AREA ====================== -->
+</div> <!-- inner_padding -->
+ <!-- main_content -->
+
+[% END%]

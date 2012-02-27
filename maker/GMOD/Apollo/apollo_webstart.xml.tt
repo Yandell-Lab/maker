@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<webstart> 
+  <jarsigner>
+    <alias>apollo</alias>
+    <keypass>apollo</keypass>
+    <storepass>apollo</storepass>
+    <keystore>apollo_store</keystore>
+    <validity>700</validity>
+
+    <!-- you might want to put your name -->
+    <commonName>Apollo for MAKER</commonName>
+
+    <!-- you might want to put your department name -->
+    <organizationUnit>Yandell Lab</organizationUnit>
+
+    <!-- you might want to put your organization's name -->
+    <organizationName>University of Utah</organizationName>
+
+    <!-- you might want to put your organization's city -->
+    <localityName>Salt Lake City</localityName>
+
+    <!-- you might want to put your organization's state -->
+    <stateName>UT</stateName>
+
+    <!-- you might want to put your organization's country -->
+    <country>USA</country>
+
+  </jarsigner>
+
+  <!-- now we need to populate our server information -->
+  <jnlp spec="1.0+">
+    <information>
+
+      <!-- change this as you will -->
+      <title>Apollo for MAKER Web Annotation Service</title>
+      <vendor>Yandell Lab</vendor>
+      <description>Apollo Webstart for MAKER Web Annotation Service</description>
+
+      <!-- location of your project's web page -->
+      <homepage href="http://www.yandell-lab.org" />
+
+      <!-- if you want to have WebStart add a specific image as your icon,
+            point to the location of the image -->
+      <icon href="[% url_base_dir %]/images/Maker-Logo.gif" width="32" height="32"/>
+
+      <!-- allow users to launch Apollo when offline -->
+      <offline-allowed/>
+    </information>
+
+    <security>
+      <all-permissions/>
+    </security>
+    <resources>
+      <j2se version="1.5+" initial-heap-size="64m" max-heap-size="500m" />
+    </resources>
+
+    <!-- don't change this -->
+    <application-desc main-class="apollo.main.Apollo">
+        <argument>-i</argument>
+        <argument>gff3</argument>
+        <argument>-f</argument>
+        <argument>[% url_gff3_file %]</argument>
+    </application-desc>
+  </jnlp>
+  <webserver>
+
+    <!-- URL where the webstart instance will reside -->
+    <url>[% url_jnlp_base %]</url>
+
+    <!-- relative location to <url> where jars are located -->
+    <jar_location>[% url_base_dir %]/jars</jar_location>
+
+  </webserver>
+</webstart>

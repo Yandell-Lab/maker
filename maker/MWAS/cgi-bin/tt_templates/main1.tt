@@ -1,0 +1,52 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+  <head bgcolor>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+    <meta name="description" content="Maker Web Service" />
+    <meta name="keywords" content="Maker" />
+    	<title>Maker Web Service</title>
+    <link href="/Student/css/style1.css" rel="stylesheet" type="text/css" />
+  </head>
+
+  <body>
+
+    <div id="container">
+
+      
+
+<div id="header"><h1><img src="http://www.yandell-lab.org/images/Maker-Logo.png	">Maker Web Service<font size=1 color="edda74"><i> Beta</i></font></h1><h7>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Your Genome Annotated</h7></div>
+      <div id="sub_header">Annotate This!</div>
+
+      <div id="main_content_top">
+        [% time.day_name %],  [% time.month_abbr %] [% time.day_of_month %] [% time.year %] [% time.hms %] |
+        [% IF logged_in  %]
+          logged-in as [% session.param('AUTH_USERNAME') %] | <a href="/cgi-bin/Maker/maker.cgi?rm=general_home;authen_logout=1">logout</a>&nbsp;
+        [% ELSE %]
+          <a href="maker.cgi?rm=general_login">login1</a> &nbsp;
+        [% END %]
+      </div>
+  
+      <div id="main_content">
+
+        <div class="content">
+
+      	  [% content %]
+
+        </div>
+
+      	
+
+        <div id="clear"></div>
+
+      </div>
+
+      <div id="main_content_bottom"></div>
+
+      <div id="footer"><strong>Copyright &copy; 2008</strong> | <a href="http://genetics.utah.edu">Department of Human Genetics</a> | <a href="http://www.utah.edu">University of Utah</a> | <b></b> </div>
+
+    </div>
+
+  </body>
+
+</html>

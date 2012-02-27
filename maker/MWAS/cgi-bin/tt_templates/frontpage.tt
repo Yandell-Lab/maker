@@ -1,0 +1,118 @@
+[% WRAPPER main.tt  %]
+
+<script type="text/javascript">
+
+<!--
+function toggleLog(iState, url) {
+    var DivID = 'FloatingLayer';
+
+    if(iState == 2)
+    {
+      if(document.layers)   //NN4+
+      {
+        iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
+      }
+      else if(document.getElementById)  //gecko(NN6) + IE 5+
+      {
+        var obj = document.getElementById(DivID);
+        iState = (obj.style.visibility == "visible") ? 0 : 1;
+      }
+      else if(document.all)// IE 4
+      {
+        iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
+      }
+    }
+
+    if(iState == 1){CenterFloatingLayer()};
+    ToggleFloatingLayer(DivID, iState);
+
+    if(iState == 1){	
+        LoadURL('floating_content_area', url);
+    }
+}
+// -->
+</script>
+
+<br>
+<br>
+
+[% IF message %]
+<h3>[% message %]<h3>
+[% END %]
+
+<h2>Welcome to the MAKER Web Annotation Service (MWAS)</h2>
+<p>
+To get started just click on "New Job" above.  You can then submit a sequence for annotation
+[% IF server_opt.tutorials %] or select from a list of pre-loaded example annotation jobs[% END %].  Once a job has been added to the
+queue you can see your job's run status as well as the results below.  You can also see your jobs position in the execution queue
+relative to other user's jobs by clicking "Job Queue" above.
+For more infomation on using the MAKER Web Annotation Service, click on "Help" above.
+</p>
+
+<br>
+<a align=right href="maker.cgi"><img  src="[% server_opt.html_web %]/images/page_refresh.gif"> Refresh Job Status</a>
+
+<h2>Your Jobs ([% jobs.size %])</h2>
+<center>
+<table width=90% border=0 cellspacing=1 cellpadding=5>
+  <tr bgcolor="#99CCCC">
+    <th>JobID</th>
+    <th>Description</th>
+    <th>Job Status</th>
+    <th>Start Time</th>
+    <th>Finish Time</th>
+    <th>Log</th>
+    <th>View Results</th>
+    <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
+  </tr>
+[% count = 0 %]
+[% FOREACH job = jobs%]
+  [% count = count + 1 %]
+  <tr bgcolor="#CFECEC">
+    <td align=center><a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.job_id %]</a></td>
+    <td>[% job.name %]</td>
+    <td align=center>
+        [% IF job.status == 'edit' %]
+	   <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.status %]</a>
+        [% ELSE %]
+	   [% job.status %]
+        [% END %]
+    </td>
+    <td align=center>[% job.start_time %]</td>
+    <td align=center>[% job.finish_time %]</td>
+    <td align=center>
+      [% IF job.status != 'waiting in queue' && job.status != 'edit' %]
+        <a href="javascript:toggleLog(1, 'stream.cgi?type=log&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="[% server_opt.html_web %]/images/report.png"></a>
+      [% END %]
+    </td>
+    <td align=center>
+      [% IF job.status == 'results ready' %]
+        <a href="javascript:toggleLog(1, 'maker.cgi?rm=results&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="[% server_opt.html_web %]/images/disk.png"></a>
+      [% END %]
+    </td>
+    <td align=center>
+      <form method="POST" action="maker.cgi" name="delete" enctype="multipart/form-data">
+	<input type="hidden" name="rm" value="delete_job">
+	<input type="hidden" name="job_id" value="[% job.job_id %]">
+	<input type="submit" name="delete_button" value="">
+      </form>
+    </td>
+  </tr>
+[% END %]
+
+[% IF count == 0 %]
+  <tr bgcolor="#CFECEC">
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+[% END %]
+</table>
+</center>
+
+[% END %]

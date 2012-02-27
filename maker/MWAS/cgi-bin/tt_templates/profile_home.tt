@@ -1,0 +1,6 @@
+[% WRAPPER main.tt %]
+
+<h2>This is page is not yet implemented.</h2>
+
+[% END %]
+

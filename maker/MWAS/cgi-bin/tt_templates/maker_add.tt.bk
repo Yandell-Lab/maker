@@ -1,0 +1,212 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Maker:Add Job</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_students.cgi" name="student_edit">
+
+<input type="hidden" name="rm" value="students_edit_process">
+
+
+
+<table>
+  <tr>
+    <td>Upload A Fasta File:</td>
+
+    <td><input type="file" name="file_name"></td>
+
+    </td>
+  </tr>
+  <tr>
+    <td>Copy and Paste 10 mg or less</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 width =40 name="file_paste">
+    </td>
+  </tr>
+<tr><td></td><td></td></tr>
+<tr><td></td><td></td></tr>
+<tr><td></td><td></td></tr>
+<tr><td></td><td></td></tr>
+<tr><td></td><td> Maker Options</td></tr>
+<tr><td></td><td></td></tr>
+<tr><td></td><td></td></tr>  
+<tr>
+    <td>EST</td>
+    <td>    
+      <input type="text" size=10 maxlength=60 name="Est">
+    </td>
+  </tr>
+  <tr>
+  <tr>
+    <td>Protein</td>
+    <td>    
+      <input type="text" size=10 maxlength=10 name="protein" >
+    </td>
+  </tr>
+  <tr>
+    <td>repeat_protein</td>
+    <td>    
+      <input type="text" size=10 maxlength=10 name="repeat_protein" value="">
+    </td>
+  </tr>
+
+
+ <tr>
+    <td>alt_est</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="alt_est" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>rm_lib</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="rm_lib" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>rm_gff</td>
+    <td>
+      <input type="rm_gff" size=10 maxlength=10 name="rm_gff" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>SnamHmm</td>
+
+    <td>
+ [% FOREACH snap = model_org.sort('modelorg') %]
+	<select>
+  	<option value=[% snap.modelorg %]>[% snap.modelorg %]</option>
+	</select>
+[% END %]      
+    </td>
+  </tr>
+
+ <tr>
+    <td>Agustus_species</td>
+ [% FOREACH agu = agustus.sort('agustus_species') %]
+    <td>
+      	<select>
+        <option value="[agu.agustus_species]">[agu.agustus_species]</option>
+        </select>
+
+    </td>
+  </tr>
+[% END %]
+
+ <tr>
+ [% FOREACH morg = model_org.sort('modelorg') %]
+    <td>model_org</td>
+    <td>
+	<select>
+        <option value="[morg.modelorg]">[morg.modelorg]</option>
+        </select>
+    </td>
+  </tr>
+[% END %]
+
+ <tr>
+    <td>alt_peptide</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="alt_peptide" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>cpus</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="cpus" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>predictor</td>
+    <td>
+	<select>
+        <option value="volvo">Volvo</option>
+        <option value="saab">Saab</option>
+        <option value="mercedes">Mercedes</option>
+        <option value="audi">Audi</option>
+        </select>
+
+
+    </td>
+  </tr>
+
+ <tr>
+    <td>rmlib_only</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="rmlib_only" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>max_dna_len</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="max_dna_len" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>min_contig</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_contig" value="">
+    </td>
+  </tr>
+
+ <tr>
+    <td>split_hit</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="spli_hit" value="">
+    </td>
+  </tr>
+
+<tr>
+    <td>snap_flank</td>
+    <td>
+      <input type="snap_flank" size=10 maxlength=10 name="snap_flank" value="">
+    </td>
+  </tr>
+
+
+
+
+<tr>
+    <td>single_exon</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="single_exon" value="">
+    </td>
+  </tr>
+
+<tr>
+    <td>use_seq_dir</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="use_seq_dir" value="">
+    </td>
+  </tr>
+
+<tr>
+    <td>clean_up</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="clean_up" value="">
+    </td>
+  </tr>
+
+
+
+  
+</table>
+
+<br />
+
+<input type="submit" value="Add Maker Job">
+</form>
+
+[% END %]
+

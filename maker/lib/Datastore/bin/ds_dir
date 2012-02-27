@@ -1,0 +1,187 @@
+#!/usr/bin/env perl
+
+use strict;
+
+use Getopt::Long;
+use Datastore::MD5;
+use Datastore::CG;
+
+my($digest) = $ENV{DATASTORE_DIGEST} || "MD5"; # default value
+my($depth) = $ENV{DATASTORE_DEPTH}   || 2;     # default value
+my($root) = $ENV{DATASTORE_ROOT}     || "./";  # default value
+my($all);
+my($regexp);
+my($usage);
+
+my($class);
+my($ds);
+my($id);
+
+GetOptions("digest=s" => \$digest,
+	   "depth=s" => \$depth,
+	   "root=s" => \$root,
+	   "all" => \$all,
+	   "regexp=s" => \$regexp,
+	   "usage" => \$usage,
+	   "help" => \$usage,
+	  );
+
+if ($usage) {
+  usage();
+  exit(0);
+}
+
+if (!defined($all) && ! defined($regexp) && scalar(@ARGV) == 0) {
+  usage();
+  exit(1);
+}
+
+$class = "Datastore::$digest";
+
+$ds = new $class("root" => $root, "depth" => $depth);
+
+# Do the heavy lifting.
+# 
+if (defined($all) || defined($regexp)) {
+  # iterate over existing directories in the datastore
+  #
+  $regexp = ".*" if (defined($all));
+  $ds->foreach(\&print_dir);
+}
+else {
+  # iterate over the id's on the command line and dir-ify them.
+  foreach $id (@ARGV) {
+    print $ds->id_to_dir($id) , "\n";
+  }
+}
+
+# used by $ds->foreach above, just prints out a directory given
+# a datastore object and an id.
+sub print_dir {
+  my($ds, $id) = @_;
+  if ($id =~ m|$regexp|) {
+    print $ds->id_to_dir($id), "\n";
+  }
+}
+
+sub usage {
+  print "$0 [--digest=(MD5|CG)] [--depth=(1|2|3|...)] [--root=/path/to/datastore/root] [--all|--regexp=RE|ID ID ...]\n";
+}
+
+__END__
+
+=head1 NAME
+
+ds_dir - Prints out datastore directories.
+
+=head1 SYNOPSIS
+
+ds_dir --root path --digest DIG -depth INT (--all|--regexp RE|ID_LIST)
+					 
+=head1 DESCRIPTION
+
+ds_dir is a command line tool that prints out the list of directories
+that correspond to either:
+
+  - a list of ID's given on the command line
+
+or
+
+  - all of the directories in the datastore
+
+or
+
+  - all of the directories in the datastore that match a regular
+    expression.
+
+It has two basic modes of operation.  If you specify --all or --regexp
+'regular_expression' it iterates over the directories that exist in
+the datastore and prints out the directory name.  Otherwise it expects
+a list of ID's on the command line, and prints out the directory names
+that correspond to those ID's, independent of whether they actually
+exist in the datastore.
+
+=head2 OPTIONS
+
+Options can be specified with or without equal sign, and with a single
+or a double dash.  C<--root foo> and C<-root=foo> are equivalent.
+
+=over 4
+
+=item --help
+
+Generate a short usage message.
+
+=item --root /path/to/the/datastore/root
+
+Specify the path to the root of the datastore.
+
+=item --depth INTEGER
+
+Specify the depth of the datastore.  Normal values are 1, 2, 3.
+Default is 2.
+
+=item --digest MD5|CG
+
+Specify the type of digest with which the datastore was built.  Valid
+options include the MD5 and CG.  Default is "MD5".
+
+=item --all
+
+Iterate over all of the directories in the datastore.
+
+=item --regexp "REGEXP"
+
+Iterate over all of the directories in the datastore that match the 
+regular expression "REGEXP".
+
+=back
+
+=head1 EXAMPLES
+
+ds_dir --root /path/to/root --depth 3 --regexp ".*9$"
+
+=over 4
+=item
+
+Prints out the directories for all of the items in the 3-level
+deep datastore rooted at /path/to/root for which the ID ends with 9.
+
+=back
+			 
+ds_dir --root ./to/root --digest MD5 CG0666 CG1234
+
+=over 4
+=item
+
+Prints out the directories for CG0666 CG1234 in the 
+2-level deep datastore rooted at ./to/root.
+
+=back
+
+=head1 DEFAULT VALUES
+
+The C<--digest>, C<--depth>, and C<--root> options can be set several
+ways.
+
+Any option specified on the command line has the highest precedence.
+
+If no matching option is specified on the command line, the user's
+environment is checked for the environment variables
+C<DATASTORE_DIGEST>, C<DATASTORE_DEPTH>, and C<DATASTORE_ROOT> and
+their value is used.
+
+Failing that, default values are used.
+
+=head1 AUTHOR
+
+George Hartzell, E<lt>hartzell @ fruitfly.orgE<gt>
+
+=head1 SEE ALSO
+
+L<ds_do>, L<Datastore::Base>, L<Datastore::MD5>, L<Datastore::CG>,
+L<perl>.
+
+=cut
+  
+  

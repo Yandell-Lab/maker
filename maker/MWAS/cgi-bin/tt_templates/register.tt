@@ -1,0 +1,109 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript"></script>
+
+<h2><img src="[% server_opt.html_web %]/images/MSN2.ico" height=32 width=32>User Registration</h2>
+
+<form method="POST" action="maker.cgi" name="register">
+<input type="hidden" name="rm" value="register">
+
+
+[% IF errors.size > 0 %]
+
+<h4 style="padding : 0 0 0 5em">
+  Please check values marked by <img src="[% server_opt.html_web %]/images/action_stop.gif">
+</h4>
+
+[% END %]
+
+
+<table style="padding : 0 0 0 4em">
+  <tr>
+    <td>Login Name:</td>
+    <td>
+        <input type="text" size=20 maxlength=20 name="login"[% IF login %] value="[% login %]"[% END %]>
+    </td>
+    <td nowrap>
+	[% IF errors.login %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.login %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>First Name:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="first"[% IF first %] value="[% first %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>Last Name:</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 name="last"[% IF last %] value="[% last %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=20 maxlength=70 name="e_mail"[% IF e_mail %] value="[% e_mail %]"[% END %]>
+    </td>
+    <td nowrap>
+	[% IF errors.e_mail %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.e_mail %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>Institution:</td>
+    <td>
+      <input type="text" size=20 maxlength=70 name="institution"[% IF institution %] value="[% institution %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="password">
+    </td>
+    <td nowrap>
+	[% IF errors.password %] <img src="[% server_opt.html_web %]/images/action_stop.gif">
+	  [% IF errors.password == 2 %] [% ELSE %] Required[% END %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>Verify Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="verify">
+    </td>
+    <td nowrap>
+	[% IF errors.verify %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.verify %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>Value Below:</td>
+    <td>   
+        <input type="text" size=10 maxlength=10 name="captcha" value="" autocomplete="off">
+    </td>
+    <td nowrap>
+	[% IF errors.captcha %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.captcha %]
+        [% END %]
+    </td>   
+  </tr>
+  <tr>
+    <td>   
+    </td>   
+    <td>   
+        <img src="maker.cgi?rm=create_captcha">
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Submit">
+</form>
+
+[% END %]
+

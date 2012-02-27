@@ -1,0 +1,531 @@
+***MAKER DOCUMENTATION***
+ALSO SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
+#---------------------------------------------------------------------
+
+INSTALLATION INSTRUCTIONS FOR MAKER
+
+*Step by step instructions are also available in the INSTALL text
+file.
+
+*If you are using Mac OS X you will need to install developer tools
+and Rosetta from your install disk first.
+
+MAKER is an annotation pipeline.  In other words it links together
+many steps and programs to produce final annotations.  For this
+reason, you must first install a number of programs that MAKER depends
+on.  MAKER works on both eukaryotic and prokaryotic genomes.
+
+Installing MAKER may be as easy as running MAKER's Build.PL script
+followed by ./Build install
+    cd maker/src/
+    perl Build.PL
+    ./Build install
+
+If you need to do any additional system configuration, Build.PL will
+provide you with insuctions. If installation fails, you will need to
+follow the detailed instructions for manual configuration bellow
+or in the bundled INSTALL file.
+
+
+To install MAKER, you will first need to install the following
+prerequisites:
+
+Perl modules (available from CPAN):
+    *DBI
+    *DBD::SQLite
+    *Proc::ProcessTable
+    *threads (Required for MPI scripts)
+    *IO::All (Required for accessory scripts)
+    *IO::Prompt (Required for accessory scripts)
+
+Required external programs:
+    *PERL 5.8.0 or higher
+    *BioPerl 1.6 or higher (www.bioperl.org)
+    *SNAP version 2009-02-03  or higher (homepage.mac.com/iankorf)
+    *RepeatMasker 3.1.6  or higher (www.repeatmasker.org)
+    *Exonerate 1.4  or higher (www.ebi.ac.uk/~guy/exonerate)
+
+You must also install one of the following:
+    *Wu-BLAST 2.0 or higher
+     (Wu-BLAST has become AB-BLAST, AB-BLAST is not supported)
+	or
+    *NCBI BLAST 2.2.X or higher
+     (http://www.ncbi.nlm.nih.gov/BLAST/download.shtml)
+ 
+You might want to also install these optional external programs:
+    *Augustus 2.0 or higher (augustus.gobics.de)
+    *GeneMark-ES (exon.biology.gatech.edu)
+    *FGENESH 2.6 or higher (www.softberry.com) - requires licence
+    *GeneMarkS for prokaryotic genomes (exon.biology.gatech.edu)
+
+To install MPI support, you must have an mpi package installed, MAKER
+supports MPICH2:
+    *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
+
+Note: Remember to install MPICH2 with the --enable-sharedlibs flag set
+to the appropriate value.  See MPICH2 Installer's Guide at:
+http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
+
+Also see the MPI configuration instructions found further bellow.
+
+Notes:
+
+1) Wu-BLAST has become AB-BLAST.  We have not tested AB-BLAST for
+   compatibiliy with MAKER, although we do have reports from users
+   who said it works for them.  However we do not have plans to
+   activly support and debug use of AB-BLAST in MAKER, so if you
+   have an existing copy of Wu-BLAST great, if not, we recommend
+   using NCBI BLAST.
+2) RepeatMasker requires Wu-BLAST or RMBlast and a single file
+   executable called TRF (see RepeatMasker website for details), so
+   please install these before installing RepeatMasker.
+   Note: We do not recommend using cross_match as RepeatMasker
+   performance will suffer.
+3) Exonerate Binaries can be downloaded from the website.  If you use
+   Mac OSX, however, binaries are only available for version 1.0.
+   This verion will work too.  If you would like to compile exonerate,
+   it requires GLIB2, a C-library, that has a link from the exonerate
+   website.  If you use Mac OSX, GLIB2 can downloaded using FINK.
+4) RepeatMasker requires a repeat library file, which can be
+   downloaded from Repbase upon registration
+   (http://www.girinst.org/), this is explained on the RepeatMasker
+   website.
+5) Please note the location of all of the programs that you have
+   installed, and add them to you $PATH variable in your .profile
+   file.  You will need this information in the maker_exe file, one
+   of MAKER's 3 control files. As long as the programs are in your
+   PATH then the correct locations will be automatically entered in
+   the maker_exe file.
+
+Now that you have all the necessary programs installed, MAKER can be
+unpacked using:
+
+ tar -zxvf maker.tar.gz
+
+This will create a directory called MAKER with many sub directories:
+
+    bin     - contains the MAKER executables.
+    lib     - contains necessary perl libaries for MAKER.
+    src     - installation folder for configuring and installing MAKER.
+              Contains the Build.PL script.
+    exe     - MAKER installed external execuatables are stored here.
+    perl    - MAKER compiled and localized CPAN libs are stored here.
+    data    - contains sample data for use by MAKER.
+    GMOD    - contains files to assist in configuring other GMOD tools
+              (See sections titled APOLLO and JBrowse below)
+    MWAS    - contains optional MAKER web based GUI
+
+Now you can run MAKER!!
+
+
+Programs required by MAKER rely on certain environmental variables
+being set.  If you have not set these variables per the installation
+instructions of the external programs, a reminder list is provided
+below:
+
+for tcsh:
+setenv PERL5LIB where_bioperl_is_installed
+setenv WUBLASTMAT where_wublast_is_installed/matrix
+setenv WUBLASTFILTER where_wublast_is_installed/filter
+setenv ZOE where_snap_is_installed
+setenv AUGUSTUS_CONFIG_PATH where_augustus_is_installed/config
+
+for bash:
+export PERL5LIB=where_bioperl_is_installed
+export WUBLASTMAT=where_wublast_is_installed/matrix
+export WUBLASTFILTER=where_wublast_is_installed/filter
+export ZOE=where_snap_is_installed
+export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
+
+#---------------------------------------------------------------------
+
+MPI MAKER INSTALL
+
+You will need to have perl compiled for threads with an updated
+version of the perl threads module installed from CPAN before
+installing MPI MAKER. Note MAKER is only compatible with MPICH2.
+
+If you are running MAKER on an MPI capable cluster, you can install an
+MPI version of MAKER by doing the following:
+  a. Install standard MAKER and verify that it runs.
+  b. Install MPICH2 with the --enable-sharedlibs flag set to the
+     appropriate value for your OS (See MPICH2 documentation)
+  c. Use cd to change to the maker/src subdirectory in the MAKER
+     instalation folder.
+  d. Run Build.PL by typing: perl Build.PL
+  e. If	MPICH2 is installed and	configured correctly, it will be
+     detected by MAKER and Build.PL will ask if you want to intall
+     MPI MAKER.  Select 'yes'.
+  f. run ./Build install
+
+To run with MPI, first verify that your MPI environment is initiated,
+(i.e. using the mpdboot or mpd command if necessary). Now start MAKER
+via mpiexec.
+
+Example: (This will run MAKER on 4 nodes or processors)
+
+mpiexec -n 4 maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+
+Please see the documentation of the MPI environment you use for
+instructions on how to initiate an MPI process.
+
+#---------------------------------------------------------------------
+
+SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
+
+#---------------------------------------------------------------------
+
+RUNNING MAKER WITH EXAMPLE DATA
+
+1) Copy the files in the data directories to a temporary directory
+   where you will run an example file.
+2) Type maker -CTL to generate generic MAKER control files
+3) Next you will need to edit the control files to include the path of
+   the genome file, EST file, and protein file, as well as the paths
+   to all required executables.  See CONFIG FILE EDITING for more
+   information.
+4) Then try the following command from your temporary directory:
+
+       maker maker_exe.ctl maker_opts.ctl maker_bopts.ctl
+
+5) Examine the output files.  See MAKER OUTPUT and APOLLO sections.
+
+#---------------------------------------------------------------------
+
+CONTROL FILE EDITING
+
+MAKER uses control files to guide each run.  Generic control files can
+be built using the -CTL flag in maker.  These control files can then
+be edited by the user to identify the location of all required input
+data and statistics.  Control files are run specific and separate
+control files will need to be built for each genome given to MAKER.
+MAKER will look for control files in the current working directory, so
+it is recomended that MAKER should be ran in a separate directory
+containing unique control files for each genome.
+
+Control files:
+
+    1. maker_exe.ctl - contains the path information for needed
+       executables.
+
+    2. maker_bopts - contains filtering statistics for BLAST and
+       Exonerate.
+
+    3. maker_opts.ctl - contains all other information for MAKER,
+       including the location of the input genome file.
+
+
+Remember to examine the control files before each run of MAKER on your
+specific data.
+
+Lines in the MAKER control files have the format key=value with no
+spaces before or after the equals(=).  If the value is a file name, you
+can use relative paths and environmental variables,
+i.e. genome=$HOME/my_genome.fasta
+
+For most options that take a file name, you can supply multiple files
+using comma seperated lists.
+i.e. est=dmel.fasta,cele.fasta
+
+You can also add optional labels to the output using a colon(:) to
+seperate a file name from the label.  Labels  will be passed on the
+the output GFF3.  This is convenient for seperating out tiers for
+GBrowse or JBrowse.
+i.e. est=dmel.fasta:fly,cele.fasta:nematode
+
+Note that for all control files the comments written to help users
+begin with a pound sign(#).  In addition, options before the equals(=)
+can not be changed, nor should there be a space before or after the
+equals.
+
+A. maker_exe.ctl - includes information about programs executed by
+MAKER.
+
+Here is an example of sections of the maker_opts.ctl file:
+
+#-----Genome
+genome=/fastas/genome.fasta
+
+#-----EST Evidence
+est=/fastas/est.fasta
+altest=/fastas/alt_est.fasta
+
+#-----Protein Homology Evidence
+protein=protein.fasta
+
+#-----MAKER Specific Options
+evaluate=0
+max_dna_len=100000
+min_contig=1
+min_protein=0
+split_hit=10000
+pred_flank=200
+single_exon=0
+single_length=250
+keep_preds=0
+map_forward=0
+retry=1
+clean_try=0
+clean_up=0
+
+
+#---------------------------------------------------------------------
+
+MAKER OUTPUT
+
+MAKER will create at least the following files/directories:
+
+1) XXX.maker.output/ - contains all output for a given run of MAKER.
+2) XXX.maker.output/XXX_datastore/ - contains subdirectories that hold
+   the output for each individual contig of the input fasta file.  See
+   DATASTORE DIRECTORY STRUCTURE section.
+3) XXX.maker.output/XXX_master_datastore_index.log - log of MAKER run
+   progress as well as an index for traversing through the output
+   datastructure.
+4) XXX.maker.output/mpi_blastdb/ - Contains fasta indexes and error
+   corrected fasta files built from the EST and protein databases
+   provided by the user. 
+5) maker_opt.log,maker_exe.log,maker_bopts.log - These are logs of the
+   control files used for this run of MAKER.
+5) XXX.maker.output/XXX.db - Database of GFF3 files provided by the
+   user.  See GFF3 PASSTHROUGH section.
+
+Within the XXX_datastore/ subdirectories:
+    * seq_name.gff - a gff file that can be loaded into GMOD, GBROWSE,
+      or Apollo
+    * seq_name.maker.transcripts.fasta - a fasta file of the MAKER
+      annotated transcript sequences
+    * seq_name.maker.proteins.fasta - a fasta file of the MAKER
+      annotated protein sequences
+    * seq_name.maker.XXX.transcript.fasta - a fasta file of ab-initio
+      predicted transcript sequences from program XXX
+    * seq_name.maker.XXX.proteins.fasta - a fasta file of ab-inito
+      predicted protein sequences from program XXX
+    * seq_name.maker.non_overlapping_ab_initio.transcripts.fasta - a
+      fasta file of filtered ab-inito transcript sequences that don't
+      overlap maker annotations
+    * seq_name.maker.non_overlapping_ab_initio.proteins.fasta - a
+      fasta file of filtered ab-inito protein sequences that don't
+      overlap maker annotations
+    * theVoid.seq_name/ - a directory containing all of the raw
+      output files produced by MAKER, including BLAST reports, SNAP
+      output, exonnerate output and the masked genomeic sequence.
+
+WARNING:
+
+* The names of output files are based on sequence ids.  If giving
+  MAKER a multi-fasta file, it is important to verify that all
+  sequence id are unique, so files are not overwritten.
+
+* If there are more than 1,000 sequences in a multi-fasta file a deep
+  datastore structure will be used. See THE DATASTORE DIRECTORY
+  STRUCTURE in this document.
+
+* If sequence ids contain characters that are illegal in file names,
+  those characters will be replaced automatically before building
+  output file names.
+
+
+#---------------------------------------------------------------------
+
+DATASTORE DIRECTORY STRUCTURE
+
+Many filesystems have performance problems with large numbers of
+subdirectories and files within a single directory, and even when the
+underlying filesystems handle things gracefully, access via network
+filesystems can be an issue.  You can imagine that the amount of
+output produced while annotating an entire genome can be quite
+overwhelming to the file system.  To deal with all the output files
+MAKER uses a Datastore module to create a hiearchy of subdirectory
+layers, starting from a 'base', and mapping identifiers to
+corresponding subdirectory.
+
+A deep datastore will be used by MAKER if there are more than 1,000
+sequences in a multi-fasta file.  When a deep datastore is
+implemented, MAKER output files will not appear where you would
+normally expect them to be.  Instead they will be located in a series
+of sub-directory under a new base-directory whose name is determined
+based on the input genome file name:
+
+EXAMPLE: current_directory/fly_datastore/EE/Af/Contig1/Contig1.gff
+
+To help you locate output files, a master_datastore_index file is
+created which lists the exact output directory corresponding to each
+contig from the input genome file.  The The master_datastore_index
+file contains three columns of text; the first column shows the
+sequence identifier from each fasta header, and the second column
+shows the location of the output files for that sequence. The third
+column is for logging the status of data related to an individual
+contig. The values of the third column are as follows:
+    * STARTED - Indicates that MAKER has started proccessing this
+      contig.
+    * FINISHED - Indicates that MAKER has finished processing this
+      contig and all data is currently available in that subdirectory.
+    * DIED - Indicates that MAKER failed on this contig.
+    * DIED_SKIPPED_PERMANENT - Indicates that MAKER failed up to the
+      specified number of retries and will not try again.
+    * RETRY - Indicates that MAKER is retrying the contig after a
+      failure.
+    * SKIPPED_SMALL - Indicates that this contig was skipped because
+      it is too short (based on control file values set by the user).
+
+
+#---------------------------------------------------------------------
+
+GFF3 PASSTHROUGH
+
+If you have data from a source that MAKER does not support, and you
+wish to use the data in annotating a genome, then you can pass the
+data to MAKER as an aligned GFF3 file.  This is done by supplying the
+files location to the appropriate value in the maker_opt.ctl file
+(i.e. est_gff=some_file.gff).  Note that MAKER expects all data sent
+to it to be of the type specified, so don't put mixed data in a file
+(i.e. don't mix EST and other data in the file pointed to by est_gff,
+otherwise it all gets used as EST data).  Also the maker_gff option
+is only for MAKER produced GFF3 files.  Other GFF3 files of mixed data
+must be split by type and identified by the appropriate control file
+option (i.e. rm_gff for repeat data, pred_gff for ab-initio prediction
+data, est_gff for EST data, etc.).
+
+You should use the online GFF3 validator to see if your GFF3 files
+comply with all GFF3 specifications before running MAKER:
+
+     http://dev.wormbase.org/db/validate_gff3/validate_gff3_online
+
+#---------------------------------------------------------------------
+
+APOLLO
+
+MAKER is bundled with a configuration file that improves the color and
+display of MAKER annotations and evidence in the Apollo genome
+browser.  The configuration file is called "gff3.tiers" and is located
+in the maker/GMOD/Apollo/ directory.  The file should be copied to the
+~/.apollo sub_directory in your home directory. You may have to create
+ths directory if it doesn't exist.  You will need to use a terminal
+window to do this.
+
+Example:
+    mkdir ~/.apollo
+    cp maker/GMOD/Apollo/gff3.tiers ~/.apollo
+
+#---------------------------------------------------------------------
+
+CHADO
+
+MAKER is bundled with a script to make it easy to load MAKER results
+into a chado database.  The script is maker2chado.  You will also want
+to review CHADO documentation at http://www.gmod.org/.
+
+You can also use the chado2gff3 script bndled with MAKER to dump from
+Chado to GFF3.
+
+#---------------------------------------------------------------------
+
+JBROWSE
+
+MAKER is bundled with a configuration file that improves the color and
+display of MAKER annotations in JBrowse. The is configuration file is
+genome.css. Place it in your JBrowse html directory per JBrowse
+documentation.  You can use the script maker2jbrowse to automatically
+load MAKER produced GFF3 into JBrowse. There is also a second example
+configuration file for loading MAKER data stored in a CHADO database
+into JBrowse.  MAKER data can be loaded into a CHADO database using
+the maker2chado script.
+
+#---------------------------------------------------------------------
+
+HMM BUILDING (for training SNAP, based on snap documentation)
+
+A) First you will need to determine the genes used to model future
+   genes, by determining a high quality gene set (annotations for the
+   high quality gene should be in GFF3 format).  The high quality gene
+   set can then be coverted into snap ZFF format using maker2zff.pl
+   found in maker/bin.
+
+   This program is run with the following command:
+
+       maker2zff.pl <directory> genome
+
+       * <directory> a the directory where all of your GFF3 files are
+         located
+       * geneome is the name for the outfile
+
+   Files Created:
+       genome.ann
+       genome.dna
+
+   Note: A convenient way to identify and initial high quality gene
+   set for the HMM is to use the -predictor est2genome option in
+   MAKER.  This will produce gene annotations based solely on EST
+   evidence.  These annoations can then seed the first HMM.  After
+   running MAKER again using this new HMM and the -predictor snap
+   option, you can use the second round of annotations as the seed
+   for an even better HMM model. In this way the HMM model
+   progressively improves with each run of MAKER.
+
+   Another strategy for identifying an initial gene set to model the
+   HMM is to use the program CEGMA (http://korflab.ucdavis.edu/
+   software.html).  CEGMA builds a highly reliable set of gene
+   annotations in the absence of experimental data by identifying DNA
+   regions with homology to a set of 458 proteins that are highly
+   conserved among taxa.
+
+   Combining both CEGMA and MAKER datasets to build the first HMM is
+   also a good strategy.
+
+B) Next you will use the dna and zff file (genome.dna and genome.ann)
+   to produce a SNAP HMM as described in the SNAP documention (which
+   we have provided below):
+
+   The first step is to look at some features of the genes:
+
+       fathom genome.ann genome.dna -gene-stats 
+
+   Next, you want to verify that the genes have no obvious errors:
+
+       fathom genome.ann genome.dna -validate
+
+   You may find some errors and warnings. Check these out in some kind
+   of genome browser and remove those that are real errors. Next,
+   break up the sequences into fragments with one gene per sequence
+   with the following command:
+
+       fathom -genome.ann genome.dna -categorize 1000
+
+   There will be up to 1000 bp on either side of the genes. You will
+   find several new files.
+
+       alt.ann, alt.dna (genes with alternative splicing)
+       err.ann, err.dna (genes that have errors)
+       olp.ann, olp.dna (genes that overlap other genes)
+       wrn.ann, wrn.dna (genes with warnings)
+       uni.ann, uni.dna (single gene per sequence)
+
+   Convert the uni genes to plus stranded with the command:
+
+       fathom uni.ann uni.dna -export 1000 -plus
+
+   You will find 4 new files:
+
+       export.aa   proteins corresponding to each gene
+       export.ann  gene structure on the plus strand
+       export.dna  DNA of the plus strand
+       export.tx   transcripts for each gene
+
+   The parameter estimation program, forge, creates a lot of files.
+   You probably want to create a directory to keep things tidy before
+   you execute the program.
+
+       mkdir params
+       cd params
+       forge ../export.ann ../export.dna
+       cd ..
+
+   Last is to build an HMM.
+
+       hmm-assembler.pl my-genome params > my-genome.hmm
+
+   Lastly, you will want to add the location of your hmm file to your
+   maker_opts.ctl file.
+
+* For more information see SNAP documentation on how to build an HMM
