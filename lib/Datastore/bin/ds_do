@@ -1,0 +1,213 @@
+#!/usr/bin/env perl
+
+use strict;
+
+use Getopt::Long;
+use Datastore::MD5;
+use Datastore::CG;
+
+my($digest) = $ENV{DATASTORE_DIGEST} || "MD5"; # default value
+my($depth) = $ENV{DATASTORE_DEPTH}   || 2;     # default value
+my($root) = $ENV{DATASTORE_ROOT}     || "./";  # default value
+my($all);
+my($regexp);
+my($readonly);
+my($usage);
+
+my($class);
+my($ds);
+my($id);
+my($command);
+
+GetOptions("digest=s" => \$digest,
+	   "depth=s" => \$depth,
+	   "root=s" => \$root,
+	   "id=s" => \$id,
+	   "all" => \$all,
+	   "regexp=s" => \$regexp,
+	   "readonly" => \$readonly,
+	   "usage" =>\$usage,
+	   "help" =>\$usage,
+	  );
+
+if ($usage) {
+  usage();
+  exit(0);
+}
+
+if ((!defined($id) && !defined($all) && !defined($regexp)) ||
+    (scalar(@ARGV) == 0)) {
+  usage();
+  exit(1);
+}
+
+$class = "Datastore::$digest";
+
+$ds = new $class("root" => $root, "depth" => $depth);
+
+$command = join " ", @ARGV;
+
+# Do the heavy lifting.
+# 
+if (defined($readonly)) {
+  $ds->readonly(1);
+}
+
+if (defined($all) || defined($regexp)) {
+  # iterate over existing directories in the datastore
+  #
+  $regexp = ".*" if (defined($all));
+  $ds->foreach(\&do_me);
+}
+else {
+  # run for the command on the command line.
+  $ds->system($id, $command);
+}
+
+exit(0);
+
+# used by $ds->foreach above,
+# 
+sub do_me {
+  my($ds, $id) = @_;
+  my($status) = 0;
+  if ($id =~ m|$regexp|) {
+    $status =system($command);
+  }
+  return($status);		# success!
+}
+
+sub usage {
+  print "$0 [--digest=(MD5|CG)] [--depth=(1|2|3|...)] [--root=/path/to/datastore/root] [--all|--regexp=RE|--id=ID] command\n";
+}
+
+__END__
+
+=head1 NAME
+
+ds_do - Execute a command in a set of datastore directories.
+
+=head1 SYNOPSIS
+
+ds_do --all|--regexp=RE|-id=CG0666 "mfold < input > output"
+					 
+=head1 DESCRIPTION
+
+ds_do is a command line tool that executes a shell command in a
+datastore directory, for
+
+  - an ID given on the command line
+
+or
+
+  - all of the directories in the datastore
+
+or
+
+  - all of the directories in the datastore that match a regular
+    expression.
+
+It has two basic modes of operation.  If you specify --all or --regexp
+'regular_expression' it iterates over the directories that exist in
+the datastore and executes the command there.  Otherwise it expects
+an ID on the command line, and executes the command in its directory.
+
+=head2 OPTIONS
+
+Options can be specified with or without equal sign, and with a single
+or a double dash.  C<--root foo> and C<-root=foo> are equivalent.
+
+=over 4
+
+=item --help
+
+Generate a short usage message.
+
+=item --root /path/to/the/datastore/root
+
+Specify the path to the root of the datastore.
+
+=item --depth INTEGER
+
+Specify the depth of the datastore.  Normal values are 1, 2, 3.
+Default is 2.
+
+=item --digest MD5|CG
+
+Specify the type of digest with which the datastore was built.  Valid
+options include the MD5 and CG.  Default is "MD5".
+
+=item --all
+
+Iterate over all of the directories in the datastore.
+
+=item --regexp "REGEXP"
+
+Iterate over all of the directories in the datastore that match the 
+regular expression "REGEXP".
+
+=item --readonly
+
+Don't create the directory if it doesn't already exist.  This is a
+great way to catch typos in identifiers, otherwise the directory is
+silently created.
+
+=back
+
+=head1 EXAMPLES
+
+ds_do --root /tmp/test-me --all "wc < /etc/termcap > count"
+
+=over 4
+=item
+
+Creates a file in each of the directories in the datastore
+that contains the wordcount info for hte file /etc/termcap.
+
+=back
+			 
+ds_do --root /tmp/test-me --all pwd
+
+=over 4
+=item
+
+Prints out the names of the directories in the datastore (a slower
+version of C<ds_dir --all>).
+
+=back
+
+ds_do --root /tmp/test-me --id CG0670 cat count
+
+=over 4
+=item
+
+Spits out the contents of the file named C<cat> in the datastore
+for C<CG0670>.
+=back
+
+=head1 DEFAULT VALUES
+
+The C<--digest>, C<--depth>, and C<--root> options can be set several
+ways.
+
+Any option specified on the command line has the highest precedence.
+
+If no matching option is specified on the command line, the user's
+environment is checked for the environment variables
+C<DATASTORE_DIGEST>, C<DATASTORE_DEPTH>, and C<DATASTORE_ROOT> and
+their value is used.
+
+Failing that, default values are used.
+
+=head1 AUTHOR
+
+George Hartzell, E<lt>hartzell @ fruitfly.orgE<gt>
+
+=head1 SEE ALSO
+
+L<ds_do>, L<Datastore::Base>, L<Datastore::MD5>, L<Datastore::CG>,
+L<perl>.
+
+=cut
+  
+  

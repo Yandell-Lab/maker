@@ -1,0 +1,4 @@
+../lib/Error.pm
+../lib/Error/Simple.pm
+../lib/Error/docs/Error.3pm
+../lib/Error/docs/Error::Simple.3pm
