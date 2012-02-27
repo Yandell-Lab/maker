@@ -1,0 +1,56 @@
+<html>
+
+<head>
+<meta name=ProgId content=PowerPoint.Slide>
+<meta name=Generator content="Microsoft PowerPoint 2008">
+<link id=Main-File rel=Main-File href="maker_web.htm">
+<title>PowerPoint Presentation  -  Maker Demo</title>
+<link title="Presentation File" type="application/powerpoint" rel=alternate
+href="file://localhost/Users/hadi/Documents/maker_web.pptx">
+<script>
+if ( ! top.PPTPRESENTATION ) {
+	window.location.replace( "endshow.htm" );
+}
+</script><script language=JavaScript><!--
+base = parent;//-->
+</script><script language=JavaScript src=script.js></script>
+</head>
+
+<script> <!--
+function getSlideName() {
+	return parent.GetHrefObj( parent.g_currentSlide ).m_slideHref;
+}
+
+function getNotesName() {
+	return parent.GetHrefObj( parent.g_currentSlide ).m_notesHref;
+}
+
+function restore() {
+	self.location.reload();
+}
+
+function WriteMe() {
+	if ( true )
+ 	  document.write( '<frameset cols=\"20%,*\" id=PPTHorizAdjust >' +
+	  '<frame src=\"outline_collapsed.htm\" name=PPTOtl>' );
+	  var distribution;
+	if ( parent.includeNotes ) 
+		distribution = "*,20%";
+	else 
+		distribution = "*,0";		
+	document.write('<frameset rows=\"' + distribution + '\" id=PPTVertAdjust >' +
+	'<frame src=' + getSlideName() + ' name=PPTSld>' +
+	'<frame src=' + getNotesName() + ' name=PPTNts>' );
+	document.write('</frameset>');
+	if ( true )
+	  document.write(' </frameset>' );
+}
+
+if ( parent.msie < 0 ) {
+	self.onresize = restore;
+}
+
+WriteMe();
+//-->
+</script>
+</html>

@@ -1,0 +1,41 @@
+[% WRAPPER main.tt %]
+
+<h2>Human Genetics 6090 | Spring 2008</h2>
+
+<p>
+Basic programming skills are rapidly becoming an essential skill for
+research in genetics, genomics, and molecular/developmental
+biology. Emphasis in this course will be on programming essentials for
+bioinformatics; no prior knowledge will be required. 
+
+<p>
+Students will learn the basics of the UNIX operating system, simple
+command line programming and how to write their own perl programs.
+Topics will include manipulating microarray data, sequence files how
+to post-process database search results.
+</p>
+
+<p>
+Skills taught will include:
+<ul>
+  <li>getting around in the UNIX operating system
+  <li>vi
+  <li>basic scripting
+  <li>file IO
+  <li>regular expressions
+  <li>subroutines
+  <li>modules
+  <li>object oriented programming.
+</ul>
+</p>
+
+<p> 
+Students will also learn how to leverage existing Perl-based
+bioinformatics software libraries such as Bioperl. Students will leave
+the class with their own self-designed programming tool-kit that will
+provide a starting point for bioinformatics analyses during the
+remainder of their graduate careers.
+</p>
+
+[% END %]
+

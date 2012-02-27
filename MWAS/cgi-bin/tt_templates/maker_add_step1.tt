@@ -1,0 +1,38 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Maker:Add Job -> Step One</h2>
+<br>
+<hr>
+<form method="POST" action="/cgi-bin/Student/student_students.cgi" name="student_edit" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="noclue" value="[% noclue %]">
+
+
+<h4>1. I want to annotate a genomic sequence file</h4>
+
+<ul>
+<li><a href="/cgi-bin/Student/student_general.cgi?rm=maker_add_trained&&noclue=[% noclue %]">Has an already trained version of SNAP,FGeneH or Augustus</li>
+<li><a href="/cgi-bin/Student/student_general.cgi?rm=maker_add_notrained&&noclue=[% noclue %]">Need to train</li>
+</ul>
+
+
+<br>
+
+
+or
+
+
+<br>
+<h4><a href="/cgi-bin/Student/student_general.cgi?rm=maker_add_reannote&&noclue=[% noclue %]">2. I want to re annotate an already annotated genome 
+  for which I have GFF3 file</a>
+</h4>
+
+
+[% END %]
+

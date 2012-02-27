@@ -1,0 +1,246 @@
+[% WRAPPER main.tt session = session %]
+</head><body bgcolor=#FFFFFF>
+<style type="text/css">
+<!--/* <![CDATA[ */
+div.login {
+  width: 25em;
+  margin: auto;
+  padding: 3px;
+  font-weight: bold;
+  border: 2px solid #445588;
+  color: #303c5f;
+  font-family: sans-serif;
+}
+
+div.login1 {
+  width: 25em;
+  margin: auto;
+  padding: 3px;
+  font-weight: bold;
+  
+  color: black;
+  font-family: sans-serif;
+}
+
+div.login div {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+div.login .login_header {
+  background: #99CCCC;
+  border-bottom: 1px solid #1b2236;
+  height: 1.5em;
+  padding: 0.45em;
+  text-align: left;
+  color: #fff;
+  font-size: 100%;
+  font-weight: bold;
+}
+div.login .login_content {
+  background: #d0d5e1;
+  padding: 0.8em;
+  border-top: 1px solid white;
+  border-bottom: 1px solid #565656;
+  font-size: 80%;
+}
+div.login .login_footer {
+  background: #99CCCC;
+  border-top: 1px solid white;
+  border-bottom: 1px solid white;
+  text-align: left;
+  padding: 0;
+  margin: 0;
+  min-height: 2.8em;
+}
+div.login fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  width: 100%;
+}
+
+div.login label {
+  clear: left;
+  float: left;
+  padding: 0.6em 1em 0.6em 0;
+  width: 8em;
+  text-align: right;
+}
+/* image courtesy of http://www.famfamfam.com/lab/icons/silk/  */
+#authen_loginfield {
+  background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAG5SURBVHjaYvz//z8DJQAggFiIVfh0twHn9w8KD9+/ZBT+9/cfExfvwwc87GxWAAFEtAFf3yl++/9XikHXL56BkYmJ4dKmcoUPT99PBQggRmK8ALT9v4BUBQMLrxxQMztY7N+PjwyXtk76BxBATMRoFjGewsDCx8jw9Oxyht9vboIxCDAxs/wCCCC8LoBrZv/A8PPpVoZ/39gZ7p57xcDLJ8Xw5tkdBrO8DYwAAcRElOYXaxn+/73DwC4vzyAmzsLw58kJsGaQOoAAYiJK868nDGwSXgxvjp1n+Hz7HoNawRFGmFqAAMIw4MBEDaI1gwBAAKEYsKtL/b9x2HSiNYMAQACBA3FmiqKCohrbfQ2nLobn97Yz6Br/JEozCAAEEDgh/eb6d98yYhEDBxsnw5VNZxnOffjLIKltw/D52B6GH89fMVjUnGbEFdgAAQRPiexMzAyfDk9gMJbmYbh17irDueMrGbjExBi8Oy8z4ksnAAEENuDY1S8MjjsnMSgaezJ8Z2Bm+P95PgPX6ycENYMAQACBwyDSUeQ/GzB926kLMEjwsjOwifKvcy05EkxMHgEIIEZKszNAgAEA+j3MEVmacXUAAAAASUVORK5CYII=') no-repeat 0 1px;
+  background-color: #fff;
+  border-top: solid 1px #565656;
+  border-left: solid 1px #565656;
+  border-bottom: solid 1px #a2aac4;
+  border-right: solid 1px #a2aac4;
+  padding: 2px 0 2px 18px;
+  margin: 0.3em 0;
+  width: 12em;
+}
+/* image courtesy of http://www.famfamfam.com/lab/icons/silk/  */
+#authen_passwordfield {
+  background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAAK/INwWK6QAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAKbSURBVHjaYvz//z8DPvBko+s0IJUJ5U6X8d+dhSwPEEAMIANw4ccbXKYB8f8/P+6BMYgNEkNWAxBAhDV/Pff/5+t5/39/2gcU/gc25P5qpzkwdQABxIjNCzBnS7p2Mfz5tJ+BkVWE4dWRxWA5oBcYHiyyYnj5heGAedYxR4AAwmXAf0mPWQx/3q9n+P/3I9AAMaCoBsPr4x0MDH/+MUgHrGG4P8eF4fVf9gMAAcSEK/D+/3oA1gxm/3kLJG8wSDhWMAjoeTJ8fxjNoJDQzyD0+7sDQACx4DKAkVWcgZGZG2jIV6AJfxn+/37F8OfPO6BhRxl+f/nIwC7xluHPm58MAAHEhMX5ILHp787OYvj/7zvDr7f7Gf59vw804DUwPM4x/P3+loFb0ZfhVlc1wxMu7psAAcSCEd9MjAzswoYMAppmDD9e9DKwcIkwMHFyMPx+dZnh7+9vDDxqwQx3Ji1jeMrJc9W1/JQOQAAheyFT2mctw9+vpxh+fz7A8O1JDQMrEz/QK2YMb47uZpD0SmEAmsRwu7eJ4QUX1wWXklOGIE0AAcQIim9YShOzSmf49W4xw5+PdxlYeIUYWLh9GS6vXPH+3U/Gd3K/vikzcTAzvOTkOmNXeNIUZitAALFAbF4D9N8Bhl+vJjP8/vCUgY1fkoGZ24PhysoV7178Y9vmW3M8FqZBHS3MAAIIZMDnP59P835/3Mnw98t7Bg5xNQZGNnOgzSvfv2ZgX+dbfiwVX14BCCCQAbyMrNwMDKxcDOxi/Az/WU0YLi1b8/E9K8cqr6JjGQwEAEAAMf378+/cn+//GFi5bRiYuMOBzt7w4RMH50IPIjSDAEAAsbz8+Gfdh9VFEr9//WX7//s/009uzlmuWUcqGYgEAAEGAIZWUhP4bjW1AAAAAElFTkSuQmCC') no-repeat 0 1px;
+  background-color: #fff;
+  border-top: solid 1px #565656;
+  border-left: solid 1px #565656;
+  border-bottom: solid 1px #a2aac4;
+  border-right: solid 1px #a2aac4;
+  padding: 2px 0 2px 18px;
+  margin: 0.3em 0;
+  width: 12em;
+}
+#authen_rememberuserfield {
+  clear: left;
+  margin-left: 8em;
+}
+#authen_loginfield:focus {
+  background-color: #ffc;
+  color: #000;
+}
+#authen_passwordfield:focus {
+  background-color: #ffc;
+  color: #000;
+}
+div.login a {
+  font-size: 80%;
+  color: #303c5f;
+}
+div.login div.buttons input {
+  border-top: solid 2px #a2aac4;
+  border-left: solid 2px #a2aac4;
+  border-bottom: solid 2px #565656;
+  border-right: solid 2px #565656;
+  background-color: #d0d5e1;
+  padding: .2em 1em ;
+  font-size: 80%;
+  font-weight: bold;
+  color: #303c5f;
+}
+div.login div.buttons {
+  display: block;
+  margin: 8px 4px;
+  width: 100%;
+}
+#authen_loginbutton {
+  float: right;
+  margin-right: 1em;
+}
+#authen_registerlink {
+  display: block;
+}
+#authen_forgotpasswordlink {
+  display: block;
+}
+ul.message {
+  margin-top: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+ul.message li {
+  text-indent: -2em;
+  padding: 0px;
+  margin: 0px;
+  font-style: italic;
+}
+ul.message li.warning {
+  color: red;
+}
+
+/* ]]> */-->
+</style>
+   
+   [% PERL %]
+       my $u_max = $stash->get('server_opt')->{max_submit_user};
+       my $g_max = $stash->get('server_opt')->{max_submit_guest};
+       $u_max =~ s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g;
+       $g_max =~ s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g;
+       $stash->set('u_max' => $u_max);
+       $stash->set('g_max' => $g_max);
+   [% END %]
+   [% IF server_opt.allow_guest %]
+     <h2>Welcome to the MAKER Web Annotation Service</h2>
+   [% ELSE %]
+     <h2>This website is restricted to registered users only</h2>
+   [% END %]
+
+   <p>Log into your account below[% IF server_opt.allow_guest %], or you can
+      access the server as a guest.  While there is no login requirement for this site, users
+      are highly encouraged to set up an account[% END %]. [% IF ! server_opt.allow_register %]You must contact the server
+      administrator to set up an account.[% ELSE %]Use the "New user registration" link to register a new account.[% END %]
+      [% IF server_opt.allow_guest %]Registration [% IF server_opt.allow_register %]is free, and [% END %] has several
+      benefits.[% END %]  [% IF server_opt.allow_guest %][% IF u_max %]Registered users can submit up to [% u_max %] base pairs of
+      sequence for each annotation job.[% END %] [% IF g_max %]Guest users are limited to [% g_max %]
+      base pairs per annotation job submission.[% END %] Registered users receive e-mail notifications as to
+      the status of their jobs, have persistance of results on the server, and their
+      jobs/results are protected by extra layers of security. [% END %]
+   </p>
+
+
+<br>
+
+<script language='javascript'>
+function doguest() {
+  document.location='maker.cgi?rm=guest_login';
+}
+</script>
+
+<div name="other" style="text-align : center;">
+<form name="loginform" method="post" action="maker.cgi">
+<div class="login" style="text-align : left;">
+  <div class="login_header">
+    [% message %]
+  </div>
+  <div class="login_content">
+
+    <span style="padding : 0em 0em 0em 4em"><img src="[% server_opt.html_web %]/images/Maker-Logo.png" height="39" width="45">Maker Web Annotation Service</span>
+
+
+    <fieldset>
+    <label for="authen_username">User Name</label>
+    <input id="authen_loginfield" tabindex="1" type="text" name="authen_username" size="20" value="" /><br />
+    <label for="authen_password">Password</label>
+    <input id="authen_passwordfield" tabindex="2" type="password" name="authen_password" size="20" /><br />
+    <input id="authen_rememberuserfield" tabindex="3" type="checkbox" name="authen_rememberuser" value="1" />Remember User Name<br />
+    
+    <table align=center>
+      <td nowrap>
+	[% IF server_opt.allow_register %]
+	  <img src="[% server_opt.html_web %]/images/icon_user.gif">
+	  <a href="maker.cgi?rm=register"> New user registration</a>
+ 	[% END %]
+      </td>
+      <td nowrap>
+	[% IF server_opt.smtp_server %]
+	  <img src="[% server_opt.html_web %]/images/folder_lock.gif">
+	  <a href="maker.cgi?rm=forgot_login"> Forgot login?</label></a>
+	[% END %]
+      </td>
+      <td nowrap>
+	<img src="[% server_opt.html_web %]/images/icon_info.gif">
+	<a href="maker.cgi?rm=help"> Help</a>
+      </td>
+    </table>
+    </fieldset>
+  </div>
+  
+  <div class="login_footer">
+    <div class="buttons">
+      <input id="authen_loginbutton" tabindex="4" type="submit" name="authen_loginbutton" value="User Sign In" class="button" />
+    
+      [% IF server_opt.allow_guest %]    
+      <input type="Button" name="guest_loginbutton" value="New Guest Account" onclick="doguest()" class="button" />
+      [% END %]
+    </div>
+
+  </div>
+</div>
+
+<input type="hidden" name="destination" value="maker.cgi" />
+<input type="hidden" name="rm" value="authen_login" />
+</form>
+</div>
+
+</body>
+[% END %]

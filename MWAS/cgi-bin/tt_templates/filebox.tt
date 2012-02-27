@@ -1,0 +1,87 @@
+[% WRAPPER main.tt session = session %]
+
+<br>
+<h2>Upload and Manage Files</h2>
+
+<form method="POST" action="maker.cgi" name="filebox_form" enctype="multipart/form-data">
+<input type="hidden" name="rm" value="upload_file">
+<input type="hidden" name="from_job" value="[% from_job %]">
+<center>
+<table width=90%>
+  <tr>
+    <td>Select a file type to upload:<br>
+     <span style="font-size : 10">
+      <INPUT TYPE=RADIO NAME="type" value="fasta" checked="checked">Fasta 
+      <INPUT TYPE=RADIO NAME="type" value="gff3">GFF3 
+      <INPUT TYPE=RADIO NAME="type" value="snaphmm">SNAP HMM
+      <INPUT TYPE=RADIO NAME="type" value="gmhmm">GeneMark HMM
+      </span>
+    </td>
+    <td nowrap align=right>
+    File to upload:<br>
+    Description:
+    </td>
+    <td align=left>
+    <input type="file"  name="up_file" id="up_file">
+    <br>
+    <input type="text" name="name" maxlength=30>
+    </td>
+  </tr>
+  <tr>
+    <td>
+    </td>
+    <td>
+    </td>
+    <td align=left>
+       <INPUT TYPE=SUBMIT VALUE="Submit">
+    </td>
+  </tr>
+</table>
+</center>
+</form>
+
+[% IF ! from_job %]
+<br>
+
+<h2>Your Files ([% files.size %])</h2>
+<center>
+<table width=90% border=0 cellspacing=1 cellpadding=5>
+  <tr bgcolor="#99CCCC">
+    <th>Filename</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Size/Sequece Length</th>
+    <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
+  </tr>
+[% IF files.size == 0 %]
+  <tr bgcolor="#CFECEC">
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+[% ELSE %]
+  [% FOREACH file = files.sort('filename') %]
+  <tr bgcolor="#CFECEC">
+    <td align=center>[% file.filename %]</td>
+    <td align=center>[% file.name %]</td>
+    <td align=center>[% file.type %]</td>
+    <td align=center>[% file.length %]</td>
+    <td align=center>
+      <form method="POST" action="maker.cgi" name="delete[% file.value %]" enctype="multipart/form-data">
+        <input type="hidden" name="rm" value="filebox">
+        <input type="hidden" name="xfile" value="[% file.value %]">
+        <input type="submit" name="do_delete" value="">
+      </form>
+    </td>
+  </tr>
+  [% END %]
+[% END %]
+</table>
+</center>
+
+[% END %]
+
+[% END %]
+

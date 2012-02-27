@@ -1,0 +1,229 @@
+***Installation Documentation***
+
+How to Install Standard MAKER
+
+**IMPORTANT FOR MAC OS X USERS**
+You will need to install developer tools (i.e. Xcode) from your installation
+disk. If you are on a 32-bit system also install Rosetta from your instalation
+disk. If you are using a 64-bit system, install fink (http://www.finkproject.org/)
+and then install glib2-dev via fink (i.e. fink install glib2-dev). Make sure to
+install fink as 64-bit when asked (32-bit is the default).
+
+
+EASY INSTALL
+
+1.  Go to the .../maker/src/ directory and run 'perl Build.PL' to configure.
+
+2.  Accept default configuration options by just pressing enter.
+
+3.  type './Build install' to complete the installation.
+
+4.  If anything fails, either use the ./Build file commands to retry the
+    failed section or follow the detailed install instructions below to
+    manually install missing modules or programs. Use ./Build status to see
+    available commands.
+
+       ./Build status           #Shows a status menu
+       ./Build installdeps      #installs missing PERL dependencies
+       ./Build installexes      #installs missing external programs
+       ./Build install          #installs MAKER
+
+   Note: When using ./Build to install missig external programs, MAKER will use
+   the maker/src/locations file to identify download URLs. You can edit this file
+   to point at alternate locations.
+
+
+DETAILED INSTALL
+
+1.  You need to have perl 5.8.0 or higher installed.  You can verify this by
+    typing perl -v on the command line in a terminal.
+
+    You will also need to install the following perl modules from CPAN.
+      *DBI
+      *DBD::SQLite
+      *Proc::ProcessTable
+      *threads (Required by MPI and accessory scripts)
+      *IO::All (Required by accessory scripts)
+      *IO::Prompt (Required by accessory scripts)
+      *File::Which
+      *Perl::Unsafe::Signals
+      *Bit::Vector
+      *Inline::C
+      *PerlIO::gzip
+
+    a. Type 'perl -MCPAN -e shell' to access the CPAN shell.  You may
+       have to answer some configuration questions if this is your first time
+       starting CPAN.  You can normally just hit enter to accept defaults.
+       Also you may have to be logged in as 'root' or use sudo to install
+       modules via CPAN.
+
+    b. Type 'install DBI' to install the first module, then type
+      'install DBD::SQLite' to install the next, and so on.
+
+    c. Alternatively you can download moadules from http://www.cpan.org/.
+       Just follow the instructions that come with each module to install.
+
+2.  Install BioPerl 1.6 or higher.  Download the Core Package from
+    http://www.bioperl.org
+
+  -quick and dirty installation-
+  (with this option, not all of bioperl will work, but what MAKER uses will)
+
+  a.  Download and unpack the most recent BioPerl package to a directory of your
+      choice, or use Git to access the most current version of BioPerl. See
+      http://www.bioperl.org for details on how to download using Git.
+      You will then need to set PERL5LIB in your .bash_profile to the location
+      of bioperl (i.e. export PERL5LIB="/usr/local/bioperl-live:$PERL5LIB").
+
+  -full BioPerl instalation via CPAN-
+  (you will need sudo privileges, root access, or CPAN configured for local
+   installation to continue with this option)
+
+  a.  Type perl -MCPAN -e shell into the command line to set up CPAN on your
+      computer before installing bioperl (CPAN helps install perl dependencies
+      needed to run bioperl).  For the most part just accept any default options
+      by hitting enter during setup.
+  b.  Type install Bundle::CPAN on the cpan command line.  Once again just press
+      enter to accept default installation options.
+  c.  Type install Module::Build on the cpan command line.  Once again just
+      press enter to accept default installation options.
+  d.  Type install Bundle::BioPerl on the cpan command line.  Once again press
+      enter to accept default installation options.
+
+  -full BioPerl instalation from download-
+  a.  Unpack the downloaded bioperl tar file to the directory of your choice or
+      use Git to get the most up to date version.  Then use the terminal
+      to find the directory and type perl Build.PL in the command line, then
+      type ./Build test, then if all tests pass, type ./Build install.  This
+      will install BioPerl where perl is installed.  Press enter to accept all
+      defaults.
+
+3.  Install either WuBlast or NCBI-BLAST using instruction in 3a and 3b
+
+3a.  Install WuBlast 2.0 or higher (Alternatively install NCBI-BLAST in 3b)
+    (WuBlast has become AB-Blast and is no longer freely available, so if you
+    are not lucky enough to have an existing copy of WuBlast, you can use NCBI
+    BLAST or BLAST+ instead)
+
+  a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
+  b.  Add the following in your .bash_profile (value depend on where you chose
+      to install wublast):
+		export WUBLASTFILTER="/usr/local/wublast/filter"
+		export WUBLASTMAT="/usr/local/wublast/matrix"
+  c.  Add the location where you installed WuBlast to your PATH variable in 
+      .bash_profile (i.e. PATH="/usr/local/wublast:$PATH").
+
+3b.  Install NCBI-BLAST 2.2.X or higher (Alternatively install WuBlast in 3a)
+
+  a.  Unpack the tar file into the directory of your choice (i.e. /usr/local).
+  b.  Add the location where you installed NCBI-BLAST to your PATH variable in
+      .bash_profile (i.e. PATH="/usr/local/ncbi-blast:$PATH").
+
+4.  Install SNAP.  Download from http://homepage.mac.com/iankorf/
+
+  a.  Unpack the SNAP tar file into the directory of your choice (ie /usr/local)
+  b.  Add the following to your .bash_profile file (value depends on where you
+      choose to install snap):  export ZOE="/usr/local/snap/Zoe"
+  c.  Navigate to the directory where snap was unpacked (i.e. /usr/local/snap)
+      and type make
+  d.  Add the location where you installed SNAP to your PATH variable in
+      .bash_profile (i.e. export PATH="/usr/local/snap:$PATH").
+
+
+5.  Install RepeatMasker. Download from http://www.repeatmasker.org
+
+  a.  The most current version of RepeatMasker requires a program called TRF.
+      This can be downloaded from http://tandem.bu.edu/trf/trf.html
+  b.  The TRF download will contain a single executable file.  You will need to
+      rename the file from whatever it is to just 'trf' (all lower case).
+  c.  Make TRF executable by typing chmod +x+u trf.  You can then move this file
+      wherever you want.  I just put it in the /RepeatMasker directory.
+  d.  Unpack RepeatMasker to the directory of your choice (i.e. /usr/local).
+  e.  If you do not have WuBlast installed, you will need to install RMBlast.
+      We do not recomend using cross_match, as RepeatMasker performance will suffer.
+  f.  Now in the RepeatMasker directory type perl ./configure in the command
+      line. You will be asked to identify the location of perl, wublast, and
+      trf.  The script expects the paths to the folders containing the
+      executables (because you are pointing to a folder the path must end in a 
+      '/' character or the configuration script throws a fit).
+  g.  Add the location where you installed RepeatMasker to your PATH variable in
+      .bash_profile (i.e. export PATH="/usr/local/RepeatMasker:$PATH").
+  h.  You must register at http://www.girinst.org and download the Repbase
+      repeat database, Repeat Masker edition, for RepeatMasker to work.
+  i.  Unpack the contents of the RepBase tarball into the RepeatMasker/Libraries
+      directory.
+
+
+6.  Install Exonerate 1.4 or higher.  Download from
+    http://www.ebi.ac.uk/~guy/exonerate
+
+  a.  Exonerate has pre-comiled binaries for many systems; however, for Mac OS-X
+      you will have to download the source code and complile it yourself by
+      following steps b though d.
+  b.  You need to have Glib 2.0 installed.  The easiest way to do this on a Mac
+      is to install fink and then type fink install glib2-dev. For 64-bit systems
+      make sure fink is in 64-bit mode (which is not the default).
+  c.  Change to the directory containing the Exonerate package to be compiled.
+  d.  To install exonerate in the directory /usr/local/exonerate, type:
+      ./configure -prefix=/usr/local/exonerate -> then type make -> then type
+      make install
+  e.  Add the location where you installed exonerate to your PATH variable in
+      .bash_profile (i.e. export PATH="/usr/local/exonerate/bin:$PATH").
+
+
+7.  Install MAKER.  Download from http://www.yandell-lab.org
+
+  a.  Unpack the MAKER tar file into the directory of your choice (i.e.
+      /usr/local).
+  b.  Go to the MAKER src/ directory.
+  c.  Configure using --> perl Build.PL
+  D.  Install using --> ./Build install
+  b.  Remember to add the following to your .bash_profile if you haven't already:
+	export ZOE="where_snap_is/Zoe"
+	export AUGUSTUS_CONFIG_PATH="where_augustus_is/config
+  c.  Add the location where you installed MAKER to your PATH variable in
+      .bash_profile (i.e. export PATH=/usr/local/maker/bin:$PATH).
+  d.  You can now run a test of MAKER by following the instructions in the MAKER
+      README file.
+
+(OPTIONAL COMPONENTS)
+
+1.  If you want to install the MPI version of MAKER, you need to have Perl
+    compiled for threads and install threads 1.67 or higher.
+
+  a. Install standard MAKER and verify that it runs.
+  b. Install MPICH2 with the --enable-sharedlibs flag set to the
+     appropriate value for your OS (See MPICH2 documentation)
+  c. Use cd to change to the maker/src subdirectory in the MAKER
+     instalation folder.
+  d. Run Build.PL by typing: perl Build.PL
+  e. If MPICH2 is installed and configured correctly, it will be
+     detected by MAKER and Build.PL will ask if you want to intall
+     MPI MAKER.  Select 'yes'.
+  f. run ./Build install
+
+
+2. Augustus 2.0 or higher.  Download from http://augustus.gobics.de
+
+  a.  Change to the directory containing the Augustus package to be compiled.
+  b.  Unpack Augustus to the directory of your choice (i.e. /usr/local).
+  c.  Change to the src/ directory inside the extracted augustus folder.
+  d.  Install and compile Augustus by typing: make
+  e.  Add the following to your .bash_profile file (value depends on where you
+      install augutus):  export AUGUSTUS_CONFIG_PATH=/usr/local/augustus/config
+  f.  Add the location where you installed augustus to your PATH variable in
+      .bash_profile (i.e. export PATH=/usr/local/augustus/bin:$PATH).
+
+
+3. GeneMark-ES.  Download from http://exon.biology.gatech.edu
+
+  a.  See GeneMark-ES installation documentation.
+
+4. FGENESH 2.4 or higher.  Purchase from http://www.softberry.com
+
+  a.  See FGENESH installation documentation.
+
+5. GeneMarkS.  Used for prokaryotic genomes only.
+   Download from http://exon.biology.gatech.edu
+
+  a.  See GeneMarkS installation documentation.

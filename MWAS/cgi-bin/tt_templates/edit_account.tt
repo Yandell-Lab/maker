@@ -1,0 +1,132 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript"></script>
+
+<h2><img src="[% server_opt.html_web %]/images/MSN2.ico" width=32 height=32> Edit Account Information</h2>
+
+<form method="POST" action="maker.cgi" name="edit_account">
+<input type="hidden" name="rm" value="edit_account">
+
+<p>
+Edit your account information below.  You must enter your current password before any changes will take effect.
+If you wish to change your password, use the new password field.
+</p>
+<br>
+[% IF user.is_guest %]
+
+<h3>
+  You are currently logged in via a guest account.  Update your information below to become a registered user.
+</h3>
+<br>
+
+[% END %]
+
+[% IF errors.size > 0 %]
+
+<h4>
+  Update Failed: Please check values marked by <img src="[% server_opt.html_web %]/images/action_stop.gif">
+</h4>
+
+[% ELSIF message %]
+<h4>
+  [% message %]
+</h4>
+[% END %]
+
+<table style="padding : 0 0 0 5em">
+  <tr>
+    <td>Login Name:</td>
+    <td>
+        <input type="text" size=20 maxlength=20 name="login"[% IF user.login %] value="[% user.login %]"[% END %]>
+    </td>
+    <td nowrap>
+	[% IF errors.login %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.login %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>First Name:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="first"[% IF user.first %] value="[% user.first %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>Last Name:</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 name="last"[% IF user.last %] value="[% user.last %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=20 maxlength=70 name="e_mail"[% IF user.e_mail %] value="[% user.e_mail %]"[% END %]>
+    </td>
+    <td nowrap>
+	[% IF errors.e_mail %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.e_mail %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>Institution:</td>
+    <td>    
+      <input type="text" size=20 maxlength=70 name="institution"[% IF user.institution %] value="[% user.institution %]"[% END %]>
+    </td>
+  </tr>
+  <tr>
+    <td>
+    <br>
+    </td>
+  </tr>
+  <tr>
+    <td>New Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="new_password">
+    </td>
+    <td nowrap>
+	[% IF errors.new_password %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.new_password %]
+        [% END %]
+    </td>
+  </tr>
+  <tr>
+    <td>Verify Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="verify">
+    </td>
+    <td nowrap>
+	[% IF errors.verify %]
+          <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.verify %]
+        [% END %]
+    </td>
+  </tr>
+  [% IF ! user.is_guest %]
+  <tr>
+    <td>
+    <br>
+    </td>
+  </tr>
+  <tr>
+    <td>Current Password:</td>
+    <td>    
+      <input type="password" size=20 maxlength=10 name="old_password">
+    </td>
+    <td nowrap>
+	[% IF errors.old_password %]
+           <img src="[% server_opt.html_web %]/images/action_stop.gif"> [% errors.old_password %]
+        [% END %]
+    </td>
+  </tr>
+  [% END %]
+  <tr>
+    <td>
+      <br>
+      <input type="submit" value="Submit">
+    </td>
+  </tr>
+</table>
+</form>
+
+[% END %]
+

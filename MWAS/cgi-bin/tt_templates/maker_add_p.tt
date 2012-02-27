@@ -1,0 +1,856 @@
+
+[% WRAPPER main1.tt session = session %]
+
+
+
+<script type="text/javascript">
+
+
+
+ var textNSA='Help about non standard amino acids'
+
+
+
+
+function writetext(what){
+document.getElementById('textarea').innerHTML=''+what+'';
+}
+function notext(){
+document.getElementById('textarea').innerHTML='';
+}
+//-->
+</script>
+
+
+
+
+<script language="JavaScript1.2">
+<!--
+isIE=document.all;
+isNN=!document.all&&document.getElementById;
+isN4=document.layers;
+isActive=false;
+
+function MoveInit(e){
+  topOne=isIE ? "BODY" : "HTML";
+  whichOne=isIE ? document.all.FloatingLayer : document.getElementById("FloatingLayer");  
+  ActiveOne=isIE ? event.srcElement : e.target;  
+  while (ActiveOne.id!="titleBar"&&ActiveOne.tagName!=topOne){
+    ActiveOne=isIE ? ActiveOne.parentElement : ActiveOne.parentNode;
+  }  
+  if (ActiveOne.id=="titleBar"){
+    offsetx=isIE ? event.clientX : e.clientX;
+    offsety=isIE ? event.clientY : e.clientY;
+    nowX=parseInt(whichOne.style.left);
+    nowY=parseInt(whichOne.style.top);
+    MoveEnabled=true;
+    document.onmousemove=Move;
+  }
+}
+
+function Move(e){
+  if (!MoveEnabled) return;
+  whichOne.style.left=isIE ? nowX+event.clientX-offsetx : nowX+e.clientX-offsetx; 
+  whichOne.style.top=isIE ? nowY+event.clientY-offsety : nowY+e.clientY-offsety;
+  return false;  
+}
+
+function MoveN4(whatOne){
+  if (!isN4) return;
+  N4=eval(whatOne);
+  N4.captureEvents(Event.MOUSEDOWN|Event.MOUSEUP);
+  N4.onmousedown=function(e){
+    N4.captureEvents(Event.MOUSEMOVE);
+    N4x=e.x;
+    N4y=e.y;
+  }
+  N4.onmousemove=function(e){
+    if (isActive){
+      N4.moveBy(e.x-N4x,e.y-N4y);
+      return false;
+    }
+  }
+  N4.onmouseup=function(){
+    N4.releaseEvents(Event.MOUSEMOVE);
+  }
+}
+
+function ToggleFloatingLayer(DivID, iState) // 1 visible, 0 hidden
+{
+    if(document.layers)	   //NN4+
+    {
+       document.layers[DivID].visibility = iState ? "show" : "hide";
+    }
+    else if(document.getElementById)	  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        obj.style.visibility = iState ? "visible" : "hidden";
+    }
+    else if(document.all)	// IE 4
+    {
+        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
+    }
+}
+
+
+document.onmousedown=MoveInit;
+document.onmouseup=Function("MoveEnabled=true");
+// -->
+</script>
+
+
+
+
+</script>
+<table>
+<tr><td></td><td></td><td>
+
+</td>
+</tr>
+</table>
+
+<table bgcolor="#edda74">
+<td bgcolor="white">
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_left.gif">
+</td>
+<td>
+<a href="maker2.cgi?rm=students_list">
+Go back to <img src="http://www.famfamfam.com/lab/icons/silk/icons/cart.png">JobView</a>
+</td>
+</table>
+<br>
+<br><br>
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor =white>
+<td>
+<center>
+<img src="/Student/images/barcode.png"></td><td bgcolor=CACACA>
+
+
+<h3>Maker Job Details [[% OT %]] :  Assigned id
+<td>
+<center>
+[% job_id %]</h3>
+</td>
+</td>
+</table>
+<form method="POST" action="/cgi-bin/Maker/maker2.cgi" name="baal" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="noclue" value="[% noclue %]">
+<input type="hidden" name="job_id" value="[% job_id %]">
+<input type="hidden" name="dirty" value="[% opt_id %]">
+
+
+<br>
+
+<table bgcolor=#CACACA width=100%>
+<tr>
+<td>
+
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Denovo Annotations</h2>
+</span>
+</td>
+<td></td><td></td>
+</tr>
+
+  <tr bgcolor=white>
+    <td>Choose Genome Fasta File:</td>
+
+   	<td>
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+     <SELECT name="genome">
+	  <option > AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==genome %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+</td><td>
+ <a href="maker2.cgi?rm=maker_file_view&&jid=[% job_id %]"> 
+Upload File
+
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a>
+ </td>
+	
+
+<td></td>
+<tr bgcolor=white>
+<td></td><td></td>
+<td>
+<input type="submit" name="save" value="Save">
+
+</td>
+<tr>
+</table>
+<br>
+
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor=#CACACA><td>
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">EST Evidence</span></h2>
+</td>
+</tr>
+</table>
+
+<table bgcolor=#CACACA>
+<tr bgcolor=white>
+<td>
+<h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta files of ESTs; these will be aligned to your genomic sequence and used to help inform the annotations. Two different types of ESTs can be used: (1) a file of ESTs from the same source as your genomic sequence; and (2) (optionally) a file of ESTs from a relatively closely related organism, for example if your genomic sequence is human, this second file might be mouse ESTs. </h4>
+
+</td>
+</tr>
+</table>
+<table bgcolor="#CACACA">
+<tr bgcolor=white>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from the same source as your genomic sequence.</td>
+    <td>    
+
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+ <SELECT name="est">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==est %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+	
+    </td><td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new.gif"></a></td>
+  </tr>
+
+<tr bgcolor=white>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from a related organism(s); this file is optional. Please keep in mind that since these ESTs must be aligned to your genomic sequence with TBLASTX, that providing this file may substantially  increase compute times.</td>
+
+    <td>    
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+	 <SELECT name="altest">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==altest %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+    </td><td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+
+
+  </tr>
+
+<tr bgcolor=white>
+<td></td><td></td>
+<td>
+<input type="submit" name="save" value="Save">
+
+</td>
+
+</table>
+<br>
+ <table width=100% bgcolor=#CACACA><tr><td>
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Protein Homology Evidence</span> </h2>
+</tr></td></table>
+<table bgcolor=#CACACA>
+  <tr bgcolor =white>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta file of Proteins; these will be aligned to your genomic sequence and used to help inform the annotations. Alternatively, you may simply wish to use the current Uniprot database; if so, skip this step and check the Uniprot Box below. </h4>
+</td>
+
+    <td>    
+
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+	<SELECT name="protein">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==protein %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view&&jid=[% job_id %]"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+
+
+
+  </tr>
+
+<tr>
+    <td>    
+      <input type="checkbox"  name="uniprot" value="uniprot" [% uniprot %]> <span style="color: red; font-weight: bold">Use Uniprot instead</span>
+    </td>
+  </tr>
+
+</table>
+
+<BR>
+
+<br><br>
+<table width=100% bgcolor=#CACACA>
+<tr>
+<td>
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Choose Your Gene-predictor(s)</span></h2>
+</td>
+</tr>
+</table>
+<table width=100% bgcolor=#CACACA>
+<tr bgcolor=white>
+<td><h4>MAKER can use a number of popular gene predictors. Even better, it can 'talk' to the gene predictors you choose, passing them information about EST and Protein alignments in order to improve the quality of the predictions. Choose the ones you want to use below. Keep in mind that every gene predictor must be 'trained' for the organism whose DNA you wish to annotate; thus you will have to choose a predictor-- and then provide that predictor with a model file. Usually these are available at the gene-predictor's own web-site; check there to find these files. Can't find a a model file for your organism? Don't despair; just chooseGENEMARK option below and choose self train.</h4> 
+</td>
+
+
+
+<table bgcolor=CACACA>
+<tr><td><h4>Gene Predictors:</h4></td></tr>
+	
+<tr><td><input type="checkbox" name="snap" value="snap"  
+
+	[% snaphmm_checked  %]
+		     
+	
+
+
+></td><td>SNAP</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="snaphmm_choice" value="userfile" [% sufl %]>Add your own snap  HMM</td>
+    <td>
+	
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+	
+	<SELECT name="snaphmm_user">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == snaphmm_user %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+ 	
+	
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td><input type="radio" name="snaphmm_choice" value="model" [% snaphmm_model_checked%]> Select from  model snap HMM</td>
+<td>
+
+
+
+      <select name="snaphmm_model">
+	[% FOREACH morg = snaphmm.sort('snaphmm') %]
+        <option 
+		
+		[% IF morg.snaphmm == snaphmm_model %]
+		     selected 
+		[% END %]
+	value=[% morg.snaphmm %]>[% morg.snaphmm %]</option>
+
+       [% END %]
+
+
+</td>
+</tr>
+
+
+
+<tr><td><input type="checkbox" name="aug" value="aug"  
+
+	[% aughmm_checked  %]
+		     
+	
+
+
+></td><td>AUG</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="aughmm_choice" value="userfile" [% aughmm_userfile_checked %]>Add your own   HMM</td>
+    <td>
+	
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+	
+	<SELECT name="aughmm_user">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == aughmm_user %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+ 	
+	
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td><input type="radio" name="aughmm_choice" value="model" [% aughmm_model_checked%]> Select from  model  HMM</td>
+<td>
+
+
+
+      <select name="aughmm_model">
+	[% FOREACH morg = agustus.sort('agustus_species') %]
+        <option 
+		
+		[% IF morg.agustus_species == aughmm_model %]
+		     selected 
+		[% END %]
+	value=[% morg.agustus_species %]>[% morg.agustus_species %]</option>
+
+       [% END %]
+</td>
+</tr>
+
+
+
+
+
+
+<tr><td><input type="checkbox" name="fgeneh" value="fgeneh" [% fgenehhmm_checked %]></td><td>FgeneH</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="fgenehhmm_choice" value="userfile"  [% fgenehhmm_checked %]>Add your own fgeneh  HMM</td>
+    <td>
+
+
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+
+
+	<SELECT name="fgenehhmm_user">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == fgenehhmm_userfile %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+
+	<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+    </td>
+  </tr>
+<tr>
+
+</tr>
+
+
+<tr><td><input type="checkbox" name="est2genome" value="checked" [% est2genome %]></td><td>Est2Genome</td><tr><td></td><td>Make  gene annotation directly from est alignments</td></tr>
+<tr><td><input type="checkbox" name="genemark" value="genemark" [% gm_checked %]></td><td>GENEMRAK</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="gm_choice" value="userfile" [% gm_user_checked %]>Add your own  genemark HMM</td>
+    <td>
+	
+
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+
+	<SELECT name="gm_user">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == gm_userfile %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+	<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+    </td>
+  </tr>
+<tr>
+
+</tr>
+<tr>
+<td><td><input type="radio" name="gm_choice" value="model" [% gm_model_checked %]>Select from  model HMM</td>
+<td>
+	<select name="gm_model">
+	[% FOREACH morg = genemark_model.sort('model') %]	
+        <option 
+
+	[% IF gm_model == morg.model %]
+	     selected
+	[% END %]
+	value=[% morg.model %]>[% morg.model %] 
+       </option>
+       [% END %]
+	
+	</select>
+</td>
+</tr>
+<tr>
+<td><td> GENEMRAK can self train your whole genome fasta. If you already have done so , you should have genemark HMM in your filebox. If not choose the self train checkbox  below. Please note GENEMARK takes  atleast 7 hours to train a reasonable size genome. If you do choose to self train,you will be notified via your provided email when genemark is done selftraining. One more email there after also will be sent once Maker is done annotatted your genome.</td>
+
+</tr>
+
+
+
+<tr><td></td>
+<td><input type="radio"  name="gm_choice" value="selftrain" [% gm_selftrain_checked %]> <span style="color: red; font-weight: bold">Self Train!</span></td>
+
+
+</tr>
+<tr bgcolor=white>
+<td></td><td></td><td></td>
+<td>
+<input type="submit" name="save" value="Save">
+
+</td>
+</tr>
+
+</table>
+<br><br>
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor=#CACACA>
+<td>
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png">Already have yourown Annotations/ab-inito predictions?</span></h2>
+<td>
+</tr>
+</table>
+
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor=white>
+<td><h4>MAKER can also use your own annotations that you already have or any abinitio gene predictions. You would need your annotation to be in GFF3 format(Optional).  
+
+</h4>
+</td>
+
+</tr>
+</table>
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor=white>
+    <td>add your own abinitio prediction</td>
+     <td>
+	 <center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+<SELECT name="pred_gff">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == pred_gff %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+
+
+
+    </td>
+<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>
+  </tr>
+
+
+
+ <tr bgcolor=white>
+    <td>add your own model organism annotation</td>
+     <td>
+<center>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images	.gif">
+<SELECT name="model_gff">
+	  <option> AVAILABLE FILES  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == model_gff %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+    </td>
+<td><a href="maker2.cgi?rm=maker_file_view"> Upload File<img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_new	.gif"></a></td>	
+  </tr>
+
+<tr bgcolor=white>
+<td></td><td></td>
+<td>
+<input type="submit" name="save" value="Save">
+
+</td>
+</tr> 
+
+</table>
+
+
+
+
+<br>
+<br>
+
+
+<table bgcolor=#CACACA width=100%>
+<tr bgcolor=#CACACA>
+<td>
+<h2><span style="color: red; font-weight: bold"><img src="http://www.famfamfam.com/lab/icons/silk/icons/brick.png"> Annotation Properties</span></h2>
+</td>
+</tr>
+</table>
+<table bgcolor="#CACACA" width=100%>
+ <tr bgcolor=white>
+
+    <td>
+
+<div id="FloatingLayer" style="position:absolute;visibility:visible;overflow:auto;"> 
+
+  <table border="0" width=350 length=400 bgcolor="#CACACA" cellspacing="0" cellpadding="5">
+    <tr> 
+      <td width="100%"> <table border="0" width="100%" cellspacing="0" cellpadding="0" height="36">
+          <tr> 
+            <td id="titleBar" style="cursor:move" width="50%"> <ilayer width="100%" onSelectStart="return false"> 
+              <layer width="100%" onMouseover="isActive=true;if (isN4) MoveN4(FloatingLayer)" onMouseout="isActive=false"> 
+              <font face="Arial" color="orange"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif"> Quick Help</font></layer>
+              </ilayer></td>
+            <td style="cursor:hand" valign="top"> <a href="#" onClick="ToggleFloatingLayer('FloatingLayer',0);return false"><font color="#edda74" size="2" face="arial"  style="text-decoration:none">[X]</font></a> 
+            </td>
+          </tr>
+          <tr> 
+            <td width="100%" bgcolor="#FFFFFF" style="padding:4px" colspan="50"> 
+              <!-- place your HTML content here-->
+
+
+<div id="textarea"></div>
+
+<br>
+
+<br>
+
+<br>
+<hr>
+<Button type="Button" onClick="ToggleFloatingLayer('FloatingLayer',0);return false">CLOSE</a> 
+<br>
+</div>
+              <!-- End of content area -->
+            </td>
+          </tr>
+        </table></td>
+    </tr>
+  </table>
+</div>
+<!-- End Floating layer -->
+
+
+
+
+
+
+
+
+
+
+Non standard amino acids generally cause problems for alignment
+algorithms. here you can select a standard amino acids to replace non
+standard amino acids. By default it is cysteine.</td>
+    <td></td>    <td></td>
+
+  </tr>
+<tr bgcolor=white>
+    <td>Choose an alternate standard amino acid</td>
+     <td>
+
+
+
+<select name="alt_peptide">
+	[% FOREACH morg = peptide.sort('alt_peptide') %]	
+        <option 
+
+	[% IF morg.alt_peptide == alt_peptide  %]
+	selected
+	[% END %]
+	value=[% morg.alt_peptide %]>[% morg.alt_peptide %]</option>
+       
+	[% END %]
+	</select>
+
+</td>
+<td>
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+
+</td>  
+</tr>
+ <tr bgcolor=white>
+    <td>All gene annotations must produce a protein of at least this many amino acids in length</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_protein" value="[% min_protein %]">
+
+
+</td>
+<td>
+
+
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+  </td>
+  </tr>
+
+ <tr bgcolor=white>
+    <td>All contigs from the input genome file below this size will be skipped</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_contig" value="[% min_contig %]">
+
+</td>
+<td>
+
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+
+</td>  
+</tr>
+
+ <tr bgcolor=white>
+    <td>Length for the splitting of hits (expected max intron size for evidence alignments)</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="split_hit" value="[% split_hit %]">
+
+ </td>
+<td>
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+
+
+</td> 
+</tr>
+
+<tr bgcolor=white>
+    <td>Length of sequence surrounding EST and protein evidence used to extend gene predictions</td>
+    <td>
+
+      <input type="text" size=10 maxlength=10 name="pred_flank" value="[% pred_flank %]">
+</td>
+
+<td>
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+
+
+</td>
+</tr>
+
+
+
+
+<tr bgcolor=white>
+    <td>Consider single exon EST evidence when generating annotations</td>
+    <td>
+
+
+	<select name="single_exon">
+	[% FOREACH morg = Bool %]	
+        <option 
+
+	[% IF single_exon == morg.model %]
+	     selected
+	[% END %]
+	value=[% morg.model %]>[% morg.model %] 
+       </option>
+       [% END %]
+	
+	</select>
+
+
+<td>
+<img src="/Student/images/help.gif" onmouseover="ToggleFloatingLayer('FloatingLayer',1);writetext(textNSA)"> 
+
+    </td>
+  </tr>
+
+</table>
+
+
+<table bgcolor=#CACACA width=100%>
+<tr>
+<td>
+<input type="submit" name="add" value="Save and Add Maker Job to the Que">
+
+<input type="submit" name="save" value="Save/Come Back">
+
+<input type="reset" value="Clear"><br>
+</td>
+</tr>
+</table>
+</form>
+
+[% END %]
+

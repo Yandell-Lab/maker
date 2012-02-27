@@ -1,0 +1,401 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Maker:Add Job</h2>
+<br>
+<form method="POST" action="/cgi-bin/Student/student_students.cgi" name="student_edit" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="noclue" value="[% noclue %]">
+
+<h4>Denovo annotations:</h4>
+<hr>
+<table>
+  <tr>
+  
+
+
+
+<td>Choose a Genome Fasta File:</td>
+ <td>
+     <SELECT name="genome">
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+ <a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a>
+ </td>
+
+  </tr>
+
+  <tr>
+<td>OR</td>
+</tr>
+<tr>
+    <td>Copy and Paste your fasta file here (500 kb limit)</td>
+    <td>
+	<textarea  class="reset" rows="5" cols="40" name="file_paste" ></textarea>    
+
+    </td>
+  </tr>
+</table>
+
+<h2><BR><span style="color: red; font-weight: bold">EST Evidence</span></h2>
+
+<h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta files of ESTs; these will be aligned to your genomic sequence and used to help inform the annotations. Two different types of ESTs can be used: (1) a file of ESTs from the same source as your genomic sequence; and (2) (optionally) a file of ESTs from a relatively closely related organism, for example if your genomic sequence is human, this second file might be mouse ESTs. </h4>
+<hr>
+
+<table>
+<tr>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from the same source as your genomic sequence.</td>
+    <td>
+      <SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+     </SELECT>
+
+ <a href="maker_service?rm=filebox"> Manage Files</a>
+ </td>	    
+
+  </tr>
+
+<tr>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from a related organism(s); this file is optional. Please keep in mind that since these ESTs must be aligned to your genomic sequence with TBLASTX, that providing this file may substantially  increase compute times.</td>
+    <td>    
+	 <SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+
+    </td>
+
+  </tr>
+</table>
+ 
+<h2><BR><span style="color: red; font-weight: bold">Protein Homology Evidence</span> </h2>
+<hr>
+<table>
+  <tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta file of Proteins; these will be aligned to your genomic sequence and used to help inform the annotations. Alternatively, you may simply wish to use the current Uniprot database; if so, skip this step and check the Uniprot Box below. </h4>
+</td>
+    <td>
+
+	 <SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+
+    </td>
+  </tr>
+
+<tr>
+    <td>    
+      <input type="checkbox"  name="Use Uniprot"> <span style="color: red; font-weight: bold">Use Uniprot instead</span>
+    </td>
+  </tr>
+
+</table>
+<hr>
+<BR>
+<h2><span style="color: red; font-weight: bold">Configure Repeat Masking</span></h2>
+<td><h4> Don't want to RepeatMask? We recommend that you think twice. Not masking repeats will seriously compromise the quality of your annotations; but if you don't want to, you don't have to. Just click the box below and skip the rest of the RepeatMsking configuration steps. </h4> 
+
+<input type="checkbox"  name="No repeat Masking"> <span style="color: red; font-weight: bold">Don't RepeatMask my sequence!</span>
+<BR>
+<td><h4>MAKER uses RepeatMasker as well as its own internal, protein-based repeatmasking protocol to identify, annotate and then mask repeats. If RepBase has already created a repeat library for your genome, then choose that organism from the toggle swithch below. If a related oprgansim is available choose that one; if you don't see your organism, or a simlar one don't despair--addtional options are available, and we will walk you through them shortly. </h4>
+</td>
+<h2></h2>
+<table>
+ <tr>
+
+    <td><span style="color: red; font-weight: bold">Choose an organism</span> </td>
+    <td>
+	 
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]	
+        <option value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+       [% END %]
+	
+	</select>	
+    </td>
+  </tr>
+</table>
+<h4>In addtion to RepeatMasker, MAKER uses its own internal, protein-based repeatmasking protocol to identify, annotate and then mask repeats. To accomplish this, MAKER uses it's own universal library of transposon encoded proteins, e.g. GAG,POL, ENVs, RVTs, etc. If you would like to use your own protein library in place of MAKER's own, then upload your protein multi-fasta here; otherwise MAKER will use its own library by default (recommended)  </h4>
+
+<table>
+  <tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> a Custom Repeat Protein multi-fasta file</h4></td>
+    <td> 
+
+ 	<SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+
+   
+    </td>
+  </tr>
+</table>
+<h4>Perhaps you have manufactured your own nucleotide repeat library or have found a RepBase library that you think would work well with RepeatMasker too? If so upload that nucelotide multi-fasta file below. Don't have one? Talk to us! We may be able to make one for you. </h4>
+
+<table>
+<tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> a Custom Repeat nucleotide multi-fasta file (optional)</td>
+    <td>
+
+
+
+
+    </td>
+  </tr>
+</table>
+
+<hr>
+<h2><span style="color: red; font-weight: bold"> Choose Your Gene-predictor(s)</span></h2>
+<td><h4>MAKER can use a number of popular gene predictors. Even better, it can 'talk' to the gene predictors you choose, passing them information about EST and Protein alignments in order to improve the quality of the predictions. Choose the ones you want to use below. Keep in mind that every gene predictor must be 'trained' for the organism whose DNA you wish to annotate; thus you will have to choose a predictor-- and then provide that predictor with a model file. Usually these are available at the gene-predictor's own web-site; check there to find these files. Can't find a a model file for your organism? Don't despair; just chooseGENEMARK option below and choose self train.</h4> 
+</td>
+
+<h4>Gene Predictors:</h4>
+<hr>
+<table>
+
+<tr><td><input type="radio" name="gene_preds" value="SNAP"></td><td>SNAP</td></tr>
+ <tr>
+    
+<td></td>
+     <td>Add your own snap  HMM</td>
+    <td>
+	
+ 	<SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+	
+    </td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td>Select from  model snap HMM</td>
+<td>
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]	
+        <option value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+       [% END %]
+	
+	</select>
+</td>
+</tr>
+
+
+<tr><td><input type="radio" name="gene_preds" value="AUGUSTUS"></td><td>AUGUSTUS</td></tr>
+ <tr>
+    
+<td></td>
+     <td>Add your own  augustus HMM</td>
+    <td>
+	
+ 	<SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+	
+    </td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td>Select from  agustus model HMM</td>
+<td>
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]	
+        <option value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+       [% END %]
+	
+	</select>
+</td>
+</tr>
+
+
+
+
+<tr><td><input type="radio" name="gene_preds" value="FgeneH"></td><td>FgeneH</td></tr>
+ <tr>
+    
+<td></td>
+     <td>Add your own fgeneh  HMM</td>
+    <td>
+	
+ 	<SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+	
+    </td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td>Select from  model HMM</td>
+<td>
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]	
+        <option value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+       [% END %]
+	
+	</select>
+</td>
+</tr>
+
+
+<tr><td><input type="radio" name="gene_preds" value="GENEMARK"></td><td>GENEMRAK</td></tr>
+ <tr>
+    
+<td></td>
+     <td>Add your own  genemark HMM</td>
+    <td>
+	
+ 	<SELECT>
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+	
+    </td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td> GENEMRAK can self train your whole genome fasta. If you already have done so , you should have genemark HMM in your filebox. If not choose the self train checkbox  below. Please note GENEMARK takes  atleast 7 hours to train a reasonable size genome. If you do choose to self train,you will be notified via your provided email when genemark is done selftraining. One more email there after also will be sent once Maker is done annotatted your genome</td>
+
+</tr>
+
+
+
+<tr><td></td>
+<td><input type="checkbox"  name="selftrain"> <span style="color: red; font-weight: bold">Self Train!</span></td>
+<td></td>
+</tr>
+</table>
+
+
+<hr>
+<h2><span style="color: red; font-weight: bold"> Already Got your own Annotations or ab-inito predictions?</span></h2>
+<td><h4>MAKER can also use your own annotations that you already have or any abinitio gene predictions. You would need your annotation to be in GFF3 format.  
+
+</h4>
+
+<table>
+<tr>
+    <td>add your own abinitio prediction</td>
+     <td>
+	 <SELECT>
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	
+    </td>
+  </tr>
+
+
+
+ <tr>
+    <td>add your own model organism annotation</td>
+     <td>
+	 <SELECT>
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	      	
+    </td>
+  </tr>
+
+</table>
+ <tr>
+    <td>add your own model organism annotation</td>
+     <td>
+	 <SELECT>
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	      	
+    </td>
+  </tr>
+
+</table>
+
+
+<table>
+<h4>blackboxaskingExternal Application</h4>
+<hr>
+ <tr>
+    <td>alt_peptide</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="alt_peptide" value="c">
+    </td>
+  </tr>
+
+  
+</table>
+
+<br />
+
+<input type="submit" value="Add Maker Job">
+<input type="reset" value="use default"><br>* = optional
+
+</form>
+
+[% END %]
+

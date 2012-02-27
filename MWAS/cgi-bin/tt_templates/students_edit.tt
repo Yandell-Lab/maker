@@ -1,0 +1,74 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Edit Students</h2>
+
+<form method="POST" action="/cgi-bin/Student/student_students.cgi" name="student_edit" onsubmit="if (password.value != password_verify.value) {alert('Passwords dont match'); password.value=''; password_verify.value=''; password.focus(); return false;}">
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="student_id" value="[% student.student_id %]">
+
+
+<table>
+  <tr>
+    <td>Last Name:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="last_name" value="[% student.last_name %]">
+    </td>
+  </tr>
+  <tr>
+    <td>First Name:</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 name="first_name" value="[% student.first_name %]">
+    </td>
+  </tr>
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=30 maxlength=60 name="e_mail" value="[% student.e_mail %]">
+    </td>
+  </tr>
+  <tr>
+  <tr>
+    <td>Password:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password" value="">
+    </td>
+  </tr>
+  <tr>
+    <td>Verify Password:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password_verify" value="">
+    </td>
+  </tr>
+  <tr>
+    <td>Course ID:</td>
+    <td>    
+      [% student.c_id %]
+    </td>
+  </tr>
+  <tr>
+    <td>Enter Value:</td>
+    <td>   
+        <input type="text" size=10 maxlength=10 name="captcha" value="">
+    </td>   
+  </tr>
+  <tr>
+    <td>   
+    </td>   
+    <td>   
+        <img src="http://derringer.genetics.utah.edu/cgi-bin/Student/student_general.cgi?rm=general_captcha_create">
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Update Profile">
+</form>
+
+[% END %]
+

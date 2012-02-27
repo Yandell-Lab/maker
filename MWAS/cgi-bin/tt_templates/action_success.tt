@@ -1,0 +1,57 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+<table bgcolor="white">
+<tr><td>
+<h3><img src="/Student/images/inout.ico">Success!</h3>
+</td></tr>
+</table>
+<form method="POST" action="/cgi-bin/Student/student_general.cgi" name="general_add">
+
+<input type="hidden" name="rm" value="general_add_process">
+
+<div id="message" bgcolor="#CACACA">
+<h2>
+<table width=100% border=0 bgcolor="#CACACA">
+<br>
+<br>
+<br>
+
+<tr><td>
+[% message  %]
+</td></tr>
+</h2>
+</table>
+</div>	
+<br>
+<br>
+<br>
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker.cgi?rm=maker_add&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_new.gif"> Add new job  </a>
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_file_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif">  FILEBOX </a>
+
+&nbsp
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_user_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_light.gif"> Account </a>
+
+
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_feedback_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/comment_new.gif"> Feedback </a>
+
+
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_help_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif"> Help </a>
+&nbsp	
+
+
+
+
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=students_list"><img src="/Student/images/c1.ico"> Update Jobs</a>
+<hr>
+
+
+</form>
+
+[% END %]
+

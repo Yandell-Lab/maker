@@ -1,0 +1,207 @@
+[GENERAL]
+db_adaptor    = Bio::DB::SeqFeature::Store
+db_args       = -adaptor memory
+	      	-dir '[% contig_dir %]'
+
+# list of tracks to turn on by default
+default features = Genes Est2genome BLASTX
+
+# size of the region
+region segment         = 10000
+
+# examples to show in the introduction
+#examples = ctgA
+
+# feature to show on startup
+#initial landmark = ctgA:5000..10000
+
+
+########################
+# Default glyph settings
+########################
+
+
+[TRACK DEFAULTS]
+glyph         = generic
+height        = 10
+bgcolor       = lightgrey
+fgcolor       = black
+font2color    = blue
+label density = 25
+bump density  = 100
+feature_limit = 500
+show_summary  = 500000
+# where to link to when user clicks in detailed view
+link          = AUTO
+
+################## TRACK CONFIGURATION ####################
+# the remainder of the sections configure individual tracks
+###########################################################
+
+[ReadingFrame]
+feature            = mRNA
+glyph              = cds
+ignore_empty_phase = 1
+category           = Genes
+key                = CDS Frame Usage
+
+[GC:region]
+glyph          = dna
+global feature = 1
+height         = 40
+do_gc          = 1
+gc_window      = auto
+fgcolor        = red
+axis_color     = blue
+strand         = both
+category       = Miscelaneous
+key            = DNA/GC Content
+
+[Translation]
+glyph          = translation
+global feature = 1
+height         = 40
+fgcolor        = purple
+start_codons   = 0
+stop_codons    = 1
+translation    = 6frame
+category       = Miscelaneous
+key            = Six Frame Translation
+
+[Loci:region]
+feature		   = gene
+glyph              = box
+bgcolor            = rgb(51,102,255)
+fgcolor            = rgb(51,102,255)
+label              = 0
+bump_density       = 1
+category           = Genes
+key                = MAKER Gene Loci
+
+[Genes]
+feature		   = mRNA
+glyph              = processed_transcript
+bgcolor            = rgb(51,102,255)
+utr_color          = rgb(176,224,230)
+thin_utr           = 1
+one_cds            = 1
+label_transcripts  = 1
+draw_translation   = 1
+implied_utrs       = 0
+description        = 1
+#link               = [% base_url_cgi %]/gene_page.cgi?seq_id=$ref&name=$name
+link_target        = _blank
+category           = Genes
+key                = MAKER Gene Annotations
+
+[SNAP]
+feature      = match:snap match:snap_masked
+glyph        = so_transcript
+bgcolor      = rgb(153,255,204)
+category     = Ab-initio Gene Predictions
+key          = SNAP Predictions
+
+[Augustus]
+feature      = match:augustus match:augustus_masked
+glyph        = so_transcript
+bgcolor      = rgb(255,204,255)
+category     = Ab-initio Gene Predictions
+key          = Augustus Predictions
+
+[FGENESH]
+feature      = match:fgenesh match:fgenesh_masked
+glyph        = so_transcript
+bgcolor      = rgb(255,153,255)
+category     = Ab-initio Gene Predictions
+key          = FGENESH Predictions
+
+[GeneMark]
+feature      = match:genemark match:genemark_masked
+glyph        = so_transcript
+bgcolor      = rgb(103,155,104)
+category     = Ab-initio Gene Predictions
+key          = GeneMark Predictions
+
+[Est2genome]
+feature      = match:est2genome expressed_sequence_match:est2genome
+glyph        = segments
+bgcolor      = rgb(250,250,210)
+stranded     = 1
+category     = EST Alignments
+key          = ESTs - Exonerate
+
+[BLASTN]
+feature      = match:blastn expressed_sequence_match:blastn
+glyph        = segments
+bgcolor      = rgb(102,204,0)
+stranded     = 1
+category     = EST Alignments
+key          = ESTs - BLASTN
+
+[TBLASTX]
+feature      = match:tblastx translated_nucleotide_match:tblastx
+glyph        = segments
+bgcolor      = rgb(102,51,102)
+stranded     = 1
+category     = EST Alignments
+key          = ESTs - BLASTN
+
+[Protein2genome]
+feature      = match:protein2genome protein_match:protein2genome
+glyph        = segments
+bgcolor      = rgb(255,255,0)
+stranded     = 1
+category     = Protein Alignments
+key          = Proteins - Exonerate
+
+[BLASTX]
+feature      = match:blastx protein_match:blastx
+glyph        = segments
+bgcolor      = pink
+stranded     = 1
+category     = Protein Alignments
+key          = Proteins - BLASTX
+
+[RepeatMasker]
+feature      = match:repeatmasker
+glyph        = segments
+bgcolor      = red
+stranded     = 1
+category     = Repetative Elements
+key          = RepeatMasker Repeats
+
+[RepeatRunner]
+feature      = match:repeatrunner match:blastx:repeatmask
+glyph        = segments
+bgcolor      = red
+stranded     = 1
+category     = Repetative Elements
+key          = RepeatRunner Repeats
+
+[InterPro]
+feature      = match:iprscan match:interproscan
+glyph        = segments
+bgcolor      = grey
+stranded     = 1
+category     = Miscelaneous
+key          = InterPro Protein Domains
+
+[Tophat]
+feature      = match:est_gff:tophat match:tophat match:TopHat
+glyph        = segments
+bgcolor      = rgb(255,140,0)
+stranded     = 1
+category     = EST Alignments
+key          = mRNA-seq - TopHat
+
+[Cufflinks]
+feature      = match:est_gff:cufflinks match:cufflinks match:CuffLinks
+glyph        = segments
+bgcolor      = rgb(251,255,179)
+stranded     = 1
+category     = EST Alignments
+key          = mRNA-seq - CuffLinks
+
+########################
+# Plugin configuration
+########################

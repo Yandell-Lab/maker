@@ -1,0 +1,89 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<head>
+    <meta http-equiv="content-cype" content="text/html; charset=iso-8859-1" />
+    <meta name="description" content="MAKER Web Annotation Service:Your genome annotated" />
+    <meta name="keywords" content="MAKER" />
+
+    <link rel="stylesheet" type="text/css" href="css/style.css" media="screen"/>
+    <link rel="stylesheet" type="text/css" href="css/print.css" media="print"/>
+
+    <title>MAKER Web Annotation Service</title>
+
+    <div id="container">
+
+        <div id="header"><h1><img src="http://www.yandell-lab.org/images/Maker-Logo.png	">Maker Web Service<font size=1 color="edda74"> <i>Beta</i></font></h1><h7>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Your Genome Annotated</h7>
+
+        </div>
+
+        <div id="sub_header">Annotate This!</div>
+
+        <div id="main_content_top">
+            [% time.day_name %],  [% time.month_abbr %] [% time.day_of_month %] [% time.year %] [% time.hms %] |
+            [% IF logged_in  %]
+                logged-in as [% session.param('AUTH_USERNAME') %] | <a href="[% server_opt.url_base_dir %]/maker.cgi?rm=login_home;authen_logout=1">logout</a>&nbsp;
+            [% ELSE %]
+                <a href="/cgi-bin/Maker/maker.cgi?rm=general_login">login</a> &nbsp;
+            [% END %] 
+       </div>
+   </div>
+</head>
+
+<body  onload="changeme('progress_bar', 'hide');changeme('bt_up', 'hide'); changeme('bt_save', 'hide');     ">
+<div id="wrapper">
+
+    <div id="navigation">
+        <h1>Yandell Lab</h1>
+
+        <h2>Department of Human Genetics - University of Utah</h2>
+        <ul>
+            <li><a href="/index.html"><span>Home</span></a></li>
+            <li><a href="/people/index.html"><span>People</span></a></li>
+            <li><a href="/research/index.html"><span>Research</span></a></li>
+            <li><a href="/software/index.html"><span>Software</span></a></li>
+            <li><a href="/publications/index.html"><span>Publications</span></a></li>
+            <li><a href="/about/index.html"><span>About</span></a></li>
+            <li><a href="/links/index.html"><span>Links</span></a></li>
+            <li><a href="/utah/index.html"><span>Utah</span></a></li>
+            <li><a href="/contact/index.html"><span>Contact</span></a></li>
+            <li><a href="http://malachite.genetics.utah.edu/yandbeck-wiki/index.php/Main_Page"><span>Internal</span></a></li>
+        </ul>
+    </div>
+
+  
+
+    <div id="content">
+        [% content %]
+    </div>
+
+    <div id="footer">
+        <span class="left">&copy; 2007-2009 Mark Yandell</span>
+
+        <span class="right">Valid CSS/XHTML 1.0</span>
+
+        <!-- Start of StatCounter Code -->
+        <script type="text/javascript">
+        var sc_project=5279097;
+        var sc_invisible=1;
+        var sc_partition=59;
+        var sc_click_stat=1;
+        var sc_security="0a7977f8";
+        var sc_text=2;
+        </script>
+
+        <script type="text/javascript"
+        src="http://www.statcounter.com/counter/counter.js"></script><noscript><div
+        class="statcounter"><a title="web counter"
+        href="http://www.statcounter.com/free_hit_counter.html"
+        target="_blank"><img class="statcounter"
+        src="http://c.statcounter.com/5279097/0/0a7977f8/1/"
+        alt="web counter" ></a></div></noscript>
+        <!-- End of StatCounter Code -->
+
+    </div>
+
+</div>
+
+</body>
+</html>

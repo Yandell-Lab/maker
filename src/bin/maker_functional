@@ -1,0 +1,189 @@
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use warnings;
+use strict;
+use FindBin;
+use Cwd;
+
+BEGIN{
+    if(! $ENV{BLASTDB}){
+	$ENV{BLASTDB} = '/usr/local/blastdb';
+	$ENV{BLASTDB} = '/data/blastdb' if(! -d $ENV{BLASTDB});
+	$ENV{BLASTDB} = '' if(! -d $ENV{BLASTDB});
+    }
+
+    $ENV{PATH} .= ":$FindBin::Bin/../exe/snap";
+}
+
+my ($job, $d, $f, $t, $n) = @ARGV;
+die "ERROR: Job ID is missing\n" if(!$job);
+
+my $cwd = Cwd::cwd();
+my $file = "$cwd/$job.maker.output/$job\_master_datastore_index.log";
+die "ERROR: There are no index file for the MAKER job\n" if(! -f $file);
+
+
+my %to_do;
+open(IN, "< $file");
+while(my $line = <IN>){
+    chomp $line;
+    my @F = split("\t", $line);
+    next if(@F != 3);
+    next if($F[2] ne 'FINISHED');
+    my $dir = "$cwd/$job.maker.output/$F[1]";
+    $to_do{$dir}++;
+}
+close(IN);
+
+if($t){
+    my $t_dir = "$cwd/$job.maker.output/snap.training";
+    my $index = "$cwd/$job.maker.output/$job\_master_datastore_index.log";
+
+    mkdir($t_dir) if(! -d $t_dir);
+
+    my @commands = ("$FindBin::Bin/maker2zff -d $index",
+		    "fathom genome.ann genome.dna -categorize 1000",
+		    "fathom uni.ann uni.dna -export 1000 -plus",
+		    "mkdir params; cd params; forge ../export.ann ../export.dna; cd ..",
+		    "hmm-assembler.pl $job params > $job.hmm"
+		    );
+
+    chdir($t_dir);
+    foreach my $cmd (@commands){
+	my $stat = system($cmd);
+	
+	if($stat){
+	    die "ERROR: Could not train SNAP\n";
+	}
+    }
+    chdir($cwd);
+}
+
+if(defined $n){
+    my $all = "$cwd/$job.maker.output/$job.all.gff";
+    my $out = "$cwd/$job.maker.output/$job.all.id.map";
+    my @commands = ("$FindBin::Bin/maker_map_ids --prefix $n $all > $out");
+    unless(! -f $all || -f $out){
+	foreach my $cmd (@commands){
+	    my $stat = system($cmd);
+
+	    if($stat){
+		unlink($out) if(-f $out);
+		die "ERROR: Could not make new names\n";
+	    }
+	}
+    }
+}
+
+foreach my $dir (keys %to_do){
+    chdir($dir);
+
+    if($d){
+	my ($prot) = <$dir/*.maker.proteins.fasta>;
+	my ($gff) = <$dir/*.gff>;
+	my $out = $prot;
+	$out =~ s/\.fasta$/\.iprscan.raw/;
+
+	unless(! $prot || !$gff || -f $out){
+	    my @commands = ("$FindBin::Bin/iprscan_wrap -i $prot -iprlookup -goterms -format raw -o $out.tmp",
+			    "$FindBin::Bin/iprscan2gff3 $out.tmp $gff > $out.gff.tmp",
+			    "$FindBin::Bin/gff3_merge $gff $out.gff.tmp -o $gff.tmp\n",
+			    "$FindBin::Bin/ipr_update_gff $gff.tmp $out.tmp\n",
+			    "mv $gff $gff.bak",
+			    "mv $gff.tmp $gff",
+			    "mv $out.tmp $out",
+			    "rm -rf $dir/$prot.iprscan.output");
+	    
+	    foreach my $cmd (@commands){
+		my $stat = system($cmd);
+		
+		if($stat){
+		    system("mv $gff.bak $gff") if(-f "$gff.bak");
+		    die "ERROR: Could not find domains\n";
+		}
+	    }
+	    
+	    unlink("$out.tmp") if (-f "$out.tmp");
+	    unlink("$out.gff.tmp") if (-f "$out.gff.tmp");
+	    unlink("$gff.tmp") if (-f "$gff.tmp");
+	    unlink("$gff.bak") if(-f "$gff.bak");
+	}
+    }
+
+    if($f){
+	my ($prot) = <$dir/*.maker.proteins.fasta>;
+	my ($tran) = <$dir/*.maker.transcripts.fasta>;
+	my ($gff) = <$dir/*.gff>;
+	my $out = $prot;
+	$out =~ s/\.fasta$/\.iprscan.blastp/;
+
+	unless(! $prot || !$gff || ! $tran || -f $out){
+	    my @commands = ("xdformat -p $ENV{BLASTDB}/uniprot_sprot.fasta &> /dev/null",
+			    "/usr/local/wublast/blastp $ENV{BLASTDB}/uniprot_sprot.fasta $prot mformat=2 hspmax=1 V=1 B=1 wordmask=seg maskextra=10 E=.000001 gi 2> /dev/null > $out.tmp",
+			    "cp $tran $tran.bak",
+			    "cp $prot $prot.bak",
+			    "cp $gff $gff.bak",
+			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $tran.bak > $tran",
+			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $prot.bak > $prot",
+			    "$FindBin::Bin/maker_functional_gff $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $gff.bak > $gff",
+			    "mv $out.tmp $out");
+
+	    #skip xdformat if not needed
+	    shift @commands if(<$ENV{BLASTDB}/uniprot_sprot.fasta.xp?>);
+
+	    foreach my $cmd (@commands){
+		my $stat = system($cmd);
+		
+		if($stat){
+		    system("mv $tran.bak $tran") if(-f "$tran.bak");
+		    system("mv $prot.bak $prot") if(-f "$prot.bak");
+		    system("mv $gff.bak $gff") if(-f "$gff.bak");
+		    die "ERROR: Could not find putative function\n";
+		}
+	    }
+	    
+	    unlink("$out.tmp") if (-f "$out.tmp");
+	    unlink("$tran.bak") if (-f "$tran.bak");
+	    unlink("$prot.bak") if (-f "$prot.bak");
+	    unlink("$gff.bak") if(-f "$gff.bak");
+	}
+    }
+    
+    if(defined $n){
+	my ($prot) = <$dir/*.maker.proteins.fasta>;
+	my ($tran) = <$dir/*.maker.transcripts.fasta>;
+	my ($gff) = <$dir/*.gff>;
+	my $map = "$cwd/$job.maker.output/$job.all.id.map";
+
+	unless(! $prot || !$gff || !$tran || ! -f $map){
+	    my @commands = ("cp $tran $tran.bak",
+			    "cp $prot $prot.bak",
+			    "cp $gff $gff.bak",
+			    "$FindBin::Bin/map_fasta_ids $map $tran",
+			    "$FindBin::Bin/map_fasta_ids $map $prot",
+			    "$FindBin::Bin/map_gff_ids $map $gff");
+
+	    foreach my $cmd (@commands){
+		my $stat = system($cmd);
+		
+		if($stat){
+		    system("mv $tran.bak $tran") if(-f "$tran.bak");
+		    system("mv $prot.bak $prot") if(-f "$prot.bak");
+		    system("mv $gff.bak $gff") if(-f "$gff.bak");
+		}
+	    }
+	    
+	    unlink("$tran.bak") if (-f "$tran.bak");
+	    unlink("$prot.bak") if (-f "$prot.bak");
+	    unlink("$gff.bak") if(-f "$gff.bak");
+	}
+    }
+}
+
+exit(0);

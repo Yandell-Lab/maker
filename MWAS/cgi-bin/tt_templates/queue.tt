@@ -1,0 +1,129 @@
+[% WRAPPER main.tt  %]
+
+<script type="text/javascript">
+
+<!--
+function toggleLog(iState, url) {
+    var DivID = 'FloatingLayer';
+    if(document.layers)   //NN4+
+    {
+        if(iState == 2)
+        {
+            iState = (document.layers[DivID].visibility == "show") ? 0 : 1;
+        }
+        document.layers[DivID].visibility = iState ? "show" : "hide";
+    }
+    else if(document.getElementById)  //gecko(NN6) + IE 5+
+    {
+        var obj = document.getElementById(DivID);
+        if(iState == 2)
+        {
+            iState = (obj.style.visibility == "visible") ? 0 : 1;
+        }
+        obj.style.visibility = iState ? "visible" : "hidden";
+    }
+    else if(document.all)// IE 4
+    {
+        if(iState == 2)
+        {
+            iState = (document.all[DivID].style.visibility == "visible") ? 0 : 1;
+        }
+        document.all[DivID].style.visibility = iState ? "visible" : "hidden";
+    }
+
+    if(iState == 1){
+      LoadURL('floating_content_area', url);
+    }
+}
+// -->
+</script>
+
+<br>
+<br>
+
+[% IF message %]
+<h3>[% message %]<h3>
+[% END %]
+
+<h2><img src="[% server_opt.html_web %]/images/c1.png" width=32 height=32> Running Jobs</h2>
+<p>
+Use this screen to see where your jobs are located relative to all other users' jobs.
+Most details are hidden on jobs that do not belong to you.
+</p>
+
+<br>
+<a align=right href="maker.cgi?rm=queue"><img  src="[% server_opt.html_web %]/images/page_refresh.gif"> Refresh Job Status</a>
+
+<h2>All Jobs in Queue([% jobs.size %])</h2>
+<center>
+<table width=90% border=0 cellspacing=1 cellpadding=5>
+  <tr bgcolor="#99CCCC">
+    <th>JobID</th>
+    <th>Description</th>
+    <th>Job Status</th>
+    <th>Start Time</th>
+    <th>Length</th>
+    <th>Log</th>
+    <th><img src="[% server_opt.html_web %]/images/trashcan-empty-24x24.png"></th>
+  </tr>
+[% IF jobs.size == 0 %]
+  <tr bgcolor="#CFECEC">
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+[% ELSE %]
+  [% FOREACH job = jobs%]
+  <tr bgcolor="#CFECEC" [% IF job.user_id != user.user_id %]style="opacity: 0.4; filter: alpha(opacity = 40);"[% END %]>
+    <td align=center>
+    [% IF job.user_id == user.user_id %]
+      <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.job_id %]</a>
+    [% ELSE %]
+      [% job.job_id %]
+    [% END %]
+    </td>
+    <td>
+      [% IF job.user_id == user.user_id %]
+        [% job.name %]
+      [% END %]
+    </td>
+    <td align=center>
+        [% IF job.status == 'edit' %]
+          [% IF job.user_id == user.user_id %]
+	    <a href="maker.cgi?rm=job_create&job_id=[% job.job_id %]">[% job.status %]</a>
+          [% ELSE %]
+            saved
+          [% END %]
+        [% ELSE %]
+	   [% job.status %]
+        [% END %]
+    </td>
+    <td align=center>[% job.start_time %]</td>
+    <td align=center>[% job.length || '0' %] bp</td>
+    <td align=center>
+      [% IF job.status != 'waiting in queue' && job.status != 'edit' && job.user_id == user.user_id %]
+        <a href="javascript:toggleLog(1, 'stream.cgi?type=log&job_id=[% job.job_id %]&user_id=[% user.user_id %]');"><img src="http://www.famfamfam.com/lab/icons/silk/icons/report.png"></a>
+      [% END %]
+    </td>
+    <td align=center>
+      <form method="POST" action="maker.cgi" name="delete" enctype="multipart/form-data">
+      [% IF job.user_id == user.user_id %]
+	<input type="hidden" name="rm" value="delete_job">
+	<input type="hidden" name="goto" value="queue">
+	<input type="hidden" name="job_id" value="[% job.job_id %]">
+	<input type="submit" name="delete_button" value="">
+      [% ELSE %]
+        <input type="button" name="delete_button" value="" disabled>
+      [% END %]
+      </form>
+    </td>
+  </tr>
+  [% END %]
+[% END %]
+</table>
+</center>
+[% END %]
