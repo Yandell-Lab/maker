@@ -68,6 +68,9 @@ http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
 
 Also see the MPI configuration instructions found further bellow.
 
+To install MAKER with support for Work Queue, you must download and install CCTOOLS
+    *CCTOOLS (http://www.cse.nd.edu/~ccl/software/download.shtml)
+
 Notes:
 
 1) Wu-BLAST has become AB-BLAST.  We have not tested AB-BLAST for
@@ -189,6 +192,21 @@ RUNNING MAKER WITH EXAMPLE DATA
        maker maker_exe.ctl maker_opts.ctl maker_bopts.ctl
 
 5) Examine the output files.  See MAKER OUTPUT and APOLLO sections.
+
+#---------------------------------------------------------------------
+
+RUNNING MAKER WITH WORK QUEUE
+
+1) Follow the regular procedure for setting up a directory for a run of MAKER
+2) Rather than using the executable maker, use maker_wq
+      maker_wq maker_exe.ctl maker_opts.ctl maker_bopts.ctl
+3) Now this will start MAKER running on port 9135 by default
+4) Now submit workers to your favorite batch system or run them on individual machines
+      To start a worker on an individual machine: work_queue_worker MACHINENAME 9135
+      To submit workers to Condor: 		  condor_submit_workers MACHINENAME 9135 COUNT
+      To submit workers to SGE: 		  sge_submit_workers MACHINENAME 9123 COUNT
+ 
+
 
 #---------------------------------------------------------------------
 
