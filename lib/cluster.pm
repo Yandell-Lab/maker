@@ -53,16 +53,14 @@ sub clean_and_cluster {
 	   while(my $key = each %types){
 	       my $s = $types{$key};
 
-	       $s = clean::remove_redundant_alt_splices($s, 10);
-	       @$s = @{$s}[0..$depth-1] if($depth && @$s > $depth);
+	       $s = clean::remove_redundant_alt_splices($s, 10, $depth);
 
 	       push(@keepers, @$s);
 	   }
 	   $c = \@keepers;
        }
        else{
-	  $c = clean::remove_redundant_alt_splices($c, 10);
-	  @$c = @{$c}[0..$depth-1] if($depth && @$c > $depth);
+	  $c = clean::remove_redundant_alt_splices($c, 10, $depth);
        }	
     }
     

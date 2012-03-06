@@ -531,7 +531,17 @@ sub phathits_on_chunk {
 	my @check = keys %IDs;
 
 	while(@check){
-	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
+	   my @subset;
+	   if(@check > 300){
+	       @subset = @check[0..299];
+	       @check = @check[300..$#check];
+	   }
+	   else{
+	       @subset = @check;
+	       undef @check;
+	   }
+
+	   my $dsn = "parent = '".join("' OR parent = '", @subset)."'";
 	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
 					      qq{WHERE seqid = '$seqid' }.
 					      qq{AND ( $dsn )});
@@ -545,7 +555,7 @@ sub phathits_on_chunk {
 		 $IDs{$1}++;
 	      }
 	   }
-	   @check = keys %IDs;
+	   push(@check, keys %IDs);
 	}
      }
     

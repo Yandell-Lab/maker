@@ -304,7 +304,7 @@ sub transcripts
 		print STDERR "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
 		print STDERR "\n";
 
-		sleep(5);
+		#sleep(5);
 
 		return [];
 

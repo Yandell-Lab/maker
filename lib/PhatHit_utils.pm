@@ -870,7 +870,7 @@ sub _adjust {
 		$edge = ($strand == 1) ? $edge - 100 : $edge + 100;
 		$edge = $slength if($edge > $slength); #cannot walk past contig end 
 		$edge = 1 if($edge < 1);  #cannot walk past contig start
-		my $l = abs($last - $edge) + 1;
+		my $l = abs($last - $edge);
 		my $add_seq = ($strand == 1) ?
 			substr_o($seq, $last-$l-1 , $l) : Fasta::revComp(substr_o($seq, $last, $l));
 

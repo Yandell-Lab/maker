@@ -1602,6 +1602,11 @@ sub check_update_version {
 	    $self->svn_w_args('update', '');
 	    ($commit_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
 	    die "ERROR: Could not query subversion repository\n" if(!$commit_svn);
+
+	    my $svn_server = 'svn://malachite.genetics.utah.edu/maker';
+	    my $copy_args = "$svn_server/trunk $svn_server/tags/Version_$version\_r$svn";
+	    my $copy_message = "Adding tags/Version_$version\_r$svn";
+	    $self->svn_w_args('copy', "$copy_args -m '$copy_message'");
 	}while($svn != $commit_svn);
 
 	print "MAKER has been updated to stable release $version\n";

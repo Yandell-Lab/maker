@@ -449,7 +449,7 @@ sub _go {
 		$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 		
-		#no sequence, try again
+		#no sequence, try again (probably NFS)
 		if (not $q_seq_obj) {
 		    sleep 5;
 		    $g_index->drop_from_global_index();

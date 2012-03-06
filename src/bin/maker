@@ -844,7 +844,6 @@ else {
 	    }
 	}
 	elsif((chunk_total_count(\@tiers) == 1) && (num_chunks(\@tiers) == 1)){
-	    print "running last\n"; #temp
 	    #run lonesome chunk (should never happen but it's here just in case)
 	    my $r_chunk = next_chunk(\@tiers); #running chunk
 	
@@ -861,7 +860,6 @@ else {
 	    next;
 	}
 	elsif((result_count(\@tiers) == chunk_total_count(\@tiers) - 1) && (num_chunks(\@tiers) == 1)){
-	    print "running last2\n"; #temp
 	    #run last chunk outside of thread
 	    my $r_chunk = next_chunk(\@tiers); #running chunk
 	    die "ERROR: Logic error\n" if(! $r_chunk);

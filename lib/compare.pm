@@ -83,7 +83,7 @@ sub is_redundant_alt_form {
         }
         elsif ($s_to_a_str =~ /^1+$/ && $s_to_b_str =~ /^0*A?1+a?$/){
                 #print STDERR "RBBBB s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
-                sleep 3;
+	        #sleep 3;
                 #return 1;
         }
         else {

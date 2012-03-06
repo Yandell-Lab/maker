@@ -96,6 +96,7 @@ sub is_identical_form {
 sub remove_redundant_alt_splices {
         my $candidates = shift;
         my $flank      = shift;
+	my $depth      = shift;
 
         return [] unless defined($candidates);
 
@@ -103,29 +104,29 @@ sub remove_redundant_alt_splices {
 
         my $num = @sorted;
         my %dead;
+        my @keepers;
         for (my $i = 0; $i < @sorted -1 ;$i++){
                 print STDERR " ...processing $i of $num\n" unless($main::quiet);
+                next if ($dead{$i});
+
                 my $hit_i = $sorted[$i];
-                if (defined($dead{$i})){
-                        next;
-                }
                 for (my $j = $i+1; $j < @sorted; $j++){
+                        next if ($dead{$j});
                         my $hit_j = $sorted[$j];
-                        if (defined($dead{$j})){
-                                next;
-                        }
+
                         if (compare::is_redundant_alt_form($hit_i, $hit_j, $flank)){
                                 $dead{$j}++;
                         }
                 }
+		
+		push(@keepers, $hit_i);
+		if($depth && @keepers == $depth){
+		    print STDERR " ...trimming the rest\n" unless($main::quiet);
+		    last;
+		}
         }
 
-        my @transcripts;
-        for (my $i = 0; $i < @sorted; $i++){
-                push(@transcripts, $sorted[$i])
-                unless defined($dead{$i});
-        }
-        return \@transcripts;
+        return \@keepers;
 }
 #------------------------------------------------------------------------
 sub get_best_alt_splices {

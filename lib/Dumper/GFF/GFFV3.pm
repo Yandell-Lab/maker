@@ -933,7 +933,7 @@ sub grow_cds_data_lookup {
    }
 
    #skip adding start and stop codons for now because Apollo croaks
-   return; #temp
+   return; #temp (not really, I'll probably keep it forever)
 
    #get start codon
    if($phat_hit->{_HAS_START}){

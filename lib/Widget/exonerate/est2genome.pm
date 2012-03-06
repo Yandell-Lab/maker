@@ -604,7 +604,7 @@ sub get_model_order {
 		$type = 'mixed';
 		warn "MIXED MODEL in Widget/est2genome!\n";
 		warn "TELL MARK Y!\n";
-		sleep 5;
+		#sleep 5;
 	}
 	elsif ($str =~ /5I3/){
 		$type = '5I3';

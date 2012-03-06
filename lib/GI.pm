@@ -1545,12 +1545,12 @@ sub exonerate_okay {
 	
 	if ($h_str =~ /Target Intron/) {
 	    print STDERR "BADDD EXONERATE!\n";
-	    sleep 4;
+	    #sleep 4;
 	    return 0;
 	}
 	elsif ($q_str =~ /Target Intron/) {
 	    print STDERR "BADDD EXONERATE!\n";
-	    sleep 4;
+	    #sleep 4;
 	    return 0;
 	}
 	$i++;

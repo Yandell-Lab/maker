@@ -58,7 +58,7 @@ sub seq {
 	       throw $E;
 	   }
 
-	   sleep 10;
+	   sleep 10; #NFS?
 
 	   if($fail == 3){
 	       my $id = $self->id;
