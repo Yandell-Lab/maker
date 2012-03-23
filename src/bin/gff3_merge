@@ -106,6 +106,7 @@ print $FAS "\#\#FASTA\n" unless($n_flag);
 
 my $i = 0;
 my %uniq;
+my $last;
 foreach  my $file (@files){
     my $file = $files[$i];
     #fix for not being in working directory with datastore
@@ -121,6 +122,10 @@ foreach  my $file (@files){
     my $seen_flag; #keep seen fasta sequnce from being printed twice
     my $FH = $ANN;
     while (defined(my $line = <IN>)){
+	if($last && $line =~ /^\#\#\#/ && $last =~ /^\#\#\#/){
+	    next;
+	}
+
 	if ($line =~ /^\#\#gff-version 3/){
 	    next;
 	}
@@ -138,6 +143,7 @@ foreach  my $file (@files){
 	    } 
 	    $uniq{$line}++;
 	    print $GFF $line;
+	    $last = $line;
 	    next;
 	}
 	elsif($line =~ /^\#\#FASTA/){
@@ -159,7 +165,10 @@ foreach  my $file (@files){
 	}
 
 	chomp $line;
-	print $FH $line . "\n" if($line);
+	if($line){
+	    print $FH $line . "\n";
+	    $last = $line;
+	}
     }
 
     $i++; #for unique identifier
