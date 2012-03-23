@@ -16,6 +16,7 @@ use Cwd;
 use URI::Escape;
 use File::NFSLock;
 use AnyDBM_File;
+use Carp;
 
 @ISA = qw(
        );
@@ -58,6 +59,7 @@ sub _initialize {
    $self->{log}."\n\n" unless($main::qq);
 
    if($ds_flag){   
+      carp "Calling Datastore::MD5::new" if($main::debug);
       $self->{ds_object} = new Datastore::MD5('root' => $self->{root},
 					      'depth' => 2
 					     );
@@ -99,7 +101,9 @@ sub mkdir {
    my $dir = $self->{root}."/".$safe_id;
 
    if($self->{ds_object}){
+      carp "Calling Datastore::MD5::id_to_dir" if($main::debug);
       $dir = $self->{ds_object}->id_to_dir($safe_id);
+      carp "Calling Datastore::MD5::mkdir" if($main::debug);
       $self->{ds_object}->mkdir($safe_id) || die "ERROR: could not make datastore directory\n";
    }
    else{
@@ -120,6 +124,7 @@ sub id_to_dir {
    my $dir = $self->{root}."/".$safe_id;
 
    if($self->{ds_object}){
+      carp "Calling Datastore::MD5::id_to_dir" if($main::debug);
       $dir = $self->{ds_object}->id_to_dir($safe_id);
    }
 
@@ -130,11 +135,14 @@ sub seq_dirs {
    my $self = shift;
    my $id = shift;
 
+   carp "Calling Datastore::MD5::mkdir" if($main::debug);
    my $out_dir = $self->mkdir($id);
+   carp "Calling uri_escape" if($main::debug);
    my $safe_id = uri_escape($id, 
 			    '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:'
 			   );
    my $the_void = "$out_dir/theVoid.$safe_id";
+   carp "Calling File::Path::mkpath" if($main::debug);
    File::Path::mkpath($the_void);
 
    return $out_dir, $the_void;

@@ -270,7 +270,7 @@ sub contig_line {
     my $name   = $id;
     my @data;
     push(@data, $id, '.', 'contig', 1, $length, '.','.','.');
-    push(@data, 'ID='.$id.';Name='.$name.';');
+    push(@data, 'ID='.$id.';Name='.$name);
     
     my $l = join("\t", @data);
     return $l;
@@ -295,7 +295,7 @@ sub contig_comment {
 sub print_txt {
     my $fh  = shift;
     my $str = shift;;
-    
+
     if (defined($fh)){
 	print $fh $str;
     }
@@ -465,9 +465,9 @@ sub gene_data {
 
     my @g_data;
     push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
-    my $attributes = 'ID='.$g_id.';Name='.$g_name.';';
-    $attributes .= $g->{g_attrib} if($g->{g_attrib});
-    #$attributes .= ';' if($attributes !~ /\;$/);
+    my $attributes = 'ID='.$g_id.';Name='.$g_name;
+    $attributes .= ';'.$g->{g_attrib} if($g->{g_attrib});
+    $attributes =~  s/\;$//;
     push(@g_data, $attributes); 
     
     my $g_l = join("\t", @g_data)."\n";
@@ -528,12 +528,12 @@ sub hit_data {
    
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
-   my $attributes = 'ID='.$h_id.';Name='.$name.';';
-   $attributes .= '_AED='.$AED.';' if(defined($AED));
-   $attributes .= '_eAED='.$eAED.';' if(defined($eAED));
-   $attributes .= '_QI='.$QI.';' if(defined($QI));
-   $attributes .= $h->{-attrib} if($h->{-attrib});
-   #$attributes .= ';' if($attributes !~ /\;$/);
+   my $attributes = 'ID='.$h_id.';Name='.$name;
+   $attributes .= ';_AED='.$AED if(defined($AED));
+   $attributes .= ';_eAED='.$eAED if(defined($eAED));
+   $attributes .= ';_QI='.$QI if(defined($QI));
+   $attributes .= ';'.$h->{-attrib} if($h->{-attrib});
+   $attributes =~  s/\;$//;
    my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
@@ -586,9 +586,9 @@ sub repeat_data {
 
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
-   my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand.';';
-   $attributes .= $h->{-attrib} if($h->{-attrib});
-   #$attributes .= ';' if($attributes !~ /\;$/);
+   my $attributes = 'ID='.$h_id.';Name='.$h_n.';Target='.$h_n.' '.$t_s.' '.$t_e.' '.$t_strand;
+   $attributes .= ';'.$h->{-attrib} if($h->{-attrib});
+   $attributes =~  s/\;$//;
    my $h_l = join("\t", @h_data, $attributes)."\n";
    
    my $sorted = PhatHit_utils::sort_hits($h);
@@ -718,9 +718,9 @@ sub get_exon_data {
 
 		my @data;
 		push(@data, $seq_id, $source, 'exon', $nB, $nE, $score, $strand, '.');
-		my $nine = 'ID='.$e_id.';Parent='.$p .';';
-		   $nine .= $e->{-attrib} if($e->{-attrib});
-		   #$nine .= ';' if($nine !~ /\;$/);
+		my $nine = 'ID='.$e_id.';Parent='.$p;
+		   $nine .= ';'.$e->{-attrib} if($e->{-attrib});
+		   $nine =~  s/\;$//;
 		push(@data, $nine); 
 
 		#make sure exon lines are ordered relative top plus strand
@@ -783,9 +783,8 @@ sub get_cds_data {
 	 
 	 my @data;
 	 push(@data, $seq_id, $source, $label, $nB, $nE, $score, $strand, $phase);
-	 my $nine = 'ID='.$e_id.';Parent='.$p.';';
-	 #$nine .= $e->{-attrib} if($e->{-attrib});
-	 #$nine .= ';' if($nine !~ /\;$/);
+	 my $nine = 'ID='.$e_id.';Parent='.$p;
+	 $nine =~  s/\;$//;
 	 push(@data, $nine);
 	 
 	 #make sure CDS lines are ordered relative top plus strand
@@ -1043,27 +1042,27 @@ sub get_transcript_data {
 
 	my @data;
 	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, $score, $t_s, '.');
-	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name.';';
-	   $nine .= '_AED='.$AED.';' if(defined($AED));
-	   $nine .= '_eAED='.$eAED.';' if(defined($eAED));
-	   $nine .= '_QI='.$t_qi.';' if(defined($t_qi));
-	   $nine .= $t_hit->{-attrib} if($t_hit->{-attrib});
-	   #$nine .= ';' if($nine !~ /\;$/);
+	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;
+	   $nine .= ';_AED='.$AED if(defined($AED));
+	   $nine .= ';_eAED='.$eAED if(defined($eAED));
+	   $nine .= ';_QI='.$t_qi if(defined($t_qi));
+	   $nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
 	if($t->{hit}->{_Alias}){
 	    if($nine =~ /Alias\=([^\;\n]+)/){
 		my @keepers = (@{[split(',', $1)]}, @{$t->{hit}->{_Alias}});
 		my %uniq;
 		@uniq{@keepers} =();
 		my $alias = join(',', keys %uniq);
-		$nine =~ s/Alias\=[^\;\n]+\;*/Alias=$alias\;/;
+		$nine =~ s/\;*Alias\=[^\;\n]+/;Alias=$alias/;
 	    }
 	    else{
                 my %uniq;
 		@uniq{@{$t->{hit}->{_Alias}}} =();
                 my $alias = join(',', keys %uniq);
-                $nine .= "Alias=$alias\;";
+                $nine .= ";Alias=$alias";
 	    }
 	}
+	$nine =~  s/\;$//;
 
 	push(@data, $nine);
 
@@ -1111,10 +1110,9 @@ sub get_hsp_data {
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
 	   $nine .= ' '.$t_strand if($hsp->strand('hit'));
-	   $nine .= ';';
-	   $nine .= 'Gap='.join(' ', @gap).';' if(@gap);
-	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
-	   #$nine .= ';' if($nine !~ /\;$/);
+	   $nine .= ';Gap='.join(' ', @gap).';' if(@gap);
+	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
+	   $nine =~  s/\;$//;
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
         push(@data, $nine);
@@ -1156,9 +1154,9 @@ sub get_repeat_hsp_data {
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
-	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand.';';
-	   $nine .= $hsp->{-attrib} if($hsp->{-attrib});
-	   #$nine .= ';' if($nine !~ /\;$/);
+	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE.' '.$t_strand;
+	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
+	   $nine =~  s/\;$//;
         push(@data, $nine);
 
         my $l = join("\t", @data);

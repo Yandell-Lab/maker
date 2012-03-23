@@ -12,6 +12,7 @@ use Bio::DB::Fasta;
 use File::NFSLock;
 use FastaSeq;
 use Error qw(:try);
+use Carp;
 
 @ISA = qw(
           );
@@ -51,11 +52,14 @@ sub new {
 
 	my $lock;
 	while(! $lock || ! $lock->still_mine){
+	    carp "Calling File::NFSLock::new" if($main::debug);
 	    $lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
+	    carp "Calling File::NFSLock::maintain" if($main::debug);
 	    $lock->maintain(30);
 	}
 
 	push(@{$self->{index}}, _safe_new($file, @args));
+	carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
 	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
 
 	#build reverse index to get the correct index based on file name
@@ -77,12 +81,14 @@ sub _safe_new {
 	    die $_[0];
 	};
 
+	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	$db = new Bio::DB::Fasta($file, @args);
     }
     catch Error::Simple with {
         my $E = shift;
 
 	unlink("$file.index");
+	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	$db = new Bio::DB::Fasta($file, @args);
     };
 
@@ -117,6 +123,7 @@ sub reindex {
 	    my $lock;
 	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
 		push(@{$self->{index}}, _safe_new($file, @args));
+		carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
 		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);		
 
 		#build reverse index to get the correct index based on file name
@@ -145,6 +152,7 @@ sub _close_index {
     my @index = @{$self->{index}};
 
     foreach my $db (@index){
+	carp "Calling out to BioPerl Bio::DB::Fasta::_close_index" if($main::debug);
 	$db->_close_index;
     }
 
@@ -173,6 +181,7 @@ sub get_Seq_for_hit {
     my $fastaObj;
     if(exists $r_ind->{$dbf}){
 	my $db = $r_ind->{$dbf};
+	carp "Calling out to FastaSeq::convert" if($main::debug);
 	$fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
     }
     
@@ -180,6 +189,7 @@ sub get_Seq_for_hit {
 	my @files = grep {!/^$dbf$/} keys %$r_ind; #check remaining files
 	foreach my $dbf (@files){
 	    my $db = $r_ind->{$dbf};
+	    carp "Calling out to FastaSeq::convert" if($main::debug);
 	    $fastaObj = FastaSeq->convert($self->{locs}, $db->get_Seq_by_id($id));
 	    last if($fastaObj);
 	}
@@ -370,6 +380,7 @@ sub header_by_alias {
 sub STORABLE_freeze {
     my ($self, $cloning) = @_;
 
+    carp "Calling out to FastaDB::STORABLE_freeze" if($main::debug);
     my $locs = $self->{locs};
 
     return '', $locs;
@@ -379,6 +390,7 @@ sub STORABLE_freeze {
 sub STORABLE_thaw {
     my ($self, $cloning, $serialized, $locs) = @_;
 
+    carp "Calling out to FastaDB::STORABLE_thaw" if($main::debug);
     $self->{locs} = $locs;
 
     my @args;
@@ -429,6 +441,8 @@ sub makeid {
     if($def =~ />(\S+)/){
 	push(@ids, $1);
     }
+
+    carp "Calling FastaDB::makeid from BioPerl Bio::DB::Fasta hook" if($main::debug);
 
     #get the MD5 ID if made by GI::split_db
     #otherwise just trim the standard name to get an alias

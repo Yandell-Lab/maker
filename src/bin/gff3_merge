@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -149,6 +146,7 @@ foreach  my $file (@files){
 	    next;
 	}
 	elsif($line =~ /^>/){
+	    last if($n_flag);
 	    $FH = $FAS;
 	}
 	elsif($line =~ /^[^\s\t\#\>\n]+\t([^\t]+)\t/){

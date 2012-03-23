@@ -856,7 +856,7 @@ sub annotate_stats {
 	foreach my $g (@{$annots->{$key}}){
 	    my $evidence = $g->{g_evidence};
 	    my $g_name = $g->{g_name};
-
+	    
 	    #load transcript stats
 	    my $AED = 1;
 	    my $eAED = 1;

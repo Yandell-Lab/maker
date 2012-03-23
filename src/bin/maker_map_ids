@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use strict;
 use warnings;
@@ -134,12 +131,13 @@ while (<$IN>) {
 	$phase, $attrb_text) = split /\t/, $_;
     
     # Here we explicity limit the mapping to genes and mRNAs
-    if ($type && $type =~ /^(gene|mRNA|pseudogene)$/) {
+    if ($type && ($type =~ /^(gene|pseudogene)$/ || $type =~ /(RNA|transcript)$/)) {
 	$type = 'gene' if($type eq 'pseudogene');
+	$type = 'mRNA' if($type =~ /RNA|transcript/);
 
 	my ($id) = $attrb_text =~ /ID=([^\;\n]*)/;
 	my ($name) = $attrb_text =~ /Name=([^\;\n]*)/;
-	my ($parent) = $attrb_text =~ /Parent=([^\;\n]*)/;
+	my ($parent) = $attrb_text =~ /Parent=([^\;\n]*)/;	
 	
 	if($type eq 'gene'){
 	    $ids{$seq}{$id}{ID}     = $id;
@@ -149,7 +147,7 @@ while (<$IN>) {
 	    $ids{$seq}{$id}{end}    = $end;
 	    $ids{$seq}{$id}{strand} = ($strand eq '+') ? 1 : -1;
 	    
-	    if($id =~ /^$test_g_id$/ || $name =~ /^$test_g_id$/){
+	    if($id =~ /^$test_g_id$/ || ($name && $name =~ /^$test_g_id$/)){
 		$gene_index{$id}{count} = $1;
 		$counter{gene} = $1 + 1 if($1 >= $counter{gene}); #make one above (next usable value)
 	    }
@@ -166,7 +164,7 @@ while (<$IN>) {
 
 	    $ids{$seq}{$parent}{mRNAs}{$id} = \%mRNA;
 	    
-	    if($id =~ /^$test_t_id$/ || $name =~ /^$test_t_id$/){
+	    if($id =~ /^$test_t_id$/ || ($name && $name =~ /^$test_t_id$/)){
 		if($iterate ne ''){
 		    if(!$gene_index{$parent}{iterate} ||
 		       ($iterate eq 'A' && $2 ge $gene_index{$parent}{iterate}) ||
@@ -185,7 +183,7 @@ while (<$IN>) {
 	}
 	
 	$exists{$id}++;
-	$exists{$name}++;
+	$exists{$name}++ if($name);
     }
 }
 

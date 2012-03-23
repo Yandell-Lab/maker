@@ -639,7 +639,8 @@ sub get_p_and_t_fastas {
 	
    my $t_seq  = $t_struct->{t_seq};
    my $p_seq  = $t_struct->{p_seq};
-   my $t_name = $t_struct->{t_name};
+   my $t_id   = $t_struct->{t_id} || $t_struct->{t_name};
+   my $t_name = ($t_id ne $t_struct->{t_name}) ? "Name:".$t_struct->{t_name} : '';
    my $t_off  = "offset:".$t_struct->{t_offset};
    my $AED    = "AED:".sprintf('%.2f', $t_struct->{AED});
    my $eAED   = "eAED:".sprintf('%.2f', $t_struct->{eAED});
@@ -648,7 +649,8 @@ sub get_p_and_t_fastas {
    #for ab initio annotations use the stats from the unmodified model 
    if($type ne 'maker'){
        my $p_struct = ($type eq 'abinit') ? $t_struct->{p_struct} : $t_struct;
-       $t_name = $p_struct->{t_name};
+       $t_name = '';
+       $t_id  = $p_struct->{t_id} || $p_struct->{t_name};
        $t_seq = $p_struct->{t_seq};
        $p_seq = $p_struct->{p_seq};
        $t_off = "offset:".$p_struct->{t_offset};
@@ -657,8 +659,8 @@ sub get_p_and_t_fastas {
        $QI = ($p_struct->{t_qi}) ? "QI:".$p_struct->{t_qi} : '';
    }
 
-   my $p_def = ">$t_name protein $AED $eAED $QI";
-   my $t_def = ">$t_name transcript $t_off $AED $eAED $QI";
+   my $p_def = ">$t_id $t_name protein $AED $eAED $QI";
+   my $t_def = ">$t_id $t_name transcript $t_off $AED $eAED $QI";
 
    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
@@ -827,6 +829,7 @@ sub split_db {
 
     my $lock;
     while(! $lock || ! $lock->maintain(30)){
+	carp "Calling File::NFSLock::new" if($main::debug);
 	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
     }
 
@@ -834,22 +837,27 @@ sub split_db {
     my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
     if(@t_db == $bins){ #use existing if right count
 	push(@db_files, @t_db);
+	carp "Calling File::NFSLock::unlock" if($main::debug);
 	$lock->unlock if($lock);
 	return \@db_files;
     }
     else{
+	carp "Calling File::Path::rmtree" if($main::debug);
 	File::Path::rmtree($f_dir);
     }
     
     #set up a new database
+    carp "Calling Iterator::Any::new" if($main::debug);
     my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
     my $count = 0;
+    carp "Calling Iterator::Any::nextDef" if($main::debug);
     while($fasta_iterator->nextDef){
 	$count++;
 	last if($count > $bins * 10 || $bins == 1);
     }
     die "ERROR: The fasta file $file appears to be empty.\n" if(! $count);
     my $max = ($count > 10) ? int($count / 10) : 1; #min seq per bin
+    carp "Calling Iterator::Any::new" if($main::debug);
     $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #rebuild
     
     if ($max < $bins){
@@ -861,6 +869,7 @@ sub split_db {
    
     #make needed output directories
     if(! -d $t_dir){
+	carp "Calling mkdir" if($main::debug);
 	mkdir($t_dir) or confess "ERROR: Could not create $t_dir\n-->$!";
     }
 
@@ -873,6 +882,7 @@ sub split_db {
 	    return \@db_files;
 	}
 	else{ #remove if there is an error
+	    carp "Calling File::Path::rmtree" if($main::debug);
 	    File::Path::rmtree($f_dir);
 	}
     }
@@ -890,9 +900,13 @@ sub split_db {
     my %alias;
     
     my $wflag = 1; #flag set so warnings gets printed only once 
+    carp "Calling Iterator::Any::nextFastaRef" if($main::debug);
     while (my $fasta = $fasta_iterator->nextFastaRef()) {
+	carp "Calling Fasta::getDef" if($main::debug);
 	my $def = Fasta::getDef($fasta);
+	carp "Calling Fasta::def2SeqID" if($main::debug);
 	my $seq_id = Fasta::def2SeqID($def);
+	carp "Calling Fasta::fasta2seqRef" if($main::debug);
 	my $seq_ref = Fasta::fasta2seqRef($fasta);
 	
 	#fix non standard peptides
@@ -926,6 +940,8 @@ sub split_db {
 		"want to reformat the fasta file with shorter IDs.\n".
 		"File_name:$file\n\n" if($wflag-- > 0);
 	    
+	    carp "Calling Digest::MD5::md5_base6" if($main::debug);
+	    carp "Calling uri_escape" if($main::debug);
 	    my $new_id = uri_escape(Digest::MD5::md5_base64($seq_id), "^A-Za-z0-9\-\_");
 	    
 	    die "ERROR: The id $seq_id is too long for BLAST, and I can't uniquely fix it\n"
@@ -936,6 +952,7 @@ sub split_db {
 	}
 	
 	#reformat fasta, just incase
+	carp "Calling Fasta::seq2fastaRef" if($main::debug);
 	my $fasta_ref = Fasta::seq2fastaRef($def, $seq_ref);
 	
 	#build part files
@@ -952,6 +969,7 @@ sub split_db {
     #move finished file directory into place
     #File::Copy::move cannot move directories
     confess "ERROR: logic problem. $f_dir already exists. Cannot replace.\n" if(-d $f_dir);
+    carp "Calling system" if($main::debug);
     system("mv $t_dir $f_dir");
     if ($? == -1) {
 	confess "ERROR: mv failed to execute: $!\n";
@@ -972,6 +990,7 @@ sub split_db {
 	confess "ERROR: Could not split db\n"; #not ok
     }
     
+    carp "Calling File::NFSLock::unlock" if($main::debug);
     $lock->unlock() if $lock;
     return \@db_files;
 }
@@ -1649,6 +1668,7 @@ sub build_fasta_index {
        push(@files, $file);
    }
 
+   carp "Calling FastaDB::new" if($main::debug);
    my $index = new FastaDB(\@files);
 
    return $index;

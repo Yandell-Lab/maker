@@ -1,3 +1,8 @@
+# -*- perl -*-#
+# This module is a rewrite of the File::NFSLock utility from CPAN
+# that was originally developed by Paul T Seamons and Rob B Brown 
+################################################################
+
 package File::NFSLock;
 
 use strict;
