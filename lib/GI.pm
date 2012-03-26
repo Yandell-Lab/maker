@@ -1403,10 +1403,10 @@ sub polish_exonerate {
 	my $L = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
 	my $offset  = $F - 1;
         my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
-	$o_file    .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';	
+	$o_file    .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';
 	my $o_tfile = "$o_file.$rank";
-	my $t_file  = $the_void."/".$safe_id.".for.$F-$L.$rank.fasta";	
-	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";	
+	my $t_file  = $the_void."/".$safe_id.".for.$F-$L.$rank.fasta";
+	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";
 
 	my $d_len = abs($L - $F) + 1;
 	my $t_len = (ref($hit)) ? $hit->length : undef;
@@ -1533,8 +1533,12 @@ sub polish_exonerate {
 	
 	#remove ambiguous alternate alignments when hints are given (only keep 1)
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
-	    my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
-	    @keepers = @perfect if(@perfect);
+	    my $coor = $1;
+	    if($coor =~ /$name\:(\d+)-(\d+)$/){
+		($B, $E) = ($1, $2);
+		my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
+		@keepers = @perfect if(@perfect);
+	    }
 	    @keepers = (sort {($b->frac_identical * $b->pAh) <=> ($a->frac_identical * $a->pAh)} @keepers)[0];
 	    $hit->{_exonerate_flipped} = $keepers[0]->{_was_flipped} if(@keepers && ref($hit));
 	}

@@ -99,18 +99,19 @@ sub remove_redundant_alt_splices {
 	my $depth      = shift;
 
         return [] unless defined($candidates);
+	return $candidates if(@{$candidates} == 1);
 
         my @sorted =  sort alt_sort @{$candidates};
 
         my $num = @sorted;
         my %dead;
         my @keepers;
-        for (my $i = 0; $i < @sorted -1 ;$i++){
+        for(my $i = 0; $i < @sorted; $i++){
                 print STDERR " ...processing $i of $num\n" unless($main::quiet);
                 next if ($dead{$i});
 
                 my $hit_i = $sorted[$i];
-                for (my $j = $i+1; $j < @sorted; $j++){
+                for(my $j = $i+1; $j < @sorted; $j++){
                         next if ($dead{$j});
                         my $hit_j = $sorted[$j];
 
@@ -139,13 +140,13 @@ sub get_best_alt_splices {
 
 	my $num = @sorted;
         my %dead;
-        for (my $i = 0; $i < @sorted -1 ;$i++){
+        for(my $i = 0; $i < @sorted;$i++){
 		print STDERR " ...processing $i of $num\n" unless($main::quiet);
 		my $hit_i = $sorted[$i];
 		if (defined($dead{$i})){
 			next;
 		}
-                for (my $j = $i+1; $j < @sorted; $j++){
+                for(my $j = $i+1; $j < @sorted; $j++){
 			my $hit_j = $sorted[$j];
 			if (defined($dead{$j})){
 				next;
@@ -157,7 +158,7 @@ sub get_best_alt_splices {
         }
 
         my @transcripts;
-        for (my $i = 0; $i < @sorted; $i++){
+        for(my $i = 0; $i < @sorted; $i++){
                 push(@transcripts, $sorted[$i])
                 unless defined($dead{$i});
         }
