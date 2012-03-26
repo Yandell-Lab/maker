@@ -47,7 +47,7 @@ use Proc::ProcessTable;
 use File::NFSLock;
 
 BEGIN{
-   $VERSION = '2.23';
+   $VERSION = '2.25';
 
    #what to do on ^C
    $SIG{'INT'}  = sub { &exit(2); };
