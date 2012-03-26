@@ -45,22 +45,30 @@ $LOCK = Storable::thaw($serial);
 die "ERROR: Could not retrieve lock" if(! $LOCK);
 
 $LOCK->_unlink_block(1);
+my $step = time();
 while(-f $LOCK->{lock_file}){
     if(getppid != $pid){
 	$LOCK->unlock(1) if($LOCK);
 	exit(0);
     }
-    if(! Proc::Signal::exists_proc_by_id($pid)){
-	$LOCK->unlock(1) if($LOCK);
-	exit(0);
-    }
-    if(my $p = Proc::Signal::get_proc_by_id($pid)){
-	if($p->state eq 'zombie'){
+
+    #these checks are actually kind of expensive (so don't do them often)
+    if(abs(time() - $step) > 60){
+	if(! Proc::Signal::exists_proc_by_id($pid)){
 	    $LOCK->unlock(1) if($LOCK);
 	    exit(0);
 	}
+	if(my $p = Proc::Signal::get_proc_by_id($pid)){
+	    if($p->state eq 'zombie'){
+		$LOCK->unlock(1) if($LOCK);
+		exit(0);
+	    }
+	}
+	$step = time();
     }
+
     exit (1) unless($LOCK->refresh);
+
     sleep $time;
 }
 

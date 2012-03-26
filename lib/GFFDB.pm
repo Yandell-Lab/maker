@@ -43,9 +43,10 @@ sub new {
 	    $self->{go_gffdb} = $CTL_OPT->{go_gffdb};
 
 	    my $lock;
-	    while(! $lock || ! $lock->maintain(30)){
-		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60);
-	    }	    
+	    if(! $self->{in_memory} && (! -f $dbfile || -f ".NFSLock.$dbfile.NFSLock")){
+		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)
+		    while(! $lock || ! $lock->maintain(30));
+	    }
 
 	    $self->initiate();
 	    return $self unless($self->{go_gffdb});
@@ -59,7 +60,7 @@ sub new {
 	    $self->add_model($CTL_OPT->{model_gff});
 	    $self->add_other($CTL_OPT->{other_gff});
 	    $self->do_indexing();
-	    $lock->unlock;
+	    $lock->unlock if($lock);
 	}
 	elsif(defined $in){
 	    $dbfile = $in;
@@ -70,11 +71,12 @@ sub new {
 	    $self->{go_gffdb} = 1;
 
 	    my $lock;
-	    while(! $lock || ! $lock->maintain(30)){
-		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60);
+	    if(! $self->{in_memory} && (! -f $dbfile || -f ".NFSLock.$dbfile.NFSLock")){
+		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)
+		    while(! $lock || ! $lock->maintain(30));
 	    }
 	    $self->initiate();
-	    $lock->unlock;
+	    $lock->unlock if($lock);
 	}
 
 	return $self;
@@ -90,12 +92,16 @@ sub initiate {
 	my $dbh;
 	if($self->{in_memory}){
 	    $dbh = DBI->connect("dbi:SQLite::memory:", "", "", {sqlite_use_immediate_transaction => 1});
+	    $dbh->sqlite_backup_from_file($dbfile) if(-e $dbfile);
 	    $self->{DBH} = $dbh;
 	}
-	else{
+	elsif(! -f $dbfile){
 	    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	}
+	else{
+	    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	}
 	
 	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -110,6 +116,17 @@ sub initiate {
        unlink($dbfile);
     }
  }
+#-------------------------------------------------------------------------------
+sub make_in_memory {
+    my $self = shift;
+    
+    return if($self->{in_memory});
+    $self->{in_memory} = 1;
+
+    my $dbh = DBI->connect("dbi:SQLite::memory:", "", "", {sqlite_use_immediate_transaction => 1});
+    $dbh->sqlite_backup_from_file($self->{dbfile});
+    $self->{DBH} = $dbh;
+}
 #-------------------------------------------------------------------------------
 sub do_indexing {
     my $self = shift;
@@ -506,8 +523,6 @@ sub phathits_on_chunk {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -657,8 +672,6 @@ sub lines_for_chunk {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
-        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -762,8 +775,6 @@ sub phathits_on_contig {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
-        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -833,8 +844,6 @@ sub get_existing_gene_names {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance      
-        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance     
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
