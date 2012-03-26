@@ -279,7 +279,8 @@ sub add_maker {
 	       }
 	       elsif($l->{source} =~ /^maker|^model_gff\:/i){
 		  next if (! $codes{model_pass});
-		  next if ($skip{model_maker});		  
+		  next if ($skip{model_maker});
+		  next unless($l->{type} =~ /^(gene|mRNA|exon|CDS)$/);
 		  $table = 'model_maker';
 	       }
 	       elsif($l->{source} =~/^\.$/){

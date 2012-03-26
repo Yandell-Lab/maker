@@ -639,8 +639,7 @@ sub get_p_and_t_fastas {
 	
    my $t_seq  = $t_struct->{t_seq};
    my $p_seq  = $t_struct->{p_seq};
-   my $t_id   = $t_struct->{t_id} || $t_struct->{t_name};
-   my $t_name = ($t_id ne $t_struct->{t_name}) ? "Name:".$t_struct->{t_name} : '';
+   my $t_name = $t_struct->{t_name} || $t_struct->{t_id};
    my $t_off  = "offset:".$t_struct->{t_offset};
    my $AED    = "AED:".sprintf('%.2f', $t_struct->{AED});
    my $eAED   = "eAED:".sprintf('%.2f', $t_struct->{eAED});
@@ -649,8 +648,7 @@ sub get_p_and_t_fastas {
    #for ab initio annotations use the stats from the unmodified model 
    if($type ne 'maker'){
        my $p_struct = ($type eq 'abinit') ? $t_struct->{p_struct} : $t_struct;
-       $t_name = '';
-       $t_id  = $p_struct->{t_id} || $p_struct->{t_name};
+       $t_name = $p_struct->{t_name} || $p_struct->{t_id};
        $t_seq = $p_struct->{t_seq};
        $p_seq = $p_struct->{p_seq};
        $t_off = "offset:".$p_struct->{t_offset};
@@ -659,8 +657,8 @@ sub get_p_and_t_fastas {
        $QI = ($p_struct->{t_qi}) ? "QI:".$p_struct->{t_qi} : '';
    }
 
-   my $p_def = ">$t_id $t_name protein $AED $eAED $QI";
-   my $t_def = ">$t_id $t_name transcript $t_off $AED $eAED $QI";
+   my $p_def = ">$t_name protein $AED $eAED $QI";
+   my $t_def = ">$t_name transcript $t_off $AED $eAED $QI";
 
    my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
    my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
