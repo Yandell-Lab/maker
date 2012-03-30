@@ -236,7 +236,7 @@ if($main::debug){
 
 	my $ver;
 	eval "\$ver = \$${name}::VERSION";
-	$ver //= 'UNKNOWN';
+	$ver = 'UNKNOWN' if(!defined($ver));
 	$ver = 'UNKNOWN' if($ver =~ /^\-1\,/);
 
 	print STDERR "\t$ver\t$name\t$INC{$key}\n"
