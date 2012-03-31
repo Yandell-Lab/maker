@@ -3046,6 +3046,7 @@ sub set_defaults {
       $CTL_OPT{'AED_threshold'} = 1;
       $CTL_OPT{'map_forward'} = 0;
       $CTL_OPT{'est_forward'} = 0; #only used to map old annotations to new assembly
+      $CTL_OPT{'correct_est_fusion'} = 0;      
       $CTL_OPT{'always_complete'} = 0;
       $CTL_OPT{'pred_flank'} = 200;
       $CTL_OPT{'pred_stats'} = 0;
@@ -4232,6 +4233,7 @@ sub generate_control_files {
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
+       print OUT "correct_est_fusion=$O{correct_est_fusion} #limits use of ESTs in annotation to avoid fusion genes\n";
        print OUT "\n";
        print OUT "tries=$O{tries} #number of times to try a contig if there is a failure for some reason\n";
        print OUT "clean_try=$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";

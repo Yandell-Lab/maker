@@ -229,16 +229,19 @@ sub get_transcript_qi {
 
         my $gomiph = $set->{gomiph};
         my $ests   = $set->{ests};
+        my $fusion = $set->{fusion};
 	my $snap_abinits = $set->{all_preds};
 	my @bag;
 	push(@bag, @{$gomiph}) if defined($gomiph);
 	push(@bag, @{$ests})   if defined($ests);
 
 	my $pol_est_hits = maker::auto_annotator::get_selected_types($ests, 'est2genome', 'est_gff');
+	my $pol_fus_hits = maker::auto_annotator::get_selected_types($fusion, 'est2genome', 'est_gff');
 	my $pol_pro_hits =  maker::auto_annotator::get_selected_types($gomiph, 'protein2genome');
 
 	my @good_splicers;
 	push(@good_splicers, @{$pol_est_hits});
+	push(@good_splicers, @{$pol_fus_hits});
 	push(@good_splicers, @{$pol_pro_hits});	
 
 	my $qi = '';

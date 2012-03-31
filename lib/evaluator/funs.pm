@@ -38,6 +38,7 @@ sub prepare_box_in_maker {
 	my @bag;
 	push(@bag, @{$set->{gomiph}}) if defined($set->{gomiph});
         push(@bag, @{$set->{ests}})   if defined($set->{ests});
+        push(@bag, @{$set->{fusion}}) if defined($set->{fusion});
 
         my $pol_est_hits = maker::auto_annotator::get_selected_type(\@bag, 'est2genome', 'est_gff');
         my $pol_pro_hits = maker::auto_annotator::get_selected_type(\@bag, 'protein2genome');
@@ -476,14 +477,12 @@ sub get_quality_seq {
 	my $exonerate = $box->{exonerate};
 	my $blastx = $box->{blastx};
 
-	my $quality_seq = evaluator::quality_seq::prep(
-				$t,
-				$ests,
-				$exonerate,
-				$blastx,
-				$abinits,
-				$seq,
-			);
+	my $quality_seq = evaluator::quality_seq::prep($t,
+						       $ests,
+						       $exonerate,
+						       $blastx,
+						       $abinits,
+						       $seq,);
 
 	return $quality_seq;
 }

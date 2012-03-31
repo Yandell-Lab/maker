@@ -81,6 +81,7 @@ sub process_hints {
     my $preds  = $set->{preds}     || [];
     my $all_p  = $set->{all_preds} || [];
     my $ests   = $set->{ests}      || [];
+    my $fusion = $set->{fusion}    || [];
     my @t_data;
     
     push(@t_data, @{$gomiph});
@@ -142,7 +143,8 @@ sub process_hints {
     }
 
     #use $mia to infer alt splicing (keep all structure from mia)
-    if($mia){
+    my $fusion_skip = grep {$mia->algorithm eq $_->algorithm} @$fusion if($fusion);
+    if($mia && !$fusion_skip){
 	my @hsps = sort {$a->start('query') <=> $b->start('query')} $mia->hsps;
 	for(my $i = 0; $i < @hsps - 1; $i++){
 	    my $hsp1 = $hsps[$i];

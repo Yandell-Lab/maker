@@ -88,13 +88,14 @@ sub evaluate_maker_annotations {
 
 	    my $pol_p   = maker::auto_annotator::get_selected_types($evi->{gomiph}, 'protein2genome');
 	    my $pol_e   = maker::auto_annotator::get_selected_types($evi->{ests}, 'est2genome', 'est_gff');
+	    my $pol_f   = maker::auto_annotator::get_selected_types($evi->{fusion}, 'est2genome', 'est_gff');
 	    my $blastx  = maker::auto_annotator::get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
 	    my $tblastx = maker::auto_annotator::get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
 	    my $ab      = $evi->{all_preds};
 
 	    push(@t_cluster, $hit);
 	    push(@pol_p_hits, @$pol_p);
-	    push(@pol_e_hits, @$pol_e);
+	    push(@pol_e_hits, @$pol_e, @$pol_f);
 	    push(@blastx_hits, @$blastx);
 	    push(@tblastx_hits, @$tblastx);
 	    push(@ab_inits, @$ab);

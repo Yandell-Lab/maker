@@ -55,6 +55,7 @@ my @ctl_to_log = ('maker_gff',
 		  'keep_preds',
 		  'map_forward',
 		  'est_forward',
+		  'correct_est_fusion',
 		  'alt_splice',
 		  'always_complete',
 		  'alt_peptide',
@@ -370,6 +371,12 @@ sub _load_old_log {
 
 		#est_forward was always 0 before and not logged (is is also sometimes hidden)
 		if($key eq 'est_forward'){
+		    $ctl_val = 0 if($ctl_val eq '');
+		    $log_val = 0 if($log_val eq '');
+		}
+
+		#correct_est_fusion was always 0 before and not logged
+		if($key eq 'correct_est_fusion'){
 		    $ctl_val = 0 if($ctl_val eq '');
 		    $log_val = 0 if($log_val eq '');
 		}

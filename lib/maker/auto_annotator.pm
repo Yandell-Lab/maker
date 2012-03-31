@@ -48,6 +48,7 @@ sub prep_hits {
 	my $pred_flank       = shift;
 	my $organism_type    = shift;
 	my $est_forward      = shift;
+	my $correct_est_fusion = shift;
 
 	#---build clusters for basic evidence
 
@@ -55,39 +56,75 @@ sub prep_hits {
 	# important for later culstering, as hits in
 	# first arg more likey to make in into to cluster
 	# than second arg, etc
-	my $c_bag = combine($prot_hits,
-			    $est_hits,
-			    $altest_hits
-			   );
+	my $c_bag;
+	my $e_bag;
+	if($correct_est_fusion){
+	    $c_bag = $prot_hits;
+	    $e_bag = combine($est_hits,
+			     $altest_hits);
+	}
+	else{
+	    $c_bag = combine($prot_hits,
+			     $est_hits,
+			     $altest_hits);
+	}
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
 	my $p_clusters = cluster::clean_and_cluster(50, $p, $pred_flank, 1);
 	my $m_clusters = cluster::clean_and_cluster(50, $m, $pred_flank, 1);
 	
-	#this method will cause clusters that are near each other and are connected by an orf to merge.
-	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
-	$p_clusters = join_clusters_around_orf($p_clusters, $seq);
-	$m_clusters = join_clusters_around_orf($m_clusters, $seq);
+	my $e_cluster = [];
+	if($correct_est_fusion){
+	    $e_cluster = cluster::clean_and_cluster(50, $e_bag, $pred_flank, 1);
+	}
+	else{
+	    #this method will cause clusters that are near each other and are connected by an orf to merge.
+	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
+	    $p_clusters = join_clusters_around_orf($p_clusters, $seq);
+	    $m_clusters = join_clusters_around_orf($m_clusters, $seq);
+	}
 
 	my $careful_clusters = [];
 	push(@{$careful_clusters}, @{$p_clusters}, @{$m_clusters});
 
-	#===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
-	# don't use unpliced single exon ESTs-- may be genomic contamination
-	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
-	    $careful_clusters = purge_single_exon_hits_in_cluster($careful_clusters);
+	if($correct_est_fusion){
+	    #==purge ESTs in separate group from main evidence cluster
+	    # don't use unpliced single exon ESTs-- may be genomic contamination
+	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+		$e_cluster = purge_single_exon_hits_in_cluster($e_cluster);
+	    }
+	    # throw out the exonerate est hits with weird splice sites
+	    if(!$est_forward){
+		$e_cluster = throw_out_bad_splicers_in_cluster($e_cluster, $seq);
+	    }
+	    #throw out short ESTs
+	    if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+		$e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
+	    }
 	}
-	# throw out the exonerate est hits with weird splice sites
-	if(!$est_forward){
-	    $careful_clusters = throw_out_bad_splicers_in_cluster($careful_clusters, $seq);
-	}
-	#throw out short ESTs
-	if($single_exon == 1 || $organism_type eq 'prokaryotic') {
-	    $careful_clusters = purge_short_ESTs_in_clusters($careful_clusters, $single_length);
+	else{
+	    #===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	    # don't use unpliced single exon ESTs-- may be genomic contamination
+	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+		$careful_clusters = purge_single_exon_hits_in_cluster($careful_clusters);
+	    }
+	    # throw out the exonerate est hits with weird splice sites
+	    if(!$est_forward){
+		$careful_clusters = throw_out_bad_splicers_in_cluster($careful_clusters, $seq);
+	    }
+	    #throw out short ESTs
+	    if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+		$careful_clusters = purge_short_ESTs_in_clusters($careful_clusters, $single_length);
+	    }
 	}
 
-	#===now start preparing data for different types of input
+	#coplapse EST clusters for careful merge back into evidence sets for scoring
+	undef $e_bag;
+	foreach my $c (@$e_cluster){
+	    push(@$e_bag, @$c);
+	}
 
+	#===now start preparing data for different types of input	    
 	#--model_gff3 input
 	# identify the models that fall within and between basic clusters
 	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models,
@@ -105,7 +142,17 @@ sub prep_hits {
 	merge_into_cluster($hit_one, $model_clusters, $c_index);
 	merge_into_cluster($hit_mult, $model_clusters, $c_index); #these have an internal tag
 
+
 	#==prep model_gff data
+
+	if($correct_est_fusion){
+	    #add ESTs that were separated for fusion avoidance
+	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
+								   $model_clusters);
+	    merge_into_cluster($hit_one, $model_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $model_clusters, $c_index);
+	}
+
 	my @all_data;
 	my $c_id = 0;
 	#my @gf_data;
@@ -132,7 +179,17 @@ sub prep_hits {
 	merge_into_cluster($hit_one, $pred_clusters, $c_index);
 	merge_into_cluster($hit_mult, $pred_clusters, $c_index); #these have an internal tag
 
+
 	#==prep abinit data
+
+	if($correct_est_fusion){
+	    #add ESTs that were separated for fusion avoidance
+	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
+								       $pred_clusters);
+	    merge_into_cluster($hit_one, $pred_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $pred_clusters, $c_index);
+	}
+
 	#my @pr_data;
 	foreach my $c (@{$pred_clusters}){
 	    my $pr = prep_pred_data($c, $c_id, $seq);
@@ -148,11 +205,13 @@ sub prep_hits {
 	    $p_clusters = cluster::shadow_cluster(0, [@$p,@$p_clusters], $pred_flank);
 	    $m_clusters = cluster::shadow_cluster(0, [@$m,@$m_clusters], $pred_flank);
 
-	    #this method will cause clusters that are near each other and are connected by an orf to merge.
-	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
-	    $p_clusters = join_clusters_around_orf($p_clusters, $seq);
-	    $m_clusters = join_clusters_around_orf($m_clusters, $seq);
-	    
+	    if(!$correct_est_fusion){
+		#this method will cause clusters that are near each other and are connected by an orf to merge.
+		#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
+		$p_clusters = join_clusters_around_orf($p_clusters, $seq);
+		$m_clusters = join_clusters_around_orf($m_clusters, $seq);
+	    }
+
 	    push(@{$hint_clusters}, @{$p_clusters}, @{$m_clusters});
 	}
 	else{
@@ -168,6 +227,15 @@ sub prep_hits {
 	merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
 
 	#==prep hint data
+
+	if($correct_est_fusion){
+	    #add ESTs that were separated for fusion avoidance
+	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
+								       $hint_clusters);
+	    merge_into_cluster($hit_one, $hint_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $hint_clusters, $c_index);
+	}
+
 	#my @bx_data;
 	foreach my $c (@{$hint_clusters}){
 	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
@@ -182,6 +250,12 @@ sub prep_hits {
 	    $f->{_index}{est} = $index++;
 	}
 
+	#add index value to alt-ESTs (corresponds to order in array)
+	$index = 0;
+	foreach my $f (@$altest_hits){
+	    $f->{_index}{altest} = $index++;
+	}
+
 	#add index value to proteins (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$prot_hits){
@@ -194,10 +268,24 @@ sub prep_hits {
 	    $f->{_index}{pred} = $index++;
 	}
 
+	#add index value to models (corresponds to order in array)
+	$index = 0;
+	foreach my $f (@$models){
+	    $f->{_index}{model} = $index++;
+	}
+
 	#add index value to clusters (corresponds to order in array)
 	$index = 0;
 	foreach my $d (@all_data){
 	    $d->{index} = $index++;
+	}
+
+	#move ESTs to fusion category for fusion correction
+	if($correct_est_fusion){
+	    foreach my $d (@all_data){
+		$d->{fusion} = $d->{ests};
+		$d->{ests} = [];
+	    }
 	}
 
 	return (\@all_data);
@@ -1393,7 +1481,7 @@ sub run_it{
     my $q_id = Fasta::def2SeqID($def);
     my @transcripts;
     foreach my $set (@{$data}) {
-	my $ests     = $set->{ests};
+	my $ests     = ($CTL_OPT->{correct_est_fusion}) ? $set->{fusion} : $set->{ests};
 	my $model    = $set->{model};
 	my $gomiph   = $set->{gomiph};
 	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
@@ -1929,12 +2017,14 @@ sub load_transcript_stats {
 
 	my $pol_p_hits   = get_selected_types($evi->{gomiph}, 'protein2genome');
 	my $pol_e_hits   = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
+	my $pol_f_hits   = get_selected_types($evi->{fusion}, 'est2genome', 'est_gff', 'blastn');
 	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
 	my $tblastx_hits = get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
 	my $abinits      = $evi->{all_preds};
 
 	my @bag = (@$pol_p_hits,
 		   @$pol_e_hits,
+		   @$pol_f_hits,
 		   @$blastx_hits,
 		   @$tblastx_hits
 		  );

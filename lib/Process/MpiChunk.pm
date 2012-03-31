@@ -3237,7 +3237,8 @@ sub _go {
 							    $CTL_OPT{single_length},
 							    $CTL_OPT{pred_flank},
 							    $CTL_OPT{organism_type},
-							    $CTL_OPT{est_forward}
+							    $CTL_OPT{est_forward},
+							    $CTL_OPT{correct_est_fusion}
 							    );
 	    #-------------------------CODE
 	 
