@@ -354,11 +354,22 @@ sub join_f {
 	    #print "LLLLLLLLLLLLLL:$n\n";
 	    #die;
 	    
+	    #sorted for hit orientation
+	    @anno_hsps = ($g->{strand} == 1) ?
+		sort {$a->{start} <=> $b->{start}} @anno_hsps :
+		sort {$b->{end} <=> $a->{end}} @anno_hsps;
+
+	    #correct for altered number and order of HSPs
+	    my $pos = 1;
 	    foreach my $hsp (@anno_hsps){
+		$hsp->{HIT_START} = $pos;
+		$hsp->{HIT_END} = ($pos + $hsp->length('query')) - 1;
+		$pos += $hsp->length('query');
+
 		my $score = $hsp->score();
 		$score = 0 if( ! $score || $score eq '.' || $score eq 'NA');
 		$new_total_score += $score;
-		$length += $hsp->length();
+		$length += $hsp->length('query');
 	    }
 	}
 	else{
@@ -405,11 +416,11 @@ sub join_f {
 	return $new_f;
 }
 #------------------------------------------------------------------------
+#clone for exact match on query
 sub clone_hsp{
     my $hsp = shift;
 
     my @args;
-
     push(@args, '-query_start');
     push(@args, $hsp->start('query'));
 
@@ -420,22 +431,22 @@ sub clone_hsp{
     push(@args, $hsp->score);
 
     push(@args, '-homology_seq');
-    push(@args, $hsp->homology_string);
+    push(@args, '|'x($hsp->length('query')));  #clone for exact match on query
 
     push(@args, '-hit_start');
-    push(@args, $hsp->start('hit'));
+    push(@args, $hsp->start('hit')); #this is a placeholder and must be fixed
 
     push(@args, '-hit_seq');
-    push(@args, $hsp->hit_string);
+    push(@args, $hsp->query_string); #clone for exact match on query
 
     push(@args, '-hsp_length');
-    push(@args, $hsp->length('total'));
+    push(@args, $hsp->length('query'));  #clone for exact match on query
 
     push(@args, '-identical');
-    push(@args, $hsp->{IDENTICAL});
+    push(@args, $hsp->length('query'));  #clone for exact match on query
 
     push(@args, '-hit_length');
-    push(@args, $hsp->length('hit'));
+    push(@args, $hsp->length('query'));  #clone for exact match on query
 
     push(@args, '-query_name');
     push(@args, $hsp->{QUERY_NAME});
@@ -459,21 +470,21 @@ sub clone_hsp{
     push(@args, $hsp->end('query'));
 
     push(@args, '-conserved');
-    push(@args, $hsp->{CONSERVED});
+    push(@args, $hsp->length('query')); #clone for exact match on query
 
     push(@args, '-hit_name');
     push(@args, $hsp->name);
 
     push(@args, '-hit_end');
-    push(@args, $hsp->end('hit'));
+    push(@args, $hsp->end('hit')); #just a placeholder and must be fixed
 
-    push(@args, '-query_gaps');
-    push(@args, $hsp->{QUERY_GAPS});
+    push(@args, '-query_gaps'); #clone for exact match on query
+    push(@args, 0);
 
-    push(@args, '-hit_gaps');
-    push(@args, $hsp->{HIT_GAPS});
+    push(@args, '-hit_gaps'); #clone for exact match on query
+    push(@args, 0);
 
-    my $REF = ref($hsp);
+    my $REF = ref($hsp); #the objuct the hsp came from
     my $clone = new $REF(@args);
 
     $clone->{queryName} = $hsp->{queryName};
@@ -482,72 +493,143 @@ sub clone_hsp{
     #------------------------------------------------
 
     $clone->{_strand_hack}->{query} = $hsp->{_strand_hack}->{query};
-    $clone->{_strand_hack}->{hit}   = $hsp->{_strand_hack}->{hit};
+    $clone->{_strand_hack}->{hit}   = 1; #clone for exact match on query
 
     return $clone;
 }
 #------------------------------------------------------------------------
 sub merge_hsp {
-	my $ext   = shift;
-	my $g_hsp = shift;
-	my $q_seq = shift;
-	my $type  = shift;
-
-	my $offset;
-	my $class;
-	if ($type == 5){
-		$offset = $ext->{five_j};	
-		$class  = $ext->{f_j_class};
+    my $ext   = shift;
+    my $g_hsp = shift;
+    my $q_seq = shift;
+    my $type  = shift;
+    
+    my $offset;
+    my $class;
+    if ($type == 5){
+	$offset = $ext->{five_j};	
+	$class  = $ext->{f_j_class};
+    }
+    else {
+	$offset = $ext->{three_j};
+	$class  = $ext->{t_j_class};
+    }
+    
+    my $sorted_ext = PhatHit_utils::sort_hits($ext->{f}, 'query');
+    my $ext_hsp = $sorted_ext->[$offset];
+    
+    my $start = $g_hsp->start('query');
+    my $end = $g_hsp->end('query');
+    if($g_hsp->start == $ext_hsp->start && $g_hsp->end == $ext_hsp->end){
+	return $g_hsp;
+    }
+    elsif ($type == 5 && ($class eq 'A' || $class eq 'Z' || $class eq '1')){
+	if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
+	    $start = $ext_hsp->start('query');
+	}
+	elsif($g_hsp->strand('query') == - 1 && $ext_hsp->strand('query') == -1) {
+	    $end = $ext_hsp->end('query');
 	}
 	else {
-		$offset = $ext->{three_j};
-		$class  = $ext->{t_j_class};
+	    die "dead in auto_annotator::merge_hsp\n";
 	}
-
-	my $sorted_ext = PhatHit_utils::sort_hits($ext->{f}, 'query');
-	my $ext_hsp = $sorted_ext->[$offset];
-
-	$g_hsp = clone_hsp($g_hsp);
-
-	if($g_hsp->start == $ext_hsp->start && $g_hsp->end == $ext_hsp->end){
-		return $g_hsp;
+    }
+    elsif ($type == 3 && ($class eq 'a' || $class eq 'z' || $class eq '1')){
+	if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
+	    $end = $ext_hsp->end;
 	}
-	elsif ($type == 5 && ($class eq 'A' || $class eq 'Z' || $class eq '1')){
-		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
-			$g_hsp->query->location->start($ext_hsp->start);
-		}
-		elsif($g_hsp->strand('query') == - 1 && $ext_hsp->strand('query') == -1) {
-			$g_hsp->query->location->end($ext_hsp->end);
-		}
-		else {
-			die "dead in auto_annotator::merge_hsp\n";
-		}
+	elsif ($g_hsp->strand('query') == - 1 && $ext_hsp->strand('query') == -1) {
+	    $g_hsp->query->location->start($ext_hsp->start);
+	    $start = $ext_hsp->end;
 	}
-        elsif ($type == 3 && ($class eq 'a' || $class eq 'z' || $class eq '1')){
-		if ($g_hsp->strand('query') == 1 && $ext_hsp->strand('query') == 1){
-                        $g_hsp->query->location->end($ext_hsp->end);
-                }
-                elsif ($g_hsp->strand('query') == - 1 && $ext_hsp->strand('query') == -1) {
-                        $g_hsp->query->location->start($ext_hsp->start);
-                }
-		else {
-			die "dead in auto_annotator::merge_hsp\n";
-		}
-        }
+	else {
+	    die "dead in auto_annotator::merge_hsp\n";
+	}
+    }
+    
+    my $exon = {'b'      => $start,
+		'e'      => $end,
+		'strand' => $g_hsp->strand('query')};
 
-	my $exon = {'b'      => $g_hsp->nB('query'),
-	            'e'      => $g_hsp->nE('query') ,
-		    'strand' => $g_hsp->strand('query'),
-		   };
+    my $new_exon_seq = Widget::snap::get_exon_seq($exon, $q_seq);
+    my $length = length($new_exon_seq);
 
-	my $new_exon_seq = Widget::snap::get_exon_seq($exon, $q_seq);
+    my @args;
+    push(@args, '-query_start');
+    push(@args, $start);
 
-	$g_hsp->{_query_string}    = $new_exon_seq;
-	$g_hsp->{_hit_string}      = $new_exon_seq;
-	$g_hsp->{_homology_string} = $new_exon_seq;
+    push(@args, '-query_seq');
+    push(@args, $new_exon_seq);
 
-	$g_hsp->{'_sequenceschanged'} = 1;
-	return $g_hsp;
+    push(@args, '-score');
+    push(@args, $length);
+
+    push(@args, '-homology_seq');
+    push(@args, '|'x($length));  #clone for exact match on query
+
+    push(@args, '-hit_start');
+    push(@args, $g_hsp->start('hit')); #this is a placeholder and must be fixed
+
+    push(@args, '-hit_seq');
+    push(@args, $new_exon_seq); #clone for exact match on query
+
+    push(@args, '-hsp_length');
+    push(@args, $length);  #clone for exact match on query
+
+    push(@args, '-identical');
+    push(@args, $length);  #clone for exact match on query
+
+    push(@args, '-hit_length');
+    push(@args, $length);  #clone for exact match on query
+
+    push(@args, '-query_name');
+    push(@args, $g_hsp->{QUERY_NAME});
+
+    push(@args, '-algorithm');
+    push(@args, $g_hsp->algorithm);
+
+    push(@args, '-bits');
+    push(@args, $g_hsp->bits);
+
+    push(@args, '-evalue');
+    push(@args, $g_hsp->evalue);
+
+    push(@args, '-pvalue');
+    push(@args, $g_hsp->pvalue);
+
+    push(@args, '-query_length');
+    push(@args, $length);
+
+    push(@args, '-query_end');
+    push(@args, $end);
+
+    push(@args, '-conserved');
+    push(@args, $length); #clone for exact match on query
+
+    push(@args, '-hit_name');
+    push(@args, $g_hsp->name);
+
+    push(@args, '-hit_end');
+    push(@args, $g_hsp->end('hit')); #just a placeholder and must be fixed
+
+    push(@args, '-query_gaps'); #clone for exact match on query
+    push(@args, 0);
+
+    push(@args, '-hit_gaps'); #clone for exact match on query
+    push(@args, 0);
+
+    my $REF = ref($g_hsp); #the object the hsp came from
+    my $clone = new $REF(@args);
+
+    $clone->{queryName} = $g_hsp->{queryName};
+    #-------------------------------------------------
+    # setting strand because bioperl is all messed up!
+    #------------------------------------------------
+
+    $clone->{_strand_hack}->{query} = $g_hsp->{_strand_hack}->{query};
+    $clone->{_strand_hack}->{hit}   = 1; #clone for exact match on query
+
+    return $clone;
 }
 #------------------------------------------------------------------------
 1;

@@ -619,19 +619,9 @@ sub _clip {
     my $tB = ($trim5) ? $coorB : $hit->nB('query');
     my $tE = ($trim3) ? $coorE : $hit->nE('query');
 
-    my $ref = ref($hit);
-    my $hsp_ref = ref($hit->{_hsps}->[0]);
-
-    my $new_hit = new $ref('-name'         => $hit->name,
-			   '-description'  => $hit->description,
-			   '-algorithm'    => $hit->algorithm,
-			   '-length'       => $hit->length,
-			   '-score'        => $hit->score,
-			   '-bits'         => $hit->bits,
-			   '-significance' => $hit->significance
-			   );
-
     my $hit_start = 1;
+    my $hit_length = 0;
+    my @new_hsps;
     ($tB, $tE) = ($tE, $tB) if($tB > $tE); #sort by value
     foreach my $hsp ($hit->hsps){
 	my $B = $hsp->start();
@@ -693,7 +683,7 @@ sub _clip {
 	push(@args, $length);
 	
 	push(@args, '-identical');
-	push(@args, $hsp->identical);
+	push(@args, $length);
 	    
 	push(@args, '-hit_length');
 	push(@args, $length);
@@ -733,7 +723,8 @@ sub _clip {
 	
 	push(@args, '-hit_gaps');
 	push(@args, 0);
-	
+
+	my $hsp_ref = ref($hsp);	
 	my $new_hsp = new $hsp_ref(@args);
 	$new_hsp->queryName($hsp->query_name);
 	#-------------------------------------------------
@@ -748,12 +739,27 @@ sub _clip {
 	    $new_hsp->{_strand_hack}->{hit}   =  1;
 	}
 	$new_hsp->{_label} = $hsp->{_label} if($hsp->{_label});
-
-	$new_hit->add_hsp($new_hsp);
 	
 	$hit_start = $hit_start + $length;
+	$hit_length += $length;
+
+	push(@new_hsps, $new_hsp);
     }
-    
+
+    my $ref = ref($hit);
+    my $new_hit = new $ref('-name'         => $hit->name,
+			   '-description'  => $hit->description,
+			   '-algorithm'    => $hit->algorithm,
+			   '-length'       => $hit_length,
+			   '-score'        => $hit_length,
+			   '-bits'         => $hit->bits,
+			   '-significance' => $hit->significance
+			   );    
+
+    foreach my $hsp (@new_hsps){
+	$new_hit->add_hsp($hsp);
+    }
+
     confess "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
 	if($hit_start == 1 || $new_hit->num_hsps == 0); #should change with each HSP
 

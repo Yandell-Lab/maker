@@ -1210,6 +1210,25 @@ sub best_annotations {
 	push(@m_keepers, @$m_list);
     }
 
+    #check for UTR overlap and trim
+    if($CTL_OPT->{correct_est_fusion}){
+	@p_keepers = sort {$a->{g_start} <=>$b->{g_start}} @p_keepers;
+	for (my $i = 0; $i < @p_keepers -1; $i++){
+	    my $j = $i+1;
+	    my $g1 = $p_keepers[$i];
+	    my $g2 = $p_keepers[$j];
+	    _trim_UTR_if_overlap($g1, $g2);
+	}
+
+	@m_keepers = sort {$a->{g_start} <=>$b->{g_start}} @m_keepers;
+	for (my $i = 0; $i < @m_keepers -1; $i++){
+	    my $j = $i+1;
+	    my $g1 = $m_keepers[$i];
+	    my $g2 = $m_keepers[$j];
+	    _trim_UTR_if_overlap($g1, $g2);
+	}
+    }
+
     #remove CDS competition on opposite strand
     my $final;
     if($CTL_OPT->{organism_type} eq 'eukaryotic'){
@@ -1220,6 +1239,65 @@ sub best_annotations {
     }
 
     return $final;
+}
+#------------------------------------------------------------------------
+sub _trim_UTR_if_overlap {
+    my $g1 = shift;
+    my $g2 = shift;
+
+    ($g1, $g2) = ($g2, $g1) if($g1->{g_start} > $g2->{g_start});
+
+    return unless(compare::compare($g1->{g_start}, $g1->{g_end}, $g2->{g_start}, $g2->{g_end}));
+
+    my $E;
+    foreach my $t (@{$g1->{t_structs}}){
+	last if($g1->{algorithm} =~ /^model_gff/);
+        my $h = $t->{hit};
+
+	if($h->strand('query') == 1){
+	    $h = PhatHit_utils::clip_3_utr($h);
+	    $t->{t_seq} = get_transcript_seq($h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
+	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
+	}
+	elsif($h->strand('query') == -1){
+	    $h = PhatHit_utils::clip_5_utr($h);
+	    $t->{t_seq} = get_transcript_seq($h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    $t->{t_qi} =~ s/^\d+/0/;
+	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
+	}
+	else{
+	    confess "ERROR: Strand is neither plus or minus\n";
+	}
+    }    
+    $g1->{g_end} = $E;
+
+    my $B;
+    foreach my $t (@{$g2->{t_structs}}){
+	last if($g1->{algorithm} =~ /^model_gff/);
+        my $h = $t->{hit};
+
+	if($h->strand('query') == 1){
+	    $h = PhatHit_utils::clip_5_utr($h);
+	    $t->{t_seq} = get_transcript_seq($h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    $t->{t_qi} =~ s/^\d+/0/;
+	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	}
+	elsif($h->strand('query') == -1){
+	    $h = PhatHit_utils::clip_3_utr($h);
+	    $t->{t_seq} = get_transcript_seq($h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
+	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	}
+	else{
+	    confess "ERROR: Strand is neither plus or minus\n";
+	}
+    }
+    $g2->{g_start} = $B;
 }
 #------------------------------------------------------------------------
 #filter for CDS competition on opposite strands
@@ -1406,10 +1484,19 @@ sub _best{
 	my $g_B = $g->{g_start};
 	my $g_E = $g->{g_end};
 
+	#adjust to check for CDS overlap only
+	if($CTL_OPT->{correct_est_fusion}){
+	    ($g_B, $g_E) = _g_coding_start_end($g);
+	}
+
 	my $bad;
 	foreach my $k (@keepers){
 	    my $k_B = $k->{g_start};
 	    my $k_E = $k->{g_end};
+
+	    if($CTL_OPT->{correct_est_fusion}){
+		($k_B, $k_E) = _g_coding_start_end($k);
+	    }
 
 	    my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
 	    if($class ne '0' && $CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
@@ -1429,6 +1516,27 @@ sub _best{
     }
 
     return \@keepers;
+}
+#------------------------------------------------------------------------
+sub _g_coding_start_end {
+    my $g = shift;
+
+    return ($g->{g_cstart}, $g->{g_cend}) if($g->{g_cstart} && $g->{g_cend});
+
+    my $B;
+    my $E;
+    foreach my $t (@{$g->{t_structs}}){
+	my $h = $t->{hit};
+	my ($cB, $cE) = ($h->{_TSTART}{query}, $h->{_TEND}{query});
+	($cB, $cE) = ($cE, $cB) if($cB > $cE);
+
+	$B = $cB if(!$B || $cB < $B);
+	$E = $cE if(!$E || $cE > $E);
+    }
+
+    ($g->{g_cstart}, $g->{g_cend}) = ($B. $E);
+
+    return ($B. $E);
 }
 #------------------------------------------------------------------------
 #sort by combined abinit-evidence AED score
