@@ -1636,7 +1636,8 @@ sub run_it{
 		#make sure the alt est evidence is not single exon and actually overlaps
 		if($remove && @$alt_ests){
 		    my $clean  = clean::purge_single_exon_hits($alt_ests);
-		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$model); #splice site and overlap check
+		    #splice site and overlap check
+		    my $aAED = (! @$clean) ? 1 : shadow_AED::get_eAED($clean,$model);
 		    $remove = 0 if ($aAED < 1);
 		}
 
@@ -1700,7 +1701,11 @@ sub run_it{
 
 		if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
 		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
-		    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
 		    #at least 60% of EST must be CDS to make a gene prediction
 		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
 		}
@@ -1794,7 +1799,8 @@ sub run_it{
 	    #only keep multi-exon hint based predictions single exon prediction
 	    #are more likely to be spurious if hint based, these are better
 	    #derived from the ab initio predictions
-	    @$on_right_strand = grep {$_->hsps > 1} @$on_right_strand if($CTL_OPT->{organism_type} eq 'eukaryotic');
+	    @$on_right_strand = grep {$_->hsps > 1} @$on_right_strand
+		if($CTL_OPT->{organism_type} eq 'eukaryotic');
 	    
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx suport
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic' && @$on_right_strand){

@@ -143,7 +143,7 @@ sub process_hints {
     }
 
     #use $mia to infer alt splicing (keep all structure from mia)
-    my $fusion_skip = grep {$mia->algorithm eq $_->algorithm} @$fusion if($fusion);
+    my $fusion_skip = grep {$mia->algorithm eq $_->algorithm} @$fusion if($mia && $fusion);
     if($mia && !$fusion_skip){
 	my @hsps = sort {$a->start('query') <=> $b->start('query')} $mia->hsps;
 	for(my $i = 0; $i < @hsps - 1; $i++){

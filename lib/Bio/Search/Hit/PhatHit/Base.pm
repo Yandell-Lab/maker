@@ -184,6 +184,9 @@ sub nB {
        my $low;
        my $high;
        foreach my $hsp ($self->hsps){
+	   if(!$hsp->{HIT_START} || !$hsp->{HIT_END}){
+	       die;
+	   }
 	   $low  = $hsp->start($w) if(!$low || $hsp->start($w) < $low);
 	   $high = $hsp->end($w) if(!$high || $hsp->end($w) > $high);
        }

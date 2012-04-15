@@ -231,18 +231,20 @@ sub get_transcript_qi {
         my $ests   = $set->{ests};
         my $fusion = $set->{fusion};
 	my $snap_abinits = $set->{all_preds};
+
 	my @bag;
-	push(@bag, @{$gomiph}) if defined($gomiph);
-	push(@bag, @{$ests})   if defined($ests);
+	push(@bag, @{$gomiph}) if defined($gomiph); #includes blastx
+	push(@bag, @{$ests})   if defined($ests); #includes tblastx
+	push(@bag, @{$fusion}) if defined($fusion);
 
 	my $pol_est_hits = maker::auto_annotator::get_selected_types($ests, 'est2genome', 'est_gff');
 	my $pol_fus_hits = maker::auto_annotator::get_selected_types($fusion, 'est2genome', 'est_gff');
-	my $pol_pro_hits =  maker::auto_annotator::get_selected_types($gomiph, 'protein2genome');
+	#my $pol_pro_hits =  maker::auto_annotator::get_selected_types($gomiph, 'protein2genome', 'protein_gff');
 
 	my @good_splicers;
 	push(@good_splicers, @{$pol_est_hits});
 	push(@good_splicers, @{$pol_fus_hits});
-	push(@good_splicers, @{$pol_pro_hits});	
+	#push(@good_splicers, @{$pol_pro_hits});	
 
 	my $qi = '';
 	# length 5-prime utr
@@ -251,13 +253,13 @@ sub get_transcript_qi {
 	my $num_e = $t->num_hsps();
 	my $num_i = $num_e - 1;
 
-	#  fra. of splices confirmed
+	#  fra. of splices confirmed by EST
 	my $num_confirmed  = $num_i == 0 ? -1 : confirm_splices($t, \@good_splicers);
 	my $frac_confirmed = $num_i == 0 ? -1 : substr($num_confirmed/$num_i, 0, 4);
 
 	$qi .= "|$frac_confirmed";
 
-	# frac. exons perfectly tagged by an est2genome, protein2genome, or est_gff hit
+	# frac. exons perfectly tagged by an EST
 	$num_confirmed  = confirm_exons($t, \@good_splicers);
 	$frac_confirmed = substr($num_confirmed/$num_e, 0, 4);
 
