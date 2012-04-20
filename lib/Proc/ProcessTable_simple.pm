@@ -9,7 +9,7 @@ use Carp;
 use base qw();
 
 our $VERSION='1.0';
-our $PS = File::Which::which('ps');
+our $PS;# = File::Which::which('ps');
 
 sub new {
     if($PS){
@@ -31,7 +31,7 @@ sub table {
 	      " -o ppid=ppid".("_"x10).
 	      " -o state=state".("_"x10).
 	      " -o comm=fname".("_"x500).
-	      " -o args=cmndline -w -w |";
+	      " -o args=cmndline -w -w 2> /dev/null |";
 
     open(PS, $cmd);
     my $i = 0;
