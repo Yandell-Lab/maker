@@ -6,6 +6,7 @@ use strict;
 use vars qw(@EXPORT @EXPORT_OK @ISA $VERSION $PS);
 use URI::Escape;
 use File::Which;
+use Proc::ProcessTable_simple;
 
 @EXPORT_OK=qw(signal killall signalall exists_proc_by_id exists_proc_by_name);
 @ISA=qw(Exporter);
@@ -33,15 +34,12 @@ sub id_matches_pattern{
     my $pid = shift;
     my $pattern = shift;
 
-    my $stat;
-    
+    my $stat;   
     if($PS){
 	$stat= grep {/$pattern/} `ps -o args -p $pid 2> /dev/null`;
     }
     else{
-	require Proc::ProcessTable;
-	my $obj = new Proc::ProcessTable;
-	
+	my $obj = new Proc::ProcessTable_simple;	
 	foreach my $p (@{$obj->table}) {
 	    if ($p->pid == $pid){
 		$stat = grep {/$pattern/} $p->cmndline();
@@ -86,17 +84,24 @@ sub exists_kill {
 
     return (0,0) if(! $id || $id == $$);
 
-    require Proc::ProcessTable;
-    my $obj = new Proc::ProcessTable;
+
     my $found = 0;
     my $signaled = 0;
-
-    foreach my $p (@{$obj->table}) {
-	#now check for the id
-	if ($p->pid == $id){
+    if($PS){
+        if(grep {/$id/} `ps -o pid -p $id 2> /dev/null`){
 	    $found++;
 	    $signaled = kill($signal, $id);
-	    last;
+	}
+    }
+    else{    
+	my $obj = new Proc::ProcessTable_simple;
+	foreach my $p (@{$obj->table}) {
+	    #now check for the id
+	    if ($p->pid == $id){
+		$found++;
+		$signaled = kill($signal, $id);
+		last;
+	    }
 	}
     }
 
@@ -134,17 +139,14 @@ sub get_proc_by_id {
     my $id = shift;
 
     my $select;
-    eval{
-	require Proc::ProcessTable;
-	my $obj = new Proc::ProcessTable;
-	foreach my $p (@{$obj->table}) {
-	    #now check for the id
-	    if ($p->pid == $id){
-		$select = $p;
-		last;
-	    }
+    my $obj = new Proc::ProcessTable_simple;
+    foreach my $p (@{$obj->table}) {
+	#now check for the id
+	if ($p->pid == $id){
+	    $select = $p;
+	    last;
 	}
-    };
+    }
 
     return $select;
 }
@@ -168,13 +170,11 @@ sub exists_killall {
 
     return (0, 0) if($name eq '');
 
-    require Proc::ProcessTable;
-    my $obj = new Proc::ProcessTable;
-
     my $err; #holds all $!
     my $found = 0; #holds count of found procceses
     my $signaled = 0; #holds count of killed procceses
 
+    my $obj = new Proc::ProcessTable_simple;
     foreach my $p (@{$obj->table}) {
 	#get all possible name variations for proccess
 	my $cmdline  = $p->cmndline() || '';
