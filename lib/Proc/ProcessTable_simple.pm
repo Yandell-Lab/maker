@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use File::Which;
 use Carp;
-use Base qw();
+use base qw();
 
 our $VERSION='1.0';
 our $PS = File::Which::which('ps');
@@ -70,7 +70,7 @@ require Exporter;
 use strict;
 use warnings;
 use Carp;
-use Base qw();
+use base qw();
 
 sub new {
     my $self = {};
