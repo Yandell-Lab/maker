@@ -60,24 +60,25 @@ sub build_hit_pairs {
     my @pairs;
 
     for (my $i = 0; $i < @$hits; $i++) {
-	my $aB = $hits->[$i]->nB('query');
-	my $aE = $hits->[$i]->nE('query');
+	my $aB = $hits->[$i]->start('query');
+	my $aE = $hits->[$i]->end('query');
 	my $aSt = $hits->[$i]->strand('query');
+
+	#fix for flank
+	$aB -= $flank;
+	$aB = 1 if($aB < 1);
+	$aE += $flank;
+
 	push(@pairs, [$i, $i]);
 
 	for (my $j = $i+1; $j < @$hits; $j++) {
-	    my $bB = $hits->[$j]->nB('query');
-	    my $bE = $hits->[$j]->nE('query');
+	    my $bB = $hits->[$j]->start('query');
+	    my $bE = $hits->[$j]->end('query');
 	    my $bSt = $hits->[$j]->strand('query');
 
 	    next if($aSt ne $bSt);
 
-	    my $code = (abs($aB - $bE) + 1 <= $flank ||
-			abs($aB - $bB) + 1 <= $flank ||
-			abs($aE - $bE) + 1 <= $flank ||
-			abs($aE - $bB) + 1 <= $flank);
-
-	    $code = compare::compare($aB, $aE, $bB, $bE, $flank) if(!$code);
+	    my $code = compare::compare($aB, $aE, $bB, $bE);
 	    push(@pairs, [$i, $j]) if($code);
 	}
     }
@@ -98,6 +99,11 @@ sub build_pairs {
 	my $aSt = $array->[$i]->{strand};
 	push(@pairs, [$i, $i]);
 
+	#fix for flank
+	$aB -= $flank;
+	$aB = 1 if($aB < 1);
+	$aE += $flank;
+
 	for (my $j = $i+1; $j < @$array; $j++) {
 	    my $bB = $array->[$j]->{start};
 	    my $bE = $array->[$j]->{end};
@@ -105,12 +111,7 @@ sub build_pairs {
 
 	    next if(defined($aSt) && defined ($bSt) && ($aSt ne $bSt));
 
-	    my $code = (abs($aB - $bE) + 1 <= $flank ||
-			abs($aB - $bB) + 1 <= $flank ||
-			abs($aE - $bE) + 1 <= $flank ||
-			abs($aE - $bB) + 1 <= $flank);
-
-	    $code = compare::compare($aB, $aE, $bB, $bE, $flank) if(!$code);
+	    my $code = compare::compare($aB, $aE, $bB, $bE);
 	    if($code){
 		push(@pairs, [$i, $j]);
 		if($jaccard){

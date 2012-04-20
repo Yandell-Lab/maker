@@ -3,6 +3,7 @@
 #------------------------------------------------------------------------
 package shadow_AED;
 use strict;
+use Carp;
 use Bit::Vector;
 
 sub get_abAED{
@@ -65,8 +66,8 @@ sub get_eAED {
 	   my $e = $hsp->end('query') - $offset;
 	   
 	   #array space coors
-	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	   confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 	   
 	   @b_seq[$s..$e] = map {1} ($s..$e);
        }
@@ -79,8 +80,8 @@ sub get_eAED {
 	   my $s = $set->[0] - $offset;
 	   my $e = $set->[1] - $offset;
 	   
-	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	   confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 	   
 	   @b_seq[$s..$e] = map {1} ($s..$e);
        }
@@ -171,8 +172,8 @@ sub get_eAED {
 	   my $e = $hsp->end('query') - $offset;
 	   
 	   #array space coors
-	   die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	   die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	   confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	   confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
 	   foreach my $i ($s..$e){
 	       $index{1}++ if($b_seq[$i] == 0); #fix evidence count
@@ -188,8 +189,8 @@ sub get_eAED {
       my $e = $hsp->end('query') - $offset;
       
       #array space coors
-      die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-      die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+      confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+      confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
       foreach my $i ($s..$e){
 	  $b_seq[$i] = 2 if($b_seq[$i] != 3); #make transcript (replaces evidence)
@@ -207,8 +208,8 @@ sub get_eAED {
       my $e = $hsp->end('query') - $offset;
       
       #array space coors
-      die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-      die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+      confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+      confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
       #only add to transcript overlap
       foreach my $i ($s..$e){
@@ -344,8 +345,8 @@ sub get_SN_SP {
 	 my $e = $hsp->end('query') - $offset;
 
 	 #array space coors
-	 die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-	 die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+	 confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+	 confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
 
 	 $h_vec->Interval_Fill($s, $e);
       }
@@ -359,8 +360,8 @@ sub get_SN_SP {
       my $e = $hsp->end('query') - $offset;
       
       #array space coors
-      die "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
-      die "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
+      confess "ERROR: Start value not permited!!\n" if($s >= $length || $s < 0);
+      confess "ERROR: End value not permited!!\n" if($e < 0 || $e >= $length);
       
       $t_vec->Interval_Fill($s, $e);
    }

@@ -398,7 +398,7 @@ sub process_the_chunk_divide{
     my $pred_flank = shift @_;
     my $s_flag     = shift @_; #indicates whether to treat strands independantly 
     my $a_flag     = shift @_; #indicates whether to have a data adjusted floating cutoff
-    my $b_flag     = shift @_; #indicates which end to have cutoof on (-1 => start, 0 => both, 1 => end)
+    my $b_flag     = shift @_; #indicates which end to have cutoff on (-1 => start, 0 => both, 1 => end)
     my $groups_cfh = shift @_; #group to cluster and find holdovers
 
     $b_flag = 1 if($chunk->is_first && $b_flag == 0);
@@ -544,24 +544,24 @@ sub process_the_chunk_divide{
 	     $strand = 1 if (!$s_flag);
 	     
 	     ($b, $e) = ($e, $b) if $b > $e;
-	     
+	     	     
+	     $hit->{_holdover} = 0; #initialize to 0
 	     if ($b_flag >= 0 &&
 		 (($strand eq '1' && ($e >= $p_cutoff || $p_cutoff <= $chunk->offset +1)) ||
 		  ($strand eq '-1' && ($e >= $m_cutoff || $m_cutoff <= $chunk->offset +1)))
 		){
-		$hit->{_holdover} = 2;
+		$hit->{_holdover} += 2;
 		push(@{$group_holdovers}, $hit);
 	     }
-	     elsif($b_flag <= 0 &&
+
+	     if($b_flag <= 0 &&
 		   (($strand eq '1' && ($b <= $p_scutoff || $p_scutoff >= $chunk->offset + $chunk->length)) ||
 		    ($strand eq '-1' && ($b <= $m_cutoff || $m_cutoff >= $chunk->offset + $chunk->length)))
 		  ){
-		$hit->{_holdover} = 1;
-                push(@{$group_holdovers}, $hit);
-
-	     }
-	     else {
-		$hit->{_holdover} = 0;
+		$hit->{_holdover} += 1;
+                push(@{$group_holdovers}, $hit) unless($hit->{_holdover} != 1); #spanners will != 1
+	     }	     
+	     if($hit->{_holdover} == 0){
 		push(@{$group_keepers}, $hit);
 	     }
 	  }
@@ -3953,6 +3953,10 @@ sub load_control_files {
    }
    if ($CTL_OPT{split_hit} < 50 || $CTL_OPT{organism_type} eq 'prokaryotic') {
       $CTL_OPT{split_hit} = 50; #important or hits will not be merged across chunk junctions
+   }
+   if ($CTL_OPT{split_hit} > $CTL_OPT{max_dna_len}/3){
+       $error .= "ERROR: split_hit cannot me more than 1/3 the value of max_dna_len\n".
+	         "Try raising max_dna_len or lowering split_hit\n";
    }
    if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
       warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n" unless($main::qq);

@@ -184,15 +184,15 @@ sub overlap {
 sub compare_by_shadow {
         my $a     = shift;
         my $b     = shift;
-	my $flank = shift;
+	my $r = shift;
 
         my $a_coors  = $a->{hsps};
 	my $b_coors  = $b->{hsps};
 
 	my $combined_ph = combine_pseudo_hit([$a, $b]);
 
-	my $s_code_a = get_shadow_code($combined_ph->{hsps}, $a_coors, $flank);
-	my $s_code_b = get_shadow_code($combined_ph->{hsps}, $b_coors, $flank);
+	my $s_code_a = get_shadow_code($combined_ph->{hsps}, $a_coors, $r);
+	my $s_code_b = get_shadow_code($combined_ph->{hsps}, $b_coors, $r);
 
 	return ($s_code_a, $s_code_b);
 }
@@ -200,7 +200,7 @@ sub compare_by_shadow {
 sub get_shadow_code {
 	my $combined_coors = shift;
 	my $coors  = shift;
-	my $flank  = shift;
+	my $r  = shift;
 
 	my @codes;
 	my $i = 0;
@@ -214,7 +214,7 @@ sub get_shadow_code {
 
 			($cB, $cE) = ($cE, $cB) if $cB > $cE;
 			
-			my $class = compare($pB, $pE, $cB, $cE, $flank);
+			my $class = compare($pB, $pE, $cB, $cE, $r);
 
 			push(@{$codes[$i]}, $class);
 		}

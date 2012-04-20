@@ -1407,11 +1407,10 @@ sub remove_CDS_competitors {
 		my $gE = $g->{g_end};
 		($gB, $gE) = ($gE, $gB) if($gE < $gB);
 
-		my $comp = compare::compare ($sB,
-					     $sE,
-					     $gB,
-					     $gE
-					    );
+		my $comp = compare::compare($sB,
+					    $sE,
+					    $gB,
+					    $gE);
 		if($comp ne '0'){
 		    $bad = 1;
 		    last;
@@ -1439,10 +1438,10 @@ sub remove_CDS_competitors {
 		my $gE = $g->{g_end};
 		($gB, $gE) = ($gE, $gB) if($gE < $gB);
 
-		my $comp = compare::compare ($sB,
-					     $sE,
-					     $gB,
-					     $gE
+		my $comp = compare::compare($sB,
+					    $sE,
+					    $gB,
+					    $gE
 					    );
 		if($comp ne '0'){
 		    $bad = 1;
@@ -2214,10 +2213,10 @@ sub get_genes_overlapping_gene {
        my $gE = $g->{g_end};
 
        ($gB, $gE) = ($gE, $gB) if($gE < $gB);
-       my $comp = compare::compare ($B,
-				    $E,
-				    $gB,
-				    $gE
+       my $comp = compare::compare($B,
+				   $E,
+				   $gB,
+				   $gE
 				  );
        if($comp ne '0'){
 	   push(@keepers, $g);
@@ -2240,10 +2239,10 @@ sub get_hits_overlapping_gene {
    foreach my $hit (@{$hits}){
       next unless $hit->strand('query') eq $g->{g_strand};
 
-      my $comp = compare::compare ($B,
-				   $E,
-				   $hit->start,
-				   $hit->end
+      my $comp = compare::compare($B,
+				  $E,
+				  $hit->start,
+				  $hit->end
 				  );
       if($comp ne '0'){
 	  push(@keepers, $hit);
@@ -2768,10 +2767,10 @@ sub get_non_overlaping_abinits {
    foreach my $ab (@p_ab){
       my $bad = 0;
       foreach my $ann (@p_ann){
-	 my $comp = compare::compare ($ab->{g_start},
-				      $ab->{g_end},
-				      $ann->{g_start},
-				      $ann->{g_end}
+	 my $comp = compare::compare($ab->{g_start},
+				     $ab->{g_end},
+				     $ann->{g_start},
+				     $ann->{g_end}
 				     );
 	 if($comp ne '0'){
 	    $bad = 1;
@@ -2789,10 +2788,10 @@ sub get_non_overlaping_abinits {
    foreach my $ab (@m_ab){
       my $bad = 0;
       foreach my $ann (@m_ann){
-	 my $comp = compare::compare ($ab->{g_start},
-				      $ab->{g_end},
-				      $ann->{g_start},
-				      $ann->{g_end}
+	 my $comp = compare::compare($ab->{g_start},
+				     $ab->{g_end},
+				     $ann->{g_start},
+				     $ann->{g_end}
 				     );
 	 if($comp ne '0'){
 	    $bad = 1;

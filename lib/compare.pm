@@ -107,18 +107,20 @@ sub hsps_overlap {
 
                 my $aB = $hsp_a->nB($what);
                 my $aE = $hsp_a->nE($what);
-
 		($aB, $aE) = ($aE, $aB) if $aB > $aE;
 
+		#fix for flank
+		$aB -= $r;
+		$aB = 1 if($aB < 1);
+		$aE += $r;
                 foreach my $hsp_b (@{$sorted_b}){
                         my $bB = $hsp_b->nB($what);
                         my $bE = $hsp_b->nE($what);
 
 			($bB, $bE) = ($bE, $bB) if $bB > $bE;
-                        my $class = compare($aB, $aE, $bB, $bE, $r);
+                        my $class = compare($aB, $aE, $bB, $bE);
 
-			return 1 if $class ne '0'
-			
+			return 1 if $class ne '0';			
 		}
 	}
 	return 0;
@@ -135,11 +137,16 @@ sub overlap {
        
        ($aB, $aE) = ($aE, $aB) if $aB > $aE;
        
+       #fix for flank
+       $aB -= $r;
+       $aB = 1 if($aB < 1);
+       $aE += $r;
+
        my $bB = $hit_b->nB($what);
        my $bE = $hit_b->nE($what);
        
        ($bB, $bE) = ($bE, $bB) if $bB > $bE;
-       my $class = compare($aB, $aE, $bB, $bE, $r);
+       my $class = compare($aB, $aE, $bB, $bE);
        
        return 1 if $class ne '0';
 	   

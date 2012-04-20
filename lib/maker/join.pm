@@ -391,22 +391,30 @@ sub join_f {
 				   '-score'        => $new_total_score,
 				   );
 
-	my @evidence;
-	push(@evidence, $g->name);
-	push(@evidence, $b_5->{f}->name) if defined($b_5->{f});
-	push(@evidence, $b_3->{f}->name) if defined($b_3->{f});
-
 	$new_f->queryLength(length_o($q_seq));
-
-	$new_f->evidence(\@evidence);
-	$new_f->{_HMM} = $g->{_HMM} if($g->{_HMM});
-	$new_f->{_label} = $g->{_label} if($g->{_label});
-	$new_f->{translation_offset} += $d_offset if(defined $g->{translation_offset});
-	$new_f->{translation_end} += $d_offset if($g->{translation_end});
 
 	foreach my $hsp (@anno_hsps){
 	    $new_f->add_hsp($hsp);
 	}
+
+	my @evidence;
+	push(@evidence, $g->name);
+	push(@evidence, $b_5->{f}->name) if defined($b_5->{f});
+	push(@evidence, $b_3->{f}->name) if defined($b_3->{f});
+	$new_f->evidence(\@evidence);
+
+	$new_f->{_HMM} = $g->{_HMM} if($g->{_HMM});
+	$new_f->{_label} = $g->{_label} if($g->{_label});
+
+	if(defined $g->{translation_offset}){
+	    $new_f->{translation_offset} = $g->{translation_offset} + $d_offset;
+	}
+	if($g->{translation_end}){
+	    $new_f->{translation_end} = $g->{translation_end} + $d_offset;
+	}
+	
+	#make sure start and end get recalculated
+	$new_f->start('query');
 
 	#finish copying over posible object specific hash keys (only copies scalars)
 	while(my $key = each %$g){

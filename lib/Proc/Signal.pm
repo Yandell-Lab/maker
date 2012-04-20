@@ -133,14 +133,20 @@ sub get_pname_by_id {
 sub get_proc_by_id {
     my $id = shift;
 
-    require Proc::ProcessTable;
-    my $obj = new Proc::ProcessTable;
-    foreach my $p (@{$obj->table}) {
-	#now check for the id
-	return $p if ($p->pid == $id);
-    }
+    my $select;
+    eval{
+	require Proc::ProcessTable;
+	my $obj = new Proc::ProcessTable;
+	foreach my $p (@{$obj->table}) {
+	    #now check for the id
+	    if ($p->pid == $id){
+		$select = $p;
+		last;
+	    }
+	}
+    };
 
-    return undef;
+    return $select;
 }
 #-----------------------------------------------------------------
 #returns parent process table for a given child id

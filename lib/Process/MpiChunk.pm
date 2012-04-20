@@ -1437,12 +1437,19 @@ sub _go {
 	    #get start and end holdovers files
 	    my @start;
 	    my @end;
+	    my @span;
 	    foreach my $h (@$holdover_blastn){
 	       if($h->{_holdover} == 1){
-		  push(@start, $h);
+		   push(@start, $h);
 	       }
-	       else{ #$h->{_holdover} == 2 
-		  push(@end, $h);
+	       elsif($h->{_holdover} == 2){
+		   push(@end, $h);
+	       }
+	       elsif($h->{_holdover} == 3){
+		   push(@span, $h);
+	       }
+	       else{
+		   confess "ERROR:Holdover hits not labeled. This shouldn't happen?";
 	       }
 	    }
 
@@ -1458,24 +1465,24 @@ sub _go {
 	       $lock1 = new File::NFSLock($start_file, 'EX', 300, 40) while(! $lock1 || ! $lock1->maintain(30));
 	       $LOG->add_entry("STARTED", $start_file, "");
 	       if(! -f $start_file){
-		  store (\@start, $start_file);
+		   store (\@start, $start_file);
 	       }
 	       $LOG->add_entry("FINISHED", $start_file, "");
 
 	       my $start_junction = "$the_void/$safe_seq_id.".($order-1).".$order.junction.blastn.holdover";
 	       my $lock2;
 	       if(($lock2 = new File::NFSLock($start_junction, 'EX', 300, 40)) && (-f $end_neighbor) && $lock2->maintain(30)){
-		  my $lock3;
-		  $lock3 = new File::NFSLock($end_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
-		  my $neighbor = retrieve($end_neighbor);
-		  unlink($start_file, $end_neighbor);
-		  push(@$blastn_keepers, @start);
-		  push(@$holdover_blastn, @$neighbor);
-		  $edge_status->{blastn_keepers}{start}++;
-		  $edge_status->{exonerate_e_data}{start}++;
-		  $lock1->unlock;
-		  $lock3->unlock;
-		  $lock2->unlock;
+		   my $lock3;
+		   $lock3 = new File::NFSLock($end_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
+		   my $neighbor = retrieve($end_neighbor);
+		   unlink($start_file, $end_neighbor);
+		   push(@$blastn_keepers, @start);
+		   push(@$holdover_blastn, @$neighbor);
+		   $edge_status->{blastn_keepers}{start}++;
+		   $edge_status->{exonerate_e_data}{start}++;
+		   $lock1->unlock;
+		   $lock3->unlock;
+		   $lock2->unlock;
 	       }
 	       else{
 		   $lock1->unlock;
@@ -1917,12 +1924,19 @@ sub _go {
 	    #get start and end holdovers files
 	    my @start;
 	    my @end;
+	    my @span;
 	    foreach my $h (@$holdover_tblastx){
 	       if($h->{_holdover} == 1){
-		  push(@start, $h);
+		   push(@start, $h);
 	       }
-	       else{ #$h->{_holdover} == 2 
-		  push(@end, $h);
+	       elsif($h->{_holdover} == 2){
+		   push(@end, $h);
+	       }
+	       elsif($h->{_holdover} == 3){
+		   push(@span, $h);
+	       }
+	       else{
+		   confess "ERROR:Holdover hits not labeled. This shouldn't happen?";
 	       }
 	    }
 
@@ -2382,13 +2396,20 @@ sub _go {
 	    #get start and end holdovers files
 	    my @start;
 	    my @end;
+	    my @span;
 	    foreach my $h (@$holdover_blastx){
 	       if($h->{_holdover} == 1){
-		  push(@start, $h);
+		   push(@start, $h);
 	       }
-	       else{ #$h->{_holdover} == 2 
-		  push(@end, $h);
-	       }
+	       elsif($h->{_holdover} == 2){
+                   push(@end, $h);
+               }
+               elsif($h->{_holdover} == 3){
+                   push(@span, $h);
+               }
+               else{
+                   confess "ERROR:Holdover hits not labeled. This shouldn't happen?";
+               }
 	    }
 
 	    my $order = $chunk->number;
