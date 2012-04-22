@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use strict;
 use warnings;
@@ -48,6 +45,9 @@ Options:
       but used to perform operations (e.g. soft to hard masking with
       s/[a-z]/N/g, but still print every sequence even if it's unaltered.
 
+  --extract_ids <id_file.txt>
+      Extract all of the sequences who's IDs are found in the given file.
+
   --grep_header <pattern>
       Grep through a multi fasta file and print out only the fasta
       sequences that have a match in the header. Use grepv_header for
@@ -81,8 +81,18 @@ Options:
   --length
       Print the length of each sequence.
 
+  --total_length
+      Print the total length of all sequences.
+
+  --n50
+      Calculate the N-50 (http://en.wikipedia.org/wiki/N50_statistic)
+      of the sequences in the file.
+
   --tab
       Print the header and sequence on the same line separated by a tab.
+
+  --table
+      Print in table format rather than fasta format.
 
   --print
       Print the sequence.  Use in conjuction with 'wrap' or other formatting
@@ -112,31 +122,43 @@ Options:
   --shuffle_pick
       Pick a given number of sequences from a multi-fasta file.
 
-  --remove
-      Pass in a file with IDs and remove sequences with these IDs.
-
   --select
       Pass in a file with IDs and return sequences with these IDs.
 
-  --fix
-      Fixes common problems in fasta files that cause many programs to fail
-      i.e. BLAST, Exonerate, etc. Fixes include, replacing non-standard amino
-      acids with 'C', removing the stop codon character '*', removing empty
-      fasta entries, and making all sequence line the same length. Use --wrap
-      to set a specific length target.
+  --remove
+      Pass in a file with IDs and remove sequences with these IDs.
+
+  --swap_ids
+      Pass in a file with two columns of IDs and map the IDs in the
+      fasta headers from the first column of the ID file to the second
+      column of the ID file.  If an ID in the fasta header is not found
+      in the first column of the ID file then issue a warning, but leave
+      the ID unmapped.
+
+  --prot_fix
+    Fix protein fasta files for use as blast database.  Removes spaces
+    and '*' and replaces any non amino acid codes with C.
+
+  --subseq
+    Grab a sub-sequence from a fasta file based on coordinates.  The
+    requested coordinates are in the form seqid:start-end;
+
+
 ";
 
-my ($summary, $chunks, $split, $eval_code, $eval_all, $grep_header, $grepv_header,
-    $grep_seq, $grepv_seq, $wrap, $count, $translate, $seq_only, $nt_count, $fix,
-    $tab, $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $length,
-    $shuffle_seq, $shuffle_codon, $shuffle_pick, $remove_file, $print, $select_file,
-    $mRNAseq, $EST, $trim_maker_utr);
+my ($summary, $chunks, $split, $eval_code, $eval_all, $extract_ids,
+    $grep_header, $grepv_header, $grep_seq, $grepv_seq, $wrap, $count,
+    $translate, $seq_only, $nt_count, $length, $total_length, $n50, $tab,
+    $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $shuffle_seq,
+    $shuffle_codon, $shuffle_pick, $select_file, $remove_file, $print,
+    $mRNAseq, $EST, $trim_maker_utr, $table, $swap_ids, $fix_prot, $subseq);
 
 GetOptions('summary'        => \$summary,
 	   'chunks=i'       => \$chunks,
 	   'split'          => \$split,
 	   'eval_code=s'    => \$eval_code,
 	   'eval_all=s'     => \$eval_all,
+	   'extract_ids=s'  => \$extract_ids,
 	   'grep_header=s'  => \$grep_header,
 	   'grep_seq=s'     => \$grep_seq,
 	   'grepv_header=s' => \$grepv_header,
@@ -147,7 +169,11 @@ GetOptions('summary'        => \$summary,
 	   'trim_maker_utr' => \$trim_maker_utr,
 	   'seq_only'       => \$seq_only,
 	   'nt_count'       => \$nt_count,
+	   'length'         => \$length,
+           'total_length'   => \$total_length,
+           'n50'            => \$n50,
 	   'tab'            => \$tab,
+	   'table'          => \$table,
 	   'print'          => \$print,
 	   'reverse'        => \$reverse,
 	   'rev_seq'        => \$rev_seq,
@@ -159,10 +185,11 @@ GetOptions('summary'        => \$summary,
 	   'shuffle_pick=i' => \$shuffle_pick,
 	   'remove=s'       => \$remove_file,
 	   'select=s'       => \$select_file,
-	   'fix'            => \$fix,
-	   'length'         => \$length,
-	   'mRNAseq'         => \$mRNAseq,
-	   'EST'             => \$EST,
+	   'fix_prot'       => \$fix_prot,
+	   'mRNAseq'        => \$mRNAseq,
+	   'EST'            => \$EST,
+           'swap_ids=s'     => \$swap_ids,
+           'subseq=s'       => \$subseq
 	  );
 
 my $file = shift;
@@ -185,10 +212,12 @@ warn $warning if grep {$_} ($reverse,
 			    $length
 			   );
 
+# These functions handle their own printing;
 $print++ unless grep {$_} ($chunks,
 			   $split,
 			   $eval_code,
 			   $eval_all,
+			   $extract_ids,
 			   $grep_header,
 			   $grep_seq,
 			   $grepv_header,
@@ -197,6 +226,9 @@ $print++ unless grep {$_} ($chunks,
 			   $translate,
 			   $seq_only,
 			   $nt_count,
+			   $length,
+			   $total_length,
+			   $n50,
 			   $reverse,
 			   $rev_seq,
 			   $comp_seq,
@@ -207,7 +239,9 @@ $print++ unless grep {$_} ($chunks,
 			   $remove_file,
 			   $select_file,
 			   $mRNAseq,
-			   $EST
+			   $EST,
+			   $swap_ids,
+			   $subseq
 			  );
 
 $nt_count++ if $summary;
@@ -232,6 +266,7 @@ chunks($file, $chunks)	    if $chunks;
 split_fasta()	            if $split;
 eval_code($eval_code)       if $eval_code;
 eval_all($eval_all)         if $eval_all;
+extract_ids($extract_ids)   if $extract_ids;
 grep_header($grep_header)   if $grep_header;
 grep_seq($grep_seq)         if $grep_seq;
 grepv_header($grepv_header) if $grepv_header;
@@ -241,8 +276,9 @@ trim_maker_utr()            if $trim_maker_utr;
 seq_only()                  if $seq_only;
 nt_count()	            if $nt_count;
 seq_length()                if $length;
+total_length()              if $total_length;
+n50()                       if $n50;
 tab()	                    if $tab;
-print_seq()                 if $print;
 reverse_order()             if $reverse;
 rev_comp()                  if $rev_seq;
 rev_comp()                  if $comp_seq;
@@ -250,11 +286,14 @@ shuffle_order()             if $shuffle_order;
 shuffle_seq()               if $shuffle_seq;
 shuffle_codon()             if $shuffle_codon;
 shuffle_pick($shuffle_pick) if $shuffle_pick;
-remove($remove_file)        if $remove_file;
-_select($select_file)       if $select_file;
+remove_ids($remove_file)    if $remove_file;
+select_ids($select_file)    if $select_file;
+swap_ids($swap_ids)         if $swap_ids;
+subseq($file, $subseq)      if $subseq;
+fix_prot()                  if $fix_prot;
+print_seq()                 if $print;
 mRNAseq()                   if $mRNAseq;
 EST()                       if $EST;
-fix()                       if $fix;
 
 #-----------------------------------------------------------------------------
 #-------------------------------- SUBROUTINES --------------------------------
@@ -351,11 +390,31 @@ sub eval_all {
 
 }
 #-----------------------------------------------------------------------------
+sub extract_ids {
+
+    my $id_file = shift;
+
+    open(my $IN, '<', $id_file) or die "Can't open $id_file for reading\n$!\n";
+
+    my %ids = map {$_ => 1 unless (/^\#/ || ! $_)} (<$IN>);
+
+    while (my $seq_obj = $seq_io->next_seq) {
+	my $id = $seq_obj->display_id;
+	my $header = get_header($seq_obj);
+	my $seq = $seq_obj->seq;
+
+	if (exists $ids{$id}) {
+	    print_this_seq($header, $seq);
+	}
+    }
+}
+#-----------------------------------------------------------------------------
 sub grep_header {
 	my ($pattern) = @_;
 
 	while (my $seq_obj = $seq_io->next_seq) {
 		my $header = get_header($seq_obj);
+		$header .= " " . $seq_obj->description;
 		my $seq = $seq_obj->seq;
 
 		if ($header =~ /$pattern/) {
@@ -479,7 +538,7 @@ sub grepv_seq {
 	}
 }
 #-----------------------------------------------------------------------------
-sub fix {
+sub fix_prot {
 	while (my $seq_obj = $seq_io->next_seq) {
 		my $header = get_header($seq_obj);
 		my $seq = $seq_obj->seq;
@@ -643,9 +702,55 @@ sub nt_count {
 #-----------------------------------------------------------------------------
 sub seq_length {
     while (my $seq_obj = $seq_io->next_seq) {
+        my $id = $seq_obj->display_id;
 	my $length = $seq_obj->length;
 	print $length . "\n";
     }
+}
+#-----------------------------------------------------------------------------
+sub total_length {
+    my $total_length;
+    while (my $seq_obj = $seq_io->next_seq) {
+        $total_length += $seq_obj->length;
+    }
+    print $total_length . "\n";
+}
+#-----------------------------------------------------------------------------
+sub n50 {
+    my $total_length;
+    my @lengths;
+    while (my $seq_obj = $seq_io->next_seq) {
+        my $length = $seq_obj->length;
+        $total_length += $length;
+        push @lengths, $length;
+    }
+    my $cumulative_length;
+    my $last_length;
+    my $n50;
+    for my $length (sort {$b <=> $a} @lengths) {
+        $cumulative_length += $length;
+        if ($cumulative_length > $total_length / 2) {
+            $n50 = $length;
+            last;
+        }
+        elsif ($cumulative_length == $total_length / 2) {
+            $n50 = $length;
+            $last_length = $length;
+            last;
+        }
+        $last_length = $length;
+    }
+    $n50 = int((($n50 + $last_length) / 2) + 0.5);
+    print $n50 . "\n";
+}
+#-----------------------------------------------------------------------------
+sub tab {
+    while (my $seq_obj = $seq_io->next_seq) {
+	my $header = get_header($seq_obj);
+	my $seq = $seq_obj->seq;
+                $seq =~ s/[\s\n\t]//g;
+                print "$header\t$seq\n";
+        }
 }
 #-----------------------------------------------------------------------------
 sub print_seq {
@@ -747,7 +852,7 @@ sub shuffle_pick {
 	}
 }
 #-----------------------------------------------------------------------------
-sub remove {
+sub remove_ids {
 
 	my $remove_file = shift;
 	open (my $IN, '<', $remove_file) or die "Can't open $remove_file for reading\n";
@@ -761,7 +866,7 @@ sub remove {
 	}
 }
 #-----------------------------------------------------------------------------
-sub _select {
+sub select_ids {
 
 	my $select_file = shift;
 	open (my $IN, '<', $select_file) or die "Can't open $select_file for reading\n";
@@ -778,10 +883,17 @@ sub _select {
 sub print_this_seq {
 	my ($header, $seq) = @_;
 
-	$seq = wrap_seq($seq, $wrap) if $wrap;
-	chomp $seq;
-	my $join = $tab ? "\t" : "\n";
-	print join $join, (">$header", "$seq\n");
+	if($table){
+	    chomp $seq;
+	    ($header) = $header =~ /^([^\s+]+)/;
+	    print join("\t", $header, uc($seq))."\n";
+	}
+	else{
+	    $seq = wrap_seq($seq, $wrap) if $wrap;
+	    chomp $seq;
+	    my $join = $tab ? "\t" : "\n";
+	    print join $join, (">$header", "$seq\n");
+	}
 }
 #-----------------------------------------------------------------------------
 sub wrap_seq {
@@ -810,5 +922,44 @@ sub shuffle {
 		my $k = int rand($n--);
 		($array->[$n], $array->[$k]) = ($array->[$k], $array->[$n]);
 	}
+}
+#-----------------------------------------------------------------------------
+sub swap_ids {
+
+    my $id_file = shift;
+    open (my $IN, '<', $id_file) or die "Can't open $id_file for reading\n";
+    my %ids;
+    while (<$IN>) {
+        chomp;
+        my($id1, $id2) = split /\t/, $_;
+        $id1 =~ s/\.\d+$//;
+        $ids{$id1} = $id2;
+    }
+    while (my $seq_obj = $seq_io->next_seq) {
+        my $id_text = $seq_obj->display_id;
+        # gi|71999842|ref|NM_073020.2|
+        my ($x, $y, $z, $id) = split /\|/, $id_text;
+        $id =~ s/\.\d+//;
+        my $header = get_header($seq_obj);
+        if ($ids{$id}) {
+            my $new_id = $ids{$id}  . "_$id";
+            $header =~ s/\S+/$new_id/;
+        }
+        my $seq = $seq_obj->seq;
+        print_this_seq($header, $seq);
+    }
+}
+#-----------------------------------------------------------------------------
+sub subseq {
+
+    my ($file, $coordinates) = @_;
+
+    require Bio::DB::Fasta;
+    my $fasta = Bio::DB::Fasta->new($file);
+
+    my ($seqid, $start, $end) = split /[:-]/, $coordinates;
+
+    print $fasta->seq($seqid, $start, $end);
+    print "\n";
 }
 #-----------------------------------------------------------------------------
