@@ -3954,10 +3954,10 @@ sub load_control_files {
    if ($CTL_OPT{split_hit} < 50 || $CTL_OPT{organism_type} eq 'prokaryotic') {
       $CTL_OPT{split_hit} = 50; #important or hits will not be merged across chunk junctions
    }
-   #if ($CTL_OPT{split_hit} > $CTL_OPT{max_dna_len}/3){
-   #    $error .= "ERROR: split_hit cannot me more than 1/3 the value of max_dna_len\n".
-   #	         "Try raising max_dna_len or lowering split_hit\n";
-   #}
+   if ($CTL_OPT{split_hit} > $CTL_OPT{max_dna_len}/3){
+       $error .= "ERROR: split_hit cannot me more than 1/3 the value of max_dna_len\n".
+   	         "Try raising max_dna_len or lowering split_hit\n";
+   }
    if ($CTL_OPT{single_exon} == 0 && $CTL_OPT{organism_type} eq 'prokaryotic') {
       warn "WARNING: \'single_exon\' is required for prokaryotic genomes and will be set to 1.\n\n" unless($main::qq);
       $CTL_OPT{single_exon} = 1;

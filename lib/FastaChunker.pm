@@ -24,10 +24,11 @@ sub new {
         bless($self, $class);
 
 	$self->min_size(0);
+	$self->flank(0);
 
 	return $self;
 }
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 sub parent_seq {
     my $self = shift;
     my $seq = shift;
@@ -42,7 +43,7 @@ sub parent_seq {
 
     return $self->{parent_seq}; #this can be a sequence objection
 }
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 sub parent_fasta {
     my $self = shift;
     my $fasta = shift;
@@ -56,7 +57,7 @@ sub parent_fasta {
 	$self->{parent_seq} = Fasta::getSeqRef($fasta_ref);
     }
 }
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 sub load_chunks {
 	my $self = shift;
 
@@ -121,7 +122,43 @@ sub load_chunks {
 	    else{
 		$chunk->seq($parent_seq);
 	    }
+	    
+	    if($self->flank()){
+		my $flank = $self->flank();
+		
+		#upstream
+		my $B1 = ($offset+1) - $flank;
+		$B1 = 1 if($B1 < 1);
+		my $E1 = $offset;
+		my $L1 = abs($E1 - $B1) +1;
 
+		if($E1 >= $B1 && $E1 > 0){
+		    if(ref($parent_seq) eq 'SCALAR'){
+			$chunk->seq(substr($$parent_seq, $B1 - 1, $L1));
+		    }
+		    else{
+			$chunk->seq($parent_seq);
+		    }
+		}
+
+		#downstream
+		my $B2 = $offset + $chunk->length + 1;
+		my $E2 = $offset + $chunk->length + $flank;
+		$E2 = $chunk->parent_seq_length if($E2 > $chunk->parent_seq_length);
+		my $L2 = abs($E2 - $B2) +1;
+
+		if($E2 >= $B2 && $E2 > 0){
+		    if(ref($parent_seq) eq 'SCALAR'){
+			$chunk->seq(substr($$parent_seq, $B2 - 1, $L2));
+			$chunk->seq(substr($$parent_seq, $offset, $chunk->length));
+		    }
+		    else{
+			$chunk->seq($parent_seq);
+		    }
+		}
+
+	    }
+	       
 	    push(@{$self->{chunks}}, $chunk);
         }
 

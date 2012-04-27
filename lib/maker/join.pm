@@ -515,7 +515,7 @@ sub merge_hsp {
     my $offset;
     my $class;
     if ($type == 5){
-	$offset = $ext->{five_j};	
+	$offset = $ext->{five_j};
 	$class  = $ext->{f_j_class};
     }
     else {
@@ -547,8 +547,7 @@ sub merge_hsp {
 	    $end = $ext_hsp->end;
 	}
 	elsif ($g_hsp->strand('query') == - 1 && $ext_hsp->strand('query') == -1) {
-	    $g_hsp->query->location->start($ext_hsp->start);
-	    $start = $ext_hsp->end;
+	    $start = $ext_hsp->start;
 	}
 	else {
 	    die "dead in auto_annotator::merge_hsp\n";
