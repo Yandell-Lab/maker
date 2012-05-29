@@ -47,7 +47,7 @@ Formating:
   suffix and the iterate value will appear at the end of the prefix (only on
   transcripts).  You can specify an alternate location for the abbreviation by
   placing a '?' character as part of the prefix or the sufix. An alternate
-  location for the itterator can be given by adding a % character to the
+  location for the iterator can be given by adding a % character to the
   suffix or prefix.
 
 ";
