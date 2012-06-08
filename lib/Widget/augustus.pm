@@ -317,7 +317,7 @@ sub parse_gene {
 	my $gene_name;
 	my $score;
 	foreach my $datum (@{$stuff}){
-		next if $datum =~ /\# end gene/;
+		last if $datum =~ /\# end gene/;
 
 		my @fields = split(/\s+/, $datum);
 

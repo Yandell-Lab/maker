@@ -10,14 +10,20 @@ sub get_abAED{
     my $hits = shift;
     my $tran = shift;
 
-    my $sum;
+    my $sum = 0;
+    $tran->{_touch}++; #keeps self from being counted in score
     foreach my $h (@$hits){
+	next if($tran->{_touch}++);
 	$sum += get_AED([$h], $tran);
     }
+    
+    foreach my $h (@$hits, $tran) {
+	delete($h->{_touch});
+    }
+
     return 1 if(! @$hits);
     return $sum/@$hits;
 }
-
 
 sub get_eAED {
    my $hits = shift;

@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------
+#------------------------------------------------------------------------
 #----                                GI                              ----
 #------------------------------------------------------------------------
 package GI;
@@ -929,7 +929,14 @@ sub split_db {
 	
 	#Skip empty fasta entries
 	next if($$seq_ref eq '');
-	
+
+	#fix weird super long headers
+	if(length($def) > 2000){
+	    warn "WARNING: Fasta header of length >2000.  Long headers kill BLAST.\n".
+		"I will truncate it for you whether you like it or not\n\n";
+	    $def = substr($def, 0, 2000);
+	}
+
 	#fix weird blast trimming error for long seq IDs by replacing them
 	if(length($seq_id) > 78){
 	    warn "WARNING: The fasta file contains sequences with names longer\n".
@@ -1854,7 +1861,7 @@ sub blastn_as_chunks {
 	}
    
        #call blast executable
-       $chunk->write_file($t_file_name);  
+       $chunk->write_file_w_flank($t_file_name);  
        
        runBlastn($t_file_name,
 		 $tmp_db,
@@ -1905,8 +1912,18 @@ sub blastn_as_chunks {
    };
    
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
+			     $chunk->offset_w_flank(),
 			    );
+
+   #filter out hits that are not really on this chunk, just on flank
+   if($chunk->length != $chunk->length_w_flank){
+       my @keepers;
+       foreach my $hit (@$chunk_keepers){
+	   next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	   push(@keepers, $hit);
+	   $chunk_keepers = \@keepers;
+       }
+   }
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -1959,7 +1976,7 @@ sub blastn {
        dbformat($formater, $db, 'blastn');
    }
 
-   $chunk->write_file($file_name);
+   $chunk->write_file_w_flank($file_name);
    runBlastn($file_name,
 	     $db,
 	     $o_file,
@@ -2006,8 +2023,18 @@ sub blastn {
    $LOG->add_entry("FINISHED", $o_file, "");
 
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
+			     $chunk->offset_w_flank(),
 			    );
+
+   #filter out hits that are not really on this chunk, just on flank
+   if($chunk->length != $chunk->length_w_flank){
+       my @keepers;
+       foreach my $hit (@$chunk_keepers){
+	   next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	   push(@keepers, $hit);
+	   $chunk_keepers = \@keepers;
+       }
+   }
 
    $chunk->erase_fasta_file();
 
@@ -2208,8 +2235,13 @@ sub blastx_as_chunks {
        }
 
        #call blast executable
-       $chunk->write_file($t_file_name);  
-       
+       if($rflag){
+	   $chunk->write_file($t_file_name);  
+       }
+       else{
+	   $chunk->write_file_w_flank($t_file_name);  
+       }
+
        runBlastx($t_file_name,
 		 $tmp_db,
 		 $o_file,
@@ -2259,9 +2291,24 @@ sub blastx_as_chunks {
       }
    };   
 
-   PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
-			    );
+   if($rflag){
+       PhatHit_utils::add_offset($chunk_keepers,
+				 $chunk->offset());
+   }
+   else{
+       PhatHit_utils::add_offset($chunk_keepers,
+				 $chunk->offset_w_flank());
+       
+       #filter out hits that are not really on this chunk, just on flank
+       if($chunk->length != $chunk->length_w_flank){
+	   my @keepers;
+	   foreach my $hit (@$chunk_keepers){
+	       next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	       push(@keepers, $hit);
+	       $chunk_keepers = \@keepers;
+	   }
+       }
+   }
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -2356,7 +2403,12 @@ sub blastx {
        dbformat($formater, $db, 'blastx');
    }
 
-   $chunk->write_file($file_name);
+   if($rflag){
+       $chunk->write_file($file_name);
+   }
+   else{
+       $chunk->write_file_w_flank($file_name);
+   }
    runBlastx($file_name,
 	     $db,
 	     $o_file,
@@ -2403,10 +2455,25 @@ sub blastx {
 
    $LOG->add_entry("FINISHED", $o_file, "");
 
-   PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
-			    );
-   
+   if($rflag){
+       PhatHit_utils::add_offset($chunk_keepers,
+				 $chunk->offset());
+   }
+   else{
+       PhatHit_utils::add_offset($chunk_keepers,
+				 $chunk->offset_w_flank());
+       
+       #filter out hits that are not really on this chunk, just on flank
+       if($chunk->length != $chunk->length_w_flank){
+	   my @keepers;
+	   foreach my $hit (@$chunk_keepers){
+	       next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	       push(@keepers, $hit);
+	       $chunk_keepers = \@keepers;
+	   }
+       }
+   }
+
    $chunk->erase_fasta_file();   
 
    #add user defined labels
@@ -2583,7 +2650,7 @@ sub tblastx_as_chunks {
        }
 
        #call blast executable
-       $chunk->write_file($t_file_name);  
+       $chunk->write_file_w_flank($t_file_name);  
        
        runtBlastx($t_file_name,
 		 $tmp_db,
@@ -2634,8 +2701,18 @@ sub tblastx_as_chunks {
    };
    
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
+			     $chunk->offset_w_flank(),
 			    );
+
+   #filter out hits that are not really on this chunk, just on flank
+   if($chunk->length != $chunk->length_w_flank){
+       my @keepers;
+       foreach my $hit (@$chunk_keepers){
+	   next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	   push(@keepers, $hit);
+	   $chunk_keepers = \@keepers;
+       }
+   }
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -2688,7 +2765,7 @@ sub tblastx {
        dbformat($formater, $db, 'tblastx');
    }
 
-   $chunk->write_file($file_name);
+   $chunk->write_file_w_flank($file_name);
    runtBlastx($file_name,
 	      $db,
 	      $o_file,
@@ -2736,8 +2813,18 @@ sub tblastx {
    $LOG->add_entry("FINISHED", $o_file, "");
 
    PhatHit_utils::add_offset($chunk_keepers,
-			     $chunk->offset(),
+			     $chunk->offset_w_flank(),
 			    );
+
+   #filter out hits that are not really on this chunk, just on flank
+   if($chunk->length != $chunk->length_w_flank){
+       my @keepers;
+       foreach my $hit (@$chunk_keepers){
+	   next if($hit->end < $chunk->start || $hit->start > $chunk->end);
+	   push(@keepers, $hit);
+	   $chunk_keepers = \@keepers;
+       }
+   }
 
    $chunk->erase_fasta_file();
 
@@ -2913,7 +3000,7 @@ sub repeatmask {
    PhatHit_utils::add_offset($rm_chunk_keepers, 
 			     $chunk->offset(),
 			    );
-   
+
    $chunk->erase_fasta_file();
 
    #add user defined labels
@@ -4163,42 +4250,40 @@ sub generate_control_files {
    if($type eq 'all' || $type eq 'opts'){
        open (OUT, "> $dir/$app\_opts.$ext") or
 	   die "ERROR: Could not create $dir/$app\_opts.$ext\n";
-       print OUT "#-----Genome (Required for De-Novo Annotation)\n" if(!$ev);
-       print OUT "#-----Genome (Required if not internal to GFF3 file)\n" if($ev);
-       print OUT "genome=$O{genome} #genome sequence (fasta format or fasta embeded in GFF3)\n";
+       print OUT "#-----Genome (these are always required)\n";
+       print OUT "genome=$O{genome} #genome sequence (fasta file or fasta embeded in GFF3 file)\n";
        print OUT "organism_type=$O{organism_type} #eukaryotic or prokaryotic. Default is eukaryotic\n";
        print OUT "\n";
        print OUT "#-----Re-annotation Using MAKER Derived GFF3\n" if(!$ev);
        print OUT "#-----MAKER Derived GFF3 Annotations to Evaluate\n" if($ev);
-       print OUT "maker_gff=$O{maker_gff} #re-annotate genome based on this gff3 file\n" if(!$ev);
-       print OUT "maker_gff=$O{maker_gff} #MAKER derived gff3 file\n" if($ev);
-       print OUT "est_pass=$O{est_pass} #use ests in maker_gff: 1 = yes, 0 = no\n";
-       print OUT "altest_pass=$O{altest_pass} #use alternate organism ests in maker_gff: 1 = yes, 0 = no\n";
-       print OUT "protein_pass=$O{protein_pass} #use proteins in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "maker_gff=$O{maker_gff} #MAKER derived GFF3 file\n";
+       print OUT "est_pass=$O{est_pass} #use ESTs in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "altest_pass=$O{altest_pass} #use alternate organism ESTs in maker_gff: 1 = yes, 0 = no\n";
+       print OUT "protein_pass=$O{protein_pass} #use protein alignments in maker_gff: 1 = yes, 0 = no\n";
        print OUT "rm_pass=$O{rm_pass} #use repeats in maker_gff: 1 = yes, 0 = no\n";
        print OUT "model_pass=$O{model_pass} #use gene models in maker_gff: 1 = yes, 0 = no\n" if(!$ev);
        print OUT "pred_pass=$O{pred_pass} #use ab-initio predictions in maker_gff: 1 = yes, 0 = no\n";
-       print OUT "other_pass=$O{other_pass} #passthrough everything else in maker_gff: 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "other_pass=$O{other_pass} #passthrough anyything else in maker_gff: 1 = yes, 0 = no\n" if(!$ev);
        print OUT "\n";
        print OUT "#-----External GFF3 Annotations to Evaluate\n" if($ev);
-       print OUT "model_gff=$O{model_gff} #gene models from an external gff3 file\n" if($ev);
+       print OUT "model_gff=$O{model_gff} #gene models from an external GFF3 file\n" if($ev);
        print OUT "\n"if($ev);
        print OUT "#-----EST Evidence (for best results provide a file for at least one)\n";
-       print OUT "est=$O{est} #non-redundant set of assembled ESTs in fasta format (classic EST analysis)\n";
+       print OUT "est=$O{est} #set of ESTs or assembled mRNA-seq in fasta format\n";
        print OUT "altest=$O{altest} #EST/cDNA sequence file in fasta format from an alternate organism\n";
-       print OUT "est_gff=$O{est_gff} #EST evidence from an external gff3 file\n";
-       print OUT "altest_gff=$O{altest_gff} #Alternate organism EST evidence from a separate gff3 file\n";
+       print OUT "est_gff=$O{est_gff} #aligned ESTs or mRNA-seq from an external GFF3 file\n";
+       print OUT "altest_gff=$O{altest_gff} #aligned ESTs from a closly relate species in GFF3 format\n";
        print OUT "\n";
        print OUT "#-----Protein Homology Evidence (for best results provide a file for at least one)\n";
-       print OUT "protein=$O{protein}  #protein sequence file in fasta format\n";
-       print OUT "protein_gff=$O{protein_gff}  #protein homology evidence from an external gff3 file\n";
+       print OUT "protein=$O{protein}  #protein sequence file in fasta format (i.e. from mutiple oransisms)\n";
+       print OUT "protein_gff=$O{protein_gff}  #aligned protein homology evidence from an external GFF3 file\n";
        print OUT "\n";
        print OUT "#-----Repeat Masking (leave values blank to skip repeat masking)\n";
        print OUT "model_org=$O{model_org} #select a model organism for RepBase masking in RepeatMasker\n";
        print OUT "rmlib=$O{rmlib} #provide an organism specific repeat library in fasta format for RepeatMasker\n";
        print OUT "repeat_protein=$O{repeat_protein} #provide a fasta file of transposable element proteins for RepeatRunner\n";
-       print OUT "rm_gff=$O{rm_gff} #repeat elements from an external GFF3 file\n";
-       print OUT "prok_rm=$O{prok_rm} #forces MAKER to run repeat masking on prokaryotes (don't change this), 1 = yes, 0 = no\n";
+       print OUT "rm_gff=$O{rm_gff} #pre-identified repeat elements from an external GFF3 file\n";
+       print OUT "prok_rm=$O{prok_rm} #forces MAKER to repeatmask prokaryotes (no reason to change this), 1 = yes, 0 = no\n";
        print OUT "softmask=$O{softmask} #use soft-masking rather than hard-masking in BLAST (i.e. seg and dust filtering)\n";
        print OUT "\n";
        print OUT "#-----Gene Prediction\n" if(!$ev);
@@ -4206,22 +4291,22 @@ sub generate_control_files {
        print OUT "snaphmm=$O{snaphmm} #SNAP HMM file\n";
        print OUT "gmhmm=$O{gmhmm} #GeneMark HMM file\n";
        print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction species model\n";
-       print OUT "fgenesh_par_file=$O{fgenesh_par_file} #Fgenesh parameter file\n";
+       print OUT "fgenesh_par_file=$O{fgenesh_par_file} #FGENESH parameter file\n";
        print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external GFF3 file\n";
        print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
        print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "protein2genome=$O{protein2genome} #gene prediction from protein homology, 1 = yes, 0 = no\n"  if(!$ev);
-       print OUT "unmask=$O{unmask} #Also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
+       print OUT "protein2genome=$O{protein2genome} #infer predictions from protein homology, 1 = yes, 0 = no\n"  if(!$ev);
+       print OUT "unmask=$O{unmask} #also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);
-       print OUT "other_gff=$O{other_gff} #features to pass-through to final output from an extenal GFF3 file\n" if(!$ev);
+       print OUT "other_gff=$O{other_gff} #extra features to pass-through to final MAKER generated GFF3 file\n" if(!$ev);
        print OUT "\n" if(!$ev);
        print OUT "#-----External Application Behavior Options\n";
-       print OUT "alt_peptide=$O{alt_peptide} #amino acid used to replace non standard amino acids in BLAST databases\n";
+       print OUT "alt_peptide=$O{alt_peptide} #amino acid used to replace non-standard amino acids in BLAST databases\n";
        print OUT "cpus=$O{cpus} #max number of cpus to use in BLAST and RepeatMasker (not for MPI, leave 1 when using MPI)\n";
        print OUT "\n";
        print OUT "#-----MAKER Behavior Options\n";
-       print OUT "max_dna_len=$O{max_dna_len} #length for dividing up contigs into chunks (increases/decreases  memory usage)\n";
+       print OUT "max_dna_len=$O{max_dna_len} #length for dividing up contigs into chunks (increases/decreases memory usage)\n";
        print OUT "min_contig=$O{min_contig} #skip genome contigs below this length (under 10kb are often useless)\n" if(!$ev);
        print OUT "\n";
        print OUT "pred_flank=$O{pred_flank} #flank for extending evidence clusters sent to gene predictors\n";
@@ -4229,10 +4314,10 @@ sub generate_control_files {
        print OUT "AED_threshold=$O{AED_threshold} #Maximum Annotation Edit Distance allowed (bound by 0 and 1)\n" if(!$ev);
        print OUT "min_protein=$O{min_protein} #require at least this many amino acids in predicted proteins\n" if(!$ev);
        print OUT "alt_splice=$O{alt_splice} #Take extra steps to try and find alternative splicing, 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "always_complete=$O{always_complete} #force start and stop codon into every gene, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "always_complete=$O{always_complete} #extra steps to force start and stop codons, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "map_forward=$O{map_forward} #map names and attributes forward from old GFF3 genes, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "est_forward=$O{est_forward} #reserve flag for map2assembly\n" if($O{est_forward});
-       print OUT "keep_preds=$O{keep_preds} #Add unsupported gene prediction to final annotation set, 1 = yes, 0 = no\n" if(!$ev);
+       print OUT "keep_preds=$O{keep_preds} #Concordance threshold to add unsupported gene prediction (bound by 0 and 1)\n" if(!$ev);
        print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
@@ -4243,15 +4328,15 @@ sub generate_control_files {
        print OUT "clean_try=$O{clean_try} #remove all data from previous run before retrying, 1 = yes, 0 = no\n";
        print OUT "clean_up=$O{clean_up} #removes theVoid directory with individual analysis files, 1 = yes, 0 = no\n";
        print OUT "TMP=$O{TMP} #specify a directory other than the system default temporary directory for temporary files\n";
-       print OUT "\n";
-       print OUT "#-----EVALUATOR Control Options\n";
-       print OUT "evaluate=$O{evaluate} #run EVALUATOR on all annotations (very experimental), 1 = yes, 0 = no\n" if(!$ev);
-       print OUT "side_thre=$O{side_thre}\n";
-       print OUT "eva_window_size=$O{eva_window_size}\n";
-       print OUT "eva_split_hit=$O{eva_split_hit}\n";
-       print OUT "eva_hspmax=$O{eva_hspmax}\n";
-       print OUT "eva_gspmax=$O{eva_gspmax}\n";
-       print OUT "enable_fathom=$O{enable_fathom}\n";
+       print OUT "\n" if($ev);
+       print OUT "#-----EVALUATOR Control Options (ignore these)\n" if($ev);
+       #print OUT "evaluate=$O{evaluate} #run EVALUATOR on all annotations (very experimental), 1 = yes, 0 = no\n";
+       print OUT "side_thre=$O{side_thre}\n" if($ev);
+       print OUT "eva_window_size=$O{eva_window_size}\n" if($ev);
+       print OUT "eva_split_hit=$O{eva_split_hit}\n" if($ev);
+       print OUT "eva_hspmax=$O{eva_hspmax}\n" if($ev);
+       print OUT "eva_gspmax=$O{eva_gspmax}\n" if($ev);
+       print OUT "enable_fathom=$O{enable_fathom}\n" if($ev);
        close (OUT);
    }
     
@@ -4285,11 +4370,11 @@ sub generate_control_files {
        print OUT "eval_rm_blastx=$O{eval_rm_blastx} #Blastx eval cutoff for transposable element masking\n";
        print OUT "bit_rm_blastx=$O{bit_rm_blastx} #Blastx bit cutoff for transposable element masking\n";
        print OUT "\n";
-       print OUT "eva_pcov_blastn=$O{eva_pcov_blastn} #EVALUATOR Blastn Percent Coverage Threshold EST-Genome Alignments\n";
-       print OUT "eva_pid_blastn=$O{eva_pid_blastn} #EVALUATOR Blastn Percent Identity Threshold EST-Genome Alignments\n";
-       print OUT "eva_eval_blastn=$O{eva_eval_blastn} #EVALUATOR Blastn eval cutoff\n";
-       print OUT "eva_bit_blastn=$O{eva_bit_blastn} #EVALUATOR Blastn bit cutoff\n";
-       print OUT "\n";
+       print OUT "eva_pcov_blastn=$O{eva_pcov_blastn} #EVALUATOR Blastn Percent Coverage Threshold EST-Genome Alignments\n" if($ev);
+       print OUT "eva_pid_blastn=$O{eva_pid_blastn} #EVALUATOR Blastn Percent Identity Threshold EST-Genome Alignments\n" if($ev);
+       print OUT "eva_eval_blastn=$O{eva_eval_blastn} #EVALUATOR Blastn eval cutoff\n" if($ev);
+       print OUT "eva_bit_blastn=$O{eva_bit_blastn} #EVALUATOR Blastn bit cutoff\n" if($ev);
+       print OUT "\n" if($ev);
        print OUT "ep_score_limit=$O{ep_score_limit} #Exonerate protein percent of maximal score threshold\n";
        print OUT "en_score_limit=$O{en_score_limit} #Exonerate nucleotide percent of maximal score threshold\n";
        close(OUT);
@@ -4319,7 +4404,7 @@ sub generate_control_files {
        print OUT "fgenesh=$O{fgenesh} #location of fgenesh executable\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
-       print OUT "fathom=$O{fathom} #location of fathom executable (experimental)\n";
+       print OUT "fathom=$O{fathom} #location of fathom executable (experimental)\n" if($ev);
        print OUT "probuild=$O{probuild} #location of probuild executable (required for genemark)\n";
        close(OUT);
    }

@@ -1093,6 +1093,7 @@ sub add_abAED{
 	    $f = $t->{hit} if(! $f);
 	    my $ab = shadow_AED::get_abAED($hits, $f);
 	    $t->{abAED} = $ab;
+	    $t->{pred_overlap} = @$hits;
 	    $abAED = $ab if($ab < $abAED);
 	}
 	$g->{abAED} = $abAED;
@@ -1107,6 +1108,7 @@ sub add_abAED{
 	    $f = $t->{hit} if(! $f);
 	    my $ab = shadow_AED::get_abAED($hits, $f);
 	    $t->{abAED} = $ab;
+	    $t->{pred_overlap} = @$hits;
 	    $abAED = $ab if($ab < $abAED);
 	}
 	$g->{abAED} = $abAED;

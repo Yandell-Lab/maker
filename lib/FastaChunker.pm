@@ -133,11 +133,13 @@ sub load_chunks {
 		my $L1 = abs($E1 - $B1) +1;
 
 		if($E1 >= $B1 && $E1 > 0){
+		    $chunk->{_upstream}{start} = $B1;
+		    $chunk->{_upstream}{end} = $E1;
 		    if(ref($parent_seq) eq 'SCALAR'){
-			$chunk->seq(substr($$parent_seq, $B1 - 1, $L1));
+			$chunk->{_upstream}{seq} = substr($$parent_seq, $B1 - 1, $L1);
 		    }
 		    else{
-			$chunk->seq($parent_seq);
+			$chunk->{_upstream}{seq} = undef; #will just query parent_seq
 		    }
 		}
 
@@ -148,15 +150,15 @@ sub load_chunks {
 		my $L2 = abs($E2 - $B2) +1;
 
 		if($E2 >= $B2 && $E2 > 0){
+                    $chunk->{_downstream}{start} = $B2;
+                    $chunk->{_downstream}{end} = $E2;
 		    if(ref($parent_seq) eq 'SCALAR'){
-			$chunk->seq(substr($$parent_seq, $B2 - 1, $L2));
-			$chunk->seq(substr($$parent_seq, $offset, $chunk->length));
+			$chunk->{_downstream}{seq} = substr($$parent_seq, $B2 - 1, $L2);
 		    }
 		    else{
-			$chunk->seq($parent_seq);
+			$chunk->{_downstream}{seq} = undef; #will just query parent_seq
 		    }
 		}
-
 	    }
 	       
 	    push(@{$self->{chunks}}, $chunk);
