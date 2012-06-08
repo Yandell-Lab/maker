@@ -857,7 +857,7 @@ sub _install_exe {
 	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
 	    my $user = $self->prompt("Please enter your username:", '');
 	    my $pass;
-	    if(!$self->check_installed_status('Term::ReadKey', '0')->{ok}){
+	    if($self->check_installed_status('Term::ReadKey', '0')->{ok}){
 		$pass = $self->safe_prompt("Please enter your Password:", '');
 	    }
 	    else{
