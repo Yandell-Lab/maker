@@ -1861,7 +1861,7 @@ sub blastn_as_chunks {
 	}
    
        #call blast executable
-       $chunk->write_file_w_flank($t_file_name);  
+       $chunk->write_file_w_flank($t_file_name);
        
        runBlastn($t_file_name,
 		 $tmp_db,

@@ -113,6 +113,15 @@ sub write_file {
 	FastaFile::writeFile($self->fasta_ref, $file_name);
 }
 #-------------------------------------------------------------------------------
+sub write_file_w_flank {
+	my $self      = shift;
+	my $file_name = shift;
+
+	$self->fasta_file_location($file_name);
+
+	FastaFile::writeFile($self->fasta_ref, $file_name);
+}
+#-------------------------------------------------------------------------------
 sub erase_fasta_file {
 	my $self     = shift;
 	my $location = shift;
