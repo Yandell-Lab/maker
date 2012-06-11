@@ -575,20 +575,20 @@ sub run {
 	my $command = shift;
 
 	if (defined($command)){
-	        $self->print_command($command);
-		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
-		{
-		    local $/ = \1;
-		    while (my $line = <$CHLD_ERR>){
-			print STDERR $line unless($main::quiet);
-		    }
+	    $self->print_command($command);
+	    my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
+	    my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	    {
+		local $/ = \1;
+		while (my $line = <$CHLD_ERR>){
+		    print STDERR $line unless($main::quiet);
 		}
-		waitpid $pid, 0;
-		die "ERROR: Snap failed\n" if $? != 0;
+	    }
+	    waitpid $pid, 0;
+	    die "ERROR: Snap failed\n" if $? != 0;
 	}
 	else {
-		die "you must give Widget::snap a command to run!\n";
+	    die "you must give Widget::snap a command to run!\n";
 	}
 }
 #-------------------------------------------------------------------------------

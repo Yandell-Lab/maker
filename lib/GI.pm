@@ -931,10 +931,10 @@ sub split_db {
 	next if($$seq_ref eq '');
 
 	#fix weird super long headers
-	if(length($def) > 2000){
-	    warn "WARNING: Fasta header of length >2000.  Long headers kill BLAST.\n".
+	if(length($def) > 10000){
+	    warn "WARNING: Fasta header of length >10000.  Long headers kill BLAST.\n".
 		"I will truncate it for you whether you like it or not\n\n";
-	    $def = substr($def, 0, 2000);
+	    $def = substr($def, 0, 10000);
 	}
 
 	#fix weird blast trimming error for long seq IDs by replacing them

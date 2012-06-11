@@ -543,7 +543,14 @@ sub unlock {
 
     $self->_unlink_block(0) if($force);
 
-    return 1 if($self->{unlocked});    
+    my $stat;
+    if($self->{unlocked}){
+	#clean up any children that are floating around
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;    
+	return 1;
+    }
 
     #remove any temporary files
     unlink($self->{rand_file});
@@ -552,12 +559,6 @@ sub unlock {
     my $m_pid = $self->{_maintain};
     if(defined($m_pid) && Proc::Signal::id_matches_pattern($m_pid, 'maintain\.pl|\<defunct\>')){
 	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
-
-	#clean up any children that are floating around
-	my $stat;
-	do {
-	    $stat = waitpid(-1, WNOHANG);
-	} while $stat > 0;
 
 	#signal maintainer
 	kill(2, $self->{_maintain});
@@ -580,8 +581,13 @@ sub unlock {
 	
 	$self->{_maintain} = undef;
     }
-    
-    my $stat = ($self->{lock_type} == LOCK_SH) ? $self->_do_unlock_shared : $self->_do_unlock;
+
+    #clean up any children that are floating around
+    do {
+	$stat = waitpid(-1, WNOHANG);
+    } while $stat > 0;    
+
+    my $ok = ($self->{lock_type} == LOCK_SH) ? $self->_do_unlock_shared : $self->_do_unlock;
     $self->{unlocked} = 1;
     
     # Revert handler once all locks are finished
@@ -591,7 +597,7 @@ sub unlock {
 	}
     }
     
-    return $stat;
+    return $ok;
 }
 #-------------------------------------------------------------------------------
 sub _check_shared {
@@ -834,18 +840,18 @@ sub maintain {
     return 0 if(!$self->refresh); #refresh once on it's own
 
     #clean up old maintainers
+    my $stat;
     my $p = Proc::Signal::get_proc_by_id($self->{_maintain}) if(defined $self->{_maintain});
     if($p && $p->state ne 'zombie'){
+	#clean up any children that are floating around
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;
+
 	return 1;
     }
     elsif($p){
 	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
-
-	#clean up any children that are floating around
-	my $stat;
-	do {
-	    $stat = waitpid(-1, WNOHANG);
-	} while $stat > 0;
 
 	#signal maintainer
 	kill(2, $self->{_maintain});
@@ -869,6 +875,11 @@ sub maintain {
 	$self->{_IN} = undef;
 	$self->{_maintain} = undef;
     }
+
+    #clean up any children that are floating around
+    do {
+	$stat = waitpid(-1, WNOHANG);
+    } while $stat > 0;
 
     #create lock serialization
     my $serial = Storable::freeze($self);
@@ -886,17 +897,16 @@ sub maintain {
     if($m_pid && $self->still_mine){
 	$self->{_maintain} = $m_pid;
 	$self->{_IN} = $IN;
+
+	#clean up any children that are floating around
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;
 	
 	return 1;
     }
     else{
 	close($IN);
-
-	#clean up any children that are floating around
-	my $stat;
-	do {
-	    $stat = waitpid(-1, WNOHANG);
-	} while $stat > 0;
 	
 	#signal maintainer
 	kill(2, $self->{_maintain});
@@ -919,6 +929,11 @@ sub maintain {
 	
 	$self->{_IN} = undef;
 	$self->{_maintain} = undef;
+
+	#clean up any children that are floating around
+	do {
+	    $stat = waitpid(-1, WNOHANG);
+	} while $stat > 0;	
 
 	return 0;
     }
