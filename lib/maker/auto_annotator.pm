@@ -1054,7 +1054,10 @@ sub gene2allPbases {
 #lower abAED means that this model is closer to the consensus of all the gene
 #models. est2genome is not considered as an alternate model when calculating
 #abAED; however, abinits, and model_gff annotations are.  This means abAED is
-#calculated for est2genome, but not against est2genome.
+#calculated for est2genome, but not against est2genome. It also means all
+#ab initio predictions will get a bonus because they match themselves.  To
+#account for this I also report the apAED or adjusted prediction AED, which
+#is basically abAED without the self-match bonus.
 sub add_abAED{
     my $annotations = shift;
 
@@ -1093,7 +1096,6 @@ sub add_abAED{
 	    $f = $t->{hit} if(! $f);
 	    my $ab = shadow_AED::get_abAED($hits, $f);
 	    $t->{abAED} = $ab;
-	    $t->{pred_overlap} = @$hits;
 	    $abAED = $ab if($ab < $abAED);
 	}
 	$g->{abAED} = $abAED;
@@ -1108,8 +1110,8 @@ sub add_abAED{
 	    $f = $t->{hit} if(! $f);
 	    my $ab = shadow_AED::get_abAED($hits, $f);
 	    $t->{abAED} = $ab;
-	    $t->{pred_overlap} = @$hits;
 	    $abAED = $ab if($ab < $abAED);
+	    
 	}
 	$g->{abAED} = $abAED;
     }

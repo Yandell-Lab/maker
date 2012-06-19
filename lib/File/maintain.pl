@@ -8,7 +8,6 @@ use File::NFSLock;
 use Storable;
 use vars qw($LOCK);
 use Proc::Signal;
-use Proc::ProcessTable_simple;
 use URI::Escape;
 use Perl::Unsafe::Signals;
 

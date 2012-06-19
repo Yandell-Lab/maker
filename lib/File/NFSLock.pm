@@ -557,7 +557,7 @@ sub unlock {
 
     #remove maintainer if running
     my $m_pid = $self->{_maintain};
-    if(defined($m_pid) && Proc::Signal::id_matches_pattern($m_pid, 'maintain\.pl|\<defunct\>')){
+    if(defined($m_pid) && Proc::Signal::id_matches_pattern($m_pid, 'maintain\.pl|defunct')){
 	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
 
 	#signal maintainer
@@ -837,8 +837,6 @@ sub maintain {
     die "ERROR: No time interval given to maintain lock\n\n"
 	if(! $time || $time < 1);
 
-    return 0 if(!$self->refresh); #refresh once on it's own
-
     #clean up old maintainers
     my $stat;
     my $p = Proc::Signal::get_proc_by_id($self->{_maintain}) if(defined $self->{_maintain});
@@ -876,10 +874,14 @@ sub maintain {
 	$self->{_maintain} = undef;
     }
 
+    my $mine = $self->refresh; #refresh once on it's own
+
     #clean up any children that are floating around
     do {
 	$stat = waitpid(-1, WNOHANG);
     } while $stat > 0;
+
+    return 0 if(!$mine);
 
     #create lock serialization
     my $serial = Storable::freeze($self);
@@ -898,11 +900,6 @@ sub maintain {
 	$self->{_maintain} = $m_pid;
 	$self->{_IN} = $IN;
 
-	#clean up any children that are floating around
-	do {
-	    $stat = waitpid(-1, WNOHANG);
-	} while $stat > 0;
-	
 	return 1;
     }
     else{
@@ -929,11 +926,6 @@ sub maintain {
 	
 	$self->{_IN} = undef;
 	$self->{_maintain} = undef;
-
-	#clean up any children that are floating around
-	do {
-	    $stat = waitpid(-1, WNOHANG);
-	} while $stat > 0;	
 
 	return 0;
     }
