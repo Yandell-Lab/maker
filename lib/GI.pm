@@ -118,6 +118,19 @@ sub mount_check {
     return "$host:$path";
 }
 #------------------------------------------------------------------------
+sub is_NFS_mount {
+    my $path = shift;
+
+    my $host = Sys::Hostname::hostname();
+    $path = mount_check($path);
+
+    return undef if(! $path);
+
+    $host = quotemeta($host);
+
+    return ($path =~ /^$host\:/) ? 0 : 1;
+}
+#------------------------------------------------------------------------
 sub set_global_temp {
     my $dir = shift;
     

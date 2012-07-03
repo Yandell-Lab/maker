@@ -47,6 +47,8 @@ sub table {
 	my @F = $line =~ /^(.{$cat[0]})(.{$cat[1]})(.{$cat[2]})(.{$cat[3]})(.*)$/;
 	map {s/^\s+|\s+$//g} @F;
 
+	next unless(defined $F[2]);
+
 	if($F[2] =~ /^T/i){
 	    $F[2] = 'stopped';
 	}

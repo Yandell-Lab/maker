@@ -733,12 +733,18 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $LOG = $VARS->{LOG};
-	    my $GFF_DB = new GFFDB($VARS->{dbfile});
+	    my $dbfile = $VARS->{dbfile};
 	    my $chunk = $VARS->{chunk};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_length = $VARS->{q_seq_length};
+
+	    my $TMP = GI::get_global_temp;
+	    if($CTL_OPT{go_gffdb} && GI::is_NFS_mount($dbfile) && !GI::is_NFS_mount($TMP)){
+		$dbfile = GI::localize_file($dbfile);
+	    }
+	    my $GFF_DB = new GFFDB($dbfile);
 
 	    #-- repeatmask with gff3 input
 	    my $rm_gff_keepers = [];
@@ -2760,11 +2766,17 @@ sub _go {
 	    my $exonerate_e_data = $VARS->{exonerate_e_data};
 	    my $exonerate_a_data = $VARS->{exonerate_a_data};
 	    my $exonerate_p_data = $VARS->{exonerate_p_data};
-	    my $GFF_DB = new GFFDB($VARS->{dbfile});
+	    my $dbfile = $VARS->{dbfile};
 	    my $GFF3_e = $VARS->{GFF3_e};
 	    my $LOG = $VARS->{LOG};
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
-	    
+
+	    my $TMP = GI::get_global_temp;
+	    if($CTL_OPT{go_gffdb} && GI::is_NFS_mount($dbfile) && !GI::is_NFS_mount($TMP)){
+		$dbfile = GI::localize_file($dbfile);
+	    }
+	    my $GFF_DB = new GFFDB($dbfile);
+
 	    #==GFF3 passthrough of evidence
 	    my $prot_gff_keepers = [];
 	    my $est_gff_keepers = [];

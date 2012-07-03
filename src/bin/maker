@@ -569,7 +569,7 @@ if($size == 1){
                                     CTL_OPT => \%CTL_OPT,
                                     DS_CTL  => $DS_CTL,
                                     dbfile  => $GFF_DB->dbfile,
-					build   => $build},
+				    build   => $build},
                                    '0',
                                    'Process::MpiChunk'
 	    );

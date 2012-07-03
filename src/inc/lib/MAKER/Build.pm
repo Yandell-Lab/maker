@@ -462,7 +462,7 @@ sub ACTION_install {
 	$self->dispatch('build');
     }
 
-    $self->log_info("Installing " . $self->dist_name . "...\n");    
+    $self->log_info("Installing " . $self->dist_name . "...\n");
     $self->SUPER::ACTION_install();
 
     my $blib = $self->blib();
