@@ -1627,7 +1627,7 @@ sub safe_prompt {
     my $key = 0;
     my $r = "";
     #Start reading the keys
-    ReadMode(4); #Disable the control keys (raw mode)
+    Term::ReadKey::ReadMode(4); #Disable the control keys (raw mode)
 
     while(ord($key = ReadKey(0)) != 10) { #This will continue until the Enter key is pressed (decimal value of 10)
 	if(ord($key) == 127 || ord($key) == 8) { #DEL/Backspace was pressed
