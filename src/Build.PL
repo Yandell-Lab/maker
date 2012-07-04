@@ -31,7 +31,6 @@ my $build = MAKER::Build->new(
      auto_configure_requires => 1,
      requires => {
 	 'perl'               => '5.8.0',
-	 'Proc::ProcessTable' => '0',
 	 'File::Which'        => '0',
 	 'Bio::Root::Version' => '1.006',
 	 'IO::All'            => '0',
@@ -43,6 +42,7 @@ my $build = MAKER::Build->new(
 	 'forks'              => '0.34',
 	 'forks::shared'      => '0.34',
 	 'Want'               => '0',
+	 #'Proc::ProcessTable' => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },
      exe_requires => {

@@ -96,8 +96,8 @@ sub mount_check {
     for(my $i = $#F; $i >= 0; $i--){
         if($F[$i] =~ /^\d+\%$/ &&
            -e $mounted_on &&
-         Cwd::abs_path($mounted_on) eq $mounted_on
-            ){
+	   Cwd::abs_path($mounted_on) eq $mounted_on
+          ){
             $filesystem = join(' ', @F[0..$i-4]);
             last;
         }
