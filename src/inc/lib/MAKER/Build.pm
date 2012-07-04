@@ -1629,7 +1629,7 @@ sub safe_prompt {
     #Start reading the keys
     Term::ReadKey::ReadMode(4); #Disable the control keys (raw mode)
 
-    while(ord($key = ReadKey(0)) != 10) { #This will continue until the Enter key is pressed (decimal value of 10)
+    while(ord($key = Term::ReadKey::ReadKey(0)) != 10) { #This will continue until the Enter key is pressed (decimal value of 10)
 	if(ord($key) == 127 || ord($key) == 8) { #DEL/Backspace was pressed
 	    if(length($r) > 0){
 		#1. Remove the last char from the password
@@ -1645,7 +1645,7 @@ sub safe_prompt {
 	}
     }
     print "\n"; #because the user pressed enter
-    ReadMode(0); #Reset the terminal once we are done
+    Term::ReadKey::ReadMode(0); #Reset the terminal once we are done
 
     return $r; #Return the response
 }
