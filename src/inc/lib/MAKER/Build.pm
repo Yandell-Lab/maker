@@ -806,6 +806,11 @@ sub _install_exe {
 		 src           => 1); 
     my ($OS, $ARC) = (POSIX::uname())[0,4];
 
+    #set all pentium achitectures to use i386 (safest choice)
+    if($ARC =~ /^i.86$/){
+	$ARC = 'i386';
+    }
+
     ($OS, $ARC) = ('src', '') if(! $os_ok{"$OS\_$ARC"}); #use source code for unknown architectures
 
     #add fink paths just in case
@@ -902,8 +907,8 @@ sub _install_exe {
 	if($OS eq 'Linux'){
 	    #glibc 2.5 or greater is required for Linux binary
 	    my $ldd = File::Which::which('ldd');
-	    my ($ver) = (`$ldd --version` =~ /(\d+\.\d+)/) if($ldd);
-	    $url = $data->{$req}{src} if(!$ver || $ver < 2.5);
+	    my ($ver, $sver) = (`$ldd --version` =~ /(\d+)\.(\d+)/) if($ldd);
+	    $url = $data->{$req}{src_} if(!$ver || $ver < 2 || $sver < 5);
 	}
 
 	print "Downloading $req...\n";
