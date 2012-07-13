@@ -652,7 +652,7 @@ sub _create_magic {
       chmod((0600 | 1), $append_file) or die "ERROR: I can't chmod files for locking";
   }
   else{
-      open(my $FH,">$append_file") or return undef;      
+      open(my $FH,">$append_file") or return undef;
       print $FH $self->{lock_line};
       close($FH);
       chmod(0600, $append_file)
@@ -965,7 +965,9 @@ sub refresh {
     ### read existing file
     if($shared){
 	local $/ = "\n"; #just incase the user changed this
+	my %seen;
 	while(defined(my $line=<$FH>)){
+	    next if($seen{$line}++);
 	    if($line !~ / /){
 		$id_line .= $line;
 		next;
@@ -1000,8 +1002,6 @@ sub refresh {
 		    $content .= $line;
 		}
 	    }	    
-	    
-	    $content .= $line;
 	}
     }
     ### add new tag

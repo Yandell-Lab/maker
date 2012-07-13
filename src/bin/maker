@@ -43,7 +43,6 @@ use Process::MpiChunk;
 use Process::MpiTiers;
 use Parallel::Application::MPI qw(:all);
 use Proc::Signal;
-use Proc::ProcessTable;
 use File::NFSLock;
 
 BEGIN{

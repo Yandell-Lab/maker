@@ -66,6 +66,9 @@ sub table {
     return \@table;
 }
 
+sub Destroy {
+}
+
 package Proc::Process_simple;
 
 require Exporter;
@@ -102,6 +105,9 @@ sub AUTOLOAD {
     else{
         return $self->{$name};
     }
+}
+
+sub DESTROY {
 }
 
 1;
