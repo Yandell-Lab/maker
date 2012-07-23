@@ -46,7 +46,7 @@ use Proc::Signal;
 use File::NFSLock;
 
 BEGIN{
-   $VERSION = '2.27';
+   $VERSION = '2.26';
 
    #what to do on ^C
    $SIG{'INT'}  = sub { &exit(2); };
