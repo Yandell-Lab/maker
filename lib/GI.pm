@@ -72,11 +72,15 @@ sub new_instance_temp {
     return get_global_temp();
 }
 #------------------------------------------------------------------------
+{
+my %mounts; #persistent list of mounts to avoid calling df so often
 sub mount_check {
     my $path = shift;
     return undef if(! -e $path);
 
     $path = Cwd::abs_path($path);
+    return $mounts{$path} if($mounts{$path});
+
     my $host = Sys::Hostname::hostname();
     my $p = quotemeta($path); #handles escapable characters
 
@@ -89,6 +93,7 @@ sub mount_check {
 
         last if grep {/\%/} @F;
     }
+    close(DF);
 
     #accept mount points with spaces
     my $mounted_on = '';
@@ -109,17 +114,26 @@ sub mount_check {
     #build new mount point
     if($filesystem =~ /\:/){
         $mounted_on = quotemeta($mounted_on);
-        $path =~ s/^$mounted_on//;
-        $path = "$filesystem/$path";
-        $path =~ s/\/\/+/\//g;
-        return $path;
+	my $mpath = $path;
+        $mpath =~ s/^$mounted_on//;
+        $mpath = "$filesystem/$mpath";
+        $mpath =~ s/\/\/+/\//g;
+	$mounts{$path} = $mpath;
+    }
+    else{
+	$mounts{$path} = "$host:$path";
     }
 
-    return "$host:$path";
+    return $mounts{$path};
+}
 }
 #------------------------------------------------------------------------
+{
+my %is_NFS; #persistent list of NFS mounts
 sub is_NFS_mount {
     my $path = shift;
+
+    return $is_NFS{$path} if(defined($is_NFS{$path})); #to avoid calling 'df' so often
 
     my $host = Sys::Hostname::hostname();
     $path = mount_check($path);
@@ -128,7 +142,9 @@ sub is_NFS_mount {
 
     $host = quotemeta($host);
 
-    return ($path =~ /^$host\:/) ? 0 : 1;
+    $is_NFS{$path} = ($path =~ /^$host\:/) ? 0 : 1;
+    return $is_NFS{$path}
+}
 }
 #------------------------------------------------------------------------
 sub set_global_temp {
@@ -727,13 +743,20 @@ sub get_split_args {
     return @to_split;
 }
 #----------------------------------------------------------------------------
+{
+my %localized; #persistent list of already localized files
 sub localize_file {
     my $file = shift;
-    die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
-    
+    die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);    
+
+    $file = Cwd::abs_path($file);
     my ($name) = $file =~ /([^\/]+)$/;
     my $tmp = GI::get_global_temp();
-    
+
+    if($localized{$file} && $localized{$file} eq "$tmp/$name" && -f "$tmp/$name"){
+	return $localized{$file};
+    }
+
     my $lock;
     while(! $lock || ! $lock->maintain(30)){
 	$lock = new File::NFSLock("$tmp/$name", 'EX', 1800, 60);
@@ -747,7 +770,9 @@ sub localize_file {
     
     $lock->unlock;
     
-    return "$tmp/$name";
+    $localized{$file} = "$tmp/$name";
+    return $localized{$file};
+}
 }
 #----------------------------------------------------------------------------
 sub create_blastdb {
