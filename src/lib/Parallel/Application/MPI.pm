@@ -2,7 +2,7 @@ package Parallel::Application::MPI;
 
 use strict;
 use Carp;
-use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $CODE $LOADED $WARNED);
+use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $CODE $LOADED $WARNED $INITIALIZED $FINALIZED);
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
 require Exporter;
@@ -62,10 +62,11 @@ sub MPI_ANY_TAG {
     return _MPI_ANY_TAG();
 }
 sub MPI_Init {
-    if(_load()){
+    if($$ != 0 && !$INITIALIZED && _load()){
 	UNSAFE_SIGNALS {
 	    _MPI_Init();
 	};
+	$INITIALIZED = 1;
 
 	return 1;
     }
@@ -74,10 +75,10 @@ sub MPI_Init {
     }
 }
 sub MPI_Finalize {
-    if(_load()){
-	UNSAFE_SIGNALS {
-	    _MPI_Finalize();
-	};
+    if($$ != 0 && ! $FINALIZED && _load()){
+	my $stat = _MPI_Finalize();	    
+	$FINALIZED = 1;
+	return $stat;
     }
 }
 sub MPI_Comm_rank {

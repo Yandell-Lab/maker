@@ -49,11 +49,11 @@ BEGIN{
    $VERSION = '2.26';
 
    #what to do on ^C
-   $SIG{'INT'}  = sub { &exit(2); };
-   $SIG{'QUIT'} = sub { &exit(3); };
-   $SIG{'ABRT'} = sub { &exit(6); };
-   $SIG{'KILL'} = sub { &exit(9); };
-   $SIG{'TERM'} = sub { &exit(15); };
+   $SIG{'INT'}  = sub { &exit_maker(2); };
+   $SIG{'QUIT'} = sub { &exit_maker(3); };
+   $SIG{'ABRT'} = sub { &exit_maker(6); };
+   $SIG{'KILL'} = sub { &exit_maker(9); };
+   $SIG{'TERM'} = sub { &exit_maker(15); };
    
    #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} = sub {
@@ -71,17 +71,7 @@ BEGIN{
 }
 
 END {
-    File::Temp::cleanup();
-    my @threads = threads->list();
-    foreach my $thr (@threads){
-	$thr->kill('KILL');
-	$thr->join() unless($thr->is_detached);
-    }
-
-    map {$_->kill('KILL')->join()} threads->list();
-    GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
-    Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
-    Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
+    cleanup();
 }
 
 #--keep STDOUT from buffering
@@ -162,6 +152,8 @@ Options:
      -dsindex            Quickly generate datastore index file. Note that this
                          will not check if run settings have changed on contigs.
 
+     -TMP                Specify temporary directory to use.
+
      -CTL                Generate empty control files in the current directory.
 
      -OPTS               Generates just the maker_opts.ctl file.
@@ -212,15 +204,16 @@ GetOptions("RM_off|R" => \$OPT{R},
            "check" =>\$OPT{check},
 	   "base=s" =>\$OPT{out_name},
 	   "datastore!" =>\$OPT{datastore},
-	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); MPI_Finalize(); exit(0);},
-	   "CTL" => sub {GI::generate_control_files() if($rank == $root); MPI_Finalize(); exit(0);},
-	   "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); MPI_Finalize(); exit(0);},
-	   "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); MPI_Finalize(); exit(0);},
-	   "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); MPI_Finalize(); exit(0);},
+	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); exit_maker(0);},
+	   "CTL" => sub {GI::generate_control_files() if($rank == $root); exit_maker(0);},
+	   "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); exit_maker(0);},
+	   "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); exit_maker(0);},
+	   "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); exit_maker(0);},
+	   "TMP=s" => \$OPT{TMP},
 	   "debug" => \$main::debug,
 	   "debugmpi" => \$main::debugmpi,
-	   "version" => sub{print "$VERSION\n" if($rank == $root); MPI_Finalize(); exit(0)},
-	   "help|?" => sub {print $usage if($rank == $root); MPI_Finalize(); exit(0)}
+	   "version" => sub{print "$VERSION\n" if($rank == $root); exit_maker(0)},
+	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)}
     );
 $main::quiet = 1 if($main::qq);
 
@@ -252,10 +245,10 @@ if (! @ctlfiles) {
     elsif($rank == $root) {
 	print STDERR  "ERROR: Control files not found\n";
 	print $usage;
-	exit(0);
+	exit_maker(0);
     }
     else{
-	exit(0);
+	exit_maker(0);
     }
 }
 
@@ -549,7 +542,7 @@ if($rank == $root){
 	    my $message = (-f "$dir/$safe_id.gff") ? 'FINISHED' : 'STARTED';
 	    $DS_CTL->add_entry($id, $dir, $message);
 	}
-	exit(0);
+	exit_maker(0);
     }
 }
 
@@ -591,7 +584,7 @@ if($size == 1){
 
     print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
 
-    exit(0);
+    exit_maker(0);
 }
 
 #--------------------------------------
@@ -1171,33 +1164,33 @@ else {
 }
 
 #---------ALL NODES----------
-MPI_Finalize(); #terminate MPI
-
-#---release thread
 $t_terminate = 1; #signals to thread to clean up
-my @threads = threads->list();
-foreach my $thr (@threads){
-    $thr->kill('KILL')->join();
-}
-
-exit(0);
+exit_maker(0); #calls MPI_Finalize
 
 #-----------------------------------------------------------------------------
 #----------------------------------- SUBS ------------------------------------
 #-----------------------------------------------------------------------------
-sub exit {    
-    File::Temp::cleanup();
-    my @threads = threads->list();
-    foreach my $thr (@threads){
-	$thr->kill('KILL');
-	$thr->join() unless($thr->is_detached);
-    }
+{
+my $clean = 0;
+sub cleanup {
+    return if($clean); #only clean up once
 
+    $t_terminate = 1;
+    File::Temp::cleanup();
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
     Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
     Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
+    while(my @threads = threads->list){
+	map {$_->kill('KILL')->join() unless($_->is_detached)} @threads;
+    }
+    $clean = 1;
+}
+}
+sub exit_maker {
+    cleanup();
 
-    MPI_Finalize() if($_[0] == 0);
+    MPI_Finalize() if(!@_ || $_[0] == 0);
+    warn "Calling Finalize\n";
 
     CORE::exit(@_);
 }
