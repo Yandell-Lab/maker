@@ -44,6 +44,7 @@ use Process::MpiTiers;
 use Parallel::Application::MPI qw(:all);
 use Proc::Signal;
 use File::NFSLock;
+use POSIX;
 
 BEGIN{
    $VERSION = '2.26';
@@ -102,8 +103,8 @@ Description:
      should behave. All options for MAKER should be set in the control files,
      but a few can also be set on the command line. Command line options provide
      a convenient machanism to override commonly altered control file values.
-     MAKER will automatically search for the control files in the current working
-     directory if they are not specified on the command line.
+     MAKER will automatically search for the control files in the current
+     working directory if they are not specified on the command line.
 
      Input files listed in the control options files must be in fasta format
      unless otherwise specified. Please see MAKER documentation to learn more
@@ -118,18 +119,18 @@ Description:
      To force MAKER to rerun all analyses, use the -f flag.
 
      MAKER also supports parallelization via MPI on computer clusters. Just
-     launch MAKER via mpiexec (Example: mpiexec -n 40 maker). MPI support must be
-     configured during the MAKER installation process for this to work though.
+     launch MAKER via mpiexec (Example: mpiexec -n 40 maker). MPI support must
+     be configured during the MAKER installation process for this to work though
      
 
 Options:
 
-     -genome|g <file>    Overrides the genome file location in the control files.
+     -genome|g <file>    Overrides the genome file location in the control files
 
      -RM_off|R           Turns all repeat masking options off.
 
-     -datastore/         Forcably turn on/off MAKER's use of a two deep datastore
-      nodatastore        directory structure for output.  Always on by default.
+     -datastore/         Forcably turn on/off MAKER's two deep directory
+      nodatastore        structure for output.  Always on by default.
 
      -base    <string>   Set the base name MAKER uses to save output files.
                          MAKER uses the input genome file name by default.
@@ -162,7 +163,7 @@ Options:
 
      -EXE                Generates just the maker_exe.ctl file.
 
-     -MWAS    <option>   Easy way to control mwas_server daemon for web-based GUI
+     -MWAS    <option>   Easy way to control mwas_server for web-based GUI
 
                               options:  STOP
                                         START
@@ -1164,7 +1165,6 @@ else {
 }
 
 #---------ALL NODES----------
-$t_terminate = 1; #signals to thread to clean up
 exit_maker(0); #calls MPI_Finalize
 
 #-----------------------------------------------------------------------------
@@ -1180,19 +1180,18 @@ sub cleanup {
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
     Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
     Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
-    while(my @threads = threads->list){
-	map {$_->kill('KILL')->join() unless($_->is_detached)} @threads;
-    }
-    $clean = 1;
+    map {$_->kill('KILL')->join() unless($_->is_detached)} threads->list;
+
+    return;
 }
 }
 sub exit_maker {
     cleanup();
 
     MPI_Finalize() if(!@_ || $_[0] == 0);
-    warn "Calling Finalize\n";
 
-    CORE::exit(@_);
+    exit(@_);
+    #POSIX:_exit(@_);
 }
 
 #other things for root node to do

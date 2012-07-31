@@ -543,6 +543,7 @@ sub unlock {
 
     $self->_unlink_block(0) if($force);
 
+    local $?; #localize to clear killed locks
     my $stat;
     if($self->{unlocked}){
 	#clean up any children that are floating around
@@ -669,7 +670,7 @@ sub _do_lock {
     return if(! -f $rand_file);
     
     my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
-    unlink ($rand_file);
+    unlink($rand_file);
     
     return $success;
 }
@@ -838,6 +839,7 @@ sub maintain {
 	if(! $time || $time < 1);
 
     #clean up old maintainers
+    local $?; #localize to clear locks
     my $stat;
     my $p = Proc::Signal::get_proc_by_id($self->{_maintain}) if(defined $self->{_maintain});
     if($p && $p->state ne 'zombie'){
