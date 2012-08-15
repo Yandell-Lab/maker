@@ -3,17 +3,12 @@
 #-------------------------------------------------------------------------------
 package runlog;
 
-BEGIN {
-    @AnyDBM_File::ISA = qw(DB_File GDBM_File NDBM_File SDBM_File);
-}
-
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
 use IO::File;
 use Fasta;
 use File::NFSLock;
-use AnyDBM_File;
 use GI;
 use URI::Escape;
 use Carp;

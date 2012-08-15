@@ -3,10 +3,6 @@
 #------------------------------------------------------------------------
 package ds_utility;
 
-BEGIN {
-    @AnyDBM_File::ISA = qw(DB_File GDBM_File NDBM_File SDBM_File);
-}
-
 use strict;
 use vars qw(@ISA @EXPORT $VERSION);
 use Exporter;
@@ -15,7 +11,6 @@ use File::Path;
 use Cwd;
 use URI::Escape;
 use File::NFSLock;
-use AnyDBM_File;
 use Carp;
 
 @ISA = qw(

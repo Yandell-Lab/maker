@@ -45,21 +45,26 @@ use Parallel::Application::MPI qw(:all);
 use Proc::Signal;
 use File::NFSLock;
 use POSIX;
+use Sys::Hostname;
 
 BEGIN{
    $VERSION = '2.26';
 
    #what to do on ^C
-   $SIG{'INT'}  = sub { &exit_maker(2); };
-   $SIG{'QUIT'} = sub { &exit_maker(3); };
-   $SIG{'ABRT'} = sub { &exit_maker(6); };
-   $SIG{'KILL'} = sub { &exit_maker(9); };
-   $SIG{'TERM'} = sub { &exit_maker(15); };
-   
+   $SIG{'INT'}  = sub { print STDERR "SIGINT received\n";  &exit_maker(SIGINT);  };
+   $SIG{'QUIT'} = sub { print STDERR "SIGQUIT received\n"; &exit_maker(SIGQUIT); };
+   $SIG{'ABRT'} = sub { print STDERR "SIGABRT received\n"; &exit_maker(SIGABRT); };
+   $SIG{'KILL'} = sub { print STDERR "SIGKILL received\n"; &exit_maker(SIGKILL); };
+   $SIG{'TERM'} = sub { print STDERR "SIGTERM received\n"; &exit_maker(SIGTERM); };
+
    #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} = sub {
-       $LOG->add_entry("DIED","COUNT",$LOG->get_die_count+1) if($LOG && defined $_[0]);
-       die $_[0];
+       if($LOG && defined $_[0]){
+	   $LOG->add_entry("DIED","COUNT",$LOG->get_die_count+1);
+       }
+             
+       $RANK ||= 'NA';
+       die $_[0]."--> rank=$RANK, hostname=".Sys::Hostname::hostname()."\n";
    };
    
    #supress warnings from storable module
@@ -69,10 +74,27 @@ BEGIN{
 		     $_[0] !~ /Find\:\:skip_pattern/ &
 		     $_[0] !~ /File\/Find\.pm/);
    };
+
+
+   #fix issue with AnyDBM_File reodering
+   require MAKER::ConfigData;
+   my $any = MAKER::ConfigData->feature('AnyDBM_ISA');
+   if($any && @$any){
+       for my $mod (@$any) {
+	   if (eval "require $mod") {
+	       @AnyDBM_File::ISA = ($mod);
+	       last;
+	   }
+       }
+   }
 }
 
+{
+my $tid = threads->tid if exists $INC{'threads.pm'};
 END {
-    cleanup();
+    my $is_thread = 1 if defined($tid) && $tid != threads->tid;
+    cleanup($is_thread);
+}
 }
 
 #--keep STDOUT from buffering
@@ -221,6 +243,7 @@ $main::quiet = 1 if($main::qq);
 #--verbose version info
 if($main::debug){
     print STDERR "****MODULE VERSION INFO\n";
+    print "perl version $^V\n";
     foreach my $key (sort keys %INC){
 	next unless($key =~ /\.pm$/);
 	my $name = $key;
@@ -505,7 +528,9 @@ else{
 }
 if($size > 1){
     carp "Calling GI::localize_file" if($main::debug);
-    GI::localize_file("$gdbfile.index");
+    GI::localize_file("$gdbfile.index") if(-f "$gdbfile.index"); #DB_File
+    GI::localize_file("$gdbfile.index.dir") if(-f "$gdbfile.index.dir"); #GDBM_File
+    GI::localize_file("$gdbfile.index.pag") if(-f "$gdbfile.index.pag"); #GDBM_File
     carp "Calling GI::localize_file" if($main::debug);
     $gdbfile = GI::localize_file($gdbfile);
 }
@@ -1173,25 +1198,33 @@ exit_maker(0); #calls MPI_Finalize
 {
 my $clean = 0;
 sub cleanup {
-    return if($clean); #only clean up once
+    my $is_thread = shift;
 
-    $t_terminate = 1;
+    return if($clean); #runs only once
+
     File::Temp::cleanup();
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
-    Proc::Signal::reap_children_by_name(15, 'maintain.pl'); #clean up maintainers
-    Proc::Signal::reap_children_by_name(9, 'maintain.pl'); #clean up maintainers
-    map {$_->kill('KILL')->join() unless($_->is_detached)} threads->list;
+    Proc::Signal::reap_children_by_name(SIGABRT, 'maintain.pl'); #clean up maintainers
+    Proc::Signal::reap_children_by_name(SIGKILL, 'maintain.pl'); #clean up maintainers
 
+    if(!$is_thread){
+	$t_terminate = 1;
+	foreach(threads->list){
+	    next if($_->is_detached);
+	    $_->kill('USR1');
+	    $_->join();
+	}
+    }
+
+    $clean++;
     return;
 }
 }
+
 sub exit_maker {
     cleanup();
-
     MPI_Finalize() if(!@_ || $_[0] == 0);
-
     exit(@_);
-    #POSIX:_exit(@_);
 }
 
 #other things for root node to do
@@ -1202,11 +1235,14 @@ sub node_thread {
    my $chunk;
 
    #set up thread signal to exit gracefully
-   $SIG{'KILL'} = sub { threads->exit(0); };
-   $SIG{'INT'}  = sub { threads->exit(0); };
-   $SIG{'QUIT'} = sub { threads->exit(0); };
-   $SIG{'STOP'} = sub { threads->exit(0); };
-   $SIG{'TERM'} = sub { threads->exit(0); };
+   #don't override other signals within threads because
+   #unlike ithreads forks uses real system signals
+   $SIG{'USR1'} = sub { cleanup(1); threads->exit(); };
+   $SIG{'INT'}  = sub { cleanup(1); print STDERR "SIGINT received in thread\n";  threads->exit(); };
+   $SIG{'QUIT'} = sub { cleanup(1); print STDERR "SIGQUIT received in thread\n"; threads->exit(); };
+   $SIG{'ABRT'} = sub { cleanup(1); print STDERR "SIGABRT received in thread\n"; threads->exit(); };
+   $SIG{'KILL'} = sub { cleanup(1); print STDERR "SIGKILL received in thread\n"; threads->exit(); };
+   $SIG{'TERM'} = sub { cleanup(1); print STDERR "SIGTERM received in thread\n"; threads->exit(); };
 
    #setup global index because of weird NFS failure in thread
    my $g_index = GI::build_fasta_index([$gdbfile]);
@@ -1307,6 +1343,8 @@ sub node_thread {
 	 sleep 1;
       }
    }
+
+   return;
 }
 #----------------------------------------------------------------------------
 #easy dump of string to a tempfile

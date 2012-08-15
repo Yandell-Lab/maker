@@ -79,10 +79,33 @@ my $build = MAKER::Build->new(
      PL_files => {'bin/mpi_scripts.PL' => ['bin/mpi_evaluator',
                                            'bin/mpi_iprscan',],
      },
+     get_options => {
+	 AnyDBM_ISA =>  { type  => '=s' },
+     }
     );
 
+#get command line AnyDBM_File override (note NDBM_File is not supported)
+if(my $any = $build->args('AnyDBM_ISA')){
+    $build->log_info("Configuring alternate AnyDBM_File order...");
+    my @dbms = grep {$_} split(/[\,\s\t]/, $any);
+
+    my $err;
+    map {$err .= "ERROR: $_ is invalid\n" if(!/^(DB|GDBM|SDBM)_File$/)} @dbms;
+    if($err){
+	$build->log_info("FAILED\n");
+	die $err."ERROR: Valid entries are DB_File, GDBM_File, and SDBM_File\n";
+    }
+    if(!grep {eval "require $_"} @dbms){
+	$build->log_info("FAILED\n");
+	die "ERROR: None of your entries exist on this system\n";
+    }
+    $build->feature(AnyDBM_ISA => \@dbms);
+    $build->log_info("DONE\n");
+    $build->log_info("New order=".join(',', @dbms)."\n");
+}
+
 #ask for MPI
-my $go = $build->y_n("MAKER supports distributed parallelization via MPI.\n".
+my $go = $build->y_n("\nMAKER supports distributed parallelization via MPI.\n".
 		     "Would you like to configure MAKER for MPI (This\n".
 		     "requires that you have an MPI client installed)?", 'N');
 $build->feature(mpi_support => $go);

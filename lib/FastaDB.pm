@@ -87,7 +87,9 @@ sub _safe_new {
     catch Error::Simple with {
         my $E = shift;
 
-	unlink("$file.index");
+	unlink("$file.index") if(-f "$file.index"); #DB_File
+	unlink("$file.index.dir") if(-f "$file.index.dir"); #GDBM_File
+	unlink("$file.index.pag") if(-f "$file.index.pag"); #GDBM_File
 	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	$db = new Bio::DB::Fasta($file, @args);
     };

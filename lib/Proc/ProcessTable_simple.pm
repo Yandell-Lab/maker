@@ -37,6 +37,7 @@ sub table {
     my $i = 0;
     my @cat;
     my @table;
+    local $/ = "\n"; #just in case
     while(my $line = <PS>){
 	if(!$i++){ #first line
 	    @cat = $line =~ /^(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)/;
