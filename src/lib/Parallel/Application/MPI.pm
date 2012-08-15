@@ -5,6 +5,7 @@ use Carp;
 use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $CODE $LOADED $WARNED $INITIALIZED $FINALIZED);
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
+use File::Temp qw(tempdir);
 require Exporter;
 
 @ISA = qw(Exporter);
@@ -153,7 +154,7 @@ sub _load {
     require Proc::Signal;
 
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|hydra_pmi_proxy)$/){
+    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|hydra_pmi_proxy|mpispawn)$/){
 	require MAKER::ConfigData;
 	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
 	if(! $mpi_support){
@@ -172,9 +173,15 @@ sub _load {
         my $loc = $INC{'Parallel/Application/MPI.pm'};
 	$loc =~ s/\/*(lib\/)?Parallel\/Application\/MPI\.pm$//;
 
+	#if mpi_override it set, I'm using non-default options
+	if(MAKER::ConfigData->feature('mpi_override')){
+	    $loc = tempdir("MPI_XXXXXX", CLEANUP => 1, TMPDIR => 1);
+	}
+
 	#lock for first compilation only
 	my $lock;
-	if(! -f "$loc/lib/auto/Parallel/Application/MPI/MPI.bundle"){
+	if(! -f "$loc/lib/auto/Parallel/Application/MPI/MPI.so" &&
+	   ! -f "$loc/lib/auto/Parallel/Application/MPI/MPI.bundle"){
 	    require File::NFSLock;
 	    $lock = new File::NFSLock("$loc/_MPI", 'EX', 300, 40) while(!$lock);
 	}

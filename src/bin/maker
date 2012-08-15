@@ -78,7 +78,7 @@ BEGIN{
 
    #fix issue with AnyDBM_File reodering
    require MAKER::ConfigData;
-   my $any = MAKER::ConfigData->feature('AnyDBM_ISA');
+   my $any = MAKER::ConfigData->config('AnyDBM_ISA');
    if($any && @$any){
        for my $mod (@$any) {
 	   if (eval "require $mod") {
@@ -202,19 +202,42 @@ Options:
 #------------------------------------ MAIN -------------------------------------
 #-------------------------------------------------------------------------------
 
+
+#--process MPICC and MPIDIR from @ARGV first
+my %OPT;
+carp "Calling GetOptions pre-init" if($main::debug);
+Getopt::Long::Configure(qw(pass_through));
+GetOptions("MPICC=s" => \$OPT{MPICC}, #hidden
+	   "MPIDIR=s" => \$OPT{MPIDIR},); #hidden
+
+#--set MPI configuration if specified on the command line
+if($OPT{MPICC} || $OPT{MPIDIR}){
+    print STDERR "Overriding default MPI settings\n";
+    die "ERROR: You must specify both MPICC and MPIDIR\n" if(!$OPT{MPICC} && !$OPT{MPIDIR});
+    die "ERROR:$OPT{MPICC} does not exist\n" if(! -f $OPT{MPICC});
+    die "ERROR:$OPT{MPICC} isn't mpicc\n" if($OPT{MPICC} !~ /^(.*\/)?mpicc$/);
+    die "ERROR:$OPT{MPIDIR} does not exist\n" if(! -d $OPT{MPIDIR});
+    die "ERROR:Cannot find mpi.h in $OPT{MPIDIR}\n" if(! -f "$OPT{MPIDIR}/mpi.h");
+
+    #configure MPI but do not write to disk (in memory only)
+    MAKER::ConfigData->set_feature(mpi_support => 1);
+    MAKER::ConfigData->set_feature(mpi_override => 1);
+    MAKER::ConfigData->set_config(MPICC => $OPT{MPICC});
+    MAKER::ConfigData->set_config(MPIDIR => $OPT{MPIDIR});
+}
+
 #--Start MPI
 carp "Calling MPI_Init" if($main::debug);
 MPI_Init();
 carp "Calling MPI_Comm_rank" if($main::debug);
-my $rank = MPI_Comm_rank(); #my proccess number
+my $rank = $RANK = MPI_Comm_rank(); #my proccess number
 carp "Calling MPI_Comm_size" if($main::debug);
 my $size = MPI_Comm_size(); #how many proccesses
 my $root = 0; #define root node (only changed for debugging)
-$RANK = $rank;
 
 #---Process options on the command line
 carp "Calling GetOptions" if($main::debug);
-my %OPT;
+Getopt::Long::Configure(qw(no_pass_through));
 GetOptions("RM_off|R" => \$OPT{R},
 	   "force|f" => \$OPT{force},
 	   "genome|g=s" => \$OPT{genome},

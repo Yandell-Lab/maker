@@ -99,7 +99,7 @@ if(my $any = $build->args('AnyDBM_ISA')){
 	$build->log_info("FAILED\n");
 	die "ERROR: None of your entries exist on this system\n";
     }
-    $build->feature(AnyDBM_ISA => \@dbms);
+    $build->config_data(AnyDBM_ISA => \@dbms);
     $build->log_info("DONE\n");
     $build->log_info("New order=".join(',', @dbms)."\n");
 }
