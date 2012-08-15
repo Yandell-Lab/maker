@@ -219,6 +219,10 @@ if($OPT{MPICC} || $OPT{MPIDIR}){
     die "ERROR:$OPT{MPIDIR} does not exist\n" if(! -d $OPT{MPIDIR});
     die "ERROR:Cannot find mpi.h in $OPT{MPIDIR}\n" if(! -f "$OPT{MPIDIR}/mpi.h");
 
+    #paths must be absolute
+    $OPT{MPICC} = Cwd::abs_path($OPT{MPICC});
+    $OPT{MPIDIR} = Cwd::abs_path($OPT{MPIDIR});
+
     #configure MPI but do not write to disk (in memory only)
     MAKER::ConfigData->set_feature(mpi_support => 1);
     MAKER::ConfigData->set_feature(mpi_override => 1);
