@@ -1105,14 +1105,20 @@ sub _install_exe {
 	print "Configuring $exe...\n";
 	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
-	if($OS eq 'Darwin'){
-	    $self->do_system('./configure CXXFLAGS=-I/usr/X11/include LDFLAGS=-L/usr/X11/lib')
-		or return $self->fail($exe, $path);
-	}
-	else{
-	    $self->do_system('./configure') or return $self->fail($exe, $path);
-	}
-	$self->do_system('make') or return $self->fail($exe, $path);
+
+	#old jbrowse setup
+	#if($OS eq 'Darwin'){
+	#    $self->do_system('./configure CXXFLAGS=-I/usr/X11/include LDFLAGS=-L/usr/X11/lib')
+	#	or return $self->fail($exe, $path);
+	#}
+	#else{
+	#    $self->do_system('./configure') or return $self->fail($exe, $path);
+	#}
+	#$self->do_system('make') or return $self->fail($exe, $path);
+
+	#new jbrowse is setup like this
+	$self->do_system('./setup.sh') or return $self->fail($exe, $path);
+
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
     }
