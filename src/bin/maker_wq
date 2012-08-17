@@ -160,6 +160,8 @@ Options:
 
      -CTL                Generate empty control files in the current directory.
 
+     -wq 		 Run MAKER on Work Queue
+
      -help|?             Prints this usage statement.
 
 Work Queue Options
@@ -204,6 +206,7 @@ try{
 	       "dtmp" =>\$main::dtmp,
 	       "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")},
 	       "CTL" => sub {GI::generate_control_files(); exit(0);},
+	       "wq" => \$OPT{wq}, 
 	       "help|?" => sub {print $usage; exit(0)},
 	       "port=i" => \$OPT{port},
 	       "fa=i" => \$OPT{fast_abort},
@@ -269,19 +272,17 @@ try{
 catch Error::Simple with{
     my $E = shift;
     print STDERR $E->{-text};
-    #print STDERR "\n\nMaker failed while examining startup data\n",
-    #"(control files and input fasta files)!!\n\n";
     my $code = 2;
     $code = $E->{-value} if (defined($E->{-value}));
     
     exit($code);
 };
+if($OPT{wq}){
 
 ## beginning of ztm's code, above is (mostly) stock
 print "Beginning work_queue code\n"; 
 
 use Storable qw(nfreeze nstore thaw retrieve);
-#use Digest::MD5 qw(md5_hex);
 use work_queue;
 use Data::Dumper;
 
@@ -300,7 +301,6 @@ $wkDirPrefix .= "/";
 
 $command .= "./maker_wq_worker";
 
-#my $port = $work_queue::WORK_QUEUE_DEFAULT_PORT;
 my $port = "9135";
 if(defined($OPT{"port"}))
 {
@@ -315,12 +315,9 @@ if(defined($OPT{"fast_abort"}))
 if(defined($OPT{"project"}))
 {
 	work_queue::work_queue_specify_name($queue, $OPT{"project"});
-#	print STDERR work_queue::WORK_QUEUE_MASTER_MODE_CATALOG."\n"; 
-#	work_queue::work_queue_specify_master_mode($queue, work_queue::WORK_QUEUE_MASTER_MODE_CATALOG);
 	work_queue::work_queue_specify_master_mode($queue, 1);
 
 }
-#work_queue::cctools_debug_flags_set("all");
 my $fa = work_queue::work_queue_activate_fast_abort($queue, $multiplier); 
 
 if(defined($queue)){
@@ -347,7 +344,6 @@ sub SubmitTask {
 	print "Specifying input $wkDirPrefix$inFile\n";
 	work_queue::work_queue_task_specify_input_file_do_not_cache($task, $wkDirPrefix.$inFile, $inFile);
 
-#	print "Specifying the worker executable ./maker.sfx\n"; 
 	print "Specifying the worker executable maker_wq_worker \n";
 
 	work_queue::work_queue_task_specify_input_file_do_not_cache($task, "maker_wq_worker", "maker_wq_worker");
@@ -476,7 +472,6 @@ while(!work_queue::work_queue_empty($queue)) {
 			$tiersTerm++;
 			print "finished tier $counter, $tiersTerm done so far \n";
 			unlink "$counter\_todo.tier" or warn "Could not unlink $counter\_todo.tier: $!\n";
-			#if(-e "$counter.output"){`mv "$counter".output "$counter".output.completed`; }
 		}
 		### tier resubmission on failure
 		else {
@@ -516,7 +511,37 @@ while(!work_queue::work_queue_empty($queue)) {
 print "\n".time." :: all tasks complete :: $tiersTerm tiers in total \n";
 work_queue::work_queue_delete($queue);
 close(LOG);
+}
+else{
+	use Dumper::GFF::GFFV3;
 
+
+	my $tier;
+	my $f_count = @failed;
+	while (my $fasta = $iterator->nextFasta() || shift @failed){
+	    $tier = Process::MpiTiers->new({fasta =>$fasta,
+					    CTL_OPT => \%CTL_OPT,
+					    DS_CTL  => $DS_CTL,
+					    GFF_DB  => $GFF_DB,
+					    build   => $build},
+					   '0',
+					   'Process::MpiChunk'
+					   );
+	
+	    #take a short break before processing previously failed contigs
+	    #this handles heavy processor usage when failure is related
+	    #to maker process overlap
+	    if($f_count != @failed){
+		sleep 1;
+	    }
+	    $f_count = @failed; #reset failure count
+	
+	    next if($tier->terminated);
+	    $tier->run_all;
+	    push(@failed, $tier->fasta) if ($tier->failed);
+	}
+	
+}
 print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
 
 #clean up all children processes

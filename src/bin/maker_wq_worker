@@ -87,9 +87,7 @@ if ($numArgs != 1) {
 
 my $counter = $ARGV[0];
 my $tier;
-# these should just be filenames, because they reference WQ's temporary worker directory
 my $inFile = $counter."_todo.tier";
-###my $outFile = $counter.".fasta";
 	
 $tier = ${retrieve($inFile)};
 
@@ -101,4 +99,4 @@ print Dumper($tier);
 	
 	if($tier->failed) { print "EXIT:-1 \n"; exit -1; }
 	elsif($tier->terminated) { print "EXIT:1 \n"; exit 1; }
-	else { print "EXIT:0 \n"; exit 0; } 	#not done (?), not failed
+	else { print "EXIT:0 \n"; exit 0; }
