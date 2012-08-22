@@ -17,6 +17,7 @@ BEGIN {
     $SIG{TERM} = sub{exit()};
     $SIG{STOP} = sub{exit()};
     $SIG{INT}  = sub{exit()};
+    $SIG{USR1} = sub{exit()};
 
     $SIG{'__WARN__'} = sub {
 	warn $_[0] if ( $_[0] !~ /Not a CODE reference/ &&

@@ -64,9 +64,9 @@ sub MPI_ANY_TAG {
 }
 sub MPI_Init {
     if($$ != 0 && !$INITIALIZED && _load()){
-	UNSAFE_SIGNALS {
+	#UNSAFE_SIGNALS {
 	    _MPI_Init();
-	};
+	#};
 	$INITIALIZED = 1;
 
 	return 1;
@@ -266,18 +266,22 @@ int _MPI_Comm_size () {
 void _MPI_Send(SV *buf, int len, int dest, int tag, int freeze) {
     int flags[2] = { len, freeze };
     MPI_Send(flags, 2, MPI_INT, dest, tag, MPI_COMM_WORLD);
-    MPI_Send(SvPVX(SvRV(buf)), len, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
+    SV* scalar = SvRV(buf);
+    char* string = SvPV(scalar, len);
+    MPI_Send(string, len, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
 }
 
 void _MPI_Recv(SV* buf, int source, int tag, SV* freeze) {
     MPI_Status status;
     int flags[2];
-     MPI_Recv(flags, 2, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
+    MPI_Recv(flags, 2, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
     int len = flags[0];
-    sv_setiv(SvRV(freeze), flags[1]);
+    SV* ref = SvRV(freeze);
+    sv_setiv(ref, flags[1]);
     char *msg = (char*)malloc((len+1)*sizeof(char));
     MPI_Recv(msg, len, MPI_CHAR, status.MPI_SOURCE, tag, MPI_COMM_WORLD, &status);
-    sv_setpvn(SvRV(buf), msg, len);
+    SV* scalar = SvRV(buf);
+    sv_setpvn(scalar, msg, len);
     free(msg);
 }
 END

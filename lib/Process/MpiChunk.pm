@@ -226,10 +226,14 @@ sub _prepare {
       my $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 
       #still no object? try rebuilding the index and try again
-      if (not $q_seq_obj) {
-	  print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-	  $g_index->reindex();
-	  $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+      if(!$q_seq_obj) {
+	  for(my $i = 0; $i < 2 && !$q_seq_obj; $i++){
+	      sleep 5;
+	      print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+	      $g_index->reindex($i);
+	      $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+	  }
+
 	  if (not $q_seq_obj) {
 	      print STDERR "stop here: $seq_id\n";
 	      confess "ERROR: Fasta index error\n";
@@ -461,34 +465,14 @@ sub _go {
 		#still no sequence? try rebuilding the index and try again
 		if (not $q_seq_obj) {
 		    print STDERR "WARNING: Cannot find >$seq_id\n";#", trying to re-index the fasta.\n";
-		    #$g_index->reindex();
-		    #$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		    #if (not $q_seq_obj) {
 		    print STDERR "stop here: $seq_id\n";
 		    confess "ERROR: Fasta index error\n";
-		    #}
 		}
 
 		open (my $FAS, "> $the_void/query.fasta");
 		my $seq = $q_seq_obj->seq;
 		print $FAS ${&Fasta::seq2fastaRef($seq_id, \$seq)};
 		close ($FAS);
-
-		#make g_index be smaller file
-		#GI::build_fasta_index($unmasked_file)->_close_index; #once to tie file
-		#$g_index = GI::build_fasta_index($unmasked_file);
-		#$q_seq_obj = $g_index->get_Seq_by_id($seq_id); #attach to new index
-                #
-		#still no sequence? try rebuilding the index and try again
-		#if (not $q_seq_obj) {
-		#    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		#    $g_index->reindex();
-		#    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		#    if (not $q_seq_obj) {
-		#	print STDERR "stop here: $seq_id\n";
-		#	confess "ERROR: Fasta index error\n";
-		#    }
-		#}
 	    }
 	    #-------------------------CODE
 	    
@@ -598,10 +582,14 @@ sub _go {
 		my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
 		#still no sequence? try rebuilding the index and try again
-		if (not $m_seq_obj) {
-		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		    $m_index->reindex();
-		    $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+		if(!$m_seq_obj) {
+		    for(my $i = 0; $i < 2 && !$m_seq_obj; $i++){
+			sleep 5;
+			print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+			$m_index->reindex($i);
+			$m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+		    }
+		    
 		    if (not $m_seq_obj) {
 			print STDERR "stop here: $seq_id\n";
 			confess "ERROR: Fasta index error\n";
@@ -1074,10 +1062,14 @@ sub _go {
 	    my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
             #still no sequence? try rebuilding the index and try again
-            if (not $m_seq_obj) {
-		print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n";
-		$m_index->reindex();
-		$m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+	    if(!$m_seq_obj) {
+		for(my $i = 0; $i < 2 && !$m_seq_obj; $i++){
+		    sleep 5;
+		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+		    $m_index->reindex($i);
+		    $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
+		}
+		
 		if (not $m_seq_obj) {
 		    print STDERR "stop here: $seq_id\n";
 		    confess "ERROR: Fasta index error\n";

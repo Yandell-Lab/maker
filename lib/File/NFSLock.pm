@@ -10,6 +10,7 @@ use File::Copy;
 use File::Temp;
 use Storable;
 use IPC::Open3;
+use POSIX;
 use POSIX qw(:sys_wait_h);
 use Proc::Signal;
 use URI::Escape;
@@ -101,12 +102,12 @@ sub new {
     }
     $self->{lock_file} = $lock_file;
     $self->{rand_file} = $self->_rand_name($self->{file});
-    
+
     #replace signals
     foreach my $signal (@CATCH_SIGS) {
 	$SIG{$signal} = $graceful_sig if(!$SIG{$signal} || $SIG{$signal} eq 'DEFAULT');
     }
-    
+
     #make lock
     if($self->{lock_type} == LOCK_SH){
 	$self->_new_SH;
@@ -151,7 +152,7 @@ sub _new_EX {
 	    unlink($rand_file);
 	    return undef;
 	}
-	
+
 	if(-f $lock_file){
 	    #create lock stack in IO
 	    if($LOCK_LIST{"$lock_file\_EX"} && $self->still_mine){
@@ -562,13 +563,13 @@ sub unlock {
 	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
 
 	#signal maintainer
-	kill(2, $self->{_maintain});
+	kill(SIGUSR1, $self->{_maintain});
 	$stat = waitpid($self->{_maintain}, WNOHANG);
 
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(SIGUSR1, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -576,7 +577,7 @@ sub unlock {
 	
 	#if still running, do this
 	if($stat == 0){
-	    kill(9, $self->{_maintain});
+	    kill(SIGKILL, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	
@@ -671,7 +672,7 @@ sub _do_lock {
     
     my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
     unlink($rand_file);
-    
+
     return $success;
 }
 #-------------------------------------------------------------------------------
@@ -840,8 +841,10 @@ sub maintain {
 
     #clean up old maintainers
     local $?; #localize to clear locks
+
     my $stat;
     my $p = Proc::Signal::get_proc_by_id($self->{_maintain}) if(defined $self->{_maintain});
+
     if($p && $p->state ne 'zombie'){
 	#clean up any children that are floating around
 	do {
@@ -854,13 +857,13 @@ sub maintain {
 	close($self->{_IN}) if(ref $self->{_IN} eq 'GLOB');
 
 	#signal maintainer
-	kill(2, $self->{_maintain});
+	kill(SIGUSR1, $self->{_maintain});
 	$stat = waitpid($self->{_maintain}, WNOHANG);
 
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(SIGUSR1, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -868,7 +871,7 @@ sub maintain {
 	
 	#if still running, do this
 	if($stat == 0){
-	    kill(9, $self->{_maintain});
+	    kill(SIGKILL, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	
@@ -908,13 +911,13 @@ sub maintain {
 	close($IN);
 	
 	#signal maintainer
-	kill(2, $self->{_maintain});
+	kill(SIGUSR1, $self->{_maintain});
 	$stat = waitpid($self->{_maintain}, WNOHANG);
 	
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(2, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(SIGUSR1, $self->{_maintain}); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
 	    $stat = waitpid($self->{_maintain}, WNOHANG);
 	    $count++;
@@ -922,7 +925,7 @@ sub maintain {
 	
 	#if still running, do this
 	if($stat == 0){
-	    kill(9, $self->{_maintain});
+	    kill(SIGKILL, $self->{_maintain});
 	    waitpid($self->{_maintain}, 0);
 	}
 	

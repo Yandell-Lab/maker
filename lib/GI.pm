@@ -343,14 +343,18 @@ sub reblast_merged_hits {
 	    my $fastaObj = $db_index->get_Seq_for_hit($hit);
 	    
 	    #still no sequence? try rebuilding the index and try again
-	    if (not $fastaObj) {
-	       print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
-	       $db_index->reindex();
-	       $fastaObj = $db_index->get_Seq_for_hit($hit);
-	       if (not $fastaObj) {
-		  print STDERR "stop here:".$hit->name."\n";
-		  confess "ERROR: Fasta index error\n";
-	       }
+	    if(!$fastaObj) {
+		for(my $i = 0; $i < 2 && !$fastaObj; $i++){
+		    sleep 5;
+		    print STDERR "WARNING: Cannot find >".$hit->name.", trying to re-index the fasta.\n" if($i);
+		    $db_index->reindex($i);
+		    $fastaObj = $db_index->get_Seq_for_hit($hit);
+		}
+
+		if (not $fastaObj) {
+		    print STDERR "stop here:".$hit->name."\n";
+		    confess "ERROR: Fasta index error\n";
+		}
 	    }
 	    
 	    #get fasta def and seq
@@ -861,7 +865,7 @@ sub split_db {
     my $d_name = "$f_name\.mpi\.$bins";
     my $f_dir = "$b_dir/$d_name";
     my $t_dir = $TMP."/$d_name";
-    $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
+    $bins = ($bins > 1 && $bins < 50 && -s $file > 1000000000) ? 50 : $bins;
 
     my $lock;
     while(! $lock || ! $lock->maintain(30)){
@@ -938,11 +942,8 @@ sub split_db {
     my $wflag = 1; #flag set so warnings gets printed only once 
     carp "Calling Iterator::Any::nextFastaRef" if($main::debug);
     while (my $fasta = $fasta_iterator->nextFastaRef()) {
-	carp "Calling Fasta::getDef" if($main::debug);
 	my $def = Fasta::getDef($fasta);
-	carp "Calling Fasta::def2SeqID" if($main::debug);
 	my $seq_id = Fasta::def2SeqID($def);
-	carp "Calling Fasta::fasta2seqRef" if($main::debug);
 	my $seq_ref = Fasta::fasta2seqRef($fasta);
 	
 	#fix non standard peptides
@@ -995,7 +996,6 @@ sub split_db {
 	}
 	
 	#reformat fasta, just incase
-	carp "Calling Fasta::seq2fastaRef" if($main::debug);
 	my $fasta_ref = Fasta::seq2fastaRef($def, $seq_ref);
 	
 	#build part files
@@ -1456,17 +1456,21 @@ sub polish_exonerate {
 	if(! -f $o_file || ! ref($hit)){
 	    #get fasta for EST/protein
 	    my $fastaObj = $db_index->get_Seq_for_hit($hit);
-	    if (not $fastaObj) {
-		#still no sequence? try rebuilding the index and try again
-		print STDERR "WARNING: Cannot find> ".$h_name.", trying to re-index the fasta.\n";
-		$db_index->reindex();
-		$fastaObj = $db_index->get_Seq_for_hit($hit);
-		
-		if (not $fastaObj) {
-		    print STDERR "stop here:".$h_name."\n";
-		    confess "ERROR: Fasta index error\n";
-		}
-	    }
+
+	    #still no sequence? try rebuilding the index and try again
+            if(!$fastaObj) {
+                for(my $i = 0; $i < 2 && !$fastaObj; $i++){
+                    sleep 5;
+                    print STDERR "WARNING: Cannot find >".$h_name.", trying to re-index the fasta.\n" if($i);
+                    $db_index->reindex($i);
+                    $fastaObj = $db_index->get_Seq_for_hit($hit);
+                }
+
+                if (not $fastaObj) {
+                    print STDERR "stop here:".$h_name."\n";
+                    confess "ERROR: Fasta index error\n";
+                }
+            }
 	    
 	    my $seq     = $fastaObj->seq();
 	    $t_len      = length($seq) if(!$t_len);
@@ -1685,10 +1689,13 @@ sub make_multi_fasta {
 	 my $fastaObj = $index->get_Seq_for_hit($hit);
 	 
 	 #still no sequence? try rebuilding the index and try again
-	 if (not $fastaObj) {
-	     print STDERR "WARNING: Cannot find> ".$hit->name.", trying to re-index the fasta.\n";
-	     $index->reindex();
-	     $fastaObj = $index->get_Seq_for_hit($hit);
+	 if(!$fastaObj) {
+	     for(my $i = 0; $i < 2 && !$fastaObj; $i++){
+		 sleep 5;
+		 print STDERR "WARNING: Cannot find >".$hit->name.", trying to re-index the fasta.\n" if($i);
+		 $index->reindex($i);
+		 $fastaObj = $index->get_Seq_for_hit($hit);
+	     }
 
 	     if (not $fastaObj) {
 		 print STDERR "stop here:".$hit->name."\n";

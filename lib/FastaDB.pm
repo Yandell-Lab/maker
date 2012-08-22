@@ -13,6 +13,7 @@ use File::NFSLock;
 use FastaSeq;
 use Error qw(:try);
 use Carp;
+use GI;
 
 @ISA = qw(
           );
@@ -77,12 +78,53 @@ sub _safe_new {
 
     my $db;
     try {
-	local $SIG{'__WARN__'} = sub {
-	    die $_[0];
-	};
+	#which DBM am I using?
+	my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
+	    ("$file.index") : ("$file.index.dir", "$file.index.pag");
+	my %args = @args;
+	my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
 
-	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
-	$db = new Bio::DB::Fasta($file, @args);
+	#copy things locally if NFS mount and TMP is available
+	if(GI::is_NFS_mount($file) && !GI::is_NFS_mount(GI::get_global_temp())){
+	    my $dir = GI::get_global_temp()."/indexing";
+	    mkdir($dir) if(! -d $dir);
+	    (my $sym = $file) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+	    symlink($file, $sym) if(! -f $sym);	   
+	    
+	    #copy files locally if they already exist globally
+	    if(!$args{'-reindex'} && $exists){
+		foreach my $i (@ifiles){
+		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+		    next if(-f $n);
+		    File::Copy::copy($i, $n) or confess "ERROR: Copy failed: $!";
+		}
+	    }
+
+	    #build the index
+	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
+	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
+	    $db = new Bio::DB::Fasta($sym, @args);
+
+	    #copy local files globally if they are needed
+	    if($args{'-reindex'} || !$exists){
+		untie($db); #untie first to flush (for new index)
+		$db = new Bio::DB::Fasta($sym, @args);
+		foreach my $i (@ifiles){
+		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+		    File::Copy::copy($n, $i) or confess "ERROR: Copy failed: $!";
+		}
+	    }
+	}
+	else{
+	    #build the index
+	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
+	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
+	    $db = new Bio::DB::Fasta($file, @args);
+	    if($args{'-reindex'} || !$exists){
+		untie($db); #untie first to flush (for new index)
+		$db = new Bio::DB::Fasta($file, @args);
+	    }
+	}
     }
     catch Error::Simple with {
         my $E = shift;
@@ -99,9 +141,11 @@ sub _safe_new {
 #-------------------------------------------------------------------------------
 sub reindex {
     my $self = shift;
+    my $destroy = shift;
+    $destroy = 1 if(! defined $destroy);
 
     my $locs = $self->{locs};
-    my @args = ('-reindex' => 1,
+    my @args = ('-reindex' => $destroy,
 		'-makeid' => \&makeid
 		);
 
@@ -120,13 +164,14 @@ sub reindex {
 
     #rebuilt build indexes
     my $lock;
+    my $stat = $self->drop_from_global_index(); #drop globally
     if(($lock = new File::NFSLock("$files[0].reindex", 'NB', 0, 50)) && $lock->maintain(30)){ #reindex lock
 	foreach my $file (@files){
 	    my $lock;
 	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
 		push(@{$self->{index}}, _safe_new($file, @args));
 		carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
-		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);		
+		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
 
 		#build reverse index to get the correct index based on file name
 		my ($title) = $file =~ /([^\/]+)$/;
@@ -142,8 +187,21 @@ sub reindex {
     else{
 	#pause and wait for other process to reindex
 	my $lock = $lock = new File::NFSLock("$files[0].reindex", 'EX', undef, 40);
+
+	#just rebuild (not destroy old index))
+	foreach my $file (@files){
+	    @args = ('-makeid' => \&makeid);
+	    push(@{$self->{index}}, _safe_new($file, @args));
+	    carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
+	    push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
+	    
+	    #build reverse index to get the correct index based on file name
+	    my ($title) = $file =~ /([^\/]+)$/;
+	    $self->{file2index}{$title} = $self->{index}->[-1];
+	}	
 	$lock->unlock;
     }
+    $self->add_to_global_index() if($stat); #re-add to global if was global
 
     return $self;
 }
@@ -426,10 +484,14 @@ sub add_to_global_index{
 sub drop_from_global_index{
     my $self = shift;
 
+    my $stat = 0;
     while(my $key = each %{$self->{file2index}}){
 	my ($name) = $key =~ /([^\/]+)$/;
+	$stat = 1 if($G_DB{$name});
         delete($G_DB{$name});
     }
+
+    return $stat;
 }
 #-------------------------------------------------------------------------------
 #------------------------------- SUBS ------------------------------------------
@@ -443,8 +505,6 @@ sub makeid {
     if($def =~ />(\S+)/){
 	push(@ids, $1);
     }
-
-    carp "Calling FastaDB::makeid from BioPerl Bio::DB::Fasta hook" if($main::debug);
 
     #get the MD5 ID if made by GI::split_db
     #otherwise just trim the standard name to get an alias

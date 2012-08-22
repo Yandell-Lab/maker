@@ -553,14 +553,6 @@ else{
 	}
     }
 }
-if($size > 1){
-    carp "Calling GI::localize_file" if($main::debug);
-    GI::localize_file("$gdbfile.index") if(-f "$gdbfile.index"); #DB_File
-    GI::localize_file("$gdbfile.index.dir") if(-f "$gdbfile.index.dir"); #GDBM_File
-    GI::localize_file("$gdbfile.index.pag") if(-f "$gdbfile.index.pag"); #GDBM_File
-    carp "Calling GI::localize_file" if($main::debug);
-    $gdbfile = GI::localize_file($gdbfile);
-}
 carp "Calling GI::build_fasta_index" if($main::debug);
 $g_index = GI::build_fasta_index([$gdbfile]);
 carp "Calling FastaDB::add_to_global_index" if($main::debug);
