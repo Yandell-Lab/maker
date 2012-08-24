@@ -6,6 +6,7 @@ use vars qw(@ISA $VERSION %EXPORT_TAGS @EXPORT_OK $CODE $LOADED $WARNED $INITIAL
 use Storable qw(nfreeze thaw); #for complex datastructures
 use Perl::Unsafe::Signals; #stops zombie processes under hydra MPICH2
 use File::Temp qw(tempdir);
+use IPC::Open3;
 require Exporter;
 
 @ISA = qw(Exporter);
@@ -154,7 +155,7 @@ sub _load {
     require Proc::Signal;
 
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|hydra_pmi_proxy|mpispawn)$/){
+    if($name =~ /(bash|mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|hydra_pmi_proxy|mpispawn)$/){
 	require MAKER::ConfigData;
 	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
 	if(! $mpi_support){
@@ -175,7 +176,19 @@ sub _load {
 
 	#if mpi_override it set, I'm using non-default options
 	if(MAKER::ConfigData->feature('mpi_override')){
-	    $loc = tempdir("MPI_XXXXXX", CLEANUP => 1, TMPDIR => 1);
+	    my $I = "$loc/lib"; #self location
+	    $loc = tempdir("MPI_XXXXXX", CLEANUP => 1, TMPDIR => 1); #override location
+	    my $M = 'Parallel::Application::MPI'; #self
+	    my $mpicc = MAKER::ConfigData->config('MPICC');
+	    my $mpidir =MAKER::ConfigData->config('MPIDIR');
+
+	    #first call in separate executable to avoid setting $& (messes up regex)
+	    my $cmd = "$^X -I'${I}' -M${M} -e '${M}::_bind(qw($mpicc $mpidir $loc))'";
+	    my $pid = open3('<&STDIN', '>&STDOUT', my $ERR, $cmd);
+	    my $err = join('', <$ERR>);
+	    waitpid($pid, 0);
+	    croak $err if($?);
+	    print STDERR $err if($err);
 	}
 
 	#lock for first compilation only
