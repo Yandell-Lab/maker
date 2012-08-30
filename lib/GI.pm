@@ -865,7 +865,7 @@ sub split_db {
     my $d_name = "$f_name\.mpi\.$bins";
     my $f_dir = "$b_dir/$d_name";
     my $t_dir = $TMP."/$d_name";
-    $bins = ($bins > 1 && $bins < 50 && -s $file > 1000000000) ? 50 : $bins;
+    $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
     my $lock;
     while(! $lock || ! $lock->maintain(30)){

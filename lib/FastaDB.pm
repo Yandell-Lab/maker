@@ -56,7 +56,12 @@ sub new {
 	    carp "Calling File::NFSLock::new" if($main::debug);
 	    $lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
 	    carp "Calling File::NFSLock::maintain" if($main::debug);
-	    $lock->maintain(30);
+	    if($lock){
+		my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
+		    ("$file.index") : ("$file.index.dir", "$file.index.pag");
+		my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
+		$lock->maintain(30) if(!$exists); #only maintain lock if necessary
+	    }
 	}
 
 	push(@{$self->{index}}, _safe_new($file, @args));
@@ -83,21 +88,21 @@ sub _safe_new {
 	    ("$file.index") : ("$file.index.dir", "$file.index.pag");
 	my %args = @args;
 	my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
+	my $tmp = GI::get_global_temp();
 
 	#copy things locally if NFS mount and TMP is available
-	if(GI::is_NFS_mount($file) && !GI::is_NFS_mount(GI::get_global_temp())){
+	if($args{'-reindex'} || (GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp))){
 	    my $dir = GI::get_global_temp()."/indexing";
 	    mkdir($dir) if(! -d $dir);
 	    (my $sym = $file) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
 	    symlink($file, $sym) if(! -f $sym);	   
 	    
 	    #copy files locally if they already exist globally
-	    if(!$args{'-reindex'} && $exists){
-		foreach my $i (@ifiles){
-		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
-		    next if(-f $n);
-		    File::Copy::copy($i, $n) or confess "ERROR: Copy failed: $!";
-		}
+	    foreach my $i (@ifiles){
+		(my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+		unlink($n) if((!$exists || $args{'-reindex'}) && -f $n);
+		next if($args{'-reindex'} || -f $n);
+		File::Copy::copy($i, $n) or confess "ERROR: Copy failed: $!";
 	    }
 
 	    #build the index
@@ -107,8 +112,9 @@ sub _safe_new {
 
 	    #copy local files globally if they are needed
 	    if($args{'-reindex'} || !$exists){
-		untie($db); #untie first to flush (for new index)
-		$db = new Bio::DB::Fasta($sym, @args);
+		untie(%{$db->{offsets}}); #untie first to flush (for new index)
+		$args{'-reindex'} = 0;
+		$db = new Bio::DB::Fasta($sym, %args);
 		foreach my $i (@ifiles){
 		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
 		    File::Copy::copy($n, $i) or confess "ERROR: Copy failed: $!";
@@ -119,10 +125,16 @@ sub _safe_new {
 	    #build the index
 	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
+	    if($args{'-reindex'}){
+		foreach my $i (@ifiles){
+		    unlink($i) if(-f $i);
+		}
+	    }
 	    $db = new Bio::DB::Fasta($file, @args);
 	    if($args{'-reindex'} || !$exists){
-		untie($db); #untie first to flush (for new index)
-		$db = new Bio::DB::Fasta($file, @args);
+		untie(%{$db->{offsets}}); #untie first to flush (for new index)
+		$args{'-reindex'} = 0;
+		$db = new Bio::DB::Fasta($file, %args);
 	    }
 	}
     }

@@ -210,11 +210,10 @@ sub getSeqRef {
     while(my $l = shift(@fasta)){
 	chomp($l);
 	next if $l =~ /^>/;
+	#remove contaminating whitespace
+	$l =~ s/\s+//g;	
 	$seq .= $l;
     }
-
-    #remove contaminating whitespace
-    $seq =~ s/\s+//g;
 
     return \$seq;
 }
@@ -243,7 +242,22 @@ sub fasta2seqRef {
     my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
     $$fasta_ref =~ s/(>[^\n\cM]+)//; #remove header
-    $$fasta_ref =~ s/[^A-Za-z]//g; #remove whitespace and binary characters
+    my $length = length($$fasta_ref);
+    my $limit = 10000000;
+    if($length < $limit){ #weird large regular expression limit
+	$$fasta_ref =~ s/[^A-Za-z]//g; #remove whitespace and binary characters
+    }
+    else{
+	my $new= '';
+	my $offset = 0;	
+	while($offset < $length){
+	    my $l = substr($$fasta_ref, $offset, $limit);
+	    $l =~ s/[^A-Za-z]//g; #remove whitespace and binary characters
+            $new .= $l;
+	    $offset += $limit;
+        }
+        $fasta_ref = \$new;
+    }
 
     return $fasta_ref;
 }
@@ -262,7 +276,23 @@ sub seq2fastaRef {
     my $fasta_ref = (ref($seq) eq '') ? \$seq : $seq;
 
     $def = ">$def" unless($def =~ /^>/);
-    $$fasta_ref =~ s/(.{1,60})/$1\n/g;
+    my $width = 60;
+    my $limit = int(10000000/$width)*$width;
+    my $length = length($$fasta_ref);
+    if($length < $limit){ #weird large regular expression limit
+	$$fasta_ref =~ s/(.{1,$width})/$1\n/g;
+    }
+    else{
+	my $new= '';
+	my $offset = 0;	
+	while($offset < $length){
+	    my $l = substr($$fasta_ref, $offset, $limit);
+	    $l =~ s/(.{1,$width})/$1\n/g;
+            $new .= $l;
+	    $offset += $limit;
+        }
+        $fasta_ref = \$new;
+    }
     $$fasta_ref =~ s/^(.)/$def\n$1/;
 
     return $fasta_ref;

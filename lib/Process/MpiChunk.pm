@@ -420,6 +420,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $q_def = $VARS->{q_def};
 	    my $seq_id = $VARS->{seq_id};
@@ -440,6 +441,7 @@ sub _go {
 				  "$out_dir/run.log"
 				  );
 
+
 	    my $LOCK = $LOG->strip_off_lock();
 	    my ($c_flag, $message) = $LOG->get_continue_flag();
 	    $DS_CTL->add_entry($seq_id, $out_dir, $message) if($message);
@@ -449,22 +451,19 @@ sub _go {
 	    my $q_seq_obj;
 	    my $unmasked_file = "$the_void/query.fasta";
 	    if($c_flag > 0){
+
 		#get genome index and object
 		$g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 		$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-		
+
 		#no sequence, try again (probably NFS)
-		if (not $q_seq_obj) {
+		for(my $i = 0; $i < 2 && !$q_seq_obj; $i++){
 		    sleep 5;
-		    $g_index->drop_from_global_index();
-		    $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
-		    $g_index->add_to_global_index();
+		    print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+		    $g_index->reindex($i);
 		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
 		}
-
-		#still no sequence? try rebuilding the index and try again
-		if (not $q_seq_obj) {
-		    print STDERR "WARNING: Cannot find >$seq_id\n";#", trying to re-index the fasta.\n";
+		if (! $q_seq_obj) {
 		    print STDERR "stop here: $seq_id\n";
 		    confess "ERROR: Fasta index error\n";
 		}
@@ -522,6 +521,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $out_dir = $VARS->{out_dir};
 	    my $build = $VARS->{build};
@@ -577,42 +577,43 @@ sub _go {
 		#make masked index
 		my $seq_id = $VARS->{seq_id};
 		my $masked_file = $VARS->{the_void}."/query.masked.fasta";
-		GI::build_fasta_index($masked_file)->_close_index; #once to tie file
 		my $m_index = GI::build_fasta_index($masked_file);
 		my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
 		#still no sequence? try rebuilding the index and try again
 		if(!$m_seq_obj) {
-		    for(my $i = 0; $i < 2 && !$m_seq_obj; $i++){
-			sleep 5;
-			print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
-			$m_index->reindex($i);
-			$m_seq_obj = $m_index->get_Seq_by_id($seq_id);
-		    }
+		    sleep 5;
+		    $m_index->reindex(0);
+		    $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 		    
 		    if (not $m_seq_obj) {
-			print STDERR "stop here: $seq_id\n";
-			confess "ERROR: Fasta index error\n";
+			unlink $VARS->{the_void}."/query.masked.fasta";
+			unlink $VARS->{the_void}."/query.masked.fasta.index";
+			unlink $VARS->{the_void}."/query.masked.fasta.index.dir";
+			unlink $VARS->{the_void}."/query.masked.fasta.index.pag";
+			unlink $VARS->{the_void}."/query.masked.gff";
 		    }
 		}
 
-		#build masked chunks    
-		my $fasta_chunker = new FastaChunker();
-		$fasta_chunker->parent_def($VARS->{q_def}." masked");
-		$fasta_chunker->parent_seq($m_seq_obj);
-		$fasta_chunker->chunk_size($VARS->{CTL_OPT}{max_dna_len});
-		$fasta_chunker->min_size($VARS->{CTL_OPT}{split_hit});
-		$fasta_chunker->load_chunks();
+		if($m_seq_obj){
+		    #build masked chunks    
+		    my $fasta_chunker = new FastaChunker();
+		    $fasta_chunker->parent_def($VARS->{q_def}." masked");
+		    $fasta_chunker->parent_seq($m_seq_obj);
+		    $fasta_chunker->chunk_size($VARS->{CTL_OPT}{max_dna_len});
+		    $fasta_chunker->min_size($VARS->{CTL_OPT}{split_hit});
+		    $fasta_chunker->load_chunks();
 
-		$VARS->{masked_file} = $masked_file;
-		$VARS->{m_index} = $m_index;
-		$VARS->{m_seq_obj} = $m_seq_obj;
-		$VARS->{fasta_chunker} = $fasta_chunker;
+		    $VARS->{masked_file} = $masked_file;
+		    $VARS->{m_index} = $m_index;
+		    $VARS->{m_seq_obj} = $m_seq_obj;
+		    $VARS->{fasta_chunker} = $fasta_chunker;
 
-		#GFF3 file with masking data
-		$VARS->{gff3_files} = [$VARS->{the_void}."/query.masked.gff"];
-
-		$next_level = 4;
+		    #GFF3 file with masking data
+		    $VARS->{gff3_files} = [$VARS->{the_void}."/query.masked.gff"];
+		    
+		    $next_level = 4;
+		}
 	    }
 	    #-------------------------NEXT_LEVEL
 	 }
@@ -663,6 +664,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
+
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
@@ -718,6 +721,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $LOG = $VARS->{LOG};
@@ -845,6 +849,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -908,6 +913,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -968,6 +974,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $chunk = $VARS->{chunk};
 	    my $rm_gff_keepers = $VARS->{rm_gff_keepers};
@@ -1033,6 +1040,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -1057,7 +1065,6 @@ sub _go {
 	    $seq = undef; #clear memory
 
 	    #make masked index and seq object
-	    GI::build_fasta_index($masked_file)->_close_index; #once to tie file
 	    my $m_index = GI::build_fasta_index($masked_file);
 	    my $m_seq_obj = $m_index->get_Seq_by_id($seq_id);
 
@@ -1127,6 +1134,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_def = $VARS->{q_def};
@@ -1261,6 +1269,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
@@ -1329,6 +1338,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -1402,6 +1412,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -1616,6 +1627,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -1636,6 +1648,16 @@ sub _go {
 		if(! $q_seq_obj->{db}){
 		    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    for(my $i = 0; $i < 2 && !$q_seq_obj; $i++){
+			sleep 5;
+			print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+			$g_index->reindex($i);
+			$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    }
+		    if (! $q_seq_obj) {
+			print STDERR "stop here: $seq_id\n";
+			confess "ERROR: Fasta index error\n";
+		    }
 		}
 
 		$exonerate_e_data = GI::polish_exonerate($chunk,
@@ -1739,6 +1761,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
 	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
@@ -1818,6 +1841,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -1889,6 +1913,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -2094,6 +2119,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2209,6 +2235,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $exonerate_a_clusters = $VARS->{exonerate_a_clusters}; #array of overlapping clusters
 	    my $tblastx_clusters = $VARS->{tblastx_clusters}; #array of overlapping clusters
@@ -2288,6 +2315,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2361,6 +2389,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -2567,6 +2596,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2587,6 +2617,16 @@ sub _go {
 		if(! $q_seq_obj->{db}){
 		    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
 		    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    for(my $i = 0; $i < 2 && !$q_seq_obj; $i++){
+			sleep 5;
+			print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+			$g_index->reindex($i);
+			$q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		    }
+		    if (! $q_seq_obj) {
+			print STDERR "stop here: $seq_id\n";
+			confess "ERROR: Fasta index error\n";
+		    }
 		}
 
 		$exonerate_p_data = GI::polish_exonerate($chunk,
@@ -2678,6 +2718,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $exonerate_p_clusters = $VARS->{exonerate_p_clusters}; #array of overlapping clusters
 	    my $blastx_clusters = $VARS->{blastx_clusters}; #array of overlapping clusters
@@ -2745,6 +2786,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
@@ -3004,6 +3046,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -3152,6 +3195,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
@@ -3209,6 +3253,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -3319,6 +3364,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -3385,6 +3431,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $trans = $VARS->{trans};
@@ -3459,6 +3506,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $an = $VARS->{an};
@@ -3508,6 +3556,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $annotations = $VARS->{annotations};
@@ -3615,6 +3664,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my $chunk       = $VARS->{chunk};
 	    my $maker_anno  = $VARS->{maker_anno};
@@ -3704,6 +3754,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};

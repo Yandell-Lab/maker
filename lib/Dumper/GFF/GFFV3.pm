@@ -106,27 +106,34 @@ sub set_current_contig {
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
 
+    my $seq_ref;
     if(!$self->{SEEN}{$self->{seq_id}} && $seq && (! ref($seq) || ref($seq) eq 'SCALAR')){
-	$self->{seq_length} = length($$seq);
-
-	$$seq =~ s/(.{1,60})/$1\n/g; #make 60 width fasta
-	open(my $SEQ, ">>", $self->{seq_file}) || confess "ERROR: opening fasta for GFF3\n\n";
-	print $SEQ ">".$self->{seq_id}."\n".$$seq;
-	close($SEQ);
-	$$seq =~ s/[^A-Za-z]//g; #make single line
+	$seq = $$seq while(ref($seq) eq 'REF');
+        $seq_ref = (ref($seq) eq '') ? \$seq : $seq;
+	$self->{seq_length} = length($$seq_ref);
     }
     elsif(!$self->{SEEN}{$self->{seq_id}} && $seq){
-	$self->{seq_length} = $seq->length;	
-
-	open(my $SEQ, ">>", $self->{seq_file}) || confess "ERROR: opening fasta for GFF3\n\n";
-	print $SEQ ${&Fasta::seq2fastaRef($id, \ ($seq->seq))};
-	close($SEQ);	
+	$self->{seq_length} = $seq->length;
+	$seq_ref = \ ($seq->seq);
+	$seq_ref = $$seq_ref while(ref($seq_ref) eq 'REF');
     }
+
+    open(my $SEQ, ">>", $self->{seq_file}) || confess "ERROR: opening fasta for GFF3\n\n";
+    print $SEQ ">".$self->{seq_id}."\n";
+    my $offset = 0;
+    my $width = 60;
+    while($offset < $self->{seq_length}){
+	my $l = substr($$seq_ref, $offset, $width);
+	print $SEQ $l."\n";
+	$offset += $width;
+    }
+    close($SEQ);
+
     $self->{SEEN}{$self->{seq_id}}++;
 
+    #-skip adding the optional sequence-region line because many programs
+    #-do not handle it correctly or consistently - 06/05/2010
     #open(my $DEF, ">>", $self->{def_file}) || confess "ERROR: Can't open definition file\n\n";
-    #skip adding the optional sequence-region line because many programs
-    #do not handle it correctly or consistently - 06/05/2010
     #print_txt($DEF, $self->contig_comment."\n");
     #close($DEF);
 
