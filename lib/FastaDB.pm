@@ -52,16 +52,16 @@ sub new {
 	}
 
 	my $lock;
-	while(! $lock || ! $lock->still_mine){
+	while(! $lock){
 	    carp "Calling File::NFSLock::new" if($main::debug);
 	    $lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
 	    carp "Calling File::NFSLock::maintain" if($main::debug);
-	    if($lock){
-		my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
-		    ("$file.index") : ("$file.index.dir", "$file.index.pag");
-		my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
-		$lock->maintain(30) if(!$exists); #only maintain lock if necessary
-	    }
+	    next if(!$lock);
+	    my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
+		("$file.index") : ("$file.index.dir", "$file.index.pag");
+	    my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
+	    last if($exists);
+	    undef $lock if(!$lock->maintain(30));
 	}
 
 	push(@{$self->{index}}, _safe_new($file, @args));
@@ -198,7 +198,7 @@ sub reindex {
     }
     else{
 	#pause and wait for other process to reindex
-	my $lock = $lock = new File::NFSLock("$files[0].reindex", 'EX', undef, 40);
+	my $lock = $lock = new File::NFSLock("$files[0].reindex", 'EX', undef, 50);
 
 	#just rebuild (not destroy old index))
 	foreach my $file (@files){

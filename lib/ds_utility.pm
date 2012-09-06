@@ -10,7 +10,6 @@ use Datastore::MD5;
 use File::Path;
 use Cwd;
 use URI::Escape;
-use File::NFSLock;
 use Carp;
 
 @ISA = qw(
@@ -156,17 +155,9 @@ sub add_entry {
        $entry =~ s/$cwd\/.*\.maker\.output\/*|$cwd\/.*\.iprscan\.output\/*//;
    }
 
-   #lock file so no one else writes to it (MPI safe)
-#   if(my $lock = new File::NFSLock($self->{log}, 'EX', 120, 15)){
-       $entry =~ /^([^\t]+)\t[^\t]+\t([^\t]+)/;
-       open(my $IN, ">>", $self->{log});
-       print $IN $entry . "\n";
-       close($IN);
-#       $lock->unlock;
-#   }
-#   else{
-#       die "ERROR: ds_utility::add_entry method timed out\n\n";
-#   }
+   open(my $IN, ">>", $self->{log});
+   print $IN $entry . "\n";
+   close($IN);
 }
 #------------------------------------------------------------------------
 #------------------------------------------------------------------------

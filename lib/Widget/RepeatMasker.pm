@@ -164,7 +164,6 @@ sub parse {
 		if ($fields[8] eq 'C'){
 			$h_end   = abs $fields[12];
 			$h_begin = abs $fields[13];
-
 			
 			($h_remainder) = $fields[11] =~/\((\d+)\)/;
 		}
@@ -172,12 +171,11 @@ sub parse {
 			$h_begin = $fields[11];
 			$h_end   = $fields[12];
 			($h_remainder) = $fields[13] =~/\((\d+)\)/;
-			
 		}
-		$h_seq_length = $h_end + $h_remainder;
-		
-		my $identical = (1 - $fields[1]/100) * abs($q_end - $q_begin);
+		$h_begin = 1 if($h_begin == 0); #only happens when RepeatMasker configured with with rmblast
 
+		$h_seq_length = $h_end + $h_remainder;		
+		my $identical = (1 - $fields[1]/100) * abs($q_end - $q_begin);
 		my $q_gaps    = (1 - $fields[2]/100) * abs($q_end - $q_begin);
 		my $h_gaps    = (1 - $fields[3]/100) * abs($h_end - $h_begin);
 		my $h_name = "species:$fields[9]|genus:$fields[10]";

@@ -751,7 +751,7 @@ sub get_split_args {
 my %localized; #persistent list of already localized files
 sub localize_file {
     my $file = shift;
-    die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);    
+    die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
 
     $file = Cwd::abs_path($file);
     my ($name) = $file =~ /([^\/]+)$/;
@@ -761,18 +761,19 @@ sub localize_file {
 	return $localized{$file};
     }
 
-    my $lock;
-    while(! $lock || ! $lock->maintain(30)){
-	$lock = new File::NFSLock("$tmp/$name", 'EX', 1800, 60);
-    }
-    
-    if(!-f "$tmp/$name"){
+    while(!-f "$tmp/$name"){
+	my $lock = new File::NFSLock("$tmp/$name", 'EX', 1800, 60);
+	next if(!$lock);
+
+	#always check again after locking
+	last if(-f "$tmp/$name");
+	next unless($lock->maintain(30));
+
 	File::Copy::copy($file, "$tmp/$name.tmp");
 	link("$tmp/$name.tmp", "$tmp/$name");
 	unlink("$tmp/$name.tmp");
-    }
-    
-    $lock->unlock;
+	$lock->unlock if($lock);
+    }    
     
     $localized{$file} = "$tmp/$name";
     return $localized{$file};
@@ -867,25 +868,36 @@ sub split_db {
     my $t_dir = $TMP."/$d_name";
     $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
-    my $lock;
-    while(! $lock || ! $lock->maintain(30)){
-	carp "Calling File::NFSLock::new" if($main::debug);
-	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
-    }
-
     #check if already finished
     my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
     if(@t_db == $bins){ #use existing if right count
 	push(@db_files, @t_db);
-	carp "Calling File::NFSLock::unlock" if($main::debug);
-	$lock->unlock if($lock);
 	return \@db_files;
     }
-    else{
-	carp "Calling File::Path::rmtree" if($main::debug);
-	File::Path::rmtree($f_dir);
-    }
-    
+
+    #lock and check again
+    my $lock;
+    while(! $lock){
+	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
+
+	#check if already finished
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	if(@t_db == $bins){ #use existing if right count
+	    push(@db_files, @t_db);
+	    carp "Calling File::NFSLock::unlock" if($main::debug);
+	    $lock->unlock if($lock);
+	    return \@db_files;
+	}
+	elsif($lock->maintain(30)){
+	    carp "Calling File::Path::rmtree" if($main::debug);
+	    File::Path::rmtree($f_dir) if(-d $f_dir);
+	    last;
+	}
+	else{
+	    undef $lock;
+	}
+    }    
+
     #set up a new database
     carp "Calling Iterator::Any::new" if($main::debug);
     my $fasta_iterator = new Iterator::Any(-fasta => $file, -gff => $file); #handle both cases
@@ -1749,57 +1761,71 @@ sub dbformat {
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
    confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
-   my $run; #flag
-   if ($command =~ /xdformat/) {
-      if (($type eq 'blastn' && ! -e $file.'.xnd') ||
-	  ($type eq 'blastx' && ! -e $file.'.xpd') ||
-	  ($type eq 'tblastx' && ! -e $file.'.xnd')
-	 ) {
-	 $command .= " -p" if($type eq 'blastx');
-	 $command .= " -n" if($type eq 'blastn' || $type eq 'tblastx');
-	 $command .= " $file";
-	 $run++;
-      }
-   }
-   elsif ($command =~ /formatdb/) {
-      if (($type eq 'blastn' && ! -e $file.'.nsq') ||
-	  ($type eq 'blastx' && ! -e $file.'.psq') ||
-	  ($type eq 'tblastx' && ! -e $file.'.nsq')
-	 ) {
-	 $command .= " -p T" if($type eq 'blastx');
-	 $command .= " -p F" if($type eq 'blastn' || $type eq 'tblastx');
-	 $command .= " -i $file";
-	 $run++;
-      }
-   }
-   elsif ($command =~ /makeblastdb/) {
-      if (($type eq 'blastn' && ! -e $file.'.nsq') ||
-	  ($type eq 'blastx' && ! -e $file.'.psq') ||
-	  ($type eq 'tblastx' && ! -e $file.'.nsq')
-	 ) {
-	 $command .= " -dbtype prot" if($type eq 'blastx');
-	 $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
-	 $command .= " -in $file";
-	 $run++;
-      }
-   }
-   else {
-      confess "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
-   }
+   my $lock;
+   while(1){
+       my $run; #flag
+       if ($command =~ /xdformat/) {
+	   if (($type eq 'blastn' && ! -e $file.'.xnd') ||
+	       ($type eq 'blastx' && ! -e $file.'.xpd') ||
+	       ($type eq 'tblastx' && ! -e $file.'.xnd')
+	       ) {
+	       $command .= " -p" if($type eq 'blastx');
+	       $command .= " -n" if($type eq 'blastn' || $type eq 'tblastx');
+	       $command .= " $file";
+	       $run++;
+	   }
+       }
+       elsif ($command =~ /formatdb/) {
+	   if (($type eq 'blastn' && ! -e $file.'.nsq') ||
+	       ($type eq 'blastx' && ! -e $file.'.psq') ||
+	       ($type eq 'tblastx' && ! -e $file.'.nsq')
+	       ) {
+	       $command .= " -p T" if($type eq 'blastx');
+	       $command .= " -p F" if($type eq 'blastn' || $type eq 'tblastx');
+	       $command .= " -i $file";
+	       $run++;
+	   }
+       }
+       elsif ($command =~ /makeblastdb/) {
+	   if (($type eq 'blastn' && ! -e $file.'.nsq') ||
+	       ($type eq 'blastx' && ! -e $file.'.psq') ||
+	       ($type eq 'tblastx' && ! -e $file.'.nsq')
+	       ) {
+	       $command .= " -dbtype prot" if($type eq 'blastx');
+	       $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
+	       $command .= " -in $file";
+	       $run++;
+	   }
+       }
+       else {
+	   confess "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
+       }
 
-   if($run){
-       my $lock;
-       if(($lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 60)) && $lock->maintain(30)){
-	   my $w = new Widget::formater();
-	   print STDERR "formating database...\n" unless $main::quiet;
-	   $w->run($command);
-	   $lock->unlock;
+       if($run){
+	   if(! $lock){
+	       $lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 60);
+	       confess "ERROR:  Could not obtain lock to format database\n\n" if(!$lock);
+	       next;
+	   }
+	   elsif($lock->maintain(30)){
+	       my $w = new Widget::formater();
+	       print STDERR "formating database...\n" unless $main::quiet;
+	       $w->run($command);
+	       last;
+	   }
+	   else{
+	       undef $lock;
+	       next;
+	   }
        }
        else{
-	   $lock->unlock if($lock);
-	   confess "ERROR:  Could not obtain lock to format database\n\n";
+	   last;
        }
    }
+
+   $lock->unlock;
+
+   return;
 }
 #-----------------------------------------------------------------------------
 sub get_blast_finished_name {
@@ -1861,7 +1887,6 @@ sub blastn_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.blastn";
-   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
@@ -1876,34 +1901,8 @@ sub blastn_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	    (! -e $blast_finished)) ||
-	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
-	   ){
-	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
-	       open(my $L,"$tmp_db.copy");
-	       flock($L, 2); #try regular file lock for extra safety
-	       
-	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-		   (! -e $blast_finished)
-		   ){
-		   $lock->maintain(30);
-		   copy($db, $tmp_db) if(! -e $tmp_db);
-		   dbformat($formater, $tmp_db, 'blastn');
-	       }
-	       
-	       flock($L, 8);
-	       $lock->unlock;
-	   }
-	   else{
-	       confess "ERROR: Could not get lock.\n\n";
-	   }
-	}
+       my $tmp_db = localize_file($db);
+       dbformat($formater, $tmp_db, 'blastn');
    
        #call blast executable
        $chunk->write_file_w_flank($t_file_name);
@@ -2234,7 +2233,6 @@ sub blastx_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.$type";
-   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG);
 
@@ -2249,35 +2247,8 @@ sub blastx_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	    (! -e $blast_finished)) ||
-	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
-	   ){
-	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
-	       open(my $L,"$tmp_db.copy");
-	       flock($L, 2); #try regular file lock for extra safety
-	       
-	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-		   (! -e $blast_finished)
-		   ){
-		   $lock->maintain(30);
-		   copy($db, $tmp_db) if(! -e $tmp_db);
-		   dbformat($formater, $tmp_db, 'blastx');
-	       }
-	       
-	       flock($L, 8);
-	       $lock->unlock;
-	   }
-	   else{
-	       confess "ERROR: Could not get lock.\n\n";
-	   }
-       }
+       my $tmp_db = localize_file($db);
+       dbformat($formater, $tmp_db, 'blastx');
 
        #call blast executable
        if($rflag){
@@ -2649,7 +2620,6 @@ sub tblastx_as_chunks {
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
    my $o_file    = "$blast_dir/$db_n\.tblastx";
-   my $tmp_db = "$TMP/$db_n";
 
    $LOG->add_entry("STARTED", $blast_finished, "") if($LOG_FLAG); 
 
@@ -2664,49 +2634,21 @@ sub tblastx_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       if ((((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-	     (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-	    (! -e $blast_finished)) ||
-	   (-e ".NFSLock.$tmp_db.copy.NFSLock")
-	   ){
-	   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-	   my $lock;
-	   if(($lock = new File::NFSLock("$tmp_db.copy", 'EX', 1800, 60)) && $lock->still_mine){
-	       open(my $L,"$tmp_db.copy");
-	       flock($L, 2); #try regular file lock for extra safety
-	       
-	       if (((! @{[<$tmp_db.x?d*>]} && $formater =~ /xdformat/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /formatdb/) ||
-		    (! @{[<$tmp_db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-		   (! -e $blast_finished)
-		   ){
-		   $lock->maintain(30);
-		   copy($db, $tmp_db) if(! -e $tmp_db);
-		   dbformat($formater, $tmp_db, 'tblastx');
-	       }
-	       
-	       flock($L, 8);
-	       $lock->unlock;
-	   }
-	   else{
-	       confess "ERROR: Could not get lock.\n\n";
-	   }
-       }
+       my $tmp_db = loalize_file($db);
+       dbformat($formater, $tmp_db, 'tblastx');
 
        #call blast executable
        $chunk->write_file_w_flank($t_file_name);  
        
        runtBlastx($t_file_name,
-		 $tmp_db,
-		 $o_file,
-		 $blast,
-		 $eval_blast,
-		 $split_hit,
-		 $cpus,
-		 $org_type,
-		 $softmask
-		 );
+		  $tmp_db,  
+		  $o_file, 
+		  $blast,
+		  $eval_blast,
+		  $split_hit,
+		  $cpus,
+		  $org_type,
+		  $softmask);
        
        $chunk->erase_fasta_file();
    }
@@ -4225,7 +4167,7 @@ sub load_control_files {
    #--check if MAKER is already running and lock the directory
    #lock must be global or it will be destroyed outside of block
    unless(($LOCK = new File::NFSLock($CTL_OPT{out_base}."/gi_lock", 'SH', 40, 40)) && $LOCK->maintain(30)){
-       die "ERROR: The directory is locked.  Perhaps by an instance of MAKER or EVALUATOR.\n\n";
+       die "ERROR: The directory is locked.  Perhaps by an instance of MAKER.\n\n";
    }
 
    #check who else is also sharing the lock and if running same settings

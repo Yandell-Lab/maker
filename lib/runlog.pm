@@ -892,7 +892,9 @@ sub report_status {
    my $tries = $die_count + 1;
 
    #maintain lock only if status id positive (possible race condition?)
-   $self->{LOCK}->maintain(30) if($flag > 0);
+   if($flag > 0){
+       $flag = -3 if(!$self->{LOCK}->maintain(30));
+   }
 
    if($flag == 0){
       print STDERR "#---------------------------------------------------------------------\n",
