@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -35,6 +32,8 @@ while(my $line = <IN>){
     chomp $line;
     my @F = split("\t", $line);
     ($F[3], $F[4]) = ($F[4], $F[3]) if($F[6] eq '-');
+
+    next if($F[2] eq 'Exon');
 
     $F[2] =~ s/First/Einit/;
     $F[2] =~ s/Terminal/Eterm/;
