@@ -1753,18 +1753,19 @@ sub build_all_indexes {
 }
 #-----------------------------------------------------------------------------
 sub dbformat {
-   my $command = shift;
+   my $exe = shift;
    my ($file) = shift =~ /^([^\:]+)\:?(.*)/; #peal off label
    my $type = shift;
 
-   confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $command);
+   confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $exe);
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
    confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
 
    my $lock;
    while(1){
        my $run; #flag
-       if ($command =~ /xdformat/) {
+       my $command = $exe;
+       if ($exe =~ /xdformat/) {
 	   if (($type eq 'blastn' && ! -e $file.'.xnd') ||
 	       ($type eq 'blastx' && ! -e $file.'.xpd') ||
 	       ($type eq 'tblastx' && ! -e $file.'.xnd')
@@ -1775,7 +1776,7 @@ sub dbformat {
 	       $run++;
 	   }
        }
-       elsif ($command =~ /formatdb/) {
+       elsif ($exe =~ /formatdb/) {
 	   if (($type eq 'blastn' && ! -e $file.'.nsq') ||
 	       ($type eq 'blastx' && ! -e $file.'.psq') ||
 	       ($type eq 'tblastx' && ! -e $file.'.nsq')
@@ -1786,7 +1787,7 @@ sub dbformat {
 	       $run++;
 	   }
        }
-       elsif ($command =~ /makeblastdb/) {
+       elsif ($exe =~ /makeblastdb/) {
 	   if (($type eq 'blastn' && ! -e $file.'.nsq') ||
 	       ($type eq 'blastx' && ! -e $file.'.psq') ||
 	       ($type eq 'tblastx' && ! -e $file.'.nsq')
@@ -1798,7 +1799,7 @@ sub dbformat {
 	   }
        }
        else {
-	   confess "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$command\'\n";
+	   confess "ERROR: databases can only be formated by xdformat, formatdb, or makeblastdb, not \'$exe\'\n";
        }
 
        if($run){
