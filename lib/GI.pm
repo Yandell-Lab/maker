@@ -1824,7 +1824,7 @@ sub dbformat {
        }
    }
 
-   $lock->unlock;
+   $lock->unlock if($lock);
 
    return;
 }
