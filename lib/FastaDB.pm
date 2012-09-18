@@ -40,7 +40,7 @@ sub new {
     }
 
     #build indexes
-    while (my $file = shift @files){ 
+    while (my $file = shift @files){
 	my ($title) = $file =~ /([^\/]+)$/;
 	if($G_DB{$title}){
 	    push(@{$self->{index}}, $G_DB{$title});
@@ -51,27 +51,12 @@ sub new {
 	    next;
 	}
 
-	my $lock;
-	while(! $lock){
-	    carp "Calling File::NFSLock::new" if($main::debug);
-	    $lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
-	    carp "Calling File::NFSLock::maintain" if($main::debug);
-	    next if(!$lock);
-	    my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
-		("$file.index") : ("$file.index.dir", "$file.index.pag");
-	    my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
-	    last if($exists);
-	    undef $lock if(!$lock->maintain(30));
-	}
-
 	push(@{$self->{index}}, _safe_new($file, @args));
 	carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
 	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
 
 	#build reverse index to get the correct index based on file name
-	$self->{file2index}{$title} = $self->{index}->[-1];
-	
-	$lock->unlock if($lock);
+	$self->{file2index}{$title} = $self->{index}->[-1];       
     }
     
     return $self;
@@ -89,20 +74,35 @@ sub _safe_new {
 	my %args = @args;
 	my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
 	my $tmp = GI::get_global_temp();
+	my $localize = (GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp));
+
+	my $lock;
+	if(!$exists || $args{'-reindex'}){
+	    my $lock;
+	    while(! $lock){
+		carp "Calling File::NFSLock::new" if($main::debug);
+		$lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
+		next if(! $lock);
+
+		$exists = 1 if((grep {-f $_} @ifiles) == @ifiles); #check again
+		last if($exists);
+		
+		undef $lock unless($lock->maintain(30));
+	    }
+	}
 
 	#copy things locally if NFS mount and TMP is available
-	if($args{'-reindex'} || (GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp))){
-	    my $dir = GI::get_global_temp()."/indexing";
-	    mkdir($dir) if(! -d $dir);
+	if(!$exists || $args{'-reindex'} || $localize){
+	    my $dir = GI::get_global_temp();
 	    (my $sym = $file) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
-	    symlink($file, $sym) if(! -f $sym);	   
+	    symlink($file, $sym) if(! -f $sym);
 	    
 	    #copy files locally if they already exist globally
 	    foreach my $i (@ifiles){
 		(my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
 		unlink($n) if((!$exists || $args{'-reindex'}) && -f $n);
-		next if($args{'-reindex'} || -f $n);
-		File::Copy::copy($i, $n) or confess "ERROR: Copy failed: $!";
+		next if($args{'-reindex'} || !$localize || ! -f $i || -f $n);
+		GI::localize_file($i);
 	    }
 
 	    #build the index
@@ -117,26 +117,20 @@ sub _safe_new {
 		$db = new Bio::DB::Fasta($sym, %args);
 		foreach my $i (@ifiles){
 		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
-		    File::Copy::copy($n, $i) or confess "ERROR: Copy failed: $!";
+		    File::Copy::copy($n, "$i.tmp") or confess "ERROR: Copy failed: $!";
+		    link("$i.tmp", $i);
+		    unlink("$i.tmp");
 		}
 	    }
 	}
 	else{
-	    #build the index
+	    #build the index with existing file
 	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
-	    if($args{'-reindex'}){
-		foreach my $i (@ifiles){
-		    unlink($i) if(-f $i);
-		}
-	    }
 	    $db = new Bio::DB::Fasta($file, @args);
-	    if($args{'-reindex'} || !$exists){
-		untie(%{$db->{offsets}}); #untie first to flush (for new index)
-		$args{'-reindex'} = 0;
-		$db = new Bio::DB::Fasta($file, %args);
-	    }
 	}
+
+	$lock->unlock if($lock);
     }
     catch Error::Simple with {
         my $E = shift;
@@ -179,20 +173,13 @@ sub reindex {
     my $stat = $self->drop_from_global_index(); #drop globally
     if(($lock = new File::NFSLock("$files[0].reindex", 'NB', 0, 50)) && $lock->maintain(30)){ #reindex lock
 	foreach my $file (@files){
-	    my $lock;
-	    if(($lock = new File::NFSLock("$file.index", 'EX', undef, 50)) && $lock->maintain(30)){ #stnd index lock
-		push(@{$self->{index}}, _safe_new($file, @args));
-		carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
-		push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
-
-		#build reverse index to get the correct index based on file name
-		my ($title) = $file =~ /([^\/]+)$/;
-		$self->{file2index}{$title} = $self->{index}->[-1];
-		$lock->unlock;
-	    }
-	    else{
-		die "ERROR: Could not get lock for re-indexing\n\n";
-	    }
+	    push(@{$self->{index}}, _safe_new($file, @args));
+	    carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
+	    push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
+	    
+	    #build reverse index to get the correct index based on file name
+	    my ($title) = $file =~ /([^\/]+)$/;
+	    $self->{file2index}{$title} = $self->{index}->[-1];
 	}
 	$lock->unlock;
     }

@@ -1763,8 +1763,8 @@ sub dbformat {
 
    my $lock;
    while(1){
-       my $run; #flag
        my $command = $exe;
+       my $run;
        if ($exe =~ /xdformat/) {
 	   if (($type eq 'blastn' && ! -e $file.'.xnd') ||
 	       ($type eq 'blastx' && ! -e $file.'.xpd') ||
@@ -4178,10 +4178,10 @@ sub load_control_files {
        #log the control files
        generate_control_files($CTL_OPT{out_base}, 'all', \%CTL_OPT, 1);
 
-       $i_lock->unlock; #release init lock
+       $i_lock->unlock if($i_lock); #release init lock
    }
    else{
-       $i_lock->unlock; #release init lock
+       $i_lock->unlock if($i_lock); #release init lock
 
        #compare current control files to logged files
        my $app = ($main::eva) ? "eval" : "maker";
@@ -4191,13 +4191,13 @@ sub load_control_files {
 		       );
 
        unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
-	   $LOCK->unlock;
+	   $LOCK->unlock if($LOCK);
 	   confess "ERROR: Could not query control option logs\n\n";
        }
 
        #should be same
        if(! runlog::are_same_opts(\%CTL_OPT, \@ctl_logs)){
-	   $LOCK->unlock;
+	   $LOCK->unlock if($LOCK);
 	   die "ERROR: Cannot start process. MAKER/EVALUATOR already running\n".
 	       "with different settings in this same directory.\n\n";
        }
