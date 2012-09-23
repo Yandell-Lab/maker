@@ -1021,17 +1021,18 @@ sub _install_exe {
 	my ($dir) = grep {-d $_} <augustus*>;
 	chdir("$dir/src");
 	print "Configuring $exe...\n";
-	if($OS eq 'Darwin'){
-	    File::Copy::move('Makefile', 'Makefile.bak') or return $self->fail($exe, $path);
-	    open(IN, "< Makefile.bak");
-	    open(OUT, "> Makefile");
-	    while(my $line = <IN>){
-		$line =~ s/\-static//g;
-		print OUT $line;
-	    }
-	    close(OUT);
-	    close(IN);
+	#always remove static flag and not just for OSX
+	#if($OS eq 'Darwin'){
+	File::Copy::move('Makefile', 'Makefile.bak') or return $self->fail($exe, $path);
+	open(IN, "< Makefile.bak");
+	open(OUT, "> Makefile");
+	while(my $line = <IN>){
+	    $line =~ s/\-static//g;
+	    print OUT $line;
 	}
+	close(OUT);
+	close(IN);
+	#}
 	$self->do_system("make") or return $self->fail($exe, $path);
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
