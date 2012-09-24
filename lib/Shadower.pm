@@ -171,8 +171,63 @@ sub getVectorPieces {
 	if(ref($features) ne 'ARRAY'){
 	    confess "ERROR: Not an array reference - ref: ".ref($features)."\n";
 	}
-
+	return [] if(!@$features);
 	$flank = 0 unless defined($flank);
+
+	foreach my $f (@$features){
+	    ($f->[0], $f->[1]) = ($f->[1], $f->[0]) if($f->[0] > $f->[1]);
+	}
+
+	#initialize pieces array
+	my @pieces;
+	my @fs = sort {$a->[0] <=> $b->[0]} @$features;
+	push(@pieces, {b => $fs[0][0]-$flank, e => $fs[0][1]+$flank});
+	$pieces[-1]{b} = 1 if($pieces[-1]{b} < 1);
+
+	#now grow pieces
+	for(my $i = 1; $i < @fs; $i++){
+	    my $p = $pieces[-1];
+	    my $f = $fs[$i];
+
+	    #FYI this is always true --> $p->{b} <= $f->[0]
+	    if($f->[0] - $flank <= $p->{e} + 1){ #plus 1 because being neigbors is sufficient
+		$p->{e} = $f->[1]+$flank if($f->[1]+$flank > $p->{e});
+	    }
+	    else{
+		push(@pieces, {b => $f->[0]-$flank, e => $f->[1]+$flank});
+		$pieces[-1]{b} = 1 if($pieces[-1]{b} < 1);
+	    }
+	}
+
+	#my $top = 0;
+	#foreach my $f (@$features){
+	#    $top = $f->[1]+$flank if($f->[1]+$flank > $top);
+	#    $top = $f->[0]+$flank if($f->[0]+$flank > $top);
+	#}
+
+        #my $sVec = shadowVector($top, $features, $flank);
+
+        #my @pieces;
+	#my $s = 0;
+	#while (($s < $sVec->Size()) && (my ($min,$max) = $sVec->Interval_Scan_inc($s))){
+	#    $s = $max + 2;
+        #
+	#    push(@pieces, {b => $min , e => $max});
+	#}
+        #
+
+	return \@pieces;
+}
+sub getVectorPieces_old {
+        my $features = shift; #coordinates not objects
+        my $flank    = shift;
+
+	if(ref($features) ne 'ARRAY'){
+	    confess "ERROR: Not an array reference - ref: ".ref($features)."\n";
+	}
+	return [] if(!@$features);
+	$flank = 0 unless defined($flank);
+
 
 	my $top = 0;
 	foreach my $f (@$features){
@@ -186,7 +241,7 @@ sub getVectorPieces {
 	my $s = 0;
 	while (($s < $sVec->Size()) && (my ($min,$max) = $sVec->Interval_Scan_inc($s))){
 	    $s = $max + 2;
-
+        
 	    push(@pieces, {b => $min , e => $max});
 	}
 

@@ -140,8 +140,8 @@ sub do_indexing {
     }
     else{
 	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	#$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	#$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -182,8 +182,8 @@ sub add_maker {
     }
     else{
 	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+	#$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+	#$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     #check to see if tables need to be created, erased, or skipped
@@ -382,8 +382,8 @@ sub _add_type {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-        $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+        #$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
+        #$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     #see if table needs to be created, erased or skipped
@@ -515,9 +515,6 @@ sub phathits_on_chunk {
     my $c_end = $chunk->end;
     my $seqid = $chunk->seqid;
 
-    my $ref1 = [];
-    my $ref2 = [];
-
     my $dbh;
     if($self->{in_memory}){
         $dbh = $self->{DBH};
@@ -529,113 +526,71 @@ sub phathits_on_chunk {
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
     #get gff annotations
+    my @features;
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
 					 qq{WHERE seqid = '$seqid' }.
-					 qq{AND start BETWEEN $c_start AND $c_end }.
+					 qq{AND $c_start <= start AND start <= $c_end }.
 					 qq{AND parent = '.' });
-	my $safe = quotemeta($seqid);
-	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref1; #removes contig/chromosome
-	
-	my %IDs;
-	foreach my $row (@$ref1){
-	   my $line = $row->[0];
-	   if($line =~ /ID=([^\;\n]+)/){
-	      $IDs{$1}++;
-	   }
+	my $feat = _ary_to_features($ref);
+	my ($min, $max) = ($c_start, $c_end);
+	foreach my $f (@$feat){
+	    $min = $f->start if($f->start < $min);
+	    $max = $f->end if($f->end > $max);
 	}
-	my @check = keys %IDs;
+	push(@features, @$feat);
 
-	while(@check){
-	   my @subset;
-	   if(@check > 300){
-	       @subset = @check[0..299];
-	       @check = @check[300..$#check];
-	   }
-	   else{
-	       @subset = @check;
-	       undef @check;
-	   }
-
-	   my $dsn = "parent = '".join("' OR parent = '", @subset)."'";
-	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
-					      qq{WHERE seqid = '$seqid' }.
-					      qq{AND ( $dsn )});
-	   
-	   push(@$ref1, @$ref);
-
-	   %IDs = ();
-	   foreach my $row (@$ref){
-	      my $line = $row->[0];
-	      if($line =~ /ID=([^\;\n]+)/){
-		 $IDs{$1}++;
-	      }
-	   }
-	   push(@check, keys %IDs);
-	}
-     }
+	$ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					qq{WHERE seqid = '$seqid' }.
+					qq{AND $min <= start AND start <= $max }.
+					qq{AND parent != '.' });
+	$feat = _ary_to_features($ref);
+	push(@features, @$feat)
+    }
     
     #get maker annotations
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
-					 qq{WHERE seqid = '$seqid' }.
-					 qq{AND start BETWEEN $c_start AND $c_end }.
-					 qq{AND parent = '.' });
-
-	my $safe = quotemeta($seqid);
-	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref2; #removes contig/chromosome
-
-	my %IDs;
-	foreach my $row (@$ref2){
-	   my $line = $row->[0];
-	   if($line =~ /ID=([^\;\n]+)/){
-	      $IDs{$1}++;
-	   }
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					   qq{WHERE seqid = '$seqid' }.
+					   qq{AND $c_start <= start AND start <= $c_end }.
+					   qq{AND parent = '.' });
+	my $feat = _ary_to_features($ref);
+	my ($min, $max) = ($c_start, $c_end);
+	foreach my $f (@$feat){
+	    $min = $f->start if($f->start < $min);
+	    $max = $f->end if($f->end > $max);
 	}
-	my @check = keys %IDs;
-
-	while(@check){
-	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
-	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
-					      qq{WHERE seqid = '$seqid' }.
-					      qq{AND ( $dsn )});
-	   
-	   push(@$ref2, @$ref);
-
-	   %IDs = ();
-	   foreach my $row (@$ref){
-	      my $line = $row->[0];
-	      if($line =~ /ID=([^\;\n]+)/){
-		 $IDs{$1}++;
-	      }
-	   }
-	   @check = keys %IDs;
-	}
+	push(@features, @$feat);
+	
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					   qq{WHERE seqid = '$seqid' }.
+					   qq{AND $min <= start AND start <= $max }.
+					   qq{AND parent != '.' });
+	$feat = _ary_to_features($ref);
+	push(@features, @$feat)
     }
     
-    $dbh->disconnect unless($self->{in_memory});
-    
-    my $features = _ary_to_features($ref1, $ref2);
+    $dbh->disconnect unless($self->{in_memory});    
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq, $seq_len);
+	$structs = _get_genes(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_genes($features, $seq, $seq_len);
-	my $structs2 = _get_structs($features, $seq, $seq_len);
+	$structs = _get_genes(\@features, $seq, $seq_len);
+	my $structs2 = _get_structs(\@features, $seq, $seq_len);
 	push(@$structs, @$structs2); 
     }
     elsif($h_type eq 'other'){
@@ -680,76 +635,21 @@ sub lines_for_chunk {
     #get gff annotations
     my @lines;
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	my $ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
-					    qq{WHERE seqid = '$seqid' }.
-					    qq{AND start BETWEEN $c_start AND $c_end }.
-					    qq{AND parent = '.' });
-	my $safe = quotemeta($seqid);
-	@$ref1 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref1; #removes contig/chromosome
-	
-	my %IDs;
-	foreach my $row (@$ref1){
-	   my $line = $row->[0];
-	   push(@lines, $line);
-	   if($line =~ /ID=([^\;\n]+)/){
-	      $IDs{$1}++;
-	   }
-	}
-	my @check = keys %IDs;
-
-	while(@check){
-	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
-	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
-					      qq{WHERE seqid = '$seqid' }.
-					      qq{AND ( $dsn )});
-	   
-	   %IDs = ();
-	   foreach my $row (@$ref){
-	      my $line = $row->[0];
-	      push(@lines, $line);
-	      if($line =~ /ID=([^\;\n]+)/){
-		 $IDs{$1}++;
-	      }
-	   }
-	   @check = keys %IDs;
-	}
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+					   qq{WHERE seqid = '$seqid' }.
+					   qq{AND $c_start <= start AND start <= $c_end }.
+					   qq{AND parent = '.' });
+	push(@lines, @$ref);
      }
     
     #get maker annotations
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	my $ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
-					    qq{WHERE seqid = '$seqid' }.
-					    qq{AND start BETWEEN $c_start AND $c_end }.
-					    qq{AND parent = '.' });
-
-	my $safe = quotemeta($seqid);
-	@$ref2 = grep {$_->[0] !~ /[\t\;]ID=$safe[\;\n]/} @$ref2; #removes contig/chromosome
-
-	my %IDs;
-	foreach my $row (@$ref2){
-	   my $line = $row->[0];
-	   push(@lines, $line);
-	   if($line =~ /ID=([^\;\n]+)/){
-	      $IDs{$1}++;
-	   }
-	}
-	my @check = keys %IDs;
-
-	while(@check){
-	   my $dsn = "parent = '".join("' OR parent = '", @check)."'";
-	   my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
-					      qq{WHERE seqid = '$seqid' }.
-					      qq{AND ( $dsn )});	   
-	   %IDs = ();
-	   foreach my $row (@$ref){
-	      my $line = $row->[0];
-	      push(@lines, $line);
-	      if($line =~ /ID=([^\;\n]+)/){
-		 $IDs{$1}++ if($line =~ /ID=([^\;\n]+)/);
-	      }
-	   }
-	   @check = keys %IDs;
-	}
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					   qq{WHERE seqid = '$seqid' }.
+					   qq{AND start BETWEEN $c_start AND $c_end }.
+					   qq{AND parent = '.' });
+	
+	push(@lines, @$ref);
     }
     
     $dbh->disconnect unless($self->{in_memory});
@@ -766,9 +666,6 @@ sub phathits_on_contig {
 
     return [] unless($self->{go_gffdb});
 
-    my $ref1 = [];
-    my $ref2 = [];
-
     my $dbfile = $self->{dbfile};
     my $dbh;
     if($self->{in_memory}){
@@ -781,38 +678,41 @@ sub phathits_on_contig {
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
     
     #get gff annotations
+    my @features;
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
     #get maker annotations
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
-    $dbh->disconnect unless($self->{in_memory});
-    
-    my $features = _ary_to_features($ref1, $ref2);
+    $dbh->disconnect unless($self->{in_memory});    
     
     my $structs;
     if($h_type eq 'model'){
-	$structs = _get_genes($features, $seq, $seq_len);
+	$structs = _get_genes(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'repeat'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'est'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'altest'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'protein'){
-	$structs = _get_structs($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
     }
     elsif($h_type eq 'pred'){
-	$structs = _get_structs($features, $seq, $seq_len);
-	my $structs2 = _get_genes($features, $seq, $seq_len);
+	$structs = _get_structs(\@features, $seq, $seq_len);
+	my $structs2 = _get_genes(\@features, $seq, $seq_len);
 	push(@{$structs}, @{$structs2});
     }
     elsif($h_type eq 'other'){
@@ -853,20 +753,22 @@ sub get_existing_gene_names {
     my $h_type = 'model';
     
     #get gff annotations
-    my $ref1 = [];
+    my @features;
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
     #get maker annotations
-    my $ref2 = [];
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
     my $safe = quotemeta($seqid);
-    my $features = _ary_to_features($ref1, $ref2);
-    foreach my $f (@$features){
+    foreach my $f (@features){
 	my $tag = $f->primary_tag();
 	
 	if ($tag eq 'gene') {    
@@ -889,19 +791,20 @@ sub get_existing_gene_names {
     $h_type = 'pred';
     
     #get gff annotations
-    $ref1 = [];
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	$ref1 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
     #get maker annotations
-    $ref2 = [];
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	$ref2 = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker WHERE seqid = '$seqid'});
+	my $feat = _ary_to_features($ref);
+	push(@features, @$feat);
     }
     
-    $features = _ary_to_features($ref1, $ref2);
-    foreach my $f (@$features){
+    foreach my $f (@features){
 	my $tag = $f->primary_tag();
 	
 	if ($tag eq 'match' || $tag eq 'gene') { 
@@ -1429,6 +1332,7 @@ sub _get_genes {
 	}
     }
 
+    my %seen;
     my @genes;
     foreach my $f (@{$features}){
 	my $tag = $f->primary_tag();
@@ -1438,6 +1342,14 @@ sub _get_genes {
 	    my $name=_get_annotation($f,'Name');
 
 	    $name = $id if ($name eq '');
+
+	    if($seen{$b->{id}}++){
+		die "ERROR: Non-unique top level ID for $b->{id}\n".
+		    "While this is technically legal in GFF3, it usually\n".
+		    "indicates a poorly fomatted GFF3 file (perhaps you\n".
+		    "tried to merge two GFF3 files without accounting for\n".
+		    "unique IDs).  MAKER will not handle these correctly.\n\n";
+	    }
 
 	    #take care of wormbases incorrect parentage
 	    if(exists $exons->{$id}){
@@ -1539,7 +1451,7 @@ sub _fix_wormbase {
     return \@keepers;
 }
 #-------------------------------------------------------------------------------
-#try too build a sructure similar to that producd by _get_genes
+#try too build a structure similar to that producd by _get_genes
 #but for non gene hits in the gff3
 sub _get_structs {
     my $features = shift;
@@ -1575,7 +1487,16 @@ sub _get_structs {
 	}
     }
 
+    my %seen;
     foreach my $b (@bases){
+	if($seen{$b->{id}}++){
+	    die "ERROR: Non-unique top level ID for $b->{id}\n".
+		"While this is technically legal in GFF3, it usually\n".
+		"indicates a poorly fomatted GFF3 file (perhaps you\n".
+		"tried to merge two GFF3 files without accounting for\n".
+		"unique IDs).  MAKER will not handle these correctly.\n\n";
+	}
+
 	if (exists $index{$b->{id}}){
 	    $b->{exons} = $index{$b->{id}};
 	}

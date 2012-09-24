@@ -106,25 +106,25 @@ sub remove_redundant_alt_splices {
         my $num = @sorted;
         my %dead;
         my @keepers;
-        for(my $i = 0; $i < @sorted; $i++){
-                print STDERR " ...processing $i of $num\n" unless($main::quiet);
-                next if ($dead{$i});
-
-                my $hit_i = $sorted[$i];
-                for(my $j = $i+1; $j < @sorted; $j++){
-                        next if ($dead{$j});
-                        my $hit_j = $sorted[$j];
-
-                        if (compare::is_redundant_alt_form($hit_i, $hit_j, $flank)){
-                                $dead{$j}++;
-                        }
-                }
+	for(my $i = 0; $i < @sorted; $i++){
+	    print STDERR " ...processing $i of $num\n" unless($main::quiet);
+	    
+	    my $hit_i = $sorted[$i];
+	    for(my $j = 0; $j < @keepers; $j++){
+		my $hit_j = $keepers[$j];
 		
-		push(@keepers, $hit_i);
-		if($depth && @keepers == $depth){
-		    print STDERR " ...trimming the rest\n" unless($main::quiet);
+		if (compare::is_redundant_alt_form($hit_i, $hit_j, $flank)){
+		    $dead{$i}++;
 		    last;
 		}
+	    }
+	    next if ($dead{$i});
+	    
+	    push(@keepers, $hit_i);
+	    if($depth && @keepers == $depth){
+		print STDERR " ...trimming the rest\n" unless($main::quiet);
+		last;
+	    }
         }
 
         return \@keepers;
@@ -140,28 +140,24 @@ sub get_best_alt_splices {
 
 	my $num = @sorted;
         my %dead;
+        my @transcripts;
         for(my $i = 0; $i < @sorted;$i++){
-		print STDERR " ...processing $i of $num\n" unless($main::quiet);
-		my $hit_i = $sorted[$i];
-		if (defined($dead{$i})){
-			next;
+	    print STDERR " ...processing $i of $num\n" unless($main::quiet);
+	    my $hit_i = $sorted[$i];
+	    
+	    for(my $j = 0; $j < @transcripts; $j++){
+		my $hit_j = $transcripts[$j];
+		
+		if (compare::is_same_alt_form($hit_i, $hit_j, $flank)){
+		    $dead{$i}++;
+		    last;
 		}
-                for(my $j = $i+1; $j < @sorted; $j++){
-			my $hit_j = $sorted[$j];
-			if (defined($dead{$j})){
-				next;
-			}
-			if (compare::is_same_alt_form($hit_i, $hit_j, $flank)){
-				$dead{$j}++;
-			}
-                }
+	    }
+	    next if ($dead{$i});
+
+	    push(@transcripts, $sorted[$i]);
         }
 
-        my @transcripts;
-        for(my $i = 0; $i < @sorted; $i++){
-                push(@transcripts, $sorted[$i])
-                unless defined($dead{$i});
-        }
         return \@transcripts;
 }
 #------------------------------------------------------------------------
@@ -180,45 +176,78 @@ sub complexity_filter {
 	    next;
 	}
 	
-	my $qOff = $f->start('query');
-	my $hOff = $f->start('hit');
-	
-	my @q_cov;
-	my @h_cov;
+	my @q_space; #space based coordinates
+	my @h_space; #space based coordinates
+	my @q_set; #hsp regions on query
+	my @h_set; #hsp regions pn hit
 	foreach my $hsp ($f->hsps){
-	    my $qS = $hsp->start('query') - $qOff;
-	    my $qE = $hsp->end('query') - $qOff;
+	    my $qS = $hsp->start('query');
+	    my $qE = $hsp->end('query');
 	    
-	    my $hS = $hsp->start('hit') - $hOff;
-	    my $hE = $hsp->end('hit') - $hOff;
+	    my $hS = $hsp->start('hit');
+	    my $hE = $hsp->end('hit');
+
+	    push(@q_space, ($qS-1, $qE));
+	    push(@h_space, ($hS-1, $hE));
+	    push(@q_set, [$qS, $qE]);
+	    push(@h_set, [$hS, $hE]);
 	    
-	    @q_cov[$qS..$qE] = map {(defined $_) ? $_ + 1 : 1} (@q_cov[$qS..$qE]);
-		@h_cov[$hS..$hE] = map {(defined $_) ? $_ + 1 : 1} (@h_cov[$hS..$hE]);
+	    #@q_cov[$qS..$qE] = map {(defined $_) ? $_ + 1 : 1} (@q_cov[$qS..$qE]);
+	    #@h_cov[$hS..$hE] = map {(defined $_) ? $_ + 1 : 1} (@h_cov[$hS..$hE]);
 	}
-	
-	#average coverage for qeury
+
+	@q_set = sort {$a->[0] <=> $b->[0]} @q_set;
+	@h_set = sort {$a->[0] <=> $b->[0]} @h_set;
+
+	my %uniq;
+	@q_space = grep {!$uniq{$_}++} sort {$a <=> $b} @q_space; 
+	undef %uniq;
+	@h_space = grep {!$uniq{$_}++} sort {$a <=> $b} @h_space;
+
+	#now count coverage on query regions
 	my $count = 0;
 	my $total = 0;
-	foreach my $c (@q_cov){
-	    next if(! defined $c);
-	    $count++;
-	    $total += $c;		
+	for(my $i = 0; $i < @q_space - 1; $i++){
+	    my $j = $i+1;
+
+	    my $sB = $q_space[$i]; #these are space based
+	    my $sE = $q_space[$j]; #these are space based
+
+	    my $l = $sE - $sB;
+	    $count += $l;
+	    foreach my $h (@q_set){
+		last if($h->[0] > $sE);
+		my $B = $h->[0]; #these are coordinate based
+		my $E = $h->[1]; #these are coordinate based
+		
+		$total += $l  if($B-1 <= $sB && $sE <= $E); #should be fully contained
+	    }
 	}
-	
-	my $q_ave = ($count) ? $total/$count : 0;
-	
-	#average coverage for hit
+	my $q_ave = ($count) ? $total/$count : 0; #average coverage for hit
+
+	#now count coverage on hit regions
 	$count = 0;
 	$total = 0;
-	foreach my $c (@h_cov){
-	    next if(! defined $c);
-	    $count++;
-	    $total += $c;		
-	}
+	for(my $i = 0; $i < @h_space - 1; $i++){
+	    my $j = $i+1;
 
+	    my $sB = $h_space[$i]; #these are space based
+	    my $sE = $h_space[$j]; #these are space based
+
+	    my $l = $sE - $sB;
+	    $count += $l;
+	    foreach my $h (@h_set){
+		last if($h->[0] > $sE);
+		my $B = $h_set[$i]; #these are coordinate based
+		my $E = $h_set[$j]; #these are coordinate based
+		
+		$total += $l  if($B-1 <= $sB && $sE <= $E); #should be fully contained
+	    }
+	}
+	my $h_ave = ($count) ? $total/$count : 0; #average coverage for hit
 	my $h_ave = ($count) ? $total/$count : 0;
 
-	#if average basepair hits twice on both query and subject, skip
+	#if average basepair hits 1.5 times on both query and subject, skip
 	push(@keepers, $f) unless(($q_ave + $h_ave)/2 > 1.5);
     }
     

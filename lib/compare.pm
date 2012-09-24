@@ -172,32 +172,51 @@ sub compare_by_shadow {
 }
 #------------------------------------------------------------------------
 sub get_shadow_code {
-	my $pieces = shift;
-	my $coors  = shift;
-	my $flank  = shift;
+    my $pieces = shift;
+    my $coors  = shift;
+    my $r      = shift;
 
-	my @codes;
-	my $i = 0;
-	foreach my $p (@{$pieces}){
-		my $pB = $p->{b};
-		my $pE = $p->{e};
+    @$coors = sort {$a->[0] <=> $b->[0]} @$coors;
 
-		foreach my $pair (@{$coors}){
-			my $cB = $pair->[0];
-			my $cE = $pair->[1];
+    my @codes;
+    my $i = 0;
+    my $first = 0;
+    foreach my $p (@{$pieces}){
+	#assume correct order
+	my $pB = $p->{b};
+	my $pE = $p->{e}; 
+	
+	my $flag;
+	$codes[$i] = 0; #initialize
+	for(my $j = $first; $j < @{$coors}; $j++){
+	    my $pair = $coors->[$j];
+	    my $cB = $pair->[0];
+	    my $cE = $pair->[1];
+	    ($cB, $cE) = ($cE, $cB) if($cB > $cE);
 
-			($cB, $cE) = ($cE, $cB) if $cB > $cE;
-			
-			my $class = compare($pB, $pE, $cB, $cE, $flank);
-
-			push(@{$codes[$i]}, $class);
+	    last if($pE < $cB);
+	    if(!$flag){ #itterate until the first match
+		if($pB <= $cE){
+		    $first = $j;
+		    $flag++;
 		}
-		$i++;
+		else{
+		    $first = $j+1;
+		    next;
+		}
+	    }
+
+	    my $c = compare($pB, $pE, $cB, $cE, $r);
+	    next if(!$c);
+	    $codes[$i] = $c if(code_values($c) > code_values($codes[$i]));
+	    last if($c eq '1');
 	}
-
-	my $code = simplify_comparison_code(\@codes);
-
-	return $code;
+	$i++;
+    }
+    
+    my $code = join('', @codes);
+    
+    return $code;
 }
 #------------------------------------------------------------------------
 sub simplify_comparison_code {
@@ -205,10 +224,10 @@ sub simplify_comparison_code {
 
 	my $code = '';
 	foreach my $exon (@{$codes}){
-		my @sorted  = 
-		sort {code_values($b) <=> code_values($a)} @{$exon};
-
-		$code .= shift @sorted;
+	    $code .= 0 if(!$exon || !@$exon);
+	    my @sorted  = sort {code_values($b) <=> code_values($a)} @{$exon};
+	    
+	    $code .= shift @sorted;
 	}
 	return $code;
 }
@@ -226,7 +245,7 @@ sub code_values {
 		return 5;
 	}
 	else {
-		return 1;
+		return 0;
         }
 
 }
@@ -248,39 +267,53 @@ sub same_strand {
 	}
 }
 #------------------------------------------------------------------------
+#assumes same strand
 sub compare_phat_hits {
-        my $hit_a = shift;
-        my $hit_b = shift;
-        my $what  = shift;
-	my $r     = shift || 0;
+    my $hit_a = shift;
+    my $hit_b = shift;
+    my $what  = shift;
+    my $r     = shift || 0;
+    
+    my $sorted_a = PhatHit_utils::sort_hits($hit_a, $what);
+    my $sorted_b = PhatHit_utils::sort_hits($hit_b, $what);
+    
+    my @codes;
+    my $i = 0;
+    my $first = 0;
+    foreach my $hsp_a (@{$sorted_a}){
+	my $aB = $hsp_a->start($what);
+	my $aE = $hsp_a->end($what);
 
-        my $sorted_a = PhatHit_utils::sort_hits($hit_a, $what);
-        my $sorted_b = PhatHit_utils::sort_hits($hit_b, $what);
+	my $flag;
+	$codes[$i] = 0; #initialize
+	for(my $j = $first; $j < @{$sorted_b}; $j++){
+	    my $hsp_b = $sorted_b->[$j];
+	    my $bB = $hsp_b->start($what);
+	    my $bE = $hsp_b->end($what);
 
-	my $alpha = 0;
-	my $omega = @{$sorted_a} - 1;
+	    last if($aE < $bB);
+	    if(!$flag){ #itterate until the first match
+		if($aB <= $bE){
+		    $first = $j;
+		    $flag++;
+		}
+		else{
+		    $first = $j+1;
+		    next;
+		}
+	    }
 
-	my @codes;
-	my $i = 0;
-        foreach my $hsp_a (@{$sorted_a}){
-                my $aB = $hsp_a->nB($what);
-                my $aE = $hsp_a->nE($what);
-
-		my $j = 0;
-                foreach my $hsp_b (@{$sorted_b}){
-                        my $bB = $hsp_b->nB($what);
-                        my $bE = $hsp_b->nE($what);
-			
-			my $class = compare($aB, $aE, $bB, $bE, $r);
-
-			push(@{$codes[$i]}, $class);
-
-                }
-		$i++;
-        }
-	my $code = simplify_comparison_code(\@codes);
-
-	return $code;
+	    my $c = compare($aB, $aE, $bB, $bE, $r);
+	    next if(!$c);
+	    $codes[$i] = $c if(code_values($c) > code_values($codes[$i]));
+	    last if($c eq '1');
+	}
+	$i++;
+    }
+    
+    my $code = join('', @codes);
+    
+    return $code;
 }
 #------------------------------------------------------------------------
 sub compare {
