@@ -770,10 +770,15 @@ sub add_align_strs {
 			                      $L,
 			                      );
 
+			my $L2 = 1;
+			if(@{$q_nc_strs} != @$exons){
+			    $L2 = length($t_nc_str) - scalar($t_nc_str =~ tr/\-/\-/);
+			}
+
 			my $don = get_donor($bad->{t_nc_str}, $o, $q_nc_part);
 			my $acc = get_acceptor($bad->{t_nc_str}, $o, $q_nc_part);
 
-			if($L != 0) { #don't add 0 length exons
+			if($L != 0 && $L2 != 0) { #don't add 0 length exons
 			    $exons->[$j]->{donor}    = $don;
 			    $exons->[$j]->{acceptor} = $acc;
 			    $exons->[$j]->{q_nc_str} = $q_nc_part;
