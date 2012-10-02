@@ -265,7 +265,7 @@ sub parse_sort_order {
     
     if ($sort_order_file) {
 	open(my $IN, '<', $sort_order_file) or die "Can't open $sort_order_file\n$!\n";
-	my %sort_order = (<$IN>);
+	%sort_order = map {chomp $_; split(/\t/, $_)} <$IN>;
 	close $IN;
     }
     else{
@@ -306,6 +306,6 @@ sub parse_sort_order {
 #-----------------------------------------------------------------------------
 sub sort_contigs {
 	my ($a, $b, $sort_map) = @_;
-	return ($sort_order->{$a} <=> $sort_order->{$b}) if defined $sort_order;
+	return ($sort_map->{$a} <=> $sort_map->{$b}) if defined $sort_order;
 	return ($sort_map->{$b} <=> $sort_map->{$a});
 }
