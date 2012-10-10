@@ -98,12 +98,12 @@ sub set_current_contig {
     my $flag = 0;
     $flag = 1 if (defined $self->{seq_id});
     my $id  = shift;
-    my $seq = shift; #can be left blank and no fasta will be added
+    my $seq = shift; #can be left blank and no fasta or contig line will be added
 
     #escape seqid per gff standards
     $self->{seq_id} = uri_escape($id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|');
 
-    if(!$self->{SEEN}{$self->{seq_id}}){
+    if(!$self->{SEEN}{$self->{seq_id}} && $seq){
 	my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
 	while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
 

@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!\usr\bin\perl
 
 use warnings;
 use strict;
@@ -13,7 +10,7 @@ Usage:
 
      This script converts the cufflinks output transcripts.gtf file
      into GFF3 format for use in MAKER via GFF3 passthrough. By
-     default standless features which correspond to single exon
+     default strandless features which correspond to single exon
      cufflinks models will be ignored.  This is because these
      features can correspond to repetative elements and
      pseudogenes. Ouput is to STDOUT so you will need to redirect
