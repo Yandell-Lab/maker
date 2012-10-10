@@ -904,19 +904,20 @@ sub _install_exe {
 	$file = "$path/$req.tar.gz"; #file to save to
         $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
 
-	if($OS eq 'Linux'){
-	    #glibc 2.5 or greater is required for Linux binary
-	    my $ldd = File::Which::which('ldd');
-	    my ($ver, $sver) = (`$ldd --version` =~ /(\d+)\.(\d+)/) if($ldd);
-	    $url = $data->{$req}{src_} if(!$ver || $ver < 2 || $sver < 5);
-	}
+	#not needed any more 10/10/2012
+	#if($OS eq 'Linux'){
+	#    #glibc 2.5 or greater is required for Linux binary
+	#    my $ldd = File::Which::which('ldd');
+	#    my ($ver, $sver) = (`$ldd --version` =~ /(\d+)\.(\d+)/) if($ldd);
+	#    $url = $data->{$req}{src_} if(!$ver || $ver < 2 || $sver < 5);
+	#}
 
 	print "Downloading $req...\n";
         $self->getstore($url, $file) or return $self->fail($req, $path);
 	print "Unpacking $req tarball...\n";
         $self->extract_archive($file) or return $self->fail($req, $path);
         push(@unlink, $file);
-	my ($dir) = grep {-d $_} <rmblast-*-ncbi-blast*>;
+	my ($dir) = grep {-d $_} <rmblast-*>;
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $req...\n";
@@ -924,8 +925,35 @@ sub _install_exe {
 	    $self->do_system("make") or return $self->fail($req, $path);
 	    $self->do_system("make install") or return $self->fail($req, $path);
 	}
+	else{ #install BLAST+ first
+	    my $req2 = 'blast';
+	    my $file2 = "$path/$req2.tar.gz"; #file to save to
+	    my $url2 = $data->{$req2}{"$OS\_$ARC"}; #url to rmblast for OS
+	    print "Downloading $req2...\n";
+	    $self->getstore($url2, $file2) or return $self->fail($req2, $path);
+	    print "Unpacking $req2 tarball...\n";
+	    $self->extract_archive($file2) or return $self->fail($req2, $path);
+	    push(@unlink, $file2);
+	    my ($dir2) = grep {-d $_} <ncbi-blast-*>;
+
+	    #move to rmblast path, not blast path
+	    File::Copy::move($dir2, $req) or return $self->fail($req2, $path);
+	    return $self->fail($req2, $path) if(! -f "$path/$req/bin/blastn");	    
+
+	    my @to_move = <$dir/*>;
+	    my $safe = quotemeta($dir);
+	    foreach my $f (@to_move){
+		(my $new = $f) =~ s/^$safe/$req/;
+		(my $base = $new) =~ s/[^\/]+$//;
+		mkdir $base if(!-d $base);
+		if(-d $f){
+		    push(@to_move, <$f/*>);
+		    next;
+		}
+		File::Copy::move($f, $new);
+	    }
+	}
         chdir($path);
-	File::Copy::move($dir, $req);
 	return $self->fail($req, $path) if(! -f "$path/$req/bin/rmblastn");
 
 	#Configure RepeatMasker
