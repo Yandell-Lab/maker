@@ -1549,7 +1549,7 @@ sub sync_bins {
 		File::Copy::move($rfile, "$rfile.bk~");
 
 		if(open(IN, "> $rfile")){
-		    print IN "\#!\\usr\\bin\\perl\n\n";
+		    print IN "#!/usr/bin/perl\n\n";
 		    print IN $bdata;
 		    close(IN);
 		}

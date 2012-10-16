@@ -1,8 +1,5 @@
 #!/usr/bin/perl 
 
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
-
 use warnings;
 use strict;
 use FindBin;
@@ -31,7 +28,7 @@ my $usage = '
 USAGE:
      compare [OPTION] <database_name> <gff3_file>
 
-     This script compares the contents of a GFF3 fiel to te database to
+     This script compares the contents of a GFF3 file to te database to
      look for merged, split and missing genes.
 
 
