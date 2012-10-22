@@ -1228,7 +1228,7 @@ sub cpan_install {
 	$ENV{PERL5LIB} = $PERL5LIB;
     }
     
-    #possible temporary install base for any CPAN requirements
+    #possible temporary install base location for any CPAN requirements
     my $base = $self->base_dir;
     if(-d "$base/inc/perl"){
 	unshift(@INC, "$base/inc/perl/lib");
@@ -1237,6 +1237,7 @@ sub cpan_install {
 	$ENV{PERL5LIB} = $PERL5LIB;
     }
 
+    #if CPAN is too old, then install a newer one first
     if(!$self->check_installed_status('CPAN', '1.82')->{ok}){
 	if(! -d "$base/inc/perl"){
 	    mkdir("$base/inc/perl");
@@ -1260,7 +1261,7 @@ sub cpan_install {
 	my $mm_def = $ENV{PERL_MM_USE_DEFAULT}; #backup
 	$ENV{PERL_MM_USE_DEFAULT} = 1;
 
-	#from local::lib's Makefile.PL
+	#CPAN config from local::lib's Makefile.PL
 	my $cpan_config_command =
             'my $done; require ExtUtils::MakeMaker;
              my $orig = ExtUtils::MakeMaker->can("prompt");
@@ -1286,6 +1287,7 @@ sub cpan_install {
 	    if(!$self->check_installed_status('ExtUtils::Install', '1.43')->{ok});
 	$cpan_command .= 'force("install","CPAN"); ';
 
+	#run CPAN via system call
 	system($^X, '-MCPAN', '-e', $cpan_config_command);
 	system($^X, '-MCPAN', '-e', $cpan_command);
 
