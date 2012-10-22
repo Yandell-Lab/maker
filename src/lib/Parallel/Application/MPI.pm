@@ -257,8 +257,9 @@ double _MPI_ANY_TAG () {
 }
 
 int _MPI_Init () {
-    int* provided;
-    return MPI_Init_thread(&PL_origargc, &PL_origargv, MPI_THREAD_FUNNELED, provided);
+    int stat;
+    stat = MPI_Init(&PL_origargc, &PL_origargv);
+    return stat;
 }
 
 int _MPI_Finalize () {
