@@ -18,7 +18,7 @@ BEGIN{
     my $Bundled_MB = 0.3607;  #version included in my distribution
 
     # Find out what version of Module::Build is installed or fail quietly.
-   # This should be cross-platform.
+    # This should be cross-platform.
     my $Installed_MB =`$^X -e "eval q{require Module::Build; print Module::Build->VERSION} or exit 1"`;
     chomp $Installed_MB;
     $Installed_MB = 0 if $?;
@@ -1227,6 +1227,73 @@ sub cpan_install {
 	$PERL5LIB = $self->base_dir."/../perl/lib:$PERL5LIB";
 	$ENV{PERL5LIB} = $PERL5LIB;
     }
+    
+    #possible temporary install base for any CPAN requirements
+    my $base = $self->base_dir;
+    if(-d "$base/inc/perl"){
+	unshift(@INC, "$base/inc/perl/lib");
+	my $PERL5LIB = $ENV{PERL5LIB} || '';
+	$PERL5LIB = "$base/inc/perl/lib:$PERL5LIB";
+	$ENV{PERL5LIB} = $PERL5LIB;
+    }
+
+    if(!$self->check_installed_status('CPAN', '1.82')->{ok}){
+	if(! -d "$base/inc/perl"){
+	    mkdir("$base/inc/perl");
+	    unshift(@INC, "$base/inc/perl/lib");
+	    my $PERL5LIB = $ENV{PERL5LIB} || '';
+	    $PERL5LIB = "$base/inc/perl/lib:$PERL5LIB";
+	    $ENV{PERL5LIB} = $PERL5LIB;
+	}
+
+	#fill out environment variables
+	my $perl_mb = $ENV{PERL_MB_OPT}; #backup
+	$ENV{PERL_MB_OPT} = "--install_base $base/inc/perl/ --installdirs site".
+            " --install_path libdoc=$base/inc/perl/man --install_path bindoc=$base/inc/perl/man".
+            " --install_path lib=$base/inc/perl/lib --install_path arch=$base/inc/perl/lib".
+            " --install_path bin=$base/inc/perl/lib/bin --install_path script=$base/inc/perl/lib/bin ";;
+	my $perl_mm = $ENV{PERL_MM_OPT}; #backup
+	$ENV{PERL_MM_OPT} = "DESTDIR=$base/inc/perl/ INSTALLDIRS=site INSTALLSITEMAN1DIR=man INSTALLSITEMAN3DIR=man".
+            " INSTALLSITEARCH=lib INSTALLSITELIB=lib INSTALLSITEBIN=lib/bin INSTALLSITESCRIPT=lib/bin";
+	my $prefer = $ENV{PERL_AUTOINSTALL_PREFER_CPAN}; #backup
+	$ENV{PERL_AUTOINSTALL_PREFER_CPAN} = 1;
+	my $mm_def = $ENV{PERL_MM_USE_DEFAULT}; #backup
+	$ENV{PERL_MM_USE_DEFAULT} = 1;
+
+	#from local::lib's Makefile.PL
+	my $cpan_config_command =
+            'my $done; require ExtUtils::MakeMaker;
+             my $orig = ExtUtils::MakeMaker->can("prompt");
+             *ExtUtils::MakeMaker::prompt = sub ($;$) {
+               if (!$done && $_[0] =~ /manual configuration/) {
+                 $done++;
+                 return "no";
+               }
+               return $orig->(@_);
+             };
+             $CPAN::Config->{prefer_installer} = "EUMM";
+             CPAN::Config->load;
+             unless ($done || -w $CPAN::Config->{keep_source_where}) {
+               my $save = $CPAN::Config->{urllist};
+               delete @{$CPAN::Config}{keys %$CPAN::Config};
+               $CPAN::Config->{urllist} = $save;
+               CPAN::Config->init;
+             }';
+	my $cpan_command = '';
+	$cpan_command .= 'force("install","ExtUtils::MakeMaker"); '
+	    if(!$self->check_installed_status('ExtUtils::MakeMaker', '6.31')->{ok});
+	$cpan_command .= 'install("ExtUtils::Install"); '
+	    if(!$self->check_installed_status('ExtUtils::Install', '1.43')->{ok});
+	$cpan_command .= 'force("install","CPAN"); ';
+
+	system($^X, '-MCPAN', '-e', $cpan_config_command);
+	system($^X, '-MCPAN', '-e', $cpan_command);
+
+	$ENV{PERL_MB_OPT} = $perl_mb; #restore
+	$ENV{PERL_MM_OPT} = $perl_mm; #restore
+	$ENV{PERL_MM_USE_DEFAULT} = $mm_def; #restore
+	$ENV{PERL_AUTOINSTALL_PREFER_CPAN} = $prefer; #restore
+    }
 
     # Here we use CPAN to actually install the desired module
     require CPAN;
@@ -1235,18 +1302,9 @@ sub cpan_install {
     # Save this because CPAN will chdir all over the place.
     my $cwd = getcwd();
 
-    #update CPAN if needed to avoid other installation issues with prereqs
-    #CPAN::Shell->install('Bundle::CPAN') if (! $self->check_installed_status('CPAN::HandleConfig', '5.5003')->{ok});
-    #die "\n\nERROR: Cannot load correct CPAN version or related modules\n".
-    #    "Try running 'install Bundle::CPAN' from CPAN manually as either\n".
-    #    "the root user or using sudo\n\n"
-    #	if (! $self->check_installed_status('CPAN::HandleConfig', '0')->{ok});
-
     #set up a non-global local module library for MAKER
     my %bak;
     if($local){
-	my $base = $self->base_dir;
-
 	CPAN::HandleConfig->load;
 	%bak = (makepl_arg => $CPAN::Config->{makepl_arg},
 		mbuildpl_arg => $CPAN::Config->{mbuildpl_arg});
