@@ -4160,9 +4160,28 @@ sub load_control_files {
    #--set an initialization lock so steps are locked to a single process
    #--take extra steps since lock is vulnerable to race conditions
    my $i_lock; #init lock, it is only a temporary blocking lock
-   while(! $i_lock || ! $i_lock->still_mine){
-       die "ERROR: Cannot get initialization lock.\n\n"
-	   unless($i_lock = new File::NFSLock($CTL_OPT{out_base}."/init_lock", 'EX', 150, 120));
+   my $tries = 0;
+   while(!$i_lock){
+       $tries++;
+       $i_lock = new File::NFSLock($CTL_OPT{out_base}."/init_lock", 'EX', 150, 120);
+       my $is_mine = $i_lock->still_mine if($i_lock);
+       if(!$is_mine && $tries >= 5){ #try up to 5 times
+	   my $is_NFS = is_NFS_mount($CTL_OPT{out_base});	   
+	   my $err = "ERROR: Cannot get initialization lock.\n".
+	             "If you are running maker in parallel or via MPI\n".
+	             "You may be facing a race condition.\n\n";
+	   $err .= "The output directory if NFS and may be a factor\n\n" if($is_NFS);
+	   die $err;
+       }
+       elsif(!$is_mine){ #sleep with random wait on failure
+	   undef $i_lock;
+	   warn "WARNING: Could not get initialization lock. Trying Again...\n";
+	   my $time = int(rand(20))+1;
+	   sleep $time;
+       }
+       elsif($is_mine){ #success
+	   last;
+       }
    }
 
    #--check if MAKER is already running and lock the directory
