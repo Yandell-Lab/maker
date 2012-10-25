@@ -51,11 +51,11 @@ BEGIN{
    $VERSION = '2.26';
 
    #what to do on ^C
-   $SIG{'INT'}  = sub { print STDERR "SIGINT received\n";  &exit_maker(SIGINT);  };
-   $SIG{'QUIT'} = sub { print STDERR "SIGQUIT received\n"; &exit_maker(SIGQUIT); };
-   $SIG{'ABRT'} = sub { print STDERR "SIGABRT received\n"; &exit_maker(SIGABRT); };
-   $SIG{'KILL'} = sub { print STDERR "SIGKILL received\n"; &exit_maker(SIGKILL); };
-   $SIG{'TERM'} = sub { print STDERR "SIGTERM received\n"; &exit_maker(SIGTERM); };
+   $SIG{INT}  = sub {print STDERR "SIGINT received\n";  exit_maker(SIGINT);};
+   $SIG{QUIT} = sub {print STDERR "SIGQUIT received\n"; exit_maker(SIGQUIT);};
+   $SIG{ABRT} = sub {print STDERR "SIGABRT received\n"; exit_maker(SIGABRT);};
+   $SIG{KILL} = sub {print STDERR "SIGKILL received\n"; exit_maker(SIGKILL);};
+   $SIG{TERM} = sub {print STDERR "SIGTERM received\n"; exit_maker(SIGTERM);};
 
    #output to log file of seq that caused rank to die
    $SIG{'__DIE__'} = sub {
@@ -116,38 +116,38 @@ Usage:
 
 Description:
 
-     MAKER is a program that produces gene annotations in GFF3 file format using
-     evidence such as EST alignments and protein homology.  MAKER can be used to
-     produce gene annotations for new genomes as well as update annotations from
-     existing genome databases.
+     MAKER is a program that produces gene annotations in GFF3 format using
+     evidence such as EST alignments and protein homology. MAKER can be used to
+     produce gene annotations for new genomes as well as update annotations
+     from existing genome databases.
 
-     The three input arguments are user control files that specify how MAKER
-     should behave. All options for MAKER should be set in the control files,
-     but a few can also be set on the command line. Command line options provide
-     a convenient machanism to override commonly altered control file values.
+     The three input arguments are control files that specify how MAKER should
+     behave. All options for MAKER should be set in the control files, but a
+     few can also be set on the command line. Command line options provide a
+     convenient machanism to override commonly altered control file values.
      MAKER will automatically search for the control files in the current
      working directory if they are not specified on the command line.
 
      Input files listed in the control options files must be in fasta format
      unless otherwise specified. Please see MAKER documentation to learn more
-     about control file  configuration.  MAKER will automatically try and locate
-     the user control files in the current working directory if these arguments
-     are not supplied when initializing MAKER.
+     about control file  configuration.  MAKER will automatically try and
+     locate the user control files in the current working directory if these
+     arguments are not supplied when initializing MAKER.
 
      It is important to note that MAKER does not try and recalculated data that
      it has already calculated.  For example, if you run an analysis twice on
-     the same dataset you will notice that MAKER does not rerun any of the BLAST
-     analyses, but instead uses the blast analyses stored from the previous run.
-     To force MAKER to rerun all analyses, use the -f flag.
+     the same dataset you will notice that MAKER does not rerun any of the
+     BLAST analyses, but instead uses the blast analyses stored from the
+     previous run. To force MAKER to rerun all analyses, use the -f flag.
 
      MAKER also supports parallelization via MPI on computer clusters. Just
-     launch MAKER via mpiexec (Example: mpiexec -n 40 maker). MPI support must
-     be configured during the MAKER installation process for this to work though
+     launch MAKER via mpiexec (i.e. mpiexec -n 40 maker). MPI support must be
+     configured during the MAKER installation process for this to work though
      
 
 Options:
 
-     -genome|g <file>    Overrides the genome file location in the control files
+     -genome|g <file>    Overrides the genome file path in the control files
 
      -RM_off|R           Turns all repeat masking options off.
 
@@ -165,15 +165,18 @@ Options:
      -force|f            Forces MAKER to delete old files before running again.
 			 This will require all blast analyses to be rerun.
 
-     -again|a            Caculate all annotations and output files again even if
-			 no settings have changed. Does not delete old analyses.
+     -again|a            recaculate all annotations and output files even if no
+			 settings have changed. Does not delete old analyses.
 
      -quiet|q            Regular quiet. Only a handlful of status messages.
 
      -qq                 Even more quit. There are no status messages.
 
      -dsindex            Quickly generate datastore index file. Note that this
-                         will not check if run settings have changed on contigs.
+                         will not check if run settings have changed on contigs
+
+     -nolock             Turn off file locks. May be usful on some file systems,
+                         but can cause race conditions if running in parallel.
 
      -TMP                Specify temporary directory to use.
 
@@ -198,9 +201,9 @@ Options:
 
 ";
 
-#-------------------------------------------------------------------------------
-#------------------------------------ MAIN -------------------------------------
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#----------------------------------- MAIN -------------------------------------
+#------------------------------------------------------------------------------
 
 
 #--process MPICC and MPIDIR from @ARGV first
@@ -213,11 +216,13 @@ GetOptions("MPICC=s" => \$OPT{MPICC}, #hidden
 #--set MPI configuration if specified on the command line
 if($OPT{MPICC} || $OPT{MPIDIR}){
     print STDERR "Overriding default MPI settings\n";
-    die "ERROR: You must specify both MPICC and MPIDIR\n" if(!$OPT{MPICC} && !$OPT{MPIDIR});
+    die "ERROR: You must specify both MPICC and MPIDIR\n"
+	if(!$OPT{MPICC} && !$OPT{MPIDIR});
     die "ERROR:$OPT{MPICC} does not exist\n" if(! -f $OPT{MPICC});
     die "ERROR:$OPT{MPICC} isn't mpicc\n" if($OPT{MPICC} !~ /^(.*\/)?mpicc$/);
     die "ERROR:$OPT{MPIDIR} does not exist\n" if(! -d $OPT{MPIDIR});
-    die "ERROR:Cannot find mpi.h in $OPT{MPIDIR}\n" if(! -f "$OPT{MPIDIR}/mpi.h");
+    die "ERROR:Cannot find mpi.h in $OPT{MPIDIR}\n"
+	if(! -f "$OPT{MPIDIR}/mpi.h");
 
     #paths must be absolute
     $OPT{MPICC} = Cwd::abs_path($OPT{MPICC});
@@ -249,21 +254,34 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "tries=i" =>\$OPT{tries},
 	   "dsindex" =>\$OPT{dsindex},
 	   "again|a" =>\$OPT{again},
+	   "nolock|nl" =>\$OPT{_no_lock},
 	   "quiet|q" =>\$main::quiet,
 	   "qq"    =>\$main::qq,
            "check" =>\$OPT{check},
 	   "base=s" =>\$OPT{out_name},
 	   "datastore!" =>\$OPT{datastore},
-	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]") if($rank == $root); exit_maker(0);},
-	   "CTL" => sub {GI::generate_control_files() if($rank == $root); exit_maker(0);},
-	   "OPTS" => sub {GI::generate_control_files('','opts') if($rank == $root); exit_maker(0);},
-	   "BOPTS" => sub {GI::generate_control_files('','bopts') if($rank == $root); exit_maker(0);},
-	   "EXE" => sub {GI::generate_control_files('','exe') if($rank == $root); exit_maker(0);},
 	   "TMP=s" => \$OPT{TMP},
 	   "debug" => \$main::debug,
 	   "debugmpi" => \$main::debugmpi,
-	   "version" => sub{print "$VERSION\n" if($rank == $root); exit_maker(0)},
-	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)}
+	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)},
+	   "version" => sub{print "$VERSION\n" if($rank == $root);
+			    exit_maker(0)},
+	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")
+			       if($rank == $root);
+			   exit_maker(0);},
+	   "CTL" => sub {GI::generate_control_files()
+			     if($rank == $root);
+			 exit_maker(0);},
+	   "OPTS" => sub {GI::generate_control_files('','opts')
+			      if($rank == $root);
+			  exit_maker(0);},
+	   "BOPTS" => sub {GI::generate_control_files('','bopts')
+			       if($rank == $root);
+			   exit_maker(0);},
+	   "EXE" => sub {GI::generate_control_files('','exe')
+			     if($rank == $root);
+			 exit_maker(0);},
+
     );
 $main::quiet = 1 if($main::qq);
 
@@ -290,7 +308,7 @@ if($main::debug){
 #--get files off the command line
 my @ctlfiles = @ARGV;
 if (! @ctlfiles) {
-    if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {	
+    if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
 	@ctlfiles = qw(maker_opts.ctl maker_bopts.ctl maker_exe.ctl);
     }
     elsif($rank == $root) {
@@ -372,14 +390,14 @@ my $empty;
 #---Process the control files
 #varibles that are persistent outside of try blocks
 my %CTL_OPT;
-my $iterator;
+my $iter;
 my $DS_CTL;
 my $GFF_DB;
 my $build;
 my $g_index;
 my $gdbfile;
 my @failed;
-my @interrupted;
+my @inter;
 
 #--parse options from control files
 if($rank == $root){
@@ -439,7 +457,8 @@ else{
 #--process and index BLAST databases
 if($rank == $root){
     #---set up blast databases and indexes for analyisis
-    print STDERR "STATUS: Processing and indexing input FASTA files...\n" unless($main::quiet);
+    print STDERR "STATUS: Processing and indexing input FASTA files...\n"
+	unless($main::quiet);
     if ($CTL_OPT{force} && !$CTL_OPT{_multi_chpc}){
 	carp "Calling File::Path::rmtree" if($main::debug);
 	File::Path::rmtree($CTL_OPT{mpi_blastdb});
@@ -461,7 +480,7 @@ if($rank == $root){
 	push(@to_do, map {['split_db', $_, $key, $bins, $bdir, $alt]} @files);
     }
     carp "Calling List::Util::shuffle" if($main::debug);
-    @to_do = List::Util::shuffle(@to_do); #shuffle the order (multiple instance efficiency)
+    @to_do = List::Util::shuffle(@to_do); #shuffle the order (efficiency)
 
     my $split_count = @to_do;
     while((my $args = shift @to_do) || $split_count > 0){
@@ -484,7 +503,7 @@ if($rank == $root){
 	    MPI_Recv(\$data, $who, $mpi_data);
 	    push(@to_do, @$data);
 	    carp "Calling List::Util::shuffle" if($main::debug);
-	    @to_do = List::Util::shuffle(@to_do);  #shuffle the order (efficiency)
+	    @to_do = List::Util::shuffle(@to_do);  #shuffle the order
 	    $split_count--;
 	}
 
@@ -560,7 +579,8 @@ $g_index->add_to_global_index();
 
 if($rank == $root){
 #--set up GFF3 DB
-    print STDERR "STATUS: Setting up database for any GFF3 input...\n" unless($main::quiet);
+    print STDERR "STATUS: Setting up database for any GFF3 input...\n"
+	unless($main::quiet);
     carp "Calling GFFDB::new" if($main::debug);
     $GFF_DB = new GFFDB(\%CTL_OPT);
     carp "Calling GFFDB::next_build" if($main::debug);
@@ -572,15 +592,15 @@ if($rank == $root){
 
     #---load genome file into iterator
     carp "Calling Iterator::Fasta::new" if($main::debug);
-    $iterator = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
+    $iter = new Iterator::Fasta($CTL_OPT{_g_db}->[0]);
     carp "Calling Iterator::Fasta::skip_file" if($main::debug);
-    $iterator->skip_file($DS_CTL->{log});
+    $iter->skip_file($DS_CTL->{log});
     carp "Calling Iterator::Fasta::step" if($main::debug);
-    $iterator->step($CTL_OPT{'_step'});
+    $iter->step($CTL_OPT{'_step'});
 
     if($OPT{dsindex}){
-	$iterator->skip_file($DS_CTL->{log});
-	while(my $q_def = $iterator->nextDef()){
+	$iter->skip_file($DS_CTL->{log});
+	while(my $q_def = $iter->nextDef()){
 	    my $id = Fasta::def2SeqID($q_def);
 	    my $safe_id = Fasta::seqID2SafeID($id);
 	    my $dir = $DS_CTL->id_to_dir($id);
@@ -599,8 +619,8 @@ if($size == 1){
 
     my $tier;
     my $f_count = @failed;
-    my $i_count = @interrupted;
-    while (my $q_def = $iterator->nextDef() || shift @failed || shift @interrupted){
+    my $i_count = @inter;
+    while(my $q_def = $iter->nextDef() || shift @failed || shift @inter){
 	$tier = Process::MpiTiers->new({q_def   => $q_def,
                                     g_index => $g_index,
                                     CTL_OPT => \%CTL_OPT,
@@ -621,10 +641,11 @@ if($size == 1){
 	$tier->run_all(0);
 
 	push(@failed, $tier->q_def) if ($tier->failed);
-	push(@interrupted, $tier->q_def) if ($tier->interrupt && $i_count == @interrupted);
+	push(@inter, $tier->q_def)
+	    if($tier->interrupt && $i_count == @inter);
 
 	$f_count = @failed; #reset failure count
-	$i_count = @interrupted; #reset interrupt count
+	$i_count = @inter; #reset interrupt count
     }
 
     print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
@@ -642,7 +663,7 @@ if ($rank == $root) {
 
     while(1){
 	#see if all contigs are finished
-	if($iterator->finished && @failed == 0 && @interrupted == 0){
+	if($iter->finished && @failed == 0 && @inter == 0){
 	    my $go = 0;
 	    foreach my $n (@active){
 		if((defined($n) && $n != 0)){
@@ -676,14 +697,14 @@ if ($rank == $root) {
 		print "COMM TIER REQUESTED\t|  RCV2\t|  mpi_data (tier_result)\t|  $rank\t<--\t$who\n" if($main::debugmpi);
 		MPI_Recv(\$result, $who, $mpi_data);
 		push(@failed, $result->{-q_def}) if ($result->{-failed});
-		push(@interrupted, $result->{-q_def}) if ($result->{-interrupt});
+		push(@inter, $result->{-q_def}) if ($result->{-interrupt});
 	    }
 	    
 	    #if a contig is available send tier
 	    my $tier;
 	    my $f_count = @failed;
-	    my $i_count = @interrupted;
-	    while (my $q_def = $iterator->nextDef || shift @failed || shift @interrupted){
+	    my $i_count = @inter;
+	    while(my $q_def = $iter->nextDef || shift @failed || shift @inter){
 		$tier = Process::MpiTiers->new({q_def => $q_def,
 						g_index => $g_index,
 						CTL_OPT => \%CTL_OPT,
@@ -698,8 +719,8 @@ if ($rank == $root) {
 		last if(! $tier->terminated);
 	    }
 	    
-	    #tag tier as being seen in two conflicting maker instances (easy to do it this way)
-	    $tier->{_seen}++ if(defined $tier && $i_count != @interrupted);
+	    #tag tier as being seen in two conflicting maker instances
+	    $tier->{_seen}++ if(defined $tier && $i_count != @inter);
 	    
 	    #take a short break before processing failed contigs
 	    #this handles heavy processor usage when failure is related
@@ -778,13 +799,13 @@ if ($rank == $root) {
 		    foreach my $helper (@$helpers){
 			#turn node into helper node
 			print "HELPER/RESULT REQUESTED\t|  RECV\t|  who_I_am (clr nd)\t\t|  $rank\t<--\t$helper\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $who_I_am); #clear who I am response
+			MPI_Recv(\$empty, $helper, $who_I_am); #clear
 			print "HELPER/RESULT REQUESTED\t|  RECV\t|  what_I_want (clr nd)\t\t|  $rank\t<--\t$helper\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $what_I_want); #clear what I want response
+			MPI_Recv(\$empty, $helper, $what_I_want); #clear
 			print "HELPER/RESULT REQUESTED\t|  RECV\t|  result_status (clr nd)\t|  $rank\t<--\t$helper\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $result_status); #clear result status response
+			MPI_Recv(\$empty, $helper, $result_status); #clear
 			print "HELPER/RESULT REQUESTED\t|  SEND\t|  req_stat (wait_as_helper nd)\t|  $rank\t-->\t$helper\n" if($main::debugmpi);
-			MPI_Send(\$wait_as_helper, $helper, $request_status); #signal to become helper
+			MPI_Send(\$wait_as_helper, $helper, $request_status);
 		    }
 		}
 	    }
@@ -926,13 +947,15 @@ else {
 		#collect errors and failures if any
 		$tier_result->{-error} = $tier->error;
 		$tier_result->{-failed} = $tier->failed;
-		$tier_result->{-interrupt} = $tier->interrupt if(!$tier->{_seen});
-		$tier_result->{-q_def} = $tier->q_def if($tier->failed || $tier_result->{-interrupt});
+		$tier_result->{-interrupt} = $tier->interrupt
+		    if(!$tier->{_seen});
+		$tier_result->{-q_def} = $tier->q_def
+		    if($tier->failed || $tier_result->{-interrupt});
 		$tier = undef;
 	    }
 	}
 	elsif((chunk_total_count(\@tiers) == 1) && (num_chunks(\@tiers) == 1)){
-	    #run lonesome chunk (should never happen but it's here just in case)
+	    #run lonesome chunk (should never happen)
 	    my $r_chunk = next_chunk(\@tiers); #running chunk
 	
 	    #if chunk is tier, treat as such
@@ -947,7 +970,7 @@ else {
 	    run(\@tiers, $rank);
 	    next;
 	}
-	elsif((result_count(\@tiers) == chunk_total_count(\@tiers) - 1) && (num_chunks(\@tiers) == 1)){
+	elsif((result_count(\@tiers) == chunk_total_count(\@tiers)-1) && (num_chunks(\@tiers) == 1)){
 	    #run last chunk outside of thread
 	    my $r_chunk = next_chunk(\@tiers); #running chunk
 	    die "ERROR: Logic error\n" if(! $r_chunk);
@@ -1093,7 +1116,8 @@ else {
 	    my $helpers = [];
 	    if ($what == $need_helper){
 		#send the number of helpers required
-		my $num_helpers_req = (num_chunks(\@tiers) - @$locs > 0) ? num_chunks(\@tiers) - @$locs : 0;
+		my $num_helpers_req = (num_chunks(\@tiers) - @$locs > 0) ?
+		    num_chunks(\@tiers) - @$locs : 0;
 
 		print "HELPER/RESULT REQUESTED\t|  SEND\t|  work_order (num_helpers_req)\t|  $rank\t-->\t$root\n" if($main::debugmpi);
 		MPI_Send(\$num_helpers_req, $root, $work_order);
@@ -1112,7 +1136,7 @@ else {
 	    #send chunk to helper
 	    foreach my $helper (sort {$a <=> $b} @{$helpers}){
 		print "HELPER/RESULT REQUESTED\t|  SEND\t|  who_I_am (for *helpers)\t|  $rank\t-->\t$helper\n" if($main::debugmpi);
-		MPI_Send(\$rank, $helper, $who_I_am); #say I'm the one who needs help
+		MPI_Send(\$rank, $helper, $who_I_am); #say I need help
 
 		#send chunk if available
 		my $r_chunk = next_chunk(\@tiers, 'chunk') || next_chunk(\@tiers, 'tier');
@@ -1124,17 +1148,17 @@ else {
 
 		if($r_chunk){
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (go_chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debugmpi);
-		    MPI_Send(\$go_chunk, $helper, $c_req_status); #say chunk is available
+		    MPI_Send(\$go_chunk, $helper, $c_req_status); #is available
 		    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_data (chunk *helpers)\t|  $rank\t-->\t$helper\n" if($main::debugmpi);
 		    MPI_Send(\$r_chunk, $helper, $mpi_data); #send chunk
 		}
 		else{
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  c_req_stat (reset *helpers)\t|  $rank\t-->\t$helper\n" if($main::debugmpi);
-		    MPI_Send(\$c_reset, $helper, $c_req_status); #send reset signal
+		    MPI_Send(\$c_reset, $helper, $c_req_status); #send reset
 		}
 	    }
 
-	    #get chunk results from nodes and send them something else to do or release them
+	    #get results from nodes and send them something or release them
 	    foreach my $loc (@{$locs}){
 		my $c_res;
 		print "COMM HAVE C_RESULT\t|  RCV2\t|  mpi_data (c_res no-root)\t|  $rank\t<--\t$loc\n" if($main::debugmpi);
@@ -1256,12 +1280,12 @@ sub node_thread {
    #set up thread signal to exit gracefully
    #don't override other signals within threads because
    #unlike ithreads forks uses real system signals
-   $SIG{'USR1'} = sub { cleanup(1); threads->exit(); };
-   $SIG{'INT'}  = sub { cleanup(1); print STDERR "SIGINT received in thread\n";  threads->exit(); };
-   $SIG{'QUIT'} = sub { cleanup(1); print STDERR "SIGQUIT received in thread\n"; threads->exit(); };
-   $SIG{'ABRT'} = sub { cleanup(1); print STDERR "SIGABRT received in thread\n"; threads->exit(); };
-   $SIG{'KILL'} = sub { cleanup(1); print STDERR "SIGKILL received in thread\n"; threads->exit(); };
-   $SIG{'TERM'} = sub { cleanup(1); print STDERR "SIGTERM received in thread\n"; threads->exit(); };
+   $SIG{USR1} = sub{cleanup(1); threads->exit};
+   $SIG{INT}  = sub{cleanup(1);print STDERR "SIGINT thread\n";threads->exit};
+   $SIG{QUIT} = sub{cleanup(1);print STDERR "SIGQUIT thread\n";threads->exit};
+   $SIG{ABRT} = sub{cleanup(1);print STDERR "SIGABRT thread\n";threads->exit};
+   $SIG{KILL} = sub{cleanup(1);print STDERR "SIGKILL thread\n";threads->exit};
+   $SIG{TERM} = sub{cleanup(1);print STDERR "SIGTERM thread\n";threads->exit};
 
    #setup global index because of weird NFS failure in thread
    my $g_index = GI::build_fasta_index([$gdbfile]);
@@ -1323,10 +1347,11 @@ sub node_thread {
 	    $tier_result->{-error} = $tier->error;
 	    $tier_result->{-failed} = $tier->failed;
 	    $tier_result->{-interrupt} = $tier->interrupt if(!$tier->{_seen});
-	    $tier_result->{-q_def} = $tier->q_def if ($tier->failed || $tier_result->{-interrupt});
+	    $tier_result->{-q_def} = $tier->q_def
+		if($tier->failed || $tier_result->{-interrupt});
 	    $tier = undef;
 
-	    sleep 1 while (defined ($t_tier_result)); #pause incase result will be overwritten
+	    sleep 1 while (defined ($t_tier_result)); #pause
 	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
 	    nstore(\$tier_result, $file);
 	    $t_tier_result = $file;
@@ -1334,7 +1359,7 @@ sub node_thread {
 	    $t_need_flag = 1;
 	 }#take a break
 	 elsif($tier->num_chunks == 0){
-	    #keeps thread from hogging resources while waiting for external results
+	    #keeps thread from hogging resources
 	    sleep 1;
 	 }
 
@@ -1349,7 +1374,7 @@ sub node_thread {
       }#process chunk
       elsif(defined($chunk)){
 	 $chunk->run($rank);
-	 sleep 1 while (defined ($t_chunk_result)); #pause incase result will be overwritten
+	 sleep 1 while (defined ($t_chunk_result)); #pause
 	 my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
 	 nstore(\$chunk, $file);
 	 $t_chunk_result = $file;
@@ -1498,7 +1523,7 @@ sub run {
        return;
    }
 
-   while ((chunk_total_count($buffer) == 1) && (my $chunk = next_chunk($buffer))){
+   while((chunk_total_count($buffer) == 1) && (my $chunk = next_chunk($buffer))){
        if(ref($chunk) eq 'Process::MpiTiers'){
 	   push(@$buffer, $chunk);
 	   actualize($buffer, $rank);

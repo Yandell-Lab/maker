@@ -112,7 +112,10 @@ sub mount_check {
     $mounted_on = Cwd::abs_path($mounted_on);
 
     #build new mount point
-    if($filesystem =~ /\:/){
+    if($filesystem =~ /^fhgfs/){
+	$mounts{$path} = "$filesystem:$path";
+    }
+    elsif($filesystem =~ /\:/){
         $mounted_on = quotemeta($mounted_on);
 	my $mpath = $path;
         $mpath =~ s/^$mounted_on//;
@@ -143,7 +146,8 @@ sub is_NFS_mount {
     $host = quotemeta($host);
 
     $is_NFS{$path} = ($path =~ /^$host\:/) ? 0 : 1;
-    return $is_NFS{$path}
+    $is_NFS{$path} = 2 if($path =~ /^fhgfs/ && $path !~ /\:/);
+    return $is_NFS{$path};
 }
 }
 #------------------------------------------------------------------------
@@ -4160,17 +4164,29 @@ sub load_control_files {
    #--set an initialization lock so steps are locked to a single process
    #--take extra steps since lock is vulnerable to race conditions
    my $i_lock; #init lock, it is only a temporary blocking lock
+   my $is_NFS = is_NFS_mount($CTL_OPT{out_base});
+   $CTL_OPT{_is_NFS} = $is_NFS;
+   if($CTL_OPT{_no_lock}){
+       warn "WARNING: You have chosen to turn locking off which may create\n".
+	    "race conditions if running in parallel.  You have been warned.\n\n";
+       $File::NFSLock::TYPE = 0;
+   }
+   elsif($is_NFS == 2){ #FhGFS type global storage
+       warn "WARNING: The output directory if FhGFS which does not support\n".
+	    "hardlinks and may have broken posix locks, but I will try\n".
+	    "posix locking anyway (hopefully no race conditions emerge).\n\n";
+       $File::NFSLock::TYPE = 'POSIX';
+   }
    my $tries = 0;
    while(!$i_lock){
        $tries++;
        $i_lock = new File::NFSLock($CTL_OPT{out_base}."/init_lock", 'EX', 150, 120);
        my $is_mine = $i_lock->still_mine if($i_lock);
        if(!$is_mine && $tries >= 5){ #try up to 5 times
-	   my $is_NFS = is_NFS_mount($CTL_OPT{out_base});	   
 	   my $err = "ERROR: Cannot get initialization lock.\n".
 	             "If you are running maker in parallel or via MPI\n".
 	             "You may be facing a race condition.\n\n";
-	   $err .= "The output directory if NFS and may be a factor\n\n" if($is_NFS);
+	   $err .= "The output directory if NFS and may be a factor\n\n" if($is_NFS == 1);
 	   die $err;
        }
        elsif(!$is_mine){ #sleep with random wait on failure

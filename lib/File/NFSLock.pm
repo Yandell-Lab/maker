@@ -16,7 +16,8 @@ use Proc::Signal;
 use URI::Escape;
 use Sys::Hostname;
 use Digest::MD5;
-use vars qw(@ISA @EXPORT $VERSION %TYPES %LOCK_LIST
+use Fcntl;
+use vars qw(@ISA @EXPORT $VERSION %TYPES %LOCK_LIST $TYPE
             $LOCK_EXTENSION $HOSTNAME @CATCH_SIGS);
 
 require Exporter;
@@ -24,11 +25,12 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(&LOCK_SH &LOCK_EX &LOCK_NB);
 $VERSION = '1.20';
+$TYPE = 'NFS';
 
 #Constants
-sub LOCK_SH {1}
-sub LOCK_EX {2}
-sub LOCK_NB {4}
+sub LOCK_SH {Fcntl::LOCK_SH}
+sub LOCK_EX {Fcntl::LOCK_EX}
+sub LOCK_NB {Fcntl::LOCK_NB}
 
 $LOCK_EXTENSION = '.NFSLock'; # customizable extension
 $HOSTNAME = &Sys::Hostname::hostname();
@@ -105,6 +107,7 @@ sub new {
 
     #replace signals
     foreach my $signal (@CATCH_SIGS) {
+	next if(!$TYPE); #locking is off
 	$SIG{$signal} = $graceful_sig if(!$SIG{$signal} || $SIG{$signal} eq 'DEFAULT');
     }
 
@@ -148,6 +151,12 @@ sub _new_EX {
  
     my $stack;
     while (1) {
+	#if locking has been turned off then just pretend success
+	if(!$TYPE){
+	    $self->_create_magic($lock_file);
+	    last;
+	}
+
 	if($quit_time && time > $quit_time){
 	    unlink($rand_file);
 	    return undef;
@@ -272,7 +281,7 @@ sub _new_EX {
     $self->uncache; #trick for NFS to update cache   
     
     if($self->still_mine){
-	unlink($rand_file);
+	unlink($rand_file) if($TYPE);
 	$LOCK_LIST{"$lock_file\_EX"}++;
 	delete($self->{unlocked});
 	return $self;
@@ -293,6 +302,11 @@ sub _new_NB {
 
     my $stack;
     { #single iteration block (so last will work))
+	#if locking has been turned off then just pretend success
+	if(!$TYPE){
+	    $self->_create_magic($lock_file);
+	    last;
+	}
 	if(-f $lock_file){
 	    if($LOCK_LIST{"$lock_file\_EX"} && $self->still_mine){
 		last if($self->_create_magic($lock_file));		
@@ -388,7 +402,7 @@ sub _new_NB {
     $self->uncache; #trick for NFS to update cache
  
     if($self->still_mine){
-	unlink($rand_file);
+	unlink($rand_file) if($TYPE);
 	$LOCK_LIST{"$lock_file\_EX"}++;
 	delete($self->{unlocked});
 	return $self;
@@ -409,6 +423,12 @@ sub _new_SH {
  
     my $stack;
     while (1) {
+	#if locking has been turned off then just pretend success
+	if(!$TYPE){
+	    $self->_create_magic($lock_file);
+	    last;
+	}
+
 	if($quit_time && time > $quit_time){
 	    unlink($rand_file);
 	    return undef
@@ -527,7 +547,7 @@ sub _new_SH {
     $self->uncache; #trick for NFS to update cache   
     
     if($self->still_mine){
-	unlink($rand_file);
+	unlink($rand_file) if($TYPE);
 	$LOCK_LIST{"$lock_file\_SH"}++;
 	delete($self->{unlocked});
 	return $self;
@@ -541,6 +561,13 @@ sub _new_SH {
 sub unlock {
     my $self = shift;
     my $force = shift;
+
+    #pretend success when locking is off
+    if(!$TYPE){
+	($self->{lock_type} == LOCK_SH) ? $self->_do_unlock_shared : $self->_do_unlock;
+        $self->{unlocked} = 1;
+        return 1;
+    }
 
     $self->_unlink_block(0) if($force);
 
@@ -604,7 +631,7 @@ sub unlock {
 #-------------------------------------------------------------------------------
 sub _check_shared {
     my $self = shift;
-    my $lock_file = $self->{lock_file};    
+    my $lock_file = $self->{lock_file};
     return ((stat($lock_file))[2] & 1); 
 }
 
@@ -631,6 +658,15 @@ sub _create_magic {
   my $id = $self->{id};
 
   $self->{lock_line} = "$hostname $pid ".time()." $id $shared\n";
+
+  #pretend success when locking is off
+  if(!$TYPE){
+      if($shared){
+	  $self->{id_line} ||= Digest::MD5::md5_hex($self->{lock_line})."\n";
+      }
+      return 1;
+  }
+
   my $first  = ($append_file eq $self->{rand_file});
 
   if($shared){
@@ -667,11 +703,23 @@ sub _do_lock {
     my $self = shift;
     my $lock_file = $self->{lock_file};
     my $rand_file = $self->{rand_file};
-    
+
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
     return if(! -f $rand_file);
-    
-    my $success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
-    unlink($rand_file);
+
+    my $success;
+    if($TYPE eq 'NFS'){
+	$success = link( $rand_file, $lock_file ) && (stat($lock_file))[3] == 2;
+	unlink($rand_file);
+    }
+    elsif($TYPE eq 'POSIX'){
+	open(my $fh, ">>$lock_file");
+	my $locked = flock($fh, LOCK_EX);
+	$success = File::Copy::move($rand_file, $lock_file) if($locked);
+	unlink($rand_file);
+	close($fh);
+    }
 
     return $success;
 }
@@ -681,13 +729,23 @@ sub _do_lock_shared {
     my $lock_file  = $self->{lock_file};
     my $rand_file  = $self->{rand_file};
 
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
+
     ### Try to create $lock_file from the special
     ### file with the magic SHAREBIT set.
     my $success;
-    if(-f $rand_file){
+    if($TYPE eq 'NFS' && -f $rand_file){
 	$success = link($rand_file, $lock_file) && (stat($lock_file))[3] == 2;
 	unlink($rand_file);
-    }    
+    }
+    elsif($TYPE eq 'POSIX' && -f $rand_file){
+	open(my $fh, ">>$lock_file");
+	my $locked = flock($fh, LOCK_EX);
+	$success = File::Copy::move($rand_file, $lock_file) if($locked);
+	unlink($rand_file);
+	close($fh);
+    }
 
     ### lock the locking process
     local $LOCK_EXTENSION = ".share";
@@ -714,6 +772,9 @@ sub _do_unlock {
   $LOCK_LIST{$self->{lock_file}."_EX"}--;
   $self->{unlocked} = 1;
 
+  #pretend success when locking is off
+  return 1 if(!$TYPE);
+
   return 1 if(! -f $self->{lock_file});
   return 1 if($self->_check_shared);
   return 1 unless($LOCK_LIST{$self->{lock_file}."_EX"} <= 0);
@@ -737,6 +798,9 @@ sub _do_unlock_shared {
 
     $LOCK_LIST{$self->{lock_file}."_SH"}--;
     $self->{unlocked} = 1;
+
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
 
     return 1 if(! -f $self->{lock_file});
     return 1 if(! $self->_check_shared);
@@ -824,9 +888,22 @@ sub uncache {
     my $file = shift || $self->{lock_file};
     my $rand_file = $self->_rand_name($file);
 
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
+
     ### hard link and rm trigger NFS to refresh
-    my $stat = link($file, $rand_file);
-    unlink($rand_file);
+    my $stat;
+    if($TYPE eq 'NFS'){
+	$stat = link($file, $rand_file);
+	unlink($rand_file);
+    }
+    elsif($TYPE eq 'POSIX'){
+	open(my $fh, ">>$file");
+	my $locked = flock($fh, LOCK_EX);
+	$stat = File::Copy::move($rand_file, $file) if($locked);
+	unlink($rand_file);
+	close($fh);
+    }
 
     return $stat;
 }
@@ -835,6 +912,9 @@ sub maintain {
     my $self = shift;
     my $time = shift; #refresh interval
     my $pid = $self->{lock_pid};
+
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
 
     die "ERROR: No time interval given to maintain lock\n\n"
 	if(! $time || $time < 1);
@@ -954,7 +1034,10 @@ sub refresh {
     return undef if(! $self->still_mine);
 
     $self->{lock_line} = "$hostname $pid ".time()." $id $shared\n";
-    
+
+    #pretend success when locking is off
+    return 1 if(!$TYPE);    
+
     ### get the handle on the lock file
     my $FH;
     if(! open ($FH,"+<$lock_file") ){
@@ -1031,6 +1114,9 @@ sub still_mine {
     my $hostname   = $self->{hostname};
     my $id = $self->{id};
 
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
+
     return 0 if(!-f $lock_file);
 
     my $shared = $self->_check_shared;
@@ -1090,6 +1176,9 @@ sub owners {
     my $hostname   = $self->{hostname};
     my $pid = $self->{lock_pid};
     my $id = $self->{id};
+
+    #pretend success when locking is off
+    return 1 if(!$TYPE);
 
     return 1 unless ($self->{lock_type} eq LOCK_SH);
 
