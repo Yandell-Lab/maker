@@ -755,14 +755,21 @@ sub get_split_args {
 my %localized; #persistent list of already localized files
 sub localize_file {
     my $file = shift;
+    my $name = shift;
     die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
 
     $file = Cwd::abs_path($file);
-    my ($name) = $file =~ /([^\/]+)$/;
+    if(!defined($name)){
+       my ($name) = $file =~ /([^\/]+)$/;
+    }
     my $tmp = GI::get_global_temp();
 
     if($localized{$file} && $localized{$file} eq "$tmp/$name" && -f "$tmp/$name"){
 	return $localized{$file};
+    }
+    elsif($localized{$file} && $localized{$file} ne "$tmp/$name" && -f $localized{$file}){
+       symlink($localized{$file}, "$tmp/$name") if(! -f "$tmp/$name");
+       return "$tmp/$name";
     }
 
     while(!-f "$tmp/$name"){
@@ -774,8 +781,7 @@ sub localize_file {
 	next unless($lock->maintain(30));
 
 	File::Copy::copy($file, "$tmp/$name.tmp");
-	link("$tmp/$name.tmp", "$tmp/$name");
-	unlink("$tmp/$name.tmp");
+	File::Copy::move("$tmp/$name.tmp", "$tmp/$name");
 	$lock->unlock if($lock);
     }    
     
