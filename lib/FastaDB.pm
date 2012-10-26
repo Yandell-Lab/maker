@@ -78,16 +78,14 @@ sub _safe_new {
 
 	my $lock;
 	if(!$exists || $args{'-reindex'}){
-	    my $lock;
-	    while(! $lock){
+	    while(!$lock || !$lock->maintain(30)){
 		carp "Calling File::NFSLock::new" if($main::debug);
 		$lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
-		next if(! $lock);
-
 		$exists = 1 if((grep {-f $_} @ifiles) == @ifiles); #check again
-		last if($exists);
-		
-		undef $lock unless($lock->maintain(30));
+		if($exists && !$args{'-reindex'}){
+		    undef $lock;
+		    last;
+		}
 	    }
 	}
 
@@ -106,7 +104,7 @@ sub _safe_new {
 	    }
 
 	    #build the index
-	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
+	    local $SIG{'__WARN__'} = sub { die $_[0]; };
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	    $db = new Bio::DB::Fasta($sym, @args);
 
@@ -118,8 +116,7 @@ sub _safe_new {
 		foreach my $i (@ifiles){
 		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
 		    File::Copy::copy($n, "$i.tmp") or confess "ERROR: Copy failed: $!";
-		    link("$i.tmp", $i);
-		    unlink("$i.tmp");
+		    File::Copy::move("$i.tmp", $i) or confess "ERROR: Move failed: $!";
 		}
 	    }
 	}
