@@ -759,8 +759,8 @@ sub localize_file {
     die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
 
     $file = Cwd::abs_path($file);
-    if(!defined($name)){
-       my ($name) = $file =~ /([^\/]+)$/;
+    if(! length($name)){
+       ($name) = $file =~ /([^\/]+)$/;
     }
     my $tmp = GI::get_global_temp();
 

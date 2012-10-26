@@ -90,35 +90,46 @@ sub _safe_new {
 	}
 
 	#copy things locally if NFS mount and TMP is available
-	if(!$exists || $args{'-reindex'} || $localize){
+	if($localize){
 	    my $dir = GI::get_global_temp();
-	    (my $sym = $file) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
-	    symlink($file, $sym) if(! -f $sym);
+	    my $sym = "$dir/".Digest::MD5::md5_hex($file);
+	    symlink($file, $sym) if(!-f $sym);
 	    
 	    #copy files locally if they already exist globally
 	    foreach my $i (@ifiles){
-		(my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+		my $n = "$sym.index";
+		$n .= $1 if($i =~/(\.[a-z]{3})$/);
 		unlink($n) if((!$exists || $args{'-reindex'}) && -f $n);
-		next if($args{'-reindex'} || !$localize || ! -f $i || -f $n);
-		GI::localize_file($i);
+		next if($args{'-reindex'} || ! -f $i || -f $n);
+		GI::localize_file($i, ($n =~ /([^\/]+)$/)[0]);
 	    }
-
+	    
 	    #build the index
 	    local $SIG{'__WARN__'} = sub { die $_[0]; };
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	    $db = new Bio::DB::Fasta($sym, @args);
-
+	    
 	    #copy local files globally if they are needed
 	    if($args{'-reindex'} || !$exists){
 		untie(%{$db->{offsets}}); #untie first to flush (for new index)
 		$args{'-reindex'} = 0;
 		$db = new Bio::DB::Fasta($sym, %args);
 		foreach my $i (@ifiles){
-		    (my $n = $i) =~ s/(.*\/)?([^\/]+)$/$dir\/$2/;
+		    my $n = "$sym.index";
+		    $n .= $1 if($i =~/(\.[a-z]{3})$/);
 		    File::Copy::copy($n, "$i.tmp") or confess "ERROR: Copy failed: $!";
 		    File::Copy::move("$i.tmp", $i) or confess "ERROR: Move failed: $!";
 		}
 	    }
+	}
+	elsif(!$exists || $args{'-reindex'}){
+	    #build the index from scratch
+	    local $SIG{'__WARN__'} = sub { die $_[0]; };
+	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
+	    $db = new Bio::DB::Fasta($file, @args);
+	    untie(%{$db->{offsets}}); #untie first to flush (for new index)
+	    $args{'-reindex'} = 0;
+	    $db = new Bio::DB::Fasta($file, %args);
 	}
 	else{
 	    #build the index with existing file
@@ -126,7 +137,7 @@ sub _safe_new {
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	    $db = new Bio::DB::Fasta($file, @args);
 	}
-
+    
 	$lock->unlock if($lock);
     }
     catch Error::Simple with {
