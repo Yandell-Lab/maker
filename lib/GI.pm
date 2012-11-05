@@ -74,14 +74,22 @@ sub new_instance_temp {
 #------------------------------------------------------------------------
 {
 my %mounts; #persistent list of mounts to avoid calling df so often
+my $host = Sys::Hostname::hostname();
 sub mount_check {
     my $path = shift;
+
     return undef if(! -e $path);
 
     $path = Cwd::abs_path($path);
-    return $mounts{$path} if($mounts{$path});
 
-    my $host = Sys::Hostname::hostname();
+    #it's a file and not a directory
+    my $f_name;
+    if(-f $path){
+	($path, $f_name) = $path =~ /(.*)\/([^\/]+)$/;
+    }
+    if($mounts{$path}){
+	return length($f_name) ? "$mounts{$path}/$f_name" : $mounts{$path};
+    }
     my $p = quotemeta($path); #handles escapable characters
 
     #get only line with mount point
@@ -127,27 +135,19 @@ sub mount_check {
 	$mounts{$path} = "$host:$path";
     }
 
-    return $mounts{$path};
-}
+    return length($f_name) ? "$mounts{$path}/$f_name" : $mounts{$path};
 }
 #------------------------------------------------------------------------
-{
-my %is_NFS; #persistent list of NFS mounts
 sub is_NFS_mount {
     my $path = shift;
 
-    return $is_NFS{$path} if(defined($is_NFS{$path})); #to avoid calling 'df' so often
-
-    my $host = Sys::Hostname::hostname();
     $path = mount_check($path);
-
     return undef if(! $path);
+    my $safe = quotemeta($host);
+    my $is_NFS = ($path =~ /^$safe\:/) ? 0 : 1;
+    $is_NFS = 2 if($path =~ /^fhgfs/ && $path !~ /\:/);
 
-    $host = quotemeta($host);
-
-    $is_NFS{$path} = ($path =~ /^$host\:/) ? 0 : 1;
-    $is_NFS{$path} = 2 if($path =~ /^fhgfs/ && $path !~ /\:/);
-    return $is_NFS{$path};
+    return $is_NFS;
 }
 }
 #------------------------------------------------------------------------
@@ -3274,7 +3274,7 @@ sub set_defaults {
       $CTL_OPT{'html_web'} = '/mwas';
       $CTL_OPT{'data_dir'} = '';
       $CTL_OPT{'data_dir'} = "/var/lib/mwas";
-      $CTL_OPT{'web_address'} = 'http://'.[`hostname` =~ /^([^\n]+)/]->[0];
+      $CTL_OPT{'web_address'} = 'http://'.Sys::Hostname::hostname();
       $CTL_OPT{'apache_user'} = '';
       $CTL_OPT{'apache_user'} = 'apache' if(@{[getpwnam('apache')]});
       $CTL_OPT{'apache_user'} = 'www' if(@{[getpwnam('www')]});
