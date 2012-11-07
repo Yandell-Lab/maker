@@ -2645,7 +2645,7 @@ sub tblastx_as_chunks {
    }
    else{
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-       my $tmp_db = loalize_file($db);
+       my $tmp_db = localize_file($db);
        dbformat($formater, $tmp_db, 'tblastx');
 
        #call blast executable
