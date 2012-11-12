@@ -21,7 +21,7 @@ sub  getWantedFromMulti {
         $/ = "\n>";
 
         my $fh = new FileHandle;
-           $fh->open("$multiFasta") || die "couldn't open $multiFasta";
+           $fh->open("$multiFasta") || die "couldn't open $multiFasta\n$!";
 
 	my @fastas;
         while(my $line = <$fh>){
@@ -32,7 +32,7 @@ sub  getWantedFromMulti {
                 }
         }
         $/ = "\n";
-        $fh->close || die "couldn't close $multiFasta";
+        $fh->close || die "couldn't close $multiFasta\n$!";
 
 	return \@fastas;
 }
@@ -53,11 +53,11 @@ sub writeFile {
 	my $fasta = (ref($f) eq '') ? \$f : $f; 
 
         my $fh = new FileHandle();
-           $fh->open(">$loc") || die "couldn't open $loc";
+           $fh->open(">$loc") || die "couldn't open $loc\n$!";
 
 	print $fh $$fasta;
 
-	$fh->close() || die "couldn't close $loc";
+	$fh->close() || die "couldn't close $loc\n$!";
 
 	return $loc;
 }
@@ -66,14 +66,14 @@ sub getDef {
         my $fastaFile = shift;
 
         my $fh = new FileHandle();
-           $fh->open($fastaFile) || die "couldn't open $fastaFile";
+           $fh->open($fastaFile) || die "couldn't open $fastaFile\n$!";
 
         my $seq = '';
         while(my $l = <$fh>){
                 chomp($l);
                 return $l if $l =~ /^>/;
 	    }
-        $fh->close() || die "couldn't close $fastaFile";
+        $fh->close() || die "couldn't close $fastaFile\n$!";
 
 }
 #-------------------------------------------------------------------------------
@@ -81,14 +81,14 @@ sub getName {
         my $fastaFile = shift;
 
         my $fh = new FileHandle();
-           $fh->open($fastaFile) || die "couldn't open $fastaFile";
+           $fh->open($fastaFile) || die "couldn't open $fastaFile\n$!";
 
         my $seq = '';
         while(my $l = <$fh>){
                 chomp($l);
 		return $1 if $l =~ /^>(\S+)/;
         }
-        $fh->close() || die "couldn't close $fastaFile";;
+        $fh->close() || die "couldn't close $fastaFile\n$!";
 
 }
 #-------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ sub getSeq {
 	my $fastaFile = shift;
 
 	my $fh = new FileHandle();
-	   $fh->open($fastaFile) || die "couldn't open $fastaFile";
+	   $fh->open($fastaFile) || die "couldn't open $fastaFile\n$!";
 
 	my $seq = '';
 	while(my $l = <$fh>){
@@ -104,7 +104,7 @@ sub getSeq {
 		next if $l =~ /^>/;
 		$seq .= $l;
 	}
-	$fh->close() || die "couldn't close $fastaFile";
+	$fh->close() || die "couldn't close $fastaFile\n$!";
 
 	return \$seq;
 	
