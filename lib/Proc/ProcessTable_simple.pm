@@ -88,6 +88,10 @@ sub new {
     $self->{state}    = shift;
     $self->{fname}    = shift;
     $self->{cmndline} = shift;
+
+    #weird trailing bug
+    chomp($self->{fname});
+    $self->{fname} =~ s/\s\s\s\s+.//;
     
     return $self;
 }
