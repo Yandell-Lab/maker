@@ -82,9 +82,10 @@ sub needs_to_be_revcomped {
 		($seq, $r_seq) = ($r_seq, $seq) if($strand == -1);
 	    }
 	    else{
-		$seq = [$hit->hsps()]->[0]->seq('query')->seq();
-		$seq->alphabet('dna');
-		$r_seq = [$hit->hsps()]->[0]->seq('query')->revcom()->seq;
+		my $obj = [$hit->hsps()]->[0]->seq('query');
+		$obj->alphabet('dna');
+		$seq   = $obj->seq();
+		$r_seq = $obj->revcom()->seq;
 	    }
 	    
 	    $seq =~ s/[\-\_\+\=\|]//g;
