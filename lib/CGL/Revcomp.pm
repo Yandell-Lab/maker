@@ -108,7 +108,7 @@ sub revcomp
    my $seq = shift;
 
    # XXXX I added the final V->B since there was only B->V before....
-   $seq =~ tr/AaCcGgTtYyRrKkMmBbVv/TtGgCcAaRrYyMmKkVvBb/;
+   $seq =~ tr/AaCcGgTtYyRrKkMmBbVvUuSsWwDdHh/TtGgCcAaRrYyMmKkVvBbAaWwSsHhDd/;
 
    return reverse $seq;
 }

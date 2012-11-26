@@ -82,10 +82,8 @@ sub needs_to_be_revcomped {
 		($seq, $r_seq) = ($r_seq, $seq) if($strand == -1);
 	    }
 	    else{
-		my $obj = [$hit->hsps()]->[0]->seq('query');
-		$obj->alphabet('dna');
-		$seq   = $obj->seq();
-		$r_seq = $obj->revcom()->seq;
+		$seq   = [$hit->hsps()]->[0]->seq('query')->seq();
+		$r_seq = Fasta::revComp(\$seq);
 	    }
 	    
 	    $seq =~ s/[\-\_\+\=\|]//g;
