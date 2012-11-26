@@ -83,6 +83,7 @@ sub needs_to_be_revcomped {
 	    }
 	    else{
 		$seq = [$hit->hsps()]->[0]->seq('query')->seq();
+		$seq->alphabet('dna');
 		$r_seq = [$hit->hsps()]->[0]->seq('query')->revcom()->seq;
 	    }
 	    
