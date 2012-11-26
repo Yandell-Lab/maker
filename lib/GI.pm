@@ -90,15 +90,14 @@ sub mount_check {
     if($mounts{$path}){
 	return length($f_name) ? "$mounts{$path}/$f_name" : $mounts{$path};
     }
-    my $p = quotemeta($path); #handles escapable characters
 
     #get only line with mount point
+    (my $p = $path) =~ s/([^A-Za-z_0-9\.\-\/\~])/\\$1/g;
     open(DF, "df -P $p |");
     my @F;
     while(my $line = <DF>){
         chomp $line;
         @F = split(/\s+/, $line);
-
         last if grep {/\%/} @F;
     }
     close(DF);

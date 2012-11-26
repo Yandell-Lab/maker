@@ -1343,8 +1343,8 @@ sub _get_genes {
 
 	    $name = $id if ($name eq '');
 
-	    if($seen{$b->{id}}++){
-		die "ERROR: Non-unique top level ID for $b->{id}\n".
+	    if($seen{$id}){
+		die "ERROR: Non-unique top level ID for $id\n".
 		    "While this is technically legal in GFF3, it usually\n".
 		    "indicates a poorly fomatted GFF3 file (perhaps you\n".
 		    "tried to merge two GFF3 files without accounting for\n".
