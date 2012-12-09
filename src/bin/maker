@@ -48,7 +48,7 @@ use POSIX;
 use Sys::Hostname;
 
 BEGIN{
-   $VERSION = '2.26';
+   $VERSION = '2.27';
 
    #what to do on ^C
    $SIG{INT}  = sub {print STDERR "SIGINT received\n";  exit_maker(SIGINT);};
