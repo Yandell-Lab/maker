@@ -1043,9 +1043,22 @@ sub _install_exe {
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
 	print "Downloading $exe...\n";
         $self->getstore($url, $file) or return $self->fail($exe, $path);
+
+	#this version of the augustus tarball doesn't make the augusus directory
+	if($url =~ /augustus\.2\.6/){
+	    mkdir("$base/augustus.2.6");
+	    chdir("$base/augustus.2.6");
+	}
+
 	print "Unpacking $exe tarball...\n";
         $self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
+
+	#change back to base for this version of augustus
+	if($url =~ /augustus\.2\.6/){
+	    chdir($base);
+	}
+
 	my ($dir) = grep {-d $_} <augustus*>;
 	chdir("$dir/src");
 	print "Configuring $exe...\n";

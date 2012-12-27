@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use FindBin;
+use lib "$FindBin::Bin/../src/inc/perl/lib"; #micelaneous
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 

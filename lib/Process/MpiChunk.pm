@@ -633,9 +633,13 @@ sub _go {
 
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
+	       my $the_void = $VARS->{the_void};
+               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+               mkdir($subvoid) unless(-d $subvoid);
 	       my %args = (chunk        => $fchunk,
 			   order        => $order,
 			   the_void     => $VARS->{the_void},
+			   subvoid      => $subvoid,
 			   seq_id       => $VARS->{seq_id},
 			   safe_seq_id  => $VARS->{safe_seq_id},
 			   q_seq_obj    => $VARS->{q_seq_obj},
@@ -712,6 +716,7 @@ sub _go {
 	    @args = (qw(chunk
 			q_seq_obj
 			the_void
+			subvoid
 			safe_seq_id
 			q_seq_length
 			dbfile
@@ -729,6 +734,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_length = $VARS->{q_seq_length};
 
@@ -755,7 +761,7 @@ sub _go {
 	    my $rm_rb_keepers = []; #repeat masker RepBase
 	    if ($CTL_OPT{model_org}) { #model organism repeats
 	       $rm_rb_keepers = GI::repeatmask($chunk,
-					       $the_void,
+					       $subvoid,
 					       $safe_seq_id,
 					       $CTL_OPT{model_org},
 					       $CTL_OPT{RepeatMasker},
@@ -771,7 +777,7 @@ sub _go {
 	    my $rm_sp_keepers = []; #repeat masker species
 	    if ($CTL_OPT{rmlib}) {  #species specific repeats;
 	       $rm_sp_keepers = GI::repeatmask($chunk,
-					       $the_void,
+					       $subvoid,
 					       $safe_seq_id,
 					       $CTL_OPT{model_org},
 					       $CTL_OPT{RepeatMasker},
@@ -841,6 +847,7 @@ sub _go {
 	    @args = (qw(db
 			chunk
 			the_void
+			subvoid
 			safe_seq_id
 			LOG
 			LOG_FLAG
@@ -855,6 +862,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $db = $VARS->{db};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
@@ -865,7 +873,7 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       ($rm_blastx_keepers, $res_dir) = GI::repeatrunner_as_chunks($chunk,
 									   $db,
-									   $the_void,
+									   $subvoid,
 									   $safe_seq_id,
 									   \%CTL_OPT,
 									   $self->{RANK},
@@ -1238,9 +1246,14 @@ sub _go {
 	       my $preds_on_chunk = GI::get_preds_on_chunk($VARS->{preds},
 							   $fchunk
 							   );
+
+               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+               mkdir($subvoid) unless(-d $subvoid);
+
 	       my %args = (chunk        => $fchunk,
                            order        => $order,
 			   the_void     => $VARS->{the_void},
+			   subvoid      => $subvoid,
 			   q_def        => $VARS->{q_def},
 			   seq_id       => $VARS->{seq_id},
 			   safe_seq_id  => $VARS->{safe_seq_id},
@@ -1330,6 +1343,7 @@ sub _go {
 	    @args = (qw(db
 			chunk
 			the_void
+			subvoid
 			safe_seq_id
 			LOG
 			LOG_FLAG
@@ -1344,6 +1358,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $db = $VARS->{db};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
@@ -1356,7 +1371,7 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       ($blastn_keepers, $res_dir) = GI::blastn_as_chunks($chunk,
 								  $db,
-								  $the_void,
+								  $subvoid,
 								  $safe_seq_id,
 								  \%CTL_OPT,
 								  $self->{RANK},
@@ -1616,6 +1631,7 @@ sub _go {
 		        dc
 			id
 			the_void
+			subvoid
 			q_seq_length
 			q_def
 			q_seq_obj
@@ -1634,6 +1650,7 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -1666,7 +1683,7 @@ sub _go {
 							 $q_def,
 							 $dc,
 							 $CTL_OPT{_e_db},
-							 $the_void,
+							 $subvoid,
 							 'e',
 							 $CTL_OPT{exonerate},
 							 $CTL_OPT{pcov_blastn},
@@ -1833,6 +1850,7 @@ sub _go {
 	    @args = (qw(db
 			chunk
 			the_void
+			subvoid
 			safe_seq_id
 			LOG
 			LOG_FLAG
@@ -1847,6 +1865,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $db = $VARS->{db};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
@@ -1857,7 +1876,7 @@ sub _go {
 	       GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 	       ($tblastx_keepers, $res_dir) = GI::tblastx_as_chunks($chunk,
 								    $db,
-								    $the_void,
+								    $subvoid,
 								    $safe_seq_id,
 								    \%CTL_OPT,
 								    $self->{RANK},
@@ -2108,6 +2127,7 @@ sub _go {
 			dc
 			id
 			the_void
+			subvoid
 			q_seq_length
 			q_def
 			q_seq_obj
@@ -2126,6 +2146,7 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -2147,7 +2168,7 @@ sub _go {
 	       #					 $q_def,
 	       #					 $dc,
 	       #					 $CTL_OPT{_a_db},
-	       #					 $the_void,
+	       #					 $subvoid,
 	       #					 'q',
 	       #					 $CTL_OPT{exonerate},
 	       #					 $CTL_OPT{pcov_tblastx},
@@ -2307,6 +2328,7 @@ sub _go {
 	    @args = (qw(db
 			chunk
 			the_void
+			subvoid
 			safe_seq_id
 			LOG
 			LOG_FLAG
@@ -2321,6 +2343,7 @@ sub _go {
 	    my $chunk = $VARS->{chunk};
 	    my $db = $VARS->{db};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $LOG = $VARS->{LOG};
 	    my $LOG_FLAG = $VARS->{LOG_FLAG};
@@ -2333,7 +2356,7 @@ sub _go {
 		GI::set_global_temp($CTL_OPT{_TMP}) if($CTL_OPT{_TMP});
 		($blastx_keepers, $res_dir) = GI::blastx_as_chunks($chunk,
 								   $db,
-								   $the_void,
+								   $subvoid,
 								   $safe_seq_id,
 								   \%CTL_OPT,
 								   $self->{RANK},
@@ -2585,6 +2608,7 @@ sub _go {
 			dc
 			id
 			the_void
+			subvoid
 			q_seq_length
 			q_def
 			q_seq_obj
@@ -2603,6 +2627,7 @@ sub _go {
 	    my $dc = $VARS->{dc};
 	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -2635,7 +2660,7 @@ sub _go {
 							 $q_def,
 							 $dc,
 							 $CTL_OPT{_p_db},
-							 $the_void,
+							 $subvoid,
 							 'p',
 							 $CTL_OPT{exonerate},
 							 $CTL_OPT{pcov_blastx},
@@ -3165,12 +3190,16 @@ sub _go {
 	    $VARS->{fasta_chunker}->reset;
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
+               my $the_void = $VARS->{the_void};
+               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+               mkdir($subvoid) unless(-d $subvoid);
 	       my ($file) = grep {/\.$order\.final\.section$/} @$section_files;
 	       my $section = retrieve($file);
 	       my %args = (%$section,
 			   (chunk              => $fchunk,
 			    order              => $order,
 			    the_void           => $VARS->{the_void},
+			    subvoid            => $subvoid,
 			    safe_seq_id        => $VARS->{safe_seq_id},
 			    seq_id             => $VARS->{seq_id},
 			    q_def              => $VARS->{q_def},
@@ -3220,7 +3249,7 @@ sub _go {
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
 	    #-------------------------NEXT_LEVEL
-	 }	    
+	 }
       }
       elsif ($tier_type == 3 && $level == 0) {	#prep hint clusters
 	 $level_status = 'preparing evidence clusters for annotations';

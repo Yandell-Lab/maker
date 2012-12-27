@@ -530,11 +530,15 @@ sub _load_old_log {
 		    my $rm_f_name = $1;
 
 		    if(! -e $key && -e "$the_void/$rm_f_name"){
-			push(@files, $rm_f_name);
+			push(@files, "$the_void/$rm_f_name");
+		    }
+		    elsif(! -e $key){
+			my @f = <$the_void/*/$rm_f_name>;			
+			push(@files, @f);
 		    }
 
 		    $rm_f_name =~ s/\.fasta$//;
-		    my @d = <$the_void/*$rm_f_name*>;
+		    my @d = (<$the_void/*$rm_f_name*>, <$the_void/*/*$rm_f_name*>);
 		    foreach my $d (@d){
 			push (@dirs, $d) if (-d $d);
 		    }
@@ -581,6 +585,8 @@ sub _load_old_log {
 	    
 	    #delete everything in the void
 	    my @f = <$the_void/*>;
+	    grep {-f $_ || !/\/\d+$/} @f;
+	    push(@f, <$the_void/*/*>);
 	    @f = grep {!/(\.rb\.out|\.rb\.cat|\.rb\.tbl)$/} @f;
 
 	    foreach my $e (@{$skip{'specific.out'}}){
@@ -604,6 +610,8 @@ sub _load_old_log {
 	    
 	    #delete everything in the void
 	    my @f = <$the_void/*>;
+	    grep {-f $_ || !/\/\d+$/} @f;
+	    push(@f, <$the_void/*/*>);
 	    @f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
 	    
 	    #delete files in the void
@@ -622,14 +630,14 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
 		    "Old hint based prediction files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.auto_annotator.*>;
+		my @f = (<$the_void/*.auto_annotator.*>, <$the_void/*/*.auto_annotator.*>);
 		push (@files, @f);
 	    }
 	    if (exists $rm_key{snap}) {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
 		    "Old SNAP files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.snap>;
+		my @f = (<$the_void/*.snap>, <$the_void/*/*.snap>);
 		foreach my $e (@{$skip{snap}}){
 		    @f = grep {!/\.$e\.snap$/} @f;
 		}
@@ -639,7 +647,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
 		    "Old Augustus files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.augustus>;
+		my @f = (<$the_void/*.augustus>, <$the_void/*/*.augustus>);
 		foreach my $e (@{$skip{augustus}}){
 		    @f = grep {!/\.$e\.augustus$/} @f;
 		}
@@ -649,7 +657,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
 		    "Old FGENESH files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.fgenesh>;
+		my @f = (<$the_void/*.fgenesh>, <$the_void/*/*.fgenesh>);
 		foreach my $e (@{$skip{fgenesh}}){
 		    @f = grep {!/\.$e\.fgenesh$/} @f;
 		}
@@ -659,7 +667,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
 		    "Old GeneMark files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.genemark>;
+		my @f = (<$the_void/*.genemark>, <$the_void/*/*.genemark>);
 		foreach my $e (@{$skip{genemark}}){
 		    @f = grep {!/\.$e\.genemark$/} @f;
 		}
@@ -669,7 +677,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
 		    "Old EST Blastn files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.blastn>;
+		my @f = (<$the_void/*.blastn>, <$the_void/*/*.blastn>);
 		foreach my $e (@{$skip{blastn}}){
 		    @f = grep {!/\.$e\.blastn$/} @f;
 		}
@@ -682,7 +690,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
 		    "Old tBlastx files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.tblastx>;
+		my @f = (<$the_void/*.tblastx>, <$the_void/*/*.tblastx>);
 		foreach my $e (@{$skip{tblastx}}){
 		    @f = grep {!/\.$e\.tblastx$/} @f;
 		}
@@ -695,7 +703,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
 		    "Old Blastx files will be erased before continuing\n" unless($main::qq);
 	 
-		my @f = <$the_void/*.blastx>;
+		my @f = (<$the_void/*.blastx>, <$the_void/*/*.blastx>);
 
 		foreach my $e (@{$skip{blastx}}){
 		    @f = grep {!/\.$e\.blastx$/} @f;
@@ -711,7 +719,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old repeatrunner data impossible\n".
 		    "Old repeatrunner files will be erased before continuing\n" unless($main::qq);
 	 
-		my @f = <$the_void/*.repeatrunner>;
+		my @f = (<$the_void/*.repeatrunner>, <$the_void/*/*.repeatrunner>);
 
 		foreach my $e (@{$skip{repeatrunner}}){
 		    @f = grep {!/\.$e\.repeatrunner$/} @f;
@@ -727,7 +735,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
 		    "Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.est_exonerate>;
+		my @f = (<$the_void/*.est_exonerate>, <$the_void/*/*.est_exonerate>);
 		push (@files, @f);
 	    }
 	    
@@ -735,7 +743,7 @@ sub _load_old_log {
 		print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
 		    "Old protein Exonerate files will be erased before continuing\n" unless($main::qq);
 		
-		my @f = <$the_void/*.p_exonerate>;
+		my @f = (<$the_void/*.p_exonerate>, <$the_void/*/*.p_exonerate>);
 		push (@files, @f);
 	    }
 	    
@@ -745,10 +753,15 @@ sub _load_old_log {
 		push (@files, $gff_file);
 		push (@files, @{[<$out_base/*.fasta>]});
 		push (@files, @{[<$the_void/*.holdover>]});
+		push (@files, @{[<$the_void/*/*.holdover>]});
 		push (@files, @{[<$the_void/*.section>]});
+		push (@files, @{[<$the_void/*/*.section>]});
 		push (@files, @{[<$the_void/evidence_*.gff>]});
+		push (@files, @{[<$the_void/*/evidence_*.gff>]});
 		push (@files, "$the_void/query.masked.fasta");
+		push (@files, "$the_void/*/query.masked.fasta");
 		push (@files, "$the_void/query.masked.gff");
+		push (@files, "$the_void/*/query.masked.gff");
 		push (@dirs, "$out_base/evaluator");
 	    }
 	    else{
@@ -772,7 +785,7 @@ sub _load_old_log {
 	}
 	
 	#just in case, this will help remove temp_dirs
-	my @d = <$the_void/*.temp_dir>;
+	my @d = (<$the_void/*.temp_dir>, <$the_void/*/*.temp_dir>);
 	foreach my $d (@d){
 	    File::Path::rmtree($d) if (-d $d);
 	}    
