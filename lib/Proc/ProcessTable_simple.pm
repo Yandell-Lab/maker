@@ -33,12 +33,20 @@ sub table {
 	      " -o comm=fname".("_"x145).
 	      " -o args=cmndline -w -w 2> /dev/null |";
 
-    open(PS, $cmd);
+    my $stat = open(my $EX, $cmd);
+
+    #what to do on failure
+    if(!$stat){
+	sleep 5;
+	$stat = open($EX, $cmd);
+	die "ERROR: Could not query process table: $!" if(!$stat);
+    }
+
     my $i = 0;
     my @cat;
     my @table;
     local $/ = "\n"; #just in case
-    while(my $line = <PS>){
+    while(my $line = <$EX>){
 	if(!$i++){ #first line
 	    @cat = $line =~ /^(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)/;
 	    @cat = map {length($_)} @cat;
@@ -63,7 +71,7 @@ sub table {
 	my $obj = Proc::Process_simple->new(@F);
 	push(@table, $obj);
     }
-    close(PS);
+    close($EX);
     return \@table;
 }
 

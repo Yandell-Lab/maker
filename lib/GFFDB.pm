@@ -89,28 +89,29 @@ sub initiate {
 
     my $val;
     if($self->{go_gffdb}){
-	my $dbh;
 	if($self->{in_memory}){
-	    $dbh = DBI->connect("dbi:SQLite::memory:", "", "", {sqlite_use_immediate_transaction => 1});
+	    my $dbh = DBI->connect("dbi:SQLite::memory:", "", "", {sqlite_use_immediate_transaction => 1});
 	    $dbh->sqlite_backup_from_file($dbfile) if(-e $dbfile);
 	    $self->{DBH} = $dbh;
+
+	    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	    if (! grep( /^sources$/, @{$tables})){
+		$dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
+	    }
 	}
 	elsif(! -f $dbfile){
-	    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
+	    my $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
 	    $dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
 	    $dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
+
+	    my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
+	    if (! grep( /^sources$/, @{$tables})){
+		$dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
+	    }
+
+	    $dbh->commit;
+	    $dbh->disconnect;
 	}
-	else{
-	    $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	}
-	
-	my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
-	if (! grep( /^sources$/, @{$tables})){
-	    $dbh->do(qq{CREATE TABLE sources (name TEXT, source TEXT)});
-	}
-	
-	$dbh->commit unless($self->{in_memory});
-	$dbh->disconnect unless($self->{in_memory});
     }
     elsif($dbfile && -e $dbfile){
        unlink($dbfile);
@@ -140,8 +141,6 @@ sub do_indexing {
     }
     else{
 	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	#$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	#$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     my $tables = $dbh->selectcol_arrayref(qq{SELECT name FROM sqlite_master WHERE type = 'table'});
@@ -182,8 +181,6 @@ sub add_maker {
     }
     else{
 	$dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-	#$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-	#$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     #check to see if tables need to be created, erased, or skipped
@@ -382,8 +379,6 @@ sub _add_type {
     }
     else{
         $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile","","",{AutoCommit => 0});
-        #$dbh->do(qq{PRAGMA default_synchronous = OFF}); #improve performance
-        #$dbh->do(qq{PRAGMA default_cache_size = 10000}); #improve performance
     }
     
     #see if table needs to be created, erased or skipped
