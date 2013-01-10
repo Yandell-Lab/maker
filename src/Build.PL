@@ -42,6 +42,7 @@ my $build = MAKER::Build->new(
 	 'forks'              => '0.34',
 	 'forks::shared'      => '0.34',
 	 'Want'               => '0',
+	 'Carp'               => '1.26',
 	 #'Proc::ProcessTable' => '0',
 	 #'Other::Module' => '>= 1.2, != 1.5, < 2.0',
      },

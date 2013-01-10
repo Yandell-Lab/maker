@@ -27,7 +27,7 @@ sub new {
 sub table {
     my $self = shift;
 
-    my $cmd = "$PS -ax -o pid=pid".("_"x10).
+    my $cmd = "$PS ax -o pid=pid".("_"x10).
 	      " -o ppid=ppid".("_"x10).
 	      " -o state=state".("_"x10).
 	      " -o comm=fname".("_"x145).
