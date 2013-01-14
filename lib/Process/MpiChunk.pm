@@ -2125,7 +2125,7 @@ sub _go {
 	    my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
-	    #my $size = 1; #write now exonerate is skipped
+	    $size = 1; #write now exonerate is skipped for alt_est
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
 	       my $j = $i % $size;
