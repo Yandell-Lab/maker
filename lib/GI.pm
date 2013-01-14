@@ -258,9 +258,11 @@ sub merge_resolve_hits{
 	   }
 	   
 	   if($start <= $break && $break <= $end){
-	       $c->[0]{_hsps} = []; #memory optimization
-	       $c->[0]{'_reblast'} = 1;
-	       push(@to_reblast, $c->[0]);
+	       foreach my $h (@$c){
+		   $h->{'_hsps'} = []; #memory optimization
+		   $h->{'_reblast'} = 1;
+	       }
+	       push(@to_reblast, $c->[0]); #doesn't matter wich one I just need the ID and DB
 
 	       $low = $start if(!$low || $start < $low);
 	       $high = $end if(!$high || $end > $high);
