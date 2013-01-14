@@ -168,6 +168,7 @@ sub keepers {
               my $e = $h->end('query');
               if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){
 		  $h->start(); #force create of stored start and end
+		  $h->strand(); #force creation
 		  $h->getLengths(); #force creation of stored lengths
 		  if(!_keep_filt($h, $params)){ #memory optimization
 		      $h->{_hsps} = [];

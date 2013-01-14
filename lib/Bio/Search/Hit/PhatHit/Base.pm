@@ -464,7 +464,7 @@ sub strand {
    $seqType = 'sbjct' if $seqType eq 'hit';
 
    # no hsps because of memory optimization
-   if(! defined($self->{stand}{query})){
+   if(! defined($self->{strand}{query})){
        my (%qstr, %hstr);
        foreach my $hsp ( $self->hsps ) {
 	   my $q = $hsp->strand('query');
@@ -492,18 +492,18 @@ sub strand {
 	   }
        }
        
-       $self->{stand}{query} = $qstr;
-       $self->{stand}{hit} = $hstr;
+       $self->{strand}{query} = $qstr;
+       $self->{strand}{hit} = $hstr;
    }
    
    if($seqType =~ /list|array/i){
-       return ($self->{stand}{query}, $self->{stand}{hit});
+       return ($self->{strand}{query}, $self->{strand}{hit});
    }
    elsif($seqType eq 'query'){
-       return $self->{stand}{query};
+       return $self->{strand}{query};
    }
    else{
-       return $self->{stand}{hit};
+       return $self->{strand}{hit};
    }
 }
 

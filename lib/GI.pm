@@ -222,9 +222,6 @@ sub merge_resolve_hits{
    my $type = shift @_; #blastn, blastx, or tblastx
    my $LOG = shift @_;
 
-   return $blast_keepers if(!@$blast_holdovers);
-   return $blast_holdovers if(!@$blast_keepers);
-
    print STDERR "merging blast reports...\n" unless($main::quiet);
 
    my %sets;
@@ -323,7 +320,8 @@ sub reblast_merged_hits {
    foreach my $hit (@{$hits}) {
        #if not a merged hit take as is
        if (! $hit->{'_sequences_was_merged'} && ! $hit->{'_reblast'}) {
-	   push (@blast_keepers, $hit);
+	   die "ERROR: Logic error in reblast_merged_hits\n";
+	   #push (@blast_keepers, $hit);
        }
        else{
 	   push (@to_blast, $hit);
@@ -2836,7 +2834,6 @@ sub tblastx {
       $chunk_keepers = Widget::tblastx::parse($o_file,
 					      \%params,
 					      );
-      
    }
    catch Error::Simple with {
       my $E = shift;
