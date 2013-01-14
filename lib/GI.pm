@@ -1972,8 +1972,7 @@ sub blastn_as_chunks {
 		 $split_hit,
 		 $cpus,
 		 $org_type,
-		 $softmask
-		 );
+		 $softmask);
        
        $chunk->erase_fasta_file();
    }
@@ -2072,20 +2071,23 @@ sub blastn {
    $LOG->add_entry("STARTED", $o_file, ""); 
 
    #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   my $tmp_db = localize_file($db);
-   dbformat($formater, $tmp_db, 'blastn');
+   if(! -e $o_file){
+       my $tmp_db = localize_file($db);
+       dbformat($formater, $tmp_db, 'blastn');
+       
+       $chunk->write_file_w_flank($file_name);
+       runBlastn($file_name,
+		 $tmp_db,
+		 $o_file,
+		 $blast,
+		 $eval_blast,
+		 $split_hit,
+		 $cpus,
+		 $org_type,
+		 $softmask);
 
-   $chunk->write_file_w_flank($file_name);
-   runBlastn($file_name,
-	     $tmp_db,
-	     $o_file,
-	     $blast,
-	     $eval_blast,
-	     $split_hit,
-	     $cpus,
-	     $org_type,
-	     $softmask
-	     );
+       $chunk->erase_fasta_file();
+   }
 
    my %params;
    $params{significance}  = $eval_blast;
@@ -2136,8 +2138,6 @@ sub blastn {
 	   $chunk_keepers = \@keepers;
        }
    }
-
-   $chunk->erase_fasta_file();
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -2323,8 +2323,7 @@ sub blastx_as_chunks {
 		 $split_hit,
 		 $cpus,
 		 $org_type,
-		 $softmask
-		 );
+		 $softmask);
        
        $chunk->erase_fasta_file();
    }
@@ -2471,25 +2470,29 @@ sub blastx {
    $LOG->add_entry("STARTED", $o_file, ""); 
 
    #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   my $tmp_db = localize_file($db);
-   dbformat($formater, $tmp_db, 'blastx');
+   if(! -e $o_file){
+       my $tmp_db = localize_file($db);
+       dbformat($formater, $tmp_db, 'blastx');
+       
+       if($rflag){
+	   $chunk->write_file($file_name);
+       }
+       else{
+	   $chunk->write_file_w_flank($file_name);
+       }
 
-   if($rflag){
-       $chunk->write_file($file_name);
+       runBlastx($file_name,
+		 $tmp_db,
+		 $o_file,
+		 $blast,
+		 $eval_blast,
+		 $split_hit,
+		 $cpus,
+		 $org_type,
+		 $softmask);
+
+       $chunk->erase_fasta_file();
    }
-   else{
-       $chunk->write_file_w_flank($file_name);
-   }
-   runBlastx($file_name,
-	     $tmp_db,
-	     $o_file,
-	     $blast,
-	     $eval_blast,
-	     $split_hit,
-	     $cpus,
-	     $org_type,
-	     $softmask
-	    );
 
    my %params;
    $params{significance}  = $eval_blast;
@@ -2546,8 +2549,6 @@ sub blastx {
 	   }
        }
    }
-
-   $chunk->erase_fasta_file();   
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -2803,21 +2804,25 @@ sub tblastx {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
-   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
-   my $tmp_db = localize_file($db);
-   dbformat($formater, $tmp_db, 'tblastx');
+   if(! -e $o_file){
+       #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+       my $tmp_db = localize_file($db);
+       dbformat($formater, $tmp_db, 'tblastx');
+       
+       $chunk->write_file_w_flank($file_name);
 
-   $chunk->write_file_w_flank($file_name);
-   runtBlastx($file_name,
-	      $tmp_db,
-	      $o_file,
-	      $blast,
-	      $eval_blast,
-	      $split_hit,
-	      $cpus,
-	      $org_type,
-	      $softmask
-	     );
+       runtBlastx($file_name,
+		  $tmp_db,
+		  $o_file,
+		  $blast,
+		  $eval_blast,
+		  $split_hit,
+		  $cpus,
+		  $org_type,
+		  $softmask);
+
+       $chunk->erase_fasta_file();
+   }
 
    my %params;
    $params{significance}  = $eval_blast;
@@ -2868,8 +2873,6 @@ sub tblastx {
 	   $chunk_keepers = \@keepers;
        }
    }
-
-   $chunk->erase_fasta_file();
 
    #add user defined labels
    foreach my $hit (@$chunk_keepers){
@@ -3026,8 +3029,9 @@ sub repeatmask {
 		   $o_file,
 		   $RepeatMasker,
 		   $rmlib,
-		   $cpus,
-		  );		# -no_low
+		   $cpus); # -no_low
+
+   $chunk->erase_fasta_file();
    
    my $rm_chunk_keepers = Widget::RepeatMasker::parse($o_file, 
 						      $seq_id, 
@@ -3043,8 +3047,6 @@ sub repeatmask {
    PhatHit_utils::add_offset($rm_chunk_keepers, 
 			     $chunk->offset(),
 			    );
-
-   $chunk->erase_fasta_file();
 
    #add user defined labels
    foreach my $hit (@$rm_chunk_keepers){
