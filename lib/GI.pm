@@ -211,9 +211,10 @@ sub get_preds_on_chunk {
 #-----------------------------------------------------------------------------
 sub merge_resolve_hits{
    my $q_seq_obj = shift @_;
+   my $break = shift @_;
    my $def = shift @_;
    my $s_length = shift @_;
-   my $fasta_index = shift @_;
+   my $index_files = shift @_;
    my $blast_keepers = shift @_;
    my $blast_holdovers = shift @_;
    my $the_void = shift @_;
@@ -224,46 +225,78 @@ sub merge_resolve_hits{
    return $blast_keepers if(!@$blast_holdovers);
    return $blast_holdovers if(!@$blast_keepers);
 
-   my $before = @$blast_keepers + @$blast_holdovers;
-   PhatHit_utils::merge_hits($blast_keepers,
-			     $blast_holdovers, 
-			     $CTL_OPT{split_hit},
-			    );
+   print STDERR "merging blast reports...\n" unless($main::quiet);
 
-   my $after = @$blast_keepers;
-
-   #cluster merged hits to save memory
-   my $depth = $CTL_OPT{depth_blastn} if($type eq 'blastn');
-   $depth = $CTL_OPT{depth_blastx} if($type eq 'blastx');
-   $depth = $CTL_OPT{depth_tblastx}if($type eq 'tblastx');
-   $depth = $depth * 3;
-   if($before - $after > $depth){
-      my @merged;
-      my @keepers;
-      foreach my $hit (@$blast_keepers){
-	 if($hit->{'_sequences_was_merged'}){
-	    push(@merged, $hit);
-	 }
-	 else{
-	    push(@keepers, $hit);
-	 }
-      }
-
-      my $clusters = cluster::shadow_cluster($depth, \@merged);
-      push(@keepers, @{GI::flatten($clusters)});
-      @$blast_keepers = @keepers;
+   my %sets;
+   foreach my $h (@$blast_keepers, @$blast_holdovers){
+       push (@{$sets{$h->name}}, $h);
    }
 
-   $blast_keepers = reblast_merged_hits($q_seq_obj,
-					$def,
-					$s_length,
-					$blast_keepers,
-					$fasta_index,
-					$the_void,
-					$type,
-					\%CTL_OPT,
-					$LOG
-					);
+   my $low;
+   my $high;
+   my @to_reblast;
+   my $no_merge = [];
+   while(my $key = each %sets){
+       if(@{$sets{$key}} == 1){
+           push(@$no_merge, @{$sets{$key}}) unless($sets{$key}[0]{_remove});
+           next;
+       }
+       
+       my $clusters = SimpleCluster::cluster_hits($sets{$key}, $CTL_OPT{split_hit});
+       
+       foreach my $c (@$clusters){
+           if(@$c == 1){
+               push(@$no_merge, @$c) unless($c->[0]{_remove});
+	       next;
+           }
+
+	   my $start; 
+	   my $end;
+	   foreach my $h (@$c){
+	       $start  = $h->start('query') if(!$start || $h->start('query') < $start);
+	       $end = $h->end('query') if(!$end || $h->end('query') > $end);
+	   }
+	   
+	   if($start <= $break && $break <= $end){
+	       $c->[0]{_hsps} = []; #memory optimization
+	       $c->[0]{'_reblast'} = 1;
+	       push(@to_reblast, $c->[0]);
+
+	       $low = $start if(!$low || $start < $low);
+	       $high = $end if(!$high || $end > $high);
+	   }
+	   else{
+	       foreach my $h (@$c){
+		   push(@$no_merge, $h) unless($h->{_remove});
+	       }
+	   }
+       }
+   }
+
+   my $merged = reblast_merged_hits($q_seq_obj,
+				    $def,
+				    $low,
+				    $high,
+				    $s_length,
+				    \@to_reblast,
+				    $index_files,
+				    $the_void,
+				    $type,
+				    \%CTL_OPT,
+				    $LOG);
+
+   $blast_keepers = $no_merge;
+   foreach my $h (@$merged){
+       if($h->start <= $break && $break <= $h->end){
+	   push(@$blast_keepers, $h);
+       }
+       elsif(abs($break - $h->start) <= $CTL_OPT{split_hit}){
+	   push(@$blast_keepers, $h);
+       }
+       elsif(abs($break - $h->end) <= $CTL_OPT{split_hit}){
+	   push(@$blast_keepers, $h);
+       }
+   }
 
    return $blast_keepers;
 }
@@ -271,152 +304,168 @@ sub merge_resolve_hits{
 sub reblast_merged_hits {
    my $par_seq     = shift @_;
    my $par_def     = shift @_;
-   my $p_seq_length = shift @_;
+   my $nB          = shift @_;
+   my $nE          = shift @_;
+   my $seq_length  = shift @_;
    my $hits        = shift @_;
-   my $db_index    = shift @_;
+   my $index_files = shift @_;
    my $the_void    = shift @_;
    my $type        = shift @_;
    my %CTL_OPT = %{shift @_};
    my $LOG         = shift @_;
 
-   #==get data from parent fasta
+   return [] if(!@$hits);
 
+   my @to_blast;
+   my @blast_keepers;
+   foreach my $hit (@{$hits}) {
+       #if not a merged hit take as is
+       if (! $hit->{'_sequences_was_merged'} && ! $hit->{'_reblast'}) {
+	   push (@blast_keepers, $hit);
+       }
+       else{
+	   push (@to_blast, $hit);
+       }
+   }
+   return \@blast_keepers if(!@to_blast);
+
+   #==get data from parent fasta
    #parent fasta get def and seq
    my $p_id  = Fasta::def2SeqID($par_def);
    my $p_safe_id = Fasta::seqID2SafeID($p_id);
 
-   my @blast_keepers;
+   #== excise region of query fasta and build new chunk object for blast
+   ($nB, $nE) = ($nE, $nB) if($nB > $nE);
+   my $F = ($nB - $CTL_OPT{split_hit} < 1) ? 1 : $nB - $CTL_OPT{split_hit};
+   my $L = ($nE + $CTL_OPT{split_hit} > $seq_length) ? $seq_length : $nE + $CTL_OPT{split_hit};
 
-   #==check whether to re-blast each hit
+   #get input and output blast file names
+   my $name = "db.$F-$L.for_$type";
+   my $t_file = "$the_void/$name.fasta";
+   my $o_file = get_blast_finished_name(0, $name, $the_void, "$p_safe_id.$F.$L", $type);
+
+   #extract sequence
+   my $piece_seq;
+   if(!ref($par_seq) || ref($par_seq) eq 'SCALAR'){
+       my @coors = [$nB, $nE];
+       my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
+       $piece_seq = $piece->[0]->{piece};
+   }
+   else{ #seq object
+       $piece_seq = $par_seq->subseq($F, $L);
+   }
+   
+   #get piece fasta def, seq, and offset
+   my $piece_def = $par_def." ".$F." ".$L;
+   my $offset = $F - 1;
+   
+   #will require chunk to blast
+   my $chunk = new FastaChunk();
+   $chunk->number(0);
+   $chunk->seq(\$piece_seq);
+   $chunk->def($piece_def);
+   $chunk->parent_def($par_def);
+   $chunk->size($seq_length); #the max size of a chunk
+   $chunk->length($L - $F + 1); #the actual size of a chunk
+   $chunk->offset($offset);
+   $chunk->is_last(1);
+   $chunk->is_first(1);
+   $chunk->parent_seq_length($seq_length);
+
+   if(! -f $o_file){                   
+       #build hit db
+       if(! -f $t_file){
+	   my $db_index = new FastaDB($index_files);
+	   open(my $FA, ">$t_file.tmp");
+	   foreach my $hit (@to_blast) {
+	       #build a safe name for file names from the sequence identifier
+	       my $t_safe_id = Fasta::seqID2SafeID($hit->name());
+	       
+	       #==build new fasta and db for blast search from hit name and db index
+	       
+	       #search db index
+	       my $fastaObj = $db_index->get_Seq_for_hit($hit);
+	       
+	       #still no sequence? try rebuilding the index and try again
+	       if(!$fastaObj) {
+		   for(my $i = 0; $i < 2 && !$fastaObj; $i++){
+		       sleep 5;
+		       print STDERR "WARNING: Cannot find >".$hit->name.", trying to re-index the fasta.\n" if($i);
+		       $db_index->reindex($i);
+		       $fastaObj = $db_index->get_Seq_for_hit($hit);
+		   }
+		   
+		   if (not $fastaObj) {
+		       print STDERR "stop here:".$hit->name."\n";
+		       confess "ERROR: Fasta index error\n";
+		   }
+	       }
+	       
+	       #get fasta def and seq
+	       my $t_seq      = $fastaObj->seq();
+	       my $t_def      = $db_index->header_for_hit($hit);
+	       
+	       #write fasta file
+	       my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
+	       print $FA $$fasta;
+	   }
+	   close($FA);
+	   File::Copy::move("$t_file.tmp", $t_file);
+       }
+   }
+
+   #save labels
+   my %labels;
    foreach my $hit (@{$hits}) {
-      #if not a merged hit take as is
-      if (! $hit->{'_sequences_was_merged'}) {
-	 push (@blast_keepers, $hit);
-	 next;
-      }
-      
-      #build a safe name for file names from the sequence identifier
-      my $t_safe_id = Fasta::seqID2SafeID($hit->name());
-      
-      #== excise region of query fasta and build new chunk object for blast     
-      #find region of hit to get piece
-      my ($nB, $nE) = PhatHit_utils::get_span_of_hit($hit,'query');   
-      ($nB, $nE) = ($nE, $nB) if($nB > $nE);
-      my $F = ($nB - $CTL_OPT{split_hit} < 1) ? 1 : $nB - $CTL_OPT{split_hit};
-      my $L = ($nE + $CTL_OPT{split_hit} > $p_seq_length) ? $p_seq_length : $nE + $CTL_OPT{split_hit};
-      
-      #will require chunk to blast
-      my $chunk = new FastaChunk();
-      $chunk->number(0);
-      
-      #get input and output blast file names
-      my $t_file = $the_void."/".$t_safe_id.'.for_'.$type.'.fasta';
-      my $o_file = get_blast_finished_name($chunk, $hit->name(), $the_void, $p_safe_id.".".$F.".".$L, $type);
-      
-      if(! -f $o_file){
-	 #extract sequence
-	 my $piece_seq;
-	 if(!ref($par_seq) || ref($par_seq) eq 'SCALAR'){
-	     my @coors = [$nB, $nE];
-	     my $piece = Shadower::getPieces($par_seq, \@coors, $CTL_OPT{split_hit});
-	     $piece_seq = $piece->[0]->{piece};
-	 }
-	 else{ #seq object
-	     $piece_seq = $par_seq->subseq($F, $L);
-	 }
-
-	 #get piece fasta def, seq, and offset
-	 my $piece_def = $par_def." ".$F." ".$L;
-	 my $offset = $F - 1;
-	 
-	 #finish making the piece into a fasta chunk
-	 $chunk->seq(\$piece_seq);
-	 $chunk->def($piece_def);
-	 $chunk->parent_def($par_def);
-	 $chunk->size($p_seq_length); #the max size of a chunk
-	 $chunk->length($L - $F + 1); #the actual size of a chunk
-	 $chunk->offset($offset);
-	 $chunk->is_last(1);
-	 $chunk->is_first(1);
-	 $chunk->parent_seq_length($p_seq_length);
-	 
-	 #==build new fasta and db for blast search from hit name and db index	  
-	 if(! -f $t_file){
-	    #search db index
-	    my $fastaObj = $db_index->get_Seq_for_hit($hit);
-	    
-	    #still no sequence? try rebuilding the index and try again
-	    if(!$fastaObj) {
-		for(my $i = 0; $i < 2 && !$fastaObj; $i++){
-		    sleep 5;
-		    print STDERR "WARNING: Cannot find >".$hit->name.", trying to re-index the fasta.\n" if($i);
-		    $db_index->reindex($i);
-		    $fastaObj = $db_index->get_Seq_for_hit($hit);
-		}
-
-		if (not $fastaObj) {
-		    print STDERR "stop here:".$hit->name."\n";
-		    confess "ERROR: Fasta index error\n";
-		}
-	    }
-	    
-	    #get fasta def and seq
-	    my $t_seq      = $fastaObj->seq();
-	    my $t_def      = $db_index->header_for_hit($hit);
-	    
-	    #write fasta file
-	    my $fasta = Fasta::toFastaRef('>'.$t_def, \$t_seq);
-	    FastaFile::writeFile($fasta, $t_file);
-	 }
-      }
-      
-      #==run the blast search
-      my $entry = $t_file;
-      $t_file .= ':'.$hit->{_label} if($hit->{_label}); #add label if there was one
-      if ($type eq 'blastx') {
-	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
-	 my $keepers = blastx($chunk, 
-			      $t_file,
-			      $the_void,
-			      $p_safe_id.".".$F.".".$L,
-			      \%CTL_OPT,
-			      $LOG
-			      );
-	 
-	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n" unless $main::quiet;
-      }
-      elsif ($type eq 'blastn') {
-	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
-	 my $keepers = blastn($chunk, 
-			      $t_file,
-			      $the_void,
-			      $p_safe_id.".".$F.".".$L,
-			      \%CTL_OPT,
-			      $LOG
-			      );
-	 
-	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n" unless $main::quiet;
-      }
-      elsif ($type eq 'tblastx') {
-	 print STDERR "re-running blast against ".$hit->name."...\n" unless $main::quiet;
-	 my $keepers = tblastx($chunk,
-			       $t_file,
-			       $the_void,
-			       $p_safe_id.".".$F.".".$L,
-			       \%CTL_OPT,
-			       $LOG
-			       );
-	 
-	 push(@blast_keepers, @{$keepers});
-	 print STDERR "...finished\n" unless $main::quiet;
-      }
-      else {
-	 confess "ERROR: Invaliv type \'$type\' in maker::reblast_merged_hit\n";
-      }
-      
-      unlink <$t_file.x??>;
+       $labels{$hit->name} = $hit->{_label} if($hit->{_label});
+   }
+   
+   #==run the blast search
+   my $entry = $t_file;
+   if ($type eq 'blastx') {
+       print STDERR "re-running blast for edge cases...\n" unless $main::quiet;
+       my $keepers = blastx($chunk,
+			    $t_file,
+			    $the_void,
+			    "$p_safe_id.$F.$L",
+			    \%CTL_OPT,
+			    $LOG);
+       
+       push(@blast_keepers, @{$keepers});
+       print STDERR "...finished\n" unless $main::quiet;
+   }
+   elsif ($type eq 'blastn') {
+       print STDERR "re-running blast for edge cases...\n" unless $main::quiet;
+       my $keepers = blastn($chunk, 
+			    $t_file,
+			    $the_void,
+			    "$p_safe_id.$F.$L",
+			    \%CTL_OPT,
+			    $LOG);
+       
+       push(@blast_keepers, @{$keepers});
+       print STDERR "...finished\n" unless $main::quiet;
+   }
+   elsif ($type eq 'tblastx') {
+       print STDERR "re-running blast for edge cases...\n" unless $main::quiet;
+       my $keepers = tblastx($chunk,
+			     $t_file,
+			     $the_void,
+			     "$p_safe_id.$F.$L",
+			     \%CTL_OPT,
+			     $LOG);
+       
+       push(@blast_keepers, @{$keepers});
+       print STDERR "...finished\n" unless $main::quiet;
+   }
+   else {
+       confess "ERROR: Invalid type \'$type\' in maker::reblast_merged_hit\n";
+   }
+   unlink($t_file);
+   
+   #restore labels
+   foreach my $hit (@blast_keepers){
+       $hit->{_label} = $labels{$hit->name} if($labels{$hit->name});      
    }
    
    #mark merged hits as having been heldover once
@@ -1839,7 +1888,7 @@ sub dbformat {
 }
 #-----------------------------------------------------------------------------
 sub get_blast_finished_name {
-    my $chunk      = shift;
+    my $chunk_num  = shift;
     my $entry      = shift || '';
     my $the_void   = shift || '';
     my $seq_id     = shift || '';
@@ -1852,9 +1901,7 @@ sub get_blast_finished_name {
     my $db_old_n = $db_n;
     $db_old_n =~ s/([^\/]+)\.mpi\.\d+\.\d+$/$1/;
     
-    my $chunk_number = $chunk->number();
-    
-    return "$the_void/$seq_id\.$chunk_number\.$db_old_n\.$type";
+    return "$the_void/$seq_id\.$chunk_num\.$db_old_n\.$type";
 }
 #-----------------------------------------------------------------------------
 sub blastn_as_chunks {
@@ -1883,13 +1930,13 @@ sub blastn_as_chunks {
    my $org_type    = $CTL_OPT->{organism_type};
 
    #finished blast report name
-   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, 'blastn');
+   my $chunk_number = $chunk->number();
+   my $blast_finished = get_blast_finished_name($chunk_number, $entry, $the_void, $seq_id, 'blastn');
 
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
-   my $chunk_number = $chunk->number();
 
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
@@ -1938,6 +1985,8 @@ sub blastn_as_chunks {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
 
    my $chunk_keepers;
    try{
@@ -2022,17 +2071,13 @@ sub blastn {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
-   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-           (! -e $o_file)
-       ){
-       dbformat($formater, $db, 'blastn');
-   }
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+   my $tmp_db = localize_file($db);
+   dbformat($formater, $tmp_db, 'blastn');
 
    $chunk->write_file_w_flank($file_name);
    runBlastn($file_name,
-	     $db,
+	     $tmp_db,
 	     $o_file,
 	     $blast,
 	     $eval_blast,
@@ -2049,6 +2094,8 @@ sub blastn {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
 
    my $chunk_keepers;
    try{
@@ -2229,13 +2276,13 @@ sub blastx_as_chunks {
 
    #finished blast report name
    my $type = ($rflag) ? 'repeatrunner': 'blastx';
-   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, $type);
+   my $chunk_number = $chunk->number();
+   my $blast_finished = get_blast_finished_name($chunk_number, $entry, $the_void, $seq_id, $type);
 
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
-   my $chunk_number = $chunk->number();
 
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
@@ -2289,6 +2336,8 @@ sub blastx_as_chunks {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
 
    my $chunk_keepers;
    try{
@@ -2421,13 +2470,9 @@ sub blastx {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
-   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-           (! -e $o_file)
-       ){
-       dbformat($formater, $db, 'blastx');
-   }
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+   my $tmp_db = localize_file($db);
+   dbformat($formater, $tmp_db, 'blastx');
 
    if($rflag){
        $chunk->write_file($file_name);
@@ -2436,7 +2481,7 @@ sub blastx {
        $chunk->write_file_w_flank($file_name);
    }
    runBlastx($file_name,
-	     $db,
+	     $tmp_db,
 	     $o_file,
 	     $blast,
 	     $eval_blast,
@@ -2453,7 +2498,9 @@ sub blastx {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
-   
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
+
    my $chunk_keepers;
    try{
       $chunk_keepers = Widget::blastx::parse($o_file,
@@ -2616,13 +2663,13 @@ sub tblastx_as_chunks {
    my $org_type    = $CTL_OPT->{organism_type};
 
    #finished blast report name
-   my $blast_finished = get_blast_finished_name($chunk, $entry, $the_void, $seq_id, 'tblastx');
+   my $chunk_number = $chunk->number();
+   my $blast_finished = get_blast_finished_name($chunk_number, $entry, $the_void, $seq_id, 'tblastx');
 
    #peal off label and build names for files to use and copy
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
-   my $chunk_number = $chunk->number();
  
    my $t_dir = $TMP."/rank".$rank;
    File::Path::mkpath($t_dir);
@@ -2670,6 +2717,8 @@ sub tblastx_as_chunks {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = $split_hit;
    $params{depth}         = $depth_blast;
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
 
    my $chunk_keepers;
    try {
@@ -2754,17 +2803,13 @@ sub tblastx {
 
    $LOG->add_entry("STARTED", $o_file, ""); 
 
-   if (((! @{[<$db.x?d*>]} && $formater =~ /xdformat/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /formatdb/) ||
-	(! @{[<$db.?sq*>]} && $formater =~ /makeblastdb/)) &&
-       (! -e $o_file)
-       ){
-       dbformat($formater, $db, 'tblastx');
-   }
+   #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
+   my $tmp_db = localize_file($db);
+   dbformat($formater, $tmp_db, 'tblastx');
 
    $chunk->write_file_w_flank($file_name);
    runtBlastx($file_name,
-	      $db,
+	      $tmp_db,
 	      $o_file,
 	      $blast,
 	      $eval_blast,
@@ -2781,6 +2826,8 @@ sub tblastx {
    $params{percid}        = $pid_blast;
    $params{split_hit}     = 0; #don't use holdover filter
    $params{depth}         = $depth_blast;
+   $params{is_first}      = $chunk->is_first;
+   $params{is_last}       = $chunk->is_last;
 
    my $chunk_keepers;
    try {

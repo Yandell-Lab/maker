@@ -463,45 +463,47 @@ sub strand {
    $seqType ||= (wantarray ? 'list' : 'query');
    $seqType = 'sbjct' if $seqType eq 'hit';
 
-   # If there is only one HSP, defer this call to the solitary HSP.
-   if ($self->num_hsps == 1) {
-      return $self->hsp->strand($seqType);
-   } else {
-      # otherwise, iterate through all HSPs collecting strand info.
-      my (%qstr, %hstr);
-      foreach my $hsp ( $self->hsps ) {
-	 my $q = $hsp->strand('query');
-	 my $h = $hsp->strand('hit');
-	 $qstr{ $q }++;
-	 $hstr{ $h }++;
-      }
-
-      #changed 2/12/2009 to act like current version of Bioperl
-      my $topq;
-      my $qstr;
-      while(my $key = each %qstr){
-	 if(! $topq || $qstr{$key} > $topq){
-	     $qstr = $key;
-	     $topq = $qstr{$key};
-	 }
-      }
-
-      my $toph;
-      my $hstr;
-      while(my $key = each %hstr){
-	 if(! $toph || $hstr{$key} > $toph){
-	     $hstr = $key;
-	     $toph = $hstr{$key};
-	 }
-      }
-
-      if ($seqType =~ /list|array/i) {
-	 return ($qstr, $hstr);
-      } elsif ( $seqType eq 'query' ) {
-	 return $qstr;
-      } else {
-	 return $hstr;
-      }
+   # no hsps because of memory optimization
+   if(! defined($self->{stand}{query})){
+       my (%qstr, %hstr);
+       foreach my $hsp ( $self->hsps ) {
+	   my $q = $hsp->strand('query');
+	   my $h = $hsp->strand('hit');
+	   $qstr{$q}++;
+	   $hstr{$h}++;
+       }
+       
+       #changed 2/12/2009 to act like current version of Bioperl
+       my $topq;
+       my $qstr;
+       while(my $key = each %qstr){
+	   if(! $topq || $qstr{$key} > $topq){
+	       $qstr = $key;
+	       $topq = $qstr{$key};
+	   }
+       }
+       
+       my $toph;
+       my $hstr;
+       while(my $key = each %hstr){
+	   if(! $toph || $hstr{$key} > $toph){
+	       $hstr = $key;
+	       $toph = $hstr{$key};
+	   }
+       }
+       
+       $self->{stand}{query} = $qstr;
+       $self->{stand}{hit} = $hstr;
+   }
+   
+   if($seqType =~ /list|array/i){
+       return ($self->{stand}{query}, $self->{stand}{hit});
+   }
+   elsif($seqType eq 'query'){
+       return $self->{stand}{query};
+   }
+   else{
+       return $self->{stand}{hit};
    }
 }
 
@@ -731,6 +733,9 @@ sub getLengths {
    
    my $laq = $q_vec->Norm();
    my $lah = $h_vec->Norm();
+
+   $self->{LAlnQ} = $laq;
+   $self->{LAlnH} = $lah;
 
    return ($laq, $lah);
 }

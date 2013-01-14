@@ -342,7 +342,6 @@ sub split_hit_by_strand {
 		      ref($hits) =~ /Bio\:\:Search\:\:PhatHit\:\:/);
 
    my @new_hits;
-
    foreach my $hit (@{$hits}){
       my $ref = ref($hit);
       
@@ -1057,25 +1056,24 @@ sub _adjust {
 }
 #------------------------------------------------------------------------
 sub add_splice_data {
-	my $new_hsp = shift;
-	my $old_hsp = shift;
-	my $what    = shift;
-
-	my $d = $old_hsp->donor();
-	my $a = $old_hsp->acceptor();
-	if ($what eq 'revq' || $what eq 'both'){
-		$new_hsp->acceptor(Fasta::revComp($d))
-		if defined($d);
-
-		$new_hsp->donor(Fasta::revComp($a))
-                if defined($a);
-
-	}
-	else {
-		$new_hsp->donor($d);
-		$new_hsp->acceptor($a);
-	}
-
+    my $new_hsp = shift;
+    my $old_hsp = shift;
+    my $what    = shift;
+    
+    my $d = $old_hsp->donor();
+    my $a = $old_hsp->acceptor();
+    if ($what eq 'revq' || $what eq 'both'){
+	$new_hsp->acceptor(Fasta::revComp($d))
+	    if defined($d);
+	
+	$new_hsp->donor(Fasta::revComp($a))
+	    if defined($a);
+	
+    }
+    else {
+	$new_hsp->donor($d);
+	$new_hsp->acceptor($a);
+    }
 }
 #------------------------------------------------------------------------
 sub load_args {
@@ -1177,7 +1175,6 @@ sub load_args {
         push(@args, $hsp->gaps('hit'));	
 
 	return \@args;
-
 }
 #------------------------------------------------------------------------
 sub copy {
@@ -1444,6 +1441,10 @@ sub merge_hits {
 	       $c->[0]->{'_sequences_was_merged'} = 1;
 	       $c->[0]->{'nB'} = undef; #force recompute of start
 	       $c->[0]->{'nE'} = undef; #force recompute of end
+	       $c->[0]->{'strand'} = undef; #force recompute of strand
+	       $c->[0]->{'strand'} = undef; #force recompute of strand
+	       $c->[0]->{'LAlnQ'} = undef; #reset this
+	       $c->[0]->{'LAlnH'} = undef; #reset this
 	       push(@merged, $c->[0]);
 	   }
        }

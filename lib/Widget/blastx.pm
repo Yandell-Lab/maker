@@ -130,8 +130,8 @@ sub keepers {
       my $q_length = $result->query_length;
       my $q_name = $result->query_name;
       my $db_name = $result->database_name;
-      my $cutoff = $q_length - $split_hit;
-      my $scutoff = 1 + $split_hit;
+      my $cutoff = ($params->{is_last}) ? $q_length+1 : $q_length - $split_hit;
+      my $scutoff = ($params->{is_first}) ? 0 : 1 + $split_hit;
       
       while (my $hit = $result->next_hit){
 	  $hit->queryLength($q_length);
@@ -166,28 +166,18 @@ sub keepers {
 	      my $s = $h->start('query');
 	      my $e = $h->end('query');
 	      if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){
+		  $h->start(); #force create of stored start and end
+		  $h->getLengths(); #force creation of stored lengths
+		  if(!_keep_filt($h, $params)){ #memory optimization
+		      $h->{_hsps} = [];
+		      $h->{_remove} = 1;
+		  }
 		  push(@keepers, $h);
 		  next;
 	      }
 	      
 	      #filtering
-	      #next unless PhatHit_utils::is_contigous($h);
-	      if(defined($params->{significance})){
-		  my $sig_thr = $params->{significance};
-		  my $significance = $h->significance();
-		  $significance = "1".$significance if  $significance =~ /^e/;
-		  $significance = 0                 if  $significance =~ /0\.$/;
-		  next if($significance > $sig_thr);
-	      }
-	      if(defined($params->{percov})){
-		  my $pcov = $params->{percov} || 0;
-		  next if($h->pAh < $pcov/2);
-	      }
-	      if(defined($params->{percid})){
-		  my $pid = $params->{percid} || 0;
-		  next if($h->hsp('best')->frac_identical() < $pid &&
-			  $h->frac_identical < $pid);
-	      }
+	      next unless(_keep_filt($h, $params));
 	      
 	      #keep
 	      if(!$depth){
@@ -219,6 +209,31 @@ sub keepers {
    print STDERR "deleted:$deleted hits\n" unless $main::quiet;
    
    return \@keepers;
+}
+sub _keep_filt {
+    my $h = shift;
+    my $params = shift;
+
+    #filtering
+    #next unless PhatHit_utils::is_contigous($h);
+    if(defined($params->{significance})){
+	my $sig_thr = $params->{significance};
+	my $significance = $h->significance();
+	$significance = "1".$significance if  $significance =~ /^e/;
+	$significance = 0                 if  $significance =~ /0\.$/;
+	return 0 if($significance > $sig_thr);
+    }
+    if(defined($params->{percov})){
+	my $pcov = $params->{percov} || 0;
+	return 0 if($h->pAh < $pcov/2);
+    }
+    if(defined($params->{percid})){
+	my $pid = $params->{percid} || 0;
+	return 0 if($h->hsp('best')->frac_identical() < $pid &&
+		    $h->frac_identical < $pid);
+    }
+
+    return 1;
 }
 #-----------------------------------------------------------------------------
 sub AUTOLOAD {

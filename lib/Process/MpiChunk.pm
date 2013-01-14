@@ -823,7 +823,7 @@ sub _go {
 	    #only create all chunks if not already finished
 	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_r_db}}){
-	       my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+	       my $blast_finished = GI::get_blast_finished_name($VARS->{chunk}->number,
 								$db,
 								$VARS->{the_void},
 								$VARS->{safe_seq_id},
@@ -1319,7 +1319,7 @@ sub _go {
 	    #only create all chunks if not already finished
 	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_e_db}}){
-		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk}->number,
 								 $db,
 								 $VARS->{the_void},
 								 $VARS->{safe_seq_id},
@@ -1417,6 +1417,7 @@ sub _go {
 			blastn_keepers
 			m_seq_obj
 			the_void
+			subvoid
 			safe_seq_id
 			q_def
 			q_seq_length
@@ -1437,6 +1438,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
@@ -1500,8 +1502,21 @@ sub _go {
 		   $lock3 = new File::NFSLock($end_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		   my $neighbor = retrieve($end_neighbor);
 		   unlink($start_file, $end_neighbor);
-		   push(@$blastn_keepers, @start);
-		   push(@$holdover_blastn, @$neighbor);
+
+		   #merge and reblast
+		   my $keepers = GI::merge_resolve_hits($m_seq_obj,
+							$chunk->start,
+							$q_def,
+							$q_seq_length,
+							$VARS->{CTL_OPT}{_e_db},
+							\@start,
+							$neighbor,
+							$subvoid,
+							\%CTL_OPT,
+							'blastn',
+							$LOG);
+		   push(@$blastn_keepers, @$keepers);
+
 		   $edge_status->{blastn_keepers}{start}++;
 		   $edge_status->{exonerate_e_data}{start}++;
 		   $lock1->unlock;
@@ -1528,8 +1543,21 @@ sub _go {
 		  $lock3 = new File::NFSLock($start_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
-		  push(@$blastn_keepers, @end);
-		  push(@$holdover_blastn, @$neighbor);
+
+		  #merge and reblast
+		  my $keepers = GI::merge_resolve_hits($m_seq_obj,
+						       $chunk->end,
+						       $q_def,
+						       $q_seq_length,
+						       $VARS->{CTL_OPT}{_e_db},
+						       \@end,
+						       $neighbor,
+						       $subvoid,
+						       \%CTL_OPT,
+						       'blastn',
+						       $LOG);
+		  push(@$blastn_keepers, @$keepers);
+		  
 		  $edge_status->{blastn_keepers}{end}++;
 		  $edge_status->{exonerate_e_data}{end}++;
 		  $lock1->unlock;
@@ -1540,21 +1568,6 @@ sub _go {
 		   $lock1->unlock;
 	       }
 	    }
-
-	    #merge and reblast
-	    my $trans = $VARS->{CTL_OPT}{_e_db};
-	    my $fasta_e_index = GI::build_fasta_index($trans) if($trans);
-	    $blastn_keepers = GI::merge_resolve_hits($m_seq_obj,
-						     $q_def,
-						     $q_seq_length,
-						     $fasta_e_index,
-						     $blastn_keepers,
-						     $holdover_blastn,
-						     $the_void,
-						     \%CTL_OPT,
-						     'blastn',
-						     $LOG
-						     );
 
 	    #trim combined clusters
 	    $blastn_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastn}, $blastn_keepers);
@@ -1826,7 +1839,7 @@ sub _go {
 	    #only create all chunks if not already finished
 	    my %fin;
             foreach my $db (@{$VARS->{CTL_OPT}{_a_db}}){
-		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk}->number,
 								 $db,
 								 $VARS->{the_void},
 								 $VARS->{safe_seq_id},
@@ -1922,6 +1935,7 @@ sub _go {
 			tblastx_keepers
 			m_seq_obj
 			the_void
+			subvoid
 			safe_seq_id
 			q_def
                         q_seq_length
@@ -1942,6 +1956,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
@@ -2005,8 +2020,21 @@ sub _go {
 		  $lock3 = new File::NFSLock($end_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		  my $neighbor = retrieve($end_neighbor);
 		  unlink($start_file, $end_neighbor);
-		  push(@$tblastx_keepers, @start);
-		  push(@$holdover_tblastx, @$neighbor);
+
+		  #merge and reblast
+		  my $keepers = GI::merge_resolve_hits($m_seq_obj,
+						       $chunk->start,
+						       $q_def,
+						       $q_seq_length,
+						       $VARS->{CTL_OPT}{_a_db},
+						       \@start,
+						       $neighbor,
+						       $subvoid,
+						       \%CTL_OPT,
+						       'tblastx',
+						       $LOG);
+		  push(@$tblastx_keepers, @$keepers);
+
 		  $edge_status->{tblastx_keepers}{start}++;
 		  $edge_status->{exonerate_a_data}{start}++;
 		  $lock1->unlock;
@@ -2033,8 +2061,21 @@ sub _go {
 		  $lock3 = new File::NFSLock($start_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		  my $neighbor = retrieve($start_neighbor);
 		  unlink($end_file, $start_neighbor);
-		  push(@$tblastx_keepers, @end);
-		  push(@$holdover_tblastx, @$neighbor);
+
+		  #merge and reblast
+		  my $keepers = GI::merge_resolve_hits($m_seq_obj,
+						       $chunk->end,
+						       $q_def,
+						       $q_seq_length,
+						       $VARS->{CTL_OPT}{_a_db},
+						       \@end,
+						       $neighbor,
+						       $subvoid,
+						       \%CTL_OPT,
+						       'tblastx',
+						       $LOG);
+		  push(@$tblastx_keepers, @$keepers);
+
 		  $edge_status->{tblastx_keepers}{end}++;
 		  $edge_status->{exonerate_a_data}{end}++;
 		  $lock1->unlock;
@@ -2045,21 +2086,6 @@ sub _go {
 		   $lock1->unlock;
 	       }
 	    }
-
-	    #merge and reblast
-	    my $altests  = $VARS->{CTL_OPT}{_a_db};
-	    my $fasta_a_index = GI::build_fasta_index($altests) if($altests);
-	    $tblastx_keepers = GI::merge_resolve_hits($m_seq_obj,
-						     $q_def,
-						     $q_seq_length,
-						     $fasta_a_index,
-						     $tblastx_keepers,
-						     $holdover_tblastx,
-						     $the_void,
-						     \%CTL_OPT,
-						     'tblastx',
-						     $LOG
-						     );
 
 	    #trim combined clusters
 	    $tblastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_tblastx}, $tblastx_keepers);
@@ -2304,7 +2330,7 @@ sub _go {
 	    #only create all chunks if not already finished
 	    my %fin;
 	    foreach my $db (@{$VARS->{CTL_OPT}{_p_db}}){
-		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk},
+		my $blast_finished = GI::get_blast_finished_name($VARS->{chunk}->number,
 								 $db,
 								 $VARS->{the_void},
 								 $VARS->{safe_seq_id},
@@ -2402,6 +2428,7 @@ sub _go {
 			blastx_keepers
 			m_seq_obj
 			the_void
+			subvoid
 			safe_seq_id
 			q_def
 			q_seq_length
@@ -2422,6 +2449,7 @@ sub _go {
 	    my $q_def = $VARS->{q_def};
 	    my $q_seq_length = $VARS->{q_seq_length};
 	    my $the_void = $VARS->{the_void};
+	    my $subvoid = $VARS->{subvoid};
 	    my $LOG = $VARS->{LOG};
 	    my $chunk = $VARS->{chunk};
 	    my $edge_status = $VARS->{edge_status};
@@ -2485,8 +2513,21 @@ sub _go {
 		   $lock3 = new File::NFSLock($end_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		   my $neighbor = retrieve($end_neighbor);
 		   unlink($start_file, $end_neighbor);
-		   push(@$blastx_keepers, @start);
-		   push(@$holdover_blastx, @$neighbor);
+
+		   #merge and reblast
+		   my $keepers = GI::merge_resolve_hits($m_seq_obj,
+							$chunk->start,
+							$q_def,
+							$q_seq_length,
+							$VARS->{CTL_OPT}{_p_db},
+							\@start,
+							$neighbor,
+							$subvoid,
+							\%CTL_OPT,
+							'blastx',
+							$LOG);		   
+		   push(@$blastx_keepers, @$keepers);
+
 		   $edge_status->{blastx_keepers}{start}++;
 		   $edge_status->{exonerate_p_data}{start}++;
 		   $lock1->unlock;
@@ -2513,8 +2554,21 @@ sub _go {
 		    $lock3 = new File::NFSLock($start_neighbor, 'EX', 300, 40) while(! $lock3 || ! $lock3->maintain(30));
 		    my $neighbor = retrieve($start_neighbor);
 		    unlink($end_file, $start_neighbor);
-		    push(@$blastx_keepers, @end);
-		    push(@$holdover_blastx, @$neighbor);
+
+		    #merge and reblast
+		    my $keepers = GI::merge_resolve_hits($m_seq_obj,
+							 $chunk->end,
+							 $q_def,
+							 $q_seq_length,
+							 $VARS->{CTL_OPT}{_p_db},
+							 \@end,
+							 $neighbor,
+							 $subvoid,
+							 \%CTL_OPT,
+							 'blastx',
+							 $LOG);
+		    push(@$blastx_keepers, @$keepers);
+
 		    $edge_status->{blastx_keepers}{end}++;
 		    $edge_status->{exonerate_p_data}{end}++;
 		    $lock1->unlock;
@@ -2525,21 +2579,6 @@ sub _go {
 		    $lock1->unlock;
 		}
 	    }
-
-	    #merge and reblast
-	    my $proteins = $VARS->{CTL_OPT}{_p_db};
-	    my $fasta_p_index = GI::build_fasta_index($proteins) if($proteins);
-	    $blastx_keepers = GI::merge_resolve_hits($m_seq_obj,
-						     $q_def,
-						     $q_seq_length,
-						     $fasta_p_index,
-						     $blastx_keepers,
-						     $holdover_blastx,
-						     $the_void,
-						     \%CTL_OPT,
-						     'blastx',
-						     $LOG
-						     );
 
 	    #trim combined clusters
 	    $blastx_keepers = cluster::shadow_cluster($CTL_OPT{depth_blastx}, $blastx_keepers);
