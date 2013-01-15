@@ -999,7 +999,7 @@ sub _go {
 						     );
       
 	    #-add repeats to GFF3
-	    my $uid = $chunk->number."_".$self->number;
+	    my $uid = join('_', $tier_type, $level, $self->number);
 	    $GFF3_m->add_repeat_hits($rm_keepers, $uid);
 	    #-------------------------CODE
 
@@ -1738,7 +1738,7 @@ sub _go {
 						   1 #contiguity flag
 						   );
 
-	    my $uid = $chunk->number."_".$self->number;
+	    my $uid = join('_', $tier_type, $level, $self->number);
 	    $GFF3_e->add_phathits($blastn_keepers, $uid);
 	    $GFF3_e->add_phathits($exonerate_e_data, $uid);
 
@@ -2236,7 +2236,7 @@ sub _go {
 						    1 #contiguity flag
 						    );
 
-	    my $uid = $chunk->number."_".$self->number;
+	    my $uid = join('_', $tier_type, $level, $self->number);
 	    $GFF3_e->add_phathits($tblastx_keepers, $uid);
 	    $GFF3_e->add_phathits($exonerate_a_data, $uid);
 
@@ -2735,7 +2735,7 @@ sub _go {
 						   0 #contiguity flag
 						   );
 
-	    my $uid = $chunk->number."_".$self->number;
+	    my $uid = join('_', $tier_type, $level, $self->number);
 	    $GFF3_e->add_phathits($blastx_keepers, $uid);
 	    $GFF3_e->add_phathits($exonerate_p_data, $uid);
 
@@ -2885,7 +2885,7 @@ sub _go {
 	       print STDERR "Gathering GFF3 input into hits - chunk:".$chunk->number."\n"
 		   unless($main::quiet);
 
-	       my $uid = $chunk->number."_".$self->number;
+	       my $uid = join('_', $tier_type, $level, $self->number);
 
 	       #-protein evidence passthraough
 	       $prot_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
@@ -3743,7 +3743,7 @@ sub _go {
 
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
-	    my $uid = $chunk->number."_".$self->number;
+	    my $uid = join('_', $tier_type, $level, $self->number);
 	    $GFF3->add_genes($maker_anno);
 	    $GFF3->add_phathits($scored_preds, $uid);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs

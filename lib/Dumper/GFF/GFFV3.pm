@@ -251,6 +251,7 @@ sub merge {
 
 		my ($source) = $line =~ /^([^\t]+)/;
 		my ($id) = $line =~ /ID\=([^\;\n]+)/;
+		#my ($parent) = $line =~ /Parent\=([^\;\n]+)/;
 		if($id && $source eq $id){
 		    next if($self->{SEEN}{$id});
 		    $self->{SEEN}{$id}++;
@@ -341,7 +342,7 @@ sub add_lines {
 sub add_predictions {
     my $self  = shift;
     my $hits  = shift;
-    my $uid   = shift;
+    my $uid   = shift || $$;
 
     return if(! $hits || ! @$hits);
 
@@ -358,7 +359,7 @@ sub add_predictions {
 sub add_phathits {
    my $self  = shift;
    my $hits  = shift;
-   my $uid   = shift;
+   my $uid   = shift || $$;
 
    return if(! $hits || ! @$hits);
 
@@ -375,7 +376,7 @@ sub add_phathits {
 sub add_repeat_hits {
    my $self  = shift;
    my $hits  = shift;
-   my $uid   = shift;
+   my $uid   = shift || $$;
 
    return if(! $hits || ! @$hits);  
 
@@ -506,7 +507,7 @@ sub gene_data {
 sub hit_data {
    my $h      = shift;
    my $seq_id = shift;
-   my $uid    = shift;
+   my $uid    = shift || $$;
 
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    
@@ -564,7 +565,7 @@ sub hit_data {
 sub repeat_data {
    my $h      = shift;
    my $seq_id = shift;
-   my $uid    = shift;
+   my $uid    = shift || $$;
 
    my $h_str = $h->strand('query') == 1 ? '+' : '-';
    #my $h_str = '+';
