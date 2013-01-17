@@ -259,7 +259,7 @@ sub add_maker {
 		  next if ($skip{est_maker});
 		  $table = 'est_maker';
 	       }
-	       elsif($l->{source} =~ /^tblastx|^altest_gff\:/i){
+	       elsif($l->{source} =~ /^tblastx|^cdna2genome|^altest_gff\:/i){
 		  next if (! $codes{altest_pass});
 		  next if ($skip{altest_maker});
 		  $table = 'altest_maker';

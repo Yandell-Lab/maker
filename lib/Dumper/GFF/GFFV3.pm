@@ -623,6 +623,7 @@ sub get_class_and_type {
     
     my ($class) = lc($h->algorithm);
     $class =~ s/^exonerate\:*\_*est2genome$/est2genome/;
+    $class =~ s/^exonerate\:*\_*cdna2genome$/cdna2genome/;
     $class =~ s/^exonerate\:*\_*protein2genome$/protein2genome/;
 
     my $type;
@@ -642,6 +643,9 @@ sub get_class_and_type {
 	$type = $k eq 'hit' ? 'translated_nucleotide_match' : 'match_part';
     }
     elsif($class =~ /^est2genome(\:.*)?$/i){
+	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
+    }
+    elsif($class =~ /^cdna2genome(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
     elsif($class =~ /^blastn(\:.*)?$/i){
@@ -1033,7 +1037,7 @@ sub get_transcript_data {
 	my $eAED    = $t->{eAED};
 	my $score   = '.'; #transcript scores causes chado errors/warning
 
-	if($t->{hit}->algorithm =~ /est2genome|protein2genome|BLASTX|est_gff|prot_gff/){
+	if($t->{hit}->algorithm =~ /est2genome|cdna2genome|protein2genome|BLASTX|est_gff|prot_gff/){
 	   $score = $t->{hit}->score();
 	}
 

@@ -157,13 +157,34 @@ sub keepers {
 	  my $hits = PhatHit_utils::split_hit_by_strand([$hit]);
           $hits = PhatHit_utils::split_hit_on_intron($hits, $split_hit) if($split_hit);
 
-          #filter split hits
+	  #fix strand
 	  foreach my $h (@{$hits}) {
-              next unless($h->hsps());
-	      
+              next unless($h->hsps());	      
               #fix strand for messed up ncbi blast
 	      $hit = PhatHit_utils::copy($hit, 'both') if ($hit->strand('hit') < 0);
-	      
+	  }
+
+	  #fix duplication across strands (common in tblastx)
+	  my $fixdup;
+	  @$hits = sort {$b->score <=> $a->score} @$hits;
+	  foreach my $h (@$hits){
+              next unless($h->hsps());
+	      my $bad;
+	      foreach my $k (@$fixdup){
+		  if(compare::compare($h->start('query'), $h->end('query'),
+				      $k->start('query'), $k->end('query'))
+		      ){
+		      $bad = 1;
+		      last;
+		  }
+	      }
+	      push(@$fixdup, $h) unless($bad);
+	  }
+	  $hits = $fixdup;
+
+          #filter split hits	      
+	  foreach my $h (@{$hits}) {
+              next unless($h->hsps());
               my $s = $h->start('query');
               my $e = $h->end('query');
               if($split_hit && ($s <=  $scutoff || $e >= $cutoff)){

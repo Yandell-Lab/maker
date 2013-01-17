@@ -39,6 +39,7 @@ use PhatHit_utils;
 use Shadower;
 use polisher::exonerate::protein;
 use polisher::exonerate::est;
+use polisher::exonerate::altest;
 use maker::auto_annotator;
 use cluster;
 use repeat_mask_seq;
@@ -1516,7 +1517,9 @@ sub polish_exonerate {
 	my $L = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
 	my $offset  = $F - 1;
         my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
-	$o_file    .= ($type eq 'e') ? '.est_exonerate' : '.p_exonerate';
+	$o_file    .= '.p_exonerate' if($type eq 'p');
+	$o_file    .= '.est_exonerate' if($type eq 'e');
+	$o_file    .= '.alt_exonerate' if($type eq 'a');
 	my $o_tfile = "$o_file.$rank";
 	my $t_file  = $the_void."/".$safe_id.".for.$F-$L.$rank.fasta";
 	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";
@@ -1727,8 +1730,7 @@ sub to_polisher {
 						  $score_limit,
 						  $min_intron,
 						  $max_intron,
-						  $matrix
-						 );
+						  $matrix);
    }
    elsif ($type eq 'e') {
       return polisher::exonerate::est::polish($d_file,
@@ -1742,8 +1744,21 @@ sub to_polisher {
 					      $score_limit,
 					      $min_intron,
 					      $max_intron,
-					      $matrix
-					     );
+					      $matrix);
+   }
+   elsif ($type eq 'a') {
+      return polisher::exonerate::altest::polish($d_file,
+						 $t_file,
+						 $o_file,
+						 $d_len,
+						 $t_len,
+						 $the_void,
+						 $offset,
+						 $exe,
+						 $score_limit,
+						 $min_intron,
+						 $max_intron,
+						 $matrix);
    }
    else {
       confess "unknown type:$type in sub to_polisher.\n";

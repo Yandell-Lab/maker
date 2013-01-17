@@ -33,6 +33,7 @@ my @ctl_to_log = ('maker_gff',
 		  'organism_type',
 		  'predictor',
 		  'est2genome',
+		  'altest2genome',
 		  'snaphmm',
 		  'gmhmm',
 		  'augustus_species',
@@ -378,7 +379,12 @@ sub _load_old_log {
 
 	        #est2genome was previously part of predictor
 		if($key eq 'est2genome' && $log_val eq ''){
-		    $log_val = (grep {/est2genome/} $logged_vals{predictor}) ? 1 : 0;
+		    $log_val = (grep {!/altest/} grep {/est2genome/} $logged_vals{predictor}) ? 1 : 0;
+		}
+
+	        #altest2genome was previously part of predictor
+		if($key eq 'altest2genome' && $log_val eq ''){
+		    $log_val = (grep {/altest2genome/} $logged_vals{predictor}) ? 1 : 0;
 		}
 
 	        #protein2genome was previously part of predictor
@@ -406,6 +412,7 @@ sub _load_old_log {
 		       $key ne 'other_gff' &&
 		       $key ne 'map_forward' &&
 		       $key ne 'est2genome' &&
+		       $key ne 'altest2genome' &&
 		       $key ne 'protein2genome' &&
 		       @$change
 		      ){
@@ -438,6 +445,7 @@ sub _load_old_log {
 			$key eq'en_score_limit'
 			) {
 			$rm_key{e_exonerate}++;
+			$rm_key{a_exonerate}++;
 			$rm_key{p_exonerate}++;
 		    }
 
@@ -454,6 +462,7 @@ sub _load_old_log {
 			$key eq 'softmask'
 			) {
 			$rm_key{tblastx}++;
+			$rm_key{a_exonerate}++;
 		    }
 
 		    if ($key eq 'eval_blastn' ||
@@ -504,13 +513,14 @@ sub _load_old_log {
 		    }		    		   
 
 		    if ($key eq 'est') {
-			$rm_key{est_blastn}++;
+			$rm_key{blastn}++;
 			$rm_key{e_exonerate}++ if(@$change);
 			$skip{blastn} = $keep;
 		    }
 		    
 		    if ($key eq 'altest') {
 			$rm_key{tblastx}++;
+			$rm_key{a_exonerate}++ if(@$change);
 			$skip{tblastx} = $keep;
 		    }
 		}
@@ -736,6 +746,14 @@ sub _load_old_log {
 		    "Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
 		
 		my @f = (<$the_void/*.est_exonerate>, <$the_void/*/*.est_exonerate>);
+		push (@files, @f);
+	    }
+
+	    if (exists $rm_key{a_exonerate}) {
+		print STDERR "MAKER WARNING: Changes in control files make re-use of old altEST Exonerate data impossible\n".
+		    "Old altEST Exonerate files will be erased before continuing\n" unless($main::qq);
+		
+		my @f = (<$the_void/*.alt_exonerate>, <$the_void/*/*.alt_exonerate>);
 		push (@files, @f);
 	    }
 	    

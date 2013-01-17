@@ -807,8 +807,8 @@ sub add_align_attr {
 
 	foreach my $e (@{$exons}){
 
-		my $num_pipes = $e->{m_str} =~ tr/\|/\|/;
-		my $num_con   = $e->{m_str} =~ tr/\|\!\:\./\|\!\:\./;
+		my $num_pipes = $e->{m_str} =~ tr/\|\+/\|\+/;
+		my $num_con   = $e->{m_str} =~ tr/\|\+\!\:\./\|\+\!\:\./;
 		my $m_str_len = length($e->{m_str});
 
 		my $identical = $num_pipes;

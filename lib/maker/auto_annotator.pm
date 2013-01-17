@@ -519,7 +519,7 @@ sub purge_single_exon_hits_in_cluster{
 	my $ests = [];
 	my $preds = [];
 	foreach my $h (@$c){
-	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome cdna2genome est_gff blastn tblastx altest_gff)){
 		push(@$ests, $h);
 	    }
 	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
@@ -555,7 +555,7 @@ sub throw_out_bad_splicers_in_cluster{
 	my $ests = [];
 	my $preds = [];
 	foreach my $h (@$c){
-	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome cdna2genome est_gff blastn tblastx altest_gff)){
 		push(@$ests, $h);
 	    }
 	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
@@ -593,7 +593,7 @@ sub purge_short_ESTs_in_clusters{
 	my $ests = [];
 	my $preds = [];
 	foreach my $h (@$c){
-	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome est_gff blastn tblastx altest_gff)){
+	    if(grep {$h->algorithm =~ /^(.*exonerate\:\:)?$_(\:.*)?$/i} qw(est2genome cdna2genome est_gff blastn tblastx altest_gff)){
 		push(@$ests, $h);
 	    }
 	    elsif(grep {$h->algorithm =~ /^$_(_masked)?(\:.*)?$/i} qw(snap augustus fgenesh genemark pred_gff)){
@@ -632,7 +632,7 @@ sub prep_blastx_data {
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
-	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
+	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark', 'pred_gff');
@@ -680,7 +680,7 @@ sub prep_gff_data {
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
-	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
+	my $alt_ests_in_cluster = get_selected_types($c,'cdna2genome', 'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark',  'pred_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
@@ -728,7 +728,7 @@ sub prep_pred_data {
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
-	my $alt_ests_in_cluster = get_selected_types($c,'tblastx', 'altest_gff');
+	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 
 	# groups of most informative protein hits
@@ -1071,13 +1071,13 @@ sub add_abAED{
 	foreach my $g (@{$annotations->{$p}}){
 	    if($g->{g_strand} == 1){
 		push(@p_genes, $g);#calculate for est2genome
-		next if($p eq 'est2genome');#but not against est2genome
+		next if($p eq 'est2genome' || $p eq 'altest2genome');#but not against est2genome
 		my $hits = gene2allPbases($g);
 		push(@p_bag, @$hits);
 	    }
 	    elsif($g->{g_strand} == -1) {
 		push(@m_genes, $g);#calculate for est2genome
-		next if($p eq 'est2genome');#but not against est2genome
+		next if($p eq 'est2genome' || $p eq 'altest2genome');#but not against est2genome
 		my $hits = gene2allPbases($g);
 		push(@m_bag, @$hits);
 	    }
@@ -1181,10 +1181,10 @@ sub best_annotations {
 		my $eAED = $g->{eAED};
 		my $low = ($AED < $eAED) ? $AED : $eAED;
 
-		if($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == 1){
+		if($p !~ /2genome$/ && $g->{g_strand} == 1){
 		    push(@$p_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
-		elsif($p ne 'est2genome' && $p ne 'protein2genome' && $g->{g_strand} == -1) {
+		elsif($p !~ /2genome$/ && $g->{g_strand} == -1) {
 		    push(@$m_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
 		elsif($g->{g_strand} == 1){
@@ -2061,7 +2061,7 @@ sub load_transcript_struct {
 	my $l_trans =  length($translation_seq);
 
 	#remove data that should not be carred over into certain transcripts
-	if($f->{_HMM} =~ /^(est2genome|protein2genome)$/ && ! $CTL_OPT->{est_forward}){
+	if($f->{_HMM} =~ /^(est2genome|protein2genome|altest2genome)$/ && ! $CTL_OPT->{est_forward}){
 	    $f->{_tran_name} = undef;
 	    $f->{_tran_id} = undef;
 	    $f->{-attrib} = undef;
@@ -2087,7 +2087,7 @@ sub load_transcript_struct {
 		    };
 
 	#also determine these values for the unmodified abinit
-	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff|model_gff/){
+	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff|model_gff/){
 	    my $transcript_seq  = get_transcript_seq($p_base, $seq);
 	    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $p_base);
 
@@ -2136,7 +2136,7 @@ sub load_transcript_stats {
 	my $pol_e_hits   = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
 	my $pol_f_hits   = get_selected_types($evi->{fusion}, 'est2genome', 'est_gff', 'blastn');
 	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
-	my $tblastx_hits = get_selected_types($evi->{alt_ests},'tblastx', 'altest_gff');
+	my $tblastx_hits = get_selected_types($evi->{alt_ests}, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $abinits      = $evi->{all_preds};
 
 	my @bag = (@$pol_p_hits,
@@ -2158,7 +2158,7 @@ sub load_transcript_stats {
 	    $f->{_QI} = $qi;
 	}
 
-	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|protein2genome|protein_gff/){
+	if($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff/){
 	    my $p_struct = $struct->{p_struct};
 	    #(my $name = $f->name) =~ s/\-processed\-/\-abinit\-/;
 	    #$p_base->name($name);
@@ -2320,7 +2320,7 @@ sub group_transcripts {
 
    if (! $CTL_OPT->{alt_splice} ||
        $predictor =~ /^model_gff$|_abinit$|^pred_gff$/ ||
-       ($predictor =~ /^(est2genome|protein2genome)$/ && $CTL_OPT->{est_forward})
+       ($predictor =~ /^(est2genome|protein2genome|altest2genome)$/ && $CTL_OPT->{est_forward})
        ) {
        my @to_do;
        my %index;
@@ -2360,7 +2360,7 @@ sub group_transcripts {
        
        #remove redundant transcripts in gene
        foreach my $c (@{$clusters}) {
-	   my $best_alt_forms = ($CTL_OPT->{est_forward} && $predictor =~ /^(est2genome|protein2genome)$/) ?
+	   my $best_alt_forms = ($CTL_OPT->{est_forward} && $predictor =~ /^(est2genome|altest2genome|protein2genome)$/) ?
 	       $c : clean::remove_redundant_alt_splices($c, 10);
 	   push(@$careful_clusters, $best_alt_forms);
        }
@@ -2425,7 +2425,7 @@ sub group_transcripts {
 	      $SEEN->{"$chunk_number\.$c_id"}++;
 	  }
       }
-      elsif (($predictor =~ /^(est2genome|protein2genome)$/) && $CTL_OPT->{est_forward} && ($c->[0]->{gene_id} || $c->[0]->{gene_name})) {
+      elsif (($predictor =~ /^(est2genome|altest2genome|protein2genome)$/) && $CTL_OPT->{est_forward} && ($c->[0]->{gene_id} || $c->[0]->{gene_name})) {
 	  $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
 	  $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	  $SEEN->{$g_name}++;
@@ -2467,7 +2467,7 @@ sub group_transcripts {
       }
 
       #infer gene name for pass-through transcripts (no gene name but yes tran name)
-      if(($predictor =~ /^(est2genome|protein2genome)$/) &&
+      if(($predictor =~ /^(est2genome|altest2genome|protein2genome)$/) &&
 	 $CTL_OPT->{est_forward} &&
 	 !$t_structs[0]->{hit}->{gene_name} &&
 	 !$t_structs[0]->{hit}->{gene_id} &&

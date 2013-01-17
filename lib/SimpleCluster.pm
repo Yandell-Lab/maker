@@ -56,6 +56,7 @@ sub cluster {
 sub build_hit_pairs {
     my $hits = shift;
     my $flank = shift;
+    my $ignore_strand = shift || 0;
 
     my @pairs;
 
@@ -76,7 +77,7 @@ sub build_hit_pairs {
 	    my $bE = $hits->[$j]->end('query');
 	    my $bSt = $hits->[$j]->strand('query');
 
-	    next if($aSt ne $bSt);
+	    next if($aSt ne $bSt && !$ignore_strand);
 
 	    my $code = compare::compare($aB, $aE, $bB, $bE);
 	    push(@pairs, [$i, $j]) if($code);

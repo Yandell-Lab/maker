@@ -29,22 +29,6 @@ sub prep {
 	return $len;
 }
 #------------------------------------------------------------------------
-sub add_offset {
-	my $offset = shift;
-	my $f      = shift;
-
-       foreach my $hsp ($f->hsps){
-       		my $new_start = $offset + $hsp->start('query');
-                my $new_end   = $offset + $hsp->end('query');
-        
-                $hsp->query->location->start($new_start);
-                $hsp->query->location->end($new_end);
-                $hsp->{'_sequenceschanged'} = 1;
-      }
-      $f->{'_sequenceschanged'} = 1;
-
-}
-#------------------------------------------------------------------------
 1;
 
 

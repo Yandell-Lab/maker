@@ -15,6 +15,7 @@ use Exporter;
 use Fasta;
 use FastaFile;
 use URI::Escape;
+use PhatHit_utils;
 
 @ISA = qw(
 	polisher::exonerate
@@ -57,9 +58,8 @@ sub polish {
 
 	return undef unless $hits->[0];
 
-	foreach my $f (@{$hits}){
-		polisher::add_offset($offset, $f);
-	}
+	PhatHit_utils::add_offset($hits, $offset);
+
 	return $hits;
 }
 #------------------------------------------------------------------------

@@ -1707,8 +1707,7 @@ sub _go {
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
 							 $LOG,
-							 $id
-							 );
+							 $id);
 	    }
 
 	    #-clean the blastn hits
@@ -1743,8 +1742,8 @@ sub _go {
 	    $GFF3_e->add_phathits($exonerate_e_data, $uid);
 
 	    #blastn will be empty from this point on in the script if eukaryotic
-	    my $blastn_clusters = [];
-	    my $exonerate_e_clusters = [];
+	    my $blastn_clusters = []; #will stay empty for eukaryotes
+	    my $exonerate_e_clusters = []; #will stay empty for prokaryotes
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
 	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_data)
@@ -2125,7 +2124,7 @@ sub _go {
 	    my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
-	    $size = 1; #write now exonerate is skipped for alt_est
+	    #$size = 1; #temp
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
 	       my $j = $i % $size;
@@ -2184,29 +2183,39 @@ sub _go {
 	    my $exonerate_a_data = [];
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
 	       #handle mising db in seq (IO error)
-	       #if(! $q_seq_obj->{db}){
-	       #    my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
-	       #    $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
-	       #}
-	       #$exonerate_a_data = GI::polish_exonerate($chunk,
-	       #                                         $q_seq_obj,
-	       #					 $q_seq_length,
-	       #					 $q_def,
-	       #					 $dc,
-	       #					 $CTL_OPT{_a_db},
-	       #					 $subvoid,
-	       #					 'q',
-	       #					 $CTL_OPT{exonerate},
-	       #					 $CTL_OPT{pcov_tblastx},
-	       #					 $CTL_OPT{pid_tblastx},
-	       #					 $CTL_OPT{en_score_limit},
-	       #                                         $CTL_OPT{split_hit},
-	       #					 $CTL_OPT{en_matrix},
-	       #					 $CTL_OPT{pred_flank},
-	       #					 $CTL_OPT{est_forward},
-	       #					 $LOG,
-	       #                                         $id
-	       #					 );
+	       if(! $q_seq_obj->{db}){
+		   my $g_index = GI::build_fasta_index($CTL_OPT{_g_db});
+		   $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		   for(my $i = 0; $i < 2 && !$q_seq_obj; $i++){
+		       sleep 5;
+		       print STDERR "WARNING: Cannot find >$seq_id, trying to re-index the fasta.\n" if($i);
+		       $g_index->reindex($i);
+		       $q_seq_obj = $g_index->get_Seq_by_id($seq_id);
+		   }
+		   if (! $q_seq_obj) {
+		       print STDERR "stop here: $seq_id\n";
+		       confess "ERROR: Fasta index error\n";
+		   }
+	       }
+
+	       $exonerate_a_data = GI::polish_exonerate($chunk,
+	                                                $q_seq_obj,
+							$q_seq_length,
+							$q_def,
+							$dc,
+							$CTL_OPT{_a_db},
+							$subvoid,
+							'a',
+							$CTL_OPT{exonerate},
+							$CTL_OPT{pcov_tblastx},
+							$CTL_OPT{pid_tblastx},
+							$CTL_OPT{en_score_limit},
+	                                                $CTL_OPT{split_hit},
+							$CTL_OPT{en_matrix},
+							$CTL_OPT{pred_flank},
+							$CTL_OPT{est_forward},
+							$LOG,
+	                                                $id);
 	    }
 	    
 	    #-clean the tblastx hits
@@ -2240,9 +2249,15 @@ sub _go {
 	    $GFF3_e->add_phathits($tblastx_keepers, $uid);
 	    $GFF3_e->add_phathits($exonerate_a_data, $uid);
 
+	    my $tblastx_clusters = []; #will stay empty for eukaryotes
+	    my $exonerate_a_clusters = []; #will stay empty for prokaryotes
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
-	    my $tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_keepers);
-	    my $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_data);
+            if($CTL_OPT{organism_type} eq 'eukaryotic'){
+               $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_data)
+            }
+            else{
+		$tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_keepers);
+            }
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -2710,8 +2725,7 @@ sub _go {
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
 							 $LOG,
-							 $id
-							 );
+							 $id);
 	    }
 
 	    #-clean the blastx hits
@@ -3342,27 +3356,24 @@ sub _go {
 	    #combine final data sets
 	    print STDERR "Preparing evidence for hint based annotation\n" unless($main::quiet);
 	    my $final_est = GI::combine($exonerate_e_data,
-					$est_gff_keepers
-					);
+					$est_gff_keepers);
 
 	    $final_est = GI::combine($final_est,
-				     $blastn_keepers
-				     ) if($CTL_OPT{organism_type} eq 'prokaryotic');
+				     $blastn_keepers) if($CTL_OPT{organism_type} eq 'prokaryotic');
 
 
-	    my $final_altest = GI::combine($tblastx_keepers,
-					   $exonerate_a_data,
-					   $altest_gff_keepers
-					  );
+	    my $final_altest = GI::combine($exonerate_a_data,
+					   $altest_gff_keepers);
+
+	    $final_altest = GI::combine($final_altest,
+					$tblastx_keepers) if($CTL_OPT{organism_type} eq 'prokaryotic');
 
 	    my $final_prot = GI::combine($blastx_keepers,
 					 $exonerate_p_data,
-					 $prot_gff_keepers
-					);
+					 $prot_gff_keepers);
 
 	    my $final_pred = GI::combine($preds_on_chunk,
-					 $pred_gff_keepers
-					);
+					 $pred_gff_keepers);
 
 	    #group evidence for annotation
 	    my $all_data = maker::auto_annotator::prep_hits($final_prot,
@@ -3376,8 +3387,7 @@ sub _go {
 							    $CTL_OPT{pred_flank},
 							    $CTL_OPT{organism_type},
 							    $CTL_OPT{est_forward},
-							    $CTL_OPT{correct_est_fusion}
-							    );
+							    $CTL_OPT{correct_est_fusion});
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
