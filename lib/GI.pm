@@ -3176,6 +3176,7 @@ sub set_defaults {
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'est2genome'} = 0;
+      $CTL_OPT{'altest2genome'} = 0;
       $CTL_OPT{'protein2genome'} = 0;
       $CTL_OPT{'other_gff'} = '';
       $CTL_OPT{'domain'} = '0';

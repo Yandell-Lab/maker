@@ -1129,6 +1129,7 @@ sub parse_block_align {
 		    $t_nc = substr($buf[1], $o, length($q_nc));
 		}
 		else{
+		    unshift(@buf, ' 'x(length($q_nc)+$o)) if(@buf == 3); #missing extra query line
 		    my @q_nc1 = split('', $q_nc);
 		    my @q_nc2 = split('', substr($buf[0], $o));
 		    $m = substr($buf[1], $o);
@@ -1157,7 +1158,7 @@ sub parse_block_align {
 			}
 		    }
 		}
- 
+
 		#print "$m\n";
 		#print "$t_nc\n";
 		#print "XXXXXXXXXXXXXXXXXX\n";
