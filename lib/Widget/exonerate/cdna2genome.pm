@@ -1166,6 +1166,9 @@ sub parse_block_align {
 		die "no m\n"    unless defined($m);
 		die "no t_nc\n" unless defined($t_nc);
 
+		$q_nc =~ s/(\{|\})//g;
+		$m =~ s/(\{|\})//g;
+		$t_nc =~ s/(\{|\})//g;
 		$data{q_nc_str} .= $q_nc;
 		$data{m_str}    .= $m;
 		$data{t_nc_str} .= $t_nc;
@@ -1175,6 +1178,9 @@ sub parse_block_align {
 		#print $t_nc."\n";
 		#print "\n";
 	}
+
+	$data{q_nc_str} =~ s/\<\-\>/\-\-\-/g;
+	$data{t_nc_str} =~ s/\<\-\>/\-\-\-/g;
 	
 	return \%data;	
 }

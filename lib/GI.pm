@@ -240,7 +240,7 @@ sub merge_resolve_hits{
            next;
        }
        
-       my $clusters = SimpleCluster::cluster_hits($sets{$key}, $CTL_OPT{split_hit});
+       my $clusters = SimpleCluster::cluster_hits($sets{$key}, $CTL_OPT{split_hit}, 1); #strand ignore flag set
        
        foreach my $c (@$clusters){
            if(@$c == 1){
@@ -260,7 +260,7 @@ sub merge_resolve_hits{
 		   $h->{'_hsps'} = []; #memory optimization
 		   $h->{'_reblast'} = 1;
 	       }
-	       push(@to_reblast, $c->[0]); #doesn't matter wich one I just need the ID and DB
+	       push(@to_reblast, $c->[0]); #doesn't matter which one I just need the ID and DB
 
 	       $low = $start if(!$low || $start < $low);
 	       $high = $end if(!$high || $end > $high);
