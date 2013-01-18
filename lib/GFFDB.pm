@@ -557,10 +557,10 @@ sub phathits_on_chunk {
 	}
 	push(@features, @$feat);
 	
-	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
-					   qq{WHERE seqid = '$seqid' }.
-					   qq{AND $min <= start AND start <= $max }.
-					   qq{AND parent != '.' });
+	$ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+					qq{WHERE seqid = '$seqid' }.
+					qq{AND $min <= start AND start <= $max }.
+					qq{AND parent != '.' });
 	$feat = _ary_to_features($ref);
 	push(@features, @$feat)
     }

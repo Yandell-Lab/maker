@@ -245,7 +245,6 @@ sub complexity_filter {
 	    }
 	}
 	my $h_ave = ($count) ? $total/$count : 0; #average coverage for hit
-	my $h_ave = ($count) ? $total/$count : 0;
 
 	#if average basepair hits 1.5 times on both query and subject, skip
 	push(@keepers, $f) unless(($q_ave + $h_ave)/2 > 1.5);
