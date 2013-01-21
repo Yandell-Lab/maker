@@ -139,7 +139,7 @@ sub mwas_setup {
         "You may need to log in as 'root' for setup\n\n";
 
     #copy all cgi, html, and support files to a web accessible directory
-    (my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+    (my $b_dir = $FindBin::RealBin) =~ s/\/(src|bin|MWAS\/bin)\/?$/\/MWAS\/bin/;
     my $m_dir = "$b_dir/../../"; #maker package base direcory
     my $co_dir = "$b_dir/../cgi-bin/"; #original direcory
     my $ho_dir = "$b_dir/../html/"; #original direcory

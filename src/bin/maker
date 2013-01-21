@@ -172,6 +172,8 @@ Options:
      -datastore/         Forcably turn on/off MAKER's two deep directory
       nodatastore        structure for output.  Always on by default.
 
+     -old_struct         Use the old directory styles (MAKER 2.26 and lower)
+
      -base    <string>   Set the base name MAKER uses to save output files.
                          MAKER uses the input genome file name by default.
 
@@ -278,6 +280,7 @@ GetOptions("RM_off|R" => \$OPT{R},
            "check" =>\$OPT{check},
 	   "base=s" =>\$OPT{out_name},
 	   "datastore!" =>\$OPT{datastore},
+	   "old_struct" =>\$main::old_struct,
 	   "TMP=s" => \$OPT{TMP},
 	   "debug" => \$main::debug,
 	   "debugmpi" => \$main::debugmpi,

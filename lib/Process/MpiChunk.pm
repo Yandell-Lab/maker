@@ -634,7 +634,7 @@ sub _go {
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
 	       my $the_void = $VARS->{the_void};
-               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+               my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
                mkdir($subvoid) unless(-d $subvoid);
 	       my %args = (chunk        => $fchunk,
 			   order        => $order,
@@ -1247,7 +1247,7 @@ sub _go {
 							   $fchunk
 							   );
 
-               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+	       my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
                mkdir($subvoid) unless(-d $subvoid);
 
 	       my %args = (chunk        => $fchunk,
@@ -3244,7 +3244,7 @@ sub _go {
 	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
 	       my $order = $fchunk->number;
                my $the_void = $VARS->{the_void};
-               my $subvoid = "$the_void/".int($fchunk->start/1000000);
+	       my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
                mkdir($subvoid) unless(-d $subvoid);
 	       my ($file) = grep {/\.$order\.final\.section$/} @$section_files;
 	       my $section = retrieve($file);
