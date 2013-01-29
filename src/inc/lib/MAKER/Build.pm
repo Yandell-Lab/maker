@@ -600,6 +600,201 @@ sub ACTION_jbrowse{
 
     $self->_exe_action('jbrowse', 'flatfile-to-json.pl');       
 }
+sub ACTION_webapollo{
+    my $self = shift;
+
+    #download webapollo
+    my $fail = $self->exe_failures({'webapollo' => 'tools/user/extract_seqids_from_fasta.pl'});
+    my @list = keys %{$fail->{exe_requires}} if($fail->{exe_requires});
+    if(grep {/^webapollo$/i} @list){
+        $self->_install_exe('webapollo');
+    }
+    else{
+        my $go = $self->y_n("Do you want to erase your old WebApollo download?", 'N');
+        $self->_install_exe('webapollo') if($go);
+    }
+
+    #try and find tomcat
+    my $tom_dir = '';
+    eval 'require Proc::ProcessTable_simple';
+    my $ps = Proc::ProcessTable_simple->new;
+    foreach my $p (@{$ps->table}){
+	if($p->{cmndline} =~ /([^\:]+)\/bin\/tomcat-juli\.jar/){
+	    $tom_dir = $1;
+	    last
+	}
+    }
+    do{
+	$tom_dir = $self->prompt("\nWhere is tomcat installed?", $tom_dir);
+    } while(! -f "$tom_dir/bin/tomcat-juli.jar");
+
+    #check for lib PNG
+    my $lib_failures = $self->lib_failures({'LibPNG' => 'png'});
+    if($lib_failures && (grep {/libpng/i} keys %{$lib_failures->{lib_requires}})){
+        print "\nERRORS/WARNINGS FOUND IN PREREQUISITES. You must have LibPNG installed first.\n";
+	exit(0);
+    }
+
+    #select DBI implementation
+    my $dbi_select;
+    do {
+	print "\nYou need a database to manage WebApollo user permissions\n";
+	$dbi_select = $self->prompt("Do you want to use 'PostgreSQL' or 'SQLite'?", 'PostgreSQL');
+	$dbi_select = lc($dbi_select);
+
+	#make sure they have postgresql
+	if($dbi_select eq 'postgresql'){
+	    my $exe_failures = $self->exe_failures({'PostgreSQL' => 'psql'});
+	    if($exe_failures && (grep {/PostgreSQL/i} keys %{$exe_failures->{exe_requires}})){
+		print "\nYou don't seem to have PostgreSQL installed.\n";
+		if($self->y_n("Do you want to use SQLite instead?", 'N')){
+		    $dbi_select = 'sqlite';
+		}
+		else{		    
+		    exit(0);
+		}
+	    }
+	}
+
+    } while($dbi_select ne 'sqlite' && $dbi_select ne 'postgresql');
+
+    #list perl dependencies
+    print "\nChecking Perl dependencies...\n";
+    $self->{properties}{requires} = {}; #clears the required module list
+    $self->add_requires({'perl'               => '5.8.0',
+			 'Bio::Root::Version' => '1.006901',
+			 'JSON'               => '0',
+			 'JSON::XS'           => '0',
+			 'DBI'                => '0',
+			 'DBD::Pg'            => '0',
+			 'PerlIO::gzip'       => '0',
+			 'Heap::Simple'       => '0',
+			 'Heap::Simple::XS'   => '0',
+			 'Devel::Size'        => '0',
+			 'Bio::GFF3::LowLevel::Parser' => '0'});
+
+    #add the correct DBI implementation to perl dependencies
+    if($dbi_select eq 'postgresql'){
+	$self->add_requires('DBD::Pg' => '0');
+    }
+    elsif($dbi_select eq 'sqlite'){
+	$self->add_requires('DBD::SQLite' => '0');
+    }
+
+    #now install missing ones
+    my $prereq = $self->prereq_failures();
+    if($prereq && $prereq->{requires}){
+	my @perl = keys %{$prereq->{requires}};
+	print "You are missing some required modules\n";
+	print "\t\t  !  ". join("\n\t\t  !  ", @perl) ."\n\n" if(@perl);
+	
+	my $install_ok = $self->y_n("\nIs it ok to try and install these?", 'Y');
+
+	if($install_ok){
+	    foreach my $m (@perl){
+		$self->cpan_install($m, 0);
+	    }
+	}
+	else{
+	    exit(0);
+	}
+
+	print "\nRechecking dependencies to see if installation was successful\n";
+	$self->check_prereq;
+
+	if($prereq = $self->prereq_failures()){
+	    my ($usr_id) = (getpwnam('root'))[2];
+	    print "\nWARNING: Installation failed (please review any previous errors).\n";
+	    print "Try installing the missing packages as 'root' or using sudo.\n" if($< != $usr_id);
+	    print "You may need to configure and install these packages manually.\n";
+
+	    @perl = keys %{$prereq->{requires}};
+
+	    print "PERL Dependencies:\t";
+	    print ((@perl) ? 'MISSING' : 'VERIFIED');
+	    print"\n";
+	    print "\t\t  !  ". join("\n\t\t  !  ", @perl) ."\n\n" if(@perl);
+
+	    exit(0);
+	}
+    }
+    print "All Perl dependencies are installed\n";
+
+    #create SQL database
+    my $dbname;
+    my $dbhost;
+    my $dbport;
+    my $dbuser;
+    my $dbpass;
+    my $createdb;
+    my $path = $self->install_destination('exe')."/webapollo";
+    if($dbi_select eq 'sqlite'){
+	$dbname = "$path/web_apollo_users.db";
+	$createdb = -f $dbname;
+    }
+    else{
+	if(!$self->y_n("\nDoes a database and username to manage it already exist?", 'Y')){
+	    print "\nPlease create a database and a user to manage it and\n".
+		  "then rerun this installation script\n";
+	    print "Example:\n";
+	    print "\tcreateuser -d -S -R -P web_apollo_users_admin\n";
+	    print "\tcreatedb -U web_apollo_users_admin web_apollo_users\n";
+	    print "\t./Build webapollo\n";
+	    exit(0);
+	}
+
+	$dbname = $self->prompt("\nName for permissions database:", 'web_apollo_users');
+	$dbhost = $self->prompt("\nDatabase host:", 'localhost');
+	$dbport = $self->prompt("\nDatabase port:", '5432') if($dbhost ne 'localhost');
+	$dbuser = $self->prompt("\nDatabase username:", 'web_apollo_users_admin');
+	$dbpass = $self->safe_prompt("\nDatabase password:", '');
+	$createdb= $self->y_n("\nDo you need me to populate the database?", 'N');
+    }
+    
+    #populate DB if required
+    eval 'require DBI';
+    my $dbh;
+    if($dbi_select eq 'postgresql'){
+	my $connect = "dbi:Pg:dbname=$dbname";
+	$connect .= ";host=$dbhost" if($dbhost ne 'localhost');
+	$connect .= ";port=$dbport" if($dbport);
+	$dbh = DBI->connect($connect, $dbuser, $dbpass);
+    }
+    elsif($dbi_select eq 'sqlite'){
+	my $connect = "dbi:SQLite:dbname=$dbname";
+        $dbh = DBI->connect($connect, '', '');
+    }
+
+    if($createdb){
+	my $string = '';
+	my $sql_file = "$path/tools/user/user_database_postgresql.sql";
+	open(IN, "<$sql_file");
+	while(my $line = <IN>){
+	    $line =~ s/SERIAL/INTEGER AUTOINCREMENT/ if($dbi_select eq 'sqlite');
+	    $line =~ s/\;/ CASCADE\;/ if($dbi_select eq 'postgresql' && $line =~ /DROP/);
+	    $string .= $line;
+	}
+	close(IN);
+	
+	$dbh->do($string);
+    }
+    $dbh->disconnect;
+
+    #store cponfiguration
+    my %conf = (tom_dir    => $tom_dir,
+		dbi_select => $dbi_select,
+		dbname     => $dbname,
+		dbhost     => $dbhost,
+		dbport     => $dbport,
+		dbuser     => $dbuser);
+    open(OUT, "> $path/maker_conf.dump");
+    print OUT Data::Dumper->Dump([\%conf], [qw(conf)]);
+    close(OUT);
+
+    print "\n**WebApollo preliminary setup complete**\n";
+    print "To complete setup run ./maker/bin/maker2wap with MAKER generated GFF3.\n".
+	"All other WebApollo resources can be found in: $path\n";
+}
 sub ACTION_apollo{
     my $self = shift;
 
@@ -1148,21 +1343,27 @@ sub _install_exe {
 	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
 
-	#old jbrowse setup
-	#if($OS eq 'Darwin'){
-	#    $self->do_system('./configure CXXFLAGS=-I/usr/X11/include LDFLAGS=-L/usr/X11/lib')
-	#	or return $self->fail($exe, $path);
-	#}
-	#else{
-	#    $self->do_system('./configure') or return $self->fail($exe, $path);
-	#}
-	#$self->do_system('make') or return $self->fail($exe, $path);
-
 	#new jbrowse is setup like this
 	$self->do_system('./setup.sh') or return $self->fail($exe, $path);
 
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+    }
+    elsif($exe eq 'webapollo'){
+	#webapollo
+        File::Path::rmtree($path);
+	my $file = "$base/$exe.tar.gz"; #file to save to
+	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	print "Downloading $exe...\n";
+        $self->getstore($url, $file) or return $self->fail($exe, $path);
+	print "Unpacking $exe tarball...\n";
+        $self->extract_archive($file) or return $self->fail($exe, $path);
+        push (@unlink, $file);
+	my ($dir) = grep {-d $_} <*WebApollo*>;
+	chdir($base);
+	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
+
+	return $self->fail($exe, $path) if(! -f "$path/tools/user/extract_seqids_from_fasta.pl");
     }
     else{
 	die "ERROR: No install method defined for $exe in MAKER::Build::_install_exe.\n";
@@ -1494,6 +1695,7 @@ sub maker_status {
         "\t./Build apollo\t\t\#installs Apollo\n".
         "\t./Build gbrowse\t\t\#installs GBrowse (must be root)\n".
         "\t./Build jbrowse\t\t\#installs JBrowse (MAKER copy, not web accecible)\n".
+        "\t./Build webapollo\t\t\#installs WebApollo (use maker2wap to create DBs)\n".
         "\t./Build mpich2\t\t\#installs MPICH2 (but manual install recommended)\n";
 }
 
@@ -1735,7 +1937,7 @@ sub safe_prompt {
     my $m = shift;
     my $d = shift || '';
 
-    print "$m [$d ]";
+    print "$m [".('*'x(length($d)))." ]";
 
     my $key = 0;
     my $r = "";
@@ -1760,6 +1962,7 @@ sub safe_prompt {
     print "\n"; #because the user pressed enter
     Term::ReadKey::ReadMode(0); #Reset the terminal once we are done
 
+    $r = $d if(length($r) == 0);
     return $r; #Return the response
 }
 

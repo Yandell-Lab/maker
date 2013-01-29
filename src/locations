@@ -66,4 +66,10 @@ $data = {
                        'Darwin_x86_64' => 'https://github.com/GMOD/jbrowse/tarball/master',
                        'src_'          => 'https://github.com/GMOD/jbrowse/tarball/master',
                    },
+    'webapollo'    => {'Linux_x86_64'  => 'http://icebox.lbl.gov/webapollo/releases/WebApollo-2012-12-21.tgz',
+                       'Linux_i386'    => 'http://icebox.lbl.gov/webapollo/releases/WebApollo-2012-12-21.tgz',
+                       'Darwin_i386'   => 'http://icebox.lbl.gov/webapollo/releases/WebApollo-2012-12-21.tgz',
+                       'Darwin_x86_64' => 'http://icebox.lbl.gov/webapollo/releases/WebApollo-2012-12-21.tgz',
+                       'src_'          => 'http://icebox.lbl.gov/webapollo/releases/WebApollo-2012-12-21.tgz',
+                   },
 };

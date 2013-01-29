@@ -6,13 +6,34 @@ eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
 use warnings;
 use strict;
 use FindBin;
+use lib "$FindBin::Bin/../src/inc/lib";
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 
+use MAKER::Build;
 use Getopt::Long;
 use File::Temp;
 use URI::Escape;
-use vars qw($JB $RS);
+use DBI;
+use vars qw($JB $RS $conf);
+
+BEGIN {
+    my $conf_file = "$FindBin::Bin/../exe/webapollo/maker.conf";
+    if(! -f $conf_file){
+	print "Please configure WebApollo via MAKER's 'Build' script\n".
+	    "before running maker2wap.\n".
+	    "Example:\n".
+	    "\t$FindBin::Bin/../src/Build webapollo\n".
+	    "\t$FindBin::Bin/maker2wap maker_results.gff\n\n";
+	exit(0);
+    }
+    else{
+	open(IN, "< $conf_file");
+	my $data = join('', <IN>); 
+	close(IN);
+	eval $data;
+    }
+}
 
 my $usage = '
 USAGE:
@@ -90,6 +111,77 @@ foreach my $file (@files){
     }
 }
 die $error if $error;
+
+#--confirm configuration
+my @report = qw(tom_dir dbi_select dbname dbhost dbport dbuser);
+print "CURRENT CONFIGURATION:\n";
+print "\t".join("\t\n", map {$_ .' => '.$conf->{$_}} @report)."\n";
+print "\n*Use command line options to alter configuration or use\n".
+    "'$FindBin::Bin/../src/Build webapollo' to alter default values\n\n";
+
+#--connect to database
+my $dbname;
+my $dbhost;
+my $dbport;
+my $dbuser;
+my $dbpass;
+my $createdb;
+my $path = "$FindBin::Bin/../exe/webapollo";
+if($dbi_select eq 'sqlite'){
+    $dbname = "$path/web_apollo_users.db";
+    $createdb = -f $dbname;
+}
+else{
+    if(!$self->y_n("\nDoes a database and username to manage it already exist?", 'Y')){
+            print "\nPlease create a database and a user to manage it and\n".
+		"then rerun this installation script\n";
+            print "Example:\n";
+            print "\tcreateuser -d -S -R -P web_apollo_users_admin\n";
+            print "\tcreatedb -U web_apollo_users_admin web_apollo_users\n";
+            print "\t./Build webapollo\n";
+            exit(0);
+    }
+
+    $dbname = $self->prompt("\nName for permissions database:", 'web_apollo_users');
+    $dbhost = $self->prompt("\nDatabase host:", 'localhost');
+    $dbport = $self->prompt("\nDatabase port:", '5432') if($dbhost ne 'localhost');
+    $dbuser = $self->prompt("\nDatabase username:", 'web_apollo_users_admin');
+    $dbpass = $self->safe_prompt("\nDatabase password:", '');
+    $createdb= $self->y_n("\nDo you need me to populate the database?", 'N');
+}
+
+#populate DB if required
+$tom_dir;
+$dbi_select;
+$dbname;
+$dbhost;
+$dbport;
+$dbuser;
+my $dbh;
+if($dbi_select eq 'postgresql'){
+    my $connect = "dbi:Pg:dbname=$dbname";
+    $connect .= ";host=$dbhost" if($dbhost ne 'localhost');
+    $connect .= ";port=$dbport" if($dbport);
+    $dbh = DBI->connect($connect, $dbuser, $dbpass);
+}
+elsif($dbi_select eq 'sqlite'){
+    my $connect = "dbi:SQLite:dbname=$dbname";
+    $dbh = DBI->connect($connect, '', '');
+
+#--add user that can access webapollo
+print "\nNow we need a user with access to WebApollo. This\n".
+    "is different than the database user, although you\n".
+    "still could choose to use the same name.\n";
+
+my $wapuser = $self->prompt("WebApollo username:", 'web_apollo_users_admin');
+my $sql = "SELECT * FROM users WHERE username='$wapuser'";
+my $results = $dbh->selectall_arrayref("SELECT * FROM users WHERE username='$wapuser'");
+if(!@$results){
+    my $wappass = $self->safe_prompt("\nWebApollo password:", '');
+        $sql = "INSERT INTO users(username, password) " .
+            "VALUES('$wapuser', '$wappass')";
+    $dbh->do($sql);
+}
 
 #--build command lines
 my %commands;
