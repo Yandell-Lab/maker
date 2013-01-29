@@ -665,6 +665,7 @@ sub ACTION_webapollo{
 			 'Bio::Root::Version' => '1.006901',
 			 'JSON'               => '0',
 			 'JSON::XS'           => '0',
+			 'XML::Twig'          => '0',
 			 'DBI'                => '0',
 			 'DBD::Pg'            => '0',
 			 'PerlIO::gzip'       => '0',
@@ -795,9 +796,37 @@ sub ACTION_webapollo{
     print OUT Data::Dumper->Dump([\%conf], [qw(conf)]);
     close(OUT);
 
+    #now configure Tomcat
+    my $m = "\nMAKER needs to modify the Tomcat server.xml file\n".
+	    "to complete setup. Do you want me to do this?";
+    if($self->y_n($m, 'Y')){
+	eval 'require XML::Twig';
+	my $wap_valves = "$path/tomcat/custom-valves.jar";
+	my $new_valves = "$tom_dir/lib/custom-valves.jar";
+	File::Copy::copy($wap_valves, $new_valves) unless(-f $new_valves);
+	my $twig = XML::Twig->new( pretty_print  => 'indented',
+				   comments  => 'keep',
+				   twig_roots   =>
+				   {
+				       'Service' => sub {
+					   my $engine = $_->first_child('Engine');
+					   my $host = $engine->first_child('Host');
+					   $host->set_att('errorReportValveClass',
+							  'org.bbop.apollo.web.ErrorReportValve');
+					   $_->print;
+				       },
+				   },
+				   twig_print_outside_roots => 1,);	
+	$twig->parsefile_inplace("$tom_dir/conf/server.xml", '.bak');
+    }
+    else{
+	exit(0);
+    }
+
     print "\n**WebApollo preliminary setup complete**\n";
-    print "To complete setup run ./maker/bin/maker2wap with MAKER generated GFF3.\n".
-	"All other WebApollo resources can be found in: $path\n";
+    print "To setup a servlet run ./maker/bin/maker2wap with MAKER generated GFF3.\n".
+	  "All WebApollo resources can be found in:\n".
+	  "$path\n";
 }
 sub ACTION_apollo{
     my $self = shift;
