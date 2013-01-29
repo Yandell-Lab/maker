@@ -730,7 +730,7 @@ sub ACTION_webapollo{
     my $path = $self->install_destination('exe')."/webapollo";
     if($dbi_select eq 'sqlite'){
 	$dbname = "$path/web_apollo_users.db";
-	$createdb = -f $dbname;
+	$createdb = (! -f $dbname);
     }
     else{
 	if(!$self->y_n("\nDoes a database and username to manage it already exist?", 'Y')){
@@ -770,13 +770,17 @@ sub ACTION_webapollo{
 	my $sql_file = "$path/tools/user/user_database_postgresql.sql";
 	open(IN, "<$sql_file");
 	while(my $line = <IN>){
-	    $line =~ s/SERIAL/INTEGER AUTOINCREMENT/ if($dbi_select eq 'sqlite');
+	    next if($line =~ /DROP TABLE/ && $dbi_select eq 'sqlite');
+	    $line =~ s/SERIAL/INTEGER/ if($dbi_select eq 'sqlite');
 	    $line =~ s/\;/ CASCADE\;/ if($dbi_select eq 'postgresql' && $line =~ /DROP/);
 	    $string .= $line;
+	    if($string =~ /\;/){
+		$dbh->do($string);
+		undef $string;
+	    }
 	}
 	close(IN);
-	
-	$dbh->do($string);
+	$dbh->do($string) if($string);
     }
     $dbh->disconnect;
 
@@ -787,7 +791,7 @@ sub ACTION_webapollo{
 		dbhost     => $dbhost,
 		dbport     => $dbport,
 		dbuser     => $dbuser);
-    open(OUT, "> $path/maker_conf.dump");
+    open(OUT, "> $path/maker.conf");
     print OUT Data::Dumper->Dump([\%conf], [qw(conf)]);
     close(OUT);
 
