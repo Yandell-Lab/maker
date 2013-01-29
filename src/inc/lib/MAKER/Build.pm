@@ -1695,7 +1695,7 @@ sub maker_status {
         "\t./Build apollo\t\t\#installs Apollo\n".
         "\t./Build gbrowse\t\t\#installs GBrowse (must be root)\n".
         "\t./Build jbrowse\t\t\#installs JBrowse (MAKER copy, not web accecible)\n".
-        "\t./Build webapollo\t\t\#installs WebApollo (use maker2wap to create DBs)\n".
+        "\t./Build webapollo\t\#installs WebApollo (use maker2wap to create DBs)\n".
         "\t./Build mpich2\t\t\#installs MPICH2 (but manual install recommended)\n";
 }
 
