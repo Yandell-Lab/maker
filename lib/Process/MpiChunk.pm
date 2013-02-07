@@ -256,6 +256,9 @@ sub _prepare {
 
    }
    elsif($tier_type == 2){
+
+   }
+   elsif($tier_type == 3){
       #-set up variables that are heldover from last chunk
       $VARS->{holdover_blastn}          = [];
       $VARS->{holdover_blastx}          = [];
@@ -279,6 +282,9 @@ sub _prepare {
       $VARS->{tblastx_keepers}  = [];
       $VARS->{res_dir} = [];
       $VARS->{edge_status} = {};
+   }
+   elsif($tier_type == 4){
+
    }
 
    return 1;
@@ -1120,7 +1126,118 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 4) {	#prep  abinits
+      elsif ($tier_type == 0 && $level == 4){ #preparing evidence tiers
+	 $level_status = 'preparing new fasta chunk tiers';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	    my $the_void = $VARS->{the_void};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
+
+	    #first tier is a pred only tier
+	    my %args = (the_void      => $VARS->{the_void},
+			fasta_chunker => $VARS->{fasta_chunker},
+			q_def         => $VARS->{q_def},
+			seq_id        => $VARS->{seq_id},
+			safe_seq_id   => $VARS->{safe_seq_id},
+			unmasked_file => $VARS->{unmasked_file},
+                        masked_file   => $VARS->{masked_file},
+			LOG           => $VARS->{LOG},
+			CTL_OPT       => $VARS->{CTL_OPT},
+			);
+
+	    my $tier_type = 2;
+	    my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
+	    push(@chunks, $tier); #really a tier
+
+	    #all other tiers are alignment evidence
+	    $VARS->{fasta_chunker}->reset;
+	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
+	       my $order = $fchunk->number;
+	       my $the_void = $VARS->{the_void};
+	       my $safe_seq_id = $VARS->{safe_seq_id};
+	       my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
+	       my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
+	       my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
+	       my $gff3_file = "$the_void/evidence_$order.gff";
+
+	       if(-f $section_file &&
+		  -f $gff3_file &&
+		  (-f $junction_start_file || $fchunk->is_first) &&
+		  (-f $junction_end_file || $fchunk->is_last)
+		 ){
+		  push(@{$VARS->{section_files}}, $section_file);
+		  push(@{$VARS->{section_files}}, $junction_start_file) if(!$fchunk->is_first);
+		  push(@{$VARS->{section_files}}, $junction_end_file) if(!$fchunk->is_last);
+		  push(@{$VARS->{gff3_files}}, $gff3_file);
+		  next;
+	       }
+
+	       my $GFF3_e = Dumper::GFF::GFFV3->new($gff3_file,
+						    '',
+						    $the_void
+						    );
+	       $GFF3_e->set_current_contig($VARS->{seq_id});
+
+	       my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
+               mkdir($subvoid) unless(-d $subvoid);
+
+	       my %args = (chunk        => $fchunk,
+                           order        => $order,
+			   the_void     => $VARS->{the_void},
+			   subvoid      => $subvoid,
+			   q_def        => $VARS->{q_def},
+			   seq_id       => $VARS->{seq_id},
+			   safe_seq_id  => $VARS->{safe_seq_id},
+			   q_seq_obj    => $VARS->{q_seq_obj},
+			   m_seq_obj    => $VARS->{m_seq_obj},
+			   q_seq_length => $VARS->{q_seq_length},
+			   dbfile       => $VARS->{dbfile},
+			   GFF3_e       => $GFF3_e,
+			   gff3_file    => $gff3_file,
+			   LOG          => $VARS->{LOG},
+			   DS_CTL       => $VARS->{DS_CTL},
+			   CTL_OPT      => $VARS->{CTL_OPT}
+			   );
+
+	       my $tier_type = 3;
+               my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
+               push(@chunks, $tier); #really a tier
+	    }
+	    delete($VARS->{preds});
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
+	    #-------------------------CODE
+	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
+	    #-------------------------CODE
+
+	    #------------------------RETURN
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+            while (my $key = each %{$self->{RESULTS}}) {
+	       if($key eq 'section_files' || $key eq 'holdover_files' || $key eq 'gff3_files'){
+		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
+	       }
+	       else{
+		  $VARS->{$key} = $self->{RESULTS}->{$key};
+	       }
+            }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 2 && $level == 0) {	#abinits
 	 $level_status = 'preparing ab-inits';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1136,6 +1253,7 @@ sub _go {
 			q_def
 			unmasked_file
 			masked_file
+			fasta_chunker
 			LOG
 			CTL_OPT)
 		    );
@@ -1151,6 +1269,7 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $fasta_chunker = $VARS->{fasta_chunker};	 
             my $LOG = $VARS->{LOG};	 
 
 	    #==ab initio predictions here
@@ -1190,11 +1309,32 @@ sub _go {
 
 	    #==QRNA noncoding RNA prediction here
 	    my $qra_preds = [];
+
+	    #section files for finishing
+	    my @section_files;
+	    $fasta_chunker->reset;
+	    while(my $fchunk = $fasta_chunker->next_chunk){
+		my $order = $fchunk->number;
+		my $the_void = $VARS->{the_void};
+		my $safe_seq_id = $VARS->{safe_seq_id};
+		my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
+		
+		my $preds_on_chunk = GI::get_preds_on_chunk($preds,
+							    $fchunk
+							    );
+
+		my %section = (preds_on_chunk => $preds_on_chunk);
+		if(! -f $section_file){
+		    $LOG->add_entry("STARTED", $section_file, "");
+		    store (\%section, $section_file);
+		    $LOG->add_entry("FINISHED", $section_file, "");
+		}
+		push(@section_files, $section_file);
+	    }
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = (preds => $preds,
-			qra_preds => $qra_preds
+	    %results = ( section_files => \@section_files,
 		       );
 	    #------------------------RETURN
 	 }
@@ -1207,107 +1347,11 @@ sub _go {
 	 }
 	 elsif ($flag eq 'flow') {
 	    #-------------------------NEXT_LEVEL
+	     $next_level = undef;
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 5){ #preparing evidence tiers
-	 $level_status = 'preparing new fasta chunk tiers';
-	 if ($flag eq 'load') {
-	    #-------------------------CHUNKER
-	    $VARS->{fasta_chunker}->reset;
-	    while(my $fchunk = $VARS->{fasta_chunker}->next_chunk){
-	       my $order = $fchunk->number;
-	       my $the_void = $VARS->{the_void};
-	       my $safe_seq_id = $VARS->{safe_seq_id};
-	       my $section_file = "$the_void/$safe_seq_id.$order.raw.section";
-	       my $junction_start_file = "$the_void/$safe_seq_id.".($order-1)."-$order.raw.section";
-	       my $junction_end_file = "$the_void/$safe_seq_id.$order-".($order+1).".raw.section";
-	       my $gff3_file = "$the_void/evidence_$order.gff";
-
-	       if(-f $section_file &&
-		  -f $gff3_file &&
-		  (-f $junction_start_file || $fchunk->is_first) &&
-		  (-f $junction_end_file || $fchunk->is_last)
-		 ){
-		  push(@{$VARS->{section_files}}, $section_file);
-		  push(@{$VARS->{section_files}}, $junction_start_file) if(!$fchunk->is_first);
-		  push(@{$VARS->{section_files}}, $junction_end_file) if(!$fchunk->is_last);
-		  push(@{$VARS->{gff3_files}}, $gff3_file);
-		  next;
-	       }
-
-	       my $GFF3_e = Dumper::GFF::GFFV3->new($gff3_file,
-						    '',
-						    $the_void
-						    );
-	       $GFF3_e->set_current_contig($VARS->{seq_id});
-
-	       #-get subset of predictions on each chunk
-	       my $preds_on_chunk = GI::get_preds_on_chunk($VARS->{preds},
-							   $fchunk
-							   );
-
-	       my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
-               mkdir($subvoid) unless(-d $subvoid);
-
-	       my %args = (chunk        => $fchunk,
-                           order        => $order,
-			   the_void     => $VARS->{the_void},
-			   subvoid      => $subvoid,
-			   q_def        => $VARS->{q_def},
-			   seq_id       => $VARS->{seq_id},
-			   safe_seq_id  => $VARS->{safe_seq_id},
-			   q_seq_obj    => $VARS->{q_seq_obj},
-			   m_seq_obj    => $VARS->{m_seq_obj},
-			   q_seq_length => $VARS->{q_seq_length},
-			   dbfile       => $VARS->{dbfile},
-			   GFF3_e       => $GFF3_e,
-			   gff3_file    => $gff3_file,
-			   LOG          => $VARS->{LOG},
-			   DS_CTL       => $VARS->{DS_CTL},
-			   CTL_OPT      => $VARS->{CTL_OPT},
-			   preds_on_chunk => $preds_on_chunk,
-			   );
-
-	       my $tier_type = 2;
-               my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
-               push(@chunks, $tier); #really a tier
-	    }
-	    delete($VARS->{preds});
-	    #-------------------------CHUNKER
-	 }
-	 elsif ($flag eq 'init') {
-	    #------------------------ARGS_IN
-	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
-	    #------------------------ARGS_IN
-	 }
-	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
-	    #-------------------------CODE
-	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
-	    #-------------------------CODE
-
-	    #------------------------RETURN
-	    #------------------------RETURN
-	 }
-	 elsif ($flag eq 'result') {
-	    #-------------------------RESULT
-            while (my $key = each %{$self->{RESULTS}}) {
-	       if($key eq 'section_files' || $key eq 'holdover_files' || $key eq 'gff3_files'){
-		  push(@{$VARS->{$key}}, @{$self->{RESULTS}->{$key}});
-	       }
-	       else{
-		  $VARS->{$key} = $self->{RESULTS}->{$key};
-	       }
-            }
-	    #-------------------------RESULT
-	 }
-	 elsif ($flag eq 'flow') {
-	    #-------------------------NEXT_LEVEL
-	    #-------------------------NEXT_LEVEL
-	 }
-      }
-      elsif ($tier_type == 2 && $level == 0) {	#blastn
+      elsif ($tier_type == 3 && $level == 0) {	#blastn
 	 $level_status = 'doing blastn of ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1402,7 +1446,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 1) {	#collect blastn
+      elsif ($tier_type == 3 && $level == 1) {	#collect blastn
 	 $level_status = 'collecting blastn reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1599,7 +1643,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 2) {	#exonerate ESTs
+      elsif ($tier_type == 3 && $level == 2) {	#exonerate ESTs
 	 $level_status = 'polishig ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1772,7 +1816,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 3) {	#further cluster
+      elsif ($tier_type == 3 && $level == 3) {	#further cluster
 	 $level_status = 'flattening EST clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1828,7 +1872,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }  
-      elsif ($tier_type == 2 && $level == 4) {	#tblastx
+      elsif ($tier_type == 3 && $level == 4) {	#tblastx
 	 $level_status = 'doing tblastx of alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -1919,7 +1963,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 5) {	#collect tblastx
+      elsif ($tier_type == 3 && $level == 5) {	#collect tblastx
 	 $level_status = 'collecting tblastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2116,7 +2160,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 6) {	#exonerate alt-ESTs
+      elsif ($tier_type == 3 && $level == 6) {	#exonerate alt-ESTs
 	 $level_status = 'polishing alt-ESTs';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2279,7 +2323,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 7) {	#further cluster and flatten
+      elsif ($tier_type == 3 && $level == 7) {	#further cluster and flatten
 	 $level_status = 'flattening altEST clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2335,7 +2379,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }  
-      elsif ($tier_type == 2 && $level == 8) {	#blastx
+      elsif ($tier_type == 3 && $level == 8) {	#blastx
 	 $level_status = 'doing blastx of proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2428,7 +2472,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 9) {	#collect blastx
+      elsif ($tier_type == 3 && $level == 9) {	#collect blastx
 	 $level_status = 'collecting blastx reports';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2626,7 +2670,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 10) {	#exonerate proteins
+      elsif ($tier_type == 3 && $level == 10) {	#exonerate proteins
 	 $level_status = 'polishing proteins';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2778,7 +2822,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 11) {	#further cluster
+      elsif ($tier_type == 3 && $level == 11) {	#further cluster
 	 $level_status = 'flattening protein clusters';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2834,7 +2878,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 2 && $level == 12) {	#prepare section files
+      elsif ($tier_type == 3 && $level == 12) {	#prepare section files
 	 $level_status = 'prepare section files';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -2849,7 +2893,6 @@ sub _go {
 			safe_seq_id
                         q_seq_obj
                         q_seq_length
-			preds_on_chunk
 			blastn_keepers
 			blastx_keepers
 			tblastx_keepers
@@ -2871,7 +2914,6 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $q_seq_length = $VARS->{q_seq_length};
-	    my $preds_on_chunk = $VARS->{preds_on_chunk};
 	    my $blastn_keepers = $VARS->{blastn_keepers};
 	    my $blastx_keepers = $VARS->{blastx_keepers};
 	    my $tblastx_keepers = $VARS->{tblastx_keepers};
@@ -2963,7 +3005,6 @@ sub _go {
 			   prot_gff_keepers => $prot_gff_keepers,
 			   pred_gff_keepers => $pred_gff_keepers,
 			   model_gff_keepers => $model_gff_keepers,
-			   preds_on_chunk => $preds_on_chunk,
 			   blastn_keepers => $blastn_keepers,
 			   blastx_keepers => $blastx_keepers,
 			   tblastx_keepers => $tblastx_keepers,
@@ -3103,7 +3144,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 6) {	#process section files
+      elsif ($tier_type == 0 && $level == 5) {	#process section files
 	 $level_status = 'processing the chunk divide';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3158,7 +3199,7 @@ sub _go {
 
 	       #fix weird storable is ARRAY not HASH error
 	       if (ref($junction) ne 'HASH'){
-		   unlink($junction);
+		   unlink($j_file);
 		   confess STDERR "ERROR: Storable retrieval error.\n".
 		                  "Must remove file before trying again.\n";
 	       }
@@ -3172,6 +3213,19 @@ sub _go {
 	       while(my $key = each %$holdovers){
 		  push(@{$section->{$key}}, @{$holdovers->{$key}});
 	       }
+
+               my $sp_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
+	       ($sp_file) = grep{$_ eq $sp_file} @$section_files;
+
+	       my $psection = retrieve($sp_file);
+
+	       #merge the junction data onto the rest of the chunk section
+	       push(@{$section->{preds_on_chunk}}, @{$psection->{preds_on_chunk}})
+		   if($psection->{preds_on_chunk});
+
+	       #merge the junction data onto the rest of the chunk section
+	       push(@{$section->{preds_on_chunk}}, @{$holdovers->{preds_on_chunk}})
+		   if($holdovers->{preds_on_chunk});
 
 	       #keys to grab out of $section hash
 	       my @keys = qw(blastn_keepers
@@ -3229,7 +3283,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 7) {     #build annotation tiers
+      elsif ($tier_type == 0 && $level == 6) {     #build annotation tiers
 	 $level_status = 'builing annotation tiers';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3265,7 +3319,7 @@ sub _go {
 			    DS_CTL             => $VARS->{DS_CTL},
 			    CTL_OPT            => $VARS->{CTL_OPT})
 			   );
-	       my $tier_type = 3;
+	       my $tier_type = 4;
 	       my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
 	    }
@@ -3304,7 +3358,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 0) {	#prep hint clusters
+      elsif ($tier_type == 4 && $level == 0) {	#prep hint clusters
 	 $level_status = 'preparing evidence clusters for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3407,7 +3461,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 1) {	#annotate transcripts
+      elsif ($tier_type == 4 && $level == 1) {	#annotate transcripts
 	 $level_status = 'annotating transcripts';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3488,7 +3542,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 2) {	#grouping transcripts into genes
+      elsif ($tier_type == 4 && $level == 2) {	#grouping transcripts into genes
 	 $level_status = 'clustering transcripts into genes for annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3548,7 +3602,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 3) {	#adding quality control statistics
+      elsif ($tier_type == 4 && $level == 3) {	#adding quality control statistics
 	 $level_status = 'adding statistics to annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3617,7 +3671,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 4) {	#deciding on final annotations
+      elsif ($tier_type == 4 && $level == 4) {	#deciding on final annotations
 	 $level_status = 'choosing best annotation set';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3713,7 +3767,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 3 && $level == 5) {	#local output
+      elsif ($tier_type == 4 && $level == 5) {	#local output
 	 $level_status = 'processing chunk output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3806,7 +3860,7 @@ sub _go {
 	    #-------------------------NEXT_LEVEL
 	 }
       }
-      elsif ($tier_type == 0 && $level == 8) {	#global output
+      elsif ($tier_type == 0 && $level == 7) {	#global output
 	 $level_status = 'processing contig output';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
@@ -3939,11 +3993,14 @@ sub _on_termination {
       $tier->{RESULTS}->{gff3_files} = [$tier->{VARS}{gff3_file}];
    }
    elsif($tier_type == 2){
+       $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
+   }
+   elsif($tier_type == 3){
       $tier->{RESULTS}->{holdover_files} = $tier->{VARS}{holdover_files};
       $tier->{RESULTS}->{section_files} = $tier->{VARS}{section_files};
       $tier->{RESULTS}->{gff3_files} = [$tier->{VARS}{gff3_file}];
    }
-   elsif($tier_type == 3){
+   elsif($tier_type == 4){
       $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
       $tier->{RESULTS}->{t_fastas} = $tier->{VARS}->{t_fastas};
    }
