@@ -765,6 +765,7 @@ sub rank {
 
    return $self->{RANK};
 }
+
 #--------------------------------------------------------------
 #returns a copy of this MpiTiers object using the Storable
 #perl module.  As a result globs and code refs are ignored.

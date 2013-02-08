@@ -19,19 +19,39 @@ sub new {
 	return $self;
     }
     else{
-	require Proc::ProcessTable;
+	eval 'require Proc::ProcessTable';
 	return Proc::ProcessTable->new(@_);
     }
 }
 
+sub get_proc_by_id {
+    my $self = shift;
+    my $id = shift;
+
+    return unless($id);
+
+    my $list = $self->_make_procs($id);
+    return shift @$list;
+}
+
 sub table {
     my $self = shift;
+    return $self->_make_procs();
+}
 
-    my $cmd = "$PS ax -o pid=pid".("_"x10).
-	      " -o ppid=ppid".("_"x10).
-	      " -o state=state".("_"x10).
-	      " -o comm=fname".("_"x145).
-	      " -o args=cmndline -w -w 2> /dev/null |";
+sub _make_procs {
+    my $self = shift;
+    my $pid = shift || '';
+
+    my $cmd = "$PS";
+    $cmd .= ($pid) ? " p$pid" : " ax"; 
+    $cmd .= " -o pid=pid".("_"x10).
+	    " -o ppid=ppid".("_"x10).
+	    " -o state=state".("_"x10).
+	    " -o vsz=size".("_"x10).
+	    " -o comm=fname".("_"x140).
+	    " -o args=cmndline".
+	    " -w -w 2> /dev/null |";
 
     my $stat = open(my $EX, $cmd);
 
@@ -43,32 +63,54 @@ sub table {
     }
 
     my $i = 0;
-    my @cat;
+    my @tags;
+    my @lens;
     my @table;
     local $/ = "\n"; #just in case
     while(my $line = <$EX>){
 	if(!$i++){ #first line
-	    @cat = $line =~ /^(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)(\s*[^\s]+)/;
-	    @cat = map {length($_)} @cat;
+	    @tags = map {s/[\s\n]//g; $_} split(/_+/, $line);
+	    while($line =~ s/^(\s*[^\s]+)//){
+		push(@lens, length($1));
+	    }
 	    next;
 	}
 
-	my @F = $line =~ /^(.{$cat[0]})(.{$cat[1]})(.{$cat[2]})(.{$cat[3]})(.*)$/;
-	map {s/^\s+|\s+$//g} @F;
-
-	next unless(defined $F[2]);
-
-	if($F[2] =~ /^T/i){
-	    $F[2] = 'stopped';
+	my %proc;
+	for(my $j = 0; $j < @lens; $j++){
+	    my $l = $lens[$j];
+	    my $val;
+	    if($j == $#lens){
+		$val = $line;
+		chomp($val);
+	    }
+	    elsif($line =~ s/^(.{$l})//){
+		$val = $1;
+	    }
+	    $proc{$tags[$j]} = $val;
 	}
-	elsif($F[2] =~ /^Z/i){
-	    $F[2] = 'zombie';
+	next unless(defined $proc{state});
+
+	map {s/^\s+|\s+$//g} values %proc;
+
+	if($proc{state} =~ /^T/i){
+	    $proc{state} = 'stopped';
+	}
+	elsif($proc{state} =~ /^Z/i){
+	    $proc{state} = 'zombie';
 	}
 	else{
-	    $F[2] = '';
+	    $proc{state} = '';
 	}
 
-	my $obj = Proc::Process_simple->new(@F);
+	$proc{size} *= 1000; #convert to bytes
+
+	#weird trailing character bug
+	chomp($proc{cmndline});
+	chomp($proc{fname});
+	$proc{fname} =~ s/\s\s\s\s+.//;
+
+	my $obj = Proc::Process_simple->new(\%proc);
 	push(@table, $obj);
     }
     close($EX);
@@ -91,15 +133,11 @@ sub new {
     my $class = shift;
     bless($self, $class);
 
-    $self->{pid}      = shift;
-    $self->{ppid}     = shift;
-    $self->{state}    = shift;
-    $self->{fname}    = shift;
-    $self->{cmndline} = shift;
+    my $hash = shift;
 
-    #weird trailing bug
-    chomp($self->{fname});
-    $self->{fname} =~ s/\s\s\s\s+.//;
+    foreach my $key (keys %$hash){
+	$self->{$key} = $hash->{$key};
+    }
     
     return $self;
 }

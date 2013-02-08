@@ -1133,21 +1133,44 @@ sub _go {
 	    my $the_void = $VARS->{the_void};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 
-	    #first tier is a pred only tier
-	    my %args = (the_void      => $VARS->{the_void},
-			fasta_chunker => $VARS->{fasta_chunker},
-			q_def         => $VARS->{q_def},
-			seq_id        => $VARS->{seq_id},
-			safe_seq_id   => $VARS->{safe_seq_id},
-			unmasked_file => $VARS->{unmasked_file},
-                        masked_file   => $VARS->{masked_file},
-			LOG           => $VARS->{LOG},
-			CTL_OPT       => $VARS->{CTL_OPT},
-			);
-
-	    my $tier_type = 2;
-	    my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
-	    push(@chunks, $tier); #really a tier
+	    #make sure that the abinits have not already been processed
+	    my $missing = 0;
+	    my @files = shift;
+	    my $total_chunks = $VARS->{fasta_chunker}->total_chunks;
+	    for(my $i = 0; $i < $total_chunks; $i++){
+	       my $the_void = $VARS->{the_void};
+	       my $safe_seq_id = $VARS->{safe_seq_id};
+	       my $section_file = "$the_void/$safe_seq_id.$i.pred.raw.section";
+	       if(! -f $section_file){
+		   $missing = 1;
+		   undef @files;
+		   last;
+	       }
+	       else{
+		   push(@files, $section_file);
+	       }
+	    }
+	    
+	    if(!$missing){
+		push(@{$VARS->{section_files}}, @files);
+	    }
+	    else{
+		#first tier is a pred only tier
+		my %args = (the_void      => $VARS->{the_void},
+			    fasta_chunker => $VARS->{fasta_chunker},
+			    q_def         => $VARS->{q_def},
+			    seq_id        => $VARS->{seq_id},
+			    safe_seq_id   => $VARS->{safe_seq_id},
+			    unmasked_file => $VARS->{unmasked_file},
+			    masked_file   => $VARS->{masked_file},
+			    LOG           => $VARS->{LOG},
+			    CTL_OPT       => $VARS->{CTL_OPT},
+			    );
+		
+		my $tier_type = 2;
+		my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
+		push(@chunks, $tier); #really a tier
+	    }
 
 	    #all other tiers are alignment evidence
 	    $VARS->{fasta_chunker}->reset;
@@ -2168,7 +2191,7 @@ sub _go {
 	    my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
-	    #$size = 1; #temp
+
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
 	       my $j = $i % $size;
@@ -3175,11 +3198,27 @@ sub _go {
 	    my $section_files = $VARS->{section_files};
 	    my $LOG = $VARS->{LOG};
 
+	    #check if sections are already processed
+	    $fasta_chunker->reset;
+	    my @new_files;
+	    while(my $chunk = $fasta_chunker->next_chunk){
+		my $order = $chunk->number;
+		my $section_file = "$the_void/$safe_seq_id.$order.final.section";
+		if(-f $section_file){
+		    push(@new_files, $section_file);
+		}
+		else{
+		    undef @new_files;
+		    last;
+		}
+	    }
+
 	    #process data from each chunk linearly
 	    $fasta_chunker->reset;
 	    my $holdovers = {}; #holds heldover data on each chunk
-	    my @new_files;
 	    while(my $chunk = $fasta_chunker->next_chunk){
+	       last if(@new_files == $fasta_chunker->total_chunks); #already finished
+
 	       #get evidence alignments from chunk section files
 	       my $order = $chunk->number;
                my $s_file = "$the_void/$safe_seq_id.$order.raw.section";
@@ -3262,7 +3301,6 @@ sub _go {
 	       $LOG->add_entry("FINISHED", $section_file, "");
 	       push (@new_files, $section_file);
 	    }
-
 	    $section_files = \@new_files;
 	    #-------------------------CODE
 	    
@@ -3301,24 +3339,22 @@ sub _go {
 	       my $subvoid = ($main::old_struct) ? $the_void : "$the_void/".int($fchunk->start/1000000);
                mkdir($subvoid) unless(-d $subvoid);
 	       my ($file) = grep {/\.$order\.final\.section$/} @$section_files;
-	       my $section = retrieve($file);
-	       my %args = (%$section,
-			   (chunk              => $fchunk,
-			    order              => $order,
-			    the_void           => $VARS->{the_void},
-			    subvoid            => $subvoid,
-			    safe_seq_id        => $VARS->{safe_seq_id},
-			    seq_id             => $VARS->{seq_id},
-			    q_def              => $VARS->{q_def},
-			    out_dir            => $VARS->{out_dir},
-			    q_seq_obj          => $VARS->{q_seq_obj},
-			    m_seq_obj          => $VARS->{m_seq_obj},
-			    section_files      => $VARS->{section_files},
-			    GFF3               => $VARS->{GFF3},
-			    LOG                => $VARS->{LOG},
-			    DS_CTL             => $VARS->{DS_CTL},
-			    CTL_OPT            => $VARS->{CTL_OPT})
-			   );
+	       my %args = (section_file       => $file,
+			   chunk              => $fchunk,
+			   order              => $order,
+			   the_void           => $VARS->{the_void},
+			   subvoid            => $subvoid,
+			   safe_seq_id        => $VARS->{safe_seq_id},
+			   seq_id             => $VARS->{seq_id},
+			   q_def              => $VARS->{q_def},
+			   out_dir            => $VARS->{out_dir},
+			   q_seq_obj          => $VARS->{q_seq_obj},
+			   m_seq_obj          => $VARS->{m_seq_obj},
+			   GFF3               => $VARS->{GFF3},
+			   LOG                => $VARS->{LOG},
+			   DS_CTL             => $VARS->{DS_CTL},
+			   CTL_OPT            => $VARS->{CTL_OPT});
+
 	       my $tier_type = 4;
 	       my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
 	       push(@chunks, $tier); #really a tier
@@ -3370,18 +3406,7 @@ sub _go {
 	 }
       	 elsif ($flag eq 'init') {
             #------------------------ARGS_IN
-	    @args = (qw(tblastx_keepers
-			blastx_keepers
-			blastn_keepers
-			exonerate_e_data
-			exonerate_a_data
-			exonerate_p_data
-			preds_on_chunk
-			est_gff_keepers
-			altest_gff_keepers
-			prot_gff_keepers
-			pred_gff_keepers
-			model_gff_keepers
+	    @args = (qw(section_file
 			seq_id
 			q_seq_obj
 			CTL_OPT)
@@ -3394,18 +3419,21 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $seq_id = $VARS->{seq_id};
-	    my $tblastx_keepers = $VARS->{tblastx_keepers};
-	    my $blastx_keepers = $VARS->{blastx_keepers};
-	    my $blastn_keepers = $VARS->{blastn_keepers};
-	    my $exonerate_e_data = $VARS->{exonerate_e_data};
-	    my $exonerate_a_data = $VARS->{exonerate_a_data};
-	    my $exonerate_p_data = $VARS->{exonerate_p_data};
-	    my $preds_on_chunk = $VARS->{preds_on_chunk};
-	    my $est_gff_keepers = $VARS->{est_gff_keepers};
-	    my $altest_gff_keepers = $VARS->{altest_gff_keepers};
-	    my $prot_gff_keepers = $VARS->{prot_gff_keepers};
-	    my $pred_gff_keepers = $VARS->{pred_gff_keepers};
-	    my $model_gff_keepers = $VARS->{model_gff_keepers};
+	    my $section_file = $VARS->{section_file};
+
+	    my $section = Storable::retrieve($section_file);
+	    my $tblastx_keepers    = $section->{tblastx_keepers};
+	    my $blastx_keepers     = $section->{blastx_keepers};
+	    my $blastn_keepers     = $section->{blastn_keepers};
+	    my $exonerate_e_data   = $section->{exonerate_e_data};
+	    my $exonerate_a_data   = $section->{exonerate_a_data};
+	    my $exonerate_p_data   = $section->{exonerate_p_data};
+	    my $preds_on_chunk     = $section->{preds_on_chunk};
+	    my $est_gff_keepers    = $section->{est_gff_keepers};
+	    my $altest_gff_keepers = $section->{altest_gff_keepers};
+	    my $prot_gff_keepers   = $section->{prot_gff_keepers};
+	    my $pred_gff_keepers   = $section->{pred_gff_keepers};
+	    my $model_gff_keepers  = $section->{model_gff_keepers};
 
 	    #combine final data sets
 	    print STDERR "Preparing evidence for hint based annotation\n" unless($main::quiet);
@@ -3781,15 +3809,6 @@ sub _go {
 			maker_anno
 			non_over
 			annotations
-			blastx_keepers
-			blastn_keepers
-			tblastx_keepers
-			exonerate_e_data
-			exonerate_a_data
-			exonerate_p_data
-			est_gff_keepers
-			altest_gff_keepers
-			prot_gff_keepers
 			scored_preds
 			GFF3)
 		    );
@@ -3798,12 +3817,12 @@ sub _go {
 	 elsif ($flag eq 'run') {
 	    print STDERR "$level_status\n";
 	    #-------------------------CODE
-	    my $chunk       = $VARS->{chunk};
-	    my $maker_anno  = $VARS->{maker_anno};
-	    my $non_over    = $VARS->{non_over};
-	    my $annotations = $VARS->{annotations};
+	    my $chunk        = $VARS->{chunk};
+	    my $maker_anno   = $VARS->{maker_anno};
+	    my $non_over     = $VARS->{non_over};
+	    my $annotations  = $VARS->{annotations};
 	    my $scored_preds = $VARS->{scored_preds};
-	    my $GFF3 = $VARS->{GFF3};
+	    my $GFF3         = $VARS->{GFF3};
 
 	    #==OUTPUT DATA HERE      
 	    #--- GFF3
@@ -3952,7 +3971,6 @@ sub _go {
    return $result_stat if($flag eq 'result');
    #return next_level for flow
    return $next_level if($flag eq 'flow');
-
 
    #should never reach this line
    confess "FATAL: \'$flag\' is not a valid flag in MpiChunk _go!!\n";

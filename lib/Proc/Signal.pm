@@ -140,15 +140,7 @@ sub get_proc_by_id {
 
     my $select;
     my $obj = new Proc::ProcessTable_simple;
-    foreach my $p (@{$obj->table}) {
-	#now check for the id
-	if ($p->pid == $id){
-	    $select = $p;
-	    last;
-	}
-    }
-
-    return $select;
+    return $obj->get_proc_by_id($id);
 }
 #-----------------------------------------------------------------
 #returns parent process table for a given child id

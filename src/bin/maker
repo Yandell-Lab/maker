@@ -66,7 +66,7 @@ use POSIX;
 use Sys::Hostname;
 
 BEGIN{
-   $VERSION = '2.27';
+   $VERSION = '2.28';
 
    #what to do on ^C
    $SIG{INT}  = sub {print STDERR "SIGINT received\n";  exit_maker(SIGINT);};
@@ -893,6 +893,15 @@ else {
 	    $t_chunk_result = undef;
 	    update_chunk(\@tiers, $c_res);
 	    run(\@tiers, $rank);
+
+	    #check thread memory usage
+	    my $p = Proc::Signal::get_proc_by_id($thr->{pid});
+	    if($p && $p->size >= 2e9){ #greater than 2 Gb
+		#drop thread to clear memory
+		$t_terminate = 1;
+		$thr->join();
+		$thr = threads->new(\&node_thread, $gdbfile);
+	    }
 	    next;
 	}
 	#====END THREAD
@@ -987,10 +996,17 @@ else {
 	       run(\@tiers, $rank);
 	       next;
 	    }
-	
-	    $r_chunk->run($rank);
-	    update_chunk(\@tiers, $r_chunk);
-	    run(\@tiers, $rank);
+
+	    #let thread do the work (allows me to drop memory)
+	    $t_need_flag = 0;
+	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    nstore(\$r_chunk, $file);
+	    $t_chunk = $file;
+	    $r_chunk = undef;	
+
+	    #$r_chunk->run($rank);
+	    #update_chunk(\@tiers, $r_chunk);
+	    #run(\@tiers, $rank);
 	    next;
 	}
 	elsif((result_count(\@tiers) == chunk_total_count(\@tiers)-1) && (num_chunks(\@tiers) == 1)){
@@ -1005,9 +1021,16 @@ else {
 	       next;
 	    }
 
-	    $r_chunk->run($rank);
-	    update_chunk(\@tiers, $r_chunk);
-	    run(\@tiers, $rank);
+	    #let thread do the work (allows me to drop memory)
+	    $t_need_flag = 0;
+	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    nstore(\$r_chunk, $file);
+	    $t_chunk = $file;
+	    $r_chunk = undef;	
+
+	    #$r_chunk->run($rank);
+	    #update_chunk(\@tiers, $r_chunk);
+	    #run(\@tiers, $rank);
 	    next;
 	}
 	elsif(!$t_need_flag && (result_count(\@tiers) == chunk_total_count(\@tiers) - 1)){
@@ -1114,7 +1137,8 @@ else {
 	} #if what I want is help or the result from a helper do this
 	elsif ($what == $need_helper || $what == $need_c_res){
 	    #give chunk to thread
-	    if(defined($chunk) && chunk_total_count(\@tiers) > 1){
+	    if(defined($chunk)){
+	    #if(defined($chunk) && chunk_total_count(\@tiers) > 1){
 		$t_need_flag = 0;
 		my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
 		nstore(\$chunk, $file);
@@ -1217,8 +1241,9 @@ else {
 	       sleep 1;
 	    }
 
-	    #finally run local chunk if there is one
+	    #finally run local chunk if there is one (shouldn't happen)
 	    if($chunk){
+		warn "WARNING:  Running chunk outside of thread\n";
 		my $r_chunk = $chunk; #running chunk
 		undef $chunk;
 		$r_chunk->run($rank);
@@ -1485,7 +1510,7 @@ sub update_chunk {
     return $stat;
 }
 #----------------------------------------------------------------------------
-#function to itterate through chunk buffer and count all total chunkse
+#function to itterate through chunk buffer and count all chunks
 sub chunk_total_count {
    my $buffer = shift;
 

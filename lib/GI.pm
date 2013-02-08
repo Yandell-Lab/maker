@@ -1516,13 +1516,14 @@ sub polish_exonerate {
 	my $F = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
 	my $L = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
 	my $offset  = $F - 1;
+	my $tmp = get_global_temp();
         my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
 	$o_file    .= '.p_exonerate' if($type eq 'p');
 	$o_file    .= '.est_exonerate' if($type eq 'e');
 	$o_file    .= '.alt_exonerate' if($type eq 'a');
-	my $o_tfile = "$o_file.$rank";
-	my $t_file  = $the_void."/".$safe_id.".for.$F-$L.$rank.fasta";
-	my $d_file  = $the_void."/".$safe_name.'.'.$F.'-'.$L.".$rank.fasta";
+	my $o_tfile = "$tmp/$safe_name.$F-$L.$safe_id.$type.exonerate";
+	my $t_file  = "$tmp/$safe_id.for.$F-$L.$rank.fasta";
+	my $d_file  = "$tmp/$safe_name.$F-$L.$rank.fasta";
 
 	my $d_len = abs($L - $F) + 1;
 	my $t_len = (ref($hit)) ? $hit->length : undef;
@@ -1579,11 +1580,13 @@ sub polish_exonerate {
 					 $max_intron,
 					 $matrix
 					 );
-	File::Copy::move($o_tfile, $o_file) if($o_tfile ne $o_file);
+
+	#temp
+	#File::Copy::move($o_tfile, $o_file) if($o_tfile ne $o_file);
 	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 
 	#delete fastas
-	unlink($d_file, $t_file);
+	unlink($d_file, $t_file, $o_tfile);
 
 	#evaluate exonerate results
 	my @keepers;
