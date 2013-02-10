@@ -1676,9 +1676,10 @@ sub _go {
 	    my $l = $VARS->{chunk}->length;
 
 	    #set max chunks
-	    my $altsize = int((@{$VARS->{blastn_keepers}} + @{$ex} * $l/$ql)/5);
+	    my $altsize = int((@{$VARS->{blastn_keepers}} + @{$ex} * $l/$ql)/20);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
+	    $size = 10 if($size > 10);
 
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{blastn_keepers}}; $i++){
@@ -2188,9 +2189,10 @@ sub _go {
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    #set max chunks
-	    my $altsize = int(@{$VARS->{tblastx_keepers}}/5);
+	    my $altsize = int(@{$VARS->{tblastx_keepers}}/20);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
+	    $size = 10 if($size > 10);
 
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{tblastx_keepers}}; $i++){
@@ -2698,9 +2700,10 @@ sub _go {
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    #set max chunks
-	    my $altsize = int(@{$VARS->{blastx_keepers}}/5);
+	    my $altsize = int(@{$VARS->{blastx_keepers}}/20);
 	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
 	    $size = 1 if(! $size);
+	    $size = 10 if($size > 10);
 
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{blastx_keepers}}; $i++){
@@ -3494,16 +3497,23 @@ sub _go {
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
 	    $VARS->{trans} = {}; #reset
+
+            my $altsize = int(@{$VARS->{all_data}}/20);
+	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
+            $size = 1 if(! $size);
+            $size = 10 if($size > 10);
+	    $size = 1;
+
 	    my @data_sets;
 	    for(my $i = 0; $i < @{$VARS->{all_data}}; $i++){
-		my $j = $i % $VARS->{CTL_OPT}->{_mpi_size};
+		my $j = $i % $size;
 		push(@{$data_sets[$j]}, $VARS->{all_data}->[$i]);
 	    }
 	    foreach my $dc (@data_sets){
-                $VARS->{dc} = $dc;
+		$VARS->{dc} = $dc;
 		$VARS->{LOG_FLAG} = (!@chunks) ? 1 : 0;
-                my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
-                push(@chunks, $chunk);
+		my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
+		push(@chunks, $chunk);
             }
 	    delete($VARS->{dc});
 	    delete($VARS->{LOG_FLAG});
@@ -3634,11 +3644,22 @@ sub _go {
 	 $level_status = 'adding statistics to annotations';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
+	    my $altsize = 0;
+	    while (my $key = each %{$VARS->{annotations}}){
+		$altsize += @{$VARS->{annotations}->{$key}};
+	    }
+	    
+	    $altsize = int($altsize/20);
+	    my $size = ($altsize < $VARS->{CTL_OPT}->{_mpi_size}) ? $altsize : $VARS->{CTL_OPT}->{_mpi_size};
+	    $size = 1 if(! $size);
+	    $size = 10 if($size > 10);
+	    $size = 1;
+
 	    my @data_sets;
 	    my $i = 0;
 	    while (my $key = each %{$VARS->{annotations}}){ 
 		foreach my $an (@{$VARS->{annotations}->{$key}}){
-		    my $j = $i % $VARS->{CTL_OPT}->{_mpi_size};
+		    my $j = $i % $size;
 		    push(@{$data_sets[$j]{$key}}, $an);
 		    $i++;
 		}

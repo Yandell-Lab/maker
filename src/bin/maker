@@ -397,7 +397,8 @@ my $no_chunk  = 21;
 #---variables for thread and the root node
 my @c_results;
 my @res_loc;
-my @limbo_stack;
+my $wait_stack; #max one node
+my @helper_stack;
 my @active;
 my @chunks :shared;
 my @returned_chunks :shared;
@@ -574,7 +575,7 @@ else{
 	}
 
 	if($req_stat == $wait_ask_again){
-	    sleep 1;
+	    sleep 5;
 	    next;
 	}
 
@@ -756,13 +757,32 @@ if ($rank == $root) {
 		print "COMM TIER REQUESTED\t|  SND2\t|  mpi_data (tier)\t\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
 		MPI_Send(\$tier, $who, $mpi_data);
 		$tier = undef;
-		@limbo_stack = grep {$_ != $who} @limbo_stack if(defined($active[$who]) && $active[$who] == 0);
+
+		#if this is the primary wait node assign a new one
+		if(defined($wait_stack) && $wait_stack == $who){
+		    undef $wait_stack;
+		    my $helper = shift @helper_stack;
+		    if(defined $helper){ #resets a helper
+			print "RESET HELPER\t|  SEND\t|  who_I_am (reset *helpers)\t|  $rank\t-->\t$helper\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Send(\$rank, $helper, $who_I_am);
+			print "RESET HELPER\t|  SEND\t|  c_req_stat (reset *helpers)\t|  $rank\t-->\t$helper\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Send(\$c_reset, $helper, $c_req_status); #send reset
+		    }
+		    $active[$helper] = 0;
+		}
+
 		$active[$who] = 1;
 	    }
-	    else{
+	    elsif(! defined($wait_stack) || $wait_stack == $who){
 		print "COMM TIER REQUESTED\t|  SEND\t|  req_stat (wait_ask_again)\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
 		MPI_Send(\$wait_ask_again, $who, $request_status);
-		push(@limbo_stack, $who) if(!defined($active[$who]) || $active[$who]);
+		$wait_stack = $who;
+		$active[$who] = 0;
+	    }
+	    else{
+		print "COMM TIER REQUESTED\t|  SEND\t|  req_stat (wait_as_helper)\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
+		MPI_Send(\$wait_as_helper, $who, $request_status);
+		push(@helper_stack, $who);
 		$active[$who] = 0;
 	    }
 
@@ -793,8 +813,9 @@ if ($rank == $root) {
 		MPI_Recv(\$num_helpers_req, $who, $work_order);
 		
 		#number of helpers available
-		my $sec_node_avail = @limbo_stack;
-		
+		my $sec_node_avail = @helper_stack;
+		$sec_node_avail++ if(defined($wait_stack));
+
 		#signal that no helpers are available
 		if($sec_node_avail == 0){
 			print "HELPER/RESULT REQUESTED\t|  SEND\t|  req_stat (no_helpers_avail)\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
@@ -805,29 +826,36 @@ if ($rank == $root) {
 		    my $helpers = [];
 		    
 		    #secondary node helpers
-		    while(@{$helpers} < $num_helpers_req && @limbo_stack > 0){
-			my $helper = shift @limbo_stack;
+		    while(@{$helpers} < $num_helpers_req && @helper_stack > 0){
+			my $helper = shift @helper_stack;
 			$active[$helper] = 1; #indicates who they work for
 			push(@{$helpers}, $helper);
 		    }
-		    
+
+		    #add wait node if necessary
+		    if(@{$helpers} < $num_helpers_req && defined($wait_stack)){
+			push(@{$helpers}, $wait_stack);			
+		    }
+
 		    #say help is available and send ids of the helpers
 		    print "HELPER/RESULT REQUESTED\t|  SEND\t|  req_stat (yes_helpers_avail)\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
 		    MPI_Send(\$yes_helper, $who, $request_status);
 		    print "HELPER/RESULT REQUESTED\t|  SND2\t|  mpi_list (helper_loc_list)\t|  $rank\t-->\t$who\t|  ".$C++."\n" if($main::debugmpi);
 		    MPI_Send(\$helpers, $who, $mpi_list);
 		    
-		    #signal to limbo nodes to become a helper
-		    foreach my $helper (@$helpers){
-			#turn node into helper node
-			print "HELPER/RESULT REQUESTED\t|  RECV\t|  who_I_am (clr nd)\t\t|  $rank\t<--\t$helper\t|  ".$C++."\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $who_I_am); #clear
-			print "HELPER/RESULT REQUESTED\t|  RECV\t|  what_I_want (clr nd)\t\t|  $rank\t<--\t$helper\t|  ".$C++."\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $what_I_want); #clear
-			print "HELPER/RESULT REQUESTED\t|  RECV\t|  result_status (clr nd)\t|  $rank\t<--\t$helper\t|  ".$C++."\n" if($main::debugmpi);
-			MPI_Recv(\$empty, $helper, $result_status); #clear
-			print "HELPER/RESULT REQUESTED\t|  SEND\t|  req_stat (wait_as_helper nd)\t|  $rank\t-->\t$helper\t|  ".$C++."\n" if($main::debugmpi);
-			MPI_Send(\$wait_as_helper, $helper, $request_status);
+		    #signal to wait nodes to become a helper
+		    if($helpers->[-1] == $wait_stack){
+			#turn wait node into helper node
+			print "HELPER/RESULT REQUESTED\t|  RECV\t|  who_I_am (clr nd)\t\t|  $rank\t<--\t$wait_stack\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Recv(\$empty, $wait_stack, $who_I_am); #clear
+			print "HELPER/RESULT REQUESTED\t|  RECV\t|  what_I_want (clr nd)\t\t|  $rank\t<--\t$wait_stack\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Recv(\$empty, $wait_stack, $what_I_want); #clear
+			print "HELPER/RESULT REQUESTED\t|  RECV\t|  result_status (clr nd)\t|  $rank\t<--\t$wait_stack\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Recv(\$empty, $wait_stack, $result_status); #clear
+			print "HELPER/RESULT REQUESTED\t|  SEND\t|  req_stat (wait_as_helper nd)\t|  $rank\t-->\t$wait_stack\t|  ".$C++."\n" if($main::debugmpi);
+			MPI_Send(\$wait_as_helper, $wait_stack, $request_status);
+			$active[$wait_stack] = 1;
+			$wait_stack = undef;
 		    }
 		}
 	    }
@@ -854,6 +882,14 @@ if ($rank == $root) {
 	else{
 	    confess "ERROR: Invalid request type\n";
 	}
+    }
+
+    while(my $helper = shift @helper_stack){
+	print "RESET HELPER\t|  SEND\t|  who_I_am (reset *helpers)\t|  $rank\t-->\t$helper\t|  ".$C++."\n" if($main::debugmpi);
+	MPI_Send(\$rank, $helper, $who_I_am);
+	print "RESET HELPER\t|  SEND\t|  c_req_stat (reset *helpers)\t|  $rank\t-->\t$helper\t|  ".$C++."\n" if($main::debugmpi);
+	MPI_Send(\$c_reset, $helper, $c_req_status); #send reset
+	$active[$helper] = 0;
     }
     
     #---tell mpi nodes to terminate
@@ -998,15 +1034,15 @@ else {
 	    }
 
 	    #let thread do the work (allows me to drop memory)
-	    $t_need_flag = 0;
-	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
-	    nstore(\$r_chunk, $file);
-	    $t_chunk = $file;
-	    $r_chunk = undef;	
+	    #$t_need_flag = 0;
+	    #my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    #nstore(\$r_chunk, $file);
+	    #$t_chunk = $file;
+	    #$r_chunk = undef;	
 
-	    #$r_chunk->run($rank);
-	    #update_chunk(\@tiers, $r_chunk);
-	    #run(\@tiers, $rank);
+	    $r_chunk->run($rank);
+	    update_chunk(\@tiers, $r_chunk);
+	    run(\@tiers, $rank);
 	    next;
 	}
 	elsif((result_count(\@tiers) == chunk_total_count(\@tiers)-1) && (num_chunks(\@tiers) == 1)){
@@ -1022,15 +1058,15 @@ else {
 	    }
 
 	    #let thread do the work (allows me to drop memory)
-	    $t_need_flag = 0;
-	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
-	    nstore(\$r_chunk, $file);
-	    $t_chunk = $file;
-	    $r_chunk = undef;	
+	    #$t_need_flag = 0;
+	    #my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    #nstore(\$r_chunk, $file);
+	    #$t_chunk = $file;
+	    #$r_chunk = undef;	
 
-	    #$r_chunk->run($rank);
-	    #update_chunk(\@tiers, $r_chunk);
-	    #run(\@tiers, $rank);
+	    $r_chunk->run($rank);
+	    update_chunk(\@tiers, $r_chunk);
+	    run(\@tiers, $rank);
 	    next;
 	}
 	elsif(!$t_need_flag && (result_count(\@tiers) == chunk_total_count(\@tiers) - 1)){
@@ -1112,7 +1148,7 @@ else {
 	    }
 	    #just wait and then try again later
 	    elsif($req_status == $wait_ask_again){
-		sleep 1;
+		sleep 5;
 		next;
 	    }
 	    #reset signal received
@@ -1238,7 +1274,7 @@ else {
 
 	    #nothing provided and nothing to advance to (wait)
 	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){
-	       sleep 1;
+	       sleep 10;
 	    }
 
 	    #finally run local chunk if there is one (shouldn't happen)
