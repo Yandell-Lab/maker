@@ -121,6 +121,15 @@ sub _safe_new {
 		    File::Copy::move("$i.tmp", $i) or confess "ERROR: Move failed: $!";
 		}
 	    }
+
+	    #fix file location for moved indexes
+	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
+		my ($name) = $sym =~ /([^\/]+)$/;
+		if($db->{offsets}{__file_0} ne $name){
+		    $db->{offsets}{__file_0} = $name;
+		    $db->{offsets}{__path_$name} = 0;
+		}
+	    }
 	}
 	elsif(!$exists || $args{'-reindex'}){
 	    #build the index from scratch
@@ -130,12 +139,30 @@ sub _safe_new {
 	    untie(%{$db->{offsets}}); #untie first to flush (for new index)
 	    $args{'-reindex'} = 0;
 	    $db = new Bio::DB::Fasta($file, %args);
+
+	    #fix file location for moved indexes
+	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
+		my ($name) = $file =~ /([^\/]+)$/;
+		if($db->{offsets}{__file_0} ne $name){
+		    $db->{offsets}{__file_0} = $name;
+		    $db->{offsets}{__path_$name} = 0;
+		}
+	    }
 	}
 	else{
 	    #build the index with existing file
 	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	    $db = new Bio::DB::Fasta($file, @args);
+
+	    #fix file location for moved indexes
+	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
+		my ($name) = $file =~ /([^\/]+)$/;
+		if($db->{offsets}{__file_0} ne $name){
+		    $db->{offsets}{__file_0} = $name;
+		    $db->{offsets}{__path_$name} = 0;
+		}
+	    }
 	}
     
 	$lock->unlock if($lock);
@@ -148,6 +175,15 @@ sub _safe_new {
 	unlink("$file.index.pag") if(-f "$file.index.pag"); #GDBM_File
 	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	$db = new Bio::DB::Fasta($file, @args);
+
+	#fix file location for moved indexes
+	if($db->{offsets} && defined($db->{offsets}{__file_0})){
+	    my ($name) = $file =~ /([^\/]+)$/;
+	    if($db->{offsets}{__file_0} ne $name){
+		$db->{offsets}{__file_0} = $name;
+		$db->{offsets}{__path_$name} = 0;
+	    }
+	}
     };
 
     return $db;

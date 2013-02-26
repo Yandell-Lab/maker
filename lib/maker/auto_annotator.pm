@@ -70,12 +70,12 @@ sub prep_hits {
 	}
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::clean_and_cluster(50, $p, $pred_flank, 1);
-	my $m_clusters = cluster::clean_and_cluster(50, $m, $pred_flank, 1);
+	my $p_clusters = cluster::clean_and_cluster(20, $p, $pred_flank, 1);
+	my $m_clusters = cluster::clean_and_cluster(20, $m, $pred_flank, 1);
 	
 	my $e_cluster = [];
 	if($correct_est_fusion){
-	    $e_cluster = cluster::clean_and_cluster(50, $e_bag, $pred_flank, 1);
+	    $e_cluster = cluster::clean_and_cluster(20, $e_bag, $pred_flank, 1);
 	}
 	else{
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
@@ -1682,17 +1682,25 @@ sub run_it{
 	    if($CTL_OPT->{est_forward}){
 		$gomias = $ests;
 	    }
-	    elsif($CTL_OPT->{org_type} eq 'prokaryotic'){
+	    elsif($CTL_OPT->{organism_type} eq 'prokaryotic'){
 		$gomias = PhatHit_utils::make_flat_hits($ests, $v_seq);
 	    }
 	    else{
 		$gomias = clean::purge_single_exon_hits($ests);
-		$gomias = clean::get_best_alt_splices($gomias, 10);
+
+		if(!@$gomias && @$ests && $CTL_OPT->{single_exon}){
+		    $gomias = clean::purge_short_single_exons($ests, $CTL_OPT->{single_length});
+		}
+		else{
+		    $gomias = clean::get_best_alt_splices($gomias, 10);
+		}
 	    }
 
 	    foreach my $mia (@$gomias){
 		my $transcript = $mia;
-		if($CTL_OPT->{est_forward}){
+		
+		#only tile if not set to push forward as is
+		if(!$CTL_OPT->{est_forward}){
 		    my $select = $mia;
 		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 		    while(! compare::is_same_alt_form($select, $transcript, 0)){
@@ -1702,19 +1710,31 @@ sub run_it{
 		}
 		$transcript->{_HMM} = 'est2genome';
 
-		if(! $CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
+		#at least 60% of single_exon est2genome genes must be ORF
+		#also require some protein support for eukaryotes
+		if(!$CTL_OPT->{est_forward} && $transcript->num_hsps == 1){
 		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
 		    my ($translation_seq,
 			$offset,
 			$end,
 			$has_start,
 			$has_stop) = get_translation_seq($transcript_seq, $transcript);
-		    #at least 60% of EST must be CDS to make a gene prediction
-		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop);
-		}
-		
-		next if !$transcript;
 
+		    #60% min
+		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop); 
+
+		    #sometimes require protein evidence as well
+		    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+			next if(!@$gomiph);
+			my $coors  = PhatHit_utils::get_hsp_coors($gomiph, 'query');
+			my $pieces = Shadower::getVectorPieces($coors, 0);
+			
+			my $bAED = shadow_AED::get_eAED($gomiph, $transcript); #also verifies reading frame
+			next unless($bAED <= 0.5); #must have 50% support
+		    }
+		}
+
+		#labels transcripts mapped to new assembly by % found
 		if($CTL_OPT->{est_forward}){
 		   $transcript->{_tran_name} = $mia->name;
 		   my $score = $mia->frac_identical * $mia->pAh * 100;
@@ -1731,8 +1751,16 @@ sub run_it{
 	if ($predictor eq 'protein2genome') {
 	    next if(! @$gomiph);
 
-	    my $miphs = clean::remove_redundant_alt_splices($gomiph, 10);
-	    #my $miphs = PhatHit_utils::make_flat_hits($gomiph, $v_seq);
+	    my $miphs = [];
+	    if($CTL_OPT->{est_forward}){
+                $miphs = $gomiph;
+            }
+            elsif($CTL_OPT->{organism_type} eq 'prokaryotic'){
+                $miphs = PhatHit_utils::make_flat_hits($gomiph, $v_seq);
+            }
+            else{
+		$miphs = clean::remove_redundant_alt_splices($gomiph, 10);
+	    }
 
 	    foreach my $miph (@$miphs){
 		my $transcript_seq  = get_transcript_seq($miph, $v_seq);
@@ -1748,16 +1776,19 @@ sub run_it{
 		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
 
-		my $select = $copy;
-		my $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
-		while(! compare::is_same_alt_form($select, $transcript, 0)){
-		    $select = $transcript;
+		#only tile if not set to push forward as is
+		my $transcript = $copy;
+		if(!$CTL_OPT->{est_forward}){
+		    my $select = $copy;
 		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+		    while(! compare::is_same_alt_form($select, $transcript, 0)){
+			$select = $transcript;
+			$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+		    }
 		}
 		$transcript->{_HMM} = 'protein2genome';
 
-		next if(! $transcript);
-
+		#label by % found
 		if($CTL_OPT->{est_forward}){
 		   $transcript->{_tran_name} = $miph->name;
 		   my $score = $miph->frac_identical * $miph->pAh * 100;
