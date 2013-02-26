@@ -22,7 +22,7 @@ IDs.
 Options:
 
   --prefix      The prefix to use for all IDs (default = 'MAKER_')
-  --suffix      A suffix to use for all transcript IDs (default = off).
+  --suffix      A suffix to use for all transcript IDs (default = '-R').
                 Specifying --suffix will also turn on --iterate.
   --initial     The initial value to start with for ID count. If --initial
                 is supplied more than once than the first value will be used
@@ -112,7 +112,7 @@ my $test_t_id = $prefix.'(\d+)'.$suffix;
 $test_t_id =~ s/\?/$abrv_tran/g; #add abrevition
 $test_t_id =~ s/\%/\(\[A\-Z\]+\)/g if($iterate eq 'A'); #add iterator
 $test_t_id =~ s/\%/\(\[0\-9\]+\)/g if($iterate eq '0'); #add iterator
-$test_t_id =~ s/\%/\(\[1\-9\]\[0\-9\]+\)/g if($iterate eq '1'); #add iterator
+$test_t_id =~ s/\%/\(\[1\-9\]\[0\-9\]*\)/g if($iterate eq '1'); #add iterator
 $test_t_id =~ s/\%//g if($iterate eq ''); #add iterator
 
 # Build a hash of ids that need to be mapped;
