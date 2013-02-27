@@ -58,21 +58,23 @@ sub skip_file {
     my $self = shift;
     my $file = shift;
 
-    die "ERROR: Log file does not exist in Iterator::Fasta::skip_file\n" if(! -f $file);
+    #die "ERROR: Log file does not exist in Iterator::Fasta::skip_file\n" if(! -f $file);
 
     my $out_base = $file;
     $out_base =~ s/[^\/]+$//;
-    open(IN, "< $file") || die "ERROR: Could not open the log file in Iterator::Fasta::skip_file\n";
     my %skip;
-    while(my $line = <IN>){
-	chomp $line;
-	my @F = split("\t", $line);
-	next unless(@F == 3);
-	next unless($F[2] eq 'FINISHED');
-	next unless(-d "$out_base/$F[1]");
-	$skip{$F[0]}++;
+    if(-f $file){
+	open(IN, "< $file") || die "ERROR: Could not open the log file in Iterator::Fasta::skip_file\n";
+	while(my $line = <IN>){
+	    chomp $line;
+	    my @F = split("\t", $line);
+	    next unless(@F == 3);
+	    next unless($F[2] eq 'FINISHED');
+	    next unless(-d "$out_base/$F[1]");
+	    $skip{$F[0]}++;
+	}
+	close(IN);
     }
-    close(IN);
 
     $self->{skip_file} = $file;
     $self->{SKIP} = \%skip;
