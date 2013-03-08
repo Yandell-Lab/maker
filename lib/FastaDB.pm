@@ -63,25 +63,28 @@ sub new {
 }
 #-------------------------------------------------------------------------------
 #handles version issues that arise with AnyDBM
+{
+my %localized;
 sub _safe_new {
     my ($file, @args) = @_;
 
+    #which DBM am I using?
+    my %args = @args;
+    my @ext = ($AnyDBM_File::ISA[0] eq 'DB_File') ? 
+	('index') : ('index.dir', 'index.pag');
     my $db;
     try {
-	#which DBM am I using?
-	my @ifiles = ($AnyDBM_File::ISA[0] eq 'DB_File') ?
-	    ("$file.index") : ("$file.index.dir", "$file.index.pag");
-	my %args = @args;
-	my $exists = 1 if((grep {-f $_} @ifiles) == @ifiles);
+	my $exists = 1 if((grep {-f "$file.$_"} @ext) == @ext);
 	my $tmp = GI::get_global_temp();
 	my $localize = (GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp));
 
+	#only lock if this is being newly created
 	my $lock;
 	if(!$exists || $args{'-reindex'}){
 	    while(!$lock || !$lock->maintain(30)){
 		carp "Calling File::NFSLock::new" if($main::debug);
 		$lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
-		$exists = 1 if((grep {-f $_} @ifiles) == @ifiles); #check again
+		$exists = 1 if((grep {-f "$file.$_"} @ext) == @ext); #check again
 		if($exists && !$args{'-reindex'}){
 		    undef $lock;
 		    last;
@@ -89,80 +92,90 @@ sub _safe_new {
 	    }
 	}
 
-	#copy things locally if NFS mount and TMP is available
-	if($localize){
-	    my $dir = GI::get_global_temp();
-	    my $sym = "$dir/".Digest::MD5::md5_hex($file);
-	    symlink($file, $sym) if(!-f $sym);
-	    
-	    #copy files locally if they already exist globally
-	    foreach my $i (@ifiles){
-		my $n = "$sym.index";
-		$n .= $1 if($i =~/(\.[a-z]{3})$/);
-		unlink($n) if((!$exists || $args{'-reindex'}) && -f $n);
-		next if($args{'-reindex'} || ! -f $i || -f $n);
-		GI::localize_file($i, ($n =~ /([^\/]+)$/)[0]);
-	    }
-	    
-	    #build the index
-	    local $SIG{'__WARN__'} = sub { die $_[0]; };
-	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
-	    $db = new Bio::DB::Fasta($sym, @args);
-	    
-	    #copy local files globally if they are needed
-	    if($args{'-reindex'} || !$exists){
-		untie(%{$db->{offsets}}); #untie first to flush (for new index)
-		$args{'-reindex'} = 0;
-		$db = new Bio::DB::Fasta($sym, %args);
-		foreach my $i (@ifiles){
-		    my $n = "$sym.index";
-		    $n .= $1 if($i =~/(\.[a-z]{3})$/);
-		    File::Copy::copy($n, "$i.tmp") or confess "ERROR: Copy failed: $!";
-		    File::Copy::move("$i.tmp", $i) or confess "ERROR: Move failed: $!";
-		}
-	    }
+	(my $dir = $file) =~ s/([^\/]+)$//;
+	my ($name) = $1;
 
-	    #fix file location for moved indexes
-	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
-		my ($name) = $sym =~ /([^\/]+)$/;
-		if($db->{offsets}{__file_0} ne $name){
-		    $db->{offsets}{__file_0} = $name;
-		    $db->{offsets}{__path_$name} = 0;
+	#set where active index should end up
+	my $fdir = $dir;
+	if($localize){ #copy things locally if NFS mount and TMP is available
+	    if($localized{$file}){
+		$fdir = $localized{$file};
+	    }
+	    else{
+		$fdir = GI::get_global_temp();
+		$fdir .= '/'.Digest::MD5::md5_hex($file);
+		mkdir($fdir) unless(-f $fdir);
+		$localized{$file} = $fdir;
+	    }
+	}
+	my $ffile = "$fdir/$name";
+	my $rank  = GI::RANK();
+
+	#copy other files locally if they already exist globally
+	symlink($file, $ffile) if(!-f $ffile);
+	if($exists && !$args{'-reindex'}){
+	    foreach my $ext (@ext){
+		last if($dir eq $fdir); #must be different location
+		my $gi = "$dir/$name.$ext";
+		my $fi = "$fdir/$name.$ext";
+		my $ti = "$fdir/$name.$ext.$rank";
+		
+		#always copy if newer than current
+		my $gitime = (stat($gi))[9] || 0;
+		my $fitime = (stat($fi))[9] || 0;
+		if($fitime < $gitime){
+		    File::Copy::copy($gi, $ti) or confess "ERROR: Copy failed: $!";
+		    File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
 		}
 	    }
 	}
-	elsif(!$exists || $args{'-reindex'}){
-	    #build the index from scratch
-	    local $SIG{'__WARN__'} = sub { die $_[0]; };
+	else{ #does not exist or must be reindexed
+	    my $tdir  = "$fdir/.dbtmp$rank";
+	    my $tfile = "$tdir/$name";
+	    mkdir($tdir);
+	    symlink($file, $tfile) if(!-f $tfile);
+	    foreach my $ext (@ext){
+		my $ti = "$tdir/$name.$ext";
+		unlink($ti) if(-f $ti);
+	    }
+
+	    #build the index (block to localize db index failures)
 	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
-	    $db = new Bio::DB::Fasta($file, @args);
+	    {
+		local $SIG{'__WARN__'} = sub { die $_[0]; };
+		$db = new Bio::DB::Fasta($tfile, @args);
+	    }
 	    untie(%{$db->{offsets}}); #untie first to flush (for new index)
-	    $args{'-reindex'} = 0;
-	    $db = new Bio::DB::Fasta($file, %args);
 
-	    #fix file location for moved indexes
-	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
-		my ($name) = $file =~ /([^\/]+)$/;
-		if($db->{offsets}{__file_0} ne $name){
-		    $db->{offsets}{__file_0} = $name;
-		    $db->{offsets}{__path_$name} = 0;
+	    foreach my $ext (@ext){
+                my $ti = "$tdir/$name.$ext";
+		my $fi = "$fdir/$name.$ext";
+		File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
+            }
+	    File::Path::rmtree($tdir);
+
+	    #copy new files back globally
+	    if($localize){
+		foreach my $ext (@ext){
+		    my $fi = "$fdir/$name.$ext";
+		    my $ti = "$dir/$name.$ext.$rank";
+		    my $gi = "$dir/$name.$ext";
+		    File::Copy::copy($fi, $ti) or confess "ERROR: Copy failed: $!";
+		    File::Copy::move($ti, $gi) or confess "ERROR: Move failed: $!";
+
+		    #make timestamps equal (avoids iterative reindexing)
+		    my $fitime = (stat($fi))[9] || 0;
+		    utime($fitime, $fitime, $gi);
 		}
 	    }
 	}
-	else{
-	    #build the index with existing file
-	    local $SIG{'__WARN__'} = sub { die $_[0]; };	    
-	    carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
-	    $db = new Bio::DB::Fasta($file, @args);
 
-	    #fix file location for moved indexes
-	    if($db->{offsets} && defined($db->{offsets}{__file_0})){
-		my ($name) = $file =~ /([^\/]+)$/;
-		if($db->{offsets}{__file_0} ne $name){
-		    $db->{offsets}{__file_0} = $name;
-		    $db->{offsets}{__path_$name} = 0;
-		}
-	    }
+	#now mount the finished index
+	$args{'-reindex'} = 0;
+	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
+	{
+	    local $SIG{'__WARN__'} = sub { die $_[0]; };
+	    $db = new Bio::DB::Fasta($ffile, %args);
 	}
     
 	$lock->unlock if($lock);
@@ -170,23 +183,16 @@ sub _safe_new {
     catch Error::Simple with {
         my $E = shift;
 
-	unlink("$file.index") if(-f "$file.index"); #DB_File
-	unlink("$file.index.dir") if(-f "$file.index.dir"); #GDBM_File
-	unlink("$file.index.pag") if(-f "$file.index.pag"); #GDBM_File
+	#try direct indexing with no lock? Dangerous, but why not it's already failing
+	foreach my $ext (@ext){
+	    unlink("$file.$ext") if(-f "$file.$ext"); #delete failed indexes
+	}
 	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	$db = new Bio::DB::Fasta($file, @args);
-
-	#fix file location for moved indexes
-	if($db->{offsets} && defined($db->{offsets}{__file_0})){
-	    my ($name) = $file =~ /([^\/]+)$/;
-	    if($db->{offsets}{__file_0} ne $name){
-		$db->{offsets}{__file_0} = $name;
-		$db->{offsets}{__path_$name} = 0;
-	    }
-	}
     };
 
     return $db;
+}
 }
 #-------------------------------------------------------------------------------
 sub reindex {

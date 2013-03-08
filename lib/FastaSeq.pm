@@ -9,6 +9,7 @@ use Bio::DB::Fasta;
 use GI;
 use Error qw(:try);
 use Error::Simple;
+use Carp;
 
 @ISA = qw(Bio::PrimarySeq::Fasta Exporter);
 @EXPORT = qw(substr_o length_o);
@@ -112,7 +113,9 @@ sub convert {
 	$locs = [keys %{$obj->{db}->{cacheseq}}];
 	$locs = [$obj->{db}->{dirname}."/".$obj->{db}->{offsets}->{__file_0}] if(!@$locs);
     }
-    $obj->{LOCS} = $locs;
+    $obj->{LOCS} = $locs || [];
+
+    confess "ERROR: Attempt to create empty FastaSeq\n" if(!@{$obj->{LOCS}});
 
     return $obj;
 }
@@ -147,6 +150,10 @@ sub STORABLE_thaw {
 	sleep 10;
 	$index = GI::build_fasta_index($locs);
 	$seq = $index->get_Seq_by_id($id);
+    }
+
+    if(! $seq->{db}){
+	die join("\n", @$locs)."\n";
     }
 
     die "ERROR: Could not reestablish DB to thaw FastaSeq for Storable\n"

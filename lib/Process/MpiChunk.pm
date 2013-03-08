@@ -882,7 +882,6 @@ sub _go {
 									   $subvoid,
 									   $safe_seq_id,
 									   \%CTL_OPT,
-									   $self->{RANK},
 									   $LOG,
 									   $LOG_FLAG
 									   );
@@ -1441,7 +1440,6 @@ sub _go {
 								  $subvoid,
 								  $safe_seq_id,
 								  \%CTL_OPT,
-								  $self->{RANK},
 								  $LOG,
 								  $LOG_FLAG
 								  );
@@ -1710,7 +1708,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(chunk
 		        dc
-			id
 			the_void
 			subvoid
 			q_seq_length
@@ -1729,7 +1726,6 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
 	    my $dc = $VARS->{dc};
-	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
 	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
@@ -1774,8 +1770,7 @@ sub _go {
 							 $CTL_OPT{en_matrix},
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
-							 $LOG,
-							 $id);
+							 $LOG);
 	    }
 
 	    #-clean the blastn hits
@@ -1959,7 +1954,6 @@ sub _go {
 								    $subvoid,
 								    $safe_seq_id,
 								    \%CTL_OPT,
-								    $self->{RANK},
 								    $LOG,
 								    $LOG_FLAG
 								    );
@@ -2219,7 +2213,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(chunk
 			dc
-			id
 			the_void
 			subvoid
 			q_seq_length
@@ -2238,7 +2231,6 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
 	    my $dc = $VARS->{dc};
-	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
 	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
@@ -2283,8 +2275,7 @@ sub _go {
 							$CTL_OPT{en_matrix},
 							$CTL_OPT{pred_flank},
 							$CTL_OPT{est_forward},
-							$LOG,
-	                                                $id);
+							$LOG);
 	    }
 	    
 	    #-clean the tblastx hits
@@ -2469,7 +2460,6 @@ sub _go {
 								   $subvoid,
 								   $safe_seq_id,
 								   \%CTL_OPT,
-								   $self->{RANK},
 								   $LOG,
 								   $LOG_FLAG
 								   );
@@ -2730,7 +2720,6 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(chunk
 			dc
-			id
 			the_void
 			subvoid
 			q_seq_length
@@ -2749,7 +2738,6 @@ sub _go {
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
 	    my $dc = $VARS->{dc};
-	    my $id = $VARS->{id};
 	    my $the_void = $VARS->{the_void};
 	    my $subvoid = $VARS->{subvoid};
 	    my $q_seq_length = $VARS->{q_seq_length};
@@ -2794,8 +2782,7 @@ sub _go {
 							 $CTL_OPT{ep_matrix},
 							 $CTL_OPT{pred_flank},
 							 $CTL_OPT{est_forward},
-							 $LOG,
-							 $id);
+							 $LOG);
 	    }
 
 	    #-clean the blastx hits

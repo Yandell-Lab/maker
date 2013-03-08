@@ -4,7 +4,7 @@
 package GI;
 
 use strict;
-use vars qw(@ISA @EXPORT $VERSION $TMP $LOCK);
+use vars qw(@ISA @EXPORT $VERSION $TMP $RANK $LOCK);
 use FindBin;
 use Exporter;
 use FileHandle;
@@ -51,7 +51,7 @@ use Sys::Hostname;
 
 @ISA = qw(
 	);
-
+$RANK = 0;
 $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
 print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dtmp);
 #------------------------------------------------------------------------
@@ -162,11 +162,20 @@ sub set_global_temp {
     }
 
     $TMP = $dir;
+    mkdir "$TMP/$RANK" unless(-d "$TMP/$RANK"); #for shared MPI
 }
 #------------------------------------------------------------------------
 sub get_global_temp {
     
     return $TMP;
+}
+#------------------------------------------------------------------------
+sub RANK {
+    if(@_){
+	$RANK = shift @_;
+	mkdir "$TMP/$RANK" unless(-d "$TMP/$RANK"); #for shared MPI
+    }
+    return $RANK;
 }
 #------------------------------------------------------------------------
 sub LOCK {
@@ -805,6 +814,7 @@ my %localized; #persistent list of already localized files
 sub localize_file {
     my $file = shift;
     my $name = shift;
+
     die "ERROR: Cannot localize non-existant file $file\n" if(! -f $file);
 
     $file = Cwd::abs_path($file);
@@ -812,6 +822,7 @@ sub localize_file {
        ($name) = $file =~ /([^\/]+)$/;
     }
     my $tmp = GI::get_global_temp();
+    my $rank = GI::RANK();
 
     if($localized{$file} && $localized{$file} eq "$tmp/$name" && -f "$tmp/$name"){
 	return $localized{$file};
@@ -829,8 +840,8 @@ sub localize_file {
 	last if(-f "$tmp/$name");
 	next unless($lock->maintain(30));
 
-	File::Copy::copy($file, "$tmp/$name.tmp");
-	File::Copy::move("$tmp/$name.tmp", "$tmp/$name");
+	File::Copy::copy($file, "$tmp/$rank/$name.tmp");
+	File::Copy::move("$tmp/$rank/$name.tmp", "$tmp/$name");
 	$lock->unlock if($lock);
     }    
     
@@ -894,7 +905,9 @@ sub concatenate_files {
     my $infiles = shift;
     my $outfile = shift;
 
-    my ($tFH, $t_file) = tempfile(DIR => $TMP);
+    my $tmp = get_global_temp();
+    my $rank = RANK();
+    my ($tFH, $t_file) = tempfile(DIR => "$tmp/$rank");
     foreach my $file (@$infiles){
 	open(my $IN, "< $file");
 	while(defined(my $line = <$IN>)){
@@ -918,13 +931,16 @@ sub split_db {
        confess "ERROR: Could not create $b_dir\n-->$!" if(! -d $b_dir);
     }
 
+    my $tmp = get_global_temp();
+    my $rank = RANK();
+
     my @db_files;
     my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;    
     my ($f_name) = $file =~ /([^\/]+)$/;
     $f_name = uri_escape($f_name, '^a-zA-Z0-9\-\_');
     my $d_name = "$f_name\.mpi\.$bins";
     my $f_dir = "$b_dir/$d_name";
-    my $t_dir = $TMP."/$d_name";
+    my $t_dir = "$tmp/$rank/$d_name";
     $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
     #check if already finished
@@ -975,7 +991,7 @@ sub split_db {
 	$bins = $max;
 	$d_name = "$f_name\.mpi\.$bins";
 	$f_dir = "$b_dir/$d_name";
-	$t_dir = $TMP."/$d_name";
+	$t_dir = "$tmp/$rank/$d_name";
     }
    
     #make needed output directories
@@ -1084,13 +1100,13 @@ sub split_db {
     #File::Copy::move cannot move directories
     confess "ERROR: logic problem. $f_dir already exists. Cannot replace.\n" if(-d $f_dir);
     carp "Calling system" if($main::debug);
-    system("mv $t_dir $f_dir");
-    if ($? == -1) {
-	confess "ERROR: mv failed to execute: $!\n";
-    }
-    elsif($? && ! -d $f_dir){
-	confess "ERROR: Could not move $t_dir to $f_dir";
-    }
+    mkdir($f_dir);
+    mkdir("$f_dir.$rank"); #temporary directory to hold active move
+    system("mv $t_dir/* $f_dir.$rank/"); #move into temporary (slow)
+    confess "ERROR: mv failed: $!\n" if($? == -1);
+    system("mv $f_dir.$rank/* $f_dir/"); #move into active (fast)
+    confess "ERROR: mv failed: $!\n" if($? == -1);
+    File::Path::rmtree("$f_dir.$rank");
     
     #check if everything is ok
     if (-e $f_dir) { #multi processor
@@ -1438,7 +1454,6 @@ sub polish_exonerate {
     my $pred_flank   = shift;
     my $est_forward  = shift;
     my $LOG          = shift;
-    my $rank         = shift || 0;
 
     return [] if(! @{$phat_hits});
 
@@ -1511,6 +1526,7 @@ sub polish_exonerate {
 	    next if(!$go); #skip because the tag limits the seq to only these coors
 	}
 
+	my $rank = GI::RANK();
 	my $id      = $h_name;
 	my $safe_id = Fasta::seqID2SafeID($id);
 	my $F = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
@@ -1521,9 +1537,9 @@ sub polish_exonerate {
 	$o_file    .= '.p_exonerate' if($type eq 'p');
 	$o_file    .= '.est_exonerate' if($type eq 'e');
 	$o_file    .= '.alt_exonerate' if($type eq 'a');
-	my $o_tfile = "$tmp/$safe_name.$F-$L.$safe_id.$type.exonerate";
-	my $t_file  = "$tmp/$safe_id.for.$F-$L.$rank.fasta";
-	my $d_file  = "$tmp/$safe_name.$F-$L.$rank.fasta";
+	my $o_tfile = "$tmp/$rank/$safe_name.$F-$L.$safe_id.$type.exonerate";
+	my $t_file  = "$tmp/$rank/$safe_id.for.$F-$L.$rank.fasta";
+	my $d_file  = "$tmp/$rank/$safe_name.$F-$L.$rank.fasta";
 
 	my $d_len = abs($L - $F) + 1;
 	my $t_len = (ref($hit)) ? $hit->length : undef;
@@ -1836,7 +1852,14 @@ sub dbformat {
    confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $exe);
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
    confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
-
+   
+   my $tmp = get_global_temp();
+   my $rank = RANK();
+   my ($name) = $file =~ /([^\/]+)$/;
+   my $t_dir = "$tmp/$rank/blastprep";
+   my $t_file = "$t_dir/$name";
+   File::Path::rmtree($t_dir) if(-d $t_dir);
+   
    my $lock;
    while(1){
        my $command = $exe;
@@ -1848,7 +1871,7 @@ sub dbformat {
 	       ) {
 	       $command .= " -p" if($type eq 'blastx');
 	       $command .= " -n" if($type eq 'blastn' || $type eq 'tblastx');
-	       $command .= " $file";
+	       $command .= " $t_file";
 	       $run++;
 	   }
        }
@@ -1859,7 +1882,7 @@ sub dbformat {
 	       ) {
 	       $command .= " -p T" if($type eq 'blastx');
 	       $command .= " -p F" if($type eq 'blastn' || $type eq 'tblastx');
-	       $command .= " -i $file";
+	       $command .= " -i $t_file";
 	       $run++;
 	   }
        }
@@ -1870,7 +1893,7 @@ sub dbformat {
 	       ) {
 	       $command .= " -dbtype prot" if($type eq 'blastx');
 	       $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
-	       $command .= " -in $file";
+	       $command .= " -in $t_file";
 	       $run++;
 	   }
        }
@@ -1879,6 +1902,10 @@ sub dbformat {
        }
 
        if($run){
+	   #use symlink in rank specific dir incase of broken NFSLocking
+	   mkdir($t_dir) if(!-d $t_dir);
+	   symlink($file, $t_file) if(!-f $t_file);
+
 	   if(! $lock){
 	       $lock = new File::NFSLock("$file.dbformat", 'EX', 1800, 60);
 	       confess "ERROR:  Could not obtain lock to format database\n\n" if(!$lock);
@@ -1888,6 +1915,11 @@ sub dbformat {
 	       my $w = new Widget::formater();
 	       print STDERR "formating database...\n" unless $main::quiet;
 	       $w->run($command);
+
+	       #move the BLAST indexes into place
+	       unlink($t_file);
+	       my @files = <$t_dir/*>;
+	       File::Copy::move($_, $tmp) foreach(@files);
 	       last;
 	   }
 	   else{
@@ -1928,19 +1960,18 @@ sub blastn_as_chunks {
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
    my $retry      = shift;
 
    $retry = 1 if(! defined $retry);
 
-   my $blast      = $CTL_OPT->{_blastn};
+   my $blast       = $CTL_OPT->{_blastn};
    my $depth_blast = $CTL_OPT->{depth_blastn};
-   my $bit_blast  = $CTL_OPT->{bit_blastn};
-   my $eval_blast = $CTL_OPT->{eval_blastn};
-   my $pcov_blast = $CTL_OPT->{pcov_blastn};
-   my $pid_blast  = $CTL_OPT->{pid_blastn};
+   my $bit_blast   = $CTL_OPT->{bit_blastn};
+   my $eval_blast  = $CTL_OPT->{eval_blastn};
+   my $pcov_blast  = $CTL_OPT->{pcov_blastn};
+   my $pid_blast   = $CTL_OPT->{pid_blastn};
    my $split_hit   = $CTL_OPT->{split_hit};
    my $cpus        = $CTL_OPT->{cpus};
    my $formater    = $CTL_OPT->{_formater};
@@ -1956,8 +1987,9 @@ sub blastn_as_chunks {
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
 
-   my $t_dir = $TMP."/rank".$rank;
-   File::Path::mkpath($t_dir);
+   my $tmp = get_global_temp();
+   my $rank = RANK();
+   my $t_dir = "$tmp/$rank";
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
@@ -2021,7 +2053,6 @@ sub blastn_as_chunks {
 				  $the_void,
 				  $seq_id,
 				  $CTL_OPT,
-				  $rank,
 				  $LOG,
 				  $LOG_FLAG,
 				  0 );
@@ -2177,10 +2208,11 @@ sub runBlastn {
    my $org_type   = shift;
    my $softmask   = shift;
 
+   my $tmp = get_global_temp();
    my $command  = $blast;
    if ($command =~ /blasta$/) {
-      symlink($blast, "$TMP/blastn") if(! -e "$TMP/blastn"); #handle blasta linking
-      $command = "$TMP/blastn";
+      symlink($blast, "$tmp/blastn") if(! -e "$tmp/blastn"); #handle blasta linking
+      $command = "$tmp/blastn";
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " R=3";
@@ -2272,7 +2304,6 @@ sub blastx_as_chunks {
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
    my $rflag      = shift; #am I running repeatrunner?
@@ -2302,8 +2333,9 @@ sub blastx_as_chunks {
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
 
-   my $t_dir = $TMP."/rank".$rank;
-   File::Path::mkpath($t_dir);
+   my $tmp = get_global_temp();
+   my $rank = GI::RANK();
+   my $t_dir = "$tmp/$rank";
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
@@ -2372,7 +2404,6 @@ sub blastx_as_chunks {
 				  $the_void,
 				  $seq_id,
 				  $CTL_OPT,
-				  $rank,
 				  $LOG,
 				  $LOG_FLAG,
 				  $rflag,
@@ -2589,10 +2620,11 @@ sub runBlastx {
    my $org_type = shift;
    my $softmask = shift;
 
+   my $tmp = get_global_temp();
    my $command  = $blast;
    if ($command =~ /blasta$/) {
-      symlink($blast, "$TMP/blastx") if(! -e "$TMP/blastx"); #handle blasta linking
-      $command = "$TMP/blastx";
+      symlink($blast, "$tmp/blastx") if(! -e "$tmp/blastx"); #handle blasta linking
+      $command = "$tmp/blastx";
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " Z=300";
@@ -2662,7 +2694,6 @@ sub tblastx_as_chunks {
    my $the_void   = shift;
    my $seq_id     = shift;
    my $CTL_OPT    = shift;
-   my $rank       = shift;
    my $LOG        = shift;
    my $LOG_FLAG   = shift;
    my $retry      = shift;
@@ -2689,9 +2720,10 @@ sub tblastx_as_chunks {
    my ($db, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
    my ($db_n) = $db =~ /([^\/]+)$/;
    $db_n = uri_escape($db_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\+');
- 
-   my $t_dir = $TMP."/rank".$rank;
-   File::Path::mkpath($t_dir);
+
+   my $tmp = get_global_temp();
+   my $rank = GI::RANK();
+   my $t_dir = "$tmp/$rank";
 
    my $t_file_name = "$t_dir/$seq_id\.$chunk_number";
    my $blast_dir = "$blast_finished\.temp_dir";
@@ -2755,7 +2787,6 @@ sub tblastx_as_chunks {
 				   $the_void,
 				   $seq_id,
 				   $CTL_OPT,
-				   $rank,
 				   $LOG,
 				   $LOG_FLAG,
 				   0 );
@@ -2912,10 +2943,11 @@ sub runtBlastx {
    my $org_type = shift;
    my $softmask = shift;
 
+   my $tmp = get_global_temp();
    my $command  = $blast;
    if ($command =~ /blasta$/) {
-      symlink($blast, "$TMP/tblastx") if(! -e "$TMP/tblastx"); #handle blasta linking
-      $command = "$TMP/tblastx";
+      symlink($blast, "$tmp/tblastx") if(! -e "$tmp/tblastx"); #handle blasta linking
+      $command = "$tmp/tblastx";
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
       $command .= ($softmask) ? " wordmask=seg" : " filter=seg";
       $command .= " Z=1000";
@@ -3043,7 +3075,7 @@ sub repeatmask {
    
    runRepeatMasker($file_name, 
 		   $model_org, 
-		   $the_void, 
+		   $the_void,
 		   $o_file,
 		   $RepeatMasker,
 		   $rmlib,
@@ -3091,17 +3123,22 @@ sub runRepeatMasker {
       return;
    }
 
-   my $t_file;	
-   my $command  = "cd $TMP; $RepeatMasker";
+   my $t_file;
+   my $tmp = get_global_temp();
+   my $command  = "cd $tmp; $RepeatMasker";
 
    if ($rmlib) {
       $command .= " $q_file -dir $dir -pa $cpus -lib $rmlib";
    }
    elsif($species eq 'simple'){
-       (my $tFH, $t_file) = tempfile(DIR => $TMP);
-       print $tFH ">(N)n#Dummy_repeat \@root  [S:25]\nnnnnnnnnnnnnnnnnnn\n";
-       close($tFH);
-       $command .= " $q_file -dir $dir -pa $cpus -lib $t_file";
+       my $lib = "$tmp/simple.lib";
+       if(!-f $lib){
+	   (my $tFH, $t_file) = tempfile(DIR => $tmp);
+	   print $tFH ">(N)n#Dummy_repeat \@root  [S:25]\nnnnnnnnnnnnnnnnnnn\n";
+	   close($tFH);
+	   File::Copy::move($t_file, $lib);
+       }
+       $command .= " $q_file -dir $dir -pa $cpus -lib $lib";
    }
    else {
       $command .= " $q_file -species $species -dir $dir -pa $cpus";
@@ -3112,7 +3149,6 @@ sub runRepeatMasker {
 
    print STDERR "running  repeat masker.\n" unless $main::quiet;
    $w->run($command);
-   unlink($t_file) if($t_file);
 }
 
 #-----------------------------------------------------------------------------

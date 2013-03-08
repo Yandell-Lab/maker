@@ -260,6 +260,7 @@ carp "Calling MPI_Init" if($main::debug);
 MPI_Init();
 carp "Calling MPI_Comm_rank" if($main::debug);
 my $rank = $RANK = MPI_Comm_rank(); #my proccess number
+GI::RANK($rank); #assign the rank to GI module
 carp "Calling MPI_Comm_size" if($main::debug);
 my $size = MPI_Comm_size(); #how many proccesses
 my $root = 0; #define root node (only changed for debugging)
