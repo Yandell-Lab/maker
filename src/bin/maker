@@ -576,7 +576,8 @@ else{
 	}
 
 	if($req_stat == $wait_ask_again){
-	    sleep 5;
+	    my $t = $size/20;
+	    sleep $t;
 	    next;
 	}
 
@@ -1072,7 +1073,7 @@ else {
 	}
 	elsif(!$t_need_flag && (result_count(\@tiers) == chunk_total_count(\@tiers) - 1)){
 	    #waiting on thread
-	    sleep 1;
+	    sleep 0.1;
 	    next;
 	}
 	elsif((num_chunks(\@tiers) > 1) || (!$t_need_flag && num_chunks(\@tiers) > 0)){
@@ -1149,7 +1150,8 @@ else {
 	    }
 	    #just wait and then try again later
 	    elsif($req_status == $wait_ask_again){
-		sleep 5;
+		my $t = $size/20;
+		sleep $t;
 		next;
 	    }
 	    #reset signal received
@@ -1274,8 +1276,8 @@ else {
 	    }
 
 	    #nothing provided and nothing to advance to (wait)
-	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){
-	       sleep 10;
+	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){		
+		#do not put sleep here or you'll be sorry!!!!
 	    }
 
 	    #finally run local chunk if there is one (shouldn't happen)
@@ -1436,7 +1438,7 @@ sub node_thread {
 		if($tier->failed || $tier_result->{-interrupt});
 	    $tier = undef;
 
-	    sleep 1 while (defined ($t_tier_result)); #pause
+	    sleep 0.1 while (defined ($t_tier_result)); #pause
 	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
 	    nstore(\$tier_result, $file);
 	    $t_tier_result = $file;
@@ -1445,7 +1447,7 @@ sub node_thread {
 	 }#take a break
 	 elsif($tier->num_chunks == 0){
 	    #keeps thread from hogging resources
-	    sleep 1;
+	    sleep 0.1;
 	 }
 
 	 next;
@@ -1459,7 +1461,7 @@ sub node_thread {
       }#process chunk
       elsif(defined($chunk)){
 	 $chunk->run($rank);
-	 sleep 1 while (defined ($t_chunk_result)); #pause
+	 sleep 0.1 while (defined ($t_chunk_result)); #pause
 	 my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
 	 nstore(\$chunk, $file);
 	 $t_chunk_result = $file;
@@ -1469,7 +1471,7 @@ sub node_thread {
       }#take a break
       else{
 	 #keeps thread form hogging resources when there is nothing to do
-	 sleep 1;
+	 sleep 0.1;
       }
    }
 
