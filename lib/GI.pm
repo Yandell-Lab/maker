@@ -1529,8 +1529,8 @@ sub polish_exonerate {
 	my $rank = GI::RANK();
 	my $id      = $h_name;
 	my $safe_id = Fasta::seqID2SafeID($id);
-	my $F = ($B - $pred_flank > 0) ? $B - $pred_flank : 1;
-	my $L = ($E + $pred_flank > $length) ? $length : $E + $pred_flank;
+	my $F = ($B - 2*$pred_flank > 0) ? $B - 2*$pred_flank : 1;
+	my $L = ($E + 2*$pred_flank > $length) ? $length : $E + 2*$pred_flank;
 	my $offset  = $F - 1;
 	my $tmp = get_global_temp();
         my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
