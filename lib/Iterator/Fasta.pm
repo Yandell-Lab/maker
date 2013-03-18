@@ -3,7 +3,7 @@
 #----------------------------------------------------------------------------
 package Iterator::Fasta;
 use strict;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION $AUTOLOAD);
 use Exporter;
 use PostData;
 use FileHandle;
@@ -290,7 +290,6 @@ sub AUTOLOAD {
         my ($self, $arg) = @_;
 
         my $caller = caller();
-        use vars qw($AUTOLOAD);
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 

@@ -3,13 +3,13 @@
 #----------------------------------------------------------------------------
 package Iterator;
 use strict;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION $AUTOLOAD);
 use Exporter;
 use PostData;
 use FileHandle;
 use Carp;
-@ISA = qw(
-       );
+
+@ISA = qw();
 
 #------------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------------
@@ -47,7 +47,7 @@ sub fileHandle {
 	}
 	elsif (defined($arg) && -e $arg){
 		my $fh = new FileHandle();
-		   $fh->open("$arg");
+		$fh->open("$arg") or die "ERROR: Could not open file: $!\n";
 
 		$self->{fileHandle} = $fh;
 		$self->startPos($self->fileHandle()->getpos());
@@ -67,7 +67,6 @@ sub AUTOLOAD {
         my ($self, $arg) = @_;
 
         my $caller = caller();
-        use vars qw($AUTOLOAD);
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 

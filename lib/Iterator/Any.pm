@@ -6,12 +6,10 @@ use strict;
 use Iterator;
 use Iterator::Fasta;
 use Iterator::GFF3;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION $AUTOLOAD);
 use Exporter;
 
-@ISA = qw(
-	  Iterator
-          );
+@ISA = qw(Iterator);
 
 #-------------------------------------------------------------------------------
 #------------------------------- FUNCTIONS -------------------------------------

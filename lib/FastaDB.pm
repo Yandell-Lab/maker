@@ -132,8 +132,9 @@ sub _safe_new {
 	else{ #does not exist or must be reindexed
 	    my $tdir  = "$fdir/.dbtmp$rank";
 	    my $tfile = "$tdir/$name";
+	    File::Path::rmtree($tdir) if(-d $tdir);
 	    mkdir($tdir);
-	    symlink($file, $tfile) if(!-f $tfile);
+	    symlink($file, $tfile);
 	    foreach my $ext (@ext){
 		my $ti = "$tdir/$name.$ext";
 		unlink($ti) if(-f $ti);
@@ -197,11 +198,9 @@ sub _safe_new {
 #-------------------------------------------------------------------------------
 sub reindex {
     my $self = shift;
-    my $destroy = shift;
-    $destroy = 1 if(! defined $destroy);
 
     my $locs = $self->{locs};
-    my @args = ('-reindex' => $destroy,
+    my @args = ('-reindex' => 1,
 		'-makeid' => \&makeid
 		);
 

@@ -5,16 +5,15 @@ package Iterator::GFF3;
 use strict;
 use Iterator;
 use Iterator::Fasta;
-use vars qw(@ISA @EXPORT $VERSION);
+use vars qw(@ISA @EXPORT $VERSION $AUTOLOAD);
 use Exporter;
 use FileHandle;
 use Bio::Tools::GFF;
-use Iterator::Fasta;
 use Fasta;
 use File::Temp qw(tempfile);
 use Scalar::Util qw(openhandle);
 
-@ISA = qw(Iterator::Fasta);
+@ISA = qw(Iterator::Fasta Iterator);
 
 #-------------------------------------------------------------------------------
 #------------------------------- FUNCTIONS -------------------------------------
@@ -39,18 +38,18 @@ sub new {
 
 	if($gff_file eq $fasta_file){
 	    my $line;
-	    my $last = $self->fileHandle()->getpos();
+	    my $last = $fh->getpos();
 	    while($line = <$fh>){
 		if ($line =~ /^\#\#FASTA/){
-		    $self->startPos($self->fileHandle()->getpos());
+		    $self->startPos($fh->getpos());
 		    last;
 		}
 		elsif($line =~ /^\>/){
 		    $self->startPos($last);
-		    $self->fileHandle()->setpos($self->startPos);
+		    $fh->setpos($self->startPos);
 		    last;
 		}
-		$last = $self->fileHandle()->getpos();
+		$last = $fh->getpos();
 	    }
 	}
 
@@ -106,7 +105,6 @@ sub AUTOLOAD {
         my ($self, $arg) = @_;
 
         my $caller = caller();
-        use vars qw($AUTOLOAD);
         my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
         $call =~/DESTROY/ && return;
 
