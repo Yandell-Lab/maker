@@ -130,7 +130,7 @@ sub _safe_new {
 		#always copy if newer than current
 		my $gitime = (stat($gi))[9] || 0;
 		my $fitime = (stat($fi))[9] || 0;
-		if($fitime < $gitime){
+		if(! -f $fi || $fitime < $gitime){
 		    File::Copy::copy($gi, $ti) or confess "ERROR: Copy failed: $!";
 		    sleep 10 if(! -f $ti); #NFS
 		    File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
@@ -171,7 +171,7 @@ sub _safe_new {
 		    my $fi = "$fdir/$name.$ext";
 		    my $ti = "$dir/$name.$ext.$rank";
 		    my $gi = "$dir/$name.$ext";
-		    next if(! -f $ti);
+		    next if(! -f $fi);
 		    File::Copy::copy($fi, $ti) or confess "ERROR: Copy failed: $!";
 		    sleep 10 if(! -f $ti); #NFS
 		    File::Copy::move($ti, $gi) or confess "ERROR: Move failed: $!";
