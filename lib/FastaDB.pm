@@ -74,7 +74,8 @@ sub _safe_new {
 	('index') : ('index.dir', 'index.pag');
     my $db;
     try {
-	my $exists = 1 if((grep {-f "$file.$_"} @ext) == @ext);
+	my $exists = grep {-f "$file.$_"} @ext;
+	$exists = ($exists == @ext) ? 1 : 0;
 	my $tmp = GI::get_global_temp();
 	my $localize;
 	if(defined($args{'-localize'})){
@@ -91,7 +92,8 @@ sub _safe_new {
 	    while(!$lock || !$lock->maintain(30)){
 		carp "Calling File::NFSLock::new" if($main::debug);
 		$lock = new File::NFSLock("$file.index", 'EX', 1800, 60);
-		$exists = 1 if((grep {-f "$file.$_"} @ext) == @ext); #check again
+		$exists = grep {-f "$file.$_"} @ext; #check again
+		$exists = ($exists == @ext) ? 1 : 0;
 		if($exists && !$args{'-reindex'}){
 		    undef $lock;
 		    last;
@@ -160,7 +162,6 @@ sub _safe_new {
                 my $ti = "$tdir/$name.$ext";
 		my $fi = "$fdir/$name.$ext";
 		sleep 10 if(! -f $ti); #NFS
-		next if(! -f $ti);
 		File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
             }
 	    File::Path::rmtree($tdir);
@@ -171,7 +172,6 @@ sub _safe_new {
 		    my $fi = "$fdir/$name.$ext";
 		    my $ti = "$dir/$name.$ext.$rank";
 		    my $gi = "$dir/$name.$ext";
-		    next if(! -f $fi);
 		    File::Copy::copy($fi, $ti) or confess "ERROR: Copy failed: $!";
 		    sleep 10 if(! -f $ti); #NFS
 		    File::Copy::move($ti, $gi) or confess "ERROR: Move failed: $!";
