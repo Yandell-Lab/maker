@@ -62,6 +62,7 @@ sub run {
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
 sub parse {
+    shift @_ if($_[0] =~ /^Widget\:\:/); #ignore
     my $report = shift;
     my $params = shift;
     my $q_file = shift;
@@ -86,14 +87,16 @@ sub parse_eukaryotic{
         my $params = shift;
 	my $q_file = shift;
 
-        my $fasta;
 	my $def;
 	my $q_seq;
 
-	if($q_file =~ /^>/){
-            $fasta   = $q_file;
-            $def     = Fasta::getDef(\$fasta);
-            $q_seq   = Fasta::getSeqRef(\$fasta);
+	if(ref($q_file) eq 'FastaChunk'){ #object not scalar
+            $q_seq = $q_file->seq_w_flank;
+            $def = $q_file->def_w_flank;
+        }
+	elsif($q_file =~ /^>/){
+            $def     = Fasta::getDef(\$q_file);
+            $q_seq   = Fasta::getSeqRef(\$q_file);
         }
         else{
             my $index = GI::build_fasta_index($q_file);
@@ -135,14 +138,16 @@ sub parse_prokaryotic{
         my $params = shift;
 	my $q_file = shift;
 
-        my $fasta;
 	my $def;
 	my $q_seq;
 
-	if($q_file =~ /^>/){
-            $fasta   = $q_file;
-            $def     = Fasta::getDef(\$fasta);
-            $q_seq   = Fasta::getSeqRef(\$fasta);
+        if(ref($q_file) eq 'FastaChunk'){ #object not scalar
+            $q_seq = $q_file->seq;
+            $def = $q_file->def;
+        }
+        elsif($q_file =~ /^>/){
+            $def     = Fasta::getDef(\$q_file);
+            $q_seq   = Fasta::getSeqRef(\$q_file);
         }
         else{
             my $index = GI::build_fasta_index($q_file);

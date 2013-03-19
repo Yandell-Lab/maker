@@ -1,3 +1,4 @@
+
 #! /usr/bin/perl -w
 
 package Process::MpiChunk;
@@ -1154,17 +1155,38 @@ sub _go {
 		push(@{$VARS->{section_files}}, @files);
 	    }
 	    else{
+		my $chunk_count = int($VARS->{q_seq_length}/10000000 + 0.5) || 1;
+		my $chunk_size  = int($VARS->{q_seq_length}/$chunk_count);
+		
+		my $mfasta_chunker = new FastaChunker();
+		$mfasta_chunker->parent_def($VARS->{q_def}." masked");
+		$mfasta_chunker->parent_seq($VARS->{m_seq_obj});
+		$mfasta_chunker->chunk_size($chunk_size);
+		$mfasta_chunker->min_size($chunk_size-1);
+		$mfasta_chunker->flank(1000000);
+		$mfasta_chunker->load_chunks();
+		
+		my $qfasta_chunker = new FastaChunker();
+		$qfasta_chunker->parent_def($VARS->{q_def});
+		$qfasta_chunker->parent_seq($VARS->{q_seq_obj});
+		$qfasta_chunker->chunk_size($chunk_size);
+		$qfasta_chunker->min_size($chunk_size-1);
+		$qfasta_chunker->flank(1000000);
+		$qfasta_chunker->load_chunks();
+
 		#first tier is a pred only tier
-		my %args = (the_void      => $VARS->{the_void},
-			    fasta_chunker => $VARS->{fasta_chunker},
-			    q_def         => $VARS->{q_def},
-			    seq_id        => $VARS->{seq_id},
-			    safe_seq_id   => $VARS->{safe_seq_id},
-			    unmasked_file => $VARS->{unmasked_file},
-			    masked_file   => $VARS->{masked_file},
-			    LOG           => $VARS->{LOG},
-			    CTL_OPT       => $VARS->{CTL_OPT},
-			    );
+		my %args = (the_void       => $VARS->{the_void},
+			    fasta_chunker  => $VARS->{fasta_chunker},
+			    q_def          => $VARS->{q_def},
+			    q_seq_obj      => $VARS->{q_seq_obj},
+			    m_seq_obj      => $VARS->{m_seq_obj},
+			    q_seq_length   => $VARS->{q_seq_length},
+			    seq_id         => $VARS->{seq_id},
+			    safe_seq_id    => $VARS->{safe_seq_id},
+			    LOG            => $VARS->{LOG},
+			    CTL_OPT        => $VARS->{CTL_OPT},
+			    qfasta_chunker => $qfasta_chunker,
+			    mfasta_chunker => $mfasta_chunker,);
 		
 		my $tier_type = 2;
 		my $tier = new Process::MpiTiers(\%args, $self->rank, $self->{CHUNK_REF}, $tier_type);
@@ -1263,8 +1285,15 @@ sub _go {
 	 $level_status = 'preparing ab-inits';
 	 if ($flag eq 'load') {
 	    #-------------------------CHUNKER
-	    my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
-	    push(@chunks, $chunk);
+	     while(1){
+		 $VARS->{mchunk} = $VARS->{mfasta_chunker}->next_chunk;
+		 $VARS->{qchunk} = $VARS->{qfasta_chunker}->next_chunk;
+		 last if(!$VARS->{mchunk});
+		 my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
+		 push(@chunks, $chunk);		 
+	     }
+	     delete($VARS->{qchunk});
+	     delete($VARS->{mchunk});
 	    #-------------------------CHUNKER
 	 }
 	 elsif ($flag eq 'init') {
@@ -1273,9 +1302,8 @@ sub _go {
 			safe_seq_id
 			seq_id
 			q_def
-			unmasked_file
-			masked_file
-			fasta_chunker
+			mchunk
+                        qchunk
 			LOG
 			CTL_OPT)
 		    );
@@ -1286,72 +1314,236 @@ sub _go {
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_def = $VARS->{q_def};
-	    my $masked_file = $VARS->{masked_file};
-	    my $unmasked_file = $VARS->{unmasked_file};
+	    my $mchunk = $VARS->{mchunk};
+	    my $qchunk = $VARS->{qchunk};
 	    my $the_void = $VARS->{the_void};
 	    my $seq_id = $VARS->{seq_id};
 	    my $safe_seq_id = $VARS->{safe_seq_id};
-	    my $fasta_chunker = $VARS->{fasta_chunker};	 
-            my $LOG = $VARS->{LOG};	 
+            my $LOG = $VARS->{LOG};
 
 	    #==ab initio predictions here
 	    #do masked predictions first
-	    my $sid = ($CTL_OPT{_no_mask}) ? $safe_seq_id : $safe_seq_id.".masked";
-	    my $preds = GI::abinits($masked_file,
-				    $the_void,
-				    $sid,
-				    \%CTL_OPT,
-				    $LOG,
-				    $unmasked_file #for genemark
-				    );
-	 
-	    unless($CTL_OPT{_no_mask}){
-		#add tag that says these are masked
-		foreach my $p (@$preds){
-		    my $alg = $p->algorithm();
-		    next if ($alg eq 'genemark'); #genemark is never masked because it splits genes
-		    $p->algorithm("$alg\_masked");
-		    foreach my $h($p->hsps){
-			$h->algorithm("$alg\_masked");
-		    }
-		}
+	    my $t_dir = GI::get_global_temp();
+	    
+	    my @abinits;
+	    if(!$CTL_OPT{_no_mask} && @{$CTL_OPT{_run}}){
+		my $sid = $safe_seq_id.".abinit_masked.".$mchunk->number();
+		my $t_file = "$t_dir/$sid";
+		$mchunk->write_file_w_flank($t_file) if(! -f $t_file);
+		my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
+		push(@abinits, @{GI::snap(@args)})     if(grep {/snap/} @{$CTL_OPT{_run}});
+		push(@abinits, @{GI::augustus(@args)}) if(grep {/augustus/} @{$CTL_OPT{_run}});
+		push(@abinits, @{GI::fgenesh(@args)})  if(grep {/fgenesh/} @{$CTL_OPT{_run}});
+		unlink($t_file);
 	    }
-	 
-	    #now do unmasked predictions
-	    if($CTL_OPT{unmask} && ! $CTL_OPT{_no_mask}){
-	       my $unmasked_preds = GI::abinits($unmasked_file,
-						$the_void,
-						$safe_seq_id,
-						\%CTL_OPT,
-						$LOG
-						);
 
-	       push(@$preds, @$unmasked_preds);
+	    #genmark is never masked
+	    if(grep {/genemark/} @{$CTL_OPT{_run}}){
+		my $sid = $safe_seq_id.".abinit_nomask.".$mchunk->number();
+		my $t_file = "$t_dir/$sid";
+		$qchunk->write_file_w_flank($t_file) if(! -f $t_file);
+		my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
+		push(@abinits, @{GI::genemark(@args)});
+		unlink($t_file) unless($CTL_OPT{unmask} || $CTL_OPT{_no_mask});
+	    }	 
+
+	    #now do other unmasked predictions if requested
+	    if($CTL_OPT{unmask} || $CTL_OPT{_no_mask}){
+		my $sid = $safe_seq_id.".abinit_nomask.".$qchunk->number();
+		my $t_file = "$t_dir/$sid";
+		my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
+		$qchunk->write_file_w_flank($t_file) if(! -f $t_file);
+		push(@abinits, @{GI::snap(@args)})     if(grep {/snap/} @{$CTL_OPT{_run}});
+		push(@abinits, @{GI::augustus(@args)}) if(grep {/augustus/} @{$CTL_OPT{_run}});
+		push(@abinits, @{GI::fgenesh(@args)})  if(grep {/fgenesh/} @{$CTL_OPT{_run}});
+		unlink($t_file);
 	    }
 
 	    #==QRNA noncoding RNA prediction here
 	    my $qra_preds = [];
-
-	    #section files for finishing
-	    my @section_files;
-	    $fasta_chunker->reset;
-	    while(my $fchunk = $fasta_chunker->next_chunk){
-		my $order = $fchunk->number;
-		my $the_void = $VARS->{the_void};
-		my $safe_seq_id = $VARS->{safe_seq_id};
-		my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
-		
-		my $preds_on_chunk = GI::get_preds_on_chunk($preds,
-							    $fchunk
-							    );
-
-		my %section = (preds_on_chunk => $preds_on_chunk);
-		if(! -f $section_file){
-		    $LOG->add_entry("STARTED", $section_file, "");
-		    store (\%section, $section_file);
-		    $LOG->add_entry("FINISHED", $section_file, "");
+	    #-------------------------CODE
+	 
+	    #------------------------RETURN
+	    %results = ( abinits => \@abinits,
+		       );
+	    #------------------------RETURN
+	 }
+	 elsif ($flag eq 'result') {
+	    #-------------------------RESULT
+	    while (my $key = each %{$self->{RESULTS}}) {
+		if($key eq 'abinits'){
+		    push(@{$VARS->{$key}}, @{$self->{RESULTS}{$key}});
 		}
-		push(@section_files, $section_file);
+		else{
+		    $VARS->{$key} = $self->{RESULTS}{$key};
+		}
+	    }
+	    #-------------------------RESULT
+	 }
+	 elsif ($flag eq 'flow') {
+	    #-------------------------NEXT_LEVEL
+	    #-------------------------NEXT_LEVEL
+	 }
+      }
+      elsif ($tier_type == 2 && $level == 1) {	#merge abinits
+	 $level_status = 'gathering ab-init output files';
+	 if ($flag eq 'load') {
+	    #-------------------------CHUNKER
+	     my $chunk = new Process::MpiChunk($VARS, $level, $tier_type);
+	     push(@chunks, $chunk);
+	    #-------------------------CHUNKER
+	 }
+	 elsif ($flag eq 'init') {
+	    #------------------------ARGS_IN
+	    @args = (qw(the_void
+			safe_seq_id
+			abinits
+			fasta_chunker
+			qfasta_chunker
+			LOG
+			CTL_OPT)
+		    );
+	    #------------------------ARGS_IN
+	 }
+	 elsif ($flag eq 'run') {
+	    print STDERR "$level_status\n";
+	    #-------------------------CODE
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $the_void = $VARS->{the_void};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $abinits = $VARS->{abinits};
+	    my $fasta_chunker = $VARS->{fasta_chunker};	 
+	    my $qfasta_chunker = $VARS->{qfasta_chunker};
+            my $LOG = $VARS->{LOG};
+
+	    #divide by type and hmm
+	    my %data;
+	    foreach my $d (@$abinits){
+		$d->[0] =~ /(masked|nomask)\.\d+\.[^\.]+\.([^\.]+)$/;
+		my $base = "$2\_$1|".$d->[1];
+		push(@{$data{$base}}, $d);
+	    }
+
+	    #sort each set of files
+	    my $crit = sub {
+		my $file = shift;
+		my ($n) = $file =~ /\.(\d+)\.[^\.]+\.[^\.]+$/;
+		return $n;
+	    };
+	    @$_ = sort {&$crit($a->[0]) <=> &$crit($b->[0])} @$_ foreach (values %data);
+
+	    #parse, merge, and section files
+	    my @buf;
+	    my @section_files;
+	    $fasta_chunker->reset; #for sectioning files
+	    my $c_count = $qfasta_chunker->total_chunks;
+	    for(my $i = 0; $i < $c_count; $i++){
+		my $qchunk0 = $qfasta_chunker->get_chunk($i);
+		my $qchunk1 = $qfasta_chunker->get_chunk($i+1) if($i+1 < $c_count);
+
+		#walk down all predictions (one section at a time)
+		my @pkeepers;
+		my @mkeepers;
+		foreach my $k (keys %data){
+		    #==parse the hits
+		    #only first chunk
+		    if($i == 0){
+			my $preds = GI::parse_abinit_file(@{$data{$k}[$i]}, $qchunk0);
+			my ($pp, $pm) = PhatHit_utils::separate_by_strand('query', $preds);
+			@$pp = sort {$a->start <=> $b->start} @$pp;
+			@$pm = sort {$a->start <=> $b->start} @$pm;
+			$data{$k}[$i] = [$pp, $pm];
+		    }
+		    my $c0 = $data{$k}[$i];
+		    
+		    #==resolve chunk divide
+		    if($qchunk1){
+			#other chunks
+			{ #block forces lexicals
+			    my $preds = GI::parse_abinit_file(@{$data{$k}[$i+1]}, $qchunk1);
+			    my ($pp, $pm) = PhatHit_utils::separate_by_strand('query', $preds);
+			    @$pp = sort {$a->start <=> $b->start} @$pp;
+			    @$pm = sort {$a->start <=> $b->start} @$pm;
+			    $data{$k}[$i+1] = [$pp, $pm];
+			}
+			my $c1 = $data{$k}[$i+1];
+
+			#go up to junction on plus strand
+			my $plimit = $qchunk0->end + 1;
+			while(my $p = shift @{$c0->[0]}){
+			    if($p->end < $plimit){
+				push(@pkeepers, $p);
+			    }
+			    else{
+				if($p->start < $plimit){
+				    push(@pkeepers, $p);
+				    $plimit = $p->end+1;
+				}
+				undef @{$c0->[0]}; #drop the rest
+			    }
+			}
+			
+			#go up to junction on minus
+			my $mlimit = $qchunk0->end + 1;
+			while(my $p = shift @{$c0->[1]}){
+			    if($p->end < $mlimit){
+				push(@mkeepers, $p);
+			    }
+			    else{
+				if($p->start < $mlimit){
+				    push(@mkeepers, $p);
+				    $mlimit = $p->end+1;
+				}
+				undef @{$c0->[1]}; #drop the rest
+			    }
+			}
+		    
+			#trim off leading extra in neighbor plus
+			while(my $p = shift @{$c1->[0]}){
+			    if($p->start >= $plimit){
+				unshift(@{$c1->[0]}, $p);
+				last;
+			    }
+			}
+			
+			#trim off leading extra in neighbor minus
+			while(my $p = shift @{$c1->[1]}){
+			    if($p->start >= $mlimit){
+				unshift(@{$c1->[1]}, $p);
+				last;
+			    }
+			}
+		    }
+		    else{ #last chunk
+			push(@pkeepers, @{$c0->[0]});
+			push(@mkeepers, @{$c0->[1]});
+		    }
+		}
+
+		#==section the results overlapping first big chunk
+		while(my $fchunk = shift @buf || $fasta_chunker->next_chunk){
+		    my $E = $fchunk->end;
+		    if($E <= $qchunk0->end){ #must not cross into neighboring chunk
+			my @on_chunk;
+			push(@on_chunk, shift @pkeepers) while(@pkeepers &&
+							       $pkeepers[0]->start <= $E);
+			push(@on_chunk, shift @mkeepers) while(@mkeepers &&
+							       $mkeepers[0]->start <= $E);
+			my $order = $fchunk->number;
+			my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
+			if(! -f $section_file){
+			    my %section = (preds_on_chunk => \@on_chunk);
+			    $LOG->add_entry("STARTED", $section_file, "");
+			    store (\%section, $section_file);
+			    $LOG->add_entry("FINISHED", $section_file, "");
+			}
+			push(@section_files, $section_file);
+		    }
+		    else{
+			push(@buf, $fchunk);
+			last;
+		    }
+		}
 	    }
 	    #-------------------------CODE
 	 

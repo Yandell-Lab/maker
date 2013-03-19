@@ -42,21 +42,13 @@ sub new {
     #build indexes
     while (my $file = shift @files){
 	my ($title) = $file =~ /([^\/]+)$/;
-	if($G_DB{$title}){
-	    push(@{$self->{index}}, $G_DB{$title});
-	    push(@{$self->{stream}}, $G_DB{$title}->get_PrimarySeq_stream);
-
-	    #build reverse index to get the correct index based on file name
-	    $self->{file2index}{$title} = $self->{index}->[-1];
-	    next;
-	}
-
 	push(@{$self->{index}}, _safe_new($file, @args));
 	carp "Calling out to BioPerl get_PrimarySeq_stream" if($main::debug);
 	push(@{$self->{stream}}, $self->{index}[-1]->get_PrimarySeq_stream);
 
 	#build reverse index to get the correct index based on file name
-	$self->{file2index}{$title} = $self->{index}->[-1];       
+	$self->{name2index}{$title} = $self->{index}->[-1];       
+	$self->{path2index}{$file} = $self->{index}->[-1];       
     }
     
     return $self;
@@ -70,13 +62,28 @@ sub _safe_new {
 
     #which DBM am I using?
     my %args = @args;
+    if($G_DB{$file} && $args{'-reindex'}){
+	delete($G_DB{$file});
+    }
+    elsif($G_DB{$file}){
+	$G_DB{$file}[1]++; #add count of active references
+	return $G_DB{$file}[0];
+    }
+
     my @ext = ($AnyDBM_File::ISA[0] eq 'DB_File') ? 
 	('index') : ('index.dir', 'index.pag');
     my $db;
     try {
 	my $exists = 1 if((grep {-f "$file.$_"} @ext) == @ext);
 	my $tmp = GI::get_global_temp();
-	my $localize = (GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp));
+	my $localize;
+	if(defined($args{'-localize'})){
+	    $localize = $args{'-localize'};
+	    delete($args{'-localize'});
+	}
+	elsif(GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp)){
+	    $localize = 1;
+	}
 
 	#only lock if this is being newly created
 	my $lock;
@@ -192,17 +199,26 @@ sub _safe_new {
 	$db = new Bio::DB::Fasta($file, @args);
     };
 
+
+    $G_DB{$file}[0] = $db; #creates a global index
+    $G_DB{$file}[1]++;
     return $db;
 }
 }
 #-------------------------------------------------------------------------------
+#first reindex attempt will just try and use non localized index
+#second attempt tries to rebuild localized index
+#other attempts alternate between localized and non-localized index
 sub reindex {
     my $self = shift;
+    my $flag = shift;
 
     my $locs = $self->{locs};
-    my @args = ('-reindex' => 1,
-		'-makeid' => \&makeid
-		);
+    $flag = 1 if(!defined($flag));
+    my @args = ('-makeid' => \&makeid);
+    push(@args, '-reindex' => 1) if($flag);
+    push(@args, '-localize' => 0) if($flag % 2 == 0);
+    $self->drop_from_global_index(); #make sure I get new ones
 
     my @files = grep {-f $_} @$locs;
     foreach my $dir (grep {-d $_} @$locs){
@@ -212,14 +228,14 @@ sub reindex {
     #clear old index array
     $self->{index} = [];
     $self->{stream} = [];
-    $self->{file2index} = {};
+    $self->{name2index} = {};
+    $self->{path2index} = {};
 
     #nothing to index
     return $self if(! @files);
 
     #rebuilt build indexes
     my $lock;
-    my $stat = $self->drop_from_global_index(); #drop globally
     if(($lock = new File::NFSLock("$files[0].reindex", 'NB', 0, 50)) && $lock->maintain(30)){ #reindex lock
 	foreach my $file (@files){
 	    push(@{$self->{index}}, _safe_new($file, @args));
@@ -228,7 +244,8 @@ sub reindex {
 	    
 	    #build reverse index to get the correct index based on file name
 	    my ($title) = $file =~ /([^\/]+)$/;
-	    $self->{file2index}{$title} = $self->{index}->[-1];
+	    $self->{name2index}{$title} = $self->{index}->[-1];
+	    $self->{path2index}{$file} = $self->{index}->[-1];
 	}
 	$lock->unlock;
     }
@@ -245,11 +262,11 @@ sub reindex {
 	    
 	    #build reverse index to get the correct index based on file name
 	    my ($title) = $file =~ /([^\/]+)$/;
-	    $self->{file2index}{$title} = $self->{index}->[-1];
+	    $self->{name2index}{$title} = $self->{index}->[-1];
+	    $self->{path2index}{$file} = $self->{index}->[-1];
 	}	
 	$lock->unlock;
     }
-    $self->add_to_global_index() if($stat); #re-add to global if was global
 
     return $self;
 }
@@ -271,7 +288,7 @@ sub get_Seq_for_hit {
     my $self = shift;
     my $hit = shift;
 
-    my $r_ind = $self->{file2index}; #reverse index
+    my $r_ind = $self->{name2index}; #reverse index
     my $id = (ref($hit) eq '') ? ($hit =~ /^>([^\s]+)/)[0] : $hit->name;
     my $source = (ref($hit) eq '') ? undef : $hit->{_file};
     my $description = (ref($hit) eq '') ? $hit : $hit->description;
@@ -311,7 +328,7 @@ sub header_for_hit {
     my $self = shift;
     my $hit = shift;
 
-    my $r_ind = $self->{file2index}; #reverse index
+    my $r_ind = $self->{name2index}; #reverse index
     my $id = (ref($hit) eq '') ? ($hit =~ /^>([^\s]+)/)[0] : $hit->name;
     my $source = (ref($hit) eq '') ? undef : $hit->{_file};
     my $description = (ref($hit) eq '') ? $hit : $hit->description;
@@ -357,10 +374,10 @@ sub get_Seq_by_id {
 
     my @index = @{$self->{index}};
     if($source){
-	my @keys = keys %{$self->{file2index}}; #all file names
+	my @keys = keys %{$self->{name2index}}; #all file names
 	$source =~ s/.*\/([^\/]+)$/$1/;
 	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
-	@index =  $self->{file2index}{@keys};
+	@index =  $self->{name2index}{@keys};
     }
 
     my $fastaObj;
@@ -384,10 +401,10 @@ sub get_Seq_by_alias {
 
     my @index = @{$self->{index}};
     if($source){
-	my @keys = keys %{$self->{file2index}}; #all file names
+	my @keys = keys %{$self->{name2index}}; #all file names
 	$source =~ s/.*\/([^\/]+)$/$1/;
 	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
-	@index =  $self->{file2index}{@keys};
+	@index =  $self->{name2index}{@keys};
     }
 
     my $fastaObj;
@@ -436,10 +453,10 @@ sub header {
 
     my @index = @{$self->{index}};
     if($source){
-	my @keys = keys %{$self->{file2index}}; #all file names
+	my @keys = keys %{$self->{name2index}}; #all file names
 	$source =~ s/.*\/([^\/]+)$/$1/;
 	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
-	@index =  $self->{file2index}{@keys};
+	@index =  $self->{name2index}{@keys};
     }
 
     my $h;
@@ -466,10 +483,10 @@ sub header_by_alias {
 
     my @index = @{$self->{index}};
     if($source){
-	my @keys = keys %{$self->{file2index}}; #all file names
+	my @keys = keys %{$self->{name2index}}; #all file names
 	$source =~ s/.*\/([^\/]+)$/$1/;
 	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
-	@index =  $self->{file2index}{@keys};
+	@index =  $self->{name2index}{@keys};
     }
 
     my $h;
@@ -516,27 +533,18 @@ sub STORABLE_thaw {
 
 	#build reverse index to get the correct index based on file name
 	my ($title) = $file =~ /([^\/]+)$/;
-	$self->{file2index}{$title} = $self->{index}->[-1];
+	$self->{name2index}{$title} = $self->{index}->[-1];
+	$self->{path2index}{$file} = $self->{index}->[-1];
     }
 }
-#-------------------------------------------------------------------------------
-sub add_to_global_index{
-    my $self = shift;
 
-    while(my $key = each %{$self->{file2index}}){
-	my ($name) = $key =~ /([^\/]+)$/;
-        $G_DB{$name} = $self->{file2index}->{$key};
-    }
-}
-#-------------------------------------------------------------------------------
 sub drop_from_global_index{
     my $self = shift;
 
     my $stat = 0;
-    while(my $key = each %{$self->{file2index}}){
-	my ($name) = $key =~ /([^\/]+)$/;
-	$stat = 1 if($G_DB{$name});
-        delete($G_DB{$name});
+    while(my $key = each %{$self->{path2index}}){
+	$stat = 1 if($G_DB{$key});
+        delete($G_DB{$key});
     }
 
     return $stat;
@@ -565,6 +573,16 @@ sub makeid {
     }
     
     return @ids;
+}
+#-------------------------------------------------------------------------------
+sub DESTROY {
+    my $self = shift;
+
+    #remove global index when all pointers go out of scope
+    foreach my $file (keys %{$self->{path2index}}){
+	$G_DB{$file}[1]--;
+	delete($G_DB{$file}) if($G_DB{$file}[1] <= 0);
+    }
 }
 #-------------------------------------------------------------------------------
 1;

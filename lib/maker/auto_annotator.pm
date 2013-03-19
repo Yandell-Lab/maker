@@ -3080,7 +3080,9 @@ sub get_translation_seq {
     my $has_stop = 1 if($p_seq =~ s/\*$//);
 
     #if very small CDS try again with longest ORF rather than internal offest
-    if(($f->{translation_offset} || $f->{translation_end}) && ($end - $offset - 1)/(length($p_seq)*3) < 40){
+    if(($f->{translation_offset} || $f->{translation_end}) &&
+       (length($p_seq) == 0 || ($end - $offset - 1)/(length($p_seq)*3) < 40)
+    ){
 	$f->{translation_offset} = undef;
 	$f->{translation_end} = undef;
 	return get_translation_seq($seq, $f);

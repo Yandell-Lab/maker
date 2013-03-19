@@ -72,6 +72,7 @@ sub seq {
 	       #retry because of weird NFS
 	       if(! $obj->{db}){
 		   sleep 10;
+		   $index->drop_from_global_index();
 		   $index = GI::build_fasta_index($locs);
 		   $obj = $index->get_Seq_by_id($id);
 	       }
@@ -79,11 +80,11 @@ sub seq {
 	       #try one more time
 	       if(! $obj->{db}){
 		   sleep 10;
+		   $index->drop_from_global_index();
 		   $index = GI::build_fasta_index($locs);
 		   $obj = $index->get_Seq_by_id($id);
 	       }
 	       
-	       $index->add_to_global_index();
 	       next if(! $obj->{db});
 
 	       while(defined(my $key = each %$obj)){

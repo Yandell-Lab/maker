@@ -522,22 +522,25 @@ sub snap {
         my $snap_keepers = [];
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
 
-        my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap.fasta";
+	my $tmp = GI::get_global_temp();
+	my $rank = GI::RANK();
+	my $t_dir = "$tmp/$rank";
 
-        my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
-
-        my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.snap";
-
+        my $file_name = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap.fasta";
+        my $xdef_file = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.snap";
+        my $o_file    = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
+        my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
 	
 	$command .= " -xdef $xdef_file ";
 	$command .= " $file_name";
 	$command .= " > $o_file";
 
-	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
+	$LOG->add_entry("STARTED", $backup, "") if(defined $LOG);
 
-        if (-e $o_file && ! $OPT_F){
+        if (-f $backup && ! $OPT_F){
                 print STDERR "re reading snap report.\n" unless $main::quiet;
-                print STDERR "$o_file\n" unless $main::quiet;
+                print STDERR "$backup\n" unless $main::quiet;
+		$o_file = $backup;
         }
         else {
                 print STDERR "running  snap.\n" unless $main::quiet;
@@ -545,9 +548,9 @@ sub snap {
 		FastaFile::writeFile(\$fasta, $file_name);
 		my $w = new Widget::snap();
                 $w->run($command);
+		#File::Copy::copy($o_file, $backup) unless();
         }
 
-	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
 	unlink($xdef_file) if(-f $xdef_file);
 	unlink($file_name) if(-f $file_name);
 
@@ -555,12 +558,11 @@ sub snap {
         $params{min_exon_score}  = -100;
         $params{min_gene_score}  = -20;
 
-        my $keepers =
-        parse($o_file,
-             \%params,
-              $fasta,
-             );
+        my $keepers = parse($o_file,
+			    \%params,
+			    $fasta);
 
+	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 	
 	PhatHit_utils::add_offset($keepers,
 				  $offset,
@@ -595,18 +597,21 @@ sub run {
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
 sub parse {
+        shift @_ if($_[0] =~ /^Widget\:\:/); #ignore 
         my $report = shift;
         my $params = shift;
 	my $q_file = shift;
-
-        my $fasta;
+	
 	my $def;
 	my $q_seq;
 
-	if($q_file =~ /^>/){
-            $fasta   = $q_file;
-            $def     = Fasta::getDef(\$fasta);
-            $q_seq   = Fasta::getSeqRef(\$fasta);
+	if(ref($q_file) eq 'FastaChunk'){ #object not scalar
+	    $q_seq = $q_file->seq_w_flank;
+	    $def = $q_file->def_w_flank;
+	}
+	elsif($q_file =~ /^>/){
+            $def     = Fasta::getDef(\$q_file);
+            $q_seq   = Fasta::getSeqRef(\$q_file);
         }
         else{
 	    my $index = GI::build_fasta_index($q_file);

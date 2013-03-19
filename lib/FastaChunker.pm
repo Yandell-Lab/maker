@@ -24,7 +24,6 @@ sub new {
         bless($self, $class);
 
 	$self->min_size(0);
-	$self->flank(0);
 
 	return $self;
 }
@@ -93,7 +92,6 @@ sub load_chunks {
 	$self->{INDEX} = 0;
         for (my $i=0; $i < $t_c; $i++){
 	    my $offset = $i * $l;
-	    my $def = $parent_def. " CHUNK number:$i size:$l offset:$offset";
 
 	    my $is_last = ($t_c - 1 == $i) ? 1 : 0;
 	    my $is_first = ($i == 0) ? 1 : 0;
@@ -103,7 +101,6 @@ sub load_chunks {
 	    my $end = ($is_last) ? $self->parent_seq_length : $offset + $l;
 
 	    my $chunk = new FastaChunk();
-	    $chunk->def($def);
 	    $chunk->parent_def($parent_def);
 	    $chunk->seqid(Fasta::def2SeqID($parent_def));
 	    $chunk->size($l); #the max size of a chunk
@@ -114,52 +111,38 @@ sub load_chunks {
 	    $chunk->start($start);
 	    $chunk->end($end);
 	    $chunk->parent_seq_length($self->parent_seq_length());
-	    $chunk->length($end - $start + 1); #the actual size of a chunk
 
-	    if(ref($parent_seq) eq 'SCALAR'){
-		$chunk->seq(substr($$parent_seq, $offset, $chunk->length));
-	    }
-	    else{
-		$chunk->seq($parent_seq);
-	    }
-	    
 	    if($self->flank()){
 		my $flank = $self->flank();
-		
+		$chunk->flank($flank);
+
 		#upstream
 		my $B1 = ($offset+1) - $flank;
 		$B1 = 1 if($B1 < 1);
 		my $E1 = $offset;
-		my $L1 = abs($E1 - $B1) +1;
-
-		if($E1 >= $B1 && $E1 > 0){
+		my $L1 = ($E1-$B1)+1;
+		if($E1 >= $B1 && $L1 > 0){
 		    $chunk->{_upstream}{start} = $B1;
 		    $chunk->{_upstream}{end} = $E1;
-		    if(ref($parent_seq) eq 'SCALAR'){
-			$chunk->{_upstream}{seq} = substr($$parent_seq, $B1 - 1, $L1);
-		    }
-		    else{
-			$chunk->{_upstream}{seq} = undef; #will just query parent_seq
-		    }
 		}
 
 		#downstream
 		my $B2 = $offset + $chunk->length + 1;
 		my $E2 = $offset + $chunk->length + $flank;
 		$E2 = $chunk->parent_seq_length if($E2 > $chunk->parent_seq_length);
-		my $L2 = abs($E2 - $B2) +1;
-
-		if($E2 >= $B2 && $E2 > 0){
+		my $L2 = ($E2-$B2)+1;
+		if($E2 >= $B2 && $L2 > 0){
                     $chunk->{_downstream}{start} = $B2;
                     $chunk->{_downstream}{end} = $E2;
-		    if(ref($parent_seq) eq 'SCALAR'){
-			$chunk->{_downstream}{seq} = substr($$parent_seq, $B2 - 1, $L2);
-		    }
-		    else{
-			$chunk->{_downstream}{seq} = undef; #will just query parent_seq
-		    }
 		}
 	    }
+
+	    if(ref($parent_seq) eq 'SCALAR'){
+		$chunk->seq(substr($$parent_seq, $chunk->offset_w_flank, $chunk->length_w_flank));
+	    }
+	    else{
+		$chunk->seq($parent_seq);
+	    }	   
 	       
 	    push(@{$self->{chunks}}, $chunk);
         }
@@ -172,7 +155,7 @@ sub get_chunk {
 	my $self = shift;
 	my $i    = shift;
 
-	return $self->{chunks}->[$i];
+	return $self->{chunks}->[$i] || undef;
 }
 #-------------------------------------------------------------------------------
 sub next_chunk {

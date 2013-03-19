@@ -574,7 +574,7 @@ else{
 	}
 
 	if($req_stat == $wait_ask_again){
-	    my $t = $size/20;
+	    my $t = $size/50;
 	    sleep $t;
 	    next;
 	}
@@ -1088,7 +1088,7 @@ else {
 	    }
 	    #just wait and then try again later
 	    elsif($req_status == $wait_ask_again){
-		my $t = $size/20;
+		my $t = $size/50;
 		sleep $t;
 		next;
 	    }
@@ -1212,8 +1212,8 @@ else {
 		}
 	    }
 
-	    #nothing provided and nothing to advance to (wait)
-	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag ){		
+	    #nothing provided and nothing to advance to
+	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag){
 		#do not put sleep here or you'll be sorry!!!!
 	    }
 

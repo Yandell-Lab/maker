@@ -853,9 +853,9 @@ sub _write_new_log {
 #sets a log child to hold values seperate from the whole log
 sub set_child {
     my $self = shift;
-    my $num = shift;
+    my $tag = shift;
 
-    if(! defined $num){
+    if(! defined $tag){
 	$self->{logchild} = undef;
 	return;
     }
@@ -863,7 +863,7 @@ sub set_child {
     my $log_file = $self->{file_name};
     my $file = $log_file;
     my $the_void = $self->{params}->{the_void};
-    $file =~ s/(.*\/)?([^\/]+)$/$the_void\/$2.child.$num/;
+    $file =~ s/(.*\/)?([^\/]+)$/$the_void\/$2.child.$tag/;
     
     $self->{logchild} = $file;
 

@@ -1152,27 +1152,49 @@ sub combine {
    return \@bag;
 }
 #-----------------------------------------------------------------------------
-sub abinits {
-   my @preds;
-   my $CTL_OPT = $_[3];
+sub parse_abinit_file {
+   my $file  = shift;
+   my $entry = shift;
+   my $chunk = shift;
+   my $type  = shift;
 
-   push(@preds, @{snap(@_)})     if(grep {/snap/} @{$CTL_OPT->{_run}});
-   push(@preds, @{augustus(@_)}) if(grep {/augustus/} @{$CTL_OPT->{_run}});
-   push(@preds, @{fgenesh(@_)})  if(grep {/fgenesh/} @{$CTL_OPT->{_run}});
-   push(@preds, @{genemark(@_)}) if(grep {/genemark/} @{$CTL_OPT->{_run}});
+   ($type) = $file =~ /\.([^\.]+)$/ if(!$type);
 
-   return \@preds;
+   my %params;
+   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+   my $keepers = "Widget::$type"->parse($file,
+					\%params,
+					$chunk);
+   
+
+   PhatHit_utils::add_offset($keepers,
+                             $chunk->offset_w_flank());
+
+   my $masked = 1 if($file =~ /\.masked\.\d+\.$type$/);
+
+   foreach my $h (@$keepers){
+       $h->{_HMM}   = $hmm;
+       if($label){
+	   $h->{_label} = $label;
+	   $_->{_label} = $label foreach($h->hsps);
+       }
+       if($masked){
+	   my $alg = $h->algorithm();
+	   $h->algorithm("$alg\_masked");
+	   $_->algorithm("$alg\_masked") foreach($h->hsps);
+       }
+   }
+
+   return $keepers;
 }
 #-----------------------------------------------------------------------------
 sub snap {
    my $in_file     = shift;
    my $the_void    = shift;
-   my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
 
    my $exe    = $CTL_OPT->{snap};
-
    my @entries = split(',', $CTL_OPT->{snaphmm});
 
    #make sure ZOE is set or snap can fail
@@ -1184,16 +1206,14 @@ sub snap {
        $ENV{ZOE} = $path;
    }
 
-   my @keepers;
+   my @out_files;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-
-       my %params;
-       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.snap";
-
-       $LOG->add_entry("STARTED", $out_file, "");   
+       my $out_file = "$in_file\.$hmm_n\.snap";
+       (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+       $LOG->add_entry("STARTED", $backup, "");
        
        my $command  = $exe;
        $command .= " $hmm";
@@ -1201,48 +1221,29 @@ sub snap {
        $command .= " > $out_file";
        
        my $w = new Widget::snap();
-       
-       if (-e $out_file) {
-	   print STDERR "re reading snap report.\n" unless $main::quiet;
-	   print STDERR "$out_file\n" unless $main::quiet;
+       if (-f $backup) {
+	   print STDERR "using existing snap report.\n" unless $main::quiet;
+	   print STDERR "$backup\n" unless $main::quiet;
+	   $out_file = $backup;
        }
        else {
 	   print STDERR "running  snap.\n" unless $main::quiet;
 	   $w->run($command);
+	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
        }
-       
-       $params{min_exon_score}  = -100000; #-10000;
-       $params{min_gene_score}  = -100000; #0;
-       
-       my $set = Widget::snap::parse($out_file,
-				     \%params,
-				     $in_file,
-				     );
-       foreach my $h (@$set){
-	   $h->{_HMM}   = $hmm;
-	   $h->{_label} = $label if($label);
-	   map{$_->{_label} = $label} $h->hsps if($label);
-       }
+       $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@keepers, @$set);
-
-       $LOG->add_entry("FINISHED", $out_file, "");
+       push(@out_files, [$out_file, $entry]);
    }
 
-   return \@keepers;
+   return \@out_files;
 }
 #-----------------------------------------------------------------------------
 sub genemark {
    my $in_file     = shift;
    my $the_void    = shift;
-   my $seq_id      = shift;
    my $CTL_OPT     = shift;
    my $LOG         = shift;
-   my $alt_file    = shift;
-
-   #genemark always uses the alt_file (no masking)
-   return [] if(! $alt_file);
-   $in_file = $alt_file;
 
    #genemark sometimes fails if called directly so I built a wrapper
    my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
@@ -1251,17 +1252,14 @@ sub genemark {
 
    my @entries = split(',', $CTL_OPT->{gmhmm});
 
-   my @keepers;
+   my @out_files;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-
-       my %params;
-       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.genemark";
-
-       $LOG->add_entry("STARTED", $out_file, "");   
-
+       my $out_file = "$in_file\.$hmm_n\.genemark";
+       (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+       $LOG->add_entry("STARTED", $backup, "");
 
        my $command  = "$^X $wrap";
        $command .= " -m $hmm";
@@ -1272,46 +1270,31 @@ sub genemark {
        $command .= " $in_file";
        
        my $w = new Widget::genemark();
-       
-       if (-e $out_file) {
-	   print STDERR "re reading genemark report.\n" unless $main::quiet;
-	   print STDERR "$out_file\n" unless $main::quiet;
+       if (-f $backup) {
+           print STDERR "using existing genemark report.\n" unless $main::quiet;
+           print STDERR "$backup\n" unless $main::quiet;
+	   $out_file = $backup;
        }
        else {
 	   print STDERR "running  genemark.\n" unless $main::quiet;
 	   $w->run($command);
+	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
        }
-       
-       $params{min_exon_score}  = -100000; #-10000;
-       $params{min_gene_score}  = -100000; #0;
-       
-       my $set = Widget::genemark::parse($out_file,
-					 \%params,
-					 $in_file,
-					 );
-       foreach my $h (@$set){
-	   $h->{_HMM} = $hmm;
-	   $h->{_label} = $label if($label);
-	   map{$_->{_label} = $label} $h->hsps if($label);
-       }
+       $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@keepers, @$set);
-       
-       $LOG->add_entry("FINISHED", $out_file, "");
+       push(@out_files, [$out_file, $entry]);
    }
 
-   return \@keepers;
+   return \@out_files;
 }
 #-----------------------------------------------------------------------------
 sub augustus {
    my $in_file     = shift;
    my $the_void    = shift;
-   my $seq_id      = shift;
    my $CTL_OPT = shift;
    my $LOG         = shift;
 
    my $exe = $CTL_OPT->{augustus};
-
    my @entries = split(',', $CTL_OPT->{augustus_species});
 
    #make sure AUGUSTUS_CONFIG_PATH is set or augustus can fail
@@ -1324,16 +1307,14 @@ sub augustus {
        $ENV{AUGUSTUS_CONFIG_PATH} = $path;
    }
 
-   my @keepers;
+   my @out_files;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-
-       my %params;
-       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.augustus";
-
-       $LOG->add_entry("STARTED", $out_file, ""); 
+       my $out_file = "$in_file\.$hmm_n\.augustus";
+       (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+       $LOG->add_entry("STARTED", $backup, ""); 
        
        my $command  = $exe;
        $command .= " --species=$hmm";
@@ -1342,42 +1323,27 @@ sub augustus {
        $command .= " > $out_file";
        
        my $w = new Widget::augustus();
-       
-       if (-e $out_file) {
-	   print STDERR "re reading augustus report.\n" unless $main::quiet;
-	   print STDERR "$out_file\n" unless $main::quiet;
+       if (-f $backup) {
+           print STDERR "using existing augustus report.\n" unless $main::quiet;
+           print STDERR "$backup\n" unless $main::quiet;
+	   $out_file = $backup;
        }
        else {
 	   print STDERR "running  augustus.\n" unless $main::quiet;
 	   $w->run($command);
+	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
        }
-       
-       $params{min_exon_score}  = -100000; #-10000;
-       $params{min_gene_score}  = -100000; #0;
-       
-       my $set = Widget::augustus::parse($out_file,
-					 \%params,
-					 $in_file
-					 );
-       
-       foreach my $h (@$set){
-	   $h->{_HMM} = $hmm;
-	   $h->{_label} = $label if($label);
-	   map{$_->{_label} = $label} $h->hsps if($label);
-       }
+       $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@keepers, @$set);
-
-       $LOG->add_entry("FINISHED", $out_file, "");
+       push(@out_files, [$out_file, $entry]);
    }
 
-   return \@keepers;
+   return \@out_files;
 }
 #-----------------------------------------------------------------------------
 sub fgenesh {
    my $in_file     = shift;
    my $the_void    = shift;
-   my $seq_id      = shift;
    my $CTL_OPT = shift;
    my $LOG         = shift;
 
@@ -1386,54 +1352,37 @@ sub fgenesh {
 
    my @entries = split(',', $CTL_OPT->{fgenesh_par_file});
 
-   my @keepers;
+   my @out_files;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
+       my $out_file = "$in_file\.$hmm_n\.fgenesh";       
+       (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+       $LOG->add_entry("STARTED", $backup, "");
 
-       my %params;
-       my $out_file = "$the_void/$seq_id\.all\.$hmm_n\.fgenesh";
-       
-       $LOG->add_entry("STARTED", $out_file, ""); 
-       
        my $command  = "$^X $wrap $exe";
-       #$command .= " -tmp $TMP";
        $command .= " $hmm";
        $command .= " $in_file";
        $command .= " > $out_file";
        
        my $w = new Widget::fgenesh();
-       
-       if (-e $out_file) {
-	   print STDERR "re reading fgenesh report.\n" unless $main::quiet;
-	   print STDERR "$out_file\n" unless $main::quiet;
+       if (-f $backup) {
+           print STDERR "using existing fgenesh report.\n" unless $main::quiet;
+           print STDERR "$backup\n" unless $main::quiet;
+	   $out_file = $backup;
        }
        else {
 	   print STDERR "running  fgenesh.\n" unless $main::quiet;
 	   $w->run($command);
+	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
        }
-       
-       $params{min_exon_score}  = -100000; #-10000;
-       $params{min_gene_score}  = -100000; #0;
-       
-       my $set = Widget::fgenesh::parse($out_file,
-					\%params,
-					$in_file
-					);
-       
-       foreach my $h (@$set){
-	   $h->{_HMM} = $hmm;
-	   $h->{_label} = $label if($label);
-	   map{$_->{_label} = $label} $h->hsps if($label);
-       }
+       $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@keepers, @$set);
-
-       $LOG->add_entry("FINISHED", $out_file, "");
+       push(@out_files, [$out_file, $entry]);
    }
 
-   return \@keepers;
+   return \@out_files;
 }
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
@@ -1459,7 +1408,7 @@ sub polish_exonerate {
 
     my $db_index = GI::build_fasta_index($db_set);
     my $name =  Fasta::def2SeqID($def);
-    my $safe_name = Fasta::seqID2SafeID($name);    
+    my $safe_name = Fasta::seqID2SafeID($name);
     my $exe = $exonerate;
     
     my @exonerate_data;
@@ -1533,17 +1482,17 @@ sub polish_exonerate {
 	my $L = ($E + 2*$pred_flank > $length) ? $length : $E + 2*$pred_flank;
 	my $offset  = $F - 1;
 	my $tmp = get_global_temp();
-        my $o_file  = "$the_void/$safe_name.$F-$L.$safe_id";
-	$o_file    .= '.p_exonerate' if($type eq 'p');
-	$o_file    .= '.est_exonerate' if($type eq 'e');
-	$o_file    .= '.alt_exonerate' if($type eq 'a');
+        my $backup  = "$the_void/$safe_name.$F-$L.$safe_id";
+	$backup    .= '.p_exonerate' if($type eq 'p');
+	$backup    .= '.est_exonerate' if($type eq 'e');
+	$backup    .= '.alt_exonerate' if($type eq 'a');
 	my $o_tfile = "$tmp/$rank/$safe_name.$F-$L.$safe_id.$type.exonerate";
 	my $t_file  = "$tmp/$rank/$safe_id.for.$F-$L.$rank.fasta";
 	my $d_file  = "$tmp/$rank/$safe_name.$F-$L.$rank.fasta";
 
 	my $d_len = abs($L - $F) + 1;
 	my $t_len = (ref($hit)) ? $hit->length : undef;
-	if(! -f $o_file || ! ref($hit)){
+	if(! -f $backup || ! ref($hit)){
 	    #get fasta for EST/protein
 	    my $fastaObj = $db_index->get_Seq_for_hit($hit);
 
@@ -1568,7 +1517,7 @@ sub polish_exonerate {
 	    my $fasta   = Fasta::toFastaRef('>'.$header, \$seq);
 	    FastaFile::writeFile($fasta, $t_file);	
 	}
-	if(! -f $o_file){
+	if(! -f $backup){
 	    #get substring fasta of contig
 	    my $p_seq = $q_seq_obj->subseq($F, $L);
 	    my $p_def = $def." ".$F." ".$L;
@@ -1580,8 +1529,8 @@ sub polish_exonerate {
 
 	#run exonerate
 	unlink($o_tfile) if(-f $o_tfile);
-	$o_tfile = $o_file if(-f $o_file);
-	$LOG->add_entry("STARTED", $o_file, "") if(defined $LOG);
+	$o_tfile = $backup if(-f $backup);
+	$LOG->add_entry("STARTED", $backup, "") if(defined $LOG);
 	my $exonerate_hits = to_polisher($d_file,
 					 $t_file,
 					 $o_tfile,
@@ -1598,8 +1547,8 @@ sub polish_exonerate {
 					 );
 
 	#temp
-	#File::Copy::move($o_tfile, $o_file) if($o_tfile ne $o_file);
-	$LOG->add_entry("FINISHED", $o_file, "") if(defined $LOG);
+	#File::Copy::move($o_tfile, $backup) if($o_tfile ne $backup);
+	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 
 	#delete fastas
 	unlink($d_file, $t_file, $o_tfile);
