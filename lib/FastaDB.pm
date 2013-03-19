@@ -132,6 +132,7 @@ sub _safe_new {
 		my $fitime = (stat($fi))[9] || 0;
 		if($fitime < $gitime){
 		    File::Copy::copy($gi, $ti) or confess "ERROR: Copy failed: $!";
+		    sleep 10 if(! -f $ti); #NFS
 		    File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
 		}
 	    }
@@ -158,6 +159,8 @@ sub _safe_new {
 	    foreach my $ext (@ext){
                 my $ti = "$tdir/$name.$ext";
 		my $fi = "$fdir/$name.$ext";
+		sleep 10 if(! -f $ti); #NFS
+		next if(! -f $ti);
 		File::Copy::move($ti, $fi) or confess "ERROR: Move failed: $!";
             }
 	    File::Path::rmtree($tdir);
@@ -168,7 +171,9 @@ sub _safe_new {
 		    my $fi = "$fdir/$name.$ext";
 		    my $ti = "$dir/$name.$ext.$rank";
 		    my $gi = "$dir/$name.$ext";
+		    next if(! -f $ti);
 		    File::Copy::copy($fi, $ti) or confess "ERROR: Copy failed: $!";
+		    sleep 10 if(! -f $ti); #NFS
 		    File::Copy::move($ti, $gi) or confess "ERROR: Move failed: $!";
 
 		    #make timestamps equal (avoids iterative reindexing)
@@ -179,7 +184,7 @@ sub _safe_new {
 	}
 
 	#now mount the finished index
-	$args{'-reindex'} = 0;
+	delete($args{'-reindex'});
 	carp "Calling out to BioPerl Bio::DB::Fasta::new" if($main::debug);
 	{
 	    local $SIG{'__WARN__'} = sub { die $_[0]; };
