@@ -575,8 +575,7 @@ else{
 	}
 
 	if($req_stat == $wait_ask_again){
-	    my $t = $size/50;
-	    sleep $t;
+	    sleep 0.1;
 	    next;
 	}
 
@@ -1089,8 +1088,7 @@ else {
 	    }
 	    #just wait and then try again later
 	    elsif($req_status == $wait_ask_again){
-		my $t = $size/50;
-		sleep $t;
+		sleep 0.1;
 		next;
 	    }
 	    #reset signal received
@@ -1214,8 +1212,8 @@ else {
 	    }
 
 	    #nothing provided and nothing to advance to
-	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag){
-		#do not put sleep here or you'll be sorry!!!!
+	    if(!@{$helpers} && !@{$locs} && !$chunk && !$t_need_flag && !$t_tier_result){
+		sleep 0.1; #don't sleep too log or you'll be sorry
 	    }
 
 	    #finally run local chunk if there is one
