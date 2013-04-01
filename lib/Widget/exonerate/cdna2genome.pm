@@ -108,6 +108,23 @@ sub get_exon_coors_r {
                         #print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
                 }
                 elsif ($o->{state} eq 'G'){
+ 		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+			}
+			else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+			}
+			
+			if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+			}
+			else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+			}
 
                         if ($v->{q_strand} == 1){
                                 $pos_q += $o->{q};
@@ -363,19 +380,36 @@ sub get_exon_coors_f {
 			#print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
 		}
 		elsif ($o->{state} eq 'G'){
-
+		        if ($v->{q_b} < $v->{q_e}){
+			    $data[$exon]{q}{b} = $pos_q + 1
+				unless defined($data[$exon]{q}{b});
+			}
+			else {
+			    $data[$exon]{q}{b} = $pos_q
+				unless defined($data[$exon]{q}{b});
+			}
+			
+			if ($v->{t_b} < $v->{t_e}){
+			    $data[$exon]{t}{b} = $pos_t + 1
+				unless defined($data[$exon]{t}{b});
+			}
+			else {
+			    $data[$exon]{t}{b} = $pos_t
+				unless defined($data[$exon]{t}{b});
+			}
+			
                         if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
+			    $pos_q += $o->{q};
                         }
                         else {
-                                $pos_q -= $o->{q};
+			    $pos_q -= $o->{q};
                         }
-
+			
                         if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
+			    $pos_t += $o->{t};
                         }
                         else {
-                                $pos_t -= $o->{t};
+			    $pos_t -= $o->{t};
                         }
 		}
                 elsif ($o->{state} eq 'N'){

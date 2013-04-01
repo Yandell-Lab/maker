@@ -59,513 +59,547 @@ sub get_blocks {
 }
 #-------------------------------------------------------------------------------
 sub get_exon_coors_r {
-        my $v      = shift;
-        my $type  = shift;
-
-        my $pos_q = $v->{q_b};
-        my $pos_t = $v->{t_b};
-
-        my $exon = 0;
-
-        my @data;
-        foreach my $o (@{$v->{operations}}){
-                if    ($o->{state} eq 'M'){
-
-                        #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
-
-		        if ($v->{q_b} < $v->{q_e}){
-			    $data[$exon]{q}{b} = $pos_q + 1
-				unless defined($data[$exon]{q}{b});
-			}
-			else {
-			    $data[$exon]{q}{b} = $pos_q
-				unless defined($data[$exon]{q}{b});
-			}
-
-			if ($v->{t_b} < $v->{t_e}){
-			    $data[$exon]{t}{b} = $pos_t + 1 
-				unless defined($data[$exon]{t}{b});
-                        }
-                        else {
-			    $data[$exon]{t}{b} = $pos_t 
-				unless defined($data[$exon]{t}{b});
-                        }
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                        #print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
-                }
-                elsif ($o->{state} eq 'G'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-                }
-                elsif ($o->{state} eq 'N'){
-                        die "dead in est2genomic::get_hsp_coors:N\n";
-                }
-                elsif ($o->{state} eq '3'){
-			if ($type eq '3I5'){
-        			if ($v->{q_b} < $v->{q_e}){
-				    $data[$exon]{q}{e} = $pos_q; 
-				}
-				else{
-				    $data[$exon]{q}{e} = $pos_q + 1; 
-				}
-				
-				if ($v->{t_b} < $v->{t_e}){
-				    $data[$exon]{t}{e} = $pos_t; 
-				}
-				else{
-				    $data[$exon]{t}{e} = $pos_t + 1;
-				}
-
-				$data[$exon]{q}{strand} = $v->{q_strand};
-				$data[$exon]{t}{strand} = $v->{t_strand};
-
-                        	#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
-
-				#fix 0 length exons in report
-				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-				    $data[$exon] = undef;
-				    $exon--; #undo iteration
-				}
-
-				$exon++;
-			}
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq '5'){
-			if ($type eq '5I3'){
-			        if ($v->{q_b} < $v->{q_e}){
-				    $data[$exon]{q}{e} = $pos_q;
-				}
-				else{
-				    $data[$exon]{q}{e} = $pos_q + 1;
-				}
-				
-				if ($v->{t_b} < $v->{t_e}){
-				    $data[$exon]{t}{e} = $pos_t;
-				}
-				else{
-				    $data[$exon]{t}{e} = $pos_t + 1;
-				}
-
-				$data[$exon]{q}{strand} = $v->{q_strand};
-				$data[$exon]{t}{strand} = $v->{t_strand};
-
-				#fix 0 length exons in report
-				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-				    $data[$exon] = undef;
-				    $exon--; #undo iteration
-				}
-
-				$exon++;
-			}
-                        #print "ZEEEEEEEEE:$pos_q exon:$exon\n";
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq 'I'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq 'S'){
-           		if ($v->{q_b} < $v->{q_e}){
-			    $data[$exon]{q}{b} = $pos_q + 1
-				unless defined($data[$exon]{q}{b});
-		        }
-		        else {
-			    $data[$exon]{q}{b} = $pos_q
-				unless defined($data[$exon]{q}{b});
-		        }
-
-                        if ($v->{t_b} < $v->{t_e}){
-			    $data[$exon]{t}{b} = $pos_t + 1
-				unless defined($data[$exon]{t}{b});
-                        }
-                        else {
-			    $data[$exon]{t}{b} = $pos_t
-				unless defined($data[$exon]{t}{b});
-                        }
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-               elsif ($o->{state} eq 'F'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                else {
-                        die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
-                }
-        }
-
-	if ($v->{q_b} < $v->{q_e}){
-	    $data[$exon]{q}{e} = $pos_q;
+    my $v      = shift;
+    my $type  = shift;
+    
+    my $pos_q = $v->{q_b};
+    my $pos_t = $v->{t_b};
+    
+    my $exon = 0;
+    
+    my @data;
+    foreach my $o (@{$v->{operations}}){
+	if    ($o->{state} eq 'M'){
+	    
+	    #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
+	    
+	    if ($v->{q_b} < $v->{q_e}){
+		$data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    else {
+		$data[$exon]{q}{b} = $pos_q
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+		$data[$exon]{t}{b} = $pos_t + 1 
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    else {
+		$data[$exon]{t}{b} = $pos_t 
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	    #print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
 	}
-	else{
-	    $data[$exon]{q}{e} = $pos_q + 1;
+	elsif ($o->{state} eq 'G'){
+	    if ($v->{q_b} < $v->{q_e}){
+                $data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+            }
+            else {
+                $data[$exon]{q}{b} = $pos_q
+                    unless defined($data[$exon]{q}{b});
+            }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+                $data[$exon]{t}{b} = $pos_t + 1
+                    unless defined($data[$exon]{t}{b});
+            }
+            else {
+                $data[$exon]{t}{b} = $pos_t
+                    unless defined($data[$exon]{t}{b});
+            }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
 	}
-
-	if ($v->{t_b} < $v->{t_e}){
-	    $data[$exon]{t}{e} = $pos_t;
+	elsif ($o->{state} eq 'N'){
+	    die "dead in est2genomic::get_hsp_coors:N\n";
 	}
-	else{
-	    $data[$exon]{t}{e} = $pos_t + 1;
+	elsif ($o->{state} eq '3'){
+	    if ($type eq '3I5'){
+		if ($v->{q_b} < $v->{q_e}){
+		    $data[$exon]{q}{e} = $pos_q; 
+		}
+		else{
+		    $data[$exon]{q}{e} = $pos_q + 1; 
+		}
+		
+		if ($v->{t_b} < $v->{t_e}){
+		    $data[$exon]{t}{e} = $pos_t; 
+		}
+		else{
+		    $data[$exon]{t}{e} = $pos_t + 1;
+		}
+		
+		$data[$exon]{q}{strand} = $v->{q_strand};
+		$data[$exon]{t}{strand} = $v->{t_strand};
+		
+		#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+		
+		#fix 0 length exons in report
+		if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+		    $data[$exon] = undef;
+		    $exon--; #undo iteration
+		}
+		
+		$exon++;
+	    }
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
 	}
-	$data[$exon]{q}{strand} = $v->{q_strand};
-	$data[$exon]{t}{strand} = $v->{t_strand};
-
-        #fix 0 length exons in report
-        if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-           delete($data[$exon]);
-           $exon--; #undo iteration
-        }
-        
-        #my $new_data = fix_exon_coors(\@data);
-        #return $new_data;
-        return \@data;
+	elsif ($o->{state} eq '5'){
+	    if ($type eq '5I3'){
+		if ($v->{q_b} < $v->{q_e}){
+		    $data[$exon]{q}{e} = $pos_q;
+		}
+		else{
+		    $data[$exon]{q}{e} = $pos_q + 1;
+		}
+		
+		if ($v->{t_b} < $v->{t_e}){
+		    $data[$exon]{t}{e} = $pos_t;
+		}
+		else{
+		    $data[$exon]{t}{e} = $pos_t + 1;
+		}
+		
+		$data[$exon]{q}{strand} = $v->{q_strand};
+		$data[$exon]{t}{strand} = $v->{t_strand};
+		
+		#fix 0 length exons in report
+		if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+		    $data[$exon] = undef;
+		    $exon--; #undo iteration
+		}
+		
+		$exon++;
+	    }
+	    #print "ZEEEEEEEEE:$pos_q exon:$exon\n";
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'I'){
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'S'){
+	    if ($v->{q_b} < $v->{q_e}){
+		$data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    else {
+		$data[$exon]{q}{b} = $pos_q
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+		$data[$exon]{t}{b} = $pos_t + 1
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    else {
+		$data[$exon]{t}{b} = $pos_t
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'F'){
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	else {
+	    die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
+	}
+    }
+    
+    if ($v->{q_b} < $v->{q_e}){
+	$data[$exon]{q}{e} = $pos_q;
+    }
+    else{
+	$data[$exon]{q}{e} = $pos_q + 1;
+    }
+    
+    if ($v->{t_b} < $v->{t_e}){
+	$data[$exon]{t}{e} = $pos_t;
+    }
+    else{
+	$data[$exon]{t}{e} = $pos_t + 1;
+    }
+    $data[$exon]{q}{strand} = $v->{q_strand};
+    $data[$exon]{t}{strand} = $v->{t_strand};
+    
+    #fix 0 length exons in report
+    if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+	delete($data[$exon]);
+	$exon--; #undo iteration
+    }
+    
+    #my $new_data = fix_exon_coors(\@data);
+    #return $new_data;
+    return \@data;
 }
 #-------------------------------------------------------------------------------
 sub get_exon_coors_f {
-	my $v    = shift;
-	my $type = shift;
-
-	my $pos_q = $v->{q_b};
-	my $pos_t = $v->{t_b};
-
-	my $exon = 0;
-
-	my @data;
-        foreach my $o (@{$v->{operations}}){
-		if    ($o->{state} eq 'M'){
-
-		        #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
-		        if ($v->{q_b} < $v->{q_e}){
-			    $data[$exon]{q}{b} = $pos_q + 1
-				unless defined($data[$exon]{q}{b});
-		        }
-		        else {
-			    $data[$exon]{q}{b} = $pos_q
-				unless defined($data[$exon]{q}{b});
-		        }
-
-                        if ($v->{t_b} < $v->{t_e}){
-			    $data[$exon]{t}{b} = $pos_t + 1
-				unless defined($data[$exon]{t}{b});
-                        }
-                        else {
-			    $data[$exon]{t}{b} = $pos_t
-				unless defined($data[$exon]{t}{b});
-                        }
-
-                     	if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-			if ($v->{t_strand} == 1){
-				$pos_t += $o->{t};
-			}
-			else {
-				$pos_t -= $o->{t};
-			}
-
-			#print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
+    my $v    = shift;
+    my $type = shift;
+    
+    my $pos_q = $v->{q_b};
+    my $pos_t = $v->{t_b};
+    
+    my $exon = 0;
+    
+    my @data;
+    foreach my $o (@{$v->{operations}}){
+	if    ($o->{state} eq 'M'){
+	    
+	    #print "ZBBBBBBBBBBBB:$pos_q exon:$exon\n";
+	    if ($v->{q_b} < $v->{q_e}){
+		$data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    else {
+		$data[$exon]{q}{b} = $pos_q
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+		$data[$exon]{t}{b} = $pos_t + 1
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    else {
+		$data[$exon]{t}{b} = $pos_t
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	    #print "ZCCCCCCCCCC:$pos_q exon:$exon\n";
+	}
+	elsif ($o->{state} eq 'G'){
+	    if ($v->{q_b} < $v->{q_e}){
+		$data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    else {
+		$data[$exon]{q}{b} = $pos_q
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+		$data[$exon]{t}{b} = $pos_t + 1
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    else {
+		$data[$exon]{t}{b} = $pos_t
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	}
+	elsif ($o->{state} eq 'N'){
+	    die "dead in est2genomic::get_hsp_coors:N\n";
+	}
+	elsif ($o->{state} eq '5'){
+	    if ($type eq '5I3'){
+		if ($v->{q_b} < $v->{q_e}){
+		    $data[$exon]{q}{e} = $pos_q;
 		}
-		elsif ($o->{state} eq 'G'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
+		else{
+		    $data[$exon]{q}{e} = $pos_q + 1;
 		}
-                elsif ($o->{state} eq 'N'){
-			die "dead in est2genomic::get_hsp_coors:N\n";
-                }
-                elsif ($o->{state} eq '5'){
-			if ($type eq '5I3'){
-			        if ($v->{q_b} < $v->{q_e}){
-				    $data[$exon]{q}{e} = $pos_q;
-				}
-				else{
-				    $data[$exon]{q}{e} = $pos_q + 1;
-				}
-				
-				if ($v->{t_b} < $v->{t_e}){
-				    $data[$exon]{t}{e} = $pos_t;
-				}
-				else{
-				    $data[$exon]{t}{e} = $pos_t + 1;
-				}
-				$data[$exon]{q}{strand} = $v->{q_strand};
-				$data[$exon]{t}{strand} = $v->{t_strand};
-
-				#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
-
-				#fix 0 length exons in report
-				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-				    $data[$exon] = undef;
-				    $exon--; #undo iteration
-				}
-
-				$exon++;
-			}
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq '3'){
-			if ($type eq '3I5'){
-			        if ($v->{q_b} < $v->{q_e}){
-				    $data[$exon]{q}{e} = $pos_q;
-				}
-				else{
-				    $data[$exon]{q}{e} = $pos_q + 1;
-				}
-				
-				if ($v->{t_b} < $v->{t_e}){
-				    $data[$exon]{t}{e} = $pos_t;
-				}
-				else{
-				    $data[$exon]{t}{e} = $pos_t + 1;
-				}
-				$data[$exon]{q}{strand} = $v->{q_strand};
-				$data[$exon]{t}{strand} = $v->{t_strand};
-                						
-				#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
-
-				#fix 0 length exons in report
-				if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-				    $data[$exon] = undef;
-				    $exon--; #undo iteration
-				}
-
-				$exon++;
-			}
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq 'I'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq 'S'){
-		        if ($v->{q_b} < $v->{q_e}){
-			    $data[$exon]{q}{b} = $pos_q + 1
-				unless defined($data[$exon]{q}{b});
-		        }
-		        else {
-			    $data[$exon]{q}{b} = $pos_q
-				unless defined($data[$exon]{q}{b});
-		        }
-
-                        if ($v->{t_b} < $v->{t_e}){
-			    $data[$exon]{t}{b} = $pos_t + 1
-				unless defined($data[$exon]{t}{b});
-                        }
-                        else {
-			    $data[$exon]{t}{b} = $pos_t
-				unless defined($data[$exon]{t}{b});
-                        }
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-                elsif ($o->{state} eq 'F'){
-
-                        if ($v->{q_strand} == 1){
-                                $pos_q += $o->{q};
-                        }
-                        else {
-                                $pos_q -= $o->{q};
-                        }
-
-                        if ($v->{t_strand} == 1){
-                                $pos_t += $o->{t};
-                        }
-                        else {
-                                $pos_t -= $o->{t};
-                        }
-
-                }
-		else {
-			die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
+		
+		if ($v->{t_b} < $v->{t_e}){
+		    $data[$exon]{t}{e} = $pos_t;
 		}
-
-        }
-
-        if ($v->{q_b} < $v->{q_e}){
-            $data[$exon]{q}{e} = $pos_q;
-        }
-        else{
-            $data[$exon]{q}{e} = $pos_q + 1;
-        }
-
-        if ($v->{t_b} < $v->{t_e}){
-            $data[$exon]{t}{e} = $pos_t;
-        }
-        else{
-            $data[$exon]{t}{e} = $pos_t + 1;
-        }
-        $data[$exon]{q}{strand} = $v->{q_strand};
-        $data[$exon]{t}{strand} = $v->{t_strand};
-
-        #fix 0 length exons in report
-        if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
-           delete($data[$exon]);
-           $exon--; #undo iteration
-        }
+		else{
+		    $data[$exon]{t}{e} = $pos_t + 1;
+		}
+		$data[$exon]{q}{strand} = $v->{q_strand};
+		$data[$exon]{t}{strand} = $v->{t_strand};
+		
+		#print "ZDDDDDDDDD:$pos_q exon:$exon\n";
+		
+		#fix 0 length exons in report
+		if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+		    $data[$exon] = undef;
+		    $exon--; #undo iteration
+		}
+		
+		$exon++;
+	    }
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq '3'){
+	    if ($type eq '3I5'){
+		if ($v->{q_b} < $v->{q_e}){
+		    $data[$exon]{q}{e} = $pos_q;
+		}
+		else{
+		    $data[$exon]{q}{e} = $pos_q + 1;
+		}
+		
+		if ($v->{t_b} < $v->{t_e}){
+		    $data[$exon]{t}{e} = $pos_t;
+		}
+		else{
+		    $data[$exon]{t}{e} = $pos_t + 1;
+		}
+		$data[$exon]{q}{strand} = $v->{q_strand};
+		$data[$exon]{t}{strand} = $v->{t_strand};
+		
+		#print "ZEEEEEEEEE:$pos_q exon:$exon\n";
+		
+		#fix 0 length exons in report
+		if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+		    $data[$exon] = undef;
+		    $exon--; #undo iteration
+		}
+		
+		$exon++;
+	    }
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'I'){
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'S'){
+	    if ($v->{q_b} < $v->{q_e}){
+		$data[$exon]{q}{b} = $pos_q + 1
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    else {
+		$data[$exon]{q}{b} = $pos_q
+		    unless defined($data[$exon]{q}{b});
+	    }
+	    
+	    if ($v->{t_b} < $v->{t_e}){
+		$data[$exon]{t}{b} = $pos_t + 1
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    else {
+		$data[$exon]{t}{b} = $pos_t
+		    unless defined($data[$exon]{t}{b});
+	    }
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	elsif ($o->{state} eq 'F'){
+	    
+	    if ($v->{q_strand} == 1){
+		$pos_q += $o->{q};
+	    }
+	    else {
+		$pos_q -= $o->{q};
+	    }
+	    
+	    if ($v->{t_strand} == 1){
+		$pos_t += $o->{t};
+	    }
+	    else {
+		$pos_t -= $o->{t};
+	    }
+	    
+	}
+	else {
+	    die "unknown state in Widget::exonerate::est2genome::get_hsp_coors!\n";
+	}
 	
-	#my $new_data = fix_exon_coors(\@data);
-	#return $new_data;
-	return \@data;
+    }
+    
+    if ($v->{q_b} < $v->{q_e}){
+	$data[$exon]{q}{e} = $pos_q;
+    }
+    else{
+	$data[$exon]{q}{e} = $pos_q + 1;
+    }
+    
+    if ($v->{t_b} < $v->{t_e}){
+	$data[$exon]{t}{e} = $pos_t;
+    }
+    else{
+	$data[$exon]{t}{e} = $pos_t + 1;
+    }
+    $data[$exon]{q}{strand} = $v->{q_strand};
+    $data[$exon]{t}{strand} = $v->{t_strand};
+    
+    #fix 0 length exons in report
+    if(! defined($data[$exon]{q}{b}) || ! defined($data[$exon]{t}{b})){
+	delete($data[$exon]);
+	$exon--; #undo iteration
+    }
+    
+    #my $new_data = fix_exon_coors(\@data);
+    #return $new_data;
+    return \@data;
 }
 #-------------------------------------------------------------------------------
 sub fix_exon_coors { #no longer needed 7-26-2008
