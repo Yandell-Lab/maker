@@ -158,6 +158,13 @@ sub augustus {
         my $o_file    = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
 
+	my $run = $command;
+	$run .= ' --UTR=off';
+	$run .= ' --hintsfile='.$xdef_file if(defined $xdef);
+	$run .= ' --extrinsicCfgFile='.$cfg_file if(-e $cfg_file);
+	$run .= " $file_name";
+	$run .= " > $o_file";
+
 	$LOG->add_entry("STARTED", $backup, "") if(defined $LOG);
 
         if (-f $backup && ! $OPT_F){
@@ -170,17 +177,9 @@ sub augustus {
 		write_xdef_file($xdef, $xdef_file) if defined $xdef;
 		FastaFile::writeFile(\$fasta, $file_name);
 
-		$command .= ' --UTR=off';
-		$command .= ' --hintsfile='.$xdef_file if -e $xdef_file;
-		$command .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
-		$command .= " $file_name";
-		$command .= " > $o_file";
-
 		my $w = new Widget::augustus();
-                $w->run($command);
-		#File::Copy::copy($o_file, $backup) unless();
+                $w->run($run);
         }
-
         unlink($xdef_file) if(-f $xdef_file);
         unlink($file_name) if(-f $file_name);
 
@@ -188,10 +187,37 @@ sub augustus {
            $params{min_exon_score}  = -100;
            $params{min_gene_score}  = -20;
 
-        my $keepers = parse($o_file,
-                           \%params,
-                            $fasta,
-                           );
+	my $keepers;
+        try { #make sure it parses correctly
+            $keepers = parse($o_file,
+                             \%params,
+                             $fasta);
+
+            #File::Copy::copy($o_file, $backup) unless();
+        }
+        catch Error::Simple with {
+            my $E = shift;
+
+            #retry predictor in different location and parse again
+	    my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus.fasta";
+	    my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.augustus";
+	    my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
+	    my $run = $command;
+	    $run .= ' --UTR=off';
+	    $run .= ' --hintsfile='.$xdef_file if defined $xdef;
+	    $run .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
+	    $run .= " $file_name";
+	    $run .= " > $o_file";
+            write_xdef_file($xdef, $xdef_file) if(defined $xdef);
+	    FastaFile::writeFile(\$fasta, $file_name);
+            my $w = new Widget::augustus();
+            $w->run($run);
+            unlink($xdef_file) if(-f $xdef_file);
+            unlink($file_name) if(-f $file_name);
+            $keepers = parse($o_file,
+                             \%params,
+                             $fasta);
+        };
 
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 

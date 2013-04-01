@@ -531,9 +531,10 @@ sub snap {
         my $o_file    = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
 	
-	$command .= " -xdef $xdef_file ";
-	$command .= " $file_name";
-	$command .= " > $o_file";
+	my $run = $command;
+	$run .= " -xdef $xdef_file ";
+	$run .= " $file_name";
+	$run .= " > $o_file";
 
 	$LOG->add_entry("STARTED", $backup, "") if(defined $LOG);
 
@@ -547,20 +548,44 @@ sub snap {
 		write_xdef_file($xdef, $xdef_file);
 		FastaFile::writeFile(\$fasta, $file_name);
 		my $w = new Widget::snap();
-                $w->run($command);
-		#File::Copy::copy($o_file, $backup) unless();
+                $w->run($run);
         }
-
 	unlink($xdef_file) if(-f $xdef_file);
 	unlink($file_name) if(-f $file_name);
 
-         my %params;
+	my %params;
         $params{min_exon_score}  = -100;
         $params{min_gene_score}  = -20;
+	
+	my $keepers;
+	try { #make sure it parse correctly
+	    $keepers = parse($o_file,
+			     \%params,
+			     $fasta);
 
-        my $keepers = parse($o_file,
-			    \%params,
-			    $fasta);
+	    #File::Copy::copy($o_file, $backup) unless();
+	}
+	catch Error::Simple with {
+	    my $E = shift;
+
+	    #retry predictor in different location and parse again
+	    $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap.fasta";
+	    $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.snap";
+	    $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
+	    my $run = $command;
+	    $run .= " -xdef $xdef_file ";
+	    $run .= " $file_name";
+	    $run .= " > $o_file";
+	    write_xdef_file($xdef, $xdef_file);
+	    FastaFile::writeFile(\$fasta, $file_name);
+	    my $w = new Widget::snap();
+	    $w->run($run);
+	    unlink($xdef_file) if(-f $xdef_file);
+	    unlink($file_name) if(-f $file_name);
+	    $keepers = parse($o_file,
+			     \%params,
+			     $fasta);
+	};
 
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 	

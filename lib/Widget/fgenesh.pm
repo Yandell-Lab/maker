@@ -276,11 +276,11 @@ sub fgenesh {
         my $o_file    = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
                             
-        $command = $wrap . " $command"; #prepend wrapper
-	$command .= " $file_name";
-#	$command .= " -tmp $TMP";                        
-        $command .= ' -exon_table:'.$xdef_file if -e $xdef_file;
-        $command .= " > $o_file";
+        my $run = $wrap . " $command"; #prepend wrapper
+	$run .= " $file_name";
+	#$run .= " -tmp $TMP";                        
+        $run .= ' -exon_table:'.$xdef_file if(defined $xdef);
+        $run .= " > $o_file";
         
 	$LOG->add_entry("STARTED", $backup, "") if(defined $LOG);
 
@@ -291,10 +291,10 @@ sub fgenesh {
         } 
         else { 
                 print STDERR "running fgenesh.\n" unless $main::quiet;
-		write_xdef_file($xdef, $xdef_file) if defined $xdef;
+		write_xdef_file($xdef, $xdef_file) if(defined $xdef);
 		FastaFile::writeFile(\$fasta, $file_name);
                 my $w = new Widget::fgenesh();
-                $w->run($command);
+                $w->run($run);
 		#File::Copy::copy($o_file, $backup) unless();
         }
 
@@ -305,9 +305,36 @@ sub fgenesh {
            $params{min_exon_score}  = -100;
            $params{min_gene_score}  = -20;
         
-        my $keepers = parse($o_file,
-                           \%params,
-                            $fasta);
+	my $keepers;
+        try { #make sure it parses correctly
+            $keepers = parse($o_file,
+                             \%params,
+                             $fasta);
+
+            #File::Copy::copy($o_file, $backup) unless();
+        }
+        catch Error::Simple with {
+            my $E = shift;
+
+            #retry predictor in different location and parse again
+	    $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh.fasta";
+	    $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.fgenesh";
+	    $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
+	    my $run = $wrap . " $command"; #prepend wrapper
+	    $run .= " $file_name";
+	    #$run .= " -tmp $TMP";
+	    $run .= ' -exon_table:'.$xdef_file if(defined $xdef);
+	    $run .= " > $o_file";
+            write_xdef_file($xdef, $xdef_file) if(defined $xdef);
+	    FastaFile::writeFile(\$fasta, $file_name);
+            my $w = new Widget::fgenesh();
+            $w->run($run);
+            unlink($xdef_file) if(-f $xdef_file);
+            unlink($file_name) if(-f $file_name);
+            $keepers = parse($o_file,
+                             \%params,
+                             $fasta);
+        };
         
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 

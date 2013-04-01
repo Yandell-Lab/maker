@@ -282,8 +282,24 @@ foreach my $file ( @lst_files ){
 
 	#fix offset from splitting fastas
 	my $new   = $1 + $count;		
-	my $start = $2 + $offset;
-	my $end   = $3 + $offset;
+	my $start = $2;
+	my $end   = $3;
+	
+	#fix negative coordinates (from prokaryotic genemark)
+	if($start <= 0){
+	    my $l = ($end-$start) + 1;
+	    $start += 3 while($start <= 0);
+
+	    my $new_l = ($end-$start) + 1;
+	    if($end <= $start || $new_l <= 3){
+		next;
+	    }
+	}
+
+	if($offset){
+	    $start += $offset;
+	    $end += $offset;
+	}
 
 	#find optimal spacing shift
 	my $s1 = abs(length($new) - length($1));
