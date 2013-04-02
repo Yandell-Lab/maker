@@ -18,6 +18,8 @@ use IPC::Open3;
 use FindBin;
 use Symbol;
 use FastaSeq;
+use Error qw(:try);
+use Error::Simple;
 
 @ISA = qw(
 	Widget

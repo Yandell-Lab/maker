@@ -17,6 +17,8 @@ use PhatHit_utils;
 use IPC::Open3;
 use Symbol;
 use FastaSeq;
+use Error qw(:try);
+use Error::Simple;
 
 @ISA = qw(
 	Widget

@@ -3,9 +3,6 @@
 #------------------------------------------------------------------------
 package Widget::fgenesh;
 use strict;
-#use lib '~/maker/lib';
-#use lib '/data1/hao/projects/MAKER-fgenesh/lib';
-
 use vars qw(@ISA);
 use PostData;
 use FileHandle;
@@ -19,6 +16,8 @@ use Bio::Search::Hit::PhatHit::fgenesh;
 use Bio::Search::HSP::PhatHSP::fgenesh;
 use Symbol;
 use FastaSeq;
+use Error qw(:try);
+use Error::Simple;
 
 @ISA = qw(
 	Widget
@@ -425,7 +424,7 @@ sub load_phat_hits {
                         $last->{b} += $overhang;
                     }
                     else{
-                        die "FATAL: No exon strand in Widget::snap\n";
+                        die "FATAL: No exon strand in Widget::fgenesh\n";
                     }
                 }
 

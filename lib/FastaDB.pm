@@ -82,7 +82,7 @@ sub _safe_new {
 	    $localize = $args{'-localize'};
 	    delete($args{'-localize'});
 	}
-	elsif(GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp)){
+	elsif(!$main::nolocal && GI::is_NFS_mount($file) && !GI::is_NFS_mount($tmp)){
 	    $localize = 1;
 	}
 
