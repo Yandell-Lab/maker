@@ -1688,7 +1688,7 @@ sub run_it{
 	    else{
 		$gomias = clean::purge_single_exon_hits($ests);
 
-		if(!@$gomias && @$ests && $CTL_OPT->{single_exon}){
+		if(!@$gomias && @$ests && $CTL_OPT->{single_exon}){ #only use single when there are no spliced
 		    $gomias = clean::purge_short_single_exons($ests, $CTL_OPT->{single_length});
 		}
 		else{
@@ -1710,9 +1710,9 @@ sub run_it{
 		}
 		$transcript->{_HMM} = 'est2genome';
 
-		#at least 60% of single_exon est2genome genes must be ORF
-		#also require some protein support for eukaryotes
-		if(!$CTL_OPT->{est_forward} && $transcript->num_hsps == 1){
+		#at least 60% of est2genome genes must be ORF
+		#also require some protein support for eukaryote single exon genes
+		if(!$CTL_OPT->{est_forward}){
 		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
 		    my ($translation_seq,
 			$offset,
@@ -1721,16 +1721,14 @@ sub run_it{
 			$has_stop) = get_translation_seq($transcript_seq, $transcript);
 
 		    #60% min
-		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60 || ! $has_stop); 
+		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60);
 
-		    #sometimes require protein evidence as well
-		    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
-			next if(!@$gomiph);
-			my $coors  = PhatHit_utils::get_hsp_coors($gomiph, 'query');
-			my $pieces = Shadower::getVectorPieces($coors, 0);
-			
+		    #single exon results require more filtering
+		    if($CTL_OPT->{organism_type} eq 'eukaryotic' && $transcript->num_hsps == 1){
+			next if(!$has_stop && !$has_start); #single exon must have start and stop
+			next if(!@$gomiph); #single exon must have protein support
 			my $bAED = shadow_AED::get_eAED($gomiph, $transcript); #also verifies reading frame
-			next unless($bAED <= 0.5); #must have 50% support
+			next unless($bAED <= 0.5); #must have 50% inframe support
 		    }
 		}
 
