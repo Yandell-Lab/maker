@@ -1170,7 +1170,7 @@ sub parse_abinit_file {
    PhatHit_utils::add_offset($keepers,
                              $chunk->offset_w_flank());
 
-   my $masked = 1 if($file =~ /\.masked\.\d+\.$type$/);
+   my $masked = 1 if($file =~ /\.abinit\_masked\.\d+\..*.$type$/);
 
    foreach my $h (@$keepers){
        $h->{_HMM}   = $hmm;

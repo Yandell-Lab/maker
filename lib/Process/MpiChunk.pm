@@ -1442,8 +1442,8 @@ sub _go {
 		my $qchunk1 = $qfasta_chunker->get_chunk($i+1) if($i+1 < $c_count);
 
 		#walk down all predictions (one section at a time)
-		my @pkeepers;
-		my @mkeepers;
+		my %pkeepers;
+		my %mkeepers;
 		foreach my $k (keys %data){
 		    #==parse the hits
 		    #only first chunk
@@ -1472,11 +1472,11 @@ sub _go {
 			my $plimit = $qchunk0->end + 1;
 			while(my $p = shift @{$c0->[0]}){
 			    if($p->end < $plimit){
-				push(@pkeepers, $p);
+				push(@{$pkeepers{$k}}, $p);
 			    }
 			    else{
 				if($p->start < $plimit){
-				    push(@pkeepers, $p);
+				    push(@{$pkeepers{$k}}, $p);
 				    $plimit = $p->end+1;
 				}
 				undef @{$c0->[0]}; #drop the rest
@@ -1487,11 +1487,11 @@ sub _go {
 			my $mlimit = $qchunk0->end + 1;
 			while(my $p = shift @{$c0->[1]}){
 			    if($p->end < $mlimit){
-				push(@mkeepers, $p);
+				push(@{$mkeepers{$k}}, $p);
 			    }
 			    else{
 				if($p->start < $mlimit){
-				    push(@mkeepers, $p);
+				    push(@{$mkeepers{$k}}, $p);
 				    $mlimit = $p->end+1;
 				}
 				undef @{$c0->[1]}; #drop the rest
@@ -1515,8 +1515,8 @@ sub _go {
 			}
 		    }
 		    else{ #last chunk
-			push(@pkeepers, @{$c0->[0]});
-			push(@mkeepers, @{$c0->[1]});
+			push(@{$pkeepers{$k}}, @{$c0->[0]});
+			push(@{$mkeepers{$k}}, @{$c0->[1]});
 		    }
 		}
 
@@ -1525,10 +1525,10 @@ sub _go {
 		    my $E = $fchunk->end;
 		    if($E <= $qchunk0->end){ #must not cross into neighboring chunk
 			my @on_chunk;
-			push(@on_chunk, shift @pkeepers) while(@pkeepers &&
-							       $pkeepers[0]->start <= $E);
-			push(@on_chunk, shift @mkeepers) while(@mkeepers &&
-							       $mkeepers[0]->start <= $E);
+			push(@on_chunk, shift @{$pkeepers{$k}}) while(@{$pkeepers{$k}} &&
+							       $pkeepers{$k}[0]->start <= $E);
+			push(@on_chunk, shift @{$mkeepers{$k}}) while(@{$mkeepers{$k}} &&
+							       $mkeepers{$k}[0]->start <= $E);
 			my $order = $fchunk->number;
 			my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
 			if(! -f $section_file){
