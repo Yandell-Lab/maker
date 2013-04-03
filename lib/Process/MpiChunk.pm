@@ -3452,10 +3452,6 @@ sub _go {
 	       push(@{$section->{preds_on_chunk}}, @{$psection->{preds_on_chunk}})
 		   if($psection->{preds_on_chunk});
 
-	       #merge the junction data onto the rest of the chunk section
-	       push(@{$section->{preds_on_chunk}}, @{$holdovers->{preds_on_chunk}})
-		   if($holdovers->{preds_on_chunk});
-
 	       #keys to grab out of $section hash
 	       my @keys = qw(blastn_keepers
 			     blastx_keepers
