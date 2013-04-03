@@ -1434,6 +1434,8 @@ sub _go {
 
 	    #parse, merge, and section files
 	    my @buf;
+	    my %pkeepers;
+	    my %mkeepers;
 	    my @section_files;
 	    $fasta_chunker->reset; #for sectioning files
 	    my $c_count = $qfasta_chunker->total_chunks;
@@ -1442,8 +1444,6 @@ sub _go {
 		my $qchunk1 = $qfasta_chunker->get_chunk($i+1) if($i+1 < $c_count);
 
 		#walk down all predictions (one section at a time)
-		my %pkeepers;
-		my %mkeepers;
 		foreach my $k (keys %data){
 		    #==parse the hits
 		    #only first chunk
@@ -1479,7 +1479,8 @@ sub _go {
 				    push(@{$pkeepers{$k}}, $p);
 				    $plimit = $p->end+1;
 				}
-				undef @{$c0->[0]}; #drop the rest
+				undef(@{$c0->[0]}); #drop the rest
+				last;
 			    }
 			}
 			
@@ -1495,6 +1496,7 @@ sub _go {
 				    $mlimit = $p->end+1;
 				}
 				undef @{$c0->[1]}; #drop the rest
+				last;
 			    }
 			}
 		    
@@ -1514,13 +1516,15 @@ sub _go {
 			    }
 			}
 		    }
-		    else{ #last chunk
+		    else{ #for last chunk
 			push(@{$pkeepers{$k}}, @{$c0->[0]});
 			push(@{$mkeepers{$k}}, @{$c0->[1]});
 		    }
 		}
 
 		#==section the results overlapping first big chunk
+		#@{$pkeepers{$_}} = sort {$a->start <=> $b->start} @{$pkeepers{$_}} foreach(keys %pkeepers);
+		#@{$mkeepers{$_}} = sort {$a->start <=> $b->start} @{$mkeepers{$_}} foreach(keys %mkeepers);
 		while(my $fchunk = shift @buf || $fasta_chunker->next_chunk){
 		    my $E = $fchunk->end;
 		    if($E <= $qchunk0->end){ #must not cross into neighboring chunk
