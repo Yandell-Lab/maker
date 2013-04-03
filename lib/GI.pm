@@ -4,7 +4,7 @@
 package GI;
 
 use strict;
-use vars qw(@ISA @EXPORT $VERSION $TMP $RANK $LOCK);
+use vars qw(@ISA @EXPORT $VERSION $TMP $RANK $LOCK $HOST);
 use FindBin;
 use Exporter;
 use FileHandle;
@@ -53,6 +53,7 @@ use Sys::Hostname;
 	);
 $RANK = 0;
 $TMP = tempdir("maker_XXXXXX", CLEANUP => 1, TMPDIR => 1);
+$HOST = Sys::Hostname::hostname();
 print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dtmp);
 #------------------------------------------------------------------------
 #--------------------------- CLASS FUNCTIONS ----------------------------
@@ -1546,8 +1547,11 @@ sub polish_exonerate {
 					 $matrix
 					 );
 
-	#make backup
-	File::Copy::move($o_tfile, $backup) if($o_tfile ne $backup);
+	#temp
+	#make backup except on TACC cluster
+	if($o_tfile ne $backup && $HOST !~ /tacc\.utexas\.edu/){
+	    File::Copy::move($o_tfile, $backup);
+	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 
 	#delete fastas
