@@ -1525,10 +1525,14 @@ sub _go {
 		    my $E = $fchunk->end;
 		    if($E <= $qchunk0->end){ #must not cross into neighboring chunk
 			my @on_chunk;
-			push(@on_chunk, shift @{$pkeepers{$k}}) while(@{$pkeepers{$k}} &&
-							       $pkeepers{$k}[0]->start <= $E);
-			push(@on_chunk, shift @{$mkeepers{$k}}) while(@{$mkeepers{$k}} &&
-							       $mkeepers{$k}[0]->start <= $E);
+			foreach my $k (keys %pkeepers){
+			    push(@on_chunk, shift @{$pkeepers{$k}}) while(@{$pkeepers{$k}} &&
+									  $pkeepers{$k}[0]->start <= $E);
+			}
+			foreach my $k (keys %mkeepers){
+			    push(@on_chunk, shift @{$mkeepers{$k}}) while(@{$mkeepers{$k}} &&
+									  $mkeepers{$k}[0]->start <= $E);
+			}
 			my $order = $fchunk->number;
 			my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
 			if(! -f $section_file){

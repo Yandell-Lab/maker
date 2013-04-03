@@ -1050,7 +1050,7 @@ sub split_db {
 		"appears to contain protein sequence or unrecognized characters.\n".
 		"Please check/fix the file before continuing.\n".
 		"Invalid Character: $1\n\n"
-		if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/);
+		if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/i);
 	}
 	
 	#Skip empty fasta entries
@@ -1546,8 +1546,8 @@ sub polish_exonerate {
 					 $matrix
 					 );
 
-	#temp
-	#File::Copy::move($o_tfile, $backup) if($o_tfile ne $backup);
+	#make backup
+	File::Copy::move($o_tfile, $backup) if($o_tfile ne $backup);
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 
 	#delete fastas
