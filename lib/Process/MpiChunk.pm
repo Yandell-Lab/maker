@@ -3969,7 +3969,7 @@ sub _go {
 	    #get AED scored preds for GFF3
 	    my @scored_preds;
 	    while(my $key = each %$annotations){
-		next unless($key =~ /^(pred|model)_gff|_abinit$/);
+		next unless($key =~ /^(pred|model)_gff/ || $key =~ /_abinit$/);
 		
 		foreach my $g (@{$annotations->{$key}}){
 		    if($key =~ /^model_gff/){
