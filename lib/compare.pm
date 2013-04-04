@@ -76,12 +76,12 @@ sub is_redundant_alt_form {
         if     ($s_to_a_str eq $s_to_b_str && $a_to_b_str !~ /^0*$/){
                 return 1;
         }
-        elsif ($b_to_a_str =~ /^B?1+b?$/ && $a_to_b_str =~ /^0*A?1+a?$/){
+        elsif ($b_to_a_str =~ /^B?1+b?$/ && $a_to_b_str =~ /^0*A?1+a?0*$/){
                 #print STDERR "RAAAA s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
                 #sleep 3;
                 return 1;
         }
-        elsif ($s_to_a_str =~ /^1+$/ && $s_to_b_str =~ /^0*A?1+a?$/){
+        elsif ($s_to_a_str =~ /^1+$/ && $s_to_b_str =~ /^0*A?1+a?0*$/){
                 #print STDERR "RBBBB s_to_a_str:$s_to_a_str s_to_b_str:$s_to_b_str\n";
 	        #sleep 3;
                 #return 1;
@@ -274,8 +274,8 @@ sub compare_phat_hits {
     my $what  = shift;
     my $r     = shift || 0;
     
-    my $sorted_a = PhatHit_utils::sort_hits($hit_a, $what);
-    my $sorted_b = PhatHit_utils::sort_hits($hit_b, $what);
+    my $sorted_a = $hit_a->sortFeatures($what);
+    my $sorted_b = $hit_b->sortFeatures($what);
     
     my @codes;
     my $i = 0;

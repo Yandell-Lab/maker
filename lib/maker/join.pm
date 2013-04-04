@@ -127,16 +127,9 @@ sub find_best_five {
                 next if $e_to_g_str =~ /^1+.*$/;
 
                 # can't be a 5 prime ext unless first exon of g is B or 1.
-                next unless $g_to_e_str =~ /^[B1].*$/;
+		next unless($g_to_e_str =~ /^[B1].*$/);
 		next if($g_to_e_str =~ /^z.*$/ && $est->num_hsps == 1);
-
-                # cant be same splice form if has an internal 0.
-		#next if     $e_to_g_str =~ /[AZ]1*[^1]+[^0]/;
-
-		# cant be same splice form if has an internal 0.
-                #next if     $g_to_e_str =~ /[Bz]1*[^1]+[^0]/;
-
-                my ($pre, $pos) = $e_to_g_str =~ /^(0*[ZbA1])(.*)$/;
+		my ($pre, $pos) = $e_to_g_str =~ /^(0*[ZbA1])(.*)$/;
                 
                 #print STDERR " POST find_best_five e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
                 #sleep 3;
@@ -175,14 +168,6 @@ sub find_best_three {
 		# can't be a 3 prime ext unless last exon of g is b or 1.
 		next unless $g_to_e_str =~ /^.*[b1]$/;
 		next if($g_to_e_str =~ /^.*Z$/ && $est->num_hsps == 1);
-	
-		#print "CCCCCC\n";
-
-		# cant be same splice form if has an internal not 1.
-		#next if  $g_to_e_str =~ /^.*[^0][^1]+.*[b1]0*$/;	
-
-		#print "DDDDD\n";
-
 		my ($pre, $pos) = $e_to_g_str =~ /^(.*)([zBa1]0*)$/;
 		
 		#print STDERR " POST find_best_three e_to_g_str:$e_to_g_str pre:$pre pos:$pos\n";
@@ -249,8 +234,15 @@ sub get_strings {
 		next unless $e->strand('query') == $g->strand('query');
 
 		my $e_to_g_str = compare::compare_phat_hits($e, $g, 'query', 3);
-
 		my $g_to_e_str = compare::compare_phat_hits($g, $e, 'query', 3);
+
+		#always return in plus orientation
+		if($g->strand == -1){
+		    $e_to_g_str = reverse($e_to_g_str);
+		    $e_to_g_str =~ tr/AaBbZz/aAbBzZ/;
+		    $g_to_e_str = reverse($g_to_e_str);
+		    $g_to_e_str =~ tr/AaBbZz/aAbBzZ/;
+		}
 
 		push(@strs, [$g_to_e_str, $e_to_g_str, $e]);
 	}
