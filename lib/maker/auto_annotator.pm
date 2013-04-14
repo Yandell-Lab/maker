@@ -70,12 +70,15 @@ sub prep_hits {
 	}
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::clean_and_cluster(20, $p, $pred_flank, 1);
-	my $m_clusters = cluster::clean_and_cluster(20, $m, $pred_flank, 1);
-	
+	my $p_clusters = cluster::clean_and_cluster(20, $p, 0, 1); #flattens
+	$p_clusters = cluster::shadow_cluster(0, $p_clusters, $pred_flank); #broaden
+	my $m_clusters = cluster::clean_and_cluster(20, $m, 0, 1); #flattens
+	$m_clusters = cluster::shadow_cluster(0, $m_clusters, $pred_flank); #broaden
+
 	my $e_cluster = [];
 	if($correct_est_fusion){
-	    $e_cluster = cluster::clean_and_cluster(20, $e_bag, $pred_flank, 1);
+	    $e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1); #flattens
+	    $e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
 	}
 	else{
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
