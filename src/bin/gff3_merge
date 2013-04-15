@@ -159,7 +159,11 @@ foreach  my $file (@files){
 	    $FH = $ANN;
 	    if($l_flag){
 		$line =~ s/ID=/ID=$i:/;
-		$line =~ s/Parent=/Parent=$i:/;
+		if($line =~ /Parent=([^\;\n]+)/){
+		    my @p = map {"$i:$_"} split(/\,/, $1);
+		    my $n = join(',', @p);
+		    $line =~ s/Parent=[^\;\n]+/Parent=$n/;
+		}
 	    }
 	    next if($g_flag && $1 ne 'maker');
 	}
