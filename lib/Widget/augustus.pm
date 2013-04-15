@@ -194,11 +194,13 @@ sub augustus {
             $keepers = parse($o_file,
                              \%params,
                              $fasta);
-
+	    unlink($o_file);
             #File::Copy::copy($o_file, $backup) unless();
         }
         catch Error::Simple with {
             my $E = shift;
+
+	    unlink($o_file);
 
             #retry predictor in different location and parse again
 	    my $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus.fasta";
@@ -219,6 +221,7 @@ sub augustus {
             $keepers = parse($o_file,
                              \%params,
                              $fasta);
+            unlink($o_file);
         };
 
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
