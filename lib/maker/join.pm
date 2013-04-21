@@ -77,7 +77,10 @@ sub find_best_one {
 
         my $strs = get_strings($ests, $g);
 
-        my @candidates;
+        my @can_five = (find_best_five($g, $ests)); #standard five prime
+        my @can_three = (find_best_three($g, $ests)); #standard three prime
+
+	#single exon full overlap
         foreach my $datum (@{$strs}){
                 my $g_to_e_str = $datum->[0];
                 my $e_to_g_str = $datum->[1];
@@ -86,20 +89,20 @@ sub find_best_one {
                 #print " PRIOR find_best_one e_to_g_str:$e_to_g_str g_to_e_str:$g_to_e_str\n";
                 #sleep 3;
 
-		next unless $g_to_e_str =~ /^[^0]$/;
-		next if($g_to_e_str =~ /^[zZ]$/ && $est->num_hsps == 1);
+		next unless $g_to_e_str =~ /^[^0zZaAi]$/;
+		next if($e_to_g_str =~ /[^0]{2}/);
 
-		my ($pre) = $e_to_g_str =~ /^(0*[^0]{1}).*$/; 
-		my ($pos) = $e_to_g_str =~ /^.*([^0]{1}0*)$/;
+		my ($pre, $pos) = $e_to_g_str =~ /^(0*[^0]{1})(.*)$/; 
+		push(@can_five, load_candidate($e_to_g_str, $est, $pre, $pos));
 
-                #print " POST find_best_one pre:$pre pos:$pos\n";
-                #sleep 3;
-
-                push(@candidates, load_candidate($e_to_g_str, $est, $pre, $pos));
+		my ($pre, $pos) = $e_to_g_str =~ /^(.*)([^0]{1}0*)$/;
+                push(@can_three, load_candidate($e_to_g_str, $est, $pre, $pos));
         }
-        my @sorted_five = sort best_five_prime_extension @candidates;
+
+	#pick just one
+        my @sorted_five = sort best_five_prime_extension @can_five;
         my $best_five = shift(@sorted_five);
-        my @sorted_three = sort best_three_prime_extension @candidates;
+        my @sorted_three = sort best_three_prime_extension @can_three;
         my $best_three = shift(@sorted_three);
 
         return ($best_five, $best_three);
