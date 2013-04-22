@@ -386,7 +386,7 @@ sub reblast_merged_hits {
    if(! -f $o_file){                   
        #build hit db
        if(! -f $t_file){
-	   my $db_index = new FastaDB($index_files);
+	   my $db_index = build_fasta_index($index_files);
 	   open(my $FA, ">$t_file.tmp");
 	   foreach my $hit (@to_blast) {
 	       #build a safe name for file names from the sequence identifier
