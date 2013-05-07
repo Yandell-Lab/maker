@@ -1145,7 +1145,7 @@ sub _install_exe {
 	print "Unpacking $req tarball...\n";
         $self->extract_archive($file) or return $self->fail($req, $path);
         push(@unlink, $file);
-	my ($dir) = grep {-d $_} <rmblast-*>;
+	my ($dir) = grep {-d $_} <*rmblast*>;
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $req...\n";
