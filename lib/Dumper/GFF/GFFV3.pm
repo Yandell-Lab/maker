@@ -12,6 +12,7 @@ use PhatHit_utils;
 use File::Copy;
 use URI::Escape;
 use File::NFSLock;
+use GI;
 use Carp;
 
 @ISA = qw(
@@ -48,31 +49,47 @@ sub _initialize {
    my $ann_file = "$t_dir/$name.ann";
    my $seq_file = "$t_dir/$name.seq";
 
-   open(my $DEF, "> $def_file") || confess "ERROR: Could not open file: $def_file\n";
-   print_txt($DEF, $self->header."\n");
-   close($DEF);
+   #use hard linking to force clear NFS cache
+   my $link = (GI::is_NFS_mount($t_dir) == 1);
+   my $tdef_file = ($link) ? "$def_file.tmp" : $def_file;
+   my $tann_file = ($link) ? "$ann_file.tmp" : $ann_file;
+   my $tseq_file = ($link) ? "$seq_file.tmp" : $seq_file;
 
-   open(my $ANN, "> $ann_file") || confess "ERROR: Could not open file: $ann_file\n";
-   close($ANN);
-
-   open(my $SEQ, "> $seq_file") || confess "ERROR: Could not open file: $seq_file\n";
-   print_txt($SEQ, "##FASTA\n");
-   close($SEQ);
-
-   #retry because of weird NFS behavior with false success
-   while(! -f $def_file){
-       open(my $DEF, "> $def_file") || confess "ERROR: Could not open file: $def_file\n";
+   #continuous try because of weird NFS behavior with false success
+   my $success = 0;
+   while(! $success){
+       open(my $DEF, "> $tdef_file") || confess "ERROR: Could not open file: $tdef_file\n$!\n";
        print_txt($DEF, $self->header."\n");
        close($DEF);
+       #link is atomic on most NFS implementations
+       unlink($def_file) if($link);
+       $success = link("$tdef_file", $def_file) if($link);
+       $success = -f $def_file if($success || !$link);
+       $success = (stat _)[3] == 2 if($success && $link);
+       unlink($tdef_file) if($link);
    }
-   while(! -f $ann_file){
-       open(my $ANN, "> $ann_file") || confess "ERROR: Could not open file: $ann_file\n";
+   $success = 0;
+   while(! $success){
+       open(my $ANN, "> $tann_file") || confess "ERROR: Could not open file: $tann_file\n$!\n";
        close($ANN);
+       #link is atomic on most NFS implementations
+       unlink($ann_file) if($link);
+       $success = link("$tann_file", $ann_file) if($link);
+       $success = -f $ann_file  if($success || !$link);
+       $success = (stat _)[3] == 2 if($success && $link);
+       unlink($tann_file) if($link);
    }
-   while(! -f $seq_file){
-       open(my $SEQ, "> $seq_file") || confess "ERROR: Could not open file: $seq_file\n";
+   $success = 0;
+   while(! $success){
+       open(my $SEQ, "> $tseq_file") || confess "ERROR: Could not open file: $tseq_file\n$!\n";
        print_txt($SEQ, "##FASTA\n");
        close($SEQ);
+       #link is atomic on most NFS implementations
+       unlink($seq_file) if($link);
+       $success = link("$tseq_file", $seq_file) if($link);
+       $success = -f $seq_file if($success || !$link);
+       $success = (stat _)[3] == 2 if($success && $link);
+       unlink($tseq_file) if($link);
    }
 
    $self->{gff_file} = $gff_file;
