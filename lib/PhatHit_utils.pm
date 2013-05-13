@@ -850,7 +850,7 @@ sub _adjust {
 	}
 	
 	if($has_stop){
-	    my $diff = $end-$tlength+1;
+	    my $diff = $end-($tlength+1);
 	    if($strand == 1){
 		$E += $diff if($diff > 0);
 	    }
