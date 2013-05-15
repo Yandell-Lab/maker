@@ -533,7 +533,7 @@ sub load_phat_hits {
         #set start and stop coordinates for codons
         foreach my $f (@$final){
             my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
-	    maker::auto_annotator::get_translation_seq($seq, $f);
+	    maker::auto_annotator::get_translation_seq($seq, $f, 1);
 	}
 
 	return $final;

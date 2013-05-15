@@ -3028,7 +3028,8 @@ sub get_off_and_str {
 sub get_translation_seq {
     my $seq    = shift;
     my $f      = shift;
-    
+    my $ignore = shift; #don't use start codon to anchor search
+
     my $tM = new CGL::TranslationMachine();
     my $p_seq;
     my $offset;
@@ -3059,7 +3060,7 @@ sub get_translation_seq {
 	($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
 
 	#does not begin with M....
-	if ($p_seq !~ /^M/){
+	if (!$ignore && $p_seq !~ /^M/){
 	    my ($off_new, $p_seq_new) = get_longest_m_seq($seq);
 
 	    #take M start sequence in most cases
