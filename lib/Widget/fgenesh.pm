@@ -524,14 +524,19 @@ sub load_phat_hits {
                         $i++;
                 }
 
-		my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
-		maker::auto_annotator::get_translation_seq($seq, $f);
-
                 push(@keepers, $f);
 		
         }
-        return keepers(\@keepers, $params);
 
+	my $final = keepers(\@keepers, $params);
+
+        #set start and stop coordinates for codons
+        foreach my $f (@$final){
+            my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
+	    maker::auto_annotator::get_translation_seq($seq, $f);
+	}
+
+	return $final;
 }
 
 #------------------------------------------------------------------------
@@ -599,20 +604,23 @@ sub keepers {
         
         my $start = @{$genes};
         my @keepers;
-        foreach my $phat_hit (@{$genes}){
-                my @hsps;
-                my $total_score = 0;
-              while(my $hsp = $phat_hit->next_hsp) {
-                        push(@hsps, $hsp)
-                        if $hsp->score() > $params->{min_exon_score};
-                        
-                        $total_score += $hsp->score();
-             }
-             $phat_hit->hsps(\@hsps);
-             push(@keepers, $phat_hit) 
-             if ($phat_hit->hsps() && $total_score > $params->{min_gene_score});
-        
-        }
+	foreach my $phat_hit (@{$genes}){
+	    my @hsps;
+	    my $total_score = 0;
+	    while(my $hsp = $phat_hit->next_hsp) {
+		push(@hsps, $hsp)
+		    if(!defined($params->{min_exon_score}) ||
+		       $hsp->score() > $params->{min_exon_score});
+		
+		$total_score += $hsp->score();
+	    }
+	    $phat_hit->hsps(\@hsps);
+	    push(@keepers, $phat_hit)
+		if ($phat_hit->hsps() &&
+		    (!defined($params->{min_gene_score}) ||
+		     $total_score > $params->{min_gene_score}));
+	    
+	}
         my $end     = @keepers;
         my $deleted = $start - $end;
         print STDERR "deleted:$deleted genes\n" unless $main::quiet;

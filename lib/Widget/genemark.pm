@@ -365,13 +365,20 @@ sub load_phat_hits {
 			$i++;
 		}
 
-		my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
-		maker::auto_annotator::get_translation_seq($seq, $f);
-                
               	push(@keepers, $f);
 
         }
-        return \@keepers;
+
+	#my $final = keepers(\@keepers, $params);
+	my $final = \@keepers;
+
+        #set start and stop coordinates for codons
+        foreach my $f (@$final){
+            my $seq = maker::auto_annotator::get_transcript_seq($f,$q_seq);
+	    maker::auto_annotator::get_translation_seq($seq, $f);
+	}
+
+	return $final;
 }
 #-----------------------------------------------------------------------------
 sub AUTOLOAD {
