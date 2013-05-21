@@ -1116,7 +1116,7 @@ else {
 	    #give chunk to thread
 	    if(defined($chunk) && chunk_total_count(\@tiers) > 1){
 		$t_need_flag = 0;
-		my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+		my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 		nstore(\$chunk, $file);
 		$t_chunk = $file;
 		$chunk = undef;
@@ -1340,7 +1340,7 @@ sub node_thread {
 	 #get all chunks available
 	 my $chnk = $tier->next_chunk;
 	 while(my $o_chnk = $tier->next_chunk){
-	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 	    nstore(\$o_chnk, $file);
 	    push (@chunks, $file);
 	 }
@@ -1374,7 +1374,7 @@ sub node_thread {
 	    $tier = undef;
 
 	    sleep 0.1 while (defined ($t_tier_result)); #pause
-	    my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	    my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 	    nstore(\$tier_result, $file);
 	    $t_tier_result = $file;
 	    $tier_result = undef;
@@ -1397,7 +1397,7 @@ sub node_thread {
       elsif(defined($chunk)){
 	 $chunk->run($rank);
 	 sleep 0.1 while (defined ($t_chunk_result)); #pause
-	 my $file = (tempfile(TEMPLATE => "mpiXXXXX", UNLINK => 0))[1];
+	 my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 	 nstore(\$chunk, $file);
 	 $t_chunk_result = $file;
 	 $chunk = undef;
