@@ -2092,7 +2092,7 @@ sub load_transcript_struct {
 	my $len_3_utr = length($transcript_seq) - $end + 1;
 	my $l_trans =  length($translation_seq);
 
-	#remove data that should not be carred over into certain transcripts
+	#remove data that should not be carried over into certain transcripts
 	if($f->{_HMM} =~ /^(est2genome|protein2genome|altest2genome)$/ && ! $CTL_OPT->{est_forward}){
 	    $f->{_tran_name} = undef;
 	    $f->{_tran_id} = undef;
@@ -2943,7 +2943,7 @@ sub get_transcript_seq {
 	return $transcript;
 }
 #------------------------------------------------------------------------
-#finds longest translatable sequence beginning with Methionine.
+#finds longest translatable sequence beginning with start codon.
 #returns sequence and offset. Called by get_translation_seq
 sub get_longest_m_seq {
 	my $seq = shift;
@@ -2953,15 +2953,12 @@ sub get_longest_m_seq {
 	my ($off_2, $p_seq_2) = get_off_and_str($seq, 2);
 
 	my @data;
-	push(@data, [$p_seq_0, $off_0]) if defined($p_seq_0);
-	push(@data, [$p_seq_1, $off_1]) if defined($p_seq_1);
-	push(@data, [$p_seq_2, $off_2]) if defined($p_seq_2);
+	push(@data, [$off_0, $p_seq_0]) if defined($p_seq_0);
+	push(@data, [$off_1, $p_seq_1]) if defined($p_seq_1);
+	push(@data, [$off_2, $p_seq_2]) if defined($p_seq_2);
 
-	my @sorted = sort {length($b->[0]) <=> length($a->[0])} @data;
-
-	my $best = shift(@sorted);
-
-	return ($best->[1], $best->[0]) if($best);
+	@data = sort {length($b->[1]) <=> length($a->[1])} @data;
+	return @{$data[0]} if(@data);
 }
 #------------------------------------------------------------------------
 sub get_longest_translation {
@@ -2993,33 +2990,30 @@ sub get_off_and_str {
 	my $offset = shift;
 
 	my $tM = new CGL::TranslationMachine();
-
 	my $p_seq = $tM->translate_from_offset($seq, $offset);
 
-	return (undef, undef) unless $p_seq =~ /M/;
+	my $n_seq = substr($seq, $offset); #get coding nucleotides
+	my @codons = $n_seq =~ /(.{3})/g; #only full codons
+	return (undef, undef) unless(grep {$tM->is_start_codon($_)} @codons);
 
 	my $best_pos;
 	my $best_len;
-	my $pos = -1;
-	while(($pos = index($p_seq, 'M', $pos)) > -1){
-		my ($open_run) = substr($p_seq, $pos) =~ /(^[^\*]+)\*?/;
-		my  $length    = length($open_run);
-		if (!defined($best_len) || $length > $best_len){
-			$best_len = $length;
-			$best_pos = $pos;
-		}
-
-		$pos++;
+	for(my $i = 0; $i < @codons; $i++){
+	    next unless($tM->is_start_codon($codons[$i]));
+	    my ($open_run) = substr($p_seq, $i) =~ /(^[^\*]+)\*?/;
+	    my  $length    = length($open_run);
+	    if (!defined($best_len) || $length > $best_len){
+		$best_len = $length;
+		$best_pos = $i;
+	    }
 	}
 
 	$offset = $offset + 3*$best_pos;
-
 	my $p_seq_2 = $tM->translate_from_offset($seq, $offset);
-
 	my ($t_seq) = $p_seq_2 =~ /(^[^\*]+\*?)/;
 
 	confess "logic error in auto_annotate::get_off_and_str!\n"
-	unless $t_seq  =~ /^M/;
+	    unless($tM->is_start_codon(substr($seq, $offset, 3)));
 
 	return ($offset, $t_seq);
 }
@@ -3033,11 +3027,12 @@ sub get_translation_seq {
     my $tM = new CGL::TranslationMachine();
     my $p_seq;
     my $offset;
+    my $has_start;
 
     #use offset and end already in model to guide seq selection
     if(defined($f->{translation_offset}) && $f->{translation_end}){
 	$offset = $f->{translation_offset};
-	my $has_start = $tM->is_start_codon(substr($seq, $offset, 3));
+	$has_start = $tM->is_start_codon(substr($seq, $offset, 3));
 
 	#step upstream to find longer ORF
 	for(my $i = $offset - 3; $i >= 0; $i -= 3){
@@ -3056,17 +3051,19 @@ sub get_translation_seq {
     }
     
     #build a new translation
-    if(! defined($offset) || ($p_seq !~ /^M/ && $offset >= 3)){
+    if(! defined($offset) || (!$has_start && $offset >= 3)){
 	($p_seq , $offset) = $tM->longest_translation_plus_stop($seq);
+	$has_start = $tM->is_start_codon(substr($seq, $offset, 3));
 
-	#does not begin with M....
-	if (!$ignore && $p_seq !~ /^M/){
+	#does not begin with M or other start codon....
+	if (!$has_start && ($offset != 0 || !$ignore)){ #ignore only works if offset if 0
 	    my ($off_new, $p_seq_new) = get_longest_m_seq($seq);
 
 	    #take M start sequence in most cases
             unless(!$p_seq_new || ($offset < 3 && $off_new - $offset > 90)){
 		$offset = $off_new;
 		$p_seq = $p_seq_new;
+		$has_start = $tM->is_start_codon(substr($seq, $offset, 3));
             }
 	}
     }
@@ -3078,7 +3075,6 @@ sub get_translation_seq {
 
     #get end, and see if there is a stop, and remove it
     my $end = length($p_seq)*3 + $offset + 1;
-    my $has_start = 1 if($p_seq =~ /^M/);
     my $has_stop = 1 if($p_seq =~ s/\*$//);
 
     #if very small CDS try again with longest ORF rather than internal offest
@@ -3087,7 +3083,7 @@ sub get_translation_seq {
     ){
 	$f->{translation_offset} = undef;
 	$f->{translation_end} = undef;
-	return get_translation_seq($seq, $f);
+	return get_translation_seq($seq, $f); #recursive
     }
 
     #set CDS internally in hit (CDS includes stop)

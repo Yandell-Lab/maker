@@ -286,6 +286,7 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "TMP=s" => \$OPT{TMP},
 	   "debug" => \$main::debug,
 	   "debugmpi" => \$main::debugmpi,
+	   "ignore_nfs_tmp" => \$OPT{ignore_nfs_tmp},
 	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)},
 	   "version" => sub{print "$VERSION\n" if($rank == $root);
 			    exit_maker(0)},

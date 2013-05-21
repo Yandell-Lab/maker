@@ -4131,8 +4131,28 @@ sub load_control_files {
       $CTL_OPT{tries} = 1;
    }
    if($CTL_OPT{TMP} && ! -d $CTL_OPT{TMP}){
-       $error .= "The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist.\n\n";
+       $error .= "ERROR: The TMP value \'$CTL_OPT{TMP}\' is not a directory or does not exist.\n\n";
    }
+   my $TMPDIR = $CTL_OPT{TMP} || File::Spec->tmpdir();
+   if(is_NFS_mount($TMPDIR)){
+       if($CTL_OPT{ignore_nfs_tmp}){
+	   warn "WARNING: Temporary directory set to an NFS location.\n".
+	        "TMP=$TMPDIR\n".
+		"The temporary directory in MAKER is specifically for\n".
+		"operations that are not NFS-safe, but you have chosen\n".
+		"to ignore this error. If you experience seemly random\n".
+		"freezing and failures, the TMP directory is the cause.\n\n";
+       }
+       else{
+	   $error .= "ERROR: Temporary directory set to an NFS location.\n".
+	             "TMP=$TMPDIR\n".
+		     "The temporary directory in MAKER is specifically for\n".
+		     "operations that are not NFS-safe. You must set TMP\n".
+		     "to a locally mounted directory such as /tmp or add\n".
+		     "--ignore_nfs_tmp to the maker command line to\n".
+		     "override this error message.\n\n";
+       }
+   }   
    if($main::eva && $CTL_OPT{maker_gff} && $CTL_OPT{model_gff}){ #only for evaluator
        $error .= "You can only specify a GFF3 file for maker_gff or model_gff no both!!\n\n";
    }

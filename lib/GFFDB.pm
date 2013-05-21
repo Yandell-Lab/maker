@@ -601,6 +601,14 @@ sub phathits_on_chunk {
 	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
     }
 
+    #preset reading frame
+    if($h_type eq 'pred'){
+	foreach my $f (@phat_hits){
+	    my $tseq = maker::auto_annotator::get_transcript_seq($f,$seq);
+	    maker::auto_annotator::get_translation_seq($tseq, $f, 1);
+	}
+    }
+
     return \@phat_hits;
 }
 #-------------------------------------------------------------------------------
@@ -720,6 +728,14 @@ sub phathits_on_contig {
     my @phat_hits;    
     foreach my $s (@{$structs}){
 	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
+    }
+
+    #preset reading frame
+    if($h_type eq 'pred'){
+	foreach my $f (@phat_hits){
+	    my $tseq = maker::auto_annotator::get_transcript_seq($f,$seq);
+	    maker::auto_annotator::get_translation_seq($tseq, $f, 1);
+	}
     }
     
     return \@phat_hits;

@@ -818,14 +818,7 @@ sub get_cds_data {
 	 $nine =~  s/\;$//;
 	 push(@data, $nine);
 	 
-	 #make sure CDS lines are ordered relative top plus strand
-	 #needed because of previous reversal for minus strand
-	 if($strand eq '+'){
-	    $c_l .= join("\t", @data)."\n";
-	 }
-	 else{
-	    $c_l = join("\t", @data)."\n".$c_l;
-	 }
+	 $c_l .= join("\t", @data)."\n";
       }
    }
    
@@ -887,12 +880,7 @@ sub grow_cds_data_lookup {
 		    $q_strand,
 		    $phat_hit->name()];
 
-	 if($q_strand == 1){ #helps keep output in sorted order
-	    push(@{$cdss->{five_prime_UTR}}, $utr);
-	 } 
-	 else{
-	    unshift(@{$cdss->{five_prime_UTR}}, $utr);
-	 }	 
+	 push(@{$cdss->{five_prime_UTR}}, $utr);
 	 push(@{$cdss->{t_ids}{five_prime_UTR}{$ub}{$ue}}, $id);
       }
       else {
@@ -911,12 +899,7 @@ sub grow_cds_data_lookup {
 		    $q_strand,
 		    $phat_hit->name()];
 
-	 if($q_strand == 1){ #helps keep output in sorted order
-	    push(@{$cdss->{three_prime_UTR}}, $utr);
-	 } 
-	 else{
-	    unshift(@{$cdss->{three_prime_UTR}}, $utr);
-	 }
+	 push(@{$cdss->{three_prime_UTR}}, $utr);
 	 push(@{$cdss->{t_ids}{three_prime_UTR}{$ub}{$ue}}, $id);
       }
       else {
@@ -951,19 +934,14 @@ sub grow_cds_data_lookup {
 	       $q_strand,
 	       $phat_hit->name()];
       
-      if($q_strand == 1){ #helps keep output in sorted order
-	 push(@{$cdss->{$label}}, $f);
-      } 
-      else{
-	 unshift(@{$cdss->{$label}}, $f);
-      }
+      push(@{$cdss->{$label}}, $f);
       push(@{$cdss->{t_ids}{$label}{$b}{$e}},  $id);
 
       $hsp_start += abs($nE - $nB)+1;
    }
 
    #skip adding start and stop codons for now because Apollo croaks
-   return; #temp (not really, I'll probably keep it forever)
+   return; #temp? (not really, I'll probably keep it forever)
 
    #get start codon
    if($phat_hit->{_HAS_START}){
@@ -990,12 +968,7 @@ sub grow_cds_data_lookup {
 		  $phat_hit->name()];
 	 $start_c += abs($ce - $cb) + 1;
 	 
-	 if($q_strand == 1){ #helps keep output in sorted order
-	    push(@{$cdss->{start_codon}}, $c);
-	 }
-	 else{
-	    unshift(@{$cdss->{start_codon}}, $c);
-	 }
+	 push(@{$cdss->{start_codon}}, $c);
 	 push(@{$cdss->{t_ids}{start_codon}{$cb}{$ce}}, $id);
       }
    }
@@ -1023,15 +996,10 @@ sub grow_cds_data_lookup {
 	 my $c = [$cb,
 		  $ce,
 		  $q_strand,
-		  $phat_hit->name()];	 
+		  $phat_hit->name()];
 	 $stop_c += abs($ce - $cb) + 1;
 	 
-	 if($q_strand == 1){ #helps keep output in sorted order
-	    unshift(@{$cdss->{stop_codon}}, $c);
-	 } 
-	 else{
-	    push(@{$cdss->{stop_codon}}, $c);
-	 }
+	 unshift(@{$cdss->{stop_codon}}, $c);
 	 push(@{$cdss->{t_ids}{stop_codon}{$cb}{$ce}},  $id);
       }
    }
