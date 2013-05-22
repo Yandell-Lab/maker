@@ -14,6 +14,7 @@ use Bio::Search::HSP::PhatHSP::gff3;
 use Cwd;
 use File::NFSLock;
 use FastaSeq;
+use PhatHit_utils;
 
 @ISA = qw(
        );
@@ -594,16 +595,17 @@ sub phathits_on_chunk {
     else{
 	die "ERROR: no recognized type in GFFDB::phathits_on_chunk\n";
     }
-    
+
     my @phat_hits;    
     foreach my $s (@{$structs}){
 	next unless ($c_start <= $s->{start} && $s->{start} <= $c_end);
 	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
     }
 
-    #preset reading frame
-    if($h_type eq 'pred'){
+    #preset reading frame and fix overlapping exons
+    if($h_type eq 'pred' || $h_type eq 'model'){
 	foreach my $f (@phat_hits){
+	    $f = PhatHit_utils::normalize($f,$seq); #fix overlapping exons
 	    my $tseq = maker::auto_annotator::get_transcript_seq($f,$seq);
 	    maker::auto_annotator::get_translation_seq($tseq, $f, 1);
 	}
@@ -730,9 +732,10 @@ sub phathits_on_contig {
 	push(@phat_hits, @{_load_hits($s, $seq, $seq_len)});
     }
 
-    #preset reading frame
-    if($h_type eq 'pred'){
+    #preset reading frame and fix overlapping exons
+    if($h_type eq 'pred' || $h_type eq 'model'){
 	foreach my $f (@phat_hits){
+	    $f = PhatHit_utils::normalize($f,$seq); #fix overlapping exons
 	    my $tseq = maker::auto_annotator::get_transcript_seq($f,$seq);
 	    maker::auto_annotator::get_translation_seq($tseq, $f, 1);
 	}

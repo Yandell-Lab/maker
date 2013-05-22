@@ -1205,7 +1205,7 @@ sub copy {
 	    my $new_hsp = new $ref(@{$args});
 	    
 	    
-	    add_splice_data($new_hsp, $hsp, $what) if ref($hsp) =~ /est2genome$/;
+	    add_splice_data($new_hsp, $hsp, $what) if ref($hsp) =~ /2genome$/;
 	    
 	    $new_hsp->queryName($hsp->queryName)
 		if defined($hsp->queryName);
@@ -1252,83 +1252,156 @@ sub copy {
 	return $new_hit;
 }
 #------------------------------------------------------------------------
+#flattens a hit with introns
 sub normalize {
-        my $hit  = shift;
-	my $what = shift;
+    my $hit = shift;
+    my $seq = shift;
 
-        my $sorted = sort_hits($hit, $what);
+    my @hsps = @{sort_hits($hit, 'query')};
 
-	my %seen;
-	my @keepers;
-        for (my $i = 0; $i < @{$sorted} -1;$i++){
-                my $hsp_i = $sorted->[$i];
-		my $nbeg_i = $hsp_i->nB($what);
-		my $nend_i = $hsp_i->nE($what);
-
-		for (my $j = 1; $j < @{$sorted};$j++){
-			my $hsp_j = $sorted->[$j];
-			my $nbeg_j = $hsp_j->nB($what);
-			my $nend_j = $hsp_j->nE($what);	
-
-			if ($nbeg_i >= $nbeg_j && $nbeg_i <= $nend_j){
-				if ($hsp_i->score > $hsp_j->score){
-					push(@keepers, $hsp_i)
-					unless $seen{$nbeg_i}{$nend_i};
-				}
-				else {
-					push(@keepers, $hsp_j)
-					unless $seen{$nbeg_j}{$nend_j};
-				}
-				$seen{$nbeg_i}{$nend_i}++;
-				$seen{$nbeg_j}{$nend_j}++;
-
-			}
-			elsif ($nbeg_j >= $nbeg_i && $nbeg_j <= $nend_i){
-                               if ($hsp_i->score > $hsp_j->score){
-                                        push(@keepers, $hsp_i)
-					unless $seen{$nbeg_i}{$nend_i};
-                                }
-                                else {
-                                        push(@keepers, $hsp_j)
-					unless $seen{$nbeg_j}{$nend_j};
-                                }
-
-				$seen{$nbeg_i}{$nend_i}++;
-				$seen{$nbeg_j}{$nend_j}++;
-			}
-			else {
-			}
-			
-		}
+    my $bad = 0;
+    for (my $i = 0; $i < @hsps-1; $i++){
+	my $fi = $hsps[$i];
+	my $fj = $hsps[$i+1];
+	if(compare::compare($fi->start, $fi->end, $fj->start, $fj->end)){
+	    $bad = 1;
+	    last;
 	}
+    }
+    return $hit if(!$bad);
 
-	my $ref = ref($hit);
+    my $coors  = PhatHit_utils::get_hsp_coors_from_hit($hit, 'query');
+    my $pieces = Shadower::getPieces($seq, $coors, 0);
 
-        my $new_hit = new $ref('-name'         => $hit->name,
-                               '-description'  => $hit->description,
-                               '-algorithm'    => $hit->algorithm,
-                               '-length'       => $hit->length,
-                              );
+    my $hit_start = 1;
+    my $hit_length = 0;
+    my $strand = $hit->strand('query');
+    my @new_hsps;
+    foreach my $p (@$pieces){
+	my $B = $p->{b};
+	my $E = $p->{e};
+	my $hseq = ($strand == 1) ? $p->{piece} : Fasta::revComp($p->{piece});
+	my $length = length($hseq);
 
-	$new_hit->queryLength($hit->queryLength);
-	$new_hit->database_name($hit->database_name);
-	$new_hit->{is_normalized} = 1;
-	$new_hit->{_label} = $hit->{_label} if($hit->{_label});
-	$new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+	my @args;
+	
+	push(@args, '-query_start');
+	push(@args, $B);
+	
+	push(@args, '-query_seq');
+	push(@args, $hseq);
+	
+	push(@args, '-score');
+	push(@args, $length);
 
-	my %crap;
-	foreach my $hsp (@keepers){
-	    $crap{$hsp->nB('hit')}{$hsp->nE('hit')}++;
-	    $new_hit->add_hsp($hsp);
+	push(@args, '-homology_seq');
+	push(@args, '|'x$length);
+	
+	push(@args, '-hit_start');
+	push(@args, $hit_start);
+
+	push(@args, '-hit_seq');
+	push(@args, $hseq);
+	
+	push(@args, '-hsp_length');
+	push(@args, $length);
+	
+	push(@args, '-identical');
+	push(@args, $length);
+	    
+	push(@args, '-hit_length');
+	push(@args, $length);
+	
+	push(@args, '-query_name');
+	push(@args, $hsps[0]->query_name);
+	
+	push(@args, '-algorithm');
+	push(@args, $hsps[0]->algorithm);
+	
+	push(@args, '-bits');
+	push(@args, $length);
+	
+	push(@args, '-evalue');
+	push(@args, 0);
+	
+	push(@args, '-pvalue');
+	push(@args, 0);
+	
+	push(@args, '-query_length');
+	push(@args, $length);
+	
+	push(@args, '-query_end');
+	push(@args, $E);
+	
+	push(@args, '-conserved');
+	push(@args, $length);
+	
+	push(@args, '-hit_name');
+	push(@args, $hsps[0]->name);
+	
+	push(@args, '-hit_end');
+	push(@args, $hit_start + $length - 1);
+	
+	push(@args, '-query_gaps');
+	push(@args, 0);
+	
+	push(@args, '-hit_gaps');
+	push(@args, 0);
+
+	my $hsp_ref = ref($hsps[0]);
+	my $new_hsp = new $hsp_ref(@args);
+	$new_hsp->queryName($hsps[0]->query_name);
+	#-------------------------------------------------
+	# setting strand because bioperl is all messed up!
+	#------------------------------------------------
+	if ($strand == 1 ){
+	    $new_hsp->{_strand_hack}->{query} = 1;
+	    $new_hsp->{_strand_hack}->{hit}   = 1;
 	}
+	else {
+	    $new_hsp->{_strand_hack}->{query} = -1;
+	    $new_hsp->{_strand_hack}->{hit}   =  1;
+	}
+	$new_hsp->{_label} = $hsps[0]->{_label} if($hsps[0]->{_label});
+	
+	$hit_start = $hit_start + $length;
+	$hit_length += $length;
 
-	my $s_size = @{$sorted};
-	my $k_size = @keepers;
+	push(@new_hsps, $new_hsp);
+    }
 
-	#print "s_size:$s_size k_size:$k_size\n";
-	#sleep 2;
+    my $ref = ref($hit);
+    my $new_hit = new $ref('-name'         => $hit->name,
+			   '-description'  => $hit->description,
+			   '-algorithm'    => $hit->algorithm,
+			   '-length'       => $hit_length,
+			   '-score'        => $hit_length,
+			   '-bits'         => $hit->bits,
+			   '-significance' => $hit->significance
+			   );    
 
-	return $new_hit;
+    foreach my $hsp (@new_hsps){
+	$new_hit->add_hsp($hsp);
+    }
+
+    confess "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
+	if($hit_start == 1 || $new_hit->num_hsps == 0); #should change with each HSP
+
+    #add hidden attributes that may be part of a gene prediction
+    $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
+    $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+    $new_hit->{_REMOVE} = $hit->{_REMOVE} if($hit->{_REMOVE});
+    $new_hit->{_tran_name} = $hit->{_tran_name} if($hit->{_tran_name});
+    $new_hit->{_tran_id} = $hit->{_tran_id} if($hit->{_tran_id});
+    $new_hit->{gene_name} = $hit->{gene_name} if($hit->{gene_name});
+    $new_hit->{gene_id} = $hit->{gene_id} if($hit->{gene_id});
+    $new_hit->{-attrib} = $hit->{-attrib} if($hit->{-attrib});
+    $new_hit->{gene_attrib} = $hit->{gene_attrib} if($hit->{gene_attrib});
+    $new_hit->{_Alias} = $hit->{_Alias} if($hit->{_Alias});
+    $new_hit->{_AED} = $hit->{_AED} if($hit->{_AED});
+    $new_hit->{_eAED} = $hit->{_eAED} if($hit->{_eAED});
+
+    return $new_hit;
 }
 #------------------------------------------------------------------------
 sub is_contigous {
