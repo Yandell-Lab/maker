@@ -385,6 +385,7 @@ sub reblast_merged_hits {
 
    if(! -f $o_file){                   
        #build hit db
+       unlink($t_file); #temp
        if(! -f $t_file){
 	   my $db_index = build_fasta_index($index_files);
 	   open(my $FA, ">$t_file.tmp");
@@ -4155,6 +4156,11 @@ sub load_control_files {
    }   
    if($main::eva && $CTL_OPT{maker_gff} && $CTL_OPT{model_gff}){ #only for evaluator
        $error .= "You can only specify a GFF3 file for maker_gff or model_gff no both!!\n\n";
+   }
+   if($CTL_OPT{out_name} && $CTL_OPT{out_name} =~ /\//){
+       $error .= "The 'base' option is an ID used in generating names for\n".
+	         "multiple files and directories. It is not a directory path.\n".
+		 "You must remove all '/' characters from '$CTL_OPT{out_name}'\n\n";
    }
 
    #--if just parsing without error check stop here

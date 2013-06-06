@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use warnings;
 use strict "vars";
@@ -107,7 +107,8 @@ my %OPT;
 my $rank = 0;
 my $size = 1;
 $RANK = $rank;
-$OPT{retry} = 3;
+GI::RANK($rank);
+$OPT{tries} = 3;
 
 #---Process options on the command line 
 try{
@@ -134,6 +135,7 @@ my %CTL_OPT;
 my $iterator;
 my $DS_CTL;
 my $GFF_DB;
+my $g_index;
 my $build;
 my @failed;
 my @interrupted;
@@ -170,6 +172,7 @@ try{
    
     #set up control options from control files
     %CTL_OPT = GI::load_control_files([], \%OPT, $size);
+    GI::new_instance_temp($CTL_OPT{TMP});
 
     #--open datastructure controller
     $DS_CTL = ds_utility->new(\%CTL_OPT);
@@ -177,6 +180,11 @@ try{
     #--set up gff database
     $GFF_DB = new GFFDB(\%CTL_OPT);
     $build = $GFF_DB->next_build;
+
+    #--set up blast databse
+    GI::create_blastdb(\%CTL_OPT);
+    my $gdbfile = $CTL_OPT{_g_db}[0];
+    $g_index = GI::build_fasta_index([$gdbfile]);
     
     #---load genome multifasta/GFF3 file
     $iterator = new Iterator::Any( -fasta => $CTL_OPT{'genome'},
@@ -198,11 +206,12 @@ catch Error::Simple with{
 my $tier;
 my $i_count = @interrupted;
 my $f_count = @failed;
-while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrupted){
-    $tier = Process::MpiTiers->new({fasta =>$fasta,
+while (my $q_def = $iterator->nextDef || shift @failed || shift @interrupted){
+    $tier = Process::MpiTiers->new({q_def => $q_def,
+				    g_index => $g_index,
 				    CTL_OPT => \%CTL_OPT,
 				    DS_CTL  => $DS_CTL,
-				    GFF_DB  => $GFF_DB,
+				    dbfile  => $GFF_DB->dbfile,
 				    build   => $build},
 				   '0',
 				   'Process::MpiChunk'
@@ -215,7 +224,7 @@ while (my $fasta = $iterator->nextFastaRef() || shift @failed || shift @interrup
     #to maker process overlap
     sleep 1 if($f_count != @failed);
 
-    $tier->run_all;
+    $tier->run_all(0);
 
     push(@failed, $tier->fasta) if ($tier->failed);
     push(@interrupted, $tier->fasta) if ($tier->interrupt && $i_count == @interrupted);

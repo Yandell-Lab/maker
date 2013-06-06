@@ -69,7 +69,7 @@ BEGIN{
    $VERSION = '2.28';
 
    #what to do on ^C
-   $SIG{INT}  = sub {print STDERR "SIGINT received\n";  exit_maker(SIGINT);};
+   $SIG{INT}  = sub {print STDERR "SIGINT received\n"; print STDERR Carp::longmess; exit_maker(SIGINT);};
    $SIG{QUIT} = sub {print STDERR "SIGQUIT received\n"; exit_maker(SIGQUIT);};
    $SIG{ABRT} = sub {print STDERR "SIGABRT received\n"; exit_maker(SIGABRT);};
    $SIG{KILL} = sub {print STDERR "SIGKILL received\n"; exit_maker(SIGKILL);};
