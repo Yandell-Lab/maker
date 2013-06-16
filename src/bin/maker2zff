@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use warnings; 
 use strict;
@@ -35,13 +35,13 @@ For determining which genes are High Confidence for Retraining, there are 7 crit
 -n           No filtering.  Accept all.
 ";
 
-if ($opt_c) {$thresh[0] = $opt_c}
-if ($opt_e) {$thresh[1] = $opt_e}
-if ($opt_o) {$thresh[2] = $opt_o}
-if ($opt_a) {$thresh[3] = $opt_a}
-if ($opt_t) {$thresh[4] = $opt_t}
-if ($opt_l) {$thresh[5] = $opt_l}
-if ($opt_x) {$thrAED = $opt_x}
+if (defined($opt_c)) {$thresh[0] = $opt_c}
+if (defined($opt_e)) {$thresh[1] = $opt_e}
+if (defined($opt_o)) {$thresh[2] = $opt_o}
+if (defined($opt_a)) {$thresh[3] = $opt_a}
+if (defined($opt_t)) {$thresh[4] = $opt_t}
+if (defined($opt_l)) {$thresh[5] = $opt_l}
+if (defined($opt_x)) {$thrAED = $opt_x}
 
 my %id2name = ();
 my %status = ();

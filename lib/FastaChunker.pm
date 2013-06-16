@@ -84,7 +84,7 @@ sub load_chunks {
 
 	#decide on number of chunks
 	my $t_c = int($self->parent_seq_length/$self->chunk_size);
-	$t_c++ if(!$t_c || ($self->chunk_size % $t_c) > $self->min_size);
+	$t_c++ if(!$t_c || ($self->parent_seq_length-$self->chunk_size*$t_c) > $self->min_size);
 
 	$self->total_chunks($t_c);
 	my $l = $self->chunk_size();

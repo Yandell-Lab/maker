@@ -131,7 +131,8 @@ sub _hard_mask_seq {
       $e = ($last <= length($$seq)) ? $e + $flank : length($$seq);
    
       my $l = $e - $b + 1;
-      
+      next if($l <= 0);
+
       #my $replace_string = substr($$seq, $b -1 , $l);
       #$replace_string =~ s/./$replace/g;
       
@@ -157,6 +158,7 @@ sub _soft_mask_seq {
       $e = ($last <= length($$seq)) ? $e + $flank : length($$seq);      
    
       my $l = $e - $b + 1;
+      next if($l <=0);
       
       substr($$seq, $b -1 , $l, lc(substr($$seq, $b -1 , $l)));
    }

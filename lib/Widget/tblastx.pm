@@ -116,7 +116,7 @@ sub keepers {
 	  my $ok;
 	  open(my $IN, '<', $sio->file);
 	  while(my $line = <$IN>){
-	      if($line =~ /There are no valid contexts|sequence has zero length/){
+	      if($line =~ /There are no valid contexts|sequence has zero length|Sequence contains no data/){
 		  $ok = 1;
 		  last;
 	      }

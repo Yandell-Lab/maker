@@ -2102,7 +2102,7 @@ sub load_transcript_struct {
 	my $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
 	my $t_id = $t_name; #affects GFFV3.pm
 	$t_name = $f->{_tran_name} if($f->{_tran_name}); #affects GFFV3.pm
-	$t_id = $f->{_tran_id} if($f->{_tran_id}); #affects GFFV3.pm
+	$t_id = $f->{_tran_id} if($f->{_tran_id} && $f->algorithm =~ /^model_gff\:/); #affects GFFV3.pm
 	$f->name($t_name);
 
 	my $t_struct = {'hit'       => $f,

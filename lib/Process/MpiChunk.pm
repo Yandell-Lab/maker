@@ -550,7 +550,7 @@ sub _go {
 	    $fasta_chunker->parent_def($q_def);
 	    $fasta_chunker->parent_seq($q_seq_obj);
 	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
-	    $fasta_chunker->min_size($CTL_OPT{split_hit});
+	    $fasta_chunker->min_size($CTL_OPT{max_dna_len}-1);
 	    $fasta_chunker->load_chunks();
 	    #-------------------------CODE
 	    
@@ -607,7 +607,7 @@ sub _go {
 		    $fasta_chunker->parent_def($VARS->{q_def}." masked");
 		    $fasta_chunker->parent_seq($m_seq_obj);
 		    $fasta_chunker->chunk_size($VARS->{CTL_OPT}{max_dna_len});
-		    $fasta_chunker->min_size($VARS->{CTL_OPT}{split_hit});
+		    $fasta_chunker->min_size($VARS->{CTL_OPT}{max_dna_len}-1);
 		    $fasta_chunker->load_chunks();
 
 		    $VARS->{masked_file} = $masked_file;
@@ -1101,7 +1101,7 @@ sub _go {
 	    $fasta_chunker->parent_def($q_def." masked");
 	    $fasta_chunker->parent_seq($m_seq_obj);
 	    $fasta_chunker->chunk_size($CTL_OPT{max_dna_len});
-	    $fasta_chunker->min_size($CTL_OPT{split_hit});
+	    $fasta_chunker->min_size($CTL_OPT{max_dna_len}-1);
 	    $fasta_chunker->load_chunks();
 	    #-------------------------CODE
 	 
