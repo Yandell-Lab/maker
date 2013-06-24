@@ -65,7 +65,7 @@ sub _initialize {
    #initialize a new blank log,
    #except when using the hidden chpc option
    #then just append to the existing log
-   if(! $CTL_OPT->{_multi_chpc}){
+   if(!$CTL_OPT->{_multi_chpc} && !$CTL_OPT->{_resume}){
        open(IN, "> $self->{log}");
        open(IN, "> $self->{SEEN_file}");
        close(IN);

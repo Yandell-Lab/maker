@@ -4293,10 +4293,22 @@ sub load_control_files {
        die "ERROR: The directory is locked.  Perhaps by an instance of MAKER.\n\n";
    }
 
+   #compare current control files to logged files
+   my $app = ($main::eva) ? "eval" : "maker";
+   my @ctl_logs = ($CTL_OPT{out_base}."/$app\_opts.log",
+		   $CTL_OPT{out_base}."/$app\_bopts.log",
+		   $CTL_OPT{out_base}."/$app\_exe.log"
+		   );
+
    #check who else is also sharing the lock and if running same settings
    $CTL_OPT{_step} = $LOCK->owners() || 1;
    $CTL_OPT{_shared_id} = $LOCK->shared_id();
    if($CTL_OPT{_step} == 1){ #I am only/first holder of the lock
+       #control files already exist see if I should remove the datastore log
+       if(-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
+	   $CTL_OPT{_resume}++ if(runlog::are_same_opts(\%CTL_OPT, \@ctl_logs));
+       }
+
        #log the control files
        generate_control_files($CTL_OPT{out_base}, 'all', \%CTL_OPT, 1);
 
@@ -4304,13 +4316,6 @@ sub load_control_files {
    }
    else{
        $i_lock->unlock if($i_lock); #release init lock
-
-       #compare current control files to logged files
-       my $app = ($main::eva) ? "eval" : "maker";
-       my @ctl_logs = ($CTL_OPT{out_base}."/$app\_opts.log",
-		       $CTL_OPT{out_base}."/$app\_bopts.log",
-		       $CTL_OPT{out_base}."/$app\_exe.log"
-		       );
 
        unless (-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
 	   $LOCK->unlock if($LOCK);
