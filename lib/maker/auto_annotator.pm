@@ -1713,7 +1713,7 @@ sub run_it{
 		}
 		$transcript->{_HMM} = 'est2genome';
 
-		#at least 60% of est2genome genes must be ORF
+		#at least 40% of est2genome genes must be ORF
 		#also require some protein support for eukaryote single exon genes
 		if(!$CTL_OPT->{est_forward}){
 		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
@@ -1723,8 +1723,8 @@ sub run_it{
 			$has_start,
 			$has_stop) = get_translation_seq($transcript_seq, $transcript);
 
-		    #60% min
-		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .60);
+		    #40% min
+		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .40);
 
 		    #single exon results require more filtering
 		    if($CTL_OPT->{organism_type} eq 'eukaryotic' && $transcript->num_hsps == 1){

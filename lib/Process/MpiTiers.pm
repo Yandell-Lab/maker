@@ -179,6 +179,7 @@ sub next_chunk {
        $self->_next_level;
        $self->_load_chunks;
        $self->_load_extra if($self->{LEVEL}{EXTRA});
+       return undef if ($self->terminated || $self->failed); #check again
    }
    
    #handle case where level needs to be initialized
@@ -813,7 +814,7 @@ sub _handler {
    print STDERR "ERROR: ".$extra."\n" if($extra);
 
    #clear queue on error
-   while(my $chunk = $self->next_chunk){
+   while(my $chunk = shift @{$self->{LEVEL}{ALL}{CHUNKS}}){
        my $clevel = $chunk->level;
        $self->{LEVEL}{$chunk->level}{RESULT_COUNT}++;
        $self->{LEVEL}{ALL}{RESULT_COUNT}++;
