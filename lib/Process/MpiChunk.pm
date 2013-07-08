@@ -630,7 +630,6 @@ sub _go {
 	    #-------------------------CHUNKER
 	    #local masked GFF3
 	    my $gff3_file = $VARS->{the_void}."/query.masked.gff";
-	    die;
             my $GFF3_m = Dumper::GFF::GFFV3->new($gff3_file,
 						 '',
 						 $VARS->{the_void}
