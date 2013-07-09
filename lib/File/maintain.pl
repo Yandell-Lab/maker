@@ -13,6 +13,7 @@ use Perl::Unsafe::Signals;
 
 BEGIN {
     $SIG{QUIT} = sub{exit()};
+    $SIG{ABRT} = sub{exit()};
     $SIG{KILL} = sub{exit()};
     $SIG{TERM} = sub{exit()};
     $SIG{STOP} = sub{exit()};

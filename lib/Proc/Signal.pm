@@ -243,7 +243,7 @@ sub reap_children_by_name {
     my $signal = shift;
     my $name = shift;
 
-    exists_killall($signal, $name, $$, 1);
+    return exists_killall($signal, $name, $$, 1);
 }
 
 #-----------------------------------------------------------------

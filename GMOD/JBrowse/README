@@ -1,2 +1,3 @@
-These files work with JBrowse versions 1.1 and greater.
-They are not backwards compatible with other JBrowse versions.
+These files work with JBrowse versions 1.1 and greater. They are not backwards
+compatible with other JBrowse versions. Do not use them directly rather,
+maker2jbrowse uses them when adding GFF3 files to JBrowse.

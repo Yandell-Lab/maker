@@ -1583,6 +1583,25 @@ column : SCORE 1
 sortbycolumn : GENOMIC_RANGE
 groupby : HOMOLOGY
 
+[Tier]
+tiername : Exonerate::cDNA2Genome
+expanded : true
+
+[Type]
+label : Exonerate::cDNA2Genome
+tiername : Exonerate::cDNA2Genome
+datatype : exonerate::cdna2genome
+datatype : cdna2genome
+glyph : DrawableResultFeatureSet
+color : 140,70,140
+column : GENOMIC_LENGTH 1
+column : MATCH_LENGTH 1
+column : GENOMIC_RANGE 1
+column : MATCH_RANGE 1
+column : SCORE 1
+sortbycolumn : GENOMIC_RANGE
+groupby : HOMOLOGY
+
 [Type]
 label : P_oligandrum
 tiername : Exonerate::EST2Genome

@@ -49,7 +49,7 @@ $HOSTNAME = &Sys::Hostname::hostname();
 	  SH          => LOCK_SH,);
 
 #signals to catch and replace
-@CATCH_SIGS = qw(TERM INT QUIT KILL TERM STOP);
+@CATCH_SIGS = qw(TERM INT QUIT ABRT KILL TERM);
 my $graceful_sig = sub{ exit; };#ensures that DESTROY and END are called
 
 #-------------------------------------------------------------------------------
