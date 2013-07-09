@@ -1271,8 +1271,18 @@ sub cleanup {
 
     File::Temp::cleanup();
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
-    Proc::Signal::reap_children_by_name(SIGABRT, 'maintain.pl'); #clean up maintainers
-    Proc::Signal::reap_children_by_name(SIGKILL, 'maintain.pl'); #clean up maintainers
+    #kill and wait for response
+    my $time = time;
+    while(abs($time - time) < 10){
+	my ($found, $signaled) = Proc::Signal::reap_children_by_name(SIGUSR1, 'maintain.pl');
+	if($found){
+	    sleep 1;
+	}
+	else{
+	    last;
+	}
+    }
+    Proc::Signal::reap_children_by_name(SIGKILL, 'maintain.pl'); #clean up any stubborn maintainers
 
     if(!$is_thread){
 	$t_terminate = 1;

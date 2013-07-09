@@ -1,48 +1,15 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
 
-use warnings;
 use strict;
+use warnings;
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
-
 use Getopt::Long;
 use File::Temp;
+use File::Copy;
 use URI::Escape;
-use vars qw($JB $RS);
-
-BEGIN{
-    my $loc = `which flatfile-to-json.pl 2> /dev/null`;
-    chomp $loc;
-    if ($loc =~ /^no flatfile-to-json.pl/ || ! $loc) {
-	$loc = `which ./bin/flatfile-to-json.pl 2> /dev/null`;
-	chomp $loc;
-    }
-
-    if ($loc =~ /^no flatfile-to-json.pl/ || ! $loc) {
-	die "FATAL: Can not find flatfile-to-json.pl\n".
-	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
-
-    }
-    else {
-	$JB = [split("\n", $loc)]->[-1];
-    }
-
-    $loc = `which prepare-refseqs.pl 2> /dev/null`;
-    chomp $loc;
-    if ($loc =~ /^no prepare-refseqs.pl/ || ! $loc) {
-	$loc = `which ./bin/prepare-refseqs.pl 2> /dev/null`;
-	chomp $loc;
-    }
-    if ($loc =~ /^no prepare-refseqs.pl/ || ! $loc) {
-	die "FATAL: Can not find prepare-refseqs.pl\n".
-	    "Make sure JBrowse is installed and the executables are in your PATH.\n";
-
-    }
-    else {
-	$RS = [split("\n", $loc)]->[-1];
-    }
-}
+use vars qw($JB $RS $G_CSS $M_CSS);
 
 my $usage = '
 USAGE:
@@ -59,6 +26,35 @@ OPTIONS:
 
 ';
 
+$JB = "./bin/flatfile-to-json.pl";
+if (! -f $JB) {
+    print $usage;
+    die "FATAL: Can not find ./bin/flatfile-to-json.pl\n".
+	"Make sure you are running inside the JBrowse directory\n";
+    
+}
+else {
+    $JB = [split("\n", $JB)]->[-1];
+}
+
+$RS = "./bin/prepare-refseqs.pl";
+if (! -f $RS) {
+    print $usage;
+    die "FATAL: Can not find ./bin/prepare-refseqs.pl\n".
+	"Make sure you are running inside the JBrowse directory.\n";
+}
+else {
+    $RS = [split("\n", $RS)]->[-1];
+}
+
+$G_CSS = "./genome.css";
+if (! -f $RS) {
+    print $usage;
+    die "FATAL: Can not find the ./genome.css file\n".
+	"Make sure you are running inside the JBrowse directory.\n";
+}
+
+$M_CSS = "$FindBin::RealBin/../GMOD/JBrowse/maker.css";
 my $dstore;
 
 GetOptions("ds_index|d=s" => \$dstore,
@@ -67,7 +63,7 @@ GetOptions("ds_index|d=s" => \$dstore,
 
 my @files;
 
-die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -f $dstore);
 
 if($dstore){
     my $base = $dstore;
@@ -118,34 +114,51 @@ foreach my $file (@files){
 
 die $error if $error;
 
+my $comment;
+my $maker;
+open(IN, "<$G_CSS");
+while(my $line = <IN>){
+    $comment = 1 if($line =~ /\/\*/);
+    $comment = 0 if($comment && $line =~ /\*\//);
+    next if($comment);
+    $maker = 1 if($line =~ /^\@import url\(\"maker\.css\"\)\;/);
+}
+
+unless($maker){
+    File::Copy::copy($M_CSS, './maker.css') or die "Copy failed: $!";
+    open(OUT, ">>$G_CSS") or die "Open failed: $!";
+    print OUT "\@import url(\"maker.css\");\n" or die "Print failed: $!";
+    close(OUT) or die "Close failed: $!";
+}
+
 #--build command lines
 my %commands;
 
 #MAKER anotations
-$commands{gene}           = ' --tracklabel "Genes" --key "Genes" --getType --getLabel --autocomplete label --cssclass feature5 --type gene';
-$commands{maker}          = ' --tracklabel "Transcripts" --key "Transcripts" --getType --getSubs --getLabel --autocomplete label --cssclass transcript --subfeatureClasses \'{"exon": "transcript-exon", "CDS": "transcript-CDS", "UTR": "transcript-UTR"}\' --arrowheadClass transcript-arrowhead --type mRNA';
+$commands{gene}           = ' --tracklabel "Genes" --key "Genes" --getType --getLabel --autocomplete label --className feature5 --type gene';
+$commands{maker}          = ' --tracklabel "Transcripts" --key "Transcripts" --getType --getSubfeatures --getLabel --autocomplete all --className transcript --subfeatureClasses \'{"exon": "exon", "CDS": "CDS", "five_prime_UTR": "five_prime_UTR", "three_prime_UTR": "three_prime_UTR"}\' --arrowheadClass transcript-arrowhead --type mRNA';
 
 #ab initio gene predictions
-$commands{snap}           = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon2"}\' --arrowheadClass transcript-arrowhead --type match:snap';
-$commands{snap_masked}    = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon2"}\' --arrowheadClass transcript-arrowhead --type match:snap_masked';
-$commands{augustus}       = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon3"}\' --arrowheadClass transcript-arrowhead --type match:augustus';
-$commands{augustus_masked} = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon3"}\' --arrowheadClass transcript-arrowhead --type match:augustus_masked';
-$commands{genemark}       = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon4"}\' --arrowheadClass transcript-arrowhead --type match:genemark';
-$commands{genemark_masked} = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon4"}\' --arrowheadClass transcript-arrowhead --type match:genemark_masked';
-$commands{fgenesh}        = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon5"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh';
-$commands{fgenesh_masked} = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubs --getLabel --cssclass transcript --subfeatureClasses \'{"match_part": "transcript-exon5"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh_masked';
+$commands{snap}           = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "snap-exon"}\' --arrowheadClass transcript-arrowhead --type match:snap';
+$commands{snap_masked}    = ' --tracklabel "SNAP" --key "SNAP" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "snap-exon"}\' --arrowheadClass transcript-arrowhead --type match:snap_masked';
+$commands{augustus}       = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "augustus-exon"}\' --arrowheadClass transcript-arrowhead --type match:augustus';
+$commands{augustus_masked} = ' --tracklabel "Augustus" --key "Augustus" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "augustus-exon"}\' --arrowheadClass transcript-arrowhead --type match:augustus_masked';
+$commands{genemark}       = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "genemark-exon"}\' --arrowheadClass transcript-arrowhead --type match:genemark';
+$commands{genemark_masked} = ' --tracklabel "GeneMark" --key "GeneMark" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "genemark-exon"}\' --arrowheadClass transcript-arrowhead --type match:genemark_masked';
+$commands{fgenesh}        = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "fgenesh-exon"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh';
+$commands{fgenesh_masked} = ' --tracklabel "FGENESH" --key "FGENESH" --getType --getSubfeatures --getLabel --className transcript --subfeatureClasses \'{"match_part": "fgenesh-exon"}\' --arrowheadClass transcript-arrowhead --type match:fgenesh_masked';
 
 #evidence alignments
-$commands{blastn}         = ' --tracklabel "BLASTN" --key "BLASTN" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part4"}\' --type expressed_sequence_match:blastn';
-$commands{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part5"}\' --type protein_match:blastx';
-$commands{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part6"}\' --type expressed_sequence_match:tblastx';
-$commands{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part3"}\' --type expressed_sequence_match:est2genome';
-$commands{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part2"}\' --type protein_match:protein2genome';
-$commands{iprscan} = ' --tracklabel "InterPro" --key "InterPro" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part7"}\' --type match:iprscan';
+$commands{blastn}         = ' --tracklabel "BLASTN" --key "BLASTN" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "blastn_part"}\' --type expressed_sequence_match:blastn';
+$commands{blastx}         = ' --tracklabel "BLASTX" --key "BLASTX" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "blastx_part"}\' --type protein_match:blastx';
+$commands{tblastx}        = ' --tracklabel "TBLASTX" --key "TBLASTX" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "tblastx_part"}\' --type expressed_sequence_match:tblastx';
+$commands{est2genome}     = ' --tracklabel "est2genome" --key "est2genome" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "est2genome_part"}\' --type expressed_sequence_match:est2genome';
+$commands{protein2genome} = ' --tracklabel "protein2genome" --key "protein2genome" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "protein2genome_part"}\' --type protein_match:protein2genome';
+$commands{cdna2genome} = ' --tracklabel "cdna2genome" --key "cdna2genome" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "cdna2genome_part"}\' --type expressed_sequence_match:cdna2genome';
 
 #repeats
-$commands{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part7"}\' --type match:repeatmasker';
-$commands{'blastx:repeatmask'}  = ' --tracklabel "RepeatRunner" --key "RepeatRunner" --getType --getSubs --cssclass generic_parent --subfeatureClasses \'{"match_part": "match_part7"}\' --type protein_match:blastx:repeatmask';
+$commands{repeatmasker}   = ' --tracklabel "RepeatMasker" --key "RepeatMasker" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "repeat_part"}\' --type match:repeatmasker';
+$commands{repeatrunner}  = ' --tracklabel "RepeatRunner" --key "RepeatRunner" --getType --getSubfeatures --className generic_parent --subfeatureClasses \'{"match_part": "repeat_part"}\' --type protein_match:repeatrunner';
 
 
 foreach my $file (@files){
