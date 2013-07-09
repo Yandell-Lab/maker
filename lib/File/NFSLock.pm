@@ -254,6 +254,11 @@ sub _new_EX {
 	}
 	else{
 	    last if($self->_create_magic($rand_file) && $self->_do_lock);
+
+	    #check for ghost file error (corrupt filesystem)
+	    die "FATAL: Potentially corrupt filesystem. The file $lock_file\n".
+                "is listed within the directory, but cannot lstat. You may need\n".
+                "to run fsck to repair it.\n" if($self->ghost_check($lock_file));
 	}
 
 	### wait a moment or timeout
@@ -396,7 +401,7 @@ sub _new_NB {
 	}
 	else{
 	    return undef unless($self->_create_magic($rand_file) && $self->_do_lock);
-	}	
+	}
     }
        
     $self->uncache; #trick for NFS to update cache
@@ -520,6 +525,18 @@ sub _new_SH {
 	}
 	else{
 	    last if($self->_create_magic($rand_file) && $self->_do_lock_shared);
+
+	    die "FATAL: Potentially corrupt filesystem. The file $lock_file\n".
+		"is listed within the directory, but cannot lstat. You may need\n".
+		"to run fsck to repair it.\n" if($self->ghost_check($lock_file));
+
+	    #semi-recoverable if rand_file is ghost
+	    if($self->ghost_check($rand_file)){
+		warn "WARNING: Potentially corrupt filesystem. The file $rand_file\n".
+		     "is listed within the directory, but cannot lstat. You may need\n".
+		     "to run fsck to repair it.\n";
+		$self->{rand_file} = $self->_rand_name($lock_file);
+	    }
 	}
 
 	### wait a moment or timeout
@@ -555,6 +572,35 @@ sub _new_SH {
     else{
 	return $self->_new_SH();
     }
+}
+
+#-------------------------------------------------------------------------------
+#these happen frequently on corrupt NFS filesystems
+#can be called as function as well
+sub ghost_check {
+    my $self = shift;
+    my $loc = shift;
+
+    #for function call
+    $loc = $self if($self && ! ref($self));
+
+    #check for ghost file (causes infinite loop)
+    $loc =~ s/\/+$//;
+    my ($dir, $name) = $loc =~ /(.*)\/([^\/]+)$/ ;
+    opendir(DIR, $dir);
+    my $ghost = grep {$_ eq $name} readdir(DIR);
+    $ghost = ($ghost && !-e $ghost);
+
+    #I seem to have found one (make extra sure)
+    if($ghost){
+	sleep 5; #ghosts are persistent so long wait is sufficient
+	opendir(DIR, $dir);
+	my $ghost = grep {$_ eq $name} readdir(DIR);
+	$ghost = ($ghost && !-e $ghost);
+    }
+    close(DIR);
+    
+    return $ghost;
 }
 
 #-------------------------------------------------------------------------------
