@@ -1024,6 +1024,7 @@ sub maintain {
 	if(! $exe || ! -f $exe);
 
     $exe =~ s/NFSLock\.pm$/maintain\.pl/;
+    $exe =~ s/ /\\ /g; #for paths with spaces
     my $m_pid = open3(my $IN, '>&STDOUT', '>&STDERR', "$^X $exe $pid $time $serial");
 
     #attach maintainer

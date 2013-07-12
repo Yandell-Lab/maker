@@ -4307,6 +4307,7 @@ sub load_control_files {
        #control files already exist see if I should remove the datastore log
        if(-f $ctl_logs[0] && -f $ctl_logs[1] && -f $ctl_logs[2]){
 	   $CTL_OPT{_resume}++ if(runlog::are_same_opts(\%CTL_OPT, \@ctl_logs));
+	   $CTL_OPT{_resume} = 0 if($CTL_OPT{force} || $CTL_OPT{again});
        }
 
        #log the control files

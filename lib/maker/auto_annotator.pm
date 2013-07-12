@@ -1751,16 +1751,14 @@ sub run_it{
 	#------protein2genome
 	if ($predictor eq 'protein2genome') {
 	    next if(! @$gomiph);
-
 	    my $miphs = [];
-	    if($CTL_OPT->{est_forward}){
-                $miphs = $gomiph;
-            }
-            elsif($CTL_OPT->{organism_type} eq 'prokaryotic'){
-                $miphs = PhatHit_utils::make_flat_hits($gomiph, $v_seq);
-            }
-            else{
-		$miphs = clean::remove_redundant_alt_splices($gomiph, 10);
+	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+		$miphs = get_selected_types($miphs,'protein2genome');
+		$miphs = clean::remove_redundant_alt_splices($miphs, 10) unless($CTL_OPT->{est_forward});
+	    }
+	    else{ #prokaryotic
+		$miphs = $gomiph;
+                $miphs = PhatHit_utils::make_flat_hits($miphs, $v_seq) unless($CTL_OPT->{est_forward});
 	    }
 
 	    foreach my $miph (@$miphs){
