@@ -11,6 +11,7 @@ use File::Copy;
 use File::Path;
 use File::Which; #bundled with MAKER
 use vars qw($BIN);
+use File::Glob;
 use Cwd ();
 
 BEGIN{
@@ -98,10 +99,11 @@ sub config_mpi {
     my $self = shift;
 
     my $base = $self->base_dir;
+    my $sbase = 
     my $ebase = $self->install_destination('exe');
-    my @exes = grep {/(^|[\/])mpicc$/} (<$base/../exe/*/*>, <$base/../exe/*/bin/*>);
+    my @exes = grep {/(^|[\/])mpicc$/} (File::Glob::bsd_glob("{$base/../exe/*/*,$base/../exe/*/bin/*}"));
     my $mpicc = "$ebase/mpich2/bin/mpicc" if(-f "$ebase/mpich2/bin/mpicc");
-    ($mpicc) = grep {/(^|[\/])mpicc$/} (<$base/../exe/*/*>, <$base/../exe/*/bin/*>) if(!$mpicc);
+    ($mpicc) = grep {/(^|[\/])mpicc$/} (File::Glob::bsd_glob("{$base/../exe/*/*,$base/../exe/*/bin/*}")) if(!$mpicc);
     $mpicc = $self->config('cc') if(! $mpicc && $self->config('cc') =~ /(^|[\/])mpicc$/);
     ($mpicc) = File::Which::where('mpicc') if(!$mpicc || ! -f $mpicc);
 
@@ -117,21 +119,21 @@ sub config_mpi {
     $ccdir =~ s/\/+[^\/]+\/[^\/]+$//;
 
     #directories to search for mpi.h
-    my @includes = (<$ccdir/include>,
-		    <$ebase/mpich2/include>,
-		    <$ebase/*/include>,
-		    </usr/include>,
-		    </usr/include/mpi*>,
-		    </usr/mpi*/include>,
-		    </usr/local/include>,
-		    </usr/local/include/mpi*>,
-		    </usr/local/mpi*/include>,
-		    </usr/lib/>,
-		    </usr/lib/include/mpi*>,
-		    </usr/lib/mpi*/include>,
-		    </usr/local/lib>,
-		    </usr/local/lib/include/mpi*>,
-		    </usr/local/lib/mpi*/include>);
+    my @includes = (File::Glob::bsd_glob("{$ccdir/include,".
+					 "$ebase/mpich2/include,".
+					 "$ebase/*/include,".
+					 "/usr/include,".
+					 "/usr/include/mpi*,".
+					 "/usr/mpi*/include,".
+					 "/usr/local/include,".
+					 "/usr/local/include/mpi*,".
+					 "/usr/local/mpi*/include,".
+					 "/usr/lib/,".
+					 "/usr/lib/include/mpi*,".
+					 "/usr/lib/mpi*/include,".
+					 "/usr/local/lib,".
+					 "/usr/local/lib/include/mpi*,".
+					 "/usr/local/lib/mpi*/include}"));
 
     my ($MPIDIR) = grep {-f "$_/mpi.h"} @includes;
 
@@ -467,7 +469,7 @@ sub ACTION_install {
 
     my $blib = $self->blib();
     my $pdir = $self->base_dir."/../perl";
-    my @files = grep {-f $_} <$blib/config-*>;
+    my @files = grep {-f $_} File::Glob::bsd_glob("$blib/config-*");
     foreach my $file (@files){
 	my ($name) = $file =~ /([^\/]+)$/;
 	ExtUtils::Install::pm_to_blib({$file => "$pdir/$name"}, $pdir);
@@ -1145,7 +1147,7 @@ sub _install_exe {
 	print "Unpacking $req tarball...\n";
         $self->extract_archive($file) or return $self->fail($req, $path);
         push(@unlink, $file);
-	my ($dir) = grep {-d $_} <*rmblast*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*rmblast*");
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $req...\n";
@@ -1162,20 +1164,20 @@ sub _install_exe {
 	    print "Unpacking $req2 tarball...\n";
 	    $self->extract_archive($file2) or return $self->fail($req2, $path);
 	    push(@unlink, $file2);
-	    my ($dir2) = grep {-d $_} <ncbi-blast-*>;
+	    my ($dir2) = grep {-d $_} File::Glob::bsd_glob("ncbi-blast-*");
 
 	    #move to rmblast path, not blast path
 	    File::Copy::move($dir2, $req) or return $self->fail($req2, $path);
 	    return $self->fail($req2, $path) if(! -f "$path/$req/bin/blastn");	    
 
-	    my @to_move = <$dir/*>;
+	    my @to_move = File::Glob::bsd_glob("$dir/*");
 	    my $safe = quotemeta($dir);
 	    foreach my $f (@to_move){
 		(my $new = $f) =~ s/^$safe/$req/;
 		(my $base = $new) =~ s/[^\/]+$//;
 		mkdir $base if(!-d $base);
 		if(-d $f){
-		    push(@to_move, <$f/*>);
+		    push(@to_move, File::Glob::bsd_glob("$f/*"));
 		    next;
 		}
 		File::Copy::move($f, $new);
@@ -1211,7 +1213,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
         $self->extract_archive($file) or return $self->fail($exe, $path);
         push (@unlink, $file);
-	my ($dir) = grep {-d $_} <ncbi-blast-*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("ncbi-blast-*");
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $exe...\n";
@@ -1233,7 +1235,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
         $self->extract_archive($file) or return $self->fail($exe, $path);
         push (@unlink, $file);
-	my ($dir) = grep {-d $_} <exonerate-*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("exonerate-*");
 	if(-d "$dir/src"){ #this is the source code and must be compiled
 	    chdir($dir);
 	    print "Configuring $exe...\n";
@@ -1287,7 +1289,7 @@ sub _install_exe {
 	    chdir($base);
 	}
 
-	my ($dir) = grep {-d $_} <augustus*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("augustus*");
 	chdir("$dir/src");
 	print "Configuring $exe...\n";
 	#always remove static flag and not just for OSX
@@ -1317,7 +1319,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} <mpich2*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("mpich2*");
 	print "Configuring $exe...\n";
 	chdir($dir);
 	my %shared = (Linux  => '--enable-sharedlibs=gcc',
@@ -1347,7 +1349,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} <trunk*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("trunk*");
 	print "Configuring $exe...\n";
 	File::Copy::copy("$base/../GMOD/Apollo/gff3.tiers", "$dir/conf/gff3.tiers");
 	chdir("$dir/src/java");
@@ -1371,7 +1373,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} <*jbrowse*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*jbrowse*");
 	print "Configuring $exe...\n";
 	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
@@ -1392,7 +1394,7 @@ sub _install_exe {
 	print "Unpacking $exe tarball...\n";
         $self->extract_archive($file) or return $self->fail($exe, $path);
         push (@unlink, $file);
-	my ($dir) = grep {-d $_} <*WebApollo*>;
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*WebApollo*");
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
 
@@ -1831,8 +1833,8 @@ sub sync_bins {
     my $sbin = "$cwd/bin";
     my $ibin = "$cwd/inc/bin";
 
-    my @ifiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$ibin/*>;
-    my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} <$sbin/*>;
+    my @ifiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} File::Glob::bsd_glob("$ibin/*");
+    my @sfiles = map {$_ =~ /([^\/]+)$/} grep {-f $_ && !/\~$/ && !/\.PL$/} File::Glob::bsd_glob("$sbin/*");
 
     foreach my $file (@ifiles, @sfiles){
 	my $bfile = "$BIN/$file";

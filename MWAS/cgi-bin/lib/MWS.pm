@@ -460,14 +460,13 @@ sub launch {
 							       twiki);
 
 	#get MAKER specific configuration file
-	my $conf = "$c_dir/genome.css";
-	system("cp -R $conf ".join(' ', @to_copy)." $dir");
+	my $conf = "$c_dir/maker.css";
     
 	#add tracks if not currently added
 	if(!-d "$dir/data"){
 	    my $dstore = "$data_dir/jobs/$job_id/$job_id.maker.output/$job_id\_master_datastore_index.log";
 	    system("cd $dir\n".
-		   "$data_dir/maker/bin/maker2jbrowse -d $dstore 1>&2");
+		   "$data_dir/maker/bin/maker2jbrowse -c $conf -d $dstore 1>&2");
 	}
 
 	my $url = ($serv_opt{html_web} =~ /http\:\/\//) ?

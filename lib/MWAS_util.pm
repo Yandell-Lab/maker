@@ -378,8 +378,8 @@ sub jbrowse_setup {
 	my $data_dir = $CTL_OPT{data_dir};
         (my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
         my $c_dir = config_loc();
-	if(! -f "$c_dir/genome.css"){
-	    system("cp $b_dir/../../GMOD/JBrowse/genome.css $c_dir")
+	if(! -f "$c_dir/maker.css"){
+	    system("cp $b_dir/../../GMOD/JBrowse/maker.css $c_dir")
 		&& die "ERROR: Preparing JBrowse configuration file failed\n";
 	}
     }

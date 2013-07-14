@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use strict;
 use warnings;
@@ -21,6 +21,9 @@ USAGE:
 
 OPTIONS:
      ds_index|d  <file>  Provide MAKER produced datastore index
+
+     css|c       <file>  Provide alternate css for tracks
+                         (DEFAULT: .../maker/GMOD/JBrowse/maker.css)
 
      help|?              Displays this usage statement
 
@@ -58,12 +61,14 @@ $M_CSS = "$FindBin::RealBin/../GMOD/JBrowse/maker.css";
 my $dstore;
 
 GetOptions("ds_index|d=s" => \$dstore,
+	   "css|c=s" => \$M_CSS,
 	   "help|?" => sub {print $usage; exit()}
 	   );
 
 my @files;
 
 die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -f $dstore);
+die "ERROR: The css file \'$M_CSS\' does not exist\n" if (! -f $M_CSS);
 
 if($dstore){
     my $base = $dstore;
