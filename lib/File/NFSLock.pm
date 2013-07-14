@@ -6,12 +6,11 @@
 package File::NFSLock;
 
 use strict;
-use File::Copy;
-use File::Temp;
-use Storable;
-use IPC::Open3;
 use POSIX;
 use POSIX qw(:sys_wait_h);
+use File::Copy;
+use Storable;
+use IPC::Open3;
 use Proc::Signal;
 use URI::Escape;
 use Sys::Hostname;

@@ -95,7 +95,7 @@ sub find_best_one {
 		my ($pre, $pos) = $e_to_g_str =~ /^(0*[^0]{1})(.*)$/; 
 		push(@can_five, load_candidate($e_to_g_str, $est, $pre, $pos));
 
-		my ($pre, $pos) = $e_to_g_str =~ /^(.*)([^0]{1}0*)$/;
+		($pre, $pos) = $e_to_g_str =~ /^(.*)([^0]{1}0*)$/;
                 push(@can_three, load_candidate($e_to_g_str, $est, $pre, $pos));
         }
 
