@@ -150,6 +150,7 @@ sub _new_EX {
     my $stale_lock_timeout = $self->{stale_lock_timeout};
  
     my $stack;
+    my $gfail = 0; #counter to trigger ghost file check
     while (1) {
 	#if locking has been turned off then just pretend success
 	if(!$TYPE){
@@ -254,11 +255,13 @@ sub _new_EX {
 	}
 	else{
 	    last if($self->_create_magic($rand_file) && $self->_do_lock);
+	    $gfail++; #hmm, either race condidtion or ghost file
 
 	    #check for ghost file error (corrupt filesystem)
 	    die "FATAL: Potentially corrupt filesystem. The file $lock_file\n".
                 "is listed within the directory, but cannot lstat. You may need\n".
-                "to run fsck to repair it.\n" if($self->ghost_check($lock_file));
+                "to run fsck to repair it.\n"
+		if($gfail % 10 == 0 && $self->ghost_check($lock_file));
 	}
 
 	### wait a moment or timeout
@@ -427,6 +430,7 @@ sub _new_SH {
     my $stale_lock_timeout = $self->{stale_lock_timeout};
  
     my $stack;
+    my $gfail = 0; #counter to trigger ghost file check
     while (1) {
 	#if locking has been turned off then just pretend success
 	if(!$TYPE){
@@ -525,13 +529,15 @@ sub _new_SH {
 	}
 	else{
 	    last if($self->_create_magic($rand_file) && $self->_do_lock_shared);
+	    $gfail++; #hmm, either race condidtion or ghost file
 
 	    die "FATAL: Potentially corrupt filesystem. The file $lock_file\n".
 		"is listed within the directory, but cannot lstat. You may need\n".
-		"to run fsck to repair it.\n" if($self->ghost_check($lock_file));
+		"to run fsck to repair it.\n"
+		if($gfail % 10 == 0 && $self->ghost_check($lock_file));
 
 	    #semi-recoverable if rand_file is ghost
-	    if($self->ghost_check($rand_file)){
+	    if($gfail % 10 == 0 && $self->ghost_check($rand_file)){
 		warn "WARNING: Potentially corrupt filesystem. The file $rand_file\n".
 		     "is listed within the directory, but cannot lstat. You may need\n".
 		     "to run fsck to repair it.\n";
@@ -583,20 +589,24 @@ sub ghost_check {
 
     #for function call
     $loc = $self if($self && ! ref($self));
+    return 0 if(! defined($loc));
 
-    #check for ghost file (causes infinite loop)
+    #check for ghost file (they can cause infinite loop)
     $loc =~ s/\/+$//;
-    my ($dir, $name) = $loc =~ /(.*)\/([^\/]+)$/ ;
+    my ($dir, $name) = $loc =~ /(.*\/)([^\/]*)$/;
+    $dir = './' if(! defined($dir) && defined($name));
+    return 0 if(! defined($dir));
+
     opendir(DIR, $dir);
-    my $ghost = grep {$_ eq $name} readdir(DIR);
-    $ghost = ($ghost && !-e $ghost);
+    my $ghost = grep {$_ eq $name && ! -e $loc} readdir(DIR);
+    close(DIR);
 
     #I seem to have found one (make extra sure)
     if($ghost){
 	sleep 5; #ghosts are persistent so long wait is sufficient
 	opendir(DIR, $dir);
-	my $ghost = grep {$_ eq $name} readdir(DIR);
-	$ghost = ($ghost && !-e $ghost);
+	$ghost = grep {$_ eq $name && ! -e $loc} readdir(DIR);
+	close(DIR);
     }
     close(DIR);
     
