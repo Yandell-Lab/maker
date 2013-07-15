@@ -1048,12 +1048,13 @@ sub split_db {
 	    #use X to mask their sequence, which causes many many programs to fail
 	    $$seq_ref =~ tr/[a-z]/[A-Z]/;
 	    $$seq_ref =~ s/\-//g;
-	    $$seq_ref =~ s/X/N/g;
+	    $$seq_ref =~ tr/XU/NT/;
 	    die "ERROR: The nucleotide sequence file \'$file\'\n".
-		"appears to contain protein sequence or unrecognized characters.\n".
+		"appears to contain protein sequence or unrecognized characters. Note\n".
+		"the following nucleotides may be valid but are unsupported [RYKMSWBDHV]\n".
 		"Please check/fix the file before continuing.\n".
-		"Invalid Character: $1\n\n"
-		if($$seq_ref =~ /([^ACGTURYKMSWBDHVNX\-\n])/i);
+		"Invalid Character: '$1'\n\n"
+		if($$seq_ref =~ /([^ATCGN\n])/i);
 	}
 	
 	#Skip empty fasta entries
