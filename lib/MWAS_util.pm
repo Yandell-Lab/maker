@@ -8,6 +8,7 @@ use GI;
 use File::NFSLock;
 use Data::Dumper;
 use File::Copy;
+use File::Glob;
 
 =head1
 #-----------------------------------------------------------------------------
@@ -145,16 +146,16 @@ sub mwas_setup {
     my $ho_dir = "$b_dir/../html/"; #original direcory
     my $m_lib = "$b_dir/../../lib/"; #/maker/lib
     my $p_lib = "$b_dir/../../perl/lib/"; #/maker/perl/lib
-    system("cp -R $co_dir/* $cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
-    system("cp -R $ho_dir/* $html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
-    system("cp -R $m_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    system("cp", "-R", File::Glob::bsd_glob("$co_dir/*"), "$cgi_dir/") && die("ERROR: Copying files to $cgi_dir failed\n");
+    system("cp", "-R", File::Glob::bsd_glob("$ho_dir/*"), "$html_dir/") && die("ERROR: Copying files to $html_dir failed\n");
+    system("cp", "-R", File::Glob::bsd_glob("$m_lib/*"), "$cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     if(-d $p_lib){ #only exists when MPI is installed
-        system("cp -R $p_lib/* $cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
+        system("cp", "-R", File::Glob::bsd_glob("$p_lib/*"), "$cgi_dir/lib/") && die("ERROR: Copying files to $cgi_dir failed\n");
     }
 
     #copy maker executables
     mkdir("$data_dir/maker") if(! -d "$data_dir/maker");
-    system("cp -R $m_dir/* $data_dir/maker/") && die("ERROR: Copying files to $data_dir/maker/ failed\n");
+    system("cp", "-R", File::Glob::bsd_glob("$m_dir/*"), "$data_dir/maker/") && die("ERROR: Copying files to $data_dir/maker/ failed\n");
 
     #recursively set group permission to write for all files in the directory
     system("chmod -R g+w $cgi_dir") &&
@@ -296,15 +297,34 @@ sub apollo_setup {
         mkdir("$html_dir/jars") if(! -d "$html_dir/jars");
 
         #create generate Apollo webstart
-	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+	(my $b_dir = $FindBin::RealBin) =~ s/\/(src|bin|MWAS\/bin)\/?$/\/MWAS\/bin/;
         my $tt_xml = "$b_dir/../../GMOD/Apollo/apollo_webstart.xml.tt";
+
+	#webstart_generator.pl can't handle space in directory names
+	if($tt_xml =~ / /){
+	    unlink("./.apollo_tt_xml");
+	    symlink($tt_xml, "./.apollo_tt_xml");
+	    $tt_xml = "./.apollo_tt_xml";
+	}
+
+	my $jars = "$CTL_OPT{APOLLO_ROOT}/jars";
+	if($jars =~ / /){
+	    unlink("./.apollo_jars");
+            symlink($jars, "./.apollo_jars");
+            $jars = "./.apollo_jars";
+	}
+
 	my $c_dir = config_loc();
         $ENV{APOLLO_ROOT} = $CTL_OPT{APOLLO_ROOT};
 	$ENV{PERL5LIB} = ($CTL_OPT{PERL5LIB}) ?
 	    $CTL_OPT{PERL5LIB}.":$b_dir/../../perl/lib" : ":$b_dir/../../perl/lib";
-        system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl -i $tt_xml -d ".
-               "$CTL_OPT{APOLLO_ROOT}/jars -o $c_dir/apollo.jnlp -D $html_dir/jars") &&
+
+        system("$CTL_OPT{APOLLO_ROOT}/bin/webstart_generator.pl","-i","$tt_xml","-d",
+               $jars,"-o","$c_dir/apollo.jnlp","-D","$html_dir/jars") &&
                die "ERROR: Generating Apollo webstart jars and jnlp file failed\n";
+
+	unlink("./.apollo_tt_xml");
+	unlink("./.apollo_jars");
     }
     else{
         die "ERROR: You must suply a value for APOLLO_ROOT in server.ctl to\n".
@@ -353,12 +373,12 @@ sub gbrowse_setup {
         my $html_dir = $CTL_OPT{html_dir};
 	my $data_dir = $CTL_OPT{data_dir};
 
-	(my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+	(my $b_dir = $FindBin::RealBin) =~ s/\/(src|bin|MWAS\/bin)\/?$/\/MWAS\/bin/;
         my $tt_conf = "$b_dir/../../GMOD/GBrowse/gbrowse.conf.tt";
 	my $c_dir = config_loc();
 
 	if(! -f "$c_dir/gbrowse.conf.tt"){
-	    system("cp $tt_conf $c_dir")
+	    system("cp", "$tt_conf", "$c_dir/")
 		&& die "ERROR: Preparing GBrowse configuration file failed\n";
 	}
     }
@@ -376,10 +396,10 @@ sub jbrowse_setup {
         #copy JBrowse configuration file
 	my $cgi_dir  = $CTL_OPT{cgi_dir};
 	my $data_dir = $CTL_OPT{data_dir};
-        (my $b_dir = $FindBin::RealBin) =~ s/\/maker\/(src|bin|MWAS\/bin)\/?$/\/maker\/MWAS\/bin/;
+        (my $b_dir = $FindBin::RealBin) =~ s/\/(src|bin|MWAS\/bin)\/?$/\/MWAS\/bin/;
         my $c_dir = config_loc();
 	if(! -f "$c_dir/maker.css"){
-	    system("cp $b_dir/../../GMOD/JBrowse/maker.css $c_dir")
+	    system("cp", "$b_dir/../../GMOD/JBrowse/maker.css", "$c_dir/")
 		&& die "ERROR: Preparing JBrowse configuration file failed\n";
 	}
     }
@@ -430,7 +450,7 @@ sub copy_package{
 
     @files = grep {!/\.tar\.gz$/} @files;
 
-    system("cp -R ".join(' ', @files)." $new_dir/");
+    system("cp", "-R", @files, "$new_dir/");
     @files = (<$new_dir/*/$job_old*>,<$new_dir/$job_old*>);
     foreach my $f (@files){
 	my $new = $f;

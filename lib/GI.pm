@@ -15,6 +15,7 @@ use Carp;
 use Cwd qw(cwd);
 use File::NFSLock;
 use File::Which;
+use File::Glob;
 use Dumper::GFF::GFFV3;
 use Dumper::XML::Game;
 use Error qw(:try);
@@ -946,7 +947,7 @@ sub split_db {
     $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
     #check if already finished
-    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+    my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} File::Glob::bsd_glob("$f_dir/$d_name\.*");
     if(@t_db == $bins){ #use existing if right count
 	push(@db_files, @t_db);
 	return \@db_files;
@@ -958,7 +959,7 @@ sub split_db {
 	$lock = new File::NFSLock($f_dir, 'EX', 1800, 60);
 
 	#check if already finished
-	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} File::Glob::bsd_glob("$f_dir/$d_name\.*");
 	if(@t_db == $bins){ #use existing if right count
 	    push(@db_files, @t_db);
 	    carp "Calling File::NFSLock::unlock" if($main::debug);
@@ -1003,7 +1004,7 @@ sub split_db {
     }
 
     if(-d "$f_dir"){ #on multi processors check if finished
-	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} File::Glob::bsd_glob("$f_dir/$d_name\.*");
 	
 	if(@t_db == $bins){ #use existing if right count
 	    push(@db_files, @t_db);
@@ -1112,7 +1113,7 @@ sub split_db {
     
     #check if everything is ok
     if (-e $f_dir) { #multi processor
-	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} <$f_dir/$d_name\.*>;
+	my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} File::Glob::bsd_glob("$f_dir/$d_name\.*");
 	
 	confess "ERROR: SplitDB not created correctly\n\n" if(@t_db != $bins);
 	
@@ -1872,7 +1873,7 @@ sub dbformat {
 
 	       #move the BLAST indexes into place
 	       unlink($t_file);
-	       my @files = <$t_dir/*>;
+	       my @files = File::Glob::bsd_glob("$t_dir/*");
 	       File::Copy::move($_, $tmp) foreach(@files);
 	       last;
 	   }
@@ -3043,7 +3044,7 @@ sub repeatmask {
 						     );
 
    #delete other unneeded output files
-   my @files = map {<$file_name.$_>} qw(ref tbl cat masked);
+   my @files = map {File::Glob::bsd_glob("$file_name.$_")} qw(ref tbl cat masked);
    unlink(@files);
 
    $LOG->add_entry("FINISHED", $o_file, ""); 
@@ -3276,7 +3277,7 @@ sub set_defaults {
 		 );
 
       #get MAKER overriden exe locations
-      my @all_alts = grep {-f $_ && -x $_} (<$FindBin::Bin/../exe/*/*>, <$FindBin::Bin/../exe/*/bin/*>);
+      my @all_alts = grep {-f $_ && -x $_} (File::Glob::bsd_glob("{$FindBin::Bin/../exe/*/*,$FindBin::Bin/../exe/*/bin/*}"));
       foreach my $exe (@exes) {
 	  my @alts = grep {/\/$exe$/} @all_alts;
 	  my $loc = shift @alts || File::Which::which($exe) || '';
@@ -3452,7 +3453,7 @@ sub collect_hmms {
 	    ($ENV{AUGUSTUC_CONFIG_PATH} = $exes{augustus}) =~ s/\/(bin|src)\/augustus/\/config/;
 	}
 
-	open(my $EXE, "$exes{augustus} --species=help 2>&1|");
+	open(my $EXE, quotemeta($exes{augustus})." --species=help 2>&1|");
 	my $flag;
 	while(my $line = <$EXE>){
 	    if($flag){
@@ -3484,7 +3485,7 @@ sub collect_hmms {
     }
 
     if($exes{snap} && -d $exes{snap}){
-	foreach my $file (grep {!/README/} <$exes{snap}/*>){
+	foreach my $file (grep {!/README/} File::Glob::bsd_glob("$exes{snap}/*")){
 	    my ($name) = $file =~ /([^\/]+)$/;
 	    $name =~ s/\.hmm$//;
 	    $name =~ s/\./\. /;
@@ -3503,7 +3504,7 @@ sub collect_hmms {
 	$exes{gmhmme3} = "$exes{gmhmme3}/HMM/";
  
 	if(-d $exes{gmhmme3}){
-	    foreach my $file (<$exes{gmhmme3}/*.mod>){
+	    foreach my $file (File::Glob::bsd_glob("$exes{gmhmme3}/*.mod")){
 		my ($name) = $file =~ /([^\/]+)\.mod$/;
 		$name =~ s/_/\. /;
 		$name = ucfirst($name);
@@ -3522,7 +3523,7 @@ sub collect_hmms {
 	$exes{fgenesh} =~ s/[^\/]+$//;
     
 	if(-d $exes{fgenesh}){
-	    foreach my $file (<$exes{fgenesh}/*>){
+	    foreach my $file (File::Glob::bsd_glob("$exes{fgenesh}/*")){
 		my ($name) = $file =~ /([^\/]+)$/;
 		my $value = Cwd::abs_path("$file");
 		

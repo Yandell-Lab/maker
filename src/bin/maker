@@ -290,7 +290,7 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)},
 	   "version" => sub{print "$VERSION\n" if($rank == $root);
 			    exit_maker(0)},
-	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server $_[1]")
+	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server", $_[1])
 			       if($rank == $root);
 			   exit_maker(0);},
 	   "CTL" => sub {GI::generate_control_files()

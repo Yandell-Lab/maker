@@ -1151,7 +1151,7 @@ sub _install_exe {
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $req...\n";
-	    $self->do_system("./configure --with-mt --prefix=$path/$dir --without-debug") or return $self->fail($req, $path);
+	    $self->do_system("./configure --with-mt --prefix=".quotemeta("$path/$dir")." --without-debug") or return $self->fail($req, $path);
 	    $self->do_system("make") or return $self->fail($req, $path);
 	    $self->do_system("make install") or return $self->fail($req, $path);
 	}
@@ -1200,7 +1200,7 @@ sub _install_exe {
 	print $fh "Y\n";
 	print $fh "5\n";
 	close($fh);
-	$self->do_system("$^X ./configure < $tmp > /dev/null") or return $self->fail($exe, $path);
+	$self->do_system("$^X ./configure < ".quotemeta($tmp)." > /dev/null") or return $self->fail($exe, $path);
         push(@unlink, $tmp);
     }
     elsif($exe eq 'blast'){
@@ -1217,7 +1217,7 @@ sub _install_exe {
 	if(-d "$dir/c++"){ #this is the source code and must be compiled
 	    chdir("$dir/c++");
 	    print "Configuring $exe...\n";
-	    $self->do_system("./configure --prefix=$path") or return $self->fail($exe, $path);
+	    $self->do_system("./configure --prefix=".quotemeta($path)) or return $self->fail($exe, $path);
 	    $self->do_system("make") or return $self->fail($exe, $path);
 	    $self->do_system("make install") or return $self->fail($exe, $path);
 	}
@@ -1239,7 +1239,7 @@ sub _install_exe {
 	if(-d "$dir/src"){ #this is the source code and must be compiled
 	    chdir($dir);
 	    print "Configuring $exe...\n";
-	    $self->do_system("./configure --prefix=$path") or return $self->fail($exe, $path);
+	    $self->do_system("./configure --prefix=".quotemeta($path)) or return $self->fail($exe, $path);
 	    $self->do_system("make") or return $self->fail($exe, $path);
 	    $self->do_system("make install") or return $self->fail($exe, $path);
 	    chdir($base);
@@ -1325,7 +1325,7 @@ sub _install_exe {
 	my %shared = (Linux  => '--enable-sharedlibs=gcc',
 		      Darwin => '--enable-sharedlibs=osx-gcc --disable-f77 --disable-fc',
 		      src    => '');
-	$self->do_system("./configure --prefix=$path --enable-shared $shared{$OS}") or return $self->fail($exe, $path);
+	$self->do_system("./configure --prefix=".quotemeta($path)." --enable-shared $shared{$OS}") or return $self->fail($exe, $path);
 	$self->do_system("make") or return $self->fail($exe, $path);
 	$self->do_system("make install") or return $self->fail($exe, $path);
 	chdir($base);
@@ -1618,13 +1618,13 @@ sub extract_archive {
 	my $u = scalar getpwuid($>);
 	my $g = scalar getgrgid($));
 	if($file =~ /\.gz$|\.tgz$/){
-	    $command = "tar -zxm -f $file";
+	    $command = "tar -zxm -f ".quotemeta($file);
 	}
 	elsif($file =~ /\.bz2?$|\.tbz2?$/){
 	    $command = "tar -jxm -f $file";
 	}
 	else{
-	    $command = "tar -xm -f $file";
+	    $command = "tar -xm -f ".quotemeta($file);
 	}
 	$command .= " --owner $u --group $g" unless((POSIX::uname())[0] =~ /darwin/i);
 
@@ -1649,7 +1649,7 @@ sub getstore {
     my $pass = shift;
 
     if(File::Which::which('wget')){ #Linux
-	my $command = "wget $url -c -O $file --no-check-certificate";
+	my $command = "wget $url -c -O ".quotemeta($file)." --no-check-certificate";
 	$command .= " --user $user --password $pass" if(defined($user) && defined($pass));
 	return $self->do_system($command); #gives status and can continue partial
     }
