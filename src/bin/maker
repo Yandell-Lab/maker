@@ -110,7 +110,7 @@ BEGIN{
 {
 my $tid = threads->tid if exists $INC{'threads.pm'};
 END {
-    my $is_thread = 1 if defined($tid) && $tid != threads->tid;
+    my $is_thread = 1 if(defined($tid) && $tid != threads->tid);
     cleanup($is_thread);
 }
 }
@@ -264,6 +264,7 @@ GI::RANK($rank);
 carp "Calling MPI_Comm_size" if($main::debug);
 my $size = MPI_Comm_size(); #how many proccesses
 my $root = 0; #define root node (only changed for debugging)
+my $start_time = time();
 
 #---Process options on the command line
 carp "Calling GetOptions" if($main::debug);
@@ -284,9 +285,11 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "datastore!" =>\$OPT{datastore},
 	   "old_struct" =>\$main::old_struct,
 	   "TMP=s" => \$OPT{TMP},
+	   "mpi_blastdb=s" => \$OPT{mpi_blastdb},
 	   "debug" => \$main::debug,
 	   "debugmpi" => \$main::debugmpi,
 	   "ignore_nfs_tmp" => \$OPT{ignore_nfs_tmp},
+	   'fix_nucleotides' => \$main::fix_nucleotides,
 	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)},
 	   "version" => sub{print "$VERSION\n" if($rank == $root);
 			    exit_maker(0)},
@@ -672,6 +675,12 @@ if($size == 1){
     }
 
     print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
+    my $end_time = time;
+    my $elapsed= $end_time-$start_time;
+    print "\n\n";
+    print "Start_time: $start_time\n";
+    print "End_time:   $end_time\n";
+    print "Elapsed:    $elapsed\n";
 
     exit_maker(0);
 }
@@ -870,6 +879,12 @@ if ($rank == $root) {
     }
 
     print STDERR "\n\nMaker is now finished!!!\n\n" unless($main::qq);
+    my $end_time = time;
+    my $elapsed = $end_time-$start_time;
+    print "\n\n";
+    print "Start_time: $start_time\n";
+    print "End_time:   $end_time\n";
+    print "Elapsed:    $elapsed\n";
 }
 #------SECONDARY MPI PROCESSES------
 else {
@@ -1267,9 +1282,13 @@ my $clean = 0;
 sub cleanup {
     my $is_thread = shift;
 
+    #set alarm so it can just die if frozen
+    local $SIG{ALRM} = sub { exit(@_) };
+    alarm 60;
+
     return if($clean); #runs only once
 
-    File::Temp::cleanup();
+    File::Temp::cleanup() unless($is_thread); #I may not want to delete these right away
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
     #kill and wait for response
     my $time = time;
@@ -1300,6 +1319,8 @@ sub cleanup {
 
 sub exit_maker {
     cleanup();
+    local $SIG{ALRM} = sub { exit(@_) };
+    alarm 60;
     MPI_Finalize() if(!@_ || $_[0] == 0);
     exit(@_);
 }

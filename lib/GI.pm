@@ -353,8 +353,12 @@ sub reblast_merged_hits {
 
    #get input and output blast file names
    my $name = "db.$F-$L.for_$type";
-   my $t_file = "$the_void/$name.fasta";
    my $o_file = get_blast_finished_name(0, $name, $the_void, "$p_safe_id.$F.$L", $type);
+
+   my $tmp = get_global_temp();
+   my $rank = RANK();
+   my $t_dir = "$tmp/$rank";
+   my $t_file = "$t_dir/$name.fasta";
 
    #extract sequence
    my $piece_seq;
@@ -386,7 +390,6 @@ sub reblast_merged_hits {
 
    if(! -f $o_file){                   
        #build hit db
-       unlink($t_file); #temp
        if(! -f $t_file){
 	   my $db_index = build_fasta_index($index_files);
 	   open(my $FA, ">$t_file.tmp");
@@ -1049,6 +1052,7 @@ sub split_db {
 	    $$seq_ref =~ tr/[a-z]/[A-Z]/;
 	    $$seq_ref =~ s/\-//g;
 	    $$seq_ref =~ tr/XU/NT/;
+	    $$seq_ref =~ s/[RYKMSWBDHV]/N/g if($main::fix_nucleotides);
 	    die "ERROR: The nucleotide sequence file \'$file\'\n".
 		"appears to contain protein sequence or unrecognized characters. Note\n".
 		"the following nucleotides may be valid but are unsupported [RYKMSWBDHV]\n".
@@ -1233,11 +1237,12 @@ sub snap {
        else {
 	   print STDERR "running  snap.\n" unless $main::quiet;
 	   $w->run($command);
-	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	   File::Copy::copy($out_file, $backup);
+	   unlink($out_file);
        }
        $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@out_files, [$out_file, $entry]);
+       push(@out_files, [$backup, $entry]);
    }
 
    return \@out_files;
@@ -1282,11 +1287,12 @@ sub genemark {
        else {
 	   print STDERR "running  genemark.\n" unless $main::quiet;
 	   $w->run($command);
-	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	   File::Copy::copy($out_file, $backup);
+	   unlink($out_file);
        }
        $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@out_files, [$out_file, $entry]);
+       push(@out_files, [$backup, $entry]);
    }
 
    return \@out_files;
@@ -1335,11 +1341,12 @@ sub augustus {
        else {
 	   print STDERR "running  augustus.\n" unless $main::quiet;
 	   $w->run($command);
-	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	   File::Copy::copy($out_file, $backup);
+	   unlink($out_file);
        }
        $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@out_files, [$out_file, $entry]);
+       push(@out_files, [$backup, $entry]);
    }
 
    return \@out_files;
@@ -1379,11 +1386,12 @@ sub fgenesh {
        else {
 	   print STDERR "running  fgenesh.\n" unless $main::quiet;
 	   $w->run($command);
-	   File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	   File::Copy::copy($out_file, $backup);
+	   unlink($out_file);
        }
        $LOG->add_entry("FINISHED", $backup, "");
 
-       push(@out_files, [$out_file, $entry]);
+       push(@out_files, [$backup, $entry]);
    }
 
    return \@out_files;
