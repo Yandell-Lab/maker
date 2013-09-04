@@ -190,7 +190,7 @@ Options:
 
      -quiet|q            Regular quiet. Only a handlful of status messages.
 
-     -qq                 Even more quit. There are no status messages.
+     -qq                 Even more quiet. There are no status messages.
 
      -dsindex            Quickly generate datastore index file. Note that this
                          will not check if run settings have changed on contigs
