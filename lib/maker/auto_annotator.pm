@@ -1252,7 +1252,7 @@ sub _trim_UTR_if_overlap {
     my $g1 = shift;
     my $g2 = shift;
 
-    ($g1, $g2) = ($g2, $g1) if($g1->{g_start} > $g2->{g_start});
+    ($g1, $g2) = ($g2, $g1) if($g1->{g_cstart} > $g2->{g_cstart});
 
     return unless(compare::compare($g1->{g_start}, $g1->{g_end}, $g2->{g_start}, $g2->{g_end}));
 
@@ -1267,6 +1267,7 @@ sub _trim_UTR_if_overlap {
 	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
 	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
+	    $t->{hit} = $h;
 	}
 	elsif($h->strand('query') == -1){
 	    $h = PhatHit_utils::clip_5_utr($h);
@@ -1274,6 +1275,7 @@ sub _trim_UTR_if_overlap {
 	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/^\d+/0/;
 	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
+	    $t->{hit} = $h;
 	}
 	else{
 	    confess "ERROR: Strand is neither plus or minus\n";
@@ -1292,6 +1294,7 @@ sub _trim_UTR_if_overlap {
 	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/^\d+/0/;
 	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	    $t->{hit} = $h;
 	}
 	elsif($h->strand('query') == -1){
 	    $h = PhatHit_utils::clip_3_utr($h);
@@ -1299,6 +1302,7 @@ sub _trim_UTR_if_overlap {
 	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
 	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	    $t->{hit} = $h;
 	}
 	else{
 	    confess "ERROR: Strand is neither plus or minus\n";
@@ -1493,6 +1497,7 @@ sub _best{
 	#adjust to check for CDS overlap only
 	if($CTL_OPT->{correct_est_fusion}){
 	    ($g_B, $g_E) = _g_coding_start_end($g);
+	    die if ($g_B < $g->{g_start} || $g_E > $g->{g_end});
 	}
 
 	my $bad;
@@ -1540,9 +1545,9 @@ sub _g_coding_start_end {
 	$E = $cE if(!$E || $cE > $E);
     }
 
-    ($g->{g_cstart}, $g->{g_cend}) = ($B. $E);
+    ($g->{g_cstart}, $g->{g_cend}) = ($B, $E);
 
-    return ($B. $E);
+    return ($B, $E);
 }
 #------------------------------------------------------------------------
 #sort by combined abinit-evidence AED score
