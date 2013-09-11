@@ -1219,7 +1219,7 @@ sub best_annotations {
 
     #check for UTR overlap and trim
     if($CTL_OPT->{correct_est_fusion}){
-	@p_keepers = sort {$a->{g_start} <=>$b->{g_start}} @p_keepers;
+	@p_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @p_keepers;
 	for (my $i = 0; $i < @p_keepers -1; $i++){
 	    my $j = $i+1;
 	    my $g1 = $p_keepers[$i];
@@ -1227,7 +1227,7 @@ sub best_annotations {
 	    _trim_UTR_if_overlap($g1, $g2);
 	}
 
-	@m_keepers = sort {$a->{g_start} <=>$b->{g_start}} @m_keepers;
+	@m_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @m_keepers;
 	for (my $i = 0; $i < @m_keepers -1; $i++){
 	    my $j = $i+1;
 	    my $g1 = $m_keepers[$i];
@@ -3080,9 +3080,10 @@ sub get_translation_seq {
     my $end = length($p_seq)*3 + $offset + 1;
     my $has_stop = 1 if($p_seq =~ s/\*$//);
 
-    #if very small CDS try again with longest ORF rather than internal offest
+    #if very small CDS try again with longest ORF rather than internal offest (only non-abinits)
     if(($f->{translation_offset} || $f->{translation_end}) &&
-       (length($p_seq) == 0 || ($end - $offset - 1)/(length($p_seq)*3) < 40)
+       (length($p_seq) == 0 || ($end - $offset - 1)/(length($p_seq)*3) < 40) &&
+       ($f->algorithm =~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff/)
     ){
 	$f->{translation_offset} = undef;
 	$f->{translation_end} = undef;

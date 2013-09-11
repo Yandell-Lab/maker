@@ -564,8 +564,8 @@ sub snap {
 	    $keepers = parse($o_file,
 			     \%params,
 			     $fasta);
-	    unlink($o_file);
-	    #File::Copy::copy($o_file, $backup) unless();
+	    #File::Copy::copy($o_file, $backup) unless(-f $backup); #temp
+	    unlink($o_file); #temp
 	}
 	catch Error::Simple with {
 	    my $E = shift;

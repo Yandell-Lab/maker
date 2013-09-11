@@ -762,6 +762,12 @@ sub _clip {
     confess "ERROR: Logic error there are no HSPs left in PhatHit_utils::_clip\n"
 	if($hit_start == 1 || $new_hit->num_hsps == 0); #should change with each HSP
 
+    #adjust translation offset for clip
+    if($trim5){
+	$end -= $offset;
+	$offset -= $offset;
+    }
+
     #add hidden attributes that may be part of a gene prediction
     $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
     $new_hit->{_label} = $hit->{_label} if($hit->{_label});
@@ -775,6 +781,8 @@ sub _clip {
     $new_hit->{_Alias} = $hit->{_Alias} if($hit->{_Alias});
     $new_hit->{_AED} = $hit->{_AED} if($hit->{_AED});
     $new_hit->{_eAED} = $hit->{_eAED} if($hit->{_eAED});
+    $new_hit->{translation_offset} = $offset;
+    $new_hit->{translation_end} = $end;
 
     return $new_hit;
 }

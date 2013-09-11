@@ -1561,7 +1561,7 @@ sub polish_exonerate {
 	#temp
 	#make backup except on TACC cluster
 	if($o_tfile ne $backup && $HOST !~ /tacc\.utexas\.edu/){
-	    File::Copy::move($o_tfile, $backup);
+	    #File::Copy::move($o_tfile, $backup);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 

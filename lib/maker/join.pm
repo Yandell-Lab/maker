@@ -192,14 +192,12 @@ sub load_candidate {
 	my $pre        = shift;
 	my $pos        = shift;
 
-        my $l_pre = defined($pre) ? length($pre) : -1;
-        my $l_pos = defined($pos) ? length($pos) : -1;
-
+        my $l_pre = defined($pre) ? length($pre) : 0;
+        my $l_pos = defined($pos) ? length($pos) : 0;
         my $l_str = length($e_to_g_str);
 
-        my $five_join  = defined($pre) ? $l_pre - 1 : -1;
-      
-        my $three_join = defined($pos) ? $l_str - $l_pos: -1;
+        my $five_join  = $l_pre - 1;
+        my $three_join = $l_str - $l_pos;
  
         my $pre_exon_length = 
         defined($pre) ? get_exon_lengths($est, $five_join,  5) : - 1;
