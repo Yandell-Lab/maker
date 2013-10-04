@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use strict;
 use warnings;
@@ -18,14 +18,22 @@ Description:
 This script will take a GFF3 file and an iprscan output file and add
 Dbxrefs and Ontology_term fields to the GFF3 attributes field.
 
-";
+Options:
 
+     inplace    Modify GFF3 files inplace, otherwise it prints to STDOUT
+
+     help|?     Prints this usage statement.
+
+";
+#tab2go is hidden because I can't guarantee that it still works (last used in 2011)
 
 my ($help,
-    $tab2go);
-my $opt_success = GetOptions('tab2go' => \$tab2go,
+    $tab2go,
+    $inplace);
+my $opt_success = GetOptions('tab2go' => \$tab2go, #BLAST2GO tables
 			     'help'    => \$help,
-			      );
+			     'inplace' => \$inplace
+			     );
 
 die $usage if $help || ! $opt_success;
 
@@ -36,146 +44,151 @@ my $gene_map = parse_genes($gff_file);
 my $ipr = parse_ipr_scan($ipr_file, $gene_map);
 
 open (my $IN, '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
-unlink($gff_file);
-open (my $OUT, '>', $gff_file) or die "Can't open $gff_file for writing\n$!\n";
+my $OUT;
+if($inplace){ #will overwrite file inplace
+    unlink($gff_file);
+    open ($OUT, '>', $gff_file) or die "Can't open $gff_file for writing\n$!\n";
+}
+else{ #will write to STDOUT
+    open($OUT, ">&STDOUT"); 
+}
 
 LINE:
 while (my $line = <$IN>) {
-
-	chomp $line;
-	my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
-	    $attrb) = split /\t/, $line;
-
-	if ($line =~ /^\s*\#/ ||
-	    ! $attrb          ||
-	    ($type ne 'mRNA' && $type ne 'gene')
-	   ) {
-		print $OUT "$line\n";
-		next LINE;
-	}
-
-	my ($id) = $attrb =~ /ID\s*=\s*(.*?);/;
-
-	my %db_xrefs;
-	my $db_xref = $ipr->{$id}{dbxref};
-	for my $db_name (keys %{$db_xref}) {
-		for my $db_data (@{$db_xref->{$db_name}}) {
-			next if $db_data->{id} eq 'NULL';
-			$db_xrefs{"$db_name:" . $db_data->{id}}++;
-		}
-	}
-	my $db_xref_text = '';
-	my @db_xrefs = sort keys %db_xrefs;
-	if (@db_xrefs) {
-		$db_xref_text = 'Dbxref=';
-		$db_xref_text .= join ',', @db_xrefs;
-		$db_xref_text .= ';';
-	}
-
-	my $ontology_text = '';
-	if ($ipr->{$id}{go}) {
-		$ontology_text = 'Ontology_term=';
-		my @go_terms = sort keys %{$ipr->{$id}{go}};
-		$ontology_text .= join ',', @go_terms;
-		$ontology_text .= ';';
-	};
-
-	$line =~ s/;$//;
-	$line .= ';';
-	$line .= "$db_xref_text$ontology_text";
+    
+    chomp $line;
+    my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
+	$attrb) = split /\t/, $line;
+    
+    if ($line =~ /^\s*\#/ ||
+	! $attrb          ||
+	($type ne 'mRNA' && $type ne 'gene')
+	) {
 	print $OUT "$line\n";
+	next LINE;
+    }
+    
+    my ($id) = $attrb =~ /ID\s*=\s*(.*?);/;
+    
+    my %db_xrefs;
+    my $db_xref = $ipr->{$id}{dbxref};
+    for my $db_name (keys %{$db_xref}) {
+	for my $db_data (@{$db_xref->{$db_name}}) {
+	    next unless($db_data->{id} && $db_data->{id} ne 'NULL');
+	    $db_xrefs{"$db_name:" . $db_data->{id}}++;
+	}
+    }
+    my $db_xref_text = '';
+    my @db_xrefs = sort keys %db_xrefs;
+    if (@db_xrefs) {
+	$db_xref_text = 'Dbxref=';
+	$db_xref_text .= join ',', @db_xrefs;
+	$db_xref_text .= ';';
+    }
+    
+    my $ontology_text = '';
+    if ($ipr->{$id}{go}) {
+	$ontology_text = 'Ontology_term=';
+	my @go_terms = sort keys %{$ipr->{$id}{go}};
+	$ontology_text .= join ',', @go_terms;
+	$ontology_text .= ';';
+    };
+    
+    $line =~ s/;$//;
+    $line .= ';';
+    $line .= "$db_xref_text$ontology_text";
+    print $OUT "$line\n";
 }
 
 #-----------------------------------------------------------------------------
 #-------------------------------- SUBROUTINES --------------------------------
 #-----------------------------------------------------------------------------
 sub parse_genes {
-
-	my $file = shift;
-
-	open (my $IN, '<', $file) or die "Can't open $file for reading\n$!\n";
-
-	my %gene_map;
-      LINE:
-	while (my $line = <$IN>) {
-
-		chomp $line;
-		my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
-		    $attrb) = split /\t/, $line;
-
-		if ($line =~ /^\s*\#/ ||
-		    ! $attrb          ||
+    
+    my $file = shift;
+    
+    open (my $IN, '<', $file) or die "Can't open $file for reading\n$!\n";
+    
+    my %gene_map;
+  LINE:
+    while (my $line = <$IN>) {
+	
+	chomp $line;
+	my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
+	    $attrb) = split /\t/, $line;
+	
+	if ($line =~ /^\s*\#/ ||
+	    ! $attrb          ||
 		    ($type ne 'mRNA')
-		   ) {
-			next LINE;
-		}
-
-		my ($name)   = $attrb =~ /Name\s*=\s*(.*?);/;
-		my ($id)     = $attrb =~ /ID\s*=\s*(.*?);/;
-		my ($parent) = $attrb =~ /Parent\s*=\s*(.*?);/;
-
-		$gene_map{$id} = $parent;
-		$gene_map{$name} = $parent if($name && $name ne $id);
+	    ) {
+	    next LINE;
 	}
-	return \%gene_map;
+	
+	my ($name)   = $attrb =~ /Name\s*=\s*(.*?);/;
+	my ($id)     = $attrb =~ /ID\s*=\s*(.*?);/;
+	my ($parent) = $attrb =~ /Parent\s*=\s*(.*?);/;
+
+	$gene_map{$id} = $parent;
+	$gene_map{$name} = $parent if($name && $name ne $id);
+    }
+    return \%gene_map;
 }
 #-----------------------------------------------------------------------------
 sub parse_ipr_scan {
 
-	my ($file, $gene_map) = @_;
-
-	open($IN, '<', $file) or die "Can't open $file for reading\n$!\n";
-
-	my %db_map = (BlastProDom  => 'ProDom',
-		      FPrintScan   => 'PRINTS',
-		      Gene3D       => 'Gene3D',
-		      HMMPanther   => 'PANTHER',
-		      HMMPfam      => 'Pfam',
-		      HMMPIR       => 'PIR',
-		      HMMSmart     => 'SMART',
-		      HMMTigr      => 'JCVI_TIGRFAMS',
-		      PatternScan  => 'Prosite',
-		      ProfileScan  => 'Prosite',
-		     );
-
-
-	my %ipr;
-	while (<$IN>) {
-
-		my ($seq_id, $crc_chksm, $aa_len, $method, $db_id, $db_desc,
-		    $start, $end, $e_val, $status, $date, $ipr_id,
-		    $ipr_desc, $go_text) = split /\t/, $_;
-
-		if($tab2go){
-		   my ($seq_id, undef, undef, undef, $go_text) = split /[\t\s]+/, $_;
-
-		   my @go_ids = $go_text =~ /(GO:\d+)/g unless(! $go_text);
-                   map {$ipr{$seq_id}{go}{$_}++} @go_ids;
-
-		   my $gene_id = $gene_map->{$seq_id};
-		   map {$ipr{$gene_id}{go}{$_}++} @go_ids;
-		}
-		else{
-		   next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
-		   
-		   $method = $db_map{$method} || $method;
-		   
-		   push @{$ipr{$seq_id}{dbxref}{$method}}, {id   => $db_id,
-							    desc => $db_desc};
-		   push @{$ipr{$seq_id}{dbxref}{InterPro}}, {id   => $ipr_id,
-							     desc => $ipr_desc};
-		   
-		   my @go_ids = $go_text =~ /\((GO:\d+)\)/g unless(! $go_text);
-		   map {$ipr{$seq_id}{go}{$_}++} @go_ids;
-		   
-		   
-		   my $gene_id = $gene_map->{$seq_id};
-		   push @{$ipr{$gene_id}{dbxref}{$method}}, {id   => $db_id,
-							  desc => $db_desc};
-		   push @{$ipr{$gene_id}{dbxref}{InterPro}}, {id   => $ipr_id,
-							      desc => $ipr_desc};
-		   map {$ipr{$gene_id}{go}{$_}++} @go_ids;
-		}
+    my ($file, $gene_map) = @_;
+    
+    open($IN, '<', $file) or die "Can't open $file for reading\n$!\n";
+    
+    my %db_map = (BlastProDom  => 'ProDom',
+		  FPrintScan   => 'PRINTS',
+		  Gene3D       => 'Gene3D',
+		  HMMPanther   => 'PANTHER',
+		  HMMPfam      => 'Pfam',
+		  HMMPIR       => 'PIR',
+		  HMMSmart     => 'SMART',
+		  HMMTigr      => 'JCVI_TIGRFAMS',
+		  PatternScan  => 'Prosite',
+		  ProfileScan  => 'Prosite',
+		  );
+    
+    
+    my %ipr;
+    while (<$IN>) {
+	
+	my ($seq_id, $crc_chksm, $aa_len, $method, $db_id, $db_desc,
+	    $start, $end, $e_val, $status, $date, $ipr_id,
+	    $ipr_desc, $go_text) = split /\t/, $_;
+	
+	if($tab2go){
+	    my ($seq_id, undef, undef, undef, $go_text) = split /[\t\s]+/, $_;
+	    
+	    my @go_ids = $go_text =~ /(GO:\d+)/g unless(! $go_text);
+	    map {$ipr{$seq_id}{go}{$_}++} @go_ids;
+	    
+	    my $gene_id = $gene_map->{$seq_id};
+	    map {$ipr{$gene_id}{go}{$_}++} @go_ids;
 	}
-	return \%ipr;
+	else{
+	    next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
+	    
+	    $method = $db_map{$method} || $method;
+	    
+	    push @{$ipr{$seq_id}{dbxref}{$method}}, {id   => $db_id,
+						     desc => $db_desc};
+	    push @{$ipr{$seq_id}{dbxref}{InterPro}}, {id   => $ipr_id,
+						      desc => $ipr_desc};
+		   
+	    my @go_ids = $go_text =~ /(GO:\d+)/g unless(! $go_text);
+	    map {$ipr{$seq_id}{go}{$_}++} @go_ids;	   
+	    
+	    my $gene_id = $gene_map->{$seq_id};
+	    push @{$ipr{$gene_id}{dbxref}{$method}}, {id   => $db_id,
+						      desc => $db_desc};
+	    push @{$ipr{$gene_id}{dbxref}{InterPro}}, {id   => $ipr_id,
+						       desc => $ipr_desc};
+	    map {$ipr{$gene_id}{go}{$_}++} @go_ids;
+	}
+    }
+    return \%ipr;
 }
