@@ -155,7 +155,7 @@ sub _load {
     require Proc::Signal;
 
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|orterun|hydra_pmi_proxy|mpispawn)$/){
+    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|orterun|hydra_pmi_proxy|mpispawn|exec\d+)$/){
 	require MAKER::ConfigData;
 	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
 	if(! $mpi_support){

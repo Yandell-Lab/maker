@@ -35,6 +35,8 @@ use Widget::blastn;
 use Widget::snap; 
 use Widget::genemark; 
 use Widget::fgenesh;
+use Widget::trnascan;
+use Widget::snoscan;
 use Widget::formater;
 use PhatHit_utils;
 use Shadower;
@@ -684,16 +686,22 @@ sub maker_p_and_t_fastas {
    my $t_fastas = shift @_;
 
    my $abinit = [];
+   my $ncrna = [];
    my $mod_gff = [];
    my @ab_keys = grep {/^pred_gff|_abinit$/} keys %$all;
    my @mod_keys = grep {/^model_gff/} keys %$all;
-   
+   my @nc_keys = grep {/^ncrna_|_ncrna$/} keys %$all;
+
    foreach my $key (@ab_keys){
        push(@$abinit, @{$all->{$key}});
    }   
 
    foreach my $key (@mod_keys){
        push(@$mod_gff, @{$all->{$key}});
+   }
+
+   foreach my $key (@nc_keys){
+       push(@$ncrna, @{$all->{$key}});
    }
 
    foreach my $an (@$maker) {
@@ -728,6 +736,15 @@ sub maker_p_and_t_fastas {
 	   my $source = $a->{hit}->algorithm;
 	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 	   $p_fastas->{$source} .= $p_fasta;
+	   $t_fastas->{$source} .= $t_fasta;
+       }
+   }
+
+   foreach my $an (@$ncrna) {
+       foreach my $a (@{$an->{t_structs}}) {
+	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+	   my $source = $a->{hit}->algorithm;
+	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
 	   $t_fastas->{$source} .= $t_fasta;
        }
    }
@@ -1395,6 +1412,86 @@ sub fgenesh {
    }
 
    return \@out_files;
+}
+#-----------------------------------------------------------------------------
+sub snoscan {
+    my $in_file     = shift;
+    my $the_void    = shift;
+    my $CTL_OPT     = shift;
+    my $LOG         = shift;
+
+    my $exe         = $CTL_OPT->{snoscan};
+    my @entries = split(',', $CTL_OPT->{snoscan_rrna});
+
+    my @out_files;
+    foreach my $entry (@entries){
+        my ($rna_file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+        my ($rna_n) = $rna_file =~ /([^\/]+)$/;
+        $rna_n = uri_escape($rna_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
+        my $out_file = "$in_file\.$rna_n\.snoscan";
+	(my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+	$LOG->add_entry("STARTED", $backup, "");
+
+	my $command  = $exe;
+	$command .= " $rna_file";
+	$command .= " $in_file";
+	$command .= " > $out_file";
+
+	my $w = new Widget::snoscan();
+	if (-f $backup) {
+	    print STDERR "using existing snoscan report.\n" unless $main::quiet;
+	    print STDERR "$backup\n" unless $main::quiet;
+	    $out_file = $backup;
+	}
+	else {
+	    print STDERR "running  snoscan.\n" unless $main::quiet;
+	    $w->run($command);
+	    File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	}
+	$LOG->add_entry("FINISHED", $backup, "");
+	
+	push(@out_files, [$out_file, $entry]);
+    }
+    
+    return \@out_files;
+}
+#-----------------------------------------------------------------------------
+sub trnascan {
+    print "got to trnascan call in GI.pm\n";
+    my $in_file     = shift;
+    my $the_void    = shift;
+    my $CTL_OPT     = shift;
+    my $LOG         = shift;
+    
+    my $exe    = $CTL_OPT->{'tRNAscan-SE'};
+
+    my @outfiles;
+    my $entry = $CTL_OPT->{organism_type};
+    my $out_file = "$in_file.$entry.trnascan";
+    (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+    $LOG->add_entry("STARTED", $backup, "");
+
+    my $command  = $exe;
+    $command .= " -b -q";
+    $command .= " -B" if($CTL_OPT->{organism_type} ne 'eukaryotic');
+    $command .= " $in_file";
+    $command .= " > $out_file";
+
+    my $w = new Widget::trnascan();
+    if (-f $backup) {
+        print STDERR "using existing trnascan report.\n" unless $main::quiet;
+        print STDERR "$backup\n" unless $main::quiet;
+        $out_file = $backup;
+    }
+    else {
+        print STDERR "running  trnascan.\n" unless $main::quiet;
+        $w->run($command);
+	File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+    }
+    $LOG->add_entry("FINISHED", $backup, "");
+    push(@outfiles, [$out_file, $entry]);
+    
+    return \@outfiles;
 }
 #-----------------------------------------------------------------------------
 sub polish_exonerate {
@@ -3176,6 +3273,8 @@ sub set_defaults {
       $CTL_OPT{'gmhmm_p'} = '' if($main::server);
       $CTL_OPT{'augustus_species'} = '';
       $CTL_OPT{'fgenesh_par_file'} = '';
+      $CTL_OPT{'snoscan_rrna'} = '';
+      $CTL_OPT{'trna'} = 0;
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'est2genome'} = 0;
@@ -3282,7 +3381,9 @@ sub set_defaults {
 		  'probuild',
 		  'twinscan',
 		  'qrna',
-		  'jigsaw'
+		  'jigsaw',
+		  'tRNAscan-SE',
+		  'snoscan'
 		 );
 
       #get MAKER overriden exe locations
@@ -3816,7 +3917,9 @@ sub load_control_files {
    push(@run, 'genemark') if($CTL_OPT{gmhmm});
    push(@run, 'augustus') if($CTL_OPT{augustus_species});
    push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
-   
+   push(@run, 'trnascan') if($CTL_OPT{trna});
+   push(@run, 'snoscan') if($CTL_OPT{snoscan_rrna});
+
    if(! @predictors){ #build predictors if not provided
        push(@predictors, @run);
        push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff} || ($CTL_OPT{maker_gff} && $CTL_OPT{pred_pass}));
@@ -3828,8 +3931,8 @@ sub load_control_files {
    $CTL_OPT{_predictor} = {}; #temporary hash
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
-       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$/ &&
-	   $p !~ /^fgenesh$|^genemark$|^model_gff$|^pred_gff$/
+       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
+	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -3944,6 +4047,8 @@ sub load_control_files {
    push (@infiles, 'RepeatMasker') if($CTL_OPT{model_org});
    push (@infiles, 'rm_gff') if($CTL_OPT{rm_gff});
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
+   push (@infiles, 'tRNAscan-SE') if (grep {/trnascan/} @{$CTL_OPT{_run}});
+   push (@infiles, 'snoscan') if (grep {/snoscan/} @{$CTL_OPT{_run}});
    
    if($CTL_OPT{organism_type} eq 'eukaryotic'){
        push (@infiles, 'exonerate') if($CTL_OPT{est}); 
@@ -4092,7 +4197,7 @@ sub load_control_files {
 	  my @files = split(/\,/, $CTL_OPT{gmhmm});
 	  my %uniq;
 	  @files = grep {! $uniq{$_}++} @files;
-	  my @non = grep {/^([^\:]+)/ && ! -f $1 && ! -f $ENV{ZOE}."/HMM/".$1} @files;
+	  my @non = grep {/^([^\:]+)/ && ! -f $1} @files;
            $error .= "ERROR: The parameter file[s] provided for fgenesh_par_file do not exist:\n".
                "\t".join("\n\t", @non)."\n\n" if(@non);
       }
@@ -4422,6 +4527,8 @@ sub generate_control_files {
        print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
        print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
        print OUT "protein2genome=$O{protein2genome} #infer predictions from protein homology, 1 = yes, 0 = no\n"  if(!$ev);
+       print OUT "trna=$O{trna} #find tRNAs with tRNAscan, 1 = yes, 0 = no\n";
+       print OUT "snoscan_rrna=$O{snoscan_rrna} #rRNA file to have Snoscan find snoRNAs\n";
        print OUT "unmask=$O{unmask} #also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);
@@ -4528,9 +4635,11 @@ sub generate_control_files {
        print OUT "gmhmmp=$O{gmhmmp} #location of prokaryotic genemark executable\n";
        print OUT "augustus=$O{augustus} #location of augustus executable\n";
        print OUT "fgenesh=$O{fgenesh} #location of fgenesh executable\n";
+       print OUT "tRNAscan-SE=$O{'tRNAscan-SE'} #location of trnascan executable\n";
+       print OUT "snoscan=$O{snoscan} #location of snoscan executable\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
-       print OUT "fathom=$O{fathom} #location of fathom executable (experimental)\n" if($ev);
+       print OUT "fathom=$O{fathom} #location of snap's fathom executable (experimental)\n" if($ev);
        print OUT "probuild=$O{probuild} #location of probuild executable (required for genemark)\n";
        close(OUT);
    }

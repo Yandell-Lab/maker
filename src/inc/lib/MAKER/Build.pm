@@ -1189,14 +1189,15 @@ sub _install_exe {
 	#Configure RepeatMasker
 	chdir($path);
 	print "Configuring $exe...\n";
-	my $tmp = "$path/.config.stdin";
+	(my $safe = $path) =~ s/ /\\ /g; #make safe path for space in names
+	my $tmp = "$safe/.config.stdin";
 	open(my $fh, "> $tmp");
 	print $fh "\n";
 	print $fh "$^X\n";
-	print $fh "$path\n";
-	print $fh "$path\n";
+	print $fh "$safe\n";
+	print $fh "$safe\n";
 	print $fh "2\n";
-	print $fh "$path/rmblast/bin\n";
+	print $fh "$safe/rmblast/bin\n";
 	print $fh "Y\n";
 	print $fh "5\n";
 	close($fh);

@@ -41,6 +41,7 @@ sub prep_hits {
 	my $est_hits         = shift;
 	my $altest_hits      = shift;
 	my $predictions      = shift;
+	my $ncrna            = shift;
 	my $models           = shift;
 	my $seq              = shift;
 	my $single_exon      = shift;
@@ -67,6 +68,8 @@ sub prep_hits {
 	    $c_bag = combine($prot_hits,
 			     $est_hits,
 			     $altest_hits);
+	    $e_bag = combine($est_hits,
+			     $altest_hits);
 	}
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
@@ -76,11 +79,9 @@ sub prep_hits {
 	$m_clusters = cluster::shadow_cluster(0, $m_clusters, $pred_flank); #broaden
 
 	my $e_cluster = [];
-	if($correct_est_fusion){
-	    $e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1); #flattens
-	    $e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
-	}
-	else{
+	$e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1); #flattens
+	$e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
+	if(!$correct_est_fusion){
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
 	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
 	    $p_clusters = join_clusters_around_orf($p_clusters, $seq);
@@ -90,22 +91,21 @@ sub prep_hits {
 	my $careful_clusters = [];
 	push(@{$careful_clusters}, @{$p_clusters}, @{$m_clusters});
 
-	if($correct_est_fusion){
-	    #==purge ESTs in separate group from main evidence cluster
-	    # don't use unpliced single exon ESTs-- may be genomic contamination
-	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
-		$e_cluster = purge_single_exon_hits_in_cluster($e_cluster);
-	    }
-	    # throw out the exonerate est hits with weird splice sites
-	    if(!$est_forward){
-		$e_cluster = throw_out_bad_splicers_in_cluster($e_cluster, $seq);
-	    }
-	    #throw out short ESTs
-	    if($single_exon == 1 || $organism_type eq 'prokaryotic') {
-		$e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
-	    }
+	#==purge ESTs in separate group from main evidence cluster
+	# don't use unpliced single exon ESTs-- may be genomic contamination
+	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+	    $e_cluster = purge_single_exon_hits_in_cluster($e_cluster);
 	}
-	else{
+	# throw out the exonerate est hits with weird splice sites
+	if(!$est_forward){
+	    $e_cluster = throw_out_bad_splicers_in_cluster($e_cluster, $seq);
+	}
+	#throw out short ESTs
+	if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+	    $e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
+	}
+
+	if(!$correct_est_fusion){
 	    #===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
 	    # don't use unpliced single exon ESTs-- may be genomic contamination
 	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
@@ -247,6 +247,21 @@ sub prep_hits {
 	   $c_id++;
 	}
 
+        #==ncRNA data
+	# identify the models that fall within and between basic clusters
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($ncrna,
+								   $e_cluster);
+
+	#join the clusters on the models
+	my $ncrna_clusters = join_clusters_on_pred($ncrna, $e_cluster, $c_index);
+
+        foreach my $c (@{$ncrna_clusters}){
+	    my $nr = prep_ncrna_data($c, $c_id, $seq, $organism_type);
+	    push(@all_data, @{$nr}) if defined $nr;
+
+	    $c_id++;
+        }
+
 	#add index value to ESTs (corresponds to order in array)
 	my $index = 0;
 	foreach my $f (@$est_hits){
@@ -269,6 +284,12 @@ sub prep_hits {
 	$index = 0;
 	foreach my $f (@$predictions){
 	    $f->{_index}{pred} = $index++;
+	}
+
+	#add index value to ncrna (corresponds to order in array)
+	$index = 0;
+	foreach my $f (@$ncrna){
+	    $f->{_index}{ncrna} = $index++;
 	}
 
 	#add index value to models (corresponds to order in array)
@@ -754,6 +775,45 @@ sub prep_pred_data {
 }
 #------------------------------------------------------------------------
 #returns an array of hashes with the following atributes
+#called by prep_hits for abinit based  clusters
+#ests => set of all ests
+#protein homology =>  empty
+#alternative splice form => none
+#predictions included
+
+sub prep_ncrna_data {
+	my $c    = shift;
+	my $c_id = shift;
+	my $seq  = shift;
+
+	#abinit model should always be first cluster entry
+	my $ncrna = get_selected_types([$c->[0]],'trnascan', 'snoscan');
+	return undef if(!@$ncrna);
+	confess "ERROR: Logic problem in maker::auto_annotator::prep_ncrna_data\n"
+	    if(@$ncrna > 1);
+
+	my $preds_in_cluster = get_selected_types($c,'trna');
+	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
+	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
+	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
+
+	my @data;
+	push(@data, {'gomiph'    => [],
+		     'preds'     => \@uniq_preds,
+		     'all_preds' => $preds_in_cluster,
+		     'model'     => $ncrna->[0],
+		     'gomod'     => undef,
+		     'ests'      => $ests_in_cluster,
+		     'alt_ests'  => $alt_ests_in_cluster,
+		     'c_id'      => $c_id,
+		     'type'      => 'nr'
+		     }
+	     );
+
+	return \@data;
+}
+#------------------------------------------------------------------------
+#returns an array of hashes with the following atributes
 #called by prep_hits for standard evidence clusters
 #ests => set of best ests from all ests
 #protein homology => each protein exonerate structure
@@ -893,6 +953,37 @@ sub annotate_trans {
 		    push(@{$transcripts{"$al\_abinit"}}, $s);
 		}
 		elsif($al =~ /^pred_gff$/){
+		    push(@{$transcripts{$al}}, $s);
+		}
+		else{
+		    confess "ERROR: Not a supported algorithm: ".$t->algorithm."\n";
+		}
+	    }
+	}
+	#---abinit scoring here
+	elsif($dc->{type} eq 'nr'){
+	    my $trans = run_it([$dc],
+			       $the_void,
+			       $m_seq_ref,
+			       $v_seq_ref,
+			       $def,
+			       'ncrna',
+			       $CTL_OPT
+			       );
+
+	    #add ncrna to their predictor type after they have been proccessed
+	    #remeber they get treated differently so you want to add them as a
+	    #separate step from hint based predictions.
+	    foreach my $s (@$trans){
+		my $t = $s->[0];
+		my $al = lc($t->algorithm);
+		$al =~ s/_masked$//;
+		$al =~ s/(ncrna_gff).*$/$1/;
+
+		if($al =~ /^trnascan$|^snoscan$/){
+		    push(@{$transcripts{"$al\_ncrna"}}, $s);
+		}
+		elsif($al =~ /^ncrna_gff$/){
 		    push(@{$transcripts{$al}}, $s);
 		}
 		else{
@@ -1619,6 +1710,15 @@ sub run_it{
 	    next;
 	}
 
+	#------ncRNA
+	if ($predictor eq 'ncrna') {
+	    next if(! defined $model);
+	    my $transcript = $model;
+
+	    push(@transcripts, [$transcript, $set->{index}, undef]);
+	    next;
+	}
+
 	#------ab-init passthrough
 	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
@@ -2072,28 +2172,35 @@ sub load_transcript_struct {
 	my $CTL_OPT      = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
-	my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	my ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans);
 
-	if($predictor !~ /model_gff/ && !$CTL_OPT->{est_forward}){
-	    #fix for non-canonical (almost certainly bad) 5' and 3' UTR
-	    my $trim3 = (!$has_stop && $end != length($transcript_seq) + 1);
-	    my $trim5 = (!$has_start && $offset != 0);
-	    if($trim5 || $trim3){
-		$f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
-		$transcript_seq  = get_transcript_seq($f, $seq);
-		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
-	    }
-
-	    #walk out edges to force completion
-	    if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
-		$f = PhatHit_utils::adjust_start_stop($f, $seq);
-		$transcript_seq  = get_transcript_seq($f, $seq);
-		($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
-	    }
+	if($predictor eq 'ncrna'){
+	    ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans) = ('', 0, 0, 0, 0, 0, 0);
 	}
-
-	my $len_3_utr = length($transcript_seq) - $end + 1;
-	my $l_trans =  length($translation_seq);
+	else{
+	    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+	    
+	    if($predictor !~ /model_gff/ && !$CTL_OPT->{est_forward}){
+		#fix for non-canonical (almost certainly bad) 5' and 3' UTR
+		my $trim3 = (!$has_stop && $end != length($transcript_seq) + 1);
+		my $trim5 = (!$has_start && $offset != 0);
+		if($trim5 || $trim3){
+		    $f = PhatHit_utils::_clip($f, $seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
+		    $transcript_seq  = get_transcript_seq($f, $seq);
+		    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+		}
+		
+		#walk out edges to force completion
+		if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop)){
+		    $f = PhatHit_utils::adjust_start_stop($f, $seq);
+		    $transcript_seq  = get_transcript_seq($f, $seq);
+		    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
+		}
+	    }
+	    
+	    $len_3_utr = length($transcript_seq) - $end + 1;
+	    $l_trans =  length($translation_seq);
+	}
 
 	#remove data that should not be carried over into certain transcripts
 	if($f->{_HMM} =~ /^(est2genome|protein2genome|altest2genome)$/ && ! $CTL_OPT->{est_forward}){
@@ -2102,12 +2209,22 @@ sub load_transcript_struct {
 	    $f->{-attrib} = undef;
 	}
 
-	my $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
+	my $t_name;
+	if($f->algorithm =~ /^trnascan/){
+	    $t_name = "$g_name-tRNA-$i"; #affects GFFV3.pm
+	}
+	elsif($f->algorithm =~ /^snoscan/){
+	    $t_name = "$g_name-snoRNA-$i"; #affects GFFV3.pm
+	}
+	else{
+	    $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
+	}
+
 	my $t_id = $t_name; #affects GFFV3.pm
 	$t_name = $f->{_tran_name} if($f->{_tran_name}); #affects GFFV3.pm
 	$t_id = $f->{_tran_id} if($f->{_tran_id} && $f->algorithm =~ /^model_gff\:/); #affects GFFV3.pm
 	$f->name($t_name);
-
+	
 	my $t_struct = {'hit'       => $f,
 			'p_base'    => $p_base,
 			't_name'    => $t_name,
@@ -2122,7 +2239,7 @@ sub load_transcript_struct {
 		    };
 
 	#also determine these values for the unmodified abinit
-	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff|model_gff/){
+	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff|model_gff|ncrna/){
 	    my $transcript_seq  = get_transcript_seq($p_base, $seq);
 	    my ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $p_base);
 
@@ -2216,7 +2333,20 @@ sub load_transcript_stats {
 	    }
 	}
 
-	my $t_name = ($f->{_tran_name}) ? $f->{_tran_name} : "$g_name-mRNA-$i"; #affects GFFV3.pm
+	my $t_name;
+	if($f->{_tran_name}){
+	    $t_name = $f->{_tran_name};
+	}
+	elsif($f->algorithm =~ /^trnascan/){
+	    $t_name = "$g_name-tRNA-$i"; #affects GFFV3.pm
+	}
+	elsif($f->algorithm =~ /^snoscan/){
+	    $t_name = "$g_name-snoRNA-$i"; #affects GFFV3.pm
+	}
+	else{
+	    $t_name = "$g_name-mRNA-$i"; #affects GFFV3.pm
+	}
+
 	my $t_id = ($f->{_tran_id}) ? $f->{_tran_id} : $t_name; #affects GFFV3.pm
 
 	#double check name (mRNA count may have changed)
@@ -2354,7 +2484,7 @@ sub group_transcripts {
    my $careful_clusters = [];
 
    if (! $CTL_OPT->{alt_splice} ||
-       $predictor =~ /^model_gff$|_abinit$|^pred_gff$/ ||
+       $predictor =~ /^model_gff$|_abinit$|^pred_gff$|_ncrna$|^ncrna_gff$/ ||
        ($predictor =~ /^(est2genome|protein2genome|altest2genome)$/ && $CTL_OPT->{est_forward})
        ) {
        my @to_do;
@@ -2421,10 +2551,10 @@ sub group_transcripts {
 	 $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	 $SEEN->{$g_name}++;
 	 $SEEN->{$g_id}++;
-	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	 if($g_name =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 	     $SEEN->{$1}++;
 	 }
-	 if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	 if($g_id =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 	     $SEEN->{$1}++;
 	 }
       }
@@ -2435,19 +2565,51 @@ sub group_transcripts {
 	      $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	      $SEEN->{$g_name}++;
 	      $SEEN->{$g_id}++;
-	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	      if($g_name =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 		  $SEEN->{$1}++;
 	      }
-	      if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	      if($g_id =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 		  $SEEN->{$1}++;
 	      }
 	  }
 	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit|$safe_id-processed/) {
 	      $g_name = $c->[0]->name;
-	      $g_name =~ s/-mRNA-\d.*//;
+	      $g_name =~ s/-(m|nc|sno|t)RNA-\d.*//;
 	      $g_id = $g_name;
 	      $SEEN->{$g_name}++;
-	      if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	      if($g_name =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
+	  }
+	  else{
+	      $g_name = "$sources-$seq_id-processed-gene-$chunk_number"; #affects GFFV3.pm
+	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
+	      $g_name = "$g_name.$c_id";
+	      $g_id = $g_name;
+	      $SEEN->{$g_name}++;
+	      $SEEN->{"$chunk_number\.$c_id"}++;
+	  }
+      }
+      elsif ($predictor =~ /^ncrna_|_ncrna$/) {
+	  #now check for preexisting name
+	  if ($c->[0]->{gene_name} || $c->[0]->{gene_id}){
+	      $g_name = $c->[0]->{gene_name} || $c->[0]->{gene_id}; #affects GFFV3.pm
+	      $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
+	      $SEEN->{$g_name}++;
+	      $SEEN->{$g_id}++;
+	      if($g_name =~ /(\d+\.\d+)\-ncRNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
+	      if($g_id =~ /(\d+\.\d+)\-ncRNA\-\d+/){
+		  $SEEN->{$1}++;
+	      }
+	  }
+	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit|$safe_id-processed/) {
+	      $g_name = $c->[0]->name;
+	      $g_name =~ s/-ncRNA-\d.*//;
+	      $g_id = $g_name;
+	      $SEEN->{$g_name}++;
+	      if($g_name =~ /(\d+\.\d+)\-ncRNA\-\d+/){
 		  $SEEN->{$1}++;
 	      }
 	  }
@@ -2465,10 +2627,10 @@ sub group_transcripts {
 	  $g_id = $c->[0]->{gene_id} || $c->[0]->{gene_name}; #affects GFFV3.pm
 	  $SEEN->{$g_name}++;
 	  $SEEN->{$g_id}++;
-	 if($g_name =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	 if($g_name =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 	     $SEEN->{$1}++;
 	 }
-	 if($g_id =~ /(\d+\.\d+)\-mRNA\-\d+/){
+	 if($g_id =~ /(\d+\.\d+)\-(m|nc|sno|t)RNA\-\d+/){
 	     $SEEN->{$1}++;
 	 }
       }

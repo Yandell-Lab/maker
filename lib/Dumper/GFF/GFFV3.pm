@@ -18,7 +18,7 @@ use Carp;
 @ISA = qw(
        );
 #------------------------------------------------------------------------
-#--------------------------- METHODS   ----------------------------------
+#----------------------------- METHODS ----------------------------------
 #------------------------------------------------------------------------
 sub new {
    my $class = shift;
@@ -423,6 +423,21 @@ sub add_genes {
     $lock->unlock;
 }
 #------------------------------------------------------------------------
+sub add_ncgenes {
+    my $self  = shift;
+    my $genes = shift;
+
+    return if(! $genes || ! @$genes);    
+
+    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
+    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
+    open(my $ANN, '>>', $self->{ann_file}) || confess "ERROR: Can't open annotation file\n\n";
+    foreach my $g (@{$genes}){
+       print_txt($ANN, ncgene_data($g, $self->seq_id));
+    }
+    close($ANN);
+    $lock->unlock;
+}
 #------------------------------------------------------------------------
 #----------------------------- FUNCTIONS --------------------------------
 #------------------------------------------------------------------------
@@ -513,6 +528,50 @@ sub gene_data {
 	grow_cds_data_lookup($t->{hit}, $t_id, \%cdss, $t->{t_offset}, $t->{t_end});
 
 	$c_l .= get_cds_data($seq_id, \%cdss, 'maker');
+    }
+
+    $g_l .= get_exon_data($seq_id, \%epl, 'maker');
+    $g_l .= $c_l;
+
+    return $g_l;
+}
+#------------------------------------------------------------------------
+sub ncgene_data {
+    my $g      = shift;
+    my $seq_id = shift;
+    
+    my $g_name     = $g->{g_name};
+    my $g_id       = $g->{g_id} || $g_name;
+    my $g_s        = $g->{g_start};
+    my $g_e        = $g->{g_end};
+    my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
+    my $t_structs  = $g->{t_structs};
+
+    $g_name = uri_escape($g_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
+    $g_id = uri_escape($g_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
+
+    my @g_data;
+    push(@g_data, $seq_id, 'maker', 'gene', $g_s, $g_e, '.', $g_strand, '.');
+    my $attributes = 'ID='.$g_id.';Name='.$g_name;
+    $attributes .= ';'.$g->{g_attrib} if($g->{g_attrib});
+    $attributes =~  s/\;$//;
+    push(@g_data, $attributes); 
+    
+    my $g_l = join("\t", @g_data)."\n";
+    
+    my @transcripts = @{$g->{t_structs}};
+    
+    my %epl;
+    my $c_l;
+    foreach my $t (@transcripts){
+	my $t_id = (split(/\s+/, $t->{t_id}))[0] || (split(/\s+/, $t->{t_name}))[0];
+	my $t_l = get_transcript_data($t, $seq_id, $g_id);
+	$g_l .= $t_l."\n";
+	
+	my %cdss;
+	grow_exon_data_lookup($t->{hit}, $t_id, \%epl);
+	#grow_cds_data_lookup($t->{hit}, $t_id, \%cdss, $t->{t_offset}, $t->{t_end});
+	#$c_l .= get_cds_data($seq_id, \%cdss, 'maker');
     }
 
     $g_l .= get_exon_data($seq_id, \%epl, 'maker');
@@ -672,6 +731,14 @@ sub get_class_and_type {
 	$type = $k eq 'hit' ? 'expressed_sequence_match' : 'match_part';
     }
     elsif($class =~ /^snap(_masked)?(\:.*)?$/i){
+	$class = lc($h->algorithm);
+	$type = $k eq 'hit' ? 'match' : 'match_part' ;
+    }
+    elsif($class =~ /^trnascan(_masked)?(\:.*)?$/i){
+	$class = lc($h->algorithm);
+	$type = $k eq 'hit' ? 'match' : 'match_part' ;
+    }
+    elsif($class =~ /^snoscan(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
@@ -1040,7 +1107,10 @@ sub get_transcript_data {
 	($t_b, $t_e) = ($t_e, $t_b) if $t_b > $t_e;
 
 	my @data;
-	push(@data, $seq_id, 'maker', 'mRNA', $t_b, $t_e, $score, $t_s, '.');
+	my $type = 'mRNA';
+	$type = 'tRNA' if($t->{hit}->algorithm =~ /trnascan/i);
+	$type = 'snoRNA' if($t->{hit}->algorithm =~ /snoscan/i);
+	push(@data, $seq_id, 'maker', $type, $t_b, $t_e, $score, $t_s, '.');
 	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;
 	   $nine .= ';_AED='.$AED if(defined($AED));
 	   $nine .= ';_eAED='.$eAED if(defined($eAED));

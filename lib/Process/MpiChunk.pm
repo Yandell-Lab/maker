@@ -1134,7 +1134,7 @@ sub _go {
 
 	    #make sure that the abinits have not already been processed
 	    my $missing = 0;
-	    my @files = shift;
+	    my @files;
 	    my $total_chunks = $VARS->{fasta_chunker}->total_chunks;
 	    for(my $i = 0; $i < $total_chunks; $i++){
 	       my $the_void = $VARS->{the_void};
@@ -1336,15 +1336,15 @@ sub _go {
 		unlink($t_file);
 	    }
 
-	    #genmark is never masked
+	    #genemark is never masked
 	    if(grep {/genemark/} @{$CTL_OPT{_run}}){
 		my $sid = $safe_seq_id.".abinit_nomask.".$mchunk->number();
 		my $t_file = "$t_dir/$sid";
 		$qchunk->write_file_w_flank($t_file) if(! -f $t_file);
 		my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
 		push(@abinits, @{GI::genemark(@args)});
-		unlink($t_file) unless($CTL_OPT{unmask} || $CTL_OPT{_no_mask});
-	    }	 
+		unlink($t_file) unless($CTL_OPT{unmask} || $CTL_OPT{_no_mask} || $CTL_OPT{trna});
+	    }
 
 	    #now do other unmasked predictions if requested
 	    if($CTL_OPT{unmask} || $CTL_OPT{_no_mask}){
@@ -1355,15 +1355,34 @@ sub _go {
 		push(@abinits, @{GI::snap(@args)})     if(grep {/snap/} @{$CTL_OPT{_run}});
 		push(@abinits, @{GI::augustus(@args)}) if(grep {/augustus/} @{$CTL_OPT{_run}});
 		push(@abinits, @{GI::fgenesh(@args)})  if(grep {/fgenesh/} @{$CTL_OPT{_run}});
-		unlink($t_file);
+		unlink($t_file) unless(grep{/trnascan/} @{$CTL_OPT{_run}});
 	    }
 
-	    #==QRNA noncoding RNA prediction here
-	    my $qra_preds = [];
+	    #==ncRNA prediction here
+	    #tRNAscan
+            if(grep{/trnascan/} @{$CTL_OPT{_run}}){
+                my $sid = $safe_seq_id.".abinit_nomask.".$mchunk->number();
+		my $t_file = "$t_dir/$sid";
+                $qchunk->write_file_w_flank($t_file) if(! -f $t_file);
+		my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
+		push(@abinits, @{GI::trnascan(@args)});
+		unlink($t_file) unless(grep{/snoscan/} @{$CTL_OPT{_run}});
+            }
+
+	    #snoscan
+            if(grep{/snoscan/} @{$CTL_OPT{_run}}){
+                my $sid = $safe_seq_id.".abinit_nomask.".$mchunk->number();
+                my $t_file = "$t_dir/$sid";
+                $qchunk->write_file_w_flank($t_file) if(! -f $t_file);
+                my @args = ($t_file, $the_void, \%CTL_OPT, $LOG);
+                push(@abinits, @{GI::snoscan(@args)});
+                unlink($t_file);
+            }
+
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = ( abinits => \@abinits,
+	    %results = ( abinits => \@abinits
 		       );
 	    #------------------------RETURN
 	 }
@@ -1522,24 +1541,35 @@ sub _go {
 		}
 
 		#==section the results overlapping first big chunk
-		#@{$pkeepers{$_}} = sort {$a->start <=> $b->start} @{$pkeepers{$_}} foreach(keys %pkeepers);
-		#@{$mkeepers{$_}} = sort {$a->start <=> $b->start} @{$mkeepers{$_}} foreach(keys %mkeepers);
 		while(my $fchunk = shift @buf || $fasta_chunker->next_chunk){
 		    my $E = $fchunk->end;
 		    if($E <= $qchunk0->end){ #must not cross into neighboring chunk
 			my @on_chunk;
+			my @ncrna;
 			foreach my $k (keys %pkeepers){
+			    if($k =~ /^(trnascan|snoscan)/){ #separate ncRNA
+				push(@ncrna, shift @{$pkeepers{$k}}) while(@{$pkeepers{$k}} &&
+									   $pkeepers{$k}[0]->start <= $E);
+				next;
+			    }
+
 			    push(@on_chunk, shift @{$pkeepers{$k}}) while(@{$pkeepers{$k}} &&
 									  $pkeepers{$k}[0]->start <= $E);
 			}
 			foreach my $k (keys %mkeepers){
+			    if($k =~ /^(trnascan|snoscan)/){ #separate ncRNA
+				push(@ncrna, shift @{$mkeepers{$k}}) while(@{$mkeepers{$k}} &&
+									   $mkeepers{$k}[0]->start <= $E);
+				next;
+			    }
 			    push(@on_chunk, shift @{$mkeepers{$k}}) while(@{$mkeepers{$k}} &&
 									  $mkeepers{$k}[0]->start <= $E);
 			}
 			my $order = $fchunk->number;
 			my $section_file = "$the_void/$safe_seq_id.$order.pred.raw.section";
 			if(! -f $section_file){
-			    my %section = (preds_on_chunk => \@on_chunk);
+			    my %section = (preds_on_chunk => \@on_chunk,
+					   ncrna_on_chunk => \@ncrna);
 			    $LOG->add_entry("STARTED", $section_file, "");
 			    store (\%section, $section_file);
 			    $LOG->add_entry("FINISHED", $section_file, "");
@@ -1555,7 +1585,7 @@ sub _go {
 	    #-------------------------CODE
 	 
 	    #------------------------RETURN
-	    %results = ( section_files => \@section_files,
+	    %results = ( section_files => \@section_files
 		       );
 	    #------------------------RETURN
 	 }
@@ -3447,15 +3477,18 @@ sub _go {
 
 	       my $psection = retrieve($sp_file);
 
-	       #merge the junction data onto the rest of the chunk section
+	       #merge the prediction data onto the rest of the chunk section
 	       push(@{$section->{preds_on_chunk}}, @{$psection->{preds_on_chunk}})
 		   if($psection->{preds_on_chunk});
+	       push(@{$section->{ncrna_on_chunk}}, @{$psection->{ncrna_on_chunk}})
+		   if($psection->{ncrna_on_chunk});
 
 	       #keys to grab out of $section hash
 	       my @keys = qw(blastn_keepers
 			     blastx_keepers
 			     tblastx_keepers
 			     preds_on_chunk
+			     ncrna_on_chunk
 			     est_gff_keepers
 			     altest_gff_keepers
 			     prot_gff_keepers
@@ -3605,6 +3638,7 @@ sub _go {
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $seq_id = $VARS->{seq_id};
 	    my $section_file = $VARS->{section_file};
+	    my $GFF3         = $VARS->{GFF3};
 
 	    my $section = Storable::retrieve($section_file);
 	    my $tblastx_keepers    = $section->{tblastx_keepers};
@@ -3614,10 +3648,12 @@ sub _go {
 	    my $exonerate_a_data   = $section->{exonerate_a_data};
 	    my $exonerate_p_data   = $section->{exonerate_p_data};
 	    my $preds_on_chunk     = $section->{preds_on_chunk};
+	    my $ncrna_on_chunk     = $section->{ncrna_on_chunk};
 	    my $est_gff_keepers    = $section->{est_gff_keepers};
 	    my $altest_gff_keepers = $section->{altest_gff_keepers};
 	    my $prot_gff_keepers   = $section->{prot_gff_keepers};
 	    my $pred_gff_keepers   = $section->{pred_gff_keepers};
+	    my $ncrna_gff_keepers  = $section->{ncrna_gff_keepers};
 	    my $model_gff_keepers  = $section->{model_gff_keepers};
 
 	    #combine final data sets
@@ -3642,11 +3678,15 @@ sub _go {
 	    my $final_pred = GI::combine($preds_on_chunk,
 					 $pred_gff_keepers);
 
+	    my $final_ncrna = GI::combine($ncrna_on_chunk,
+					 $ncrna_gff_keepers);
+
 	    #group evidence for annotation
 	    my $all_data = maker::auto_annotator::prep_hits($final_prot,
 							    $final_est,
 							    $final_altest,
 							    $final_pred,
+							    $final_ncrna,
 							    $model_gff_keepers,
 							    $q_seq_obj,
 							    $CTL_OPT{single_exon},
@@ -3931,12 +3971,18 @@ sub _go {
 								     \%CTL_OPT
 								    );
 	    
-	    
 	    #get best non-overlapping ab-inits
 	    my $non_over = maker::auto_annotator::get_non_overlaping_abinits($maker_anno,
 									     $annotations,
 									     \%CTL_OPT
 									     );
+
+	    #get non-coding annotations
+	    my $non_coding = [];
+	    my @nc_keys = grep {/^ncrna_|_ncrna$/} keys %$annotations;
+	    foreach my $k (@nc_keys){
+		push(@$non_coding, @{$annotations->{$k}})
+	    }
 	    
 	    #add non-overlapping to final set if specified
 	    if($CTL_OPT{keep_preds}){
@@ -3982,6 +4028,7 @@ sub _go {
 	    #------------------------RETURN
 	    %results = ( maker_anno => $maker_anno,
 			 non_over => $non_over,
+			 non_coding => $non_coding,
 			 scored_preds => \@scored_preds
 		       );
 	    #------------------------RETURN
@@ -4011,6 +4058,7 @@ sub _go {
 	    @args = (qw(chunk
 			maker_anno
 			non_over
+                        non_coding
 			annotations
 			scored_preds
 			GFF3)
@@ -4023,6 +4071,7 @@ sub _go {
 	    my $chunk        = $VARS->{chunk};
 	    my $maker_anno   = $VARS->{maker_anno};
 	    my $non_over     = $VARS->{non_over};
+	    my $non_coding   = $VARS->{non_coding};
 	    my $annotations  = $VARS->{annotations};
 	    my $scored_preds = $VARS->{scored_preds};
 	    my $GFF3         = $VARS->{GFF3};
@@ -4031,6 +4080,7 @@ sub _go {
 	    #--- GFF3
 	    my $uid = join('.', $tier_type, $level, $self->number, $chunk->number);
 	    $GFF3->add_genes($maker_anno);
+	    $GFF3->add_ncgenes($non_coding);
 	    $GFF3->add_phathits($scored_preds, $uid);
 	    $GFF3->resolved_flag if (not $chunk->is_last); #adds ### between contigs
             
