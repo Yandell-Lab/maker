@@ -114,9 +114,66 @@ sub new {
 
         bless ($self, $class);
 
+	#make default codon table as M only start codon
+	my $id = $self->add_table(
+	    'Strict',
+	    'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG',
+	    '-----------------------------------M----------------------------');
+	$self->id($id);
+
         return $self;
 }
 
+################################################ subroutine header begin ##
+
+=head2 name
+
+ Usage     :
+
+=for example
+  $seq = "atgaaaaaauaa";
+
+=for example begin
+
+  use CGL::TranslationMachine;
+  my $t = new CGL::TranslationMachine;
+  $t->name('Strict');
+  my ($name) = $t->name();
+
+=for example end
+
+=for example_testing
+  is($name, "Strict", "Did it find the return the codon table?");
+
+ Purpose   : Get/set the codon table by name
+ Returns   : Name of curret codon table
+ Arguments : Codon talbe name
+ Throws    :
+ Comments  :
+           :
+ See Also  : Bio::Tools::CodonTable
+
+=cut
+
+################################################## subroutine header end ##
+sub name{
+    my ($self, $arg) = @_;
+
+    if($arg){
+	my %index;
+	@index{@Bio::Tools::CodonTable::NAMES} =  (1..@Bio::Tools::CodonTable::NAMES);
+
+	my $id = $index{$arg};
+
+	die "ERROR: No codon table named '$arg' in CGL::TranaslationMachine::name\n"
+	    if(!defined($id));
+
+	$self->id($id);
+    }
+
+    my ($id) = $self->{'id'};
+    return $Bio::Tools::CodonTable::NAMES[$id-1];
+}
 ################################################ subroutine header begin ##
 
 =head2 longest_translation
