@@ -9,6 +9,7 @@ use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
+use lib "$FindBin::Bin/inc/perl/lib"; #libary just needed for configuration
 use MAKER::Build;
 
 chdir($FindBin::Bin); #alway go here for safety
