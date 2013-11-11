@@ -2,14 +2,34 @@
 eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
-use strict;
-use warnings;
+#Hack to get around findbin error where broken Carp is preloaded
+BEGIN {
+    if(@ARGV == 1 && $ARGV[0] eq 'findbin'){
+        eval 'require FindBin';
+        print $FindBin::Bin;
+        exit;
+    }
+
+    my $carp_version = `$^X -MCarp -e 'print \$Carp::VERSION'`;
+    if($carp_version < 1.24){
+        my $bin = `$0 findbin`;
+        eval "use lib '$bin/../lib'";
+        eval "use lib '$bin/lib'";
+        eval "use lib '$bin/../perl/lib'";
+        eval "use lib '$bin/inc/lib'";
+        eval "use lib '$bin/inc/perl/lib'";
+    }
+}
+
 use FindBin;
 use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
 use lib "$FindBin::Bin/inc/perl/lib"; #libary just needed for configuration
+
+use strict;
+use warnings;
 use MAKER::Build;
 
 chdir($FindBin::Bin); #alway go here for safety
