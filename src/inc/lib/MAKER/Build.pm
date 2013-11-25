@@ -134,6 +134,7 @@ sub config_mpi {
 					 "/usr/local/lib,".
 					 "/usr/local/lib/include/mpi*,".
 					 "/usr/local/lib/mpi*/include}"));
+    push(@includes, split(/\:/, $ENV{CPATH})) if($ENV{CPATH});
 
     my ($MPIDIR) = grep {-f "$_/mpi.h"} @includes;
 

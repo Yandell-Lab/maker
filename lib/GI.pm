@@ -3639,11 +3639,24 @@ sub collect_hmms {
 		my $value = Cwd::abs_path("$file");
 		
 		next if(!$name || !$value);
-		
+		next if($name =~ /\.zip$/);
+
 		my $filesize = [stat($file)]->[7]; #size in bytes
-		
+		next unless(200000 <= $filesize && $filesize <= 400000); #rough size of all parameter files
+
+		my $ok;
+		open(IN, "< $file");
+		while(my $line = <IN>){
+		    if($line =! /Fgenesh_data/){
+			$ok++;
+			last;
+		    }
+		}
+		close(IN);
+		next unless($ok);
+
 		#rough size of all parameter files
-		$hmms{fgenesh_par_file}{$name} = $value if($filesize >= 200000);
+		$hmms{fgenesh_par_file}{$name} = $value;
 	    }
 	}
     }

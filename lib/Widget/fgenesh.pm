@@ -542,56 +542,55 @@ sub load_phat_hits {
 #------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 sub get_xdef {
-       my $seq       = shift;
-        my $p_coors  = shift;
-        my $n_coors = shift;
-        my $i_coors = shift;
-        my $s       = shift;
-        my $offset  = shift;
-        my $i_flank = shift;
-
-        my $group = 'gb|bogus;';
-
-        my @xdef;
-       foreach my $p (@$p_coors){
-	   my $c_b = $p->[0] - $offset;
-	   my $c_e = $p->[1] - $offset;
-	   
-	   my $l = "$c_b $c_e 100";
-	   
-	   push(@xdef, $l);
-        }
-
-        return \@xdef if(!@$i_coors);            
+    my $seq       = shift;
+    my $p_coors  = shift;
+    my $n_coors = shift;
+    my $i_coors = shift;
+    my $s       = shift;
+    my $offset  = shift;
+    my $i_flank = shift;
     
-       foreach my $i (@$i_coors){
-	   my $i_b = ($i->[0] - $offset) + ($i_flank-1);
-	   my $i_e = ($i->[1] - $offset) - ($i_flank-1);
-                
-	   next if abs($i_b - $i_e) < 2*$i_flank;
-	   next if abs($i_b - $i_e) < 25;
-	   
-	   my $l  = "$i_b $i_e -1000";
-	   
-	   push(@xdef, $l);
-       }
+    my $group = 'gb|bogus;';
+    
+    my @xdef;
+    foreach my $p (@$p_coors){
+	my $c_b = $p->[0] - $offset;
+	my $c_e = $p->[1] - $offset;
+	
+	my $l = "$c_b $c_e 100";
+	
+	push(@xdef, $l);
+    }
+    
+    foreach my $i (@$i_coors){
+	my $i_b = ($i->[0] - $offset) + ($i_flank-1);
+	my $i_e = ($i->[1] - $offset) - ($i_flank-1);
+	
+	next if abs($i_b - $i_e) < 2*$i_flank;
+	next if abs($i_b - $i_e) < 25;
+	
+	my $l  = "$i_b $i_e -1000";
+	
+	push(@xdef, $l);
+    }
+    
+    my $num = @xdef;
+    unshift(@xdef, "$num $s");
+    
 
-       my $num = @xdef;
-       unshift(@xdef, "$num $s");
-
-	# The next part also put ESTs as arbitrary exons.
 =pod
-        for (my $i = 0; $i < @{$n_pieces}; $i++){
-                my $p = $n_pieces->[$i];
-                my $e_b = $p->{b} - $offset;
-                my $e_e = $p->{e} - $offset;
-
-                my $l  = "$q_id\tEST-EXON\texonpart";
-                   $l .= "\t".$e_b."\t".$e_e."\t"."1e-1000"."\t".$s;
-                   $l .= "\t".'.'."\t".'group=n_peices;'."source=E";
-
-                push(@xdef, $l);
-        }
+    # The next part also put ESTs as arbitrary exons.
+    for (my $i = 0; $i < @{$n_pieces}; $i++){
+        my $p = $n_pieces->[$i];
+	my $e_b = $p->{b} - $offset;
+        my $e_e = $p->{e} - $offset;
+	    
+        my $l  = "$q_id\tEST-EXON\texonpart";
+	$l .= "\t".$e_b."\t".$e_e."\t"."1e-1000"."\t".$s;
+	$l .= "\t".'.'."\t".'group=n_peices;'."source=E";
+	    
+	push(@xdef, $l);
+    }
 =cut
 
         return \@xdef;
