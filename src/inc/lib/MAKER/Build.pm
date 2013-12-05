@@ -109,7 +109,7 @@ sub config_mpi {
 
     $mpicc = $self->prompt("\nPlease specify the path to 'mpicc' on your system:", $mpicc);
 
-    while($mpicc !~ /(^|[\/])mpicc$/ || ! -f $mpicc){
+    while(!$mpicc || $mpicc !~ /(^|[\/])mpicc$/ || ! -f $mpicc){
 	$mpicc = $self->prompt("\nCannot find 'mpicc'.\n".
 			    "Please specify the path (leave blank to cancel):", '');
 	return if(! $mpicc);
@@ -140,7 +140,7 @@ sub config_mpi {
 
     $MPIDIR = $self->prompt("\nPlease specify the path to the directory containing 'mpi.h':", $MPIDIR);
 
-    while(! -f "$MPIDIR/mpi.h"){
+    while(!$MPIDIR || ! -f "$MPIDIR/mpi.h"){
 	$MPIDIR = $self->prompt("\nCannot find 'mpi.h'\n.".
 				"Please specify the containing directory path (leave blank to cancel):", '');
 	return if(! $MPIDIR);
@@ -1192,9 +1192,10 @@ sub _install_exe {
 	print "Configuring $exe...\n";
 	(my $safe = $path) =~ s/ /\\ /g; #make safe path for space in names
 	my $tmp = "$safe/.config.stdin";
+	(my $perl = $^X) =~ s/perl[^\/]+$/perl/; #fix symlink causing repeatmasker setup to fail
 	open(my $fh, "> $tmp");
 	print $fh "\n";
-	print $fh "$^X\n";
+	print $fh "$perl\n";
 	print $fh "$safe\n";
 	print $fh "$safe\n";
 	print $fh "2\n";
