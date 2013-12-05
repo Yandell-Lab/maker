@@ -66,15 +66,122 @@ sub clean_tes {
 	my $tes = shift;
 
 	my $shattered_hits = shatter_hits($tes);
-
-	my $clusters = cluster::shadow_cluster(10, $shattered_hits, 20);
+	my $clusters = cluster::shadow_cluster(0, $shattered_hits, 20);
 
 	my @keepers;
 	foreach my $c (@{$clusters}){
 		my @sorted = sort l_sort @{$c};
-		push(@keepers, $sorted[0]);
+		push(@keepers, colapse_hit(\@sorted));
 	}
 	return \@keepers;
+}
+#------------------------------------------------------------------------
+sub colapse_hit {
+    my $hits = shift;
+    my $best = $hits->[0];
+
+    my $ref = ref($best);
+
+    my $new_hit = new $ref('-name'         => $best->name,
+			   '-description'  => $best->description,
+			   '-algorithm'    => $best->algorithm,
+			   '-length'       => $best->length,
+	);
+    
+    $new_hit->queryLength($best->queryLength);
+    $new_hit->database_name($best->database_name);
+    $new_hit->{_label} = $best->{_label};
+
+    my $B;
+    my $E;
+    foreach my $h (@$hits){
+	$B = $h->start('query') if(!$B || $h->start('query') < $B);
+	$E = $h->end('query') if(!$E || $h->end('query') > $E);
+    }
+    my $l = $E-$B+1;
+
+    my @args;
+    (my $hsp) = $best->hsps; #just need one hsp
+
+
+    push(@args, '-query_start');
+    push(@args, $B);
+
+    push(@args, '-query_end');
+    push(@args, $E);
+
+    push(@args, '-score');
+    push(@args, $hsp->{SCORE});
+
+    #push(@args, '-query_seq');
+    #push(@args, 'N'x$l);
+
+    #push(@args, '-homology_seq');
+    #push(@args, '|'x$l);
+
+    #push(@args, '-hit_seq');
+    #push(@args, 'N'x$l);
+
+    push(@args, '-hit_start');
+    push(@args, $hsp->start('hit'));
+
+    push(@args, '-hsp_length');
+    push(@args, $l);
+
+    push(@args, '-identical');
+    push(@args, $hsp->num_identical);
+
+    push(@args, '-hit_length');
+    push(@args, $l);
+
+    push(@args, '-query_name');
+    push(@args, $hsp->name());
+
+    push(@args, '-algorithm');
+    push(@args, $hsp->algorithm);
+
+    push(@args, '-bits');
+    push(@args, $hsp->bits);
+
+    push(@args, '-evalue');
+    push(@args, $hsp->evalue);
+
+    push(@args, '-pvalue');
+    push(@args, $hsp->signifcance);
+
+    push(@args, '-query_length');
+    push(@args, $hsp->query->length);
+
+    push(@args, '-conserved');
+    push(@args, $hsp->num_conserved);
+
+    push(@args, '-hit_name');
+    push(@args, $hsp->name());
+
+    push(@args, '-hit_end');
+    push(@args, $hsp->end('hit'));
+
+    push(@args, '-query_gaps');
+    push(@args, $hsp->gaps('query'));
+
+    push(@args, '-hit_gaps');
+    push(@args, $hsp->gaps('hit'));
+
+    my $ref = ref($hsp);
+    my $new_hsp = new $ref(@args);
+    
+    $new_hsp->queryName($hsp->queryName) if defined($hsp->queryName);
+    
+    $new_hsp->{_strand_hack}->{query} = $hsp->strand('query');
+    $new_hsp->{_strand_hack}->{hit}   = $hsp->strand('hit');
+    $new_hsp->{_identical_hack}       = $hsp->frac_identical();
+    $new_hsp->{_label}                = $hsp->{_label};
+    
+    $new_hit->add_hsp($new_hsp);
+    $new_hit->{_HMM} = $best->{_HMM} if($best->{_HMM});
+    $new_hit->{_label} = $best->{_label} if($best->{_label});
+
+    return $new_hit;
 }
 #-----------------------------------------------------------------------------
 sub mask_chunk {

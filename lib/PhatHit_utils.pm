@@ -486,7 +486,7 @@ sub make_flat_hits {
 	    #natural end and beginning are non-normalized values
 	    ($nB, $nE) = ($nE, $nB) if($nB < $nE && $strand == -1);
 
-	    my $pSeq = substr_o($seq, $p->{b}-1, $p->{e}-$p->{b}+1);
+	    my $pSeq = ($seq) ? substr_o($seq, $p->{b}-1, $p->{e}-$p->{b}+1) : 'N'x($p->{e}-$p->{b}+1);
 	    $pSeq = Fasta::revComp(\$pSeq) if($strand == -1);
 
 	    my $new_hit = new $ref('-name'         => "flat_hit_$nB\_$nE",
