@@ -520,6 +520,7 @@ sub gene_data {
     my $c_l;
     foreach my $t (@transcripts){
 	my $t_id = (split(/\s+/, $t->{t_id}))[0] || (split(/\s+/, $t->{t_name}))[0];
+	$t_id = uri_escape($t_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards 
 	my $t_l = get_transcript_data($t, $seq_id, $g_id);
 	$g_l .= $t_l."\n";
 	
@@ -565,6 +566,7 @@ sub ncgene_data {
     my $c_l;
     foreach my $t (@transcripts){
 	my $t_id = (split(/\s+/, $t->{t_id}))[0] || (split(/\s+/, $t->{t_name}))[0];
+	$t_id = uri_escape($t_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 	my $t_l = get_transcript_data($t, $seq_id, $g_id);
 	$g_l .= $t_l."\n";
 	

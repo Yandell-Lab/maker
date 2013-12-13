@@ -48,7 +48,7 @@ sub run {
 	  }
       }
       waitpid $pid, 0;
-      if ($? != 0 && $all_err !~ /There are no valid contexts/){
+      if ($? != 0 && $all_err !~ /There are no valid contexts|invalid query sequence/){
 	 #try again on filure
 	 sleep 15;
 	 $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
@@ -62,7 +62,7 @@ sub run {
 	 }
 	 waitpid $pid, 0;
 	 
-	 if ($? != 0 && $all_err !~ /There are no valid contexts/){
+	 if ($? != 0 && $all_err !~ /There are no valid contexts|invalid query sequence/){
 	    die "ERROR: TBLASTX failed\n";
 	 }
       }
