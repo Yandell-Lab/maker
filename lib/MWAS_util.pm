@@ -173,7 +173,7 @@ sub mwas_setup {
     #set correct exe location for moved files in maker/exe
     my %E = GI::parse_ctl_files([config_loc()."/maker_exe.ctl"]);
     while(my $key = each %E){
-	$E{$key} = GI::s_abs_path($E{$key});
+	$E{$key} = GI::s_abs_path($E{$key}) if($E{$key});
 	if($E{$key} =~ /\/exe\/([^\/]+\/[^\/]+|[^\/]+\/bin\/[^\/]+)$/ &&
 	   -e "$data_dir/maker/exe/$1"
 	  ){
@@ -195,7 +195,7 @@ sub mwas_setup {
 		print $fh "Y\n";
 		print $fh "5\n";
 		close($fh);
-		system("$^X ./configure < $tmp > /dev/null") &&
+		system("$^X ./configure < $tmp &> /dev/null") &&
 		    die "ERROR: Could not configure RepeatMasker for its new location\n";
 		chdir($cwd);
 	    }
@@ -633,7 +633,7 @@ sub check_table_structure {
     add_missing_columns($dbh, $dsn, 'jobs');
 
     #create ctl_opt table
-    my @defaults = map {lc($_)." $t_type"} keys %def_opt; #get table column names and datatype
+    my @defaults = map {lc("\"$_\"")." $t_type"} keys %def_opt; #get table column names and datatype
     $dsn = "CREATE TABLE ctl_opt (job_id INTEGER UNIQUE, ".join(', ', @defaults).')';
     $dbh->do($dsn) if(! grep {/ctl_opt/} @tables);
     add_missing_columns($dbh, $dsn, 'ctl_opt');
@@ -727,24 +727,24 @@ sub check_table_structure {
 
     #create/re-create all_default_opt table
     $dbh->do(qq{DROP TABLE all_default_opt}) if(grep {/all_default_opt/} @tables); #drop table
-    @defaults = map {lc($_)." $t_type"} grep {!/^menus$|^stat$/i} keys %O; #get table column names and datatype
+    @defaults = map {lc("\"$_\"")." $t_type"} grep {!/^menus$|^stat$/i} keys %O; #get table column names and datatype
     $dsn = 'CREATE TABLE all_default_opt ('.join(', ', @defaults).')';
-
     $dbh->do($dsn);
+
     @defaults = grep {!/^menus$|^stat$/i} keys %O; #keys to add
     my @lc_defaults = map {lc($_)}  @defaults;
-    $dsn = "INSERT INTO all_default_opt (".join(", ", @lc_defaults).") VALUES ('".join("', '", @O{@defaults})."')";
+    $dsn = "INSERT INTO all_default_opt (".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ('".join("', '", @O{@defaults})."')";
     $dbh->do($dsn); #add ctl_opt
 
     #create/re-create stat table
     my %stat = %{$O{STAT}};
     $dbh->do(qq{DROP TABLE stat}) if(grep {/stat/} @tables); #drop table
-    @defaults = map {lc($_)." $t_type"}  keys %stat; #get table column names and datatype
+    @defaults = map {lc("\"$_\"")." $t_type"}  keys %stat; #get table column names and datatype
     $dsn = 'CREATE TABLE stat ('.join(', ', @defaults).')';
     $dbh->do($dsn);
     @defaults = keys %stat; #keys to add
     @lc_defaults = map {lc($_)}  @defaults;
-    $dsn = "INSERT INTO stat (".join(", ", @lc_defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
+    $dsn = "INSERT INTO stat (".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ('".join("', '", @stat{@defaults})."')";
     $dbh->do($dsn); #add ctl_opt
 
     #update values for possible null columns
@@ -784,7 +784,7 @@ sub check_table_structure {
             #add to ctl_opt table
             @defaults = (keys %def_opt); #keys to add
             my @lc_defaults = map {lc($_)}  @defaults;
-            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
             $dbh->do($dsn); #add ctl_opt
         }
 
@@ -835,7 +835,7 @@ sub check_table_structure {
             #add to ctl_opt table
             @defaults = (keys %def_opt); #keys to add
             my @lc_defaults = map {lc($_)}  @defaults;
-            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
             $dbh->do($dsn); #add ctl_opt
         }
 
@@ -890,7 +890,7 @@ sub check_table_structure {
             #add to ctl_opt table
             @defaults = (keys %def_opt); #keys to add
             my @lc_defaults = map {lc($_)}  @defaults;
-            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
             $dbh->do($dsn); #add ctl_opt
         }
 
@@ -948,7 +948,7 @@ sub check_table_structure {
             #add to ctl_opt table
             @defaults = (keys %def_opt); #keys to add
             my @lc_defaults = map {lc($_)}  @defaults;
-            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
             $dbh->do($dsn); #add ctl_opt
 	}
 
@@ -996,7 +996,7 @@ sub check_table_structure {
             #add to ctl_opt table
             @defaults = (keys %def_opt); #keys to add
             my @lc_defaults = map {lc($_)}  @defaults;
-            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
+            $dsn = "INSERT INTO ctl_opt (job_id, ".join(", ", map {"\"$_\""} @lc_defaults).") VALUES ($id, '".join("', '", @job_opt{@defaults})."')";
             $dbh->do($dsn); #add ctl_opt
         }
 
@@ -1030,7 +1030,7 @@ sub add_missing_columns {
     #check that all columns are present
     my $bak = $dsn;
     ($dsn) = $dsn =~ /\((.*)\)/;
-    my %columns = map {/^([^\s]+)\s+(.*)/} split(/,\s*/, $dsn);
+    my %columns = map {/^\"?([^\s\"]+)\"?\s+(.*)/} split(/,\s*/, $dsn);
 
     my $sth = $dbh->prepare("SELECT * FROM $table LIMIT 1");
     $sth->execute;

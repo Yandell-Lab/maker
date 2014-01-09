@@ -3559,9 +3559,9 @@ sub collect_hmms {
 
     #find augustus HMMs
     if(-f $exes{augustus}){
-	if(!$ENV{AUGUSTUC_CONFIG_PATH}){
+	if(!$ENV{AUGUSTUS_CONFIG_PATH}){
 	    $exes{augustus} = Cwd::abs_path($exes{augustus});
-	    ($ENV{AUGUSTUC_CONFIG_PATH} = $exes{augustus}) =~ s/\/(bin|src)\/augustus/\/config/;
+	    ($ENV{AUGUSTUS_CONFIG_PATH} = $exes{augustus}) =~ s/\/(bin|src)\/augustus/\/config/;
 	}
 
 	open(my $EXE, quotemeta($exes{augustus})." --species=help 2>&1|");
@@ -3793,6 +3793,10 @@ sub load_server_files {
 	    $CTL_OPT{STAT}{augustus_species} = 'DISABLED';
 	    $CTL_OPT{STAT}{fgenesh_par_file} = 'DISABLED';
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
+	}
+
+	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan)$/){
+	   $CTL_OPT{STAT}{$key} = 'DISABLED';
 	}
 
 	if($key eq 'gmhmm' && $CTL_OPT{STAT}{$key} eq 'DISABLED'){

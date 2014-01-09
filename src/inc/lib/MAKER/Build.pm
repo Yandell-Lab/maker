@@ -53,6 +53,7 @@ __PACKAGE__->add_property( 'lib_requires' );
 
 eval 'require LWP::Simple';
 eval 'require Archive::Tar';
+eval 'require Archive::Zip';
 
 #------------------------------------------------------------------------
 #--------------------------------- METHODS ------------------------------
@@ -1345,14 +1346,16 @@ sub _install_exe {
 	}
 
 	&File::Path::rmtree($path);
-	my $file = "$base/$exe.tar.gz"; #file to save to
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	my $file = "$base/$exe.tar.gz"; #file to save to	
+	$file = "$base/$exe.zip"if($url =~ /\.zip$/);
+
 	print "Downloading $exe...\n";
 	$self->getstore($url, $file) or return $self->fail($exe, $path);
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
-	my ($dir) = grep {-d $_} File::Glob::bsd_glob("trunk*");
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*trunk*");
 	print "Configuring $exe...\n";
 	File::Copy::copy("$base/../GMOD/Apollo/gff3.tiers", "$dir/conf/gff3.tiers");
 	chdir("$dir/src/java");
@@ -1369,14 +1372,18 @@ sub _install_exe {
 	}
 
 	&File::Path::rmtree($path);
-	my $file = "$base/$exe.tar.gz"; #file to save to
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
+	my $file = "$base/$exe.tar.gz"; #file to save to
+	$file = "$base/$exe.zip"if($url =~ /\.zip$/);
+
 	print "Downloading $exe...\n";
 	$self->getstore($url, $file) or return $self->fail($exe, $path);
 	print "Unpacking $exe tarball...\n";
 	$self->extract_archive($file) or return $self->fail($exe, $path);
 	push (@unlink, $file);
 	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*jbrowse*");
+	($dir) = grep {-d $_} File::Glob::bsd_glob("*JBrowse*") if(! $dir);
+
 	print "Configuring $exe...\n";
 	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
 	chdir($dir);
@@ -1615,7 +1622,28 @@ sub extract_archive {
     my $file = shift;
 
     return 0 if(! $file);
-    
+
+    if($file =~ /\.zip$/){
+	if(File::Which::which('unzip')){
+	    my $command;
+	    my $u = scalar getpwuid($>);
+	    my $g = scalar getgrgid($));
+	    $command = "unzip $file";
+	    #$command .= " --owner $u --group $g" unless((POSIX::uname())[0] =~ /darwin/i);
+	    
+	    return $self->do_system($command); #fast
+	}
+	else{
+	    die "ERROR: Archive::Zip required to unpack missing executables.\n".
+		"Try running ./Build installdeps first.\n\n"
+		if(!$self->check_installed_status('Archive::Zip', '0')->{ok});
+
+	    my $zip = Archive::Zip->new();
+	    $zip->read($file);
+	    return ($zip->extractTree()) ? 1 : 0; #slow
+	}
+    }
+
     if(File::Which::which('tar')){
 	my $command;
 	my $u = scalar getpwuid($>);
@@ -1625,6 +1653,9 @@ sub extract_archive {
 	}
 	elsif($file =~ /\.bz2?$|\.tbz2?$/){
 	    $command = "tar -jxm -f $file";
+	}
+	elsif($file =~ /\.zip$/){
+	    $command = "unzip";
 	}
 	else{
 	    $command = "tar -xm -f ".quotemeta($file);

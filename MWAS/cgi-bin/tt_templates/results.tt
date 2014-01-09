@@ -19,7 +19,7 @@
 	<a href="stream.cgi?type=tarball&job_id=[% job_id %]&user_id=[% user_id %]"><img src="[% server_opt.html_web %]/images/disk.png" border="0px"><b>Download All Data</b></a>
 
 	<br>
-	[% IF type != 'functional' %]<a href="maker.cgi?rm=job_create&func=1&job_id=[% job_id %]"><font style="font-size : 10">Do post processing of annotations</font></a>[% END %]
+	<!-- [% IF type != 'functional' %]<a href="maker.cgi?rm=job_create&func=1&job_id=[% job_id %]"><font style="font-size : 10">Do post processing of annotations</font></a>[% END %] -->
 	<br>
 	<br>
 	View contigs individually.<br>
@@ -41,7 +41,7 @@
 <tr>
   <td>
     <p style="font-size : 10"><br>
-      Clicking on "Launch in Apollo" will install a Java Web Start version of Apollo if not already installed. If for some inexplicable reason the program Dashcode starts <a href="http://malachite.genetics.utah.edu/apollo/index.html">click here</a>.
+      Clicking on "Launch in Apollo" will install a Web Start version of Apollo (jnlp file). This requires that you have <a href="http://www.java.com">Java</a> installed. It should open automatically. If not you may have to open the jnlp file manually from your downloads folder and/or edit your security setting to allow apps from third party developers.
     </p>
   </td>
 </tr>

@@ -167,7 +167,7 @@ sub colapse_hit {
     push(@args, '-hit_gaps');
     push(@args, $hsp->gaps('hit'));
 
-    my $ref = ref($hsp);
+    $ref = ref($hsp);
     my $new_hsp = new $ref(@args);
     
     $new_hsp->queryName($hsp->queryName) if defined($hsp->queryName);

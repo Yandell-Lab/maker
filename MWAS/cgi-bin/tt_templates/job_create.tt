@@ -815,7 +815,7 @@ function viewFile(section) {
     </td>
   </tr>
 
-  [% IF stat.snaphmm != 'DISABLED' && o_type == 'eukaryotic' %]
+  [% IF stat.snaphmm != 'DISABLED' && stat.snap != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
 	<li type=disc>
@@ -856,7 +856,7 @@ function viewFile(section) {
   </tr>
   [% END %]
   
-  [% IF stat.augustus_species != 'DISABLED' && o_type == 'eukaryotic' %]
+  [% IF stat.augustus_species != 'DISABLED' && stat.augustus != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
 	<li type=disc>
@@ -901,7 +901,7 @@ function viewFile(section) {
   </tr>
   [% END %]
   
-  [% IF stat.fgenesh_par_file != 'DISABLED' && o_type == 'eukaryotic' %]
+  [% IF stat.fgenesh_par_file != 'DISABLED' && stat.fgenesh != 'DISABLED' && o_type == 'eukaryotic' %]
   <tr bgcolor=white>
     <td align=right>
 	<li type=disc>
@@ -942,7 +942,7 @@ function viewFile(section) {
   </tr>
   [% END %]
 
-  [% IF stat.gmhmm != 'DISABLED' %]  
+  [% IF stat.gmhmm != 'DISABLED' && ( ( stat.gmhmme3 != 'DISABLED' && o_type == 'eukaryotic' ) || ( stat.gmhmmp != 'DISABLED' && o_type == 'prokaryotic' ) ) %]  
   <tr bgcolor=white>
     <td align=right>
 	<li type=disc>

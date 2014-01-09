@@ -33,6 +33,7 @@ use Data::Dumper;
 use MWAS_util;
 use URI::Escape;
 use Mail::Sender;
+use File::Basename;
 
 #-----------------------------------------------------------------------------
 sub cgiapp_init {
@@ -443,30 +444,19 @@ sub launch {
 	
 	#copy necessary JBrowse files if not yet copied
 	File::Path::mkpath("$dir") if(! -d $dir);
+
 	    
 	#get all JBrowse contents
-	my @to_copy = map {"$j_dir/$_" if(! -e "$dir/$_")}  qw(LICENSE
-		                                               Makefile
-							       bin
-							       closedhand.cur
-							       docs
-							       img
-							       index.html
-							       js
-							       jslib
-							       lib
-							       openhand.cur
-							       src
-							       twiki);
-
+	my @files = map {File::Basename::basename($_)} <$j_dir/*>;
+	my @to_copy = map {"$j_dir/$_" if(! -e "$dir/$_")} grep {$_ ne 'data'} @files;
+	
 	#get MAKER specific configuration file
-	my $conf = "$c_dir/maker.css";
-    
+	system("cp -R ".join(' ', @to_copy)." $dir");
+
 	#add tracks if not currently added
 	if(!-d "$dir/data"){
 	    my $dstore = "$data_dir/jobs/$job_id/$job_id.maker.output/$job_id\_master_datastore_index.log";
-	    system("cd $dir\n".
-		   "$data_dir/maker/bin/maker2jbrowse -c $conf -d $dstore 1>&2");
+	    system("cd $dir; ./bin/maker2jbrowse -d $dstore 1>&2");
 	}
 
 	my $url = ($serv_opt{html_web} =~ /http\:\/\//) ?
@@ -1020,7 +1010,7 @@ sub submit_to_db {
    if($self->dbh->selectrow_array(qq{SELECT job_id FROM ctl_opt WHERE job_id=$job_id})){
        #update control options for job
        my @defaults = (keys %CTL_OPT); #keys to add
-       my @set = map {lc($_)." = '$CTL_OPT{$_}'" } @defaults;
+       my @set = map {"\"".lc($_)."\" = '$CTL_OPT{$_}'" } @defaults;
        $self->dbh->do("UPDATE ctl_opt SET ".join(", ", @set) . "WHERE job_id=$job_id");
    }
    else{
@@ -1028,7 +1018,7 @@ sub submit_to_db {
        my @defaults = (keys %CTL_OPT); #keys to add
        my @lc_defaults = map {lc($_)} @defaults;
        my $ver = GI::version();
-       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", @lc_defaults).qq{) }.
+       $self->dbh->do(qq{INSERT INTO ctl_opt (job_id, }.join(", ", map {"\"$_\""} @lc_defaults).qq{) }.
 		      qq{VALUES ($job_id, '}.join("\', \'", @CTL_OPT{@defaults}).qq{\')}
 		      );
    }
