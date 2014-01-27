@@ -85,7 +85,23 @@ while(my $val = shift @ARGV){
 
 my $command = "$exe $s_par $s_seq " . join(" ", @args);
 
-system($command) && die "ERROR: FGENESH Failed\n";
+#system($command) && die "ERROR: FGENESH Failed\n";
+
+system($command);
+
+my $stat = $?;
+if ($stat == -1) {
+    print "ERROR:FGENESH failed to execute: $!\n";
+}
+elsif ($stat & 127) {
+        printf "ERROR: FGENESH died with signal %d, %s coredump\n",
+	($? & 127),  ($? & 128) ? 'with' : 'without';
+}
+else {
+    printf "ERROR: FGENESH exited with value %d\n", $? >> 8;
+}
+
+exit($stat);
 
 #----------------SUBS-------------------
 sub print_usage{

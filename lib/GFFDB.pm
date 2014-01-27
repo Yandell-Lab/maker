@@ -29,10 +29,11 @@ sub new {
         bless ($self, $class);
 
 	my $in = shift @args;
-	my $dbfile = 'dbfile.db';
 	if(ref $in eq 'HASH'){
 	    my $CTL_OPT = $in;
-	    $dbfile = "$CTL_OPT->{out_base}/$CTL_OPT->{out_name}.db";
+
+	    my $dbname = "$CTL_OPT->{out_name}.db";
+	    my $dbfile = "$CTL_OPT->{out_base}/$dbname";
 	    $CTL_OPT->{_dbfile} = $dbfile;
 
 	    #rebuild database from scratch on force
@@ -44,7 +45,7 @@ sub new {
 	    $self->{go_gffdb} = $CTL_OPT->{go_gffdb};
 
 	    my $lock;
-	    if(! $self->{in_memory} && (! -f $dbfile || -f ".NFSLock.$dbfile.NFSLock")){
+	    if(! $self->{in_memory} && (! -f $dbfile || -f "$CTL_OPT->{out_base}/.NFSLock.$dbname.NFSLock")){
 		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)
 		    while(! $lock || ! $lock->maintain(30));
 	    }
@@ -64,7 +65,9 @@ sub new {
 	    $lock->unlock if($lock);
 	}
 	elsif(defined $in){
-	    $dbfile = $in;
+	    my $dbfile = $in;
+	    my ($out_base, $dbname) = $in =~ /(.*\/)?([^\/]+)$/;
+	    $out_base ||= './';
 	    $self->{dbfile} = $dbfile;
 	    $self->{in_memory} = shift @args;
 	    $self->{last_build} = undef;
@@ -72,7 +75,7 @@ sub new {
 	    $self->{go_gffdb} = 1;
 
 	    my $lock;
-	    if(! $self->{in_memory} && (! -f $dbfile || -f ".NFSLock.$dbfile.NFSLock")){
+	    if(! $self->{in_memory} && (! -f $dbfile || -f "$out_base/.NFSLock.$dbname.NFSLock")){
 		$lock = new File::NFSLock($self->{dbfile}, 'EX', 1200, 60)
 		    while(! $lock || ! $lock->maintain(30));
 	    }

@@ -104,6 +104,7 @@ my $build = MAKER::Build->new(
      },
      get_options => {
 	 AnyDBM_ISA =>  { type  => '=s' },
+	 MWAS       =>  {},
      }
     );
 
@@ -135,23 +136,14 @@ $build->feature(mpi_support => $go);
 $build->config_mpi() if($go);
 
 
-#ask for MWAS
-if(File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2'){
-    my $go = $build->y_n("\nWould you like to install the web interface to MAKER (MWAS) on this machine\n".
-			 "This requires that you be logged in as root or use sudo for \'./Build install\'?", 'N');
-
-    if($go){
-	$build->feature(mwas_support => 1); #set mwas flag for Build
-    }
-    else{
-	$build->feature(mwas_support => 0); #set mwas flag for Build
-    }    
+#configure for MWAS
+if($build->args('MWAS')){
+    die "ERROR: You must have apache installed and configured to use the MWAS interface\n"
+	unless (File::Which::which('httpd') || -f '/etc/init.d/httpd' || -f '/etc/init.d/apache2');
+    $build->feature(mwas_support => 1); #set mwas flag for Build
 }
 else{
-    $build->log_info("\nWARNING: Apache cannot be located. The optional web based\n".
-                     "interface to MAKER will not be available to you.\n\n");
-
-    $build->feature(mwas_support => 0); #set mpi flag for Build  
+    $build->feature(mwas_support => 0); #set mwas flag for Build
 }
 
 if($build->feature('mwas_support')){

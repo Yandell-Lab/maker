@@ -102,7 +102,10 @@ print $GFF "\#\#gff-version 3\n";
 
 my ($ANN, $ann_file) = tempfile();
 my ($FAS, $fas_file) = tempfile() unless($n_flag);
-print $FAS "\#\#FASTA\n" unless($n_flag);
+
+unless($n_flag){
+    print $FAS "\#\#FASTA\n" || die "ERROR: $!";
+}
 
 my $i = 0;
 my %uniq;
@@ -142,7 +145,7 @@ foreach  my $file (@files){
 		$seen_flag = 1;
 	    } 
 	    $uniq{$line}++;
-	    print $GFF $line;
+	    print $GFF $line || die "ERROR: $!";
 	    $last = $line;
 	    next;
 	}
@@ -170,7 +173,7 @@ foreach  my $file (@files){
 
 	chomp $line;
 	if($line){
-	    print $FH $line . "\n";
+	    print $FH $line."\n" || die "ERROR: $!";
 	    $last = $line;
 	}
     }
@@ -185,8 +188,10 @@ if($s_flag){
     print `cat $fas_file` unless($n_flag);
 }
 else{
-    system ("cat $ann_file >> $outfile");
-    system ("cat $fas_file >> $outfile") unless($n_flag);
+    system ("cat $ann_file >> $outfile") && die "ERROR: $!";
+    unless($n_flag){
+	system ("cat $fas_file >> $outfile") && die "ERROR: $!";
+    }
 }
 
 unlink("$ann_file");

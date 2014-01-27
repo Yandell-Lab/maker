@@ -1,113 +1,21 @@
 ***MAKER DOCUMENTATION***
 ALSO SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
+
+
 #---------------------------------------------------------------------
+INSTALLING MAKER
 
-INSTALLATION INSTRUCTIONS FOR MAKER
-
-*Step by step instructions are also available in the INSTALL text
-file.
-
-*If you are using Mac OS X you will need to install developer tools
-and Rosetta from your install disk first.
-
-MAKER is an annotation pipeline.  In other words it links together
-many steps and programs to produce final annotations.  For this
-reason, you must first install a number of programs that MAKER depends
-on.  MAKER works on both eukaryotic and prokaryotic genomes.
-
-Installing MAKER may be as easy as running MAKER's Build.PL script
-followed by ./Build install
-    cd maker/src/
-    perl Build.PL
-    ./Build install
-
-If you need to do any additional system configuration, Build.PL will
-provide you with insuctions. If installation fails, you will need to
-follow the detailed instructions for manual configuration bellow
-or in the bundled INSTALL file.
+!!INSTALLATION INSTRUCTIONS FOR MAKER ARE IN .../maker/INSTALL!!
+Following installation the maker exectutable will be in .../maker/bin.
+If .../maker/bin doesn't exist then you haven't finished installing.
 
 
-To install MAKER, you will first need to install the following
-prerequisites:
-
-Perl modules (available from CPAN):
-    *DBI
-    *DBD::SQLite
-    *Proc::ProcessTable
-    *threads (Required for MPI scripts)
-    *IO::All (Required for accessory scripts)
-    *IO::Prompt (Required for accessory scripts)
-
-Required external programs:
-    *PERL 5.8.0 or higher
-    *BioPerl 1.6 or higher (www.bioperl.org)
-    *SNAP version 2009-02-03  or higher (homepage.mac.com/iankorf)
-    *RepeatMasker 3.1.6  or higher (www.repeatmasker.org)
-    *Exonerate 1.4  or higher (www.ebi.ac.uk/~guy/exonerate)
-
-You must also install one of the following:
-    *Wu-BLAST 2.0 or higher
-     (Wu-BLAST has become AB-BLAST, AB-BLAST is not supported)
-	or
-    *NCBI BLAST 2.2.X or higher
-     (http://www.ncbi.nlm.nih.gov/BLAST/download.shtml)
- 
-You might want to also install these optional external programs:
-    *Augustus 2.0 or higher (augustus.gobics.de)
-    *GeneMark-ES (exon.biology.gatech.edu)
-    *FGENESH 2.6 or higher (www.softberry.com) - requires licence
-    *GeneMarkS for prokaryotic genomes (exon.biology.gatech.edu)
-
-To install MPI support, you must have an mpi package installed, MAKER
-supports MPICH2:
-    *MPICH2 (http://www.mcs.anl.gov/research/projects/mpich2/)
-
-Note: Remember to install MPICH2 with the --enable-sharedlibs flag set
-to the appropriate value.  See MPICH2 Installer's Guide at:
-http://www.mcs.anl.gov/research/projects/mpich2/documentation/index.php?s=docs
-
-Also see the MPI configuration instructions found further bellow.
-
-Notes:
-
-1) Wu-BLAST has become AB-BLAST.  We have not tested AB-BLAST for
-   compatibiliy with MAKER, although we do have reports from users
-   who said it works for them.  However we do not have plans to
-   activly support and debug use of AB-BLAST in MAKER, so if you
-   have an existing copy of Wu-BLAST great, if not, we recommend
-   using NCBI BLAST.
-2) RepeatMasker requires Wu-BLAST or RMBlast and a single file
-   executable called TRF (see RepeatMasker website for details), so
-   please install these before installing RepeatMasker.
-   Note: We do not recommend using cross_match as RepeatMasker
-   performance will suffer.
-3) Exonerate Binaries can be downloaded from the website.  If you use
-   Mac OSX, however, binaries are only available for version 1.0.
-   This verion will work too.  If you would like to compile exonerate,
-   it requires GLIB2, a C-library, that has a link from the exonerate
-   website.  If you use Mac OSX, GLIB2 can downloaded using FINK.
-4) RepeatMasker requires a repeat library file, which can be
-   downloaded from Repbase upon registration
-   (http://www.girinst.org/), this is explained on the RepeatMasker
-   website.
-5) Please note the location of all of the programs that you have
-   installed, and add them to you $PATH variable in your .profile
-   file.  You will need this information in the maker_exe file, one
-   of MAKER's 3 control files. As long as the programs are in your
-   PATH then the correct locations will be automatically entered in
-   the maker_exe file.
-
-Now that you have all the necessary programs installed, MAKER can be
-unpacked using:
-
- tar -zxvf maker.tar.gz
-
-This will create a directory called MAKER with many sub directories:
+The following directories will be found in the MAKER installation
+(some are generated during setup):
 
     bin     - contains the MAKER executables.
     lib     - contains necessary perl libaries for MAKER.
     src     - installation folder for configuring and installing MAKER.
-              Contains the Build.PL script.
     exe     - MAKER installed external execuatables are stored here.
     perl    - MAKER compiled and localized CPAN libs are stored here.
     data    - contains sample data for use by MAKER.
@@ -115,7 +23,9 @@ This will create a directory called MAKER with many sub directories:
               (See sections titled APOLLO and JBrowse below)
     MWAS    - contains optional MAKER web based GUI
 
+
 Now you can run MAKER!!
+Just type maker -h on the command line to see the usage statement
 
 
 Programs required by MAKER rely on certain environmental variables
@@ -124,43 +34,22 @@ instructions of the external programs, a reminder list is provided
 below:
 
 for tcsh:
-setenv PERL5LIB where_bioperl_is_installed
-setenv WUBLASTMAT where_wublast_is_installed/matrix
-setenv WUBLASTFILTER where_wublast_is_installed/filter
 setenv ZOE where_snap_is_installed
 setenv AUGUSTUS_CONFIG_PATH where_augustus_is_installed/config
 
 for bash:
-export PERL5LIB=where_bioperl_is_installed
-export WUBLASTMAT=where_wublast_is_installed/matrix
-export WUBLASTFILTER=where_wublast_is_installed/filter
 export ZOE=where_snap_is_installed
 export AUGUSTUS_CONFIG_PATH=where_augustus_is_installed/config
 
+Note: ZOE should not be set to .../snap/Zoe, rather just .../snap
+
+
 #---------------------------------------------------------------------
+MAKER WITH MPI
 
-MPI MAKER INSTALL
+!!INSTALLATION INSTRUCTIONS FOR MPI ARE IN .../maker/INSTALL!!
 
-You will need to have perl compiled for threads with an updated
-version of the perl threads module installed from CPAN before
-installing MPI MAKER. Note MAKER is only compatible with MPICH2.
-
-If you are running MAKER on an MPI capable cluster, you can install an
-MPI version of MAKER by doing the following:
-  a. Install standard MAKER and verify that it runs.
-  b. Install MPICH2 with the --enable-sharedlibs flag set to the
-     appropriate value for your OS (See MPICH2 documentation)
-  c. Use cd to change to the maker/src subdirectory in the MAKER
-     instalation folder.
-  d. Run Build.PL by typing: perl Build.PL
-  e. If	MPICH2 is installed and	configured correctly, it will be
-     detected by MAKER and Build.PL will ask if you want to intall
-     MPI MAKER.  Select 'yes'.
-  f. run ./Build install
-
-To run with MPI, first verify that your MPI environment is initiated,
-(i.e. using the mpdboot or mpd command if necessary). Now start MAKER
-via mpiexec.
+To run with MPI, run MAKER via mpiexec.
 
 Example: (This will run MAKER on 4 nodes or processors)
 
@@ -169,12 +58,18 @@ mpiexec -n 4 maker maker_opts.ctl maker_bopts.ctl maker_exe.ctl
 Please see the documentation of the MPI environment you use for
 instructions on how to initiate an MPI process.
 
-#---------------------------------------------------------------------
-
-SEE THE GMOD MAKER TUTORIAL http://gmod.org/wiki/MAKER_Tutorial
 
 #---------------------------------------------------------------------
+HOW TO USE MAKER
 
+Step-by-step GMOD tutorial --> http://gmod.org/wiki/MAKER_Tutorial
+MAKER mailing list --> http://box290.bluehost.com/mailman/listinfo/maker-devel_yandell-lab.org
+Search List archives --> https://groups.google.com/forum/#!forum/maker-devel
+
+*Please search the archives before sending questions to the list
+
+
+#---------------------------------------------------------------------
 RUNNING MAKER WITH EXAMPLE DATA
 
 1) Copy the files in the data directories to a temporary directory
@@ -190,8 +85,8 @@ RUNNING MAKER WITH EXAMPLE DATA
 
 5) Examine the output files.  See MAKER OUTPUT and APOLLO sections.
 
-#---------------------------------------------------------------------
 
+#---------------------------------------------------------------------
 CONTROL FILE EDITING
 
 MAKER uses control files to guide each run.  Generic control files can
@@ -241,7 +136,8 @@ equals.
 A. maker_exe.ctl - includes information about programs executed by
 MAKER.
 
-Here is an example of sections of the maker_opts.ctl file:
+
+Here is an example of section (not everything) from the maker_opts.ctl file:
 
 #-----Genome
 genome=/fastas/genome.fasta
@@ -270,7 +166,6 @@ clean_up=0
 
 
 #---------------------------------------------------------------------
-
 MAKER OUTPUT
 
 MAKER will create at least the following files/directories:
@@ -311,23 +206,21 @@ Within the XXX_datastore/ subdirectories:
       output files produced by MAKER, including BLAST reports, SNAP
       output, exonnerate output and the masked genomeic sequence.
 
-WARNING:
+IMPORTANT:
 
 * The names of output files are based on sequence ids.  If giving
   MAKER a multi-fasta file, it is important to verify that all
   sequence id are unique, so files are not overwritten.
 
-* If there are more than 1,000 sequences in a multi-fasta file a deep
-  datastore structure will be used. See THE DATASTORE DIRECTORY
-  STRUCTURE in this document.
+* Output is store din a deep datastore structure.
+  See DATASTORE DIRECTORY STRUCTURE in this document.
 
-* If sequence ids contain characters that are illegal in file names,
+* If sequence IDs contain characters that are illegal in file names,
   those characters will be replaced automatically before building
   output file names.
 
 
 #---------------------------------------------------------------------
-
 DATASTORE DIRECTORY STRUCTURE
 
 Many filesystems have performance problems with large numbers of
@@ -371,7 +264,6 @@ contig. The values of the third column are as follows:
 
 
 #---------------------------------------------------------------------
-
 GFF3 PASSTHROUGH
 
 If you have data from a source that MAKER does not support, and you
@@ -390,10 +282,10 @@ data, est_gff for EST data, etc.).
 You should use the online GFF3 validator to see if your GFF3 files
 comply with all GFF3 specifications before running MAKER:
 
-     http://dev.wormbase.org/db/validate_gff3/validate_gff3_online
+     http://modencode.oicr.on.ca/cgi-bin/validate_gff3_online
+
 
 #---------------------------------------------------------------------
-
 APOLLO
 
 MAKER is bundled with a configuration file that improves the color and
@@ -409,7 +301,6 @@ Example:
     cp maker/GMOD/Apollo/gff3.tiers ~/.apollo
 
 #---------------------------------------------------------------------
-
 CHADO
 
 MAKER is bundled with a script to make it easy to load MAKER results
@@ -420,20 +311,16 @@ You can also use the chado2gff3 script bndled with MAKER to dump from
 Chado to GFF3.
 
 #---------------------------------------------------------------------
-
 JBROWSE
 
 MAKER is bundled with a configuration file that improves the color and
 display of MAKER annotations in JBrowse. The is configuration file is
-genome.css. Place it in your JBrowse html directory per JBrowse
-documentation.  You can use the script maker2jbrowse to automatically
-load MAKER produced GFF3 into JBrowse. There is also a second example
-configuration file for loading MAKER data stored in a CHADO database
-into JBrowse.  MAKER data can be loaded into a CHADO database using
-the maker2chado script.
+maker.css. Place it in your JBrowse directory. You can then use the
+script maker2jbrowse to automatically load MAKER produced GFF3 into
+JBrowse.
+
 
 #---------------------------------------------------------------------
-
 HMM BUILDING (for training SNAP, based on snap documentation)
 
 A) First you will need to determine the genes used to model future
@@ -469,6 +356,8 @@ A) First you will need to determine the genes used to model future
    annotations in the absence of experimental data by identifying DNA
    regions with homology to a set of 458 proteins that are highly
    conserved among taxa.
+
+   Use cegma2zff.pl to convert cegma output for training SNAP.
 
    Combining both CEGMA and MAKER datasets to build the first HMM is
    also a good strategy.
