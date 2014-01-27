@@ -1,0 +1,167 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Long;
+use URI::Escape;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+maker_functional_gff
+
+maker_functional_gff uniprot-sprot.fasta uniprot-sprot.blast.out maker.gff
+
+Description:
+
+This script will take a uniprot-sprot file a GFF3 file, and a wu-blast -mformat
+2 blast output file from a blast of maker proteins against
+uniprot-sprot proteins and add functional annotations to the maker
+GFF3 Notes attribute. Like this:
+
+";
+
+
+my ($uniprot_file, $blast_file, $gff_file) = @ARGV;
+die $usage unless $uniprot_file && $blast_file && $gff_file;
+
+my $gene_map = parse_genes($gff_file);
+my $blast = parse_blast($uniprot_file, $blast_file, $gene_map);
+
+open (my $IN,  '<', $gff_file) or die "Can't open $gff_file for reading\n$!\n";
+
+LINE:
+while (my $line = <$IN>) {
+
+	chomp $line;
+	my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
+	    $attrb) = split /\t/, $line;
+
+	if ($line =~ /^\s*\#/ ||
+	    ! $attrb          ||
+	    ($type ne 'mRNA' && $type ne 'gene')
+	   ) {
+		print "$line\n";
+		next LINE;
+	}
+
+	my ($id) = $attrb =~ /ID\s*=\s*(.*?);/;
+
+	my $note;
+	if ($blast->{$id}{note}) {
+		$note .= $blast->{$id}{note};
+	}
+	else {
+		$note .= 'Protein of unknown function';
+	}
+
+	$note = uri_escape($note, ';=%&,');
+
+	$note = "Note=" . $note;
+
+	$line =~ s/;$//;
+	$line .= ';';
+	$line .= "$note;";
+
+#	my $name = $blast->{$id}{name};
+#	if ($name) {
+#		$line =~ s/Name=.*?;/Name=Similar to $name;/;
+#	}
+
+	print "$line\n";
+}
+#-----------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES --------------------------------
+#-----------------------------------------------------------------------------
+sub parse_genes {
+
+	my $file = shift;
+
+	open (my $IN, '<', $file) or die "Can't open $file for reading\n$!\n";
+
+	my %gene_map;
+      LINE:
+	while (my $line = <$IN>) {
+
+		chomp $line;
+		my ($seq, $source, $type, $start, $end, $score, $strand, $phase,
+		    $attrb) = split /\t/, $line;
+
+		if ($line =~ /^\s*\#/ ||
+		    ! $attrb          ||
+		    ($type ne 'mRNA')
+		   ) {
+			next LINE;
+		}
+
+		my ($id)     = $attrb =~ /ID\s*=\s*(.*?);/;
+		my ($parent) = $attrb =~ /Parent\s*=\s*(.*?);/;
+
+		$gene_map{$id} = $parent;
+	}
+	return \%gene_map;
+}
+#-----------------------------------------------------------------------------
+sub parse_blast{
+
+	my ($fasta_file, $blast_file, $gene_map) = @_;
+
+	open(my $IN, '<', $fasta_file) or
+	  die "Can't open $fasta_file for reading\n$!\n";
+
+	my %fasta;
+	while (<$IN>) {
+
+		next unless /^>/;
+
+		my ($id, $desc, $org, $name);
+		#>sp|P18560|1101L_ASFB7 Protein MGF 110-1L OS=African swine fever virus (strain Badajoz 1971 Vero-adapted) GN=BA71V-008 PE=3 SV=1
+		if (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
+			$id   = $1;
+			$desc = $2;
+			$org  = $3;
+			$name = $5 || '';
+		}
+		else {
+			warn "Can't parse details from FASTA header: $_\n";
+		}
+
+		my $note = '';
+		$note .= "Similar to " if $name || $desc;
+		$note .= "$name: "     if $name;
+		$note .= "$desc "      if $desc;
+		$note .= "($org)"      if $org;
+
+		$fasta{$id}{note} = $note;
+
+		$fasta{$id}{name} = $name;
+
+		print '';
+	}
+	close $IN;
+
+	open($IN, '<', $blast_file) or
+	  die "Can't open $blast_file for reading\n$!\n";
+
+	my (%blast, %seen);
+	while (<$IN>) {
+	        my @F = split;
+		my ($qid, $sid, $e_val) = (@F == 12 && $F[3] =~ /^\d+$/) ? (@F[0..1],$F[10]) : @F[0..2];
+
+		if (! $seen{$qid}) {
+			$blast{$qid} = $fasta{$sid} || '';
+			$seen{$qid}++;
+		}
+
+		my $gene_id = $gene_map->{$qid};
+		if ($gene_id && ! $seen{$gene_id}) {
+			$blast{$gene_id} = $fasta{$sid} || '';
+			$seen{$gene_id}++;
+		}
+	}
+	return \%blast;
+}

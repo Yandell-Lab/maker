@@ -1,0 +1,298 @@
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
+use warnings;
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../src/inc/lib";
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use MAKER::Build;
+use Getopt::Long;
+use File::Temp;
+use URI::Escape;
+use DBI;
+use vars qw($JB $RS $conf);
+
+BEGIN {
+    my $conf_file = "$FindBin::Bin/../exe/webapollo/maker.conf";
+    if(! -f $conf_file){
+	print "Please configure WebApollo via MAKER's 'Build' script\n".
+	    "before running maker2wap.\n".
+	    "Example:\n".
+	    "\t$FindBin::Bin/../src/Build webapollo\n".
+	    "\t$FindBin::Bin/maker2wap maker_results.gff\n\n";
+	exit(0);
+    }
+    else{
+	open(IN, "< $conf_file");
+	my $data = join('', <IN>); 
+	close(IN);
+	eval $data;
+    }
+}
+
+my $usage = '
+USAGE:
+     maker2wap [OPTION] <db_dir> <gff3file1> <gff3file2> ...
+     maker2wap [OPTION] <db_dir> -d <datastore_index>
+
+     This script takes MAKER produced GFF3 files and dumps them into a
+     JBrowse for you using pre-configured JSON tracks.
+
+OPTIONS:
+     ds_index|d  <file>  Provide MAKER produced datastore index
+
+     help|?              Displays this usage statement
+
+';
+
+my $dstore;
+GetOptions("ds_index|d=s" => \$dstore,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+my $db_dir = shift;
+$JB = "$db_dir/jbrowse/bin/flatfile-to-json.pl";
+$RS = "$db_dir/jbrowse/bin/prepare-refseqs.pl";
+
+my $error;
+$error .= "ERROR:  Cannot find flatfile-to-json.pl\n" if(! -f $RS);
+$error .= "ERROR:  Cannot find prepare-refseqs.pl\n" if(! -f $JB);
+$error .= "You may not have supplied the proper directory for Web Apollo\n" if($error);
+$error .= "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+
+my @files;
+if($dstore && -f $dstore){
+    my $base = $dstore;
+    $base =~ s/(\/?)[^\/]+$/$1/;
+    open(IN, "< $dstore");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        next if $seen{$e};
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+	my $name = $1;
+        my $gff = ($base) ? "$base/$file/$name.gff" : "$file/$name.gff";
+
+	if(! -f $gff){
+	    $name = uri_escape($name, '.');
+	    $gff = ($base) ? "$base/$file/$name.gff" : "$file/$name.gff";
+	}
+	$file = $gff;
+    }
+}
+else{
+    @files = @ARGV;
+    undef @ARGV;
+}
+
+if(!@files){
+    print $usage;
+    exit();
+}
+
+foreach my $file (@files){
+    if (! -f $file){
+	$error .= "ERROR: The GFF3 file \'$file\' does not exist\n";
+    }
+}
+die $error if $error;
+
+#--confirm configuration
+my @report = qw(tom_dir dbi_select dbname dbhost dbport dbuser);
+print "CURRENT CONFIGURATION:\n";
+print "\t".join("\t\n", map {$_ .' => '.$conf->{$_}} @report)."\n";
+print "\n*Use command line options to alter configuration or use\n".
+    "'$FindBin::Bin/../src/Build webapollo' to alter default values\n\n";
+
+#--connect to database
+my $dbname;
+my $dbhost;
+my $dbport;
+my $dbuser;
+my $dbpass;
+my $createdb;
+my $path = "$FindBin::Bin/../exe/webapollo";
+if($dbi_select eq 'sqlite'){
+    $dbname = "$path/web_apollo_users.db";
+    $createdb = -f $dbname;
+}
+else{
+    if(!$self->y_n("\nDoes a database and username to manage it already exist?", 'Y')){
+            print "\nPlease create a database and a user to manage it and\n".
+		"then rerun this installation script\n";
+            print "Example:\n";
+            print "\tcreateuser -d -S -R -P web_apollo_users_admin\n";
+            print "\tcreatedb -U web_apollo_users_admin web_apollo_users\n";
+            print "\t./Build webapollo\n";
+            exit(0);
+    }
+
+    $dbname = $self->prompt("\nName for permissions database:", 'web_apollo_users');
+    $dbhost = $self->prompt("\nDatabase host:", 'localhost');
+    $dbport = $self->prompt("\nDatabase port:", '5432') if($dbhost ne 'localhost');
+    $dbuser = $self->prompt("\nDatabase username:", 'web_apollo_users_admin');
+    $dbpass = $self->safe_prompt("\nDatabase password:", '');
+    $createdb= $self->y_n("\nDo you need me to populate the database?", 'N');
+}
+
+#populate DB if required
+$tom_dir;
+$dbi_select;
+$dbname;
+$dbhost;
+$dbport;
+$dbuser;
+my $dbh;
+if($dbi_select eq 'postgresql'){
+    my $connect = "dbi:Pg:dbname=$dbname";
+    $connect .= ";host=$dbhost" if($dbhost ne 'localhost');
+    $connect .= ";port=$dbport" if($dbport);
+    $dbh = DBI->connect($connect, $dbuser, $dbpass);
+}
+elsif($dbi_select eq 'sqlite'){
+    my $connect = "dbi:SQLite:dbname=$dbname";
+    $dbh = DBI->connect($connect, '', '');
+
+#--add user that can access webapollo
+print "\nNow we need a user with access to WebApollo. This\n".
+    "is different than the database user, although you\n".
+    "still could choose to use the same name.\n";
+
+my $wapuser = $self->prompt("WebApollo username:", 'web_apollo_users_admin');
+my $sql = "SELECT * FROM users WHERE username='$wapuser'";
+my $results = $dbh->selectall_arrayref("SELECT * FROM users WHERE username='$wapuser'");
+if(!@$results){
+    my $wappass = $self->safe_prompt("\nWebApollo password:", '');
+        $sql = "INSERT INTO users(username, password) " .
+            "VALUES('$wapuser', '$wappass')";
+    $dbh->do($sql);
+}
+
+#--build command lines
+my %commands;
+
+#MAKER anotations
+$commands{maker}          = ' --trackLabel maker --webApollo --arrowheadClass trellis-arrowhead --getSubfeatures --subfeatureClasses \'{"wholeCDS": null, "CDS":"maker-CDS", "UTR": "maker-UTR", "exon":"container-100pct"}\' --cssClass container-16px --type mRNA --renderClassName gray-center-20pct';
+
+#ab initio gene predictions
+$commands{snap}           = ' --tracklabel "snap" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "snap-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{snap_masked}           = ' --tracklabel "snap_masked" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "snap-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{augustus}           = ' --tracklabel "augustus" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "augustus-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{augustus_masked}           = ' --tracklabel "augustus" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "augustus-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{fgenesh}           = ' --tracklabel "fgenesh" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "fgenesh-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{fgenesh_masked}           = ' --tracklabel "fgenesh" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "fgenesh-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{genemark}           = ' --tracklabel "genemark" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "genemark-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{genemark_masked}           = ' --tracklabel "genemark" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "genemark-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{pred_gff}           = ' --tracklabel "pred_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "snap-CDS"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+
+#evidence alignments
+$commands{blastn}           = ' --tracklabel "blastn" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "blastn-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{est2genome}           = ' --tracklabel "est2genome" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "est2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{est_gff}           = ' --tracklabel "est_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "est2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{blastx}           = ' --tracklabel "blastx" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "blastx-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{protein2genome}           = ' --tracklabel "protein2genome" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "protein2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{protein_gff}           = ' --tracklabel "protein_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "protein2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{tblastx}           = ' --tracklabel "tblastx" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "tblastx-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{cdna2genome}           = ' --tracklabel "cdna2genome" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "cdna2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{altest_gff}           = ' --tracklabel "altest_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "cdna2genome-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{iprscan}           = ' --tracklabel "iprscan" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "iprscan-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+
+#repeats
+$commands{repeatmasker}           = ' --tracklabel "repeatmasker" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "repeatmasker-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{repeatrunner}           = ' --tracklabel "repeatrunner" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "repeatmasker-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+$commands{repeat_gff}           = ' --tracklabel "repeat_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "repeatmasker-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+
+#other
+$commands{other_gff}           = ' --tracklabel "other_gff" --webApollo --arrowheadClass webapollo-arrowhead --getSubfeatures --subfeatureClasses \'{"match_part": "other-part"}\' --cssClass container-10px --renderClassName gray-center-20pct';
+
+foreach my $file (@files){
+    my $gff;
+    my $fasta;
+    my %tracks;
+
+    open(IN, "< $file");
+    my $ff; #fasta flag
+    my %seen;
+    while(defined(my $line = <IN>)){
+	if($ff){
+	    $fasta .= $line;
+	    next;
+	}
+	elsif($line =~ /^\#\#FASTA/){
+	    $ff = 1;
+	    next;
+	}
+	elsif($line =~ /[^\t]*\t[^\t]*\tcontig\t/){
+	    next; #skip contig line
+	}
+	else{
+	    if($line !~ /^\#/ && $line =~ /[^\t]*\t([^\t]*)\t/){
+		$tracks{$1}++;
+		$tracks{gene}++ if($1 eq 'maker'); #add gene locus track
+	    }
+	    #if($line =~ /\tCDS\t|\tfive_prime_UTR\t|\tthree_prime_UTR\t/ && $line =~ /ID\=([^\;\n]+)/){
+	    #	my $id = $1;
+	    #	if($seen{$id}){
+	    #	    my $i = 0;
+	    #	    $i++ while($seen{"$id:$i"});
+	    #	    $id = "$id:$i";
+	    #	    $line =~ s/ID\=[^\;\n]+/ID\=$id/;
+	    #	}
+	    #	$seen{$id}++
+	    #}
+
+	    $gff .= $line;
+	    next;
+	}
+    }
+    close(IN);
+
+    if($fasta){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh $fasta;
+	close($fh);
+
+	my $command = $RS;
+	$command .= " --fasta $fname";
+
+	system ($command);
+	unlink($fname);
+    }
+
+    if($gff){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh $gff;
+	close($fh);
+
+	while(my $track = each %tracks){
+	    my $command = $JB;
+
+	    if(! exists $commands{$track}){
+		warn "ERROR: No track information for source \'$track\'\n\n";
+		next;
+	    }
+
+	    $command .= $commands{$track};
+	    $command .= " --gff $fname";
+
+	    system ($command);
+	}
+
+	unlink($fname);
+    }
+}

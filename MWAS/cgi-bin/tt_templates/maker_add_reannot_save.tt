@@ -1,0 +1,607 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Maker:Add Job: assigned id:[% job_id %]</h2>
+<br>
+<form method="POST" action="/cgi-bin/Maker/maker2.cgi" name="baal" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="noclue" value="[% noclue %]">
+<input type="hidden" name="job_id" value="[% job_id %]">
+<h2><BR><span style="color: red; font-weight: bold">Denovo Annotations</span></h2>
+<hr>
+<table>
+  <tr>
+    <td>Choose Genome Fasta File:</td>
+
+   	<td>
+     <SELECT name="genome">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==genome %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+</td><td>
+ <a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a>
+ </td>
+	
+
+  </tr>
+
+
+</table>
+
+<h2><BR><span style="color: red; font-weight: bold">EST Evidence</span></h2>
+
+<h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta files of ESTs; these will be aligned to your genomic sequence and used to help inform the annotations. Two different types of ESTs can be used: (1) a file of ESTs from the same source as your genomic sequence; and (2) (optionally) a file of ESTs from a relatively closely related organism, for example if your genomic sequence is human, this second file might be mouse ESTs. </h4>
+<hr>
+
+<table>
+<tr>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from the same source as your genomic sequence.</td>
+    <td>    
+
+
+ <SELECT name="est">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==est %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+	
+    </td><td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+  </tr>
+
+<tr>
+    <td><span style="color: red; font-weight: bold">Upload</span> a multi-fasta file of ESTs from a related organism(s); this file is optional. Please keep in mind that since these ESTs must be aligned to your genomic sequence with TBLASTX, that providing this file may substantially  increase compute times.</td>
+
+    <td>    
+	 <SELECT name="altest">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==altest %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+    </td><td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+
+
+  </tr>
+</table>
+ 
+<h2><BR><span style="color: red; font-weight: bold">Protein Homology Evidence</span> </h2>
+<hr>
+<table>
+  <tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> your multi-fasta file of Proteins; these will be aligned to your genomic sequence and used to help inform the annotations. Alternatively, you may simply wish to use the current Uniprot database; if so, skip this step and check the Uniprot Box below. </h4>
+</td>
+
+    <td>    
+
+
+	<SELECT name="protein">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==protein %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view&&jid=[% job_id %]"> Manage FILEBOX</a></td>
+
+
+
+  </tr>
+
+<tr>
+    <td>    
+      <input type="checkbox"  name="uniprot" value="uniprot"> <span style="color: red; font-weight: bold">Use Uniprot instead</span>
+    </td>
+  </tr>
+
+</table>
+<hr>
+<BR>
+<h2><span style="color: red; font-weight: bold">Configure Repeat Masking</span></h2>
+<td><h4> Don't want to RepeatMask? We recommend that you think twice. Not masking repeats will seriously compromise the quality of your annotations; but if you don't want to, you don't have to. Just click the box below and skip the rest of the RepeatMsking configuration steps. </h4> 
+
+<input type="checkbox"  name="no_mask" value="no_mask"> <span style="color: red; font-weight: bold">Don't RepeatMask my sequence!</span>
+<BR>
+<td><h4>MAKER uses RepeatMasker as well as its own internal, protein-based repeatmasking protocol to identify, annotate and then mask repeats. If RepBase has already created a repeat library for your genome, then choose that organism from the toggle swithch below. If a related oprgansim is available choose that one; if you don't see your organism, or a simlar one don't despair--addtional options are available, and we will walk you through them shortly. </h4>
+</td>
+<h2></h2>
+<table>
+ <tr>
+
+    <td><span style="color: red; font-weight: bold">Choose an organism</span> </td>
+    <td>
+
+	
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]
+        <option 
+		
+		[% IF morg.modelorg == rm_model %]
+		     selected 
+		[% END %]
+	value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+
+       [% END %]
+	
+	</select>	
+    </td>
+  </tr>
+</table>
+<h4>In addtion to RepeatMasker, MAKER uses its own internal, protein-based repeatmasking protocol to identify, annotate and then mask repeats. To accomplish this, MAKER uses it's own universal library of transposon encoded proteins, e.g. GAG,POL, ENVs, RVTs, etc. If you would like to use your own protein library in place of MAKER's own, then upload your protein multi-fasta here; otherwise MAKER will use its own library by default (recommended)  </h4>
+
+<table>
+  <tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> a Custom Repeat Protein multi-fasta file</h4></td>
+
+
+
+
+
+
+	  <td>    
+
+
+	<SELECT name="repeat_protein">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file==repeat_protein %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+    </td>
+
+
+
+
+
+
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+
+
+  </tr>
+</table>
+<h4>Perhaps you have manufactured your own nucleotide repeat library or have found a RepBase library that you think would work well with RepeatMasker too? If so upload that nucelotide multi-fasta file below. Don't have one? Talk to us! We may be able to make one for you. </h4>
+
+<table>
+<tr>
+    <td><h4><span style="color: red; font-weight: bold">Upload</span> a Custom Repeat nucleotide multi-fasta file (optional)</td>
+
+ <td>    
+
+	<SELECT name="rmlib">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == rmlib %]
+		     selected 
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+
+  </tr>
+</table>
+
+<hr>
+<h2><span style="color: red; font-weight: bold"> Choose Your Gene-predictor(s)</span></h2>
+<td><h4><td><h4>MAKER can use a number of popular gene predictors. Even better, it can 'talk' to the gene predictors you choose, passing them information about EST and Protein alignments in order to improve the quality of the predictions. Choose the ones you want to use below. Keep in mind that every gene predictor must be 'trained' for the organism whose DNA you wish to annotate; thus you will have to choose a predictor-- and then provide that predictor with a model file. Usually these are available at the gene-predictor's own web-site; check there to find these files. Can't find a a model file for your organism? Don't despair; just chooseGENEMARK option below and choose self train.</h4> 
+</td>
+
+<h4>Gene Predictors:</h4>
+<hr>
+<table>
+
+	
+<tr><td><input type="checkbox" name="snap" value="snap"  
+
+	[% snaphmm_checked  %]
+		     
+	
+
+
+></td><td>SNAP</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="snaphmm_choice" value="userfile" [% sufl %]>Add your own snap  HMM</td>
+    <td>
+	
+
+	
+	<SELECT name="snaphmm_user">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == snaphmm_user %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+ 	
+	
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td><input type="radio" name="snaphmm_choice" value="model" [% snaphmm_model_checked%]> Select from  model snap HMM</td>
+<td>
+
+
+
+      <select name="snaphmm_model">
+	[% FOREACH morg = snaphmm.sort('snaphmm') %]
+        <option 
+		
+		[% IF morg.snaphmm == snaphmm_model %]
+		     selected 
+		[% END %]
+	value=[% morg.snaphmm %]>[% morg.snaphmm %]</option>
+
+       [% END %]
+
+
+</td>
+</tr>
+
+
+
+<tr><td><input type="checkbox" name="aug" value="aug"  
+
+	[% aughmm_checked  %]
+		     
+	
+
+
+></td><td>AUG</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="aughmm_choice" value="userfile" [% aughmm_userfile_checked %]>Add your own snap  HMM</td>
+    <td>
+	
+
+	
+	<SELECT name="aughmm_user">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == aughmm_user %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+ 	
+	
+    </td>
+
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+  </tr>
+<tr>
+<td></td><td>or</td>
+</tr>
+<tr>
+<td><td><input type="radio" name="aughmm_choice" value="model" [% aughmm_model_checked%]> Select from  model snap HMM</td>
+<td>
+
+
+
+      <select name="aughmm_model">
+	[% FOREACH morg = agustus.sort('agustus_species') %]
+        <option 
+		
+		[% IF morg.agustus_species == aughmm_model %]
+		     selected 
+		[% END %]
+	value=[% morg.agustus_species %]>[% morg.agustus_species %]</option>
+
+       [% END %]
+</td>
+</tr>
+
+
+
+
+
+
+<tr><td><input type="checkbox" name="fgeneh" value="fgeneh" [% fgeneh_checked %]></td><td>FgeneH</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="fgenehhmm_choice" value="userfile" >Add your own fgeneh  HMM</td>
+    <td>
+
+
+
+
+
+	<SELECT name="fgenehhmm_user">
+	  <option> FILEBOX  
+	
+	[% FOREACH file = files  %]
+		<OPTION 	  	
+		
+		[% IF file == fgenehhmm_userfile %]
+		     selected 
+	         
+		[% END %]
+	      value="[% file %]">[% file %]
+    	  
+	  [% END %]
+	
+     </SELECT>
+
+
+
+	<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+    </td>
+  </tr>
+<tr>
+
+</tr>
+
+
+<tr><td><input type="checkbox" name="est2genome" value="est2genome"></td><td>Est2Genome</td><tr><td></td><td>Make  gene annotation directly from est alignments</td></tr>
+<tr><td><input type="checkbox" name="genemark" value="genemark"></td><td>GENEMRAK</td></tr>
+ <tr>
+    
+<td></td>
+     <td><input type="radio" name="gm_choice" value="userfile">Add your own  genemark HMM</td>
+    <td>
+	
+ 	<SELECT name="gm_user">
+	  <option> FILEBOX  
+	  [% FOREACH file = files  %]
+
+	     <OPTION>[% file %]
+    	  
+	  [% END %]
+        </SELECT>
+	<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+    </td>
+  </tr>
+<tr>
+
+</tr>
+<tr>
+<td><td><input type="radio" name="gm_choice" value="model">Select from  model HMM</td>
+<td>
+	<select name="gm_model">
+	[% FOREACH morg = genemark_model.sort('model') %]	
+        <option value=[% morg.model %]>[% morg.model %]</option>
+       [% END %]
+	
+	</select>
+</td>
+</tr>
+<tr>
+<td><td> GENEMRAK can self train your whole genome fasta. If you already have done so , you should have genemark HMM in your filebox. If not choose the self train checkbox  below. Please note GENEMARK takes  atleast 7 hours to train a reasonable size genome. If you do choose to self train,you will be notified via your provided email when genemark is done selftraining. One more email there after also will be sent once Maker is done annotatted your genome</td>
+
+</tr>
+
+
+
+<tr><td></td>
+<td><input type="radio"  name="gm_choice" value="selftrain"> <span style="color: red; font-weight: bold">Self Train!</span></td>
+</tr>
+</table>
+<hr>
+
+<h2><span style="color: red; font-weight: bold"> Already Got your own Annotations or ab-inito predictions?</span></h2>
+<td><h4>MAKER can also use your own annotations that you already have or any abinitio gene predictions. You would need your annotation to be in GFF3 format.  
+
+</h4>
+
+<table>
+<tr>
+    <td>add your own abinitio prediction</td>
+     <td>
+	 <SELECT name="pred_gff">
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	
+    </td>
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+  </tr>
+
+
+
+ <tr>
+    <td>add your own model organism annotation</td>
+     <td>
+	 <SELECT name="model_gff">
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	      	
+    </td>
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>	
+  </tr>
+
+
+
+</table>
+<hr>
+<h2><span style="color: red; font-weight: bold"> Thinking of Reannotation?</span></h2>
+<td><h4>You can. If you have maker old annotation
+
+</h4>
+
+<table>
+<tr>
+    <td>Add maker old annotation</td>
+     <td>
+	 <SELECT name="old_annotation">
+	  <option> FILEBOX  
+	     [% FOREACH file = files  %]
+
+	       <OPTION>[% file %]
+    	  
+	     [% END %]
+        </SELECT>      	      	
+    </td>
+<td><a href="maker2.cgi?rm=maker_file_view"> Manage FILEBOX</a></td>
+  </tr>
+
+<table> 
+
+<hr>
+<h2><span style="color: red; font-weight: bold"> Annotation Properties</span></h2>
+
+<table>
+ <tr>
+    <td>Non standard amino acids generally cause problems for alignment
+algorithms. here you can select a standard amino acids to replace non
+standard amino acids. By default it is cysteine.</td>
+    
+  </tr>
+<tr>
+    <td>Choose an alternate standard amino acid</td>
+     <td>
+<select name="alt_peptide">
+	[% FOREACH morg = peptide.sort('alt_peptide') %]	
+        <option value=[% morg.alt_peptide %]>[% morg.alt_peptide %]</option>
+       [% END %]
+	
+	</select>
+</td>
+  </tr>
+ <tr>
+    <td>All gene annotations must produce a protein of at least this many amino acids in lengthn</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_protein" value=0></td>
+    </td>
+  </tr>
+
+ <tr>
+    <td>All contigs from the input genome file below this size will be skipped</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_contig" value=1>
+    </td>
+  </tr>
+
+ <tr>
+    <td>Length for the splitting of hits (expected max intron size for evidence alignments)</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="split_hit" value="10000">
+    </td>
+ </tr>
+
+<tr>
+    <td>Length of sequence surrounding EST and protein evidence used to extend gene predictions</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="pred_flank" value="200">
+    </td>
+</tr>
+
+
+
+
+<tr>
+    <td>Consider single exon EST evidence when generating annotations</td>
+    <td>
+      	<select name="single_exon">
+        <option value="1">Yes</option>	
+        <option value="0">No</option>
+	</select>
+    </td>
+  </tr>
+
+</table>
+
+<br />
+
+<input type="submit" name="add" value="Add Maker Job">
+
+<input type="submit" name="save" value="Save/Come Back">
+
+<input type="reset" value="use default"><br>* = optional
+
+</form>
+
+[% END %]
+

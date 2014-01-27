@@ -1,0 +1,111 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<br><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_dark.gif">
+[% first %][% lastt %]
+<br>[% email %]
+<br>
+<br>
+<br>
+<br>
+<br>
+
+<h2><img src="/Student/images/MSN2.ico" width="50" height="50">Your Account</h2>
+
+
+<br>
+<br>
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=students_list"><img  src="http://www.famfamfam.com/lab/icons/silk/icons/cart.png"> Job view</a>
+&nbsp;
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_file_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif">  FILEBOX </a>
+&nbsp
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_user_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_light.gif"> Account </
+a>
+&nbsp;
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_feedback_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/comment_new.gif"> Feedback  </a>
+&nbsp;
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_help_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif"> Help </a>
+
+
+&nbsp;
+<a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=students_list"><img  src="/Student/images/c1.ico" width="16" height="16"        > Update Jobs</a>
+
+
+<hr>
+
+<form method="POST" action="/cgi-bin/Student/student_general.cgi" name="general_add">
+
+<input type="hidden" name="rm" value="update_user">
+
+<h2>
+[% message  %]
+</h2>
+<table bgcolor ="white" width=100%><tr><td><H3>Profile<hr></H3></td><td></td><td></td></tr></table>
+<table   width=100%  border=0 celspacing="11">
+  <tr>
+    <td>Login ID:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="c_id" value=[% cid %]>
+    </td>
+  </tr>
+  <tr>
+    <td>First Name:</td>
+    <td>    
+        <input type="text" size=20 maxlength=20 name="first_name" value="[% first %]">
+    </td>
+  </tr>
+  <tr>
+    <td>Last Name:</td>
+    <td>    
+      <input type="text" size=20 maxlength=20 name="last_name" value="[% lastt %]">
+    </td>
+  </tr>
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=30 maxlength=60 name="e_mail" value="[% email %]">
+    </td>
+<tr><td></td><td><input type="submit" name="profile" value="Change Profile"></td>
+
+  </tr>
+</table>
+<table bgcolor ="white" width=100%><tr><td><H3></H2></td><td></td><td></td></tr></table>
+<table bgcolor ="white" width=100%><tr><td><H3>Password</H2></td><td></td><td></td></tr></table>
+
+
+
+
+<table  border=0 widhth=100%>
+
+
+  <tr bgcolor="#C9CC9C" width=100%>
+    <td>New Password:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password">
+    </td><td></td>
+
+  </tr>
+  <tr bgcolor="#C9CC9c">
+    <td>New Password Verify:</td>
+    <td>    
+      <input type="password" size=10 maxlength=10 name="password_verify">
+    </td><td></td><td></td>
+<td> <input type="submit" name="pass" value="Change Password "></td>
+
+
+<td></td><td></td><td></td>
+  </tr>
+</table>
+
+
+
+<br>
+
+
+</form>
+
+[% END %]
+

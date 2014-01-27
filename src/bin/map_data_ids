@@ -1,0 +1,73 @@
+#!/usr/bin/perl 
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+map_data_ids genome.all.id.map data.txt
+
+Description:
+
+This script takes a id map file and changes the name of the ID in a
+data file.  The map file is a two column tab delimited file with two
+columns: old_name and new_name.  The data file is assumed to be
+tab delimited by default, but this can be altered with the delimit
+option.  The ID in the data file can be in any column and is specified
+by the col option which defaults to the first column.
+
+Options:
+
+  col      The column number (1 based) in the data file that
+           corresponds to old_name in the mapping file.
+  delimit  The delimeter for the data file.
+
+";
+
+
+my ($help, $col, $delimit);
+my $opt_success = GetOptions('help'      => \$help,
+			     'col=i'     => \$col,
+			     'delimit=s' => \$delimit,
+			      );
+
+die $usage if $help || ! $opt_success;
+
+$col ||= 1;
+$col--;
+$delimit ||= "\t";
+
+my ($map_file, $data_file) = @ARGV;
+die $usage unless $map_file && $data_file;
+
+# Read the map file and build a map hash;
+open (my $MAP, '<', $map_file) or die "Can't open $map_file for reading\n$!\n";
+my %map;
+map {my ($old, $new) = split;$map{$old} = $new} (<$MAP>);
+close $MAP;
+
+# Open the data file for input unlink it to avoid clobbering it and open the 
+# same file for output.
+open (my $IN, '<', $data_file) or die "Can't open $data_file for reading\n$!\n";
+unlink($data_file);
+open(my $OUT, '>', $data_file) or die "Can't open $data_file for writing\n$!\n";
+
+# Just do it!
+while (<$IN>) {
+	chomp;
+	my @fields = split /$delimit/, $_;
+	if ($map{$fields[$col]}) {
+		$fields[$col] = $map{$fields[$col]};
+	}
+	else {
+		print STDERR "WARNING: No mapping available for $fields[$col]\n";
+	}
+	print $OUT join $delimit, @fields;
+	print $OUT "\n";
+}

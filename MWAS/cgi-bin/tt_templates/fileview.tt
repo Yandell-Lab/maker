@@ -1,0 +1,225 @@
+
+[% WRAPPER main.tt  %]
+
+<form method="POST" action="maker.cgi" name="filebox" enctype="multipart/form-data">
+<h2>
+ <a href="http://malachite.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_file_view&&noclue=[% UID %]"><img src="/Student/images/file1.ico">  FILEBOX </a>
+: ([% count %])</h2>
+<input type="hidden" name="rm" value="maker_file_view_process">
+<input type="hidden" name="jid" value="[% jobid %]">
+[% IF jobid > 0 %]
+<table bgcolor="#edda74">
+<td bgcolor="white">
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_left.gif">
+</td>
+<td>
+<a href="maker2.cgi?rm=students_list">
+Go back to <img src="http://www.famfamfam.com/lab/icons/silk/icons/cart.png">JobView</a>
+</td>
+</table>
+
+
+
+<a href="maker.cgi?rm=maker_add&&view=1&&noclue=gu&&jid=[% jobid %]">back to job:[% jobid %]</a>
+[% END %]
+
+<br><br>
+
+[% IF jobid < 1 %]
+<table bgcolor="#CACACA">
+<td bgcolor="white">
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_left.gif">
+</td>
+<td>
+<a href="maker2.cgi?rm=students_list">
+Go back to <img src="http://www.famfamfam.com/lab/icons/silk/icons/cart.png">JobView</a>
+</td>
+<td>
+
+
+<td><br></td><td><br></td><td><br></td><td><br></td>
+<td><br></td><td><br></td><td><br></td><td><br></td><td><br></td>
+<td><br></td><td><br></td><td><br></td><td><br></td><td><br></td>
+<td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td><td><br></td>
+<td><br></td><td><br></td><td><br></td><td><br></td>
+<td bgcolor="#CACACA">
+
+</td>
+<td bgcolor="#CACACA">
+<a href="maker2.cgi?rm=validate_file_view&&noclue=[% UID %]">
+ Validate <img src="/Student/images/eye.png"> File Format</a>
+</td>
+<td bgcolor="white">
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_right.gif">
+
+</td>
+
+</table>
+
+
+
+
+[% END %]
+
+
+
+<style>
+		
+	#progress_bar {
+		width:102px;
+		height:7px;
+		border:1px solid #ccc;
+		padding:0;
+		margin:0;
+		
+		position:relative;
+		background-image:url("/Student/images/progress_bar.gif");
+		background-repeat:repeat-x;
+	}
+
+	#progress_bar div {
+		background-color:#fff;
+	}
+
+#hide {
+      display: none;
+      visibility:hidden;
+}
+
+
+	</style>
+
+
+<script>
+
+function changeme(id, action) {
+       if (action=="hide") {
+            document.getElementById(id).style.display = "none";
+       } else {
+            document.getElementById(id).style.display = "block";
+       }
+}
+
+</script>
+
+
+
+<br><img src="/Student/images/zip.png"> A compressed file  consists of  one or more uncompressed files.
+<br>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/comment_yellow.gif"> Please click the file chooser button,select file compression 
+<table>
+
+<tr bgcolor="#EDDA74"><td><img src="http://www.famfamfam.com/lab/icons/silk/icons/accept.png"> Option A: Upload a binary file <td>
+<select name ="FT">
+  <option>Compression</option>
+  <option>undef</option>
+  	  <option>None</option>
+</select>
+<select name="VL">
+  <option>Validate</option>
+  <option>undef</option>
+  <option>None</option>
+  
+</select>
+
+
+
+<td></td></tr>
+  <tr bgcolor="#8BB381">
+
+
+    
+<td><div id="progress_bar" </div>  <input type="file" name="comp" onClick="changeme('bt_up', 'show');">
+    </td>
+<td>description
+
+        <input id="file_desc" tabindex="1" type="text" name="file_desc" size="20" value="None specified" />
+</td>
+	
+<td>
+<input id="bt_up" type="submit" name="gzip" value="Upload"    onClick="changeme('progress_bar', 'show');">
+
+</td>
+
+</table>
+
+<br>
+<img src="http://www.famfamfam.com/lab/icons/mini/icons/comment_yellow.gif"> Please paste your clipboard in empty text area,type a name and select validation
+<table border=0 cellspacing=1 cellpadding=5>
+
+<tr bgcolor="#EDDA74">
+	
+    <td>
+<img src="http://www.famfamfam.com/lab/icons/silk/icons/accept.png">Option B:Copy And Paste</td>
+<td>
+   <textarea  id="ta1" class="reset" rows="5" cols="40" name="copy_text" onclick="changeme('bt_save', 'show');"></textarea>    
+ </td>
+	
+
+    </td>
+<td></td>
+<tr bgcolor="#8BB381">
+
+
+<td>
+
+</td><td>
+Given Name
+ <input id="copy_name" tabindex="1" type="text" name="copy_name" size="20" value="Identity" />
+
+<select>
+  <option>Validate</option>
+  <option>Fasta</option>
+  <option>None</option>
+
+</select>
+
+
+</td><td><input id="bt_save" type="submit" name="copy" value="Save"></td>
+</tr>
+</table>
+</form>
+
+
+
+
+<br>
+<table bgcolor="white"><td>
+<td bgcolor="white"></td><td>
+<img src="/Student/images/tag_yellow.png"> [% file.filename  %]Not Validated
+</td><td>
+<img src="/Student/images/tag_blue.png"> [% file.filename  %]Validated
+</td>
+</table>	
+
+[% IF count > 0 %]
+<table width=100% border=0 cellspacing=1 cellpadding=5>
+  <tr BGCOLOR="#CACACA">
+    
+    <th><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif">Files</th>
+   
+<th><img src="http://www.famfamfam.com/lab/icons/mini/icons/icon_attachment.gif">Description</th>
+
+<th><img src="/Student/images/trashcan-empty-24x24.png"></th>	
+
+  [% FOREACH file = files %]
+
+  <tr bgcolor="Edda74">
+       <td><img src="/Student/images/tag_yellow.png"> [% file.filename  %]
+</td>	
+       <td>[% file.filedesc %]</td>
+       <td>
+<A HREF="maker2.cgi?rm=removeF&&fn=[%file.filename%]"><button type="button">
+	
+  </tr>
+  [% END %]
+[% END %]
+</table>
+
+<br>
+<br>
+
+
+
+[% END %]
+

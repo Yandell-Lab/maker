@@ -1,0 +1,253 @@
+#!/usr/bin/perl 
+
+use warnings;
+use strict;
+
+my $usage = "
+Usage:
+     maker2eval <maker_gff3_file>
+
+     This script converts MAKER GFF3 files into GTF formated files
+     for the program EVAL, an annotation  sensitivity/specificity
+     evaluating program. (For GFF3 from MAKER 2.11 and above)
+
+";
+
+if (! @ARGV) {
+   print $usage;
+   exit;
+}
+
+foreach my $file (@ARGV) {
+   #parse file
+   open (IN, "< $file") or die "ERROR: Could not open file $file";
+   my @genes;
+   my @mRNAs;
+   my @stuff;
+
+   while (defined(my $line = <IN>)) {
+      #skip comments and fasta
+      last if($line =~ /^\#\#FASTA/);
+      next if($line =~ /^\#/);
+       
+      #add contig lines to header
+      my $f = parse($line);
+      next if($f->{type} eq 'contig');
+       
+      push(@genes, $f) if($f->{type} eq 'gene');
+      push(@mRNAs, $f) if($f->{type} eq 'mRNA');
+      push(@stuff, $f) if($f->{type} eq 'CDS');
+      push(@stuff, $f) if($f->{type} eq 'five_prime_UTR');
+      push(@stuff, $f) if($f->{type} eq 'three_prime_UTR');
+   }
+
+   #organize transcript features
+   my %stuffinx;
+   foreach my $f (@stuff) {
+      my $parent = $f->{Parent};
+      push (@{$stuffinx{$parent}}, $f);
+   }
+
+   #organize mRNAs
+   my %mRNAinx;
+   foreach my $f (@mRNAs) {
+      my $parent = $f->{Parent};
+      push (@{$mRNAinx{$parent}}, $f);
+   }
+
+   #get sequence
+   my %seq;
+   my $seq_id; 
+   while (defined(my $line = <IN>)) {
+      chomp $line;
+      $line =~ s/^\s+|\s+$//g;
+      next if(! $line);
+      if($line =~ /^>([^\s]+)/){
+	 $seq_id = $1;
+	 next;
+      }
+      else{
+	 $seq{$seq_id} .= $line;
+      }
+   }
+   close(IN);
+
+   foreach my $g (@genes) {
+      my $gene_id = $g->{ID};
+      my $g_mRNAs = $mRNAinx{$g->{ID}};
+       
+      foreach my $t (@$g_mRNAs) {
+	 my $transcript_id = $t->{ID};
+	 my $t_stuff = $stuffinx{$t->{ID}};
+	  
+	 my @UTRs   = grep {$_->{type} =~ /UTR$/} @$t_stuff;
+	 my @CDSs   = grep {$_->{type} eq 'CDS'} @$t_stuff;
+	 my ($start, $stop) = find_start_stop(\@CDSs, \%seq);
+
+	 push(@$t_stuff, $start) if($start);
+	 push(@$t_stuff, $stop) if($stop);
+	  
+	 @CDSs = fix_CDS(\@CDSs,[$stop]) if($stop);
+	  
+	 printIt($gene_id, $transcript_id, @$t_stuff);
+      }
+   }
+}
+
+#------------------------SUBS------------------------
+sub fix_CDS {
+   my $CDSs  = shift;
+   my $stops = shift;
+
+   my @keepers;
+   foreach my $CDS (@$CDSs) {
+      my $cB = $CDS->{start};
+      my $cE = $CDS->{end};
+
+      foreach my $stop (@$stops) {
+         my $sB = $stop->{start};
+         my $sE = $stop->{end};
+
+         if ($cB == $sB) {
+            $CDS->{start} += 3;
+         } elsif ($cE == $sE) {
+            $CDS->{end} -= 3;
+         }
+      }
+
+      push(@keepers, $CDS);
+   }
+
+   return @keepers
+    }
+
+sub find_start_stop {
+   my $CDSs  = shift;
+   my $seq = shift;
+
+   @$CDSs = sort {$a->{start} <=> $b->{start}} @$CDSs;
+
+   my $start;
+   my $stop;
+
+   my $fB = $CDSs->[0]->{start};
+   my $fE = $CDSs->[0]->{end};
+   if(($fE - $fB) + 1 >= 3){
+      my $codon = substr($seq->{$CDSs->[0]->{seqid}}, $fB - 1, 3);
+      
+      if($CDSs->[0]->{strand} eq '-'){
+	 $codon = reverse($codon);
+	 $codon =~ tr/ATCG/TAGC/;
+      }
+
+      if($CDSs->[0]->{strand} eq '-' && $codon =~ /^(TAG|TAA|TGA)$/){
+	 %$stop = %{$CDSs->[0]};
+	 $stop->{start} = $fB;
+	 $stop->{end} = $fB + 2;
+	 $stop->{type} = 'stop_codon';
+	 $stop->{phase} = 0;
+      }
+      elsif($CDSs->[0]->{strand} eq '+' && $codon =~ /^ATG$/){
+	 %$start = %{$CDSs->[0]};
+	 $start->{start} = $fB;
+	 $start->{end} = $fB + 2;
+	 $start->{type} = 'start_codon';
+	 $start->{phase} = 0;
+      }
+   }
+
+   my $lB = $CDSs->[-1]->{start};
+   my $lE = $CDSs->[-1]->{end};
+   if(($lE - $lB) + 1 >= 3){
+      my $codon = substr($seq->{$CDSs->[-1]->{seqid}}, $lE - 3, 3);
+      
+      if($CDSs->[-1]->{strand} eq '-'){
+	 $codon = reverse($codon);
+	 $codon =~ tr/ATCG/TAGC/;
+      }
+
+      if($CDSs->[-1]->{strand} eq '+' && $codon =~ /^(TAG|TAA|TGA)$/){
+	 %$stop = %{$CDSs->[-1]};
+	 $stop->{start} = $lE - 2;
+	 $stop->{end} = $lE;
+	 $stop->{type} = 'stop_codon';
+	 $stop->{phase} = 0;
+      }
+      elsif($CDSs->[-1]->{strand} eq '-' && $codon =~ /^ATG$/){
+	 %$start = %{$CDSs->[-1]};
+	 $start->{start} = $lE - 2;
+	 $start->{end} = $lE;
+	 $start->{type} = 'start_codon';
+	 $start->{phase} = 0;
+      }
+   }
+
+   return($start, $stop);
+}
+
+sub printIt {
+   my $gene_id = shift;
+   my $transcript_id = shift;
+
+   ($transcript_id) = $transcript_id =~ /^([^\s\t\n]+)/; 
+
+   while (my $f = shift @_) {
+      $f->{type} = '5UTR' if($f->{type} eq 'five_prime_UTR');
+      $f->{type} = '3UTR' if($f->{type} eq 'three_prime_UTR');
+	
+      #remove comments to change coordinates for chunks
+      if ($f->{seqid} =~ /^([^\:]+)\:(\d+)\D+\d+$/) {
+         $f->{seqid} = $1;
+         $f->{start} += $2 - 1;
+         $f->{end} += $2 - 1;
+      }
+	
+      print $f->{seqid} . "\t";
+      print $f->{source} . "\t";
+      print $f->{type} . "\t";
+      print $f->{start} . "\t";
+      print $f->{end} . "\t";
+      print $f->{score} . "\t";
+      print $f->{strand} . "\t";
+      print $f->{phase} . "\t";
+      print "gene_id \"".$gene_id."\"\;";
+      print " transcript_id \"".$transcript_id."\"\;";
+      print "\n";
+   }
+}
+
+sub parse {
+   my $l = shift;
+    
+   chomp $l;
+   my @F = split("\t", $l);
+   my @att = attrib($F[8]);
+    
+   my $f = {seqid => $F[0],
+	    source => $F[1],
+	    type => $F[2],
+	    start => $F[3],
+	    end => $F[4],
+	    score => $F[5],
+	    strand => $F[6],
+	    phase => $F[7],
+	    ID => $att[0],
+	    Name => $att[1],
+	    Parent => $att[2]};
+    
+   return $f;
+}
+
+sub attrib {
+   my $att = shift;
+
+   my ($ID) = $att =~ /ID\=([^\;\n]+)/;
+   my ($name) = $att =~ /Name\=([^\;\n]+)/;
+   my ($parent) = $att =~ /Parent\=([^\;\n]+)/;    
+    
+   $ID = $name if(! defined $ID);
+   $name = $ID if(! defined $name);
+    
+   return ($ID, $name, $parent);
+}
+

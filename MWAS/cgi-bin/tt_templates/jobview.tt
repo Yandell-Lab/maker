@@ -1,0 +1,53 @@
+
+[% WRAPPER main.tt  %]
+
+<br>Welcome 
+
+<br>[% first %][% lastt %]
+<br>[% email %]
+<br>
+<br>
+<br>
+<br>
+
+[% UID = session.param('AUTH_USERNAME') %]
+
+<h2>Your jobs([% count %])</h2><a href="http://derringer.genetics.utah.edu/cgi-bin/Student/student_general.cgi?rm=maker_add_one&&noclue=[% UID %]">Add new job</a>
+<hr>
+[% IF count > 0 %]
+<table border cellspacing=0 cellpadding=5>
+  <tr>
+    <th>JobId</th>
+    <th>Name</th>
+    <th>Status</th>
+    <th>Start Time</th>
+    <th>End Time</th>
+<th>Download</th>
+	
+ 	
+  [% FOREACH student = students.sort('idjob') %]
+  <tr>
+    <td>[% student.idjob %]</td>
+    <td>[% student.data_name %]</td>
+    <td>
+<a href="http://derringer.genetics.utah.edu/cgi-bin/Student/students.cgi?rm=maker_job_view&&noclue=[% UID %]&&clue=[% student.idjob %]">[% student.status %]
+
+
+
+    </td>
+    <td>[% student.starttime %]</td>
+    <td>[% student.endtime %]</td>	
+<td><a href="url">download</a></td>
+   
+  </tr>
+  [% END %]
+[% END %]
+</table>
+
+<br>
+<br>
+
+
+
+[% END %]
+

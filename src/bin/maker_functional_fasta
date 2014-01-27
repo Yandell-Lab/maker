@@ -1,0 +1,133 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+
+my $usage = "
+
+Synopsis:
+
+maker_functional_fasta uniprot-sprot.fasta uniprot-sprot.blast.out \
+		       maker.transcripts.fasta maker.proteins.fasta ....
+
+Description:
+
+This script will take a uniprot-sprot fasta file, a wu-blast -mformat
+2 blast output file from a blast of maker proteins against
+uniprot-sprot proteins and add functional annotations to the maker
+fasta header changing it from this:
+
+>PYU1_T015316 transcript offset:0 AED:0.0476397966594044 \
+QI:0|-1|0|1|-1|1|1|0|255
+
+to this:
+
+>PYU1_T015316 transcript Name:\"Similar to Serine-aspartate repeat-containing protein I \
+(Staphylococcus saprophyticus)\" offset:0 AED:0.0476397966594044             \
+QI:0|-1|0|1|-1|1|1|0|255
+
+";
+
+
+my ($help);
+my $opt_success = GetOptions('help'    => \$help,
+			    );
+
+die $usage if $help || ! $opt_success;
+
+my ($uniprot_file, $blast_file, @fasta_files) = @ARGV;
+die $usage unless $uniprot_file && $blast_file && @fasta_files;
+
+my $blast = parse_blast($uniprot_file, $blast_file);
+
+for my $file (@fasta_files) {
+
+open (my $IN,  '<', $file) or die "Can't open $file for reading\n$!\n";
+
+LINE:
+while (<$IN>) {
+
+    if ($_ !~ /^>/) {
+	print $_;
+	next LINE;
+    }
+
+    my ($id, $mol_type, @attrbs) = split /\s+/, $_;
+    $id =~ s/^>//;
+
+    my $func = $blast->{$id} || 'Name:"Protein of unknown function"';
+
+    my $header = ">$id $mol_type ";
+    $header .= "$func " if $func;
+    $header .= join " ", @attrbs if @attrbs;
+
+    print "$header\n";
+
+    }
+}
+#-----------------------------------------------------------------------------
+#-------------------------------- SUBROUTINES --------------------------------
+#-----------------------------------------------------------------------------
+
+sub parse_blast{
+
+	my ($fasta_file, $blast_file) = @_;
+
+	open(my $IN, '<', $fasta_file) or
+	  die "Can't open $fasta_file for reading\n$!\n";
+
+	my %fasta;
+	while (<$IN>) {
+
+		next unless /^>/;
+
+		my ($id, $desc, $org, $name);
+		#>sp|P18560|1101L_ASFB7 Protein MGF 110-1L OS=African swine fever virus (strain Badajoz 1971 Vero-adapted) GN=BA71V-008 PE=3 SV=1
+		if (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
+			$id   = $1;
+			$desc = $2;
+			$org  = $3;
+			$name = $5 || '';
+		}
+		else {
+			warn "Can't parse details from FASTA header: $_\n";
+		}
+
+		my $func = '';
+		$func .= "Similar to $name " if $name;
+		if ($func =~ /Similar to/) {
+			$func .= "$desc "  if $desc;
+		}
+		else {
+			$func .= "Similar to $desc "  if $desc;
+		}
+		$func .= "($org)"  if $org;
+		$func  = ('Name:"' . $func . '"') if $func;
+
+		$fasta{$id} = $func;
+
+		print '';
+	}
+	close $IN;
+
+	open($IN, '<', $blast_file) or
+	  die "Can't open $blast_file for reading\n$!\n";
+
+	my (%blast, %seen);
+	while (<$IN>) {
+	        my @F = split;
+		my ($qid, $sid, $e_val) = (@F == 12 && $F[3] =~ /^\d+$/) ? (@F[0..1],$F[10]) : @F[0..2];
+
+		next if $seen{$qid};
+
+		$seen{$qid}++;
+
+		$blast{$qid} = $fasta{$sid} || '';
+	}
+	return \%blast;
+}

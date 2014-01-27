@@ -1,0 +1,226 @@
+#!/usr/bin/perl
+
+use warnings; 
+use strict;
+use URI::Escape;
+use Getopt::Std;
+
+##### Initialize Threshhold  ####
+my @thresh = ();
+my $thrAED = 0.5;
+use vars qw($opt_h $opt_c $opt_e $opt_o $opt_a $opt_t $opt_l $opt_x $opt_d $opt_n); 
+
+push @thresh, 0.5;
+push @thresh, 0.5;
+push @thresh, 0.5;
+push @thresh, 0;
+push @thresh, 0;
+push @thresh, 75;
+
+
+getopts("nhc:e:o:a:t:x:l:d:");
+my $usage = "
+maker2zff [options] <gff3_file> <gff3_file> ...
+maker2zff [options] -d <datastore_index>
+
+OPTIONS
+For determining which genes are High Confidence for Retraining, there are 7 criteria.
+-c fraction  The fraction of splice sites confirmed by an EST alignment, default 0.5
+-e fraction  The fraction of exons that overlap an EST alignment, default 0.5
+-o fraction  The fraction of exons that overlap any evidence (EST or Protein), default 0.5
+-a fraction  The fraction of splice sites confirmed by an ab-initio prediction, default 0
+-t fraction  The fraction of exons that overlap an ab-initio prediction, default 0
+-l number    The min length of the protein sequence produced by the mRNA
+-x number    Max AED to allow 0.5 is default
+-n           No filtering.  Accept all.
+";
+
+if (defined($opt_c)) {$thresh[0] = $opt_c}
+if (defined($opt_e)) {$thresh[1] = $opt_e}
+if (defined($opt_o)) {$thresh[2] = $opt_o}
+if (defined($opt_a)) {$thresh[3] = $opt_a}
+if (defined($opt_t)) {$thresh[4] = $opt_t}
+if (defined($opt_l)) {$thresh[5] = $opt_l}
+if (defined($opt_x)) {$thrAED = $opt_x}
+
+my %id2name = ();
+my %status = ();
+my %parent = ();
+my %exons = ();
+my %hc = ();
+my %bad = ();
+my %seq = ();
+
+my @files;
+if(! $opt_d){
+    @files = @ARGV;
+}
+
+if(! $opt_d && ! @files) {
+    print $usage;
+    exit();
+}
+
+my $outfile = "genome";
+#if ($opt_d){
+#    ($outfile) = $opt_d =~ /([^\/]+)$/;
+#    $outfile =~ s/_master_datastore_index.log//;
+#    $outfile .= ".all";
+#}
+
+die "ERROR: The file \'$opt_d\' does not exist\n" if ($opt_d && ! -e $opt_d);
+if ($opt_d){
+    my $base = $opt_d;
+    $base =~ s/[^\/]+$//;
+    $base = '.' if !$base;
+    open(IN, "< $opt_d");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        next if $seen{$e};
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+	my $name = uri_escape($1, '.');
+        $file = "$base/$file/$name.gff";
+    }
+}
+
+
+#### Go through the GFF file and determine which genes are HC  ####
+#### This step must finish before any output is produced since ####
+#### featues can be out of order ####
+
+my %index; #used to replace long maker names that mess up snap
+my $count = 0;
+
+foreach my $file (@files) {
+    open GFF, "< $file" or die $!;
+    while (my $line = <GFF>) {
+	chomp($line);
+        if ($line =~ m/\#\#FASTA/) {
+	    my $header;
+	    while (my $d = <GFF>) {
+		if($d =~ /^>(\S+)/){
+		    $header = $1;
+		    $seq{$header} = "";
+		}
+		else{
+		    $seq{$header} .= $d;
+		}
+	    }
+        }
+	elsif($line =~ /^\s*\#|^\n$|^\s*$/){
+	    next;
+	}
+	else {
+	    my ($seqid, $source, $tag, $start, $end, $score, $strand, $phase, $annot) = split(/\t/, $line);
+	    my %annotation = split(/[;=]/, $annot);
+	    if ($tag eq "mRNA") {
+		my $id = $annotation{'ID'};
+		my $lname = $annotation{'Name'} || $annotation{'ID'};
+		my $parent = $annotation{'Parent'};
+		my ($name, $qi) = split(/\s+/, $lname);
+		if(! $qi){
+		    ($qi) = $line =~ /_QI\=([^\;\n]+)/;
+		}
+		my ($AED) = $line =~ /_AED\=([^\;\n]+)/;
+		#if not from maker don't try and filter
+		my $ishc = ($source eq 'maker' && ! $opt_n) ? is_hc($qi, $AED) : 1;
+		if ($ishc == 1 ) {
+		    push(@{$hc{$seqid}}, $id);
+		}
+	    }elsif ($tag eq "CDS") {
+		my @parents = split(',', $annotation{'Parent'});
+
+		foreach my $parent (@parents){
+		    #set alias
+		    if(! $index{$parent}){
+			$index{$parent} = "MODEL$count";
+			$count++;
+		    }
+		    
+		    if($strand eq '-'){
+			($start, $end) = ($end, $start);
+		    }
+		    
+		    push @{$exons{$seqid}{$parent}}, [$start, $end];
+		}
+	    }
+	}
+    }
+}
+
+#### Now filter out anything thats not high quality ####
+
+#### Print out the exon locations of the HC genes ####
+
+open(ZFF, ">$outfile\.ann") or die;
+open DNA, ">$outfile\.dna" or die $!;
+
+foreach my $seqid (sort {$a cmp $b} keys %hc) {
+    print ZFF ">",$seqid,"\n";
+    print DNA ">",$seqid,"\n",$seq{$seqid},"\n";
+
+    foreach my $mRNA (@{$hc{$seqid}}){
+	my @exons = @{$exons{$seqid}{$mRNA}};
+	my $pname = $index{$mRNA};
+
+	next if (! @exons);
+
+	#reverse sort exons on minus strand
+	if($exons[0]->[0] > $exons[0]->[1]){
+	    @exons = sort {$b->[0] <=> $a->[0]} @exons;
+	}
+
+	my $f = shift @exons;
+	if(! @exons){
+	    print ZFF join(" ", "Esngl ", $f->[0], $f->[1], $pname),"\n";
+	    next;
+	}
+	else{
+	    print ZFF join(" ", "Einit ", $f->[0], $f->[1], $pname),"\n";
+	}
+
+	my $l = pop @exons; # hold last exon
+
+	foreach my $e (@exons) {
+	    print ZFF join(" ", "Exon ", $e->[0], $e->[1], $pname),"\n";
+	}
+
+	print ZFF join(" ", "Eterm ", $l->[0], $l->[1], $pname),"\n";
+    }
+}
+
+close(ZFF);
+close(DNA);
+
+################## Subroutines ###################
+
+sub is_hc {
+    my $qi = shift @_;
+    my $AED = shift @_;
+
+    return 1 if(! $qi); #returns manually edited genes as OK
+
+    my @q = split(/\|/, $qi);
+    my @qual = (@q[1..5],$q[8]);
+    my $hc = 1;
+    foreach my $i (0..4) {
+	if ($qual[$i] < $thresh[$i]) {
+	    $hc = 0;
+	}
+    }
+
+    $hc = 0 if($AED > $thrAED);
+
+    return $hc;
+}

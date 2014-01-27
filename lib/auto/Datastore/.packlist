@@ -1,0 +1,13 @@
+../lib/Datastore/Base.pm
+../lib/Datastore/CG.pm
+../lib/Datastore/MD5.pm
+../lib/Datastore/bin/ds_dir
+../lib/Datastore/bin/ds_do
+../lib/Datastore/docs/Datastore::Base.3pm
+../lib/Datastore/docs/Datastore::CG.3pm
+../lib/Datastore/docs/Datastore::MD5.3pm
+../lib/Datastore/docs/ds_dir.1
+../lib/Datastore/docs/ds_do.1
+../lib/auto/Datastore/Base/autosplit.ix
+../lib/auto/Datastore/CG/autosplit.ix
+../lib/auto/Datastore/MD5/autosplit.ix

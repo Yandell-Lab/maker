@@ -1,0 +1,25 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+</script>
+
+<br>	
+<h2><img src="[% server_opt.html_web %]/images/help.png" height=32 width=32> Help</h2>
+
+<p>Welcome to the MAKER Web Annotatation Service.  To get started, please register
+as a new user[% IF server_opt.allow_guest %] or sign in as a guest[% END %]. [% IF server_opt.tutorials && menus.tutorials.size > 0 %] If you are new to this service, try submiting
+one of the server supplied example jobs for annotation once you are signed in.
+First click on "New Job", then on the job creation screen select an example job
+from the drop down menu.  You will need to click on "Submit Job to Queue" at the
+bottom of the screen after loading the example job to complete the process. [% END %]<p>
+
+<p>For a detailed tutorial on using the MAKER Web Annotation Service, please
+<a href="http://gmod.org/wiki/MWAS_Tutorial">click here</a>.
+You will be redirected to an external wiki.</a>
+
+<p>MAKER accepts files in fasta and GFF3 format for integration into the annotation
+proccess.  For more information on the GFF3 file format,
+<a href ="http://www.sequenceontology.org/gff3.shtml">click here</a>.</p>
+
+
+[% END %]

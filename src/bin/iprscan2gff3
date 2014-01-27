@@ -1,0 +1,297 @@
+#!/usr/bin/perl 
+
+use warnings;
+use strict;
+use URI::Escape;
+
+my $usage = "
+Usage:
+      iprscan2gff3 <iprscan.raw> <genome.all.gff>
+
+      This script takes an InterProScan raw format report with labeled
+      IPR domains and builds them into GFF3 formated features that can
+      be added as a track to GBrowse, JBrowse, and Apollo.
+
+";
+
+if(@ARGV < 2){
+    print $usage;
+    exit(1);
+}
+
+my $file = shift;
+my $gff3 = shift;
+
+die("ERROR: The file $file does not exist\n") if(! -f $file);
+die("ERROR: The file $gff3 does not exist\n") if(! -f $gff3);
+
+my %index;
+my %list;
+my %GO;
+
+open(IN, "< $file") or die "ERROR: Could not open the file $file\n";
+while(defined(my $line = <IN>)){
+    next unless($line =~ /\tIPR\d+\t/);
+    chomp $line;
+    my @F = split("\t", $line);
+    
+    if($index{$F[0]}{$F[11]}){
+	my $ok = 0;
+	F1: foreach my $grp (@{$index{$F[0]}{$F[11]}}){
+	   F2: foreach my $m (@$grp){
+	       if(overlap($m->[0], $m->[1], $F[6], $F[7]) > 0.5){
+		   #add new member
+		   $ok = 1;
+		   push(@$grp, [$F[6], $F[7]]);
+		   last F1;
+	       }
+	   }
+	}
+
+	#make new group
+	push(@{$index{$F[0]}{$F[11]}}, [[$F[6], $F[7]]]) if(! $ok);
+    }
+    else{
+	#make new group
+	push(@{$index{$F[0]}{$F[11]}}, [[$F[6], $F[7]]]);
+    }
+
+    my @go = $line =~ /(GO\:\d+)/;
+
+    $F[12] =~ s/\t/ /g;
+    $F[12] = uri_escape($F[12], '\,\;\=\%\&');
+    $list{$F[11]} = $F[12];
+    $GO{$F[11]} = join(",", @go);
+}
+close(IN);
+
+#colapse groups
+while(my $t = each %index){
+    while(my $d = each %{$index{$t}}){
+	foreach my $grp (@{$index{$t}{$d}}){
+	    my $B;
+	    my $E;
+	    foreach my $m (@$grp){
+		$B = $m->[0] if(!$B || $m->[0] < $B);
+		$E = $m->[1] if(!$E || $m->[1] > $E);
+	    }
+
+	    #fix for nucleotide space
+	    $B = ($B * 3) - 2;
+	    $E = $E * 3;
+	    $grp = [$B, $E];
+	}
+    }
+}
+
+while(my $t = each %index){
+    while(my $d = each %{$index{$t}}){
+	my $array = $index{$t}{$d};
+	my @keepers;
+        for(my $i = 0; $i < @$array; $i++){
+	    my $grp1 = $array->[$i];
+	    next if(! $grp1);
+	    my $B = $grp1->[0];
+	    my $E = $grp1->[1];
+	    for(my $j = $i+1; $j < @$array; $j++){
+		my $grp2 = $array->[$j];
+		next if(! $grp2);
+		if(overlap($grp1->[0], $grp1->[1], $grp2->[0], $grp2->[1]) > 0.5){
+		    $B = $grp2->[0] if($grp2->[0] < $B);
+		    $E = $grp2->[1] if($grp2->[1] > $E);
+		    
+		    $array->[$j] = undef;
+		}
+	    }
+	    push(@keepers, [$B, $E])
+        }
+	$index{$t}{$d} = \@keepers;
+    }
+}
+
+#parse gff3
+my %details;
+my %mRNAs;
+open(IN, "< $gff3") or die "ERROR: Could not open the file $gff3\n";
+while(defined(my $line = <IN>)){
+    last if($line =~ /\#\#FASTA/);
+    next if($line =~ /^\#/);
+    next unless($line =~ /\tCDS\t/);
+
+    chomp $line;
+    my @F = split("\t", $line);
+    if($F[2] eq 'CDS'){
+	my ($parent) = $F[8] =~ /Parent\=([^\;\n]+)/;
+	my @parents = split(',', $parent);
+	foreach my $p (@parents){
+	    push(@{$mRNAs{$p}}, [$F[3], $F[4]]);
+	    $details{$p}{seqid} = $F[0];
+	    $details{$p}{strand} = $F[6];
+	}
+    }
+}
+close(IN);
+
+#now search for ab init matches
+my %id2name;
+my %ok;
+open(IN, "< $gff3");
+while(defined(my $line = <IN>)){
+    last if($line =~ /\#\#FASTA/);
+    next if($line =~ /^\#/);
+    next unless($line =~ /\tsnap|\tfgenesh|\tgenemark|\taugustus|\tpred_gff/);
+
+    chomp $line;
+    my @F = split("\t", $line);
+    if($F[2] eq 'match'){ #load names form matches
+        my ($name) = $F[8] =~ /Name\=([^\;\n]+)/;
+        my ($id) = $F[8] =~ /ID\=([^\;\n]+)/;
+
+	$id2name{$id} = $name;
+    }
+    elsif($F[2] eq 'match_part'){ #load structure from match_parts
+	my ($parent) = $F[8] =~ /Parent\=([^\;\n]+)/;
+	$parent = $id2name{$parent}; #get name of parent rather than ID
+	if(! exists $mRNAs{$parent} || $ok{$parent} ){
+	    $ok{$parent}++;
+	    push(@{$mRNAs{$parent}}, [$F[3], $F[4]]);
+	    $details{$parent}{seqid} = $F[0];
+	    $details{$parent}{strand} = $F[6];
+	}
+    }
+}
+close(IN);
+
+#sort CDSs
+while(my $key = each %mRNAs){
+    @{$mRNAs{$key}} = sort {$a->[0] <=> $b->[0]} @{$mRNAs{$key}};
+}
+
+#make gff3 lines
+my $id = 0;
+while(my $t = each %index){
+    my $CDSs = $mRNAs{$t};
+    while(my $d = each %{$index{$t}}){
+        my $set = $index{$t}{$d};
+
+        foreach my $hit (@$set){
+	    my @match;
+
+	    #correct for strand
+	    my $length = 0;
+	    grep {$length += abs($_->[1] - $_->[0]) + 1} @$CDSs;
+	    if($details{$t}{strand} eq '-'){
+		$hit->[0] = $length - $hit->[0] + 1;
+		$hit->[1] = $length - $hit->[1] + 1;
+		($hit->[0], $hit->[1]) = ($hit->[1], $hit->[0]); #flip order
+	    }
+
+	    my $leader = 0;
+	    my $started = 0;
+	    foreach my $CDS (@$CDSs){
+		my $offset = $CDS->[0] - 1;
+
+		my $B = $hit->[0] + $offset - $leader;
+		my $E = $hit->[1] + $offset - $leader;
+
+		my $cB = $CDS->[0];
+		my $cE = $CDS->[1];
+
+		if($cB <= $B &&  $B <= $cE && $cB <= $E &&  $E <= $cE){
+		    push(@match, [$B, $E, $offset - $leader]);
+		    last;
+		}
+		elsif($cB <= $B &&  $B <= $cE){
+		    push(@match, [$B, $cE, $offset - $leader]);
+		    $started = 1;
+		}
+		elsif($cB <= $E &&  $E <= $cE){
+		    push(@match, [$cB, $E, $offset - $leader]);
+		    last;
+		}
+		elsif($started){
+		    push(@match, [$cB, $cE, $offset - $leader]);
+		}
+
+		$leader += abs($cE - $cB) + 1;
+	    }
+
+	    @match = sort {$a->[0] <=> $b->[0]} @match;
+
+	    #match begin and end in gff3
+	    my $mB = $match[0]->[0];
+	    my $mE = $match[-1]->[1];
+	    
+	    #target begin and end in attributes
+	    my $tB = $mB - $match[0]->[2];
+	    my $tE = $mE - $match[-1]->[2];
+
+	    #debug
+	    if(!defined $mB || ! defined $match[0]->[2]){
+		print STDERR "ERROR: In $t\n";
+	    }
+
+	    #gff3 colums
+	    my $seqid = $details{$t}{seqid};
+	    my $source = 'iprscan';
+	    my $type = 'match';
+	    my $start = $mB;
+	    my $end = $mE;
+	    my $score = '.';
+	    my $strand = $details{$t}{strand};
+	    my $phase = '.';
+	    my $p_id = "match:".$id++;
+	    my $attributes = "Name=$d $list{$d}\;ID=$p_id\;";
+	    $attributes .= "Ontology_term=$GO{$d}\;" if($GO{$d});
+
+	    print "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\t$attributes\n";
+
+	    foreach my $p (@match){
+		my $pB = $p->[0];
+		my $pE = $p->[1];
+		my $off = $p->[2];
+
+		#set nesessary values
+		$type = 'match_part';
+		$start = $pB;
+		$end = $pE;
+		$attributes = "Name=$d:match_part:$id\;ID=match_part:".$id++."\;";
+		$attributes .= "Parent=$p_id\;Target=$d ".($pB - $off)." ".($pE - $off)." +\;";
+
+		print "$seqid\t$source\t$type\t$start\t$end\t$score\t$strand\t$phase\t$attributes\n";
+	    }
+	}
+    }
+}
+
+#----------------SUBS--------------------------
+sub overlap {
+    my $aB = shift;
+    my $aE = shift;
+    my $bB = shift;
+    my $bE = shift;
+
+    my @seq;
+    
+    for(my $i = $aB; $i <= $aE; $i++){
+	$seq[$i]++;
+    }
+
+    for(my $i = $bB; $i <= $bE; $i++){
+	$seq[$i]++;
+    }
+
+    my $count = 0;
+    foreach my $c (@seq[$aB..$aE]){
+	$count++ if($c == 2);
+    }
+    my $over1 = $count / ($aE - $aB + 1);
+
+    $count = 0;
+    foreach my $c (@seq[$bB..$bE]){
+	$count++ if($c == 2);
+    }
+    my $over2 = $count / ($bE - $bB + 1);
+
+    return ($over1 > $over2) ? $over1: $over2;
+}

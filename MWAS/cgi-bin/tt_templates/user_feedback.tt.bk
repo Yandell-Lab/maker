@@ -1,0 +1,70 @@
+[% WRAPPER main1.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<br><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_user_dark.gif">
+[% first %][% lastt %]
+<br>[% email %]
+<br>
+<br>
+<br>
+<br>
+<br>
+
+<h2><img src="/Student/images/feedback_icon.gif">Feedback</h2>
+
+<a href="http://derringer.genetics.utah.edu/cgi-bin/Maker/maker.cgi?rm=maker_add&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_new.gif"> Add new job  </a>
+&nbsp;
+<a href="http://derringer.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_file_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/folder_images.gif">  FILEBOX </a>
+&nbsp
+
+<a href="http://derringer.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=maker_help_view&&noclue=[% UID %]"><img src="http://www.famfamfam.com/lab/icons/mini/icons/page_script.gif"> Help </a>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+&nbsp;&nbsp
+
+<a href="http://derringer.genetics.utah.edu/cgi-bin/Maker/maker2.cgi?rm=students_list"><img src="/Student/images/c1.ico"> Update Jobs</a>
+<hr>
+
+
+<form method="POST" action="/cgi-bin/Maker/maker.cgi" name="user_feed">
+
+<input type="hidden" name="rm" value="send_feedback">
+
+<h2>
+[% message  %]
+</h2>
+<table width=100% bgcolor="#CACACA" border=0 celspacing="11">
+    <tr>
+
+<h5>Our mission is to provide a great user experience. Please suggest any additions,imrovements as well as comments </h6>
+<td>
+
+
+<textarea  class="reset" rows="9" cols="60" name="comment_text" ></textarea>    
+<td>
+  </tr>
+</table>
+<table width=100% bgcolor="#CACACA" border=0 celspacing="11">
+    <tr>
+<td>
+
+<h5></h6>
+   Feedback is sent anonymously! (your identity would not appear to the group) 
+<td>
+  </tr>
+</table>
+
+
+<br>
+
+<input type="submit" src="http://www.famfamfam.com/lab/icons/mini/icons/arrow_left.gif" name="feedback" value="Send">
+
+</form>
+
+[% END %]
+

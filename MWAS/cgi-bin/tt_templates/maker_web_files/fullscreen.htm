@@ -1,0 +1,60 @@
+<html>
+
+<head>
+<meta name=ProgId content=PowerPoint.Slide>
+<meta name=Generator content="Microsoft PowerPoint 2008">
+<link id=Main-File rel=Main-File href="maker_web.htm">
+<link title="Presentation File" type="application/powerpoint" rel=alternate
+href="file://localhost/Users/hadi/Documents/maker_web.pptx">
+<script>
+if ( ! opener.PPTPRESENTATION ) {
+	window.location.replace( "endshow.htm" );
+}
+</script><script language=JavaScript src=script.js></script><script language=JavaScript><!--
+var SCREEN_MODE = "FullScreen";
+ base = self;
+ g_fullscrMode = 1;LoadHTMLVersion();
+//-->
+</script>
+</head>
+
+<script> <!--
+closing = false;
+PPTPRESENTATION = 1;
+function getSlideName() {
+	return opener.GetHrefObj( g_currentSlide ).m_slideHref;
+}
+function initpopup() {
+	if ( base.msie < 0 )
+		NavPopup = window.open(  "fs_navigation_bar.htm", "controls", "alwaysRaised=yes,WIDTH=300,HEIGHT=50");
+	else	
+		NavPopup = window.open( "fs_navigation_bar.htm", "controls", "WIDTH=300,HEIGHT=50");
+	NavPopup.focus();
+}
+
+
+function WriteMe() {
+	document.write( '<frameset rows=\" *,35 \" frameborder=0> '  +
+	' ' + 
+	'<frame src=\"' + getSlideName() + '\" name=PPTSld marginheight=0  marginwidth=0 scrolling=no noresize> ' +
+	' <frame src="fs_navigation_bar.htm" name=PPTNav marginheight=0 marginwidth=0 scrolling=no noresize>  ' +
+	'</frameset>' );
+	window.focus();
+}
+
+function shutdown( ) {
+if ( ! closing )
+
+	if ( window.NavPopup && !window.NavPopup.closed )
+		window.NavPopup.close();
+}
+
+WriteMe();
+// initpopup();
+
+
+	self.onunload = shutdown;
+	
+//-->
+</script>
+</html>

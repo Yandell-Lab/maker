@@ -1,0 +1,107 @@
+<html>
+
+<head>
+<meta name=ProgId content=PowerPoint.Slide>
+<meta name=Generator content="Microsoft PowerPoint 2008">
+<link id=Main-File rel=Main-File href="maker_web.htm">
+<link title="Presentation File" type="application/powerpoint" rel=alternate
+href="file://localhost/Users/hadi/Documents/maker_web.pptx">
+<script>
+if ( ! top.PPTPRESENTATION ) {
+	window.location.replace( "endshow.htm" );
+}
+</script>
+<script>
+<!--
+function restore() {
+if( navigator.platform != "MacPPC" )
+	self.location.reload();
+}
+
+function WriteBody()
+{
+  if( window.name != "PPTNav" ) return;
+
+  document.writeln( '<table width=\"100%\" border=0 valign=top cellpadding=0 cellspacing=0> <tr> ' );
+  drawing_app = false;
+  if ( parent.includeNotes && !false  ) {
+  	
+  		document.write( '<td align=left><a href=\"javascript:parent.ShowHideNotes()\">' + 
+  		' <img src=\"notes_flag.gif\" border=0  title=\"  Notes\" alt=\"  Notes\">' + ' </a> </td>  ' );
+  		
+  }
+  	document.write( '<td align=center valign=top> <table border=0 valign=top cellpadding=0 cellspacing=0> <tr><td align=right>' );
+
+  innerText = "";
+  if ( parent.GetHrefObj( parent.g_currentSlide ).m_origVisibility == 1 && !parent.g_allHidden )
+    innerText = "Slide " + parent.GetCurrentSlideNum() + " of " + parent.GetNumSlides();
+  else
+    innerText = "Hidden Slide";
+
+ if ( drawing_app ) {
+ 	    document.write( '<a href=\"javascript:parent.GoToFirst()\">' );
+ 	    document.write( '<img src="prev_active.gif"></a> &nbsp &nbsp &nbsp &nbsp' );
+ }
+
+  fEnable = ( ( parent.g_currentSlide != 1 && parent.GetHrefObj( parent.g_currentSlide - 1 ).m_visibility == 1 ) ) ||
+		( parent.GetCurrentSlideNum() > 1 );
+
+  if( fEnable )
+  {
+    prevBtn = "prev_active.gif";
+    document.write( '<a href=\"javascript:parent.TP_GoToPrevSld()\">' );
+  }
+  else
+    prevBtn = "prev_disabled.gif";
+  
+ document.write( '<img src="' + prevBtn + '" border=0 title="Previous Slide" alt="Previous Slide" >' );
+ 
+  if( fEnable )
+    document.write( '</a>' );
+
+ document.write( '</td> <td align=center> ')
+  document.write( ' &nbsp &nbsp <font face=\"Arial\" color=#000000 size=2>' + innerText + '</font>  &nbsp &nbsp ' );
+ document.write( '</td> <td align=left>' );
+
+  fEnable = ( parent.GetCurrentSlideNum() != parent.GetNumSlides() );
+  if( fEnable )
+  {
+    nextBtn = "next_active.gif";
+    document.write( '<a href=\"javascript:parent.TP_GoToNextSld()\">' );
+  }
+  else
+    nextBtn = "next_disabled.gif";
+  
+document.write( '<img src="' + nextBtn + '" border=0 title="Next Slide" alt="Next Slide">' );
+
+  if( fEnable )
+    document.write( '</a>' );
+ if ( drawing_app ) {
+ 	    document.write( ' &nbsp &nbsp &nbsp &nbsp<a href=\"javascript:parent.GoToLast()\">' );
+ 	    document.write( '<img src="next_active.gif"></a>' );
+ }
+
+
+  document.write( '</td> </tr></table>' );
+
+  if ( ! drawing_app && !false ) {
+  	document.write( '</td>  <td align=right valign=top>' );
+  	document.write( '<a href=\"javascript:parent.FullScreen()\"> ' +
+  	'<img src="fullscr.gif" border=0 title="Full Screen Slide Show" alt="Full Screen Slide Show">' + 
+  	'</a>' );
+ }
+  document.write( '</td> </tr></table>' );
+}
+//-->
+</script>
+</head>
+
+<body background=navbg.gif topmargin=2 scroll="no"  onresize="restore()">
+
+<center><script language=JavaScript><!--
+WriteBody();//-->
+</script></center>
+
+</body>
+
+</html>

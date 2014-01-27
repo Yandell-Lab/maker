@@ -1,0 +1,95 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+my $usage ="
+Usage:
+     cufflinks2gff3 <transcripts.gtf>
+     cufflinks2gff3 <transcripts1.gtf> <transcripts2.gtf> ...
+
+     This script converts the cufflinks output transcripts.gtf file
+     into GFF3 format for use in MAKER via GFF3 passthrough. By
+     default strandless features which correspond to single exon
+     cufflinks models will be ignored.  This is because these
+     features can correspond to repetative elements and
+     pseudogenes. Ouput is to STDOUT so you will need to redirect
+     to a file.
+
+
+";
+
+my @infiles = @ARGV;
+
+if(! @infiles){
+    print $usage;
+    exit(1);
+}
+
+my $error;
+foreach my $file (@infiles){
+    if(! -f $file){
+	$error .= "ERROR: The file $file does not exist.\n";
+    }
+}
+die $error if($error);
+
+my $prefix = 1;
+foreach my $file (@infiles){
+    open(IN, "< $file");
+
+    my $offset = 0;
+    while(my $line = <IN>){
+	chomp $line;
+	next if($line =~ /^\#/);
+
+	my @F = split(/\t/, $line);
+	($F[3], $F[4]) = ($F[4], $F[3]) if($F[3] > $F[4]); #sanity check
+
+	next if($F[6] eq '.'); # skip all strandless features
+
+	#build attributes
+	my ($ID) = $F[8] =~ /transcript_id\s+\"([^\"]+)/;
+	$ID = "$prefix:$ID"; #handles case of multiple input files
+	my $name = $ID;
+	my $target = $ID;
+	my $tB = 1;
+	my $tE = abs($F[4] - $F[3]) + 1;
+	my $parent='';
+	if($F[2] eq 'exon'){
+	    $parent = $ID;
+	    if($F[8] =~ /exon_number\s+\"([^\"]+)/){
+		$ID .= ":exon-$1";
+	    }
+	    else{
+		$ID .= ":exon-$offset";
+	    }
+	    $tB += $offset;
+	    $tE += $offset;
+	    $offset = $tE;
+	}
+	else{
+	    $offset = 0;
+	}
+
+
+
+
+	#build GFF3 columns
+	my $seqid = $F[0];
+	my $source = $F[1];
+	my $type = ($F[2] eq 'transcript') ? 'match' : 'match_part';
+	my $start = $F[3];
+	my $end = $F[4];
+	my ($score) = $F[8] =~ /cov\s+\"([^\"]+)/;
+	my $strand = $F[6];
+	my $phase = '.';
+	my $attributes = "ID=$ID;Name=$name;";
+	$attributes .= "Parent=$parent;" if($parent);
+	$attributes .= "Target=$target $tB $tE +;" if($type eq 'match_part');
+
+	print join("\t", $seqid, $source, $type, $start, $end, $score, $strand, $phase, $attributes) ."\n";
+    }
+    close(IN);
+    $prefix++;
+}

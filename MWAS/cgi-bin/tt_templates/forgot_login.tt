@@ -1,0 +1,55 @@
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2><img src="/Student/images/mail_sent.png">  Forgot login?</h2>
+
+<form method="POST" action="maker.cgi" name="forgot_login_form">
+
+<input type="hidden" name="rm" value="forgot_login">
+<table width=100%  bgcolor="#EDDA74">
+  <tr>
+    <td>
+      <h3>[% message %]</h3>
+    </td>
+  </tr>
+</table>
+
+<table bgcolor="#99CCCC" width=100%>
+  <tr>
+  <td colspan=2>
+    <h4>No worries! Enter the email address that you previously used to create your account</h4>
+  </td>
+  </tr>
+
+  <tr>
+    <td>E-mail:</td>
+    <td>    
+      <input type="text" size=30 maxlength=60 name="e_mail">
+    </td>
+  </tr>
+  <tr>
+  <tr>
+      <td>Enter Value:</td>
+    <td>   
+        <input type="text" size=10 maxlength=10 name="captcha" value="" autocomplete="off">
+    </td>   
+  </tr>
+  <tr>
+    <td>   
+    </td>   
+    <td>   
+        <img src="maker.cgi?rm=create_captcha">
+    </td>
+  </tr>
+</table>
+
+<br />
+
+<input type="submit" value="Email me my login info">
+</form>
+
+[% END %]
+

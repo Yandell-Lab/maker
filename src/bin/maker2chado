@@ -1,0 +1,601 @@
+#!/usr/bin/perl 
+
+use warnings;
+use strict;
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/../perl/lib";
+
+use DBI;
+use Getopt::Long;
+use File::Temp;
+use vars qw($DBH $GMOD);
+
+BEGIN{
+    if (not ($ENV{CGL_SO_SOURCE}) || ! -e $ENV{CGL_SO_SOURCE}) {
+	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+    }
+    if (not ($ENV{CGL_GO_SOURCE}) || ! -e $ENV{CGL_GO_SOURCE}) {
+	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo";
+    }
+
+    #what to do on ^C
+    $SIG{'INT'} = sub {
+	$DBH->disconnect;
+	die "\n\nInterupt signal received!\n\n";
+    };
+
+    my $loc = `which gmod_bulk_load_gff3.pl 2> /dev/null`;
+    chomp $loc;
+    if ($loc =~ /^no gmod_bulk_load_gff3\.pl/ || ! $loc) {
+	die "FATAL: Can not find gmod_bulk_load_gff3.pl\n".
+	    "Make sure CHADO is installed and the executables are in your PATH.\n";
+
+    }
+    else {
+	$GMOD = [split("\n", $loc)]->[-1];
+    }
+}
+
+use GI;
+use Fasta;
+use IO::Prompt;
+use DBD::Pg;
+
+my $usage = '
+USAGE:
+     maker2chado [OPTION] <database_name> <gff3file1> <gff3file2> ...
+     maker2chado [OPTION] -d <datastore_index> <database_name>
+
+     This script takes MAKER produced GFF3 files and dumps them into a
+     CHADO database.  You must set the database up first according to
+     CHADO installation instructions.  CHADO provides its own methods
+     for loading GFF3, but this script makes it easier for MAKER
+     specific data.  You can either provide the datastore index file
+     produced by MAKER to the script or add the GFF3 files as command
+     line arguments.
+
+
+OPTIONS:
+     ds_index|d  <file>  Provide MAKER produced datastore index
+
+     host|h      <host>  Database host address
+
+     port|p      <port>  Database port
+
+     username|U  <user>  Username to access database
+
+     password|W          Promp for password to access database
+
+     organism|o  <name>  Organism in CHADO database to add to
+
+     jobid|j     <id>    JobID (only for MAKER web server use)
+
+     fasta       <file>  Adds sequences for BLAST hit features.
+
+     annotation          Only parse annotation features
+
+     analysis            Only parse analysis features
+
+     match     <regex>   Only use GFF3 lines matching pattern
+
+     exclude   <regex>   exclude GFF3 lines matching pattern
+
+     delete              Use GFF3 file to delete DB contents
+
+     reindex             Recreate inexes and name cache
+
+     dropindex           Drop indexes before adding features
+
+     help|?              Displays this usage statement
+
+
+';
+
+my $host = '';
+my $user = '';
+my $pass = '';
+my $organism;
+my $port;
+my $dstore;
+my $jid;
+my $delete;
+my $fasta_file;
+my $annotation_only;
+my $analysis_only;
+my $match;
+my $exclude;
+my $reindex;
+my $dropindex;
+my $addpermission;
+my @permissiontype;
+
+GetOptions("host|h=s" => \$host,
+	   "port|p=i" => \$port,
+	   "username|U=s" => \$user,
+	   "password|W" => sub{$pass = prompt("Please enter your password: ", -echo => '*')},
+	   "organism|o=s" => \$organism,
+	   "jobid|j=i" => \$jid,
+	   "ds_index|d=s" => \$dstore,
+	   "delete" => \$delete,
+	   "annotation" => \$annotation_only,
+	   "analysis" => \$analysis_only,
+	   "fasta=s" => \$fasta_file,
+	   "match=s" => \$match,
+	   "exclude=s" => \$exclude,
+	   "reindex" => \$reindex,
+	   "dropindex" => \$dropindex,
+	   "addpermission=s" => \$addpermission,
+	   "permissiontype=s" => \@permissiontype,
+	   "help|?" => sub {print $usage; exit()}
+	   );
+
+$pass = $pass->{value} if($pass);
+
+die "ERROR: 'annotation' and 'analysis' are mutually exclusive\n".
+    "You can choose only one!\n\n" if( $analysis_only && $annotation_only);
+
+my $dbname = shift;
+my @files;
+
+die "ERROR: The file ds_index\'$dstore\' does not exist\n" if ($dstore && ! -e $dstore);
+if($dstore){
+    open(IN, "< $dstore");
+
+    #uniq the entries
+    my %seen;
+    while(my $e = <IN>){
+        next unless ($e =~ /FINISHED/);
+        $seen{$e}++;
+        chomp $e;
+        my ($id, $dir, $status) = split("\t", $e);
+        $dir =~ s/\/$//;
+        push(@files, $dir);
+    }
+
+    foreach my $file (@files){
+        $file =~ /([^\/]+)$/;
+        $file = "$file/$1.gff";
+    }
+}
+else{
+    @files = @ARGV;
+    undef @ARGV;
+}
+
+if(!$dbname || ! @files){
+    print $usage;
+    exit();
+}
+
+my $error;
+my $base = $dstore;
+$base =~ s/[^\/]+$// if($base);
+
+foreach my $file (@files){
+    if (! -f $file){
+	if($base && -f "$base/$file"){
+	    $file = "$base/$file";
+	    next;
+	}
+
+	$error .= "ERROR: The GFF3 file \'$file\' does not exist\n";
+    }
+}
+die $error if $error;
+
+my $dsn .= "dbi:Pg:dbname=$dbname";
+$dsn .= "\;host=$host" if($host);
+$dsn .= "\;port=$port" if($port);
+
+
+$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+
+#add permissions for indicated user
+if($addpermission){
+    die "ERROR: You must specify the permission type when adding permissions for a user\n".
+	"valid entries are SELECT, INSERT, UPDATE, DELETE, RULE, and ALL\n"
+	if(! @permissiontype);
+
+    foreach my $type (@permissiontype){
+	die "ERROR: You specified an invalid permission type: $type\n".
+	    "valid entries are SELECT, INSERT, UPDATE, DELETE, RULE, and ALL\n"
+	    if(! $type || $type !~ /^select$|^insert$|^update$|^delete$|^rule$|^all$/i);
+    }
+
+    #my $sth = $DBH->table_info('', 'public', undef, undef);
+    #for my $rel (@{$sth->fetchall_arrayref({})}) {
+    #    my $name = $rel->{TABLE_NAME};
+    #    my $privleges = join(',', @permissiontype);
+    #    my $user = $addpermission;
+    #    $DBH->do(qq{GRANT $privleges ON $name TO $user});
+    #}
+
+    my $tables = $DBH->selectall_arrayref(qq{SELECT n.nspname AS schemaname, c.relname AS name, pg_get_userbyid(c.relowner) }.
+					  qq{AS viewowner, c.relkind AS kind FROM (pg_class c LEFT JOIN pg_namespace n }.
+					  qq{ON ((n.oid = c.relnamespace))) WHERE ((c.relkind = 'r'::"char" OR c.relkind = }.
+					  qq{'S'::"char" OR c.relkind = 'v'::"char") AND n.nspname = 'public')},
+					  {Slice => {}});
+
+    foreach my $table (@$tables){
+	my $name = $table->{name};
+	my $kind = $table->{kind};
+	my $user = $addpermission;
+
+	my @perm = @permissiontype;
+	@perm = grep {/select|update|usage|all/i} @perm if($kind eq 'S');
+	my $privleges = join(',', @perm);
+
+	$DBH->do(qq{GRANT $privleges ON $name TO $user}) if($privleges);
+    }
+
+    $DBH->commit;
+}
+
+my $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+my $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+warn "WARNING: This does not seem to be a chado database\n\n" if(! @$o_list || ! @$c_list);
+
+#check user defined organism
+unless(! $organism || grep {$_ eq $organism} (@$o_list, @$c_list)){
+    warn "WARNING: The organism you specified \'$organism\' does not exist in the database\n\n";
+    undef $organism;
+}
+
+#add maker jobids automatically to the database
+if($jid){
+    $organism = $jid;
+    if(! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+	$DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$jid', 'JOB', '$jid', '$jid') });
+	$DBH->commit;
+	$o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+	$c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+    }
+}
+
+#promt user to select organism
+if(!$organism || ! @{[grep {$_ eq $organism} (@$o_list, @$c_list)]}){
+    die "FATAL: This script must be run interactively if no valid organism is supplied\n\n" if(! -t);
+
+    for(my $i = 0; $i <= abs(@$c_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Add a new organism to the database>");
+	push(@menu, "<Remove an organism from the database>");
+	push(@menu, "<Quit>");
+
+	system("clear");
+	$organism = prompt ("Please select an existing organism from the database or add a new one: ",
+			    -menu => \@menu
+			   );
+	
+	if($organism eq 'Show more organisms -->'){
+	    undef $organism;
+	}
+	elsif($organism eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $organism;
+	}
+	elsif($organism eq '<Add a new organism to the database>'){
+	    my $ab = '';
+	    my $gn = '';
+	    my $sp = '';
+	    my $cn = '';
+
+	    while(1){
+		system("clear");
+		do{
+		    $ab = prompt ("Enter abbreviation, (i.e. H.sapiens) [$ab]: ", -default => $ab);
+		    $ab = $ab->{value};
+		}while(!$ab);
+		do{
+		    $gn = prompt ("Enter genus, (i.e. Homo) [$gn]: ", -default => $gn);
+		    $gn = $gn->{value};
+		}while(!$gn);
+		do{
+		    $sp = prompt ("Enter species, (i.e. sapiens) [$sp]: ", -default => $sp);
+		    $sp = $sp->{value};
+		}while(!$sp);
+		do{
+		    $cn = prompt ("Enter common name, (i.e. human) [$cn]: ", -default => $cn);
+		    $cn = $cn->{value};
+		}while(!$cn);
+		
+		system("clear");
+		last if(prompt ("Abbreviation: $ab\n".
+				"Genus: $gn\n".
+				"Species: $sp\n".
+				"Common Name: $cn\n\n".
+				"Is this correct?",
+				-yes_no
+				)
+			);
+	    }
+
+	    $DBH->do(qq{ INSERT INTO organism (abbreviation, genus, species, common_name) VALUES ('$ab', '$gn', '$sp', '$cn') });
+	    $DBH->commit;
+	    $o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+	    $c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+	    $i = -1;
+	    next;
+	}
+	elsif($organism eq '<Remove an organism from the database>'){
+	    remove_db_menu();
+	    $i = -1;
+	}
+	elsif($organism eq '<Quit>'){
+	    warn "\n\nWARNING: The user exited the program without doing anything\n\n";
+	    $DBH->disconnect;
+	    exit;
+	}
+	else{
+	    last;
+	}
+    }
+}
+
+$DBH->disconnect;
+
+my $index;
+if($fasta_file){
+    my %CTL_OPT = (out_base => '.', alt_peptide => 'C', protein => $fasta_file);
+    ($CTL_OPT{_protein}, $CTL_OPT{p_db}) = GI::split_db(\%CTL_OPT, 'protein', 10);
+    $index = GI::build_fasta_index($CTL_OPT{_protein});
+}
+
+open(LOG, "> maker2chado.log");
+
+#build command line
+$GMOD .= " --dbhost $host" if($host);
+$GMOD .= " --dbport $port" if($port);
+$GMOD .= " --dbuser $user" if($user);
+$GMOD .= " --dbpass $pass" if($pass);
+$GMOD .= " --dbname $dbname";
+$GMOD .= " --organism '$organism'";
+$GMOD .= " --skip_vacuum";
+$GMOD .= " --delete_i_really_mean_it" if($delete);
+$GMOD .= " --drop_indexes" if($dropindex);
+
+my $count = 0;
+while(my $file = shift @files){
+    my $gmod = $GMOD;
+    $count++;
+
+    my $annotations;
+    my $analysis;
+    my $fasta = "##FASTA\n";
+    my $afasta = "##FASTA\n";
+
+    open(IN, "< $file");
+    my $ff; #fasta flag
+    while(defined(my $line = <IN>)){
+
+	if($ff){
+	    $fasta .= $line;
+	    next;
+	}
+	elsif($line =~ /^\#\#FASTA/){
+	    $ff = 1;
+	    next;
+	}
+	elsif($line =~ /^\#/){
+	    next;
+	}
+
+	#skip lines that match regex pattern
+	next if($exclude && $line =~ /$exclude/);
+
+	#skip lines that do not match regex pattern
+	next if($match && $line !~ /$match/);
+
+	if($line =~ /^[^\t]+\t[^\t]+\t(match|[^\t]+_match)/){
+	    #add sequence for features if external fasta provided
+	    if($index){
+		my ($name) = $line =~ /Target=([^\;\n\s]+)/;
+		if(defined $name && (my $fastaObj = $index->get_Seq_by_id($name))){
+		    my $t_def = $index->header($name);
+		    my $t_seq = $fastaObj->seq();
+		    my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
+		    $afasta .= $f;
+		}
+		elsif(defined $name && ($fastaObj = $index->get_Seq_by_alias($name))){
+		    my $t_def = $index->header_by_name($name);
+		    my $t_seq = $fastaObj->seq();
+		    my $f = Fasta::toFasta('>'.$t_def, \$t_seq);
+		    $afasta .= $f;
+		}
+	    }
+	    
+	    $analysis .= $line;
+	    next;
+	}
+	elsif($line =~ /\tcontig\t|\tchromosome\t/){
+	    #don't delete contig if analysis is still attached
+	    if($delete && $annotation_only){
+		next;
+	    }
+
+	    #add contig to attach analysis features if not present otherwise skip
+	    if(! $delete && $analysis_only){
+		my ($id) = $line =~ /ID=([^\;\n]+)/;		
+		$DBH = DBI->connect($dsn,$user,$pass,{AutoCommit => 0}) or die $DBI::errstr;
+		my ($contig_id) = $DBH->selectrow_array(qq{SELECT f.feature_id FROM feature f }.
+							qq{JOIN organism o ON f.organism_id=o.organism_id }.
+							qq{WHERE (o.abbreviation='$organism' OR o.common_name='$organism') }.
+							qq{AND (f.uniquename='$id' OR f.name='$id')}
+							);
+		$DBH->disconnect();
+		undef $DBH;
+
+		next if($contig_id);
+	    }
+
+	    #default behavior
+	    $annotations .= $line;
+	    next;
+	}
+	elsif(! $analysis_only){
+	    $annotations .= $line;
+	    next;
+	}
+
+    }
+    close(IN);
+
+    #must delete analysis before annotations
+    if($delete){
+	my $flag = (@files == 0 && $reindex) ? 1 : 0;
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta, $flag);
+	$flag = ($annotation_only && $flag) ? 1 : 0;
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta, $flag);
+    }
+    else{
+	my $flag = (@files == 0 && $reindex) ? 1 : 0;
+	process_annotations($annotations, $analysis, $gmod, $file, $fasta, $flag);
+	$flag = ($analysis_only && $flag) ? 1 : 0;
+	process_analysis($analysis, $annotations, $gmod, $file, $fasta, $afasta, $flag);
+    }
+}
+close(LOG);
+
+#-------subs--------
+
+sub process_annotations {
+    my $annotations = shift;
+    my $analysis = shift;
+    my $gmod = shift;
+    my $file = shift;
+    my $fasta = shift;
+    my $flag = shift;
+
+    if($flag){
+	$gmod .= " --recreate_cache";
+	$gmod =~ s/\-\-skip_vacuum//;
+    }
+
+    #adds/deletes annotation featues except if in analysis only mode
+    #in which case it will only add the contig feature if necessary
+    if($annotations && (! $delete || ! $analysis_only)){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh "\#\#gff-version 3\n";
+	print $fh $annotations;
+	print $fh $fasta;
+	close($fh);
+
+	my $command = $gmod;
+	$command .= " --gfffile $fname";
+	$command .= " --noexon";
+
+	system ($command);
+	if($? != '0'){
+	    $command .= " --remove_lock";
+	    $command .= " --recreate_cache";
+	    $command .= " --delete_i_really_mean_it";
+
+	    system ($command);
+	    push (@files, $file);
+	    print LOG "FAILED $file\n";
+	    unlink($fname);
+	    next;
+	}
+	unlink($fname)
+    }
+}
+
+sub process_analysis {
+    my $analysis = shift;
+    my $annotations = shift;
+    my $gmod = shift;
+    my $file = shift;
+    my $fasta = shift;
+    my $afasta = shift;
+    my $flag = shift;
+
+    if($flag){
+	$gmod .= " --recreate_cache";
+	$gmod =~ s/\-\-skip_vacuum//;
+    }
+
+    #adds/deletes analysis features if necessary
+    if($analysis && ! $annotation_only){
+	my ($fh, $fname) = File::Temp::tempfile();
+	print $fh "\#\#gff-version 3\n";
+	print $fh $analysis;
+	print $fh $afasta;
+	close($fh);
+
+	my $command = $gmod;
+	$command .= " --gfffile $fname";
+	$command .= " --analysis";
+
+	system ($command);
+	if($? != '0'){
+	    $command .= " --remove_lock";
+	    $command .= " --recreate_cache";
+	    $command .= " --delete_i_really_mean_it";
+
+	    system ($command);
+
+	    if(! $analysis_only && ! $delete){
+		#rebuild annotation file to delete
+		open($fh, "> $fname");
+		print $fh "\#\#gff-version 3\n";
+		print $fh $annotations;
+		print $fh $fasta;
+		close($fh);
+		system ($command);
+	    }
+
+	    push (@files, $file);
+	    print LOG "FAILED $file\n";           
+	}
+	unlink($fname);
+    }
+}
+
+sub remove_db_menu{
+    for(my $i = 0; $i < abs(@$c_list/10); $i ++){
+	my @menu;
+	for(my $j = $i*10; $j < $i*10+10; $j++){
+	    push(@menu, $c_list->[$j]) if(exists $c_list->[$j]);
+	}
+	
+	push(@menu, "Show more organisms -->") if($i + 1 < abs(@$c_list/10));
+	push(@menu, "<-- Previous list") if($i > 0);
+	push(@menu, "<Go back to main menu>");
+
+	my $selection = prompt ("Please select an organism to remove from the database: ",
+				-menu => \@menu
+				);
+	
+	if($selection eq 'Show more organisms -->'){
+	    undef $selection;
+	}
+	elsif($selection eq '<-- Previous list'){
+	    $i -= 2;
+	    undef $selection;
+	}
+	elsif($selection eq '<Go back to main menu>'){
+	    return;
+	}
+	else{
+	    if(prompt ("Are you sure you want to delete \'$selection\' from the database?", -yes_no)){
+		$DBH->do(qq{ DELETE FROM organism WHERE (abbreviation = '$selection') });
+		$DBH->commit;
+		$o_list = $DBH->selectcol_arrayref(qq{SELECT abbreviation FROM organism});
+		$c_list = $DBH->selectcol_arrayref(qq{SELECT common_name FROM organism});
+
+		return;
+	    }
+	    else{
+		$i--;
+	    }
+	}
+    }
+}

@@ -1,0 +1,83 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+my $usage = "
+Usage:
+     cegma2zff <cegma_gff> <genome_fasta>
+
+     This script converts the output GFF file from CEGMA into ZFF format
+     for use in SNAP training.  Output files are always genome.ann and
+     genome.dna.
+
+";
+
+my $infile = shift;
+my $fasta = shift;
+
+if(! $infile){
+    print $usage;
+    exit(1);
+}
+
+if(! -f $infile){
+    die "ERROR: The file $infile does not exist\n";
+}
+
+open(IN, "< $infile") or die "ERROR: Could not open the file $infile\n";
+
+my %contigs;
+while(my $line = <IN>){
+    chomp $line;
+    my @F = split("\t", $line);
+    ($F[3], $F[4]) = ($F[4], $F[3]) if($F[6] eq '-');
+
+    next if($F[2] eq 'Exon');
+
+    $F[2] =~ s/First/Einit/;
+    $F[2] =~ s/Terminal/Eterm/;
+    $F[2] =~ s/Internal/Exon/;
+    $F[2] =~ s/Single/Esngl/;
+
+    $contigs{$F[0]}{$F[8]} = [] if(! $contigs{$F[0]}{$F[8]});
+
+    push(@{$contigs{$F[0]}{$F[8]}}, "$F[2]\t$F[3]\t$F[4]")
+	unless((@{[grep {/^Einit/} @{$contigs{$F[0]}{$F[8]}}]} &&
+		@{[grep {/^Eterm/} @{$contigs{$F[0]}{$F[8]}}]}) ||
+	       @{[grep {/^Esngl/} @{$contigs{$F[0]}{$F[8]}}]});
+}
+
+close(IN);
+
+my %fastas;
+my $buffer;
+open(IN, "< $fasta");
+while(my $line = <IN>){
+    chomp $line;
+    if($line =~ />([^\s\t\n]+)/){
+	$buffer = $1;
+    }
+    else{
+	$fastas{$buffer} .= $line if(exists $contigs{$buffer});
+    }
+}
+close(IN);
+
+open(OUT, "> genome.ann");
+foreach my $contig ( sort keys %contigs){
+    print OUT ">$contig\n";
+    while(my $model = each %{$contigs{$contig}}){
+	print OUT join("\t$model\n", @{$contigs{$contig}{$model}}) . "\t$model\n";
+    }
+}
+close(OUT);
+
+open(OUT, "> genome.dna");
+foreach my $contig ( sort keys %fastas){
+    print OUT ">$contig\n";
+    while($fastas{$contig} =~ /(.{1,70})/g){
+	print OUT $1 ."\n";
+    }
+}
+close(OUT);

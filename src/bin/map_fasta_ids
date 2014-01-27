@@ -1,0 +1,60 @@
+#!/usr/bin/perl 
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+#-----------------------------------------------------------------------------
+#----------------------------------- MAIN ------------------------------------
+#-----------------------------------------------------------------------------
+my $usage = "
+
+Synopsis:
+
+map_fasta_ids genome.all.id.map genome.all.transcripts.fasta
+
+Description:
+
+This script takes a id map file and changes the name of the ID in a
+fasta file.  The map file is a two column tab delimited file with two
+columns: old_name and new_name.  The ID in the fasta file must be the
+first set of characters after the '>' and ending with a space.
+
+";
+
+
+my ($help);
+my $opt_success = GetOptions('help'    => \$help,
+			      );
+
+die $usage if $help || ! $opt_success;
+
+my ($map_file, $fasta_file) = @ARGV;
+die $usage unless $map_file && $fasta_file;
+
+# Read the map file and build a map hash;
+open (my $MAP, '<', $map_file) or die "Can't open $map_file for reading\n$!\n";
+my %map;
+map {my ($old, $new) = split;$map{$old} = $new} (<$MAP>);
+close $MAP;
+
+# Open the fasta file for input unlink it to avoid clobbering it and open the 
+# same file for output.
+open (my $IN, '<', $fasta_file) or die "Can't open $fasta_file for reading\n$!\n";
+unlink($fasta_file);
+open(my $OUT, '>', $fasta_file) or die "Can't open $fasta_file for writing\n$!\n";
+
+# Just do it!
+while (<$IN>) {
+	if  (/^>/) {
+		my ($old_id) = $_ =~ /^>(\S+)/;
+		if (exists $map{$old_id}) {
+			my $new_id = $map{$old_id};
+			s/^>$old_id/>$new_id/g;
+		}
+		else {
+			print STDERR "WARNING:  No mapping available for $old_id\n";
+		}
+	}
+	print $OUT $_;
+}

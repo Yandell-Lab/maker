@@ -1,0 +1,438 @@
+
+[% WRAPPER main.tt session = session %]
+
+<script type="text/javascript">
+
+</script>
+
+<h2>Maker:Add Job</h2>
+<br>
+<form method="POST" action="/cgi-bin/Student/student_students.cgi" name="student_edit" enctype="multipart/form-data">
+
+<input type="hidden" name="rm" value="students_edit_process">
+<input type="hidden" name="noclue" value="[% noclue %]">
+
+<h4>Denovo annotations:</h4>
+<hr>
+<table>
+  <tr>
+    <td>Genome Fasta File:</td>
+
+    <td><input type="file" name="genome"></td>
+
+    </td>
+
+  </tr>
+
+  <tr>
+<td>OR</td>
+</tr>
+<tr>
+    <td>Copy and Paste your fasta file here (500 kb limit)</td>
+    <td>
+	<textarea  class="reset" rows="5" cols="40" name="file_paste" ></textarea>    
+
+    </td>
+  </tr>
+</table>
+
+
+<h4>Re annotation options:</h4>
+<HR>
+<table>
+<tr>
+    <td>Genome_Gff</td>
+    <td>    
+      <input type="file"  name="genome_gff">
+    </td>
+  </tr>
+
+<tr>
+    <td>est_pass</td>
+    <td>    
+	<select name="est_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+    </td>
+</tr>
+
+
+
+<tr>
+    <td>altest_pass</td>
+    <td>    
+	<select name="altest_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+
+    </td>
+  </tr>
+
+
+<tr>
+    <td>protein_pass</td>
+    <td>    
+	<select name="protein_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+      
+    </td>
+  </tr>
+
+
+<tr>
+    <td>rm_pass</td>
+    <td>    
+	<select name="rm_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+    </td>
+  </tr>
+
+
+<tr>
+    <td>model_pass</td>
+    <td>    
+	<select name="model_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+      
+    </td>
+  </tr>
+
+<tr>
+    <td>pred_pass</td>
+    <td>    
+	<select name="pred_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+	</select>	
+
+    </td>
+  </tr>
+
+<tr>
+    <td>other_pass</td>
+	 <td>
+		<select name="other_pass">
+        	<option value="1">Yes</option>	
+        	<option value="0">No</option>
+		</select>	
+   	 </td>
+  </tr>
+</table	>
+
+
+
+<h4>Est Evedence: </h4>
+<hr>
+
+<table>
+<tr>
+    <td>EST</td>
+    <td>    
+      <input type="file"  name="Est">
+    </td>
+  </tr>
+
+<tr>
+    <td>est_reads</td>
+    <td>    
+      <input type="file"  name="est_reads">
+    </td>
+  </tr>
+
+<tr>
+    <td>altest</td>
+    <td>    
+      <input type="file"  name="altest">
+    </td>
+  </tr>
+
+
+<tr>
+    <td>est_gff</td>
+    <td>    
+      <input type="file"  name="est_gff">
+    </td>
+  </tr>
+
+
+<tr>
+    <td>altest_gff</td>
+    <td>    
+      <input type="file"  name="altest_gff">
+    </td>
+  </tr>
+
+</table>
+ 
+<h4>Protein Homology Evidence: </h4>
+<hr>
+<table>
+  <tr>
+    <td>Protein</td>
+    <td>    
+      <input type="file"  name="protein" >
+    </td>
+  </tr>
+
+<tr>
+    <td>Protein_gff</td>
+    <td>    
+      <input type="file"  name="protein_gff">
+    </td>
+  </tr>
+
+</table>
+
+
+<h4>model_org:</h4>
+
+<hr>
+<table>
+ <tr>
+
+    <td>model_org</td>
+    <td>
+	 
+	<select name="model_org">
+	[% FOREACH morg = model_org.sort('modelorg') %]	
+        <option value=[% morg.modelorg %]>[% morg.modelorg %]</option>
+       [% END %]
+	
+	</select>	
+    </td>
+  </tr>
+
+
+  <tr>
+    <td>repeat_protein</td>
+    <td>    
+      <input type="file" name="repeat_protein" >
+    </td>
+  </tr>
+
+<tr>
+    <td>rm_lib*</td>
+    <td>
+      <input type="file" size=10 maxlength=10 name="rm_lib" >
+    </td>
+  </tr>
+
+ <tr>
+    <td>rm_gff*</td>
+    <td>
+      <input type="file" size=10 maxlength=10 name="rm_gff" >
+    </td>
+  </tr>
+</table>
+
+
+
+<h4>Gene Predictor:</h4>
+<hr>
+<table>
+
+ <tr>
+    <td>predictor</td>
+    <td>
+	<select name="predictor">
+	[% FOREACH p = predictor.sort('predictor') %]		
+        <option value=[% p.predictor %]>[% p.predictor %]</option>
+        [% END %]
+	</select>
+    </td>
+  </tr>
+
+
+ <tr>
+ 
+    <td>SnamHmm</td>
+
+    <td>
+ 
+	<select name="snaphmm">
+		[% FOREACH snap = snaphmms.sort('snaphmm') %] 
+ 		<option value=[% snap.snaphmm %]>[% snap.snaphmm %]</option>
+		[% END %]
+	</select>      
+    </td>
+  </tr>
+
+
+ <tr>
+    <td>Agustus_species</td>
+     <td>
+      	<select name="augustus_species">
+		[% FOREACH agu = agustus.sort('agustus_species') %] 
+	        <option value=[% agu.agustus_species %]>[% agu.agustus_species %]</option>
+		[% END %]       		
+	 </select>
+    </td>
+  </tr>
+ 
+
+ <tr>
+    <td>Fgenesh_par_file</td>
+     <td>
+      	<select name="augustus_species">
+		[% FOREACH agu = agustus.sort('agustus_species') %] 
+	        <option value=[% agu.agustus_species %]>[% agu.agustus_species %]</option>
+		[% END %]       		
+	 </select>
+    </td>
+  </tr>
+
+
+ <tr>
+    <td>model_gff</td>
+     <td>
+      	<select name="model_gff">
+		[% FOREACH agu = agustus.sort('agustus_species') %] 
+	        <option value=[% agu.agustus_species %]>[% agu.agustus_species %]</option>
+		[% END %]       		
+	 </select>
+    </td>
+  </tr>
+
+
+
+ <tr>
+    <td>pred_gff</td>
+     <td>
+      	<select name="augustus_species">
+		[% FOREACH agu = agustus.sort('agustus_species') %] 
+	        <option value=[% agu.agustus_species %]>[% agu.agustus_species %]</option>
+		[% END %]       		
+	 </select>
+    </td>
+  </tr>
+
+</table>
+
+<h4>Other annotation:</h4>
+<hr>
+<tr>
+    <td>other_gff</td>
+    <td>
+      <input type="file"  name="other_gff" >
+    </td>
+  </tr>
+</table>
+
+
+
+<table>
+<h4>External Application</h4>
+<hr>
+ <tr>
+    <td>alt_peptide</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="alt_peptide" value="c">
+    </td>
+  </tr>
+
+ <tr>
+    <td>cpus</td>
+    <td>
+	<select name="cpus">
+        <option value="4">4</option>	
+       	</select>
+    </td>
+  </tr>
+</table>
+
+
+
+<h4>Maker Specific Options:</h4>
+<hr>
+<table> 
+
+ <tr>
+    <td>max_dna_len</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="max_dna_len" value=100000>&nbsp;&nbsp;[% errors.error_max_dna_len %]</td>
+    </td>
+  </tr>
+
+ <tr>
+    <td>min_contig</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="min_contig" value=1>
+    </td>
+  </tr>
+
+ <tr>
+    <td>split_hit</td>
+    <td>
+      <input type="text" size=10 maxlength=10 name="split_hit" value="10000">
+    </td>
+ </tr>
+
+<tr>
+    <td>pred_flank</td>
+    <td>
+      <input type="snap_flank" size=10 maxlength=10 name="snap_flank" value="200">
+    </td>
+</tr>
+
+
+
+
+<tr>
+    <td>single_exon</td>
+    <td>
+      	<select name="single_exon">
+        <option value="1">Yes</option>	
+        <option value="0">No</option>
+	</select>
+    </td>
+  </tr>
+
+<tr>
+    <td>keep_preds</td>
+    <td>
+    	<select name="keep_preds">
+        <option value="1">Yes</option>	
+	 <option value="0">No</option>		
+	</select>
+    </td>
+  </tr>
+
+<tr>
+    <td>retry</td>
+    <td>
+    	<select name="retry">
+        <option value="1">Yes</option>	
+	 <option value="0">No</option>		
+	</select>
+    </td>
+  </tr>
+
+<tr>
+    <td>clean_up</td>
+    <td>
+	<select name="use_seq_dir">
+        <option value="1">Yes</option>	
+	</select>
+
+    </td>
+  </tr>
+  
+</table>
+
+<br />
+
+<input type="submit" value="Add Maker Job">
+<input type="reset" value="use default"><br>* = optional
+
+</form>
+
+[% END %]
+

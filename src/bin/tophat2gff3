@@ -1,0 +1,79 @@
+#!/usr/bin/perl 
+
+use warnings;
+use strict;
+
+my $usage = "
+Usage:
+     tophat2gff3 <junctions.bed>
+     tophat2gff3 <junctions1.bed> <junctions2.bed> ...
+
+Description:
+     This script conversts the juctions file producted by TopHat into
+     GFF3 format for use with MAKER.
+
+
+";
+
+
+my @infiles = @ARGV;
+
+if(! @infiles){
+    print $usage;
+    exit(1);
+}
+
+my $error;
+foreach my $file (@infiles){
+    if(! -e $file){
+	$error .= "ERROR: The file $file does not exist\n";
+    }
+}
+die $error if($error);
+
+my $prefix = 1;
+foreach my $file (@infiles){
+    open(IN, "< $file") or die "ERROR: Could not open the file $file\n";
+    while(my $line = <IN>){
+	chomp $line;
+	my ($seqid, $start, $stop, $ID, $score, $strand,
+	    undef, undef, undef, undef, $lengths, undef) = split("\t", $line);
+
+	#scipt header lines
+	next if(! $lengths);
+
+	$ID = "$prefix:$ID"; #for case of multiple files
+
+	$start++; #fix for 0 based coordinates
+	#don't change stop since stop in bed is not shown in sequece
+	#so it is already the right value for a correcrted GFF3
+	
+	#split length attribute in BED file
+	my ($l1, $l2) = split(',', $lengths);
+	
+	#get match_part start and ends
+	my $m1_s = $start;
+	my $m1_e = $start + $l1 - 1;
+	my $m2_s = $stop - $l2 + 1;
+	my $m2_e = $stop;
+	
+	#get target start and end
+	my $t1_s = 1;
+	my $t1_e = $m1_e - $m1_s + 1;
+	my $t2_s = $t1_e + 1;
+	my $t2_e = $m2_e - $m1_s + $t2_s;
+	
+	#print match
+	print "$seqid\tTopHat\tmatch\t$start\t$stop\t$score\t$strand\t.\tID=$ID\:0;Name=$ID;\n";
+	
+	#print match_parts
+	print "$seqid\tTopHat\tmatch_part\t$m1_s\t$m1_e\t$score\t$strand\t.\t".
+	    "ID=$ID\:exon-1;Name=$ID;Parent=$ID\:0;Target=$ID $t1_s $t1_e +;\n";
+	print "$seqid\tTopHat\tmatch_part\t$m2_s\t$m2_e\t$score\t$strand\t.\t".
+	    "ID=$ID\:exon-2;Name=$ID;Parent=$ID\:0;Target=$ID $t2_s $t2_e +;\n";
+	
+    }
+    close(IN);
+    $prefix++;
+}
+

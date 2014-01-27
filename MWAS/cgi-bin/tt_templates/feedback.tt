@@ -1,0 +1,36 @@
+[% WRAPPER main.tt %]
+
+<br>
+<h2><img src="[% server_opt.html_web %]/images/feedback.png"  WIDTH=32 HEIGHT=32 >User Feedback</h2>
+
+<form method="POST" action="maker.cgi" name="feedback_form">
+<input type="hidden" name="rm" value="feedback">
+<center>
+<table width=90% bgcolor="#CACACA" border=0 celspacing="11" style="border-collapse:collapse;">
+  <tr>
+    <td>
+    <h5"left">Please provide any questions, comments, and suggestions below.</h6>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <textarea  class="reset" rows="15" cols="80" name="comment_text" ></textarea>    
+    <td>
+  </tr>
+  <tr>
+    <td nowrap>
+      <input type="test" size=30 maxlength=70 name="e_mail" [% IF user.e_mail %]value="[% user.e_mail %]" [% END %]>
+      E-mail Address (Optional)
+    <td>
+  </tr>
+  <tr bgcolor=white >
+    <td>
+    <input type="submit"  name="feedback" value="Send">
+    </td>
+  </tr>
+</table>
+</center>
+</form>
+
+[% END %]
+
