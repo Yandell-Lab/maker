@@ -4478,6 +4478,7 @@ sub retrieve {
     my @args = @_;
     
     try {
+	sleep 5 if(! -e $args[0]);
 	confess "ERROR: No such file or directory at $args[0]\n" if(! -e $args[0]);
 	return Storable::retrieve(@args);
     }

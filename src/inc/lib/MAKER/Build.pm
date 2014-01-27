@@ -1540,11 +1540,11 @@ sub cpan_install {
                CPAN::Config->init;
              }';
 	my $cpan_command = '';
-	$cpan_command .= 'force("install","ExtUtils::MakeMaker"); '
+	$cpan_command .= 'force("notest","install","ExtUtils::MakeMaker"); '
 	    if(!$self->check_installed_status('ExtUtils::MakeMaker', '6.31')->{ok});
-	$cpan_command .= 'install("ExtUtils::Install"); '
+	$cpan_command .= 'force("notest","install","ExtUtils::Install"); '
 	    if(!$self->check_installed_status('ExtUtils::Install', '1.43')->{ok});
-	$cpan_command .= 'force("install","CPAN"); ';
+	$cpan_command .= 'force("notest","install","CPAN"); ';
 
 	#run CPAN via system call
 	system($^X, '-MCPAN', '-e', $cpan_config_command);
@@ -1590,11 +1590,11 @@ sub cpan_install {
     }
 
     #install YAML if needed to avoid other installation issues with prereqs
-    CPAN::Shell->install('YAML') if (! $self->check_installed_status('YAML', '0')->{ok});
+    CPAN::Shell->force('notest','install','YAML') if (! $self->check_installed_status('YAML', '0')->{ok});
 
     #CPAN::Shell->expand("Module", $desired)->cpan_version <= 2.16;
     #CPAN::Shell->install($desired);
-    CPAN::Shell->force('install', $desired);
+    CPAN::Shell->force('notest', 'install', $desired);
 
     #restore old CPAN settings
     $CPAN::Config->{makepl_arg} = $bak{makepl_arg};

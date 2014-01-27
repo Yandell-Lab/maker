@@ -1908,6 +1908,8 @@ sub run_it{
 	#------default hint based behavior
 	#------genemark does not have hints enabled
 	return [] if ($predictor eq 'genemark');
+	return [] if ($predictor eq 'trnascan'); #neither does trnascan
+	return [] if ($predictor eq 'snoscan'); #neither does or snoscan
 
 	my $gomias = []; #group of most informative alt splices
 	if($CTL_OPT->{alt_splice}){
@@ -2521,13 +2523,17 @@ sub group_transcripts {
    }
    #now cluster each list seperately
    foreach my $set (values %sources){
-       my $clusters = cluster::careful_cluster_phat_hits($set);
-       
-       #remove redundant transcripts in gene
-       foreach my $c (@{$clusters}) {
-	   my $best_alt_forms = ($CTL_OPT->{est_forward} && $predictor =~ /^(est2genome|altest2genome|protein2genome)$/) ?
-	       $c : clean::remove_redundant_alt_splices($c, 10);
-	   push(@$careful_clusters, $best_alt_forms);
+       if($CTL_OPT->{est_forward}){
+	   @$careful_clusters = map {[$_]} @$set; #every result as separate gene
+       }
+       else{
+	   my $clusters = cluster::careful_cluster_phat_hits($set);
+	   
+	   #remove redundant transcripts in gene
+	   foreach my $c (@{$clusters}) {
+	       my $best_alt_forms = clean::remove_redundant_alt_splices($c, 10);
+	       push(@$careful_clusters, $best_alt_forms);
+	   }
        }
    }
 
@@ -2671,7 +2677,7 @@ sub group_transcripts {
 	 $t_structs[0]->{hit}->{_tran_name}
 	 ){
 	  $g_name = $t_structs[0]->{t_name}."-gene";
-	  $g_id = $t_structs[0]->{t_id}."-gene";
+	  #$g_id = $t_structs[0]->{t_id}."-gene";
 	  $SEEN->{$g_name}++;
       }
 

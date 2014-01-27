@@ -60,8 +60,8 @@ sub skip_file {
 
     #die "ERROR: Log file does not exist in Iterator::Fasta::skip_file\n" if(! -f $file);
 
-    my $out_base = $file;
-    $out_base =~ s/[^\/]+$//;
+    my ($out_base, $name) = $file =~ /(.*\/)([^\/]+)$/;
+    $name =~ s/master_datastore_index\.log$/datastore/;
     my %skip;
     if(-f $file){
 	open(IN, "< $file") || die "ERROR: Could not open the log file in Iterator::Fasta::skip_file\n";
@@ -70,7 +70,7 @@ sub skip_file {
 	    my @F = split("\t", $line);
 	    next unless(@F == 3);
 	    next unless($F[2] eq 'FINISHED');
-	    next unless(-d "$out_base/$F[1]");
+	    next unless($F[1] =~ /^$name\/..\/..\/$F[0]\/?$/ || -d "$out_base/$F[1]");
 	    $skip{$F[0]}++;
 	}
 	close(IN);

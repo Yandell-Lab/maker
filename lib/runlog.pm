@@ -231,6 +231,7 @@ sub _load_old_log {
     #===id files types that can not be re-used
     my $continue_flag = $self->{continue_flag}; #signals whether to continue with this seq
     my %rm_key; #key to what type of old files to remove
+    my %skip;
     my @files; #list of files to remove
     my @dirs; #list of directories to remove
 
@@ -287,7 +288,6 @@ sub _load_old_log {
              $continue_flag = -1;
         }
 
-	my %skip;
 	if(!$rm_key{force}){
 	    #CHECK CONTROL FILE OPTIONS FOR CHANGES
 	    foreach my $key (@ctl_to_log) {
@@ -562,252 +562,257 @@ sub _load_old_log {
             $self->{continue_flag} = -3;
             return;
         }
-
-	#-print file type specific warnings and delete files
-	if (exists $rm_key{force} || $rm_key{cleantry}) {
-	    print STDERR "MAKER WARNING: All old files will be erased before continuing\n" unless($main::qq);
-	    
-	    #delete everything in the void
-	    File::Path::rmtree($the_void);
-	    File::Path::mkpath($the_void);
-	    
-	    #remove all other files
-	    push (@files, $gff_file) if(-e $gff_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
-	    push (@dirs, "$out_base/evaluator");
-	}
-	elsif (exists $rm_key{all}) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
-		         "All old files will be erased before continuing\n" unless($main::qq);
-	    
-	    #delete everything in the void
-	    File::Path::rmtree($the_void);
-	    File::Path::mkpath($the_void);
-
-	    #remove all other files	    
-	    push (@files, $gff_file) if(-e $gff_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
-	    push (@dirs, "$out_base/evaluator");
-	}
-	elsif (exists $rm_key{all_but_rb}) { #all but repbase reports
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but some RepeatMasker data impossible\n".
-		         "All old non-RepeatMasker and some RepeatMasker files will be erased before continuing\n" unless($main::qq);
-	    
-	    #delete everything in the void
-	    my @f = <$the_void/*>;
-	    grep {-f $_ || !/\/\d+$/} @f;
-	    push(@f, <$the_void/*/*>);
-	    @f = grep {!/(\.rb\.out|\.rb\.cat|\.rb\.tbl)$/} @f;
-
-	    foreach my $e (@{$skip{'specific.out'}}){
-		@f = grep {!/\.$e\.specific\.(out|cat|tbl)$/} @f;
-	    }
-
-	    #delete files in the void
-	    foreach my $f (@f){
-		push (@files, $f) if (-f $f);
-		push (@dirs, $f) if (-d $f);
-	    }
-
-	    #remove all other files
-	    push (@files, $gff_file) if(-e $gff_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
-	    push (@dirs, "$out_base/evaluator");
-	}
-	elsif (exists $rm_key{all_but}) {
-	    print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
-		"All old non-RepeatMasker files will be erased before continuing\n" unless($main::qq);
-	    
-	    #delete everything in the void
-	    my @f = <$the_void/*>;
-	    grep {-f $_ || !/\/\d+$/} @f;
-	    push(@f, <$the_void/*/*>);
-	    @f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
-	    
-	    #delete files in the void
-	    foreach my $f (@f){
-		push (@files, $f) if (-f $f);
-		push (@dirs, $f) if (-d $f);
-	    }
-
-	    #remove all other files	    
-	    push (@files, $gff_file) if(-e $gff_file);
-	    push (@files, @{[<$out_base/*.fasta>]});
-	    push (@dirs, "$out_base/evaluator");
-	}
-	else {
-	    if (exists $rm_key{preds}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
-		    "Old hint based prediction files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.auto_annotator.*>, <$the_void/*/*.auto_annotator.*>);
-		push (@files, @f);
-	    }
-	    if (exists $rm_key{snap}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
-		    "Old SNAP files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.snap>, <$the_void/*/*.snap>);
-		foreach my $e (@{$skip{snap}}){
-		    @f = grep {!/\.$e\.snap$/} @f;
-		}
-		push (@files, @f);
-	    }
-	    if (exists $rm_key{augustus}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
-		    "Old Augustus files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.augustus>, <$the_void/*/*.augustus>);
-		foreach my $e (@{$skip{augustus}}){
-		    @f = grep {!/\.$e\.augustus$/} @f;
-		}
-		push (@files, @f); 
-	    }
-	    if (exists $rm_key{fgenesh}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
-		    "Old FGENESH files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.fgenesh>, <$the_void/*/*.fgenesh>);
-		foreach my $e (@{$skip{fgenesh}}){
-		    @f = grep {!/\.$e\.fgenesh$/} @f;
-		}
-		push (@files, @f);
-	    }
-	    if (exists $rm_key{genemark}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
-		    "Old GeneMark files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.genemark>, <$the_void/*/*.genemark>);
-		foreach my $e (@{$skip{genemark}}){
-		    @f = grep {!/\.$e\.genemark$/} @f;
-		}
-		push (@files, @f);
-	    }
-	    if (exists $rm_key{blastn}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
-		    "Old EST Blastn files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.blastn>, <$the_void/*/*.blastn>);
-		foreach my $e (@{$skip{blastn}}){
-		    @f = grep {!/\.$e\.blastn$/} @f;
-		}
-		foreach my $f (@f){
-		    push (@files, $f) if (-f $f);
-		    push (@dirs, $f) if (-d $f);
-		}
-	    }	    
-	    if (exists $rm_key{tblastx}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
-		    "Old tBlastx files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.tblastx>, <$the_void/*/*.tblastx>);
-		foreach my $e (@{$skip{tblastx}}){
-		    @f = grep {!/\.$e\.tblastx$/} @f;
-		}
-		foreach my $f (@f){
-		    push (@files, $f) if (-f $f);
-		    push (@dirs, $f) if (-d $f);
-		}
-	    }
-	    if (exists $rm_key{blastx}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
-		    "Old Blastx files will be erased before continuing\n" unless($main::qq);
-	 
-		my @f = (<$the_void/*.blastx>, <$the_void/*/*.blastx>);
-
-		foreach my $e (@{$skip{blastx}}){
-		    @f = grep {!/\.$e\.blastx$/} @f;
-		}
-		foreach my $f (@f){
-		    push (@files, $f) if (-f $f);
-		    push (@dirs, $f) if (-d $f);
-		}
-
-	    }
-
-	    if (exists $rm_key{repeatrunner}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old repeatrunner data impossible\n".
-		    "Old repeatrunner files will be erased before continuing\n" unless($main::qq);
-	 
-		my @f = (<$the_void/*.repeatrunner>, <$the_void/*/*.repeatrunner>);
-
-		foreach my $e (@{$skip{repeatrunner}}){
-		    @f = grep {!/\.$e\.repeatrunner$/} @f;
-		}
-		foreach my $f (@f){
-		    push (@files, $f) if (-f $f);
-		    push (@dirs, $f) if (-d $f);
-		}
-
-	    }
-	    
-	    if (exists $rm_key{e_exonerate}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
-		    "Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.est_exonerate>, <$the_void/*/*.est_exonerate>);
-		push (@files, @f);
-	    }
-
-	    if (exists $rm_key{a_exonerate}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old altEST Exonerate data impossible\n".
-		    "Old altEST Exonerate files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.alt_exonerate>, <$the_void/*/*.alt_exonerate>);
-		push (@files, @f);
-	    }
-	    
-	    if (exists $rm_key{p_exonerate}) {
-		print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
-		    "Old protein Exonerate files will be erased before continuing\n" unless($main::qq);
-		
-		my @f = (<$the_void/*.p_exonerate>, <$the_void/*/*.p_exonerate>);
-		push (@files, @f);
-	    }
-	    
-	    if (exists $rm_key{gff}) {
-		print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n"
-		    unless($main::qq);
-		push (@files, $gff_file);
-		push (@files, @{[<$out_base/*.fasta>]});
-		push (@files, @{[<$the_void/*.holdover>]});
-		push (@files, @{[<$the_void/*/*.holdover>]});
-		push (@files, @{[<$the_void/*.section>]});
-		push (@files, @{[<$the_void/*/*.section>]});
-		push (@files, @{[<$the_void/evidence_*.gff>]});
-		push (@files, @{[<$the_void/*/evidence_*.gff>]});
-		push (@files, "$the_void/query.masked.fasta");
-		push (@files, "$the_void/*/query.masked.fasta");
-		push (@files, "$the_void/query.masked.gff");
-		push (@files, "$the_void/*/query.masked.gff");
-		push (@dirs, "$out_base/evaluator");
-	    }
-	    else{
-		#see if died fasta exists
-		my $d_fasta = $gff_file;
-		$d_fasta =~ s/\.gff$/.died.fasta/;
-		if(-e $d_fasta){
-		    push (@files, $d_fasta);
-		}
-	    }
-	}
-
-	#delete files in the void
-	foreach my $file (@files) {
-	    unlink($file);
-	}
-	
-	#delete directories in the void
-	foreach my $dir (@dirs) {
-	    File::Path::rmtree($dir);
-	}
-	
-	#just in case, this will help remove temp_dirs
-	my @d = (<$the_void/*.temp_dir>, <$the_void/*/*.temp_dir>);
-	foreach my $d (@d){
-	    File::Path::rmtree($d) if (-d $d);
-	}    
     }
+    elsif($self->{params}->{seq_length} < $self->{CTL_OPT}->{min_contig}){
+	$continue_flag = -2; #skip short
+	$self->{die_count} = 0; #reset the die count
+	$rm_key{force}++; #will destroy gff and fastas for this contig
+    }
+
+    #-print file type specific warnings and delete files
+    if (exists $rm_key{force} || $rm_key{cleantry}) {
+	print STDERR "MAKER WARNING: All old files will be erased before continuing\n" unless($main::qq);
+	
+	#delete everything in the void
+	File::Path::rmtree($the_void);
+	File::Path::mkpath($the_void);
+	
+	#remove all other files
+	push (@files, $gff_file) if(-e $gff_file);
+	push (@files, @{[<$out_base/*.fasta>]});
+	push (@dirs, "$out_base/evaluator");
+    }
+    elsif (exists $rm_key{all}) {
+	print STDERR "MAKER WARNING: Changes in control files make re-use of all old data impossible\n".
+	    "All old files will be erased before continuing\n" unless($main::qq);
+	
+	#delete everything in the void
+	File::Path::rmtree($the_void);
+	File::Path::mkpath($the_void);
+	
+	#remove all other files	    
+	push (@files, $gff_file) if(-e $gff_file);
+	push (@files, @{[<$out_base/*.fasta>]});
+	push (@dirs, "$out_base/evaluator");
+    }
+    elsif (exists $rm_key{all_but_rb}) { #all but repbase reports
+	print STDERR "MAKER WARNING: Changes in control files make re-use of all but some RepeatMasker data impossible\n".
+	    "All old non-RepeatMasker and some RepeatMasker files will be erased before continuing\n" unless($main::qq);
+	
+	#delete everything in the void
+	my @f = <$the_void/*>;
+	grep {-f $_ || !/\/\d+$/} @f;
+	push(@f, <$the_void/*/*>);
+	@f = grep {!/(\.rb\.out|\.rb\.cat|\.rb\.tbl)$/} @f;
+	
+	foreach my $e (@{$skip{'specific.out'}}){
+	    @f = grep {!/\.$e\.specific\.(out|cat|tbl)$/} @f;
+	}
+	
+	#delete files in the void
+	foreach my $f (@f){
+	    push (@files, $f) if (-f $f);
+	    push (@dirs, $f) if (-d $f);
+	}
+	
+	#remove all other files
+	push (@files, $gff_file) if(-e $gff_file);
+	push (@files, @{[<$out_base/*.fasta>]});
+	push (@dirs, "$out_base/evaluator");
+    }
+    elsif (exists $rm_key{all_but}) {
+	print STDERR "MAKER WARNING: Changes in control files make re-use of all but RepeatMasker data impossible\n".
+	    "All old non-RepeatMasker files will be erased before continuing\n" unless($main::qq);
+	
+	#delete everything in the void
+	my @f = <$the_void/*>;
+	grep {-f $_ || !/\/\d+$/} @f;
+	push(@f, <$the_void/*/*>);
+	@f = grep(!/(\.out|\.cat|\.tbl)$/, @f);
+	
+	#delete files in the void
+	foreach my $f (@f){
+	    push (@files, $f) if (-f $f);
+	    push (@dirs, $f) if (-d $f);
+	}
+	
+	#remove all other files	    
+	push (@files, $gff_file) if(-e $gff_file);
+	push (@files, @{[<$out_base/*.fasta>]});
+	push (@dirs, "$out_base/evaluator");
+    }
+    else {
+	if (exists $rm_key{preds}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of hint based predictions impossible\n".
+		"Old hint based prediction files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.auto_annotator.*>, <$the_void/*/*.auto_annotator.*>);
+	    push (@files, @f);
+	}
+	if (exists $rm_key{snap}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old SNAP data impossible\n".
+		"Old SNAP files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.snap>, <$the_void/*/*.snap>);
+	    foreach my $e (@{$skip{snap}}){
+		@f = grep {!/\.$e\.snap$/} @f;
+	    }
+	    push (@files, @f);
+	}
+	if (exists $rm_key{augustus}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Augustus data impossible\n".
+		"Old Augustus files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.augustus>, <$the_void/*/*.augustus>);
+	    foreach my $e (@{$skip{augustus}}){
+		@f = grep {!/\.$e\.augustus$/} @f;
+	    }
+	    push (@files, @f); 
+	}
+	if (exists $rm_key{fgenesh}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old FGENESH data impossible\n".
+		"Old FGENESH files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.fgenesh>, <$the_void/*/*.fgenesh>);
+	    foreach my $e (@{$skip{fgenesh}}){
+		@f = grep {!/\.$e\.fgenesh$/} @f;
+	    }
+	    push (@files, @f);
+	}
+	if (exists $rm_key{genemark}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old GeneMark data impossible\n".
+		"Old GeneMark files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.genemark>, <$the_void/*/*.genemark>);
+	    foreach my $e (@{$skip{genemark}}){
+		@f = grep {!/\.$e\.genemark$/} @f;
+	    }
+	    push (@files, @f);
+	}
+	if (exists $rm_key{blastn}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of all old EST Blastn data impossible\n".
+		"Old EST Blastn files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.blastn>, <$the_void/*/*.blastn>);
+	    foreach my $e (@{$skip{blastn}}){
+		@f = grep {!/\.$e\.blastn$/} @f;
+	    }
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+	    }
+	}	    
+	if (exists $rm_key{tblastx}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old tBlastx data impossible\n".
+		"Old tBlastx files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.tblastx>, <$the_void/*/*.tblastx>);
+	    foreach my $e (@{$skip{tblastx}}){
+		@f = grep {!/\.$e\.tblastx$/} @f;
+	    }
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+	    }
+	}
+	if (exists $rm_key{blastx}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old Blastx data impossible\n".
+		"Old Blastx files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.blastx>, <$the_void/*/*.blastx>);
+	    
+	    foreach my $e (@{$skip{blastx}}){
+		@f = grep {!/\.$e\.blastx$/} @f;
+	    }
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+	    }
+	    
+	}
+	
+	if (exists $rm_key{repeatrunner}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old repeatrunner data impossible\n".
+		"Old repeatrunner files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.repeatrunner>, <$the_void/*/*.repeatrunner>);
+	    
+	    foreach my $e (@{$skip{repeatrunner}}){
+		@f = grep {!/\.$e\.repeatrunner$/} @f;
+	    }
+	    foreach my $f (@f){
+		push (@files, $f) if (-f $f);
+		push (@dirs, $f) if (-d $f);
+	    }
+	    
+	}
+	
+	if (exists $rm_key{e_exonerate}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old EST Exonerate data impossible\n".
+		"Old EST Exonerate files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.est_exonerate>, <$the_void/*/*.est_exonerate>);
+	    push (@files, @f);
+	}
+	
+	if (exists $rm_key{a_exonerate}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old altEST Exonerate data impossible\n".
+		"Old altEST Exonerate files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.alt_exonerate>, <$the_void/*/*.alt_exonerate>);
+	    push (@files, @f);
+	}
+	
+	if (exists $rm_key{p_exonerate}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old protein Exonerate data impossible\n".
+		"Old protein Exonerate files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.p_exonerate>, <$the_void/*/*.p_exonerate>);
+	    push (@files, @f);
+	}
+	
+	if (exists $rm_key{gff}) {
+	    print STDERR "MAKER WARNING: Any preexisting GFF3 and fasta files for this contig must now be removed.\n"
+		unless($main::qq);
+	    push (@files, $gff_file);
+	    push (@files, @{[<$out_base/*.fasta>]});
+	    push (@files, @{[<$the_void/*.holdover>]});
+	    push (@files, @{[<$the_void/*/*.holdover>]});
+	    push (@files, @{[<$the_void/*.section>]});
+	    push (@files, @{[<$the_void/*/*.section>]});
+	    push (@files, @{[<$the_void/evidence_*.gff>]});
+	    push (@files, @{[<$the_void/*/evidence_*.gff>]});
+	    push (@files, "$the_void/query.masked.fasta");
+	    push (@files, "$the_void/*/query.masked.fasta");
+	    push (@files, "$the_void/query.masked.gff");
+	    push (@files, "$the_void/*/query.masked.gff");
+	    push (@dirs, "$out_base/evaluator");
+	}
+	else{
+	    #see if died fasta exists
+	    my $d_fasta = $gff_file;
+	    $d_fasta =~ s/\.gff$/.died.fasta/;
+	    if(-e $d_fasta){
+		push (@files, $d_fasta);
+	    }
+	}
+    }
+    
+    #delete files in the void
+    foreach my $file (@files) {
+	unlink($file);
+    }
+    
+    #delete directories in the void
+    foreach my $dir (@dirs) {
+	File::Path::rmtree($dir);
+    }
+    
+    #just in case, this will help remove temp_dirs
+    my @d = (<$the_void/*.temp_dir>, <$the_void/*/*.temp_dir>);
+    foreach my $d (@d){
+	File::Path::rmtree($d) if (-d $d);
+    }    
 
     #just let it run init/cleanup and then stop
     if($CTL_OPT{tries} == 0 && $continue_flag != 0){
