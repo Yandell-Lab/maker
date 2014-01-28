@@ -26,10 +26,10 @@ BEGIN {
     if($FindBin::Bin =~ /\/src\/bin\/?$/){
 	my $bad = "$FindBin::Bin/maker";
 	(my $good =  $bad) =~ s/\/src\/bin\/maker$/\/bin\/maker/;
-	die "ERROR: You are running MAKER from the src directory. This is what you called\n".
+	die "ERROR: You are running MAKER from the src directory. This is what you called:\n".
 	    "BAD --> $bad\n".
 	    "\n".
-	    "When MAKER has been correcly installed it will be located here\n".
+	    "When MAKER has been correcly installed it will be located here:\n".
 	    "GOOD --> $good\n".
 	    "\n".
 	    "Make sure you followed the instructions in the INSTALL documentation,\n".
