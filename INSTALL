@@ -41,7 +41,8 @@ then install glib2-dev via fink (i.e. 'fink install glib2-dev').
 **MPI INSTALL
 
 !!IMPORTANT!!
-Only use OpenMPI and MPICH2. MAKER is not compatible with MVAPICH2 or MPICH3. If
+MAKER is not compatible with MVAPICH2. Use OpenMPI or MPICH. If using MPICH, make
+sure to enable shared libaries during installation (this is not the default). If
 using OpenMPI, make sure to set LD_PRELOAD to the location of libmpi.so before
 even trying to install MAKER. It must also be set before running MAKER (or any
 program that uses OpenMPI's shared libraries), so it's best just to add it to

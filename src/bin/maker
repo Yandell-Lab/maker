@@ -22,6 +22,22 @@ use lib "$FindBin::Bin/../src/inc/perl/lib"; #micelaneous
 use lib "$FindBin::Bin/../lib";
 use lib "$FindBin::Bin/../perl/lib";
 
+BEGIN {
+    if($FindBin::Bin =~ /\/src\/bin\/?$/){
+	my $bad = "$FindBin::Bin/maker";
+	(my $good =  $bad) =~ s/\/src\/bin\/maker$/\/bin\/maker/;
+	die "ERROR: You are running MAKER from the src directory. This is what you called\n".
+	    "BAD --> $bad\n".
+	    "\n".
+	    "When MAKER has been correcly installed it will be located here\n".
+	    "GOOD --> $good\n".
+	    "\n".
+	    "Make sure you followed the instructions in the INSTALL documentation,\n".
+	    "succeffully completed the installation, and that you have set the location\n".
+	    "for MAKER's executables correctly in your PATH environmental variable.\n\n";
+    }
+}
+
 #always load forks before anything else
 use forks;
 use forks::shared;
