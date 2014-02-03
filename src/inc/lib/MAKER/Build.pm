@@ -149,6 +149,8 @@ sub config_mpi {
 
     $self->config_data(MPIDIR => $MPIDIR);
     $self->config_data(MPICC => $mpicc);
+    my $extra = $self->extra_compiler_flags ? join(' ', @{$self->extra_compiler_flags}) : '';
+    $self->config_data(CCFLAGSEX => $extra);
 
     $self->add_exe_requires(mpicc => $mpicc);
     $self->add_lib_requires(MPI => "$MPIDIR/mpi.h");
@@ -274,7 +276,9 @@ sub ACTION_build {
 	mkdir($loc) if(!$loc);
         Parallel::Application::MPI::_bind($self->config_data('MPICC'),
                                           $self->config_data('MPIDIR'),
-					  $loc);	
+					  $loc,
+                                          $self->config_data('CCFLAGSEX'));
+
 	File::Path::rmtree($self->blib()."/build");
     }    
 
@@ -1821,6 +1825,7 @@ sub svn_w_args {
 	    $svn .= " $o_args";
 	}
 	else{
+	    $svn .= " -m " if($param eq 'commit');
 	    foreach my $arg (@{$self->args->{ARGV}}){
 		if($arg =~ /[\s\t]/){
 		    $arg =~ s/\'/\\\'/g;

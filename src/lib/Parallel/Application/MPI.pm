@@ -155,7 +155,7 @@ sub _load {
     require Proc::Signal;
 
     my $name = Proc::Signal::get_pname_by_id($$);
-    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|orterun|hydra_pmi_proxy|mpispawn|exec\d+)$/){
+    if($name =~ /(mpiexec|mpirun|mpdrun|mpdexec|mpd|smpd|orted|orterun|pmi_proxy|hydra|mpispawn|exec\d+)$/){
 	require MAKER::ConfigData;
 	my $mpi_support = MAKER::ConfigData->feature('mpi_support');
 	if(! $mpi_support){
@@ -179,11 +179,12 @@ sub _load {
 	    my $I = "$loc/lib"; #self location
 	    $loc = tempdir("MPI_XXXXXX", CLEANUP => 1, TMPDIR => 1); #override location
 	    my $M = 'Parallel::Application::MPI'; #self
-	    my $mpicc = MAKER::ConfigData->config('MPICC');
-	    my $mpidir =MAKER::ConfigData->config('MPIDIR');
+	    my $mpicc  = MAKER::ConfigData->config('MPICC');
+	    my $mpidir = MAKER::ConfigData->config('MPIDIR');
+	    my $extra  = MAKER::ConfigData->config('CCFLAGSEX') || '';
 
 	    #first call in separate executable to avoid setting $& (messes up regex)
-	    my $cmd = "$^X -I'${I}' -M${M} -e '${M}::_bind(qw($mpicc $mpidir $loc))'";
+	    my $cmd = "$^X -I'${I}' -M${M} -e '${M}::_bind(qw($mpicc $mpidir $loc $extra))'";
 	    my $pid = open3('<&STDIN', '>&STDOUT', my $ERR, $cmd);
 	    my $err = join('', <$ERR>);
 	    waitpid($pid, 0);
@@ -201,7 +202,8 @@ sub _load {
 
 	_bind(MAKER::ConfigData->config('MPICC'),
 	      MAKER::ConfigData->config('MPIDIR'),
-	      $loc);
+	      $loc,
+	      MAKER::ConfigData->config('CCFLAGSEX'));
 
 	$LOADED = 1;
 	$lock->unlock() if($lock);
@@ -216,15 +218,17 @@ sub _bind {
     my $mpicc = shift;
     my $mpidir = shift;
     my $loc = shift;
+    my $extra = shift || '';
 
     eval{
 	#this comment is just a way to force Inline::C to recompile on changing MPICC and MPIDIR
-	my $comment = "void _comment() {\nchar comment[] = \"MPICC=$mpicc, MPIDIR=$mpidir\";\n}\n"; 
+	my $comment = "void _comment() {\nchar comment[] = \"MPICC=$mpicc, MPIDIR=$mpidir, CCFLAGSEX=$extra\";\n}\n"; 
 	Inline->bind(C => $CODE . $comment,
 		     NAME => 'Parallel::Application::MPI',
 		     DIRECTORY => $loc,
 		     CC => $mpicc,
 		     LD => $mpicc,
+		     CCFLAGSEX => $extra,
 		     INC => '-I'.$mpidir,);
     };
     
