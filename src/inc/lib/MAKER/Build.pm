@@ -1825,8 +1825,9 @@ sub svn_w_args {
 	    $svn .= " $o_args";
 	}
 	else{
-	    $svn .= " -m " if($param eq 'commit');
-	    foreach my $arg (@{$self->args->{ARGV}}){
+	    my @args = @{$self->args->{ARGV}};
+	    $svn .= " -m " if($param eq 'commit' && @args && $args[0] ne '-m');
+	    foreach my $arg (@args){
 		if($arg =~ /[\s\t]/){
 		    $arg =~ s/\'/\\\'/g;
 		    $arg = "'$arg'" 
