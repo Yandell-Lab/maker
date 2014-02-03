@@ -1300,12 +1300,13 @@ sub cleanup {
 
     #set alarm so it can just die if frozen
     local $SIG{ALRM} = sub { exit(@_) };
-    alarm 60;
+    alarm 300;
 
-    return if($clean); #runs only once
+    return if($clean++); #clean runs only once
 
     File::Temp::cleanup() unless($is_thread); #I may not want to delete these right away
     GI::LOCK()->unlock() if(GI::LOCK()); #remove global lock
+
     #kill and wait for response
     my $time = time;
     while(abs($time - time) < 10){
@@ -1317,18 +1318,25 @@ sub cleanup {
 	    last;
 	}
     }
+
     Proc::Signal::reap_children_by_name(SIGKILL, 'maintain.pl'); #clean up any stubborn maintainers
 
     if(!$is_thread){
 	$t_terminate = 1;
 	foreach(threads->list){
 	    next if($_->is_detached);
-	    $_->kill('USR1');
-	    $_->join();
+	    $time = 0;
+	    sleep 0.1 while(!$_->is_joinable && $time++ < 50); #wait on join up to five seconds
+	    if($_->is_joinable){ #join to clear
+	    	$_->join();
+	    }
+	    else{ #frozen? just kill it
+	    	$_->kill('KILL');
+		$_->detach();
+	    }
 	}
     }
 
-    $clean++;
     return;
 }
 }
@@ -1336,7 +1344,7 @@ sub cleanup {
 sub exit_maker {
     cleanup();
     local $SIG{ALRM} = sub { exit(@_) };
-    alarm 60;
+    alarm 30;
     MPI_Finalize() if(!@_ || $_[0] == 0);
     exit(@_);
 }
@@ -1351,12 +1359,12 @@ sub node_thread {
    #set up thread signal to exit gracefully
    #don't override other signals within threads because
    #unlike ithreads forks uses real system signals
-   $SIG{USR1} = sub{cleanup(1); threads->exit};
-   $SIG{INT}  = sub{cleanup(1);print STDERR "SIGINT thread\n";threads->exit};
-   $SIG{QUIT} = sub{cleanup(1);print STDERR "SIGQUIT thread\n";threads->exit};
-   $SIG{ABRT} = sub{cleanup(1);print STDERR "SIGABRT thread\n";threads->exit};
-   $SIG{KILL} = sub{cleanup(1);print STDERR "SIGKILL thread\n";threads->exit};
-   $SIG{TERM} = sub{cleanup(1);print STDERR "SIGTERM thread\n";threads->exit};
+   $SIG{USR1} = sub{threads->exit};
+   $SIG{INT}  = sub{print STDERR "SIGINT thread\n";threads->exit};
+   $SIG{QUIT} = sub{print STDERR "SIGQUIT thread\n";threads->exit};
+   $SIG{ABRT} = sub{print STDERR "SIGABRT thread\n";threads->exit};
+   $SIG{KILL} = sub{print STDERR "SIGKILL thread\n";threads->exit};
+   $SIG{TERM} = sub{print STDERR "SIGTERM thread\n";threads->exit};
 
    #setup global index because of weird NFS failure in thread
    my $g_index = GI::build_fasta_index([$gdbfile]);
@@ -1421,7 +1429,7 @@ sub node_thread {
 		if($tier->failed || $tier_result->{-interrupt});
 	    $tier = undef;
 
-	    sleep 0.1 while (defined ($t_tier_result)); #pause
+	    sleep 0.1 while (defined ($t_tier_result) && !$t_terminate); #pause
 	    my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 	    nstore(\$tier_result, $file);
 	    $t_tier_result = $file;
@@ -1444,7 +1452,7 @@ sub node_thread {
       }#process chunk
       elsif(defined($chunk)){
 	 $chunk->run($rank);
-	 sleep 0.1 while (defined ($t_chunk_result)); #pause
+	 sleep 0.1 while (defined ($t_chunk_result) && !$t_terminate); #pause
 	 my $file = (tempfile("mpiXXXXX", UNLINK => 0, TMPDIR => 1))[1];
 	 nstore(\$chunk, $file);
 	 $t_chunk_result = $file;
