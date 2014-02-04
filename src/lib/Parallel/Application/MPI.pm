@@ -52,53 +52,47 @@ sub APP_ANY_SOURCE { return MPI_ANY_SOURCE(@_); }
 
 #for independent interface
 sub MPI_ANY_SOURCE {
-    die "LOGIC ERROR: Cannot call MPI_ANY_SOURCE if not\n".
+    confess "LOGIC ERROR: Cannot call MPI_ANY_SOURCE if not\n".
 	"compiled and running under mpiexec" if(! _load());
 
-    return _MPI_ANY_SOURCE();
+    return C_MPI_ANY_SOURCE();
 }
 sub MPI_ANY_TAG {
-    die "LOGIC ERROR: Cannot call MPI_ANY_TAG if not\n".
+    confess "LOGIC ERROR: Cannot call MPI_ANY_TAG if not\n".
 	"compiled and running under mpiexec" if(! _load());
 
-    return _MPI_ANY_TAG();
+    return C_MPI_ANY_TAG();
+}
+sub MPI_SUCCESS {
+    confess "LOGIC ERROR: Cannot call MPI_SUCCESS if not\n".
+	"compiled and running under mpiexec" if(! _load());
+
+    return C_MPI_SUCCESS();
 }
 sub MPI_Init {
+    my $stat = 0;
     if($$ != 0 && !$INITIALIZED && _load()){
-	#UNSAFE_SIGNALS {
-	    _MPI_Init();
-	#};
+	$stat = C_MPI_Init();
 	$INITIALIZED = 1;
-
-	return 1;
     }
-    else{
-	return 0;
-    }
+    return $stat;
 }
 sub MPI_Finalize {
+    my $stat = 1;
     if($$ != 0 && ! $FINALIZED && _load()){
-	my $stat = _MPI_Finalize();	    
+	$stat = C_MPI_Finalize();	    
 	$FINALIZED = 1;
-	return $stat;
     }
+    return $stat;
 }
 sub MPI_Comm_rank {
     my $rank = 0;
-    if(_load()){
-	UNSAFE_SIGNALS {
-	    $rank = _MPI_Comm_rank();
-	};
-    }
+    $rank = C_MPI_Comm_rank() if(_load());
     return $rank;
 }
 sub MPI_Comm_size {
     my $size = 1;
-    if(_load()){
-	UNSAFE_SIGNALS {
-	    $size = _MPI_Comm_size();
-	};
-    }
+    $size = C_MPI_Comm_size() if(_load());
     return $size;
 }
 sub MPI_Send {
@@ -106,7 +100,7 @@ sub MPI_Send {
     my $dest = shift;
     my $tag = shift;
 
-    die "LOGIC ERROR: Cannot run MPI_Send if not\n".
+    confess "LOGIC ERROR: Cannot run MPI_Send if not\n".
 	"compiled and running under mpiexec" if(! _load());
 
     #MPI_Send only works with references
@@ -114,38 +108,30 @@ sub MPI_Send {
     confess "ERROR: must be a reference to a SCALAR or REF\n"
 	if(ref($buf) !~ /^(REF|SCALAR)$/);
 
-    #freeze anything that is not a scalar reference
-    my $freeze = 0; #flag to let receiving node know whether to call thaw
-    my $msg = $buf;
+    my $msg = nfreeze($buf); #always serialize the message
+    my $len = length($msg);
+    my $stat = C_MPI_Send(\$msg, $len, $dest, $tag);
+    confess "ERROR: MPI_Send failed with status $stat" if($stat != MPI_SUCCESS);
 
-    if(ref($msg) ne 'SCALAR'){
-	$freeze = 1;
-	$msg = \ (nfreeze($$buf)); #MPI_Send only works with references
-    }
-
-    my $len = length($$msg);    
-    UNSAFE_SIGNALS {
-	_MPI_Send($msg, $len, $dest, $tag, $freeze);
-    };
+    return $stat;
 }
 
 sub MPI_Recv {
     my $buf = shift;
     my $source = shift;
     my $tag = shift;
-    my $freeze;
 
-    die "LOGIC ERROR: Cannot run MPI_Recv if not\n".
-	"compiled and running under mpiexec" if(! _load());    
+    confess "LOGIC ERROR: Cannot run MPI_Recv if not\n".
+	    "compiled and running under mpiexec" if(! _load());    
 
     confess "ERROR: Not a reference to a SCALAR\n"
 	if (ref($buf) ne 'SCALAR' && ref($buf) ne 'REF');
+    
+    my $stat = C_MPI_Recv($buf, $source, $tag);
+    confess "ERROR: MPI_Recv failed with status $stat" if($stat != MPI_SUCCESS);
+    $$buf = ${thaw($$buf)};
 
-    UNSAFE_SIGNALS {
-	_MPI_Recv($buf, $source, $tag, \$freeze);
-    };
-
-    $$buf = thaw($$buf) if($freeze);
+    return $stat;
 }
 
 #binding to C MPI library
@@ -243,7 +229,7 @@ sub _bind {
 	    "** Please do this before trying to run MAKER again!!\n\n";
     }
     
-    die $err if($err);
+    confess $err if($err);
     
     return 1;
 }
@@ -252,56 +238,71 @@ $CODE = <<END;
 
 #include <mpi.h>
 
-double _MPI_ANY_SOURCE () {
+double C_MPI_ANY_SOURCE () {
     return (double)MPI_ANY_SOURCE;
 }
 
-double _MPI_ANY_TAG () {
+double C_MPI_ANY_TAG () {
     return (double)MPI_ANY_TAG;
 }
 
-int _MPI_Init () {
+double C_MPI_SUCCESS () {
+    return (double)MPI_SUCCESS;
+}
+
+int C_MPI_Init () {
     int stat;
     stat = MPI_Init(&PL_origargc, &PL_origargv);
     return stat;
 }
 
-int _MPI_Finalize () {
+int C_MPI_Finalize () {
     return MPI_Finalize();
 }
 
-int _MPI_Comm_rank () {
+int C_MPI_Comm_rank () {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     return rank;
 }
 
-int _MPI_Comm_size () {
+int C_MPI_Comm_size () {
     int size;
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     return size;
 }
 
-void _MPI_Send(SV *buf, int len, int dest, int tag, int freeze) {
-    int flags[2] = { len, freeze };
-    MPI_Send(flags, 2, MPI_INT, dest, tag, MPI_COMM_WORLD);
-    SV* scalar = SvRV(buf);
-    char* string = SvPV(scalar, len);
-    MPI_Send(string, len, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
+int C_MPI_Send(SV *buf, int len, int dest, int tag) {
+    STRLEN len2  = (STRLEN)len;
+    SV* scalar   = SvRV(buf);
+    char* string = SvPV(scalar, len2);
+
+    int stat;
+    stat = MPI_Send(string, len, MPI_CHAR, dest, tag, MPI_COMM_WORLD);
+
+    return stat;
 }
 
-void _MPI_Recv(SV* buf, int source, int tag, SV* freeze) {
+int C_MPI_Recv(SV* buf, int source, int tag) {
+    int len;
     MPI_Status status;
-    int flags[2];
-    MPI_Recv(flags, 2, MPI_INT, source, tag, MPI_COMM_WORLD, &status);
-    int len = flags[0];
-    SV* ref = SvRV(freeze);
-    sv_setiv(ref, flags[1]);
-    char *msg = (char*)malloc((len+1)*sizeof(char));
-    MPI_Recv(msg, len, MPI_CHAR, status.MPI_SOURCE, tag, MPI_COMM_WORLD, &status);
+    MPI_Probe(source, tag, MPI_COMM_WORLD, &status);
+    MPI_Get_count(&status, MPI_CHAR, &len);
+    char *msg = (char*)malloc((len)*sizeof(char));
+
+    int stat;
+    stat = MPI_Recv(msg, len, MPI_CHAR, status.MPI_SOURCE, tag, MPI_COMM_WORLD, &status);
+
+    if(stat != MPI_SUCCESS){
+	free(msg);
+        return stat;
+    }
+
     SV* scalar = SvRV(buf);
     sv_setpvn(scalar, msg, len);
     free(msg);
+
+    return stat;
 }
 END
 
