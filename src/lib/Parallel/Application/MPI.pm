@@ -72,7 +72,8 @@ sub MPI_SUCCESS {
 sub MPI_Init {
     my $stat = 0;
     if($$ != 0 && !$INITIALIZED && _load()){
-	$stat = C_MPI_Init();
+	# allow signals to interupt blocked MPI calls
+	UNSAFE_SIGNALS { $stat = C_MPI_Init(); };
 	$INITIALIZED = 1;
     }
     return $stat;
@@ -80,19 +81,22 @@ sub MPI_Init {
 sub MPI_Finalize {
     my $stat = 1;
     if($$ != 0 && ! $FINALIZED && _load()){
-	$stat = C_MPI_Finalize();	    
+	# allow signals to interupt blocked MPI calls
+	UNSAFE_SIGNALS { $stat = C_MPI_Finalize(); };
 	$FINALIZED = 1;
     }
     return $stat;
 }
 sub MPI_Comm_rank {
     my $rank = 0;
-    $rank = C_MPI_Comm_rank() if(_load());
+    # allow signals to interupt blocked MPI calls
+    UNSAFE_SIGNALS { $rank = C_MPI_Comm_rank() if(_load()); };
     return $rank;
 }
 sub MPI_Comm_size {
     my $size = 1;
-    $size = C_MPI_Comm_size() if(_load());
+    # allow signals to interupt blocked MPI calls
+    UNSAFE_SIGNALS { $size = C_MPI_Comm_size() if(_load()); };
     return $size;
 }
 sub MPI_Send {
@@ -110,7 +114,9 @@ sub MPI_Send {
 
     my $msg = nfreeze($buf); #always serialize the message
     my $len = length($msg);
-    my $stat = C_MPI_Send(\$msg, $len, $dest, $tag);
+    my $stat;
+    # allow signals to interupt blocked MPI calls
+    UNSAFE_SIGNALS { $stat = C_MPI_Send(\$msg, $len, $dest, $tag); };
     confess "ERROR: MPI_Send failed with status $stat" if($stat != MPI_SUCCESS);
 
     return $stat;
@@ -127,7 +133,9 @@ sub MPI_Recv {
     confess "ERROR: Not a reference to a SCALAR\n"
 	if (ref($buf) ne 'SCALAR' && ref($buf) ne 'REF');
     
-    my $stat = C_MPI_Recv($buf, $source, $tag);
+    my $stat;
+    # allow signals to interupt blocked MPI calls
+    UNSAFE_SIGNALS { $stat = C_MPI_Recv($buf, $source, $tag); };
     confess "ERROR: MPI_Recv failed with status $stat" if($stat != MPI_SUCCESS);
     $$buf = ${thaw($$buf)};
 
