@@ -483,7 +483,10 @@ sub reblast_merged_hits {
    
    #restore labels
    foreach my $hit (@blast_keepers){
-       $hit->{_label} = $labels{$hit->name} if($labels{$hit->name});      
+       if($labels{$hit->name}){
+	   $hit->{_label} = $labels{$hit->name};
+	   $_->{_label} = $labels{$hit->name} foreach($hit->hsps);
+       }
    }
    
    #mark merged hits as having been heldover once
@@ -1458,7 +1461,6 @@ sub snoscan {
 }
 #-----------------------------------------------------------------------------
 sub trnascan {
-    print "got to trnascan call in GI.pm\n";
     my $in_file     = shift;
     my $the_void    = shift;
     my $CTL_OPT     = shift;

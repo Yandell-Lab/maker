@@ -1051,7 +1051,7 @@ sub annotate_stats {
 			       $low > $CTL_OPT->{AED_threshold}
 			       );
 
-		next if($bad && $key !~ /_abinit$/); #removes multiple transcripts where only some are bad
+		next if($bad && $key !~ /(_abinit|_ncrna)$/); #removes multiple transcripts where only some are bad
 
 		push(@t_structs, $t_struct);
 
@@ -2176,7 +2176,7 @@ sub load_transcript_struct {
 	my $transcript_seq  = get_transcript_seq($f, $seq);
 	my ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans);
 
-	if($predictor eq 'ncrna'){
+	if($predictor =~ /_ncrna$/){
 	    ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans) = ('', 0, 0, 0, 0, 0, 0);
 	}
 	else{

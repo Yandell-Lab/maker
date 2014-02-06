@@ -73,7 +73,9 @@ sub MPI_Init {
     my $stat = 0;
     if($$ != 0 && !$INITIALIZED && _load()){
 	# allow signals to interupt blocked MPI calls
-	UNSAFE_SIGNALS { $stat = C_MPI_Init(); };
+	UNSAFE_SIGNALS {
+	    $stat = C_MPI_Init();
+	};
 	$INITIALIZED = 1;
     }
     return $stat;
@@ -82,7 +84,9 @@ sub MPI_Finalize {
     my $stat = 1;
     if($$ != 0 && ! $FINALIZED && _load()){
 	# allow signals to interupt blocked MPI calls
-	UNSAFE_SIGNALS { $stat = C_MPI_Finalize(); };
+	UNSAFE_SIGNALS {
+	    $stat = C_MPI_Finalize();
+	};
 	$FINALIZED = 1;
     }
     return $stat;
@@ -90,13 +94,21 @@ sub MPI_Finalize {
 sub MPI_Comm_rank {
     my $rank = 0;
     # allow signals to interupt blocked MPI calls
-    UNSAFE_SIGNALS { $rank = C_MPI_Comm_rank() if(_load()); };
+    if(_load()){
+	UNSAFE_SIGNALS {
+	    $rank = C_MPI_Comm_rank();
+	};
+    }
     return $rank;
 }
 sub MPI_Comm_size {
     my $size = 1;
     # allow signals to interupt blocked MPI calls
-    UNSAFE_SIGNALS { $size = C_MPI_Comm_size() if(_load()); };
+    if(_load()){
+	UNSAFE_SIGNALS {
+	    $size = C_MPI_Comm_size();
+	};
+    }
     return $size;
 }
 sub MPI_Send {
@@ -116,7 +128,9 @@ sub MPI_Send {
     my $len = length($msg);
     my $stat;
     # allow signals to interupt blocked MPI calls
-    UNSAFE_SIGNALS { $stat = C_MPI_Send(\$msg, $len, $dest, $tag); };
+    UNSAFE_SIGNALS {
+	$stat = C_MPI_Send(\$msg, $len, $dest, $tag);
+    };
     confess "ERROR: MPI_Send failed with status $stat" if($stat != MPI_SUCCESS);
 
     return $stat;
@@ -135,7 +149,9 @@ sub MPI_Recv {
     
     my $stat;
     # allow signals to interupt blocked MPI calls
-    UNSAFE_SIGNALS { $stat = C_MPI_Recv($buf, $source, $tag); };
+    UNSAFE_SIGNALS {
+	$stat = C_MPI_Recv($buf, $source, $tag);
+    };
     confess "ERROR: MPI_Recv failed with status $stat" if($stat != MPI_SUCCESS);
     $$buf = ${thaw($$buf)};
 

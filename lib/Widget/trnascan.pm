@@ -95,7 +95,7 @@ sub parse {
 	$line =~ s/^\s+//;
 	my @stuff = split(/\s+/, $line);
 	my ($id) = $stuff[1];
-	$i = 0  if  !defined($g{$id});
+	die "ERROR: Multi-line tRNAscan entry\n" if(defined($g{$id}));
 	my $strand = 1;
 	$strand = -1 if $stuff[2] > $stuff[3];
 	
@@ -116,10 +116,29 @@ sub parse {
 	    }
 	    $g{$id}[$i]{score}    = $stuff[8];
 	}
-	else{
-	    die "ERROR: You found a tRNA with an intron! This should not happen\n";
+	else{ #intron detected
+            $g{$id}[$i]{strand}   = $strand;
+            $g{$id}[$i]{type}     = 'exon';
+
+            if ($strand == 1){
+                $g{$id}[$i]{b}        = $stuff[2];
+                $g{$id}[$i]{e}        = $stuff[6]-1;
+
+                $g{$id}[$i+1]{b}        = $stuff[7]+1;
+                $g{$id}[$i+1]{e}        = $stuff[3];
+            }
+            elsif ($strand == -1){
+		$g{$id}[$i]{b}        = $stuff[3];
+                $g{$id}[$i]{e}        = $stuff[7]-1;
+
+		$g{$id}[$i+1]{b}        = $stuff[6]+1;
+                $g{$id}[$i+1]{e}        = $stuff[2];
+            }
+            else {
+                die "ERROR: tRNAs must have a strand";
+            }
+            $g{$id}[$i]{score}    = $stuff[8];
 	}
-	$i++;
     }
     $fh->close();
 
