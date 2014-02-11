@@ -17,8 +17,8 @@ my $build = MAKER::Build->resume (
 
 #see if running on TACC (replaces default ibrun command)
 if(hostname() =~ /tacc\.utexas\.edu/){
-    File::Copy::copy("inc/bin/ibrun", "$FindBin::Bin/");
+    File::Copy::copy("inc/bin/ibrun", "$FindBin::RealBin/");
 }
 else{ #clean up if they already exist
-    unlink("$FindBin::Bin/ibrun");
+    unlink("$FindBin::RealBin/ibrun");
 }

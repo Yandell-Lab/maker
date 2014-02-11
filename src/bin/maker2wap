@@ -6,9 +6,9 @@ eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
 use warnings;
 use strict;
 use FindBin;
-use lib "$FindBin::Bin/../src/inc/lib";
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../src/inc/lib";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 
 use MAKER::Build;
 use Getopt::Long;
@@ -18,13 +18,13 @@ use DBI;
 use vars qw($JB $RS $conf);
 
 BEGIN {
-    my $conf_file = "$FindBin::Bin/../exe/webapollo/maker.conf";
+    my $conf_file = "$FindBin::RealBin/../exe/webapollo/maker.conf";
     if(! -f $conf_file){
 	print "Please configure WebApollo via MAKER's 'Build' script\n".
 	    "before running maker2wap.\n".
 	    "Example:\n".
-	    "\t$FindBin::Bin/../src/Build webapollo\n".
-	    "\t$FindBin::Bin/maker2wap maker_results.gff\n\n";
+	    "\t$FindBin::RealBin/../src/Build webapollo\n".
+	    "\t$FindBin::RealBin/maker2wap maker_results.gff\n\n";
 	exit(0);
     }
     else{
@@ -117,7 +117,7 @@ my @report = qw(tom_dir dbi_select dbname dbhost dbport dbuser);
 print "CURRENT CONFIGURATION:\n";
 print "\t".join("\t\n", map {$_ .' => '.$conf->{$_}} @report)."\n";
 print "\n*Use command line options to alter configuration or use\n".
-    "'$FindBin::Bin/../src/Build webapollo' to alter default values\n\n";
+    "'$FindBin::RealBin/../src/Build webapollo' to alter default values\n\n";
 
 #--connect to database
 my $dbname;
@@ -126,7 +126,7 @@ my $dbport;
 my $dbuser;
 my $dbpass;
 my $createdb;
-my $path = "$FindBin::Bin/../exe/webapollo";
+my $path = "$FindBin::RealBin/../exe/webapollo";
 if($dbi_select eq 'sqlite'){
     $dbname = "$path/web_apollo_users.db";
     $createdb = -f $dbname;

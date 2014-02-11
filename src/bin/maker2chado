@@ -3,8 +3,8 @@
 use warnings;
 use strict;
 use FindBin;
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 
 use DBI;
 use Getopt::Long;
@@ -13,10 +13,10 @@ use vars qw($DBH $GMOD);
 
 BEGIN{
     if (not ($ENV{CGL_SO_SOURCE}) || ! -e $ENV{CGL_SO_SOURCE}) {
-	$ENV{CGL_SO_SOURCE} = "$FindBin::Bin/../lib/CGL/so.obo";
+	$ENV{CGL_SO_SOURCE} = "$FindBin::RealBin/../lib/CGL/so.obo";
     }
     if (not ($ENV{CGL_GO_SOURCE}) || ! -e $ENV{CGL_GO_SOURCE}) {
-	$ENV{CGL_GO_SOURCE} = "$FindBin::Bin/../lib/CGL/gene_ontology.obo";
+	$ENV{CGL_GO_SOURCE} = "$FindBin::RealBin/../lib/CGL/gene_ontology.obo";
     }
 
     #what to do on ^C

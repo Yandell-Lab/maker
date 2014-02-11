@@ -15,11 +15,11 @@ my $build = MAKER::Build->resume (
     );
 
 if($build->feature('mpi_support')){
-    File::Copy::copy("inc/bin/mpi_evaluator", "$FindBin::Bin/");
-    File::Copy::copy("inc/bin/mpi_iprscan", "$FindBin::Bin/");
+    File::Copy::copy("inc/bin/mpi_evaluator", "$FindBin::RealBin/");
+    File::Copy::copy("inc/bin/mpi_iprscan", "$FindBin::RealBin/");
 }
 else{ #clean up if they already exist
-    unlink("$FindBin::Bin/mpi_maker");
-    unlink("$FindBin::Bin/mpi_evaluator");
-    unlink("$FindBin::Bin/mpi_iprscan");
+    unlink("$FindBin::RealBin/mpi_maker");
+    unlink("$FindBin::RealBin/mpi_evaluator");
+    unlink("$FindBin::RealBin/mpi_iprscan");
 }

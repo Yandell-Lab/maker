@@ -12,7 +12,7 @@ BEGIN{
 	$ENV{BLASTDB} = '' if(! -d $ENV{BLASTDB});
     }
 
-    $ENV{PATH} .= ":$FindBin::Bin/../exe/snap";
+    $ENV{PATH} .= ":$FindBin::RealBin/../exe/snap";
 }
 
 my ($job, $d, $f, $t, $n) = @ARGV;
@@ -41,7 +41,7 @@ if($t){
 
     mkdir($t_dir) if(! -d $t_dir);
 
-    my @commands = ("$FindBin::Bin/maker2zff -d $index",
+    my @commands = ("$FindBin::RealBin/maker2zff -d $index",
 		    "fathom genome.ann genome.dna -categorize 1000",
 		    "fathom uni.ann uni.dna -export 1000 -plus",
 		    "mkdir params; cd params; forge ../export.ann ../export.dna; cd ..",
@@ -62,7 +62,7 @@ if($t){
 if(defined $n){
     my $all = "$cwd/$job.maker.output/$job.all.gff";
     my $out = "$cwd/$job.maker.output/$job.all.id.map";
-    my @commands = ("$FindBin::Bin/maker_map_ids --prefix $n $all > $out");
+    my @commands = ("$FindBin::RealBin/maker_map_ids --prefix $n $all > $out");
     unless(! -f $all || -f $out){
 	foreach my $cmd (@commands){
 	    my $stat = system($cmd);
@@ -85,10 +85,10 @@ foreach my $dir (keys %to_do){
 	$out =~ s/\.fasta$/\.iprscan.raw/;
 
 	unless(! $prot || !$gff || -f $out){
-	    my @commands = ("$FindBin::Bin/iprscan_wrap -i $prot -iprlookup -goterms -format raw -o $out.tmp",
-			    "$FindBin::Bin/iprscan2gff3 $out.tmp $gff > $out.gff.tmp",
-			    "$FindBin::Bin/gff3_merge $gff $out.gff.tmp -o $gff.tmp\n",
-			    "$FindBin::Bin/ipr_update_gff $gff.tmp $out.tmp\n",
+	    my @commands = ("$FindBin::RealBin/iprscan_wrap -i $prot -iprlookup -goterms -format raw -o $out.tmp",
+			    "$FindBin::RealBin/iprscan2gff3 $out.tmp $gff > $out.gff.tmp",
+			    "$FindBin::RealBin/gff3_merge $gff $out.gff.tmp -o $gff.tmp\n",
+			    "$FindBin::RealBin/ipr_update_gff $gff.tmp $out.tmp\n",
 			    "mv $gff $gff.bak",
 			    "mv $gff.tmp $gff",
 			    "mv $out.tmp $out",
@@ -123,9 +123,9 @@ foreach my $dir (keys %to_do){
 			    "cp $tran $tran.bak",
 			    "cp $prot $prot.bak",
 			    "cp $gff $gff.bak",
-			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $tran.bak > $tran",
-			    "$FindBin::Bin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $prot.bak > $prot",
-			    "$FindBin::Bin/maker_functional_gff $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $gff.bak > $gff",
+			    "$FindBin::RealBin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $tran.bak > $tran",
+			    "$FindBin::RealBin/maker_functional_fasta $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $prot.bak > $prot",
+			    "$FindBin::RealBin/maker_functional_gff $ENV{BLASTDB}/uniprot_sprot.fasta $out.tmp $gff.bak > $gff",
 			    "mv $out.tmp $out");
 
 	    #skip xdformat if not needed
@@ -159,9 +159,9 @@ foreach my $dir (keys %to_do){
 	    my @commands = ("cp $tran $tran.bak",
 			    "cp $prot $prot.bak",
 			    "cp $gff $gff.bak",
-			    "$FindBin::Bin/map_fasta_ids $map $tran",
-			    "$FindBin::Bin/map_fasta_ids $map $prot",
-			    "$FindBin::Bin/map_gff_ids $map $gff");
+			    "$FindBin::RealBin/map_fasta_ids $map $tran",
+			    "$FindBin::RealBin/map_fasta_ids $map $prot",
+			    "$FindBin::RealBin/map_gff_ids $map $gff");
 
 	    foreach my $cmd (@commands){
 		my $stat = system($cmd);

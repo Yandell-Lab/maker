@@ -5,8 +5,8 @@ use strict "vars";
 use strict "refs";
 
 use FindBin;
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 use vars qw($RANK $LOG $EXE $TMP $LOCK @CMD_ARGS $VERSION);
 use File::Which;
 

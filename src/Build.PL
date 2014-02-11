@@ -6,7 +6,7 @@ eval 'exec /usr/bin/env perl -w -S $0 ${1+"$@"}'
 BEGIN {
     if(@ARGV == 1 && $ARGV[0] eq 'findbin'){
         eval 'require FindBin';
-        print $FindBin::Bin;
+        print $FindBin::RealBin;
         exit;
     }
 
@@ -22,23 +22,23 @@ BEGIN {
 }
 
 use FindBin;
-use lib "$FindBin::Bin/../lib"; #libary just needed for configuration
-use lib "$FindBin::Bin/lib"; #libary just needed for configuration
-use lib "$FindBin::Bin/../perl/lib"; #libary just needed for configuration
-use lib "$FindBin::Bin/inc/lib"; #libary just needed for configuration
-use lib "$FindBin::Bin/inc/perl/lib"; #libary just needed for configuration
+use lib "$FindBin::RealBin/../lib"; #libary just needed for configuration
+use lib "$FindBin::RealBin/lib"; #libary just needed for configuration
+use lib "$FindBin::RealBin/../perl/lib"; #libary just needed for configuration
+use lib "$FindBin::RealBin/inc/lib"; #libary just needed for configuration
+use lib "$FindBin::RealBin/inc/perl/lib"; #libary just needed for configuration
 
 use strict;
 use warnings;
 use MAKER::Build;
 
-chdir($FindBin::Bin); #alway go here for safety
+chdir($FindBin::RealBin); #alway go here for safety
 
 #configure Build
 my $build = MAKER::Build->new(
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
-     dist_version_from  => "$FindBin::Bin/version",
+     dist_version_from  => "$FindBin::RealBin/version",
      dist_abstract => ('MAKER is a portable and easily configurable genome annotation pipeline. '.
 		       'It\'s purpose is to allow smaller eukaryotic and prokaryotic genome '.
 		       'projects to independently annotate their genomes and to create genome '.
@@ -91,7 +91,7 @@ my $build = MAKER::Build->new(
 	'Carp'               => '1.24',
 	#'Other::Module' => '>= 1.2, != 1.5, < 2.0',
     },
-    install_base => "$FindBin::Bin/../",
+    install_base => "$FindBin::RealBin/../",
     install_base_relpaths => {
 	arch   => [qw(perl/lib)],
 	lib    => [qw(perl/lib)],

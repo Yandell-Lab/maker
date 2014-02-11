@@ -5,8 +5,8 @@ use strict "vars";
 use strict "refs";
 
 use FindBin;
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 use vars qw($RANK $LOG $EXE $TMP $lTMP $LOCK $VERSION $IPRSCAN_HOME $LOC_HOME $CWD);
 use Storable qw(freeze thaw);
 use threads;

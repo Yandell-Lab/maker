@@ -173,9 +173,9 @@ sub _load {
 		 "** Yet you are attempting to do so!!\n".
 		 "**\n".
 		 "** You need to configure MAKER by executing -->\n".
-		 "**     perl $FindBin::Bin/../src/Build.PL\n".
+		 "**     perl $FindBin::RealBin/../src/Build.PL\n".
 		 "** Then run -->\n".
-		 "**     $FindBin::Bin/../src/Build install\n\n" unless($WARNED);
+		 "**     $FindBin::RealBin/../src/Build install\n\n" unless($WARNED);
 	    $WARNED = 1; #turn this warning off now
 	    return 0;
 	}

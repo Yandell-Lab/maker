@@ -4,7 +4,7 @@
 BEGIN {
     if(@ARGV == 1 && $ARGV[0] eq 'findbin'){
 	eval 'require FindBin';
-	print $FindBin::Bin;
+	print $FindBin::RealBin;
 	exit;
     }
 
@@ -18,13 +18,13 @@ BEGIN {
 }
 
 use FindBin;
-use lib "$FindBin::Bin/../src/inc/perl/lib"; #micelaneous
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../src/inc/perl/lib"; #micelaneous
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 
 BEGIN {
-    if($FindBin::Bin =~ /\/src\/bin\/?$/){
-	my $bad = "$FindBin::Bin/maker";
+    if($FindBin::RealBin =~ /\/src\/bin\/?$/){
+	my $bad = "$FindBin::RealBin/maker";
 	(my $good =  $bad) =~ s/\/src\/bin\/maker$/\/bin\/maker/;
 	die "ERROR: You are running MAKER from the src directory. This is what you called:\n".
 	    "BAD --> $bad\n".
@@ -309,7 +309,7 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "help|?" => sub {print $usage if($rank == $root); exit_maker(0)},
 	   "version" => sub{print "$VERSION\n" if($rank == $root);
 			    exit_maker(0)},
-	   "MWAS=s" =>sub {exec("$FindBin::Bin/../MWAS/bin/mwas_server", $_[1])
+	   "MWAS=s" =>sub {exec("$FindBin::RealBin/../MWAS/bin/mwas_server", $_[1])
 			       if($rank == $root);
 			   exit_maker(0);},
 	   "CTL" => sub {GI::generate_control_files()
