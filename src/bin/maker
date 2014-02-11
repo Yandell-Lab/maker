@@ -82,7 +82,7 @@ use POSIX;
 use Sys::Hostname;
 
 BEGIN{
-   $VERSION = '2.30';
+   $VERSION = '2.31';
 
    #what to do on ^C
    $SIG{INT}  = sub {print STDERR "SIGINT received\n"; print STDERR Carp::longmess; exit_maker(SIGINT);};
