@@ -2,8 +2,8 @@
 use warnings;
 use strict;
 use FindBin;
-use lib "$FindBin::Bin/../";
-use lib "$FindBin::Bin/../../perl/lib";
+use lib "$FindBin::RealBin/../";
+use lib "$FindBin::RealBin/../../perl/lib";
 use File::NFSLock;
 use Storable;
 use vars qw($LOCK);

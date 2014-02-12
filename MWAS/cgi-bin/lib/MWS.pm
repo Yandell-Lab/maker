@@ -2,10 +2,10 @@ package MWS;
 
 BEGIN{
    if (not ($ENV{CGL_SO_SOURCE})) {
-      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/lib/CGL/so.obo";
+      $ENV{CGL_SO_SOURCE} = "$FindBin::RealBin/lib/CGL/so.obo";
    }
    if (not ($ENV{CGL_GO_SOURCE})) {
-      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/lib/CGL/gene_ontology.obo"
+      $ENV{CGL_GO_SOURCE} = "$FindBin::RealBin/lib/CGL/gene_ontology.obo"
    }
    #$ENV{'CAP_DEVPOPUP_EXEC'} = 1;
    
@@ -74,7 +74,7 @@ sub cgiapp_init {
    @serv_opt{keys %serv_opt} = @CTL_OPT{keys %serv_opt}; #just get server options
 
    #setup template params
-   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => ["$FindBin::Bin/tt_templates/", "$c_dir/"],
+   $self->tt_config(TEMPLATE_OPTIONS => {INCLUDE_PATH => ["$FindBin::RealBin/tt_templates/", "$c_dir/"],
 				         EVAL_PERL => 1});
 
    #setup authentication

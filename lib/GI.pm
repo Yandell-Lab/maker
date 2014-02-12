@@ -1276,7 +1276,7 @@ sub genemark {
    my $LOG         = shift;
 
    #genemark sometimes fails if called directly so I built a wrapper
-   my $wrap = "$FindBin::Bin/../lib/Widget/genemark/gmhmm_wrap";
+   my $wrap = "$FindBin::RealBin/../lib/Widget/genemark/gmhmm_wrap";
    my $exe  = $CTL_OPT->{organism_type} eq 'eukaryotic' ? $CTL_OPT->{gmhmme3} : $CTL_OPT->{gmhmmp}; #genemark
    my $pro = $CTL_OPT->{probuild}; #helper exe
 
@@ -1379,7 +1379,7 @@ sub fgenesh {
    my $CTL_OPT = shift;
    my $LOG         = shift;
 
-   my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
+   my $wrap = "$FindBin::RealBin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
    my $exe = $CTL_OPT->{fgenesh};
 
    my @entries = split(',', $CTL_OPT->{fgenesh_par_file});
@@ -3263,7 +3263,7 @@ sub set_defaults {
       $CTL_OPT{'protein'} = '';
       $CTL_OPT{'protein_gff'} = '';
       $CTL_OPT{'model_org'} = 'all';
-      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::Bin/../data/te_proteins.fasta") || '';
+      $CTL_OPT{'repeat_protein'} = Cwd::abs_path("$FindBin::RealBin/../data/te_proteins.fasta") || '';
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
@@ -3390,7 +3390,7 @@ sub set_defaults {
 		 );
 
       #get MAKER overriden exe locations
-      my @all_alts = grep {-f $_ && -x $_} (File::Glob::bsd_glob("{$FindBin::Bin/../exe/*/*,$FindBin::Bin/../exe/*/bin/*}"));
+      my @all_alts = grep {-f $_ && -x $_} (File::Glob::bsd_glob("{$FindBin::RealBin/../exe/*/*,$FindBin::RealBin/../exe/*/bin/*}"));
       foreach my $exe (@exes) {
 	  my @alts = grep {/\/$exe$/} @all_alts;
 	  my $loc = shift @alts || File::Which::which($exe) || '';
@@ -3455,7 +3455,7 @@ sub set_defaults {
       $CTL_OPT{'font_file'} = '/usr/share/fonts/truetype/freefont/FreeMono.ttf' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'font_file'} = '' if(! -f $CTL_OPT{'font_file'});
       $CTL_OPT{'soba_url'} = 'http://www.sequenceontology.org/cgi-bin/soba.cgi';
-      $CTL_OPT{'JBROWSE_ROOT'} = "$FindBin::Bin/../exe/jbrowse";
+      $CTL_OPT{'JBROWSE_ROOT'} = "$FindBin::RealBin/../exe/jbrowse";
       $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/html/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/Library/WebServer/Documents/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
       $CTL_OPT{'JBROWSE_ROOT'} = '/var/www/jbrowse' if(! -d $CTL_OPT{'JBROWSE_ROOT'});
@@ -3465,7 +3465,7 @@ sub set_defaults {
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse/GBrowse.conf';
       $CTL_OPT{'GBROWSE_MASTER'} = '/etc/gbrowse2/GBrowse.conf' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
       $CTL_OPT{'GBROWSE_MASTER'} = '' if(! -f $CTL_OPT{'GBROWSE_MASTER'});
-      $CTL_OPT{'APOLLO_ROOT'} = "$FindBin::Bin/../exe/apollo";
+      $CTL_OPT{'APOLLO_ROOT'} = "$FindBin::RealBin/../exe/apollo";
       $CTL_OPT{'APOLLO_ROOT'} = $ENV{APOLLO_ROOT} if(! -d $CTL_OPT{'APOLLO_ROOT'} &&
 						     $ENV{APOLLO_ROOT} &&
 						     -d $ENV{APOLLO_ROOT});

@@ -1858,7 +1858,7 @@ sub run_it{
 	    next if(! @$gomiph);
 	    my $miphs = [];
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
-		$miphs = get_selected_types($miphs,'protein2genome');
+		$miphs = get_selected_types($gomiph,'protein2genome');
 		$miphs = clean::remove_redundant_alt_splices($miphs, 10) unless($CTL_OPT->{est_forward});
 	    }
 	    else{ #prokaryotic

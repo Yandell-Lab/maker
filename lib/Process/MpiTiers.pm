@@ -4,8 +4,8 @@ package Process::MpiTiers;
 
 use strict;
 use FindBin;
-use lib "$FindBin::Bin/../lib";
-use lib "$FindBin::Bin/../perl/lib";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/../perl/lib";
 use Error qw(:try);
 use Error::Simple;
 use Process::MpiChunk;

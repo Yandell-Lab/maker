@@ -222,7 +222,7 @@ sub add_maker {
     if(scalar(keys %skip) < @types && $gff_file){
 	my @files = split(/\,/, $gff_file);
 	open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
-	open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
+	open ($IN, "$FindBin::RealBin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
 	my $count = 0;
 	my $line;
 	while(defined($line = <$IN>)){
@@ -411,7 +411,7 @@ sub _add_type {
     if(! $skip && $gff_file){
 	my @files = split(/\,/, $gff_file);
 	open (my $IN, "< $gff_file") or die "ERROR: Could not open file: $gff_file\n" if(@files == 1);
-	open ($IN, "$FindBin::Bin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
+	open ($IN, "$FindBin::RealBin/gff3_merge -l -s -n ".join(' ', @files)." |") if(@files > 1);
 	my $count = 0;
 	while(defined(my $line = <$IN>)){
 	    chomp($line);

@@ -2,10 +2,10 @@ package stream;
 
 BEGIN{
    if (not ($ENV{CGL_SO_SOURCE})) {
-      $ENV{CGL_SO_SOURCE} = "$FindBin::Bin/lib/CGL/so.obo";
+      $ENV{CGL_SO_SOURCE} = "$FindBin::RealBin/lib/CGL/so.obo";
    }
    if (not ($ENV{CGL_GO_SOURCE})) {
-      $ENV{CGL_GO_SOURCE} = "$FindBin::Bin/lib/CGL/gene_ontology.obo"
+      $ENV{CGL_GO_SOURCE} = "$FindBin::RealBin/lib/CGL/gene_ontology.obo"
    }
    #{ $ENV{'CAP_DEVPOPUP_EXEC'} = 1; }
 }

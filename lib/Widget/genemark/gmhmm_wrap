@@ -2,8 +2,8 @@
 use warnings;
 use strict;
 use FindBin;
-use lib "$FindBin::Bin/../../../perl/lib/";
-use lib "$FindBin::Bin/../../";
+use lib "$FindBin::RealBin/../../../perl/lib/";
+use lib "$FindBin::RealBin/../../";
 use File::Spec;
 use File::Temp qw(tempdir tempfile);
 use Iterator::Fasta;

@@ -264,7 +264,7 @@ sub fgenesh {
         my $hmm        = shift;
 
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
-	my $wrap = "$FindBin::Bin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
+	my $wrap = "$FindBin::RealBin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
 
         my $tmp = GI::get_global_temp();
         my $rank = GI::RANK();

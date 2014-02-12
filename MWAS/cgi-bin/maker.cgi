@@ -4,10 +4,10 @@ use strict;
 use warnings;
 
 use FindBin;
-use lib "$FindBin::Bin/../../../maker/lib";
-use lib "$FindBin::Bin/../../../maker/perl/lib";
-use lib "$FindBin::Bin/lib";
-use lib "$FindBin::Bin/perl/lib";
+use lib "$FindBin::RealBin/../../../maker/lib";
+use lib "$FindBin::RealBin/../../../maker/perl/lib";
+use lib "$FindBin::RealBin/lib";
+use lib "$FindBin::RealBin/perl/lib";
          
 use CGI qw(:standard);
 use CGI::Carp qw(warningsToBrowser fatalsToBrowser);
