@@ -3210,7 +3210,7 @@ sub get_translation_seq {
 	    my $codon = substr($seq, $i, 3);
 	    last if($tM->is_ter_codon($codon));
 	    
-	    if(my $s = $tM->is_start_codon($codon) || !$has_start){
+	    if((my $s = $tM->is_start_codon($codon)) || !$has_start){
 		$offset = $i;
 		$has_start = $s;
 	    }
