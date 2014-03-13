@@ -40,8 +40,10 @@ USAGE:
      maker2wap [OPTION] <db_dir> <gff3file1> <gff3file2> ...
      maker2wap [OPTION] <db_dir> -d <datastore_index>
 
+     !!!!!!!!This script is under development!!!!!!!!!
+
      This script takes MAKER produced GFF3 files and dumps them into a
-     JBrowse for you using pre-configured JSON tracks.
+     Web-Apollo for you using pre-configured JSON tracks.
 
 OPTIONS:
      ds_index|d  <file>  Provide MAKER produced datastore index

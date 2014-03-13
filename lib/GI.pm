@@ -1074,10 +1074,13 @@ sub split_db {
 	    $$seq_ref =~ tr/XU/NT/;
 	    $$seq_ref =~ s/[RYKMSWBDHV]/N/g if($main::fix_nucleotides);
 	    die "ERROR: The nucleotide sequence file \'$file\'\n".
-		"appears to contain protein sequence or unrecognized characters. Note\n".
-		"the following nucleotides may be valid but are unsupported [RYKMSWBDHV]\n".
-		"Please check/fix the file before continuing, or set -fix_nucleotides on\n".
-		"the command line to fix this automatically.\n".
+		"contains either protein sequence or unsupported characters. Note the\n".
+		"following nucleotides may be valid but are unsupported [RYKMSWBDHV]. This\n".
+		"message is to get you to look at your input files, and verify that there\n".
+		"is not a mistake. Both an explanation of the cause and a solution are\n".
+		"indicated in this message. Do not post it to the mailing list. Please\n".
+		"manually check/fix the file before continuing, or set -fix_nucleotides on\n".
+		"the command line to automatically replace invalid nucleotides with 'N'.\n".
 		"Invalid Character: '$1'\n\n"
 		if($$seq_ref =~ /([^ATCGN\n])/i);
 	}

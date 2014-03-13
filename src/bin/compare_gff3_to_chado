@@ -26,7 +26,7 @@ use threads::shared;
 
 my $usage = '
 USAGE:
-     compare [OPTION] <database_name> <gff3_file>
+     compare_gff3_to_chado [OPTION] <database_name> <gff3_file>
 
      This script compares the contents of a GFF3 file to te database to
      look for merged, split and missing genes.

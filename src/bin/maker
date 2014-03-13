@@ -126,8 +126,10 @@ BEGIN{
 {
 my $tid = threads->tid if exists $INC{'threads.pm'};
 END {
+    my $stat = $?; #help preserve exit status
     my $is_thread = 1 if(defined($tid) && $tid != threads->tid);
     cleanup($is_thread);
+    $? = $stat if($stat);
 }
 }
 
