@@ -360,7 +360,7 @@ sub get_exon_seq {
 
         my $e_seq = substr_o($q_seq, $e_b - 1, $length);
                         
-        $e_seq = Fasta::revCompRef($e_seq) if $exon->{strand} == -1;
+        $e_seq = Fasta::revComp($e_seq) if $exon->{strand} == -1;
 
         return $e_seq;  
 }

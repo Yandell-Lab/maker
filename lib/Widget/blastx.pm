@@ -48,7 +48,7 @@ sub run {
 	  }
       }
       waitpid $pid, 0;
-      if ($? != 0 && $all_err !~ /There are no valid contexts|invalid query sequence/){
+      if ($? != 0 && ! ignorable($all_err, $command)){
 	  #try again a second time
 	  sleep 15;
 	  $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
@@ -62,7 +62,7 @@ sub run {
 	  }
 	  waitpid $pid, 0;
 	  
-	  if ($? != 0 && $all_err !~ /There are no valid contexts|invalid query sequence/){
+	  if ($? != 0 && ! ignorable($all_err, $command)){
 	      die "ERROR: BLASTX failed\n";
 	  }
       }
@@ -70,6 +70,43 @@ sub run {
   else {
       die "you must give Widget::blastx a command to run!\n";
   }
+}
+
+sub ignorable{
+    my $err = shift;
+    my $command = shift;
+
+    my $ignorable = 0;
+    if($err =~ /There are no valid contexts/){
+        $ignorable = 1;
+    }
+    elsif($err =~ /invalid query sequence/){
+        $ignorable = 1;
+    }
+    elsif($err =~ /calculate ungapped Karlin-Altschul/){
+        $ignorable = 1;
+    }
+    elsif($err =~ /sequence has zero length/){
+        $ignorable = 1;
+    }
+    elsif($err =~ /Sequence contains no data/){
+        $ignorable = 1;
+    }
+    else{
+        $ignorable = 0;
+    }
+
+    #concatenate error into file (fixes BLAST+ 2.29 issue)
+    if($ignorable && $command && $command =~ /\s\-+(out|output_file)\s+([^\s\t\n]+)/){
+	my $file = $2;
+	return $ignorable if(! -f $file);
+	
+	open(OUT, ">>$file");
+	print OUT $err;
+	close(OUT);
+    }
+    
+    return $ignorable;
 }
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
@@ -115,7 +152,7 @@ sub keepers {
       if(!$ok && !$result->get_statistic('posted_date')){
 	  open(my $IN, '<', $sio->file);
 	  while(my $line = <$IN>){
-	      if($line =~ /There are no valid contexts|sequence has zero length|Sequence contains no data/){
+	      if(ignorable($line)){
 		  $ok = 1;
 		  last;
 	      }

@@ -2226,7 +2226,7 @@ sub load_transcript_struct {
 	$t_name = $f->{_tran_name} if($f->{_tran_name}); #affects GFFV3.pm
 	$t_id = $f->{_tran_id} if($f->{_tran_id} && $f->algorithm =~ /^model_gff\:/); #affects GFFV3.pm
 	$f->name($t_name);
-	
+
 	my $t_struct = {'hit'       => $f,
 			'p_base'    => $p_base,
 			't_name'    => $t_name,
@@ -2239,6 +2239,7 @@ sub load_transcript_struct {
 			'has_stop'  => $has_stop,
 			'p_length'  => length($translation_seq)
 		    };
+
 
 	#also determine these values for the unmodified abinit
 	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff|model_gff|ncrna/){
