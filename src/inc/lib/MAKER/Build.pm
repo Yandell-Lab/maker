@@ -864,6 +864,43 @@ sub ACTION_gbrowse{
     $self->cpan_install('Bio::Graphics::Browser2', 0);
 }
 
+#update the locations file for urls
+sub ACTION_locations{
+    my $self = shift;
+    my $base = $self->install_destination('exe');
+
+    #get OS and architecture
+    my %os_ok = (Linux_x86_64  => 1,
+		 Linux_i386    => 1,
+		 Darwin_i386   => 1,
+		 Darwin_x86_64 => 1,
+		 src           => 1); 
+    my ($OS, $ARC) = (POSIX::uname())[0,4];
+    $ARC = 'i386' if($ARC =~ /^i.86$/);
+    ($OS, $ARC) = ('src', '') if(! $os_ok{"$OS\_$ARC"});
+
+    #get url for exectuable to be installed
+    my $data;    
+    my $loc = $self->base_dir()."/locations";
+    open(LOC, '<', $loc)
+	or die "ERROR: Could not open locations to download dependencies\n";
+    my $line = <LOC>;
+    if($line =~ /^\#\#MAKER/){
+	$data = join('', <LOC>);
+	eval $data;
+    }
+    close(LOC);
+
+    my $file = "$base/alt_locations"; #file to save to
+    my $url = $data->{locations}{"$OS\_$ARC"};
+    
+    $self->getstore($url, $file) or die $self->fail('locations', $file);
+    File::Copy::copy($loc, "$loc.bak") or die $self->fail('locations', $file);
+    File::Copy::move($file, $loc) or die $self->fail('locations', $file);
+
+    print "The locations file was updated successfully\n";    
+}
+
 
 #runs all the algorithm installs that are missing
 sub ACTION_installexes{
@@ -1072,7 +1109,7 @@ sub _install_exe {
     my $data2 = {};
     my $file = "$base/alt_locations"; #file to save to
     my $url = $data->{locations}{"$OS\_$ARC"};
-    $self->getstore($url, $file);
+    $self->getstore($url, $file) or unlink($file);
     if(-f $file){
 	my $data;
 	open(LOC, '<', $file);
