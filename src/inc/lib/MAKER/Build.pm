@@ -1734,10 +1734,10 @@ sub getstore {
     }
 
     #download failed with alternate url
-    if(! $stat && $alt){
+    if(! $stat && $alt && $alt ne $url){
 	my $go = $self->y_n("Download failed: $url\n".
 			    "Alternate version or url available: $alt\n".
-			    "Do want to try the alternate version or url?", 'Y');
+			    "Do want to try the alternate version/url?", 'Y');
 
 	delete($param->{ALT});
 	return $self->getstore($alt, $file, $param) if($go);
