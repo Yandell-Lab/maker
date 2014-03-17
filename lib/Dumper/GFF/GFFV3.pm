@@ -137,7 +137,7 @@ sub set_current_contig {
 	}
 
 	open(my $SEQ, ">>", $self->{seq_file}) || confess "ERROR: opening fasta for GFF3\n\n";
-	print $SEQ ">".$self->{seq_id}."\n";
+	print $SEQ ">".uri_unescape($self->{seq_id})."\n"; #fasta doesn't require escaped seq_ids
 	my $offset = 0;
 	my $width = 60;
 	while($offset < $self->{seq_length}){
@@ -501,6 +501,10 @@ sub gene_data {
     my $g_e        = $g->{g_end};
     my $g_strand   = $g->{g_strand} ==1 ? '+' : '-';
     my $t_structs  = $g->{t_structs};
+
+    #maximum of supported characters for GFF3 attributes using ASCII encoding
+    #\x21-\x24\x27-\x2B\x2D-\x3A\x3C\x3E-\x7E
+    #I really only allow a subset of these though for portability
 
     $g_name = uri_escape($g_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
     $g_id = uri_escape($g_id, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
@@ -1176,7 +1180,7 @@ sub get_hsp_data {
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
 
 	my $hsp_name = $hit_n;
-	#$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
+	$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
 
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
@@ -1220,7 +1224,7 @@ sub get_repeat_hsp_data {
 	$class = "repeatrunner" if ($class eq 'blastx');
 	
 	my $hsp_name = $hit_n;
-	#$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
+	$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
  
         my @data;
         push(@data, $seq_id, $class, $type, $nB, $nE, $score, $hsp_str, '.');
