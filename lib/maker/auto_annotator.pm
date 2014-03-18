@@ -2611,7 +2611,7 @@ sub group_transcripts {
 		  $SEEN->{$1}++;
 	      }
 	  }
-	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-abinit|$safe_id-processed/) {
+	  elsif ($c->[0]->name =~ /^maker-$safe_id|$safe_id-noncoding/) {
 	      $g_name = $c->[0]->name;
 	      $g_name =~ s/-ncRNA-\d.*//;
 	      $g_id = $g_name;
@@ -2620,8 +2620,17 @@ sub group_transcripts {
 		  $SEEN->{$1}++;
 	      }
 	  }
+	  elsif($sources =~ /trnascan/){
+	      my $type = $c->[0]->name;
+	      $g_name = "$sources-$seq_id-noncoding-$type-gene-$chunk_number"; #affects GFFV3.pm
+              $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
+              $g_name = "$g_name.$c_id";
+              $g_id = $g_name;
+              $SEEN->{$g_name}++;
+              $SEEN->{"$chunk_number\.$c_id"}++;
+	  }
 	  else{
-	      $g_name = "$sources-$seq_id-processed-gene-$chunk_number"; #affects GFFV3.pm
+	      $g_name = "$sources-$seq_id-noncoding-gene-$chunk_number"; #affects GFFV3.pm
 	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
 	      $g_name = "$g_name.$c_id";
 	      $g_id = $g_name;

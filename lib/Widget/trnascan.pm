@@ -114,7 +114,8 @@ sub parse {
 	    else {
 		die "ERROR: tRNAs must have a strand";
 	    }
-	    $g{$id}[$i]{score}    = $stuff[8];
+	    $g{$id}[$i]{score} = $stuff[8];
+	    $g{$id}[$i]{name} ="$stuff[4]_$stuff[5]";
 	}
 	else{ #intron detected
             $g{$id}[$i]{strand}   = $strand;
@@ -138,6 +139,7 @@ sub parse {
                 die "ERROR: tRNAs must have a strand";
             }
             $g{$id}[$i]{score}    = $stuff[8];
+	    $g{$id}[$i]{name} ="$stuff[4]_$stuff[5]";
 	}
     }
     $fh->close();
@@ -186,7 +188,7 @@ sub load_phat_hits {
 		#build hit
 		my %hsps;
 		my $i = 0;
-		my $f = new Bio::Search::Hit::PhatHit::trnascan('-name'         => $gene,
+		my $f = new Bio::Search::Hit::PhatHit::trnascan('-name'         => $g->{$gene}[0]{name},
 								'-description'  => 'NA',
 								'-algorithm'    => 'trnascan',
 								'-length'       => $q_len,
@@ -252,7 +254,7 @@ sub load_phat_hits {
         		push(@args, abs($exon->{e} - $exon->{b}) + 1);
 
         		push(@args, '-hit_name');
-        		push(@args, $gene.":".$i.":".$exon->{type});
+        		push(@args, $g->{$gene}[0]{name});
 
         		push(@args, '-hit_end');
         		push(@args, $hit_end);
