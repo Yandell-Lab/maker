@@ -752,6 +752,10 @@ sub get_class_and_type {
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
     }
+    elsif($class =~ /^evm(_masked)?(\:.*)?$/i){ 
+        $class = lc($h->algorithm);
+        $type = $k eq 'hit' ? 'match' : 'match_part' ;
+    }
     elsif($class =~ /^augustus(_masked)?(\:.*)?$/i){
 	$class = lc($h->algorithm);
 	$type = $k eq 'hit' ? 'match' : 'match_part' ;
