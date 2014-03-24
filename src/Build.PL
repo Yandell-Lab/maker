@@ -98,9 +98,8 @@ my $build = MAKER::Build->new(
 	bindoc => [qw(perl/man)],
 	libdoc => [qw(perl/man)],
     },
-    PL_files => {'bin/mpi_scripts.PL' => ['bin/mpi_evaluator',
-					  'bin/mpi_iprscan',],
-		 'bin/TACC.PL' => ['bin/ibrun'],
+    PL_files => {
+	'bin/TACC.PL' => ['bin/ibrun'],
     },
     get_options => {
 	AnyDBM_ISA =>  { type  => '=s' },

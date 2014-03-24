@@ -1,6 +1,6 @@
 bin/cegma2zff
 bin/chado2gff3
-bin/compare
+bin/compare_gff3_to_chado
 bin/cufflinks2gff3
 bin/evaluator
 bin/fasta_merge
@@ -9,13 +9,12 @@ bin/genemark_gtf2gff3
 bin/gff3_merge
 bin/ipr_update_gff
 bin/iprscan2gff3
-bin/iprscan_wrap
 bin/maker
 bin/maker2chado
 bin/maker2eval_gtf
 bin/maker2jbrowse
+bin/maker2wap
 bin/maker2zff
-bin/maker_functional
 bin/maker_functional_fasta
 bin/maker_functional_gff
 bin/maker_map_ids
@@ -23,11 +22,11 @@ bin/map2assembly
 bin/map_data_ids
 bin/map_fasta_ids
 bin/map_gff_ids
-bin/mpi_scripts.PL
+bin/match2gene.pl
+bin/TACC.PL
 bin/tophat2gff3
 Build.PL
-inc/bin/mpi_evaluator
-inc/bin/mpi_iprscan
+inc/bin/ibrun
 inc/bundle/auto/Module/Build/.packlist
 inc/bundle/bin/config_data
 inc/bundle/inc/latest.pm
