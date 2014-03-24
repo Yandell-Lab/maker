@@ -748,7 +748,7 @@ sub _go {
 	    if($CTL_OPT{go_gffdb} && GI::is_NFS_mount($dbfile) && !GI::is_NFS_mount($TMP)){
 		$dbfile = GI::localize_file($dbfile);
 	    }
-	    my $GFF_DB = new GFFDB($dbfile);
+	    my $GFF_DB = new GFFDB($dbfile) if($CTL_OPT{go_gffdb});
 
 	    #-- repeatmask with gff3 input
 	    my $rm_gff_keepers = [];
@@ -3171,7 +3171,7 @@ sub _go {
 	    if($CTL_OPT{go_gffdb} && GI::is_NFS_mount($dbfile) && !GI::is_NFS_mount($TMP)){
 		$dbfile = GI::localize_file($dbfile);
 	    }
-	    my $GFF_DB = new GFFDB($dbfile);
+	    my $GFF_DB = new GFFDB($dbfile) if($CTL_OPT{go_gffdb});
 
 	    #==GFF3 passthrough of evidence
 	    my $prot_gff_keepers = [];

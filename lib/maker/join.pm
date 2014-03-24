@@ -290,13 +290,13 @@ sub join_f {
 	    my $i = 0;
 	    foreach my $hsp (@{$sorted_5}){
 		last if $i ==  $b_5->{five_j};
-		push(@anno_hsps, clone_hsp($hsp));	
+		push(@anno_hsps, clone_hsp($hsp, $q_seq));	
 		$i++;
 		$d_offset += abs($hsp->end - $hsp->start) + 1;
 	    }
 	    #-- merge the 5-prime overlaping features
 	    if ( !defined($join_offset_5) || $join_offset_5 == -1){
-		push(@anno_hsps, clone_hsp($sorted_g->[0]));
+		push(@anno_hsps, clone_hsp($sorted_g->[0], $q_seq));
 	    }
 	    else {
 		my $merged_hsp = merge_hsp($b_5,
@@ -310,13 +310,13 @@ sub join_f {
 	    
 	    #-- push on the gene pred's interior hsps
 	    for (my $i = 1; $i < @{$sorted_g} -1; $i++){
-		push(@anno_hsps, clone_hsp($sorted_g->[$i]));
+		push(@anno_hsps, clone_hsp($sorted_g->[$i], $q_seq));
 	    }
 	    
 	    #-- merge the 3-prime overlaping features
 	    my $omega = $#{$sorted_g};
 	    if (!defined($join_offset_3) || $join_offset_3 == -1){
-		push(@anno_hsps, clone_hsp($sorted_g->[$omega]));
+		push(@anno_hsps, clone_hsp($sorted_g->[$omega], $q_seq));
 	    }
 	    else {
 		# sepcial case for single exon genes
@@ -339,7 +339,7 @@ sub join_f {
 	    #-- push on b_3's downsteam hsps added 52006
 	    if (defined($b_3->{three_j})){
 		for (my $i = $b_3->{three_j} + 1; $i < @{$sorted_3}; $i++){
-		    push(@anno_hsps, clone_hsp($sorted_3->[$i]));
+		    push(@anno_hsps, clone_hsp($sorted_3->[$i], $q_seq));
 		} 
 	    }
 	    
@@ -368,7 +368,7 @@ sub join_f {
 	else{
 	    my @hsps = $g->hsps;
 	    foreach my $h (@hsps){
-		push(@anno_hsps, clone_hsp($h))
+		push(@anno_hsps, clone_hsp($h, $q_seq))
 	    }
 	    
 	    $length = $g->length();
@@ -419,35 +419,46 @@ sub join_f {
 #------------------------------------------------------------------------
 #clone for exact match on query
 sub clone_hsp{
-    my $hsp = shift;
+    my $hsp   = shift;
+    my $q_seq = shift;
+
+    my $start = $hsp->start('query');
+    my $end = $hsp->end('query');
+
+    my $exon = {'b'      => $start,
+		'e'      => $end,
+		'strand' => $hsp->strand('query')};
+
+    my $new_exon_seq = Widget::snap::get_exon_seq($exon, $q_seq);
+    my $length = length($new_exon_seq);
 
     my @args;
     push(@args, '-query_start');
-    push(@args, $hsp->start('query'));
+    push(@args, $start);
 
     push(@args, '-query_seq');
-    push(@args, $hsp->query_string);
+    push(@args, $new_exon_seq);
 
     push(@args, '-score');
-    push(@args, $hsp->score);
+    push(@args, $length);
 
     push(@args, '-homology_seq');
-    push(@args, '|'x($hsp->length('query')));  #clone for exact match on query
+    push(@args, '|'x($length));  #clone for exact match on query
 
     push(@args, '-hit_start');
     push(@args, $hsp->start('hit')); #this is a placeholder and must be fixed
 
     push(@args, '-hit_seq');
-    push(@args, $hsp->query_string); #clone for exact match on query
+    push(@args, $new_exon_seq); #clone for exact match on query
 
     push(@args, '-hsp_length');
-    push(@args, $hsp->length('query'));  #clone for exact match on query
+    push(@args, $length);  #clone for exact match on query
 
     push(@args, '-identical');
-    push(@args, $hsp->length('query'));  #clone for exact match on query
+    push(@args, $length);  #clone for exact match on query
 
     push(@args, '-hit_length');
-    push(@args, $hsp->length('query'));  #clone for exact match on query
+    push(@args, $length);  #clone for exact match on query
 
     push(@args, '-query_name');
     push(@args, $hsp->{QUERY_NAME});
@@ -465,13 +476,13 @@ sub clone_hsp{
     push(@args, $hsp->pvalue);
 
     push(@args, '-query_length');
-    push(@args, $hsp->length('query'));
+    push(@args, $length);
 
     push(@args, '-query_end');
-    push(@args, $hsp->end('query'));
+    push(@args, $end);
 
     push(@args, '-conserved');
-    push(@args, $hsp->length('query')); #clone for exact match on query
+    push(@args, $length); #clone for exact match on query
 
     push(@args, '-hit_name');
     push(@args, $hsp->name);
@@ -485,7 +496,7 @@ sub clone_hsp{
     push(@args, '-hit_gaps'); #clone for exact match on query
     push(@args, 0);
 
-    my $REF = ref($hsp); #the objuct the hsp came from
+    my $REF = ref($hsp); #the object the hsp came from
     my $clone = new $REF(@args);
 
     $clone->{queryName} = $hsp->{queryName};
