@@ -37,6 +37,7 @@ use Widget::genemark;
 use Widget::fgenesh;
 use Widget::trnascan;
 use Widget::snoscan;
+use Widget::evm;
 use Widget::formater;
 use PhatHit_utils;
 use Shadower;
@@ -1461,6 +1462,108 @@ sub snoscan {
     }
     
     return \@out_files;
+}
+#-----------------------------------------------------------------------------
+sub evm {
+    my $in_file     = shift;
+    my $the_void    = shift;
+    my $CTL_OPT     = shift;
+    my $LOG         = shift;
+    my $final_prot  = shift;
+    my $final_est   = shift;
+    my $final_altest= shift;
+    my $final_pred  = shift;
+    my $q_seq_obj   = shift;
+    my $sid         = shift;
+    my $seq_id      = shift;
+    my @empty_array;
+    my $final_ncrna       = [];
+    my $model_gff_keepers = [];
+    my $t_dir = GI::get_global_temp();
+    my $exe = $CTL_OPT->{evm};
+    my $weights = $CTL_OPT->{evm_weights};
+
+    my $all_data = maker::auto_annotator::prep_hits($final_prot,
+                                                    $final_est,
+                                                    $final_altest,
+                                                    $final_pred,
+                                                    $final_ncrna,
+                                                    $model_gff_keepers,
+                                                    $q_seq_obj,
+                                                    $CTL_OPT->{single_exon},
+                                                    $CTL_OPT->{single_length},
+                                                    $CTL_OPT->{pred_flank},
+                                                    $CTL_OPT->{organism_type},
+                                                    $CTL_OPT->{est_forward},
+                                                    $CTL_OPT->{correct_est_fusion});
+
+    my $flat_ests = maker::auto_annotator::flatten_by_type($all_data,
+                                                           'ests');
+    my $GFF3_est = Dumper::GFF::GFFV3->new($t_dir."/".$sid."ests_for_evm.gff");
+    $GFF3_est->set_current_contig($seq_id);
+    $GFF3_est->add_phathits($flat_ests);
+    $GFF3_est->finalize;
+
+    my $flat_proteins = maker::auto_annotator::flatten_by_type($all_data,
+                                                               'gomiph');
+    my $GFF3_pro = Dumper::GFF::GFFV3->new($t_dir."/".$sid."protein_for_evm.gff");
+    $GFF3_pro->set_current_contig($seq_id);
+    $GFF3_pro->add_phathits($flat_proteins);
+    $GFF3_pro->finalize;
+
+    my $flat_preds = maker::auto_annotator::flatten_by_type($all_data,
+                                                            'all_preds');
+    my $GFF3_preds = Dumper::GFF::GFFV3->new($t_dir."/".$sid."preds_for_evm.gff");
+    $GFF3_preds->set_current_contig($seq_id);
+    $GFF3_preds->add_phathits($flat_preds);
+    $GFF3_preds->finalize;
+    my $chunk = 0;
+
+    my $m2g_cmd  = "$FindBin::Bin/match2gene.pl ";
+    $m2g_cmd .= $t_dir."/".$sid."preds_for_evm.gff";
+    $m2g_cmd .= " > ". $t_dir."/".$sid."preds_for_evm_gene.gff";
+    system($m2g_cmd);
+
+    my @out_files;
+    my $out_file = "$in_file\.evm";
+    (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
+    $LOG->add_entry("STARTED", $backup, "");
+    my $prot_file = $t_dir."/".$sid."protein_for_evm.gff";
+    my $est_file  = $t_dir."/".$sid."ests_for_evm.gff";
+    my $pred_file = $t_dir."/".$sid."preds_for_evm_gene.gff";
+
+    my $command = $exe;
+    $command .= " --genome $in_file";
+    $command .= " --weights $CTL_OPT->{evm_weights}";
+    $command .= " --gene_predictions $pred_file";
+    $command .= " --protein_alignments $prot_file";
+    $command .= " --transcript_alignments $est_file";
+#    $command .= " --trellis_search_limit 20"; #suposed to make it go faster not working right now                                                                                                                         
+    $command .= " > $out_file";
+    $command .= " 2> /dev/null"; #I could add an unless here for the debug flag                                                                                                                                            
+
+    my $w = new Widget::evm();
+    if (-f $backup) {
+        print STDERR "using existing evm report.\n" unless $main::quiet;
+        print STDERR "$backup\n" unless $main::quiet;
+        $out_file = $backup;
+    }
+    else {
+        print STDERR "running  evm.\n" unless $main::quiet;
+        $w->run($command);
+	File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+    }
+    $LOG->add_entry("FINISHED", $backup, "");
+
+    push(@out_files, $out_file);
+
+    my %params;
+    my $keepers = Widget::evm->parse($out_file,
+                                     \%params,
+                                     $in_file);
+
+    return $keepers;
+
 }
 #-----------------------------------------------------------------------------
 sub trnascan {
@@ -3281,6 +3384,7 @@ sub set_defaults {
       $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'snoscan_rrna'} = '';
       $CTL_OPT{'trna'} = 0;
+      $CTL_OPT{'evm_weights'} = '';
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'est2genome'} = 0;
@@ -3389,7 +3493,8 @@ sub set_defaults {
 		  'qrna',
 		  'jigsaw',
 		  'tRNAscan-SE',
-		  'snoscan'
+		  'snoscan',
+		  'evm'
 		 );
 
       #get MAKER overriden exe locations
@@ -3800,7 +3905,7 @@ sub load_server_files {
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
 
-	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan)$/){
+	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan|evm)$/){
 	   $CTL_OPT{STAT}{$key} = 'DISABLED';
 	}
 
@@ -3942,6 +4047,7 @@ sub load_control_files {
    push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
    push(@run, 'trnascan') if($CTL_OPT{trna});
    push(@run, 'snoscan') if($CTL_OPT{snoscan_rrna});
+   push(@run, 'evm') if($CTL_OPT{evm_weights});
 
    if(! @predictors){ #build predictors if not provided
        push(@predictors, @run);
@@ -3955,7 +4061,7 @@ sub load_control_files {
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$/
+	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^evm$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -4072,7 +4178,8 @@ sub load_control_files {
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'tRNAscan-SE') if (grep {/trnascan/} @{$CTL_OPT{_run}});
    push (@infiles, 'snoscan') if (grep {/snoscan/} @{$CTL_OPT{_run}});
-   
+   push (@infiles, 'evm') if (grep {/evm/} @{$CTL_OPT{_run}});
+
    if($CTL_OPT{organism_type} eq 'eukaryotic'){
        push (@infiles, 'exonerate') if($CTL_OPT{est}); 
        push (@infiles, 'exonerate') if($CTL_OPT{protein});
@@ -4546,6 +4653,7 @@ sub generate_control_files {
        print OUT "gmhmm=$O{gmhmm} #GeneMark HMM file\n";
        print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction species model\n";
        print OUT "fgenesh_par_file=$O{fgenesh_par_file} #FGENESH parameter file\n";
+       print OUT "evm_weights=$O{evm_weights} #EvidenceModeler weights file\n";
        print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external GFF3 file\n";
        print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
        print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
@@ -4658,6 +4766,7 @@ sub generate_control_files {
        print OUT "gmhmmp=$O{gmhmmp} #location of prokaryotic genemark executable\n";
        print OUT "augustus=$O{augustus} #location of augustus executable\n";
        print OUT "fgenesh=$O{fgenesh} #location of fgenesh executable\n";
+       print OUT "evm=$O{'evm'} #location of EvidenceModeler executable\n";
        print OUT "tRNAscan-SE=$O{'tRNAscan-SE'} #location of trnascan executable\n";
        print OUT "snoscan=$O{snoscan} #location of snoscan executable\n";
        print OUT "\n";

@@ -641,6 +641,30 @@ sub purge_short_ESTs_in_clusters{
     return \@c_keepers;
 }
 #------------------------------------------------------------------------
+#retuns an array of Phat hits of a single type given an array of hashes
+#of Phat hits and a type this was added for makeing evm input files
+sub flatten_by_type{
+    my $all_data = shift;
+    my $type     = shift;
+    my @keepers;
+    foreach my $cluster (@$all_data){
+	next unless $cluster->{'type'} eq 'bx';
+        foreach my $type_ (keys %$cluster){
+            if ($type_ eq $type){
+                foreach my $phits ($cluster->{$type_}){
+		    foreach my $ph (@$phits){
+                        if ($type eq 'gomiph'){
+                            push (@keepers, $ph) if $ph =~ /protein2genome/;;
+                        }
+                        else {push (@keepers, $ph)}
+		    }
+                }
+            }
+        }
+    }
+    return \@keepers;
+}
+#------------------------------------------------------------------------          
 #returns an array of hashes with the following atributes
 #called by prep_hits for standard evidence clusters
 #ests => set of all ests
@@ -742,13 +766,13 @@ sub prep_pred_data {
 
 	#abinit model should always be first cluster entry
 	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
-					 'twinscan', 'genemark', 'pred_gff');
+					 'twinscan', 'genemark', 'evm', 'pred_gff');
 	return undef if(!@$abinits);
 	confess "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
 	    if(@$abinits > 1);
 
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark', 'pred_gff');
+						  'twinscan', 'genemark', 'evm', 'pred_gff');
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
@@ -949,7 +973,7 @@ sub annotate_trans {
 		$al =~ s/_masked$//;
 		$al =~ s/(pred_gff).*$/$1/;
 
-		if($al =~ /^snap$|^genemark$|^augustus$|^fgenesh$/){
+		if($al =~ /^snap$|^genemark$|^augustus$|^fgenesh$|^evm$/){
 		    push(@{$transcripts{"$al\_abinit"}}, $s);
 		}
 		elsif($al =~ /^pred_gff$/){
@@ -1910,6 +1934,7 @@ sub run_it{
 	return [] if ($predictor eq 'genemark');
 	return [] if ($predictor eq 'trnascan'); #neither does trnascan
 	return [] if ($predictor eq 'snoscan'); #neither does or snoscan
+	return [] if ($predictor eq 'evm'); #evm gets its hints another way
 
 	my $gomias = []; #group of most informative alt splices
 	if($CTL_OPT->{alt_splice}){
