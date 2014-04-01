@@ -3680,36 +3680,36 @@ sub _go {
 					 $pred_gff_keepers);
 
 	    my $final_ncrna = GI::combine($ncrna_on_chunk,
-					 $ncrna_gff_keepers);
- #run evm now that the evidence is aligned and the predictors have run                                                       
+					  $ncrna_gff_keepers);
+
+	    #run evm now that the evidence is aligned and the predictors have run                                                       
             my $evm_preds = [];#makes an empty array ref                                                                                
-		if(grep{/evm/} @{$CTL_OPT{_run}}){
-		    my $LOG = $VARS->{LOG};
-		    my $t_dir = GI::get_global_temp();
-		    my $CTL_OPT = $VARS->{CTL_OPT};
-		    my $the_void = $VARS->{the_void};
-		    my $sid = $seq_id.".abinit_nomask.";#.$mchunk->number();                                                                
-		    my $t_file = "$t_dir/$sid";
-		    my $seq = $q_seq_obj->seq();
-		    my $seq = Fasta::toFastaRef('>'.$seq_id, \$seq); #over writes $seq to save memory                                       
-		    FastaFile::writeFile($seq, $t_file); #takes the fasta ref and writes it out as a wraped fasta file                      
-		    
-		    
-		    $evm_preds = GI::evm($t_file,
-					 $the_void,
-					 $CTL_OPT,
-					 $LOG,
-					 $final_prot,
-					 $final_est,
-					 $final_altest,
-					 $final_pred,
-					 $q_seq_obj,
-					 $sid,
-					 $seq_id);
-
-		    push(@$final_pred, @$evm_preds);# $evm_preds onto $final_pred dereference both of them                                 
-		    }
-
+	    if(grep{/evm/} @{$CTL_OPT{_run}}){
+		my $LOG = $VARS->{LOG};
+		my $t_dir = GI::get_global_temp();
+		my $CTL_OPT = $VARS->{CTL_OPT};
+		my $the_void = $VARS->{the_void};
+		my $sid = $seq_id.".abinit_nomask.";#.$mchunk->number();                                                                
+		my $t_file = "$t_dir/$sid";
+		my $seq = $q_seq_obj->seq();
+		my $seq = Fasta::toFastaRef('>'.$seq_id, \$seq); #over writes $seq to save memory                                       
+		FastaFile::writeFile($seq, $t_file); #takes the fasta ref and writes it out as a wraped fasta file                      
+		
+		$evm_preds = GI::evm($t_file,
+				     $the_void,
+				     $CTL_OPT,
+				     $LOG,
+				     $final_prot,
+				     $final_est,
+				     $final_altest,
+				     $final_pred,
+				     $q_seq_obj,
+				     $sid,
+				     $seq_id);
+		
+		push(@$final_pred, @$evm_preds);# $evm_preds onto $final_pred dereference both of them                                 
+	    }
+	    
 	    #group evidence for annotation
 	    my $all_data = maker::auto_annotator::prep_hits($final_prot,
 							    $final_est,

@@ -1379,7 +1379,7 @@ sub _trim_UTR_if_overlap {
 	if($h->strand('query') == 1){
 	    $h = PhatHit_utils::clip_3_utr($h);
 	    $t->{t_seq} = get_transcript_seq($h);
-	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
 	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
 	    $t->{hit} = $h;
@@ -1387,7 +1387,7 @@ sub _trim_UTR_if_overlap {
 	elsif($h->strand('query') == -1){
 	    $h = PhatHit_utils::clip_5_utr($h);
 	    $t->{t_seq} = get_transcript_seq($h);
-	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/^\d+/0/;
 	    $E = $h->end('query') if(!$E || $E < $h->end('query'));
 	    $t->{hit} = $h;
@@ -1406,7 +1406,7 @@ sub _trim_UTR_if_overlap {
 	if($h->strand('query') == 1){
 	    $h = PhatHit_utils::clip_5_utr($h);
 	    $t->{t_seq} = get_transcript_seq($h);
-	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/^\d+/0/;
 	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
 	    $t->{hit} = $h;
@@ -1414,7 +1414,7 @@ sub _trim_UTR_if_overlap {
 	elsif($h->strand('query') == -1){
 	    $h = PhatHit_utils::clip_3_utr($h);
 	    $t->{t_seq} = get_transcript_seq($h);
-	    ($t->{p_seq}, $t->{t_offset}, $t->{end}) = get_translation_seq($t->{t_seq}, $h);
+	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
 	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
 	    $t->{hit} = $h;

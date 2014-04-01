@@ -1091,7 +1091,7 @@ sub get_transcript_data {
 	my $t_seq   = $t->{t_seq};
 	my $p_seq   = $t->{p_seq};
 	my $t_off   = $t->{t_offset};
-	my $t_end   = $t->{end};
+	my $t_end   = $t->{t_end};
 	my $t_name  = $t->{t_name};
 	my $t_id    = $t->{t_id};
 	my $t_qi    = $t->{t_qi};
