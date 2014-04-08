@@ -250,6 +250,7 @@ sub _prepare {
       #-set up variables that are the result of chunk accumulation
       $VARS->{p_fastas} = {};
       $VARS->{t_fastas} = {};
+      $VARS->{n_fastas} = {};
       $VARS->{gff3_files} = [];
    }
    elsif($tier_type == 1){
@@ -3596,7 +3597,7 @@ sub _go {
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-	       if($key eq 'p_fastas' || $key eq 't_fastas'){
+	       if($key eq 'p_fastas' || $key eq 't_fastas' || $key eq 'n_fastas'){
 		  while(my $key2 = each %{$self->{RESULTS}->{$key}}){
 		     $VARS->{$key}->{$key2} .= $self->{RESULTS}->{$key}->{$key2};
 		  }
@@ -4011,7 +4012,7 @@ sub _go {
 	    my $non_coding = [];
 	    my @nc_keys = grep {/^ncrna_|_ncrna$/} keys %$annotations;
 	    foreach my $k (@nc_keys){
-		push(@$non_coding, @{$annotations->{$k}})
+		push(@$non_coding, @{$annotations->{$k}});
 	    }
 	    
 	    #add non-overlapping to final set if specified
@@ -4117,17 +4118,21 @@ sub _go {
 	    #--- building fastas for annotations (grows with iteration)
 	    my $p_fastas = {};
 	    my $t_fastas = {};
+	    my $n_fastas = {};
 	    GI::maker_p_and_t_fastas($maker_anno,
+				     $non_coding,
 				     $non_over,
 				     $annotations,
 				     $p_fastas,
 				     $t_fastas,
+				     $n_fastas,
 				   );
 	    #-------------------------CODE
 
 	    #------------------------RETURN
 	    %results = ( p_fastas => $p_fastas,
 			 t_fastas => $t_fastas,
+			 n_fastas => $n_fastas,
 			 maker_anno         => [], #clear memory
 			 blastn_keepers     => [], #clear memory
 			 tblastx_keepers    => [], #clear memory
@@ -4145,7 +4150,7 @@ sub _go {
 	 elsif ($flag eq 'result') {
 	    #-------------------------RESULT
 	    while (my $key = each %{$self->{RESULTS}}) {
-	       if($key eq 'p_fastas' || $key eq 't_fastas'){
+	       if($key eq 'p_fastas' || $key eq 't_fastas' || $key eq 'n_fastas'){
 		  while(my $key2 = each %{$self->{RESULTS}->{$key}}){
 		     $VARS->{$key}->{$key2} .= $self->{RESULTS}->{$key}->{$key2};
 		  }
@@ -4178,6 +4183,7 @@ sub _go {
 			safe_seq_id
 			p_fastas
 			t_fastas
+			n_fastas
 			GFF3
 			gff3_files
 			DS_CTL
@@ -4197,6 +4203,7 @@ sub _go {
 	    my $safe_seq_id = $VARS->{safe_seq_id};
 	    my $p_fastas = $VARS->{p_fastas};
 	    my $t_fastas = $VARS->{t_fastas};
+	    my $n_fastas = $VARS->{n_fastas};
 	    my $GFF3 = $VARS->{GFF3};
 	    my $gff3_files = $VARS->{gff3_files};
 	    my $DS_CTL = $VARS->{DS_CTL};
@@ -4204,7 +4211,7 @@ sub _go {
 	    my $LOCK = $VARS->{LOCK};
 
 	    #--- write fastas for ab-initio predictions
-	    GI::write_p_and_t_fastas($p_fastas, $t_fastas, $safe_seq_id, $out_dir);
+	    GI::write_p_and_t_fastas($p_fastas, $t_fastas, $n_fastas, $safe_seq_id, $out_dir);
 	    
 	    #--- write GFF3 file
 	    $GFF3->merge($gff3_files);
@@ -4304,6 +4311,7 @@ sub _on_termination {
    elsif($tier_type == 4){
       $tier->{RESULTS}->{p_fastas} = $tier->{VARS}->{p_fastas};
       $tier->{RESULTS}->{t_fastas} = $tier->{VARS}->{t_fastas};
+      $tier->{RESULTS}->{n_fastas} = $tier->{VARS}->{n_fastas};
    }
 
    delete($tier->{VARS});

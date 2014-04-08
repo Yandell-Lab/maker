@@ -75,7 +75,6 @@ while (<$IN>) {
 #-----------------------------------------------------------------------------
 
 sub parse_blast{
-
 	my ($fasta_file, $blast_file) = @_;
 
 	open(my $IN, '<', $fasta_file) or
@@ -83,7 +82,6 @@ sub parse_blast{
 
 	my %fasta;
 	while (<$IN>) {
-
 		next unless /^>/;
 
 		my ($id, $desc, $org, $name);
@@ -93,6 +91,13 @@ sub parse_blast{
 			$desc = $2;
 			$org  = $3;
 			$name = $5 || '';
+		}
+		#>UniRef50_P18963 Inhibitory regulator protein IRA1 n=10 Tax=Saccharomyces RepID=IRA1_YEAST
+                elsif(/>(\S+)\s+(.*?)\s+n=\S+\s+Tax=(.*?)\s+(RepID=(.*?)\s+)?/){
+		    $id   = $1;
+		    $desc = $2;
+		    $org  = $3;
+		    $name = $5 || '';
 		}
 		else {
 			warn "Can't parse details from FASTA header: $_\n";

@@ -683,11 +683,13 @@ sub process_the_chunk_divide{
 }
 #-----------------------------------------------------------------------------
 sub maker_p_and_t_fastas {
-   my $maker    = shift @_;
-   my $non_over = shift @_;
-   my $all      = shift @_;
-   my $p_fastas = shift @_;
-   my $t_fastas = shift @_;
+   my $maker      = shift @_;
+   my $non_coding = shift @_;
+   my $non_over   = shift @_;
+   my $all        = shift @_;
+   my $p_fastas   = shift @_;
+   my $t_fastas   = shift @_;
+   my $n_fastas   = shift @_;
 
    my $abinit = [];
    my $ncrna = [];
@@ -708,11 +710,16 @@ sub maker_p_and_t_fastas {
        push(@$ncrna, @{$all->{$key}});
    }
 
-   foreach my $an (@$maker) {
+   foreach my $an (@$maker, @$non_coding) {
       foreach my $a (@{$an->{t_structs}}) {
-	 my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
-	 $p_fastas->{maker} .= $p_fasta;
-	 $t_fastas->{maker} .= $t_fasta;
+	 my ($p_fasta, $t_fasta, $n_fasta) = get_p_and_t_fastas($a);
+	 if($p_fasta || $t_fasta){
+	     $p_fastas->{maker} .= $p_fasta;
+	     $t_fastas->{maker} .= $t_fasta;
+	 }
+	 if($n_fasta){
+	     $n_fastas->{maker} .= $n_fasta;
+	 }
       }
    }
 
@@ -736,20 +743,25 @@ sub maker_p_and_t_fastas {
 
    foreach my $an (@$mod_gff) {
        foreach my $a (@{$an->{t_structs}}) {
-	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a, 'model_gff');
+	   my ($p_fasta, $t_fasta, $n_fasta) = get_p_and_t_fastas($a, 'model_gff');
 	   my $source = $a->{hit}->algorithm;
 	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-	   $p_fastas->{$source} .= $p_fasta;
-	   $t_fastas->{$source} .= $t_fasta;
+	   if($p_fasta || $t_fasta){
+	       $p_fastas->{$source} .= $p_fasta;
+	       $t_fastas->{$source} .= $t_fasta;
+	   }
+	   if($n_fasta){
+	       $n_fastas->{$source} .= $n_fasta;
+	   }
        }
    }
 
    foreach my $an (@$ncrna) {
        foreach my $a (@{$an->{t_structs}}) {
-	   my ($p_fasta, $t_fasta) = get_p_and_t_fastas($a);
+	   my ($p_fasta, $t_fasta, $n_fasta) = get_p_and_t_fastas($a, 'ncrna');
 	   my $source = $a->{hit}->algorithm;
 	   $source = uri_escape($source, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
-	   $t_fastas->{$source} .= $t_fasta;
+	   $n_fastas->{$source} .= $n_fasta;
        }
    }
 }
@@ -761,6 +773,7 @@ sub get_p_and_t_fastas {
 	
    my $t_seq  = $t_struct->{t_seq};
    my $p_seq  = $t_struct->{p_seq};
+   my $is_coding = $t_struct->{is_coding};
    my $t_name = $t_struct->{t_name} || $t_struct->{t_id};
    my $t_off  = "offset:".$t_struct->{t_offset};
    my $AED    = "AED:".sprintf('%.2f', $t_struct->{AED});
@@ -773,6 +786,7 @@ sub get_p_and_t_fastas {
        $t_name = $p_struct->{t_name} || $p_struct->{t_id};
        $t_seq = $p_struct->{t_seq};
        $p_seq = $p_struct->{p_seq};
+       $is_coding = $p_struct->{is_coding};
        $t_off = "offset:".$p_struct->{t_offset};
        $AED = (defined $p_struct->{AED}) ? "AED:".sprintf('%.2f', $p_struct->{AED}) : '';
        $eAED = (defined $p_struct->{eAED}) ? "eAED:".sprintf('%.2f', $p_struct->{eAED}) : '';
@@ -781,16 +795,19 @@ sub get_p_and_t_fastas {
 
    my $p_def = ">$t_name protein $AED $eAED $QI";
    my $t_def = ">$t_name transcript $t_off $AED $eAED $QI";
+   my $n_def = ">$t_name noncoding $AED $eAED $QI";
 
-   my $p_fasta = Fasta::toFasta($p_def, \$p_seq);
-   my $t_fasta = Fasta::toFasta($t_def, \$t_seq);
+   my $p_fasta = Fasta::toFasta($p_def, \$p_seq) if($is_coding);
+   my $t_fasta = Fasta::toFasta($t_def, \$t_seq) if($is_coding);
+   my $n_fasta = Fasta::toFasta($n_def, \$t_seq) if(!$is_coding);
 	
-   return($p_fasta, $t_fasta);
+   return($p_fasta, $t_fasta, $n_fasta);
 }
 #----------------------------------------------------------------------------
 sub write_p_and_t_fastas{
     my $p_fastas = shift @_;
     my $t_fastas = shift @_;
+    my $n_fastas = shift @_;
     my $safe_seq_id = shift @_;
     my $out_dir = shift @_;
 
@@ -810,6 +827,16 @@ sub write_p_and_t_fastas{
 	$name .= "\.transcripts.fasta";
 
 	FastaFile::writeFile(\$t_fastas->{$key},
+			     $name,
+	                    );
+    }
+
+    while( my $key = each %$n_fastas){
+	my $name = "$out_dir/$safe_seq_id.maker";
+	$name .= ".$key" unless($key eq 'maker');
+	$name .= "\.noncoding.fasta";
+
+	FastaFile::writeFile(\$n_fastas->{$key},
 			     $name,
 	                    );
     }

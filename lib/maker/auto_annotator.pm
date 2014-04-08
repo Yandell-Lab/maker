@@ -2199,10 +2199,10 @@ sub load_transcript_struct {
 	my $CTL_OPT      = shift;
 
 	my $transcript_seq  = get_transcript_seq($f, $seq);
-	my ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans);
+	my ($translation_seq, $offset, $end, $has_start, $has_stop);
 
 	if($predictor =~ /_ncrna$/){
-	    ($translation_seq, $offset, $end, $has_start, $has_stop, $len_3_utr, $l_trans) = ('', 0, 0, 0, 0, 0, 0);
+	    ($translation_seq, $offset, $end, $has_start, $has_stop) = ('', 0, 0, 0, 0);
 	}
 	else{
 	    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
@@ -2223,10 +2223,7 @@ sub load_transcript_struct {
 		    $transcript_seq  = get_transcript_seq($f, $seq);
 		    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $f);
 		}
-	    }
-	    
-	    $len_3_utr = length($transcript_seq) - $end + 1;
-	    $l_trans =  length($translation_seq);
+	    }	    
 	}
 
 	#remove data that should not be carried over into certain transcripts
@@ -2262,9 +2259,9 @@ sub load_transcript_struct {
 			't_end'     => $end,
 			'has_start' => $has_start,
 			'has_stop'  => $has_stop,
+			'is_coding' => ($predictor =~ /\_ncrna$/) ? 0 : 1,
 			'p_length'  => length($translation_seq)
 		    };
-
 
 	#also determine these values for the unmodified abinit
 	if ($p_base && $p_base->algorithm !~ /est2genome|est_gff|cdna2genome|altest_gff|protein2genome|protein_gff|model_gff|ncrna/){
@@ -2281,6 +2278,7 @@ sub load_transcript_struct {
 			    't_end'     => $end,
 			    'has_start' => $has_start,
 			    'has_stop'  => $has_stop,
+			    'is_coding' => 1,
 			    'p_length'  => length($translation_seq)
 			    };
 
@@ -2309,7 +2307,7 @@ sub load_transcript_stats {
 	my $transcript_seq  = $struct->{t_seq};
 	my $translation_seq = $struct->{p_seq};
 
-	my $len_3_utr = length($transcript_seq) - $end + 1;
+	my $len_3_utr = ($end) ? length($transcript_seq) - $end + 1 : 0;
 	my $l_trans   = length($translation_seq);
 
 	my $pol_p_hits   = get_selected_types($evi->{gomiph}, 'protein2genome');
@@ -2719,18 +2717,17 @@ sub group_transcripts {
       my ($g_start, $g_end, $g_strand) = get_start_and_end_on_seq(\@t_structs);
       my $g_attrib = $t_structs[0]->{hit}->{gene_attrib} if(exists $t_structs[0]->{hit}->{gene_attrib});
 
-
-      my $annotation = { 't_structs'  => \@t_structs, 
-			 'g_name'     => $g_name,
-			 'g_id'       => $g_id,
-			 'g_start'    => $g_start,
-			 'g_end'      => $g_end,
-			 'g_strand'   => $g_strand,
-			 'g_evidence' => $evidence,
-			 'g_evi_index'=> $evidence->{index},
-			 'predictor'  => $predictor,
-			 'algorithm'  => $sources,
-			 'g_attrib'   => $g_attrib
+      my $annotation = { 't_structs'   => \@t_structs, 
+			 'g_name'      => $g_name,
+			 'g_id'        => $g_id,
+			 'g_start'     => $g_start,
+			 'g_end'       => $g_end,
+			 'g_strand'    => $g_strand,
+			 'g_evidence'  => $evidence,
+			 'g_evi_index' => $evidence->{index},
+			 'predictor'   => $predictor,
+			 'algorithm'   => $sources,
+			 'g_attrib'    => $g_attrib
 		       };
 
       push(@annotations, $annotation);
