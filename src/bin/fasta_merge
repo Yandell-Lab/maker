@@ -109,12 +109,15 @@ while(my $key = each %groups){
     $source .= ".$key" if($key ne 'maker');
 
     #protein and transcript files
-    my $trans = [sort @{$groups{$key}{transcripts}}];
-    my $prot  = [sort @{$groups{$key}{proteins}}];
 
-
-    dump_it($trans, "$outfile.all.$source.transcripts.fasta");
-    dump_it($prot, "$outfile.all.$source.proteins.fasta");
+    if($groups{$key}{transcripts}){
+	my $trans = [sort @{$groups{$key}{transcripts}}];
+	dump_it($trans, "$outfile.all.$source.transcripts.fasta");
+    }
+    if($groups{$key}{proteins}){
+	my $prot  = [sort @{$groups{$key}{proteins}}];
+	dump_it($prot, "$outfile.all.$source.proteins.fasta") if(@$prot);
+    }
 }
 
 sub dump_it {
