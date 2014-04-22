@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use warnings;
 use strict;
@@ -92,6 +92,10 @@ foreach my $file (@files){
 	my $key = $1;
 	push(@{$groups{$key}{proteins}}, $file);
     }
+    elsif($file =~ /([^\.]+)\.noncoding\.fasta$/){
+	my $key = $1;
+	push(@{$groups{$key}{noncoding}}, $file);
+    }
     else{
 	push(@{$groups{all}}, $file);
     }
@@ -113,10 +117,18 @@ while(my $key = each %groups){
     if($groups{$key}{transcripts}){
 	my $trans = [sort @{$groups{$key}{transcripts}}];
 	dump_it($trans, "$outfile.all.$source.transcripts.fasta");
+	warn "WARNING: Transcipt to protein mismatch for $key\n"
+	    if(!$groups{$key}{proteins})
     }
     if($groups{$key}{proteins}){
 	my $prot  = [sort @{$groups{$key}{proteins}}];
-	dump_it($prot, "$outfile.all.$source.proteins.fasta") if(@$prot);
+	dump_it($prot, "$outfile.all.$source.proteins.fasta");
+	warn "WARNING: Transcipt to protein mismatch for $key\n"
+	    if(!$groups{$key}{transcripts})
+    }
+    if($groups{$key}{noncoding}){
+	my $non  = [sort @{$groups{$key}{noncoding}}];
+	dump_it($non, "$outfile.all.$source.noncoding.fasta");
     }
 }
 

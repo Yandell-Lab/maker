@@ -1,5 +1,3 @@
-#! /usr/bin/perl -w
-
 package Process::MpiChunk;
 
 use strict;
