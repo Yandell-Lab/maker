@@ -643,7 +643,7 @@ sub lines_for_chunk {
     #get gff annotations
     my @lines;
     if (grep(/^$h_type\_gff$/, @{$tables})){
-	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_gff }.
+	my $ref = $dbh->selectcol_arrayref(qq{SELECT line FROM $h_type\_gff }.
 					   qq{WHERE seqid = '$seqid' }.
 					   qq{AND $c_start <= start AND start <= $c_end }.
 					   qq{AND parent = '.' });
@@ -652,7 +652,7 @@ sub lines_for_chunk {
     
     #get maker annotations
     if (grep(/^$h_type\_maker$/, @{$tables})){
-	my $ref = $dbh->selectall_arrayref(qq{SELECT line FROM $h_type\_maker }.
+	my $ref = $dbh->selectcol_arrayref(qq{SELECT line FROM $h_type\_maker }.
 					   qq{WHERE seqid = '$seqid' }.
 					   qq{AND start BETWEEN $c_start AND $c_end }.
 					   qq{AND parent = '.' });
