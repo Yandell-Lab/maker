@@ -93,8 +93,6 @@ sub parse {
     my $fh = new FileHandle();
     $fh->open($report);
     
-#    my $counter=1;
-#    my %d;
     my $counter  = 1;
     my $counter2 = 1;
     my %d;
@@ -123,34 +121,6 @@ sub parse {
         $g{$id}[$i]{name}     = "cmpl_".$stuff[5]."_$n{$stuff[5]}";
         $i++;
         $counter++;
-
-#        my @stuff = split(/\s+/, $line);
-#        next if defined($d{$stuff[3]});
-#	my $id = "$stuff[5]"."_"."$counter";
-#        my $strand = 1;
-#        my ($b,$e) = $stuff[3] =~ /\((\S+?)-(\S+?)\)/;
-#        $strand = -1 if $b > $e;
-#	push(@{$d{$stuff[3]}{'id'}}, $stuff[5]);
-#	push(@{$d{$stuff[3]}{'score'}}, $stuff[2]);
-#	$d{$stuff[3]}{'strand'} = $strand;
-#	$d{$stuff[3]}{'b'} = $b;
-#	$d{$stuff[3]}{'e'} = $e;
-#	$counter++;
-#    }
-#    $fh->close();
-#    my %g;
-#    my $i = 0;
-#    foreach my $hit (keys %d){	    
-#	my $id = "snoscan_". $i;
-#	$i = 0  if  !defined($g{$id});
-#	my @scores = sort {$b <=> $a} @{$d{$hit}{'score'}}; 
-#	$g{$id}[$i]{strand}   = $d{$hit}{'strand'};
-#	$g{$id}[$i]{type}     = 'exon';
-#	$g{$id}[$i]{b}        = $d{$hit}{'b'}; 
-#	$g{$id}[$i]{e}        = $d{$hit}{'e'};
-#	$g{$id}[$i]{score}    = $scores[0];
-#	$g{$id}[$i]{name}     = 
-#	$i++;
     }
 
     my $phat_hits = load_phat_hits($q_name, $q_seq, \%g, $params);

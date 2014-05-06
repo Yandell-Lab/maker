@@ -1457,7 +1457,11 @@ sub snoscan {
 
     my $exe         = $CTL_OPT->{snoscan};
     my @entries = split(',', $CTL_OPT->{snoscan_rrna});
-
+    my $meth_file;
+   if ($CTL_OPT->{snoscan_meth}){
+	$meth_file = $CTL_OPT->{snoscan_meth};
+    }
+    else{print "WARNING:no O-meth file, expect lower snoscan specificity\n";}
     my @out_files;
     foreach my $entry (@entries){
         my ($rna_file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
@@ -1468,9 +1472,11 @@ sub snoscan {
 	$LOG->add_entry("STARTED", $backup, "");
 
 	my $command  = $exe;
+	$command .= " -o $out_file";
+	$command .= " -m $meth_file" if $CTL_OPT->{snoscan_meth};
 	$command .= " $rna_file";
 	$command .= " $in_file";
-	$command .= " > $out_file";
+
 
 	my $w = new Widget::snoscan();
 	if (-f $backup) {
@@ -1531,12 +1537,22 @@ sub evm {
     $GFF3_est->add_phathits($flat_ests);
     $GFF3_est->finalize;
 
+    #my $command_2 = "cp ";
+    #$command_2 .= $t_dir."/".$sid."ests_for_evm.gff";
+    #$command_2 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+    #system($command_2);
+
     my $flat_proteins = maker::auto_annotator::flatten_by_type($all_data,
                                                                'gomiph');
     my $GFF3_pro = Dumper::GFF::GFFV3->new($t_dir."/".$sid."protein_for_evm.gff");
     $GFF3_pro->set_current_contig($seq_id);
     $GFF3_pro->add_phathits($flat_proteins);
     $GFF3_pro->finalize;
+
+    #my $command_3 = "cp ";
+    #$command_3 .= $t_dir."/".$sid."protein_for_evm.gff";
+    #$command_3 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+    #system($command_3);
 
     my $flat_preds = maker::auto_annotator::flatten_by_type($all_data,
                                                             'all_preds');
@@ -1545,11 +1561,21 @@ sub evm {
     $GFF3_preds->add_phathits($flat_preds);
     $GFF3_preds->finalize;
     my $chunk = 0;
-
+    
+    #my $command_1 = "cp ";
+    #$command_1 .= $t_dir."/".$sid."preds_for_evm.gff";
+    #$command_1 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+    #system($command_1);
+    
     my $m2g_cmd  = "$FindBin::Bin/match2gene.pl ";
     $m2g_cmd .= $t_dir."/".$sid."preds_for_evm.gff";
     $m2g_cmd .= " > ". $t_dir."/".$sid."preds_for_evm_gene.gff";
     system($m2g_cmd);
+
+    #my $command_5 = "cp ";
+    #$command_5 .= $t_dir."/".$sid."preds_for_evm_gene.gff";
+    #$command_5 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+    #system($command_5);
 
     my @out_files;
     my $out_file = "$in_file\.evm";
@@ -1567,7 +1593,11 @@ sub evm {
     $command .= " --transcript_alignments $est_file";
 #    $command .= " --trellis_search_limit 20"; #suposed to make it go faster not working right now                                                                                                                         
     $command .= " > $out_file";
-    $command .= " 2> /dev/null"; #I could add an unless here for the debug flag                                                                                                                                            
+    #$command .= " 2> /dev/null"; #I could add an unless here for the debug flag                                                                                                                                            
+    #my $command_4 = "cp ";
+    #$command_4 .= $out_file;
+    #$command_4 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+    #system($command_4);
 
     my $w = new Widget::evm();
     if (-f $backup) {
@@ -3410,6 +3440,7 @@ sub set_defaults {
       $CTL_OPT{'augustus_species'} = '';
       $CTL_OPT{'fgenesh_par_file'} = '';
       $CTL_OPT{'snoscan_rrna'} = '';
+      $CTL_OPT{'snoscan_meth'} = '';
       $CTL_OPT{'trna'} = 0;
       $CTL_OPT{'evm_weights'} = '';
       $CTL_OPT{'model_gff'} = '';
@@ -3521,6 +3552,7 @@ sub set_defaults {
 		  'jigsaw',
 		  'tRNAscan-SE',
 		  'snoscan',
+		  'sort-snos',
 		  'evm'
 		 );
 
@@ -3932,7 +3964,7 @@ sub load_server_files {
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
 
-	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan|evm)$/){
+	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan|sort-snos|evm)$/){
 	   $CTL_OPT{STAT}{$key} = 'DISABLED';
 	}
 
@@ -4074,6 +4106,7 @@ sub load_control_files {
    push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
    push(@run, 'trnascan') if($CTL_OPT{trna});
    push(@run, 'snoscan') if($CTL_OPT{snoscan_rrna});
+   push(@run, 'sort-snos') if($CTL_OPT{snoscan_rrna});
    push(@run, 'evm') if($CTL_OPT{evm_weights});
 
    if(! @predictors){ #build predictors if not provided
@@ -4088,7 +4121,7 @@ sub load_control_files {
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^evm$/
+	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^sort-snos$|^evm$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -4205,6 +4238,7 @@ sub load_control_files {
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'tRNAscan-SE') if (grep {/trnascan/} @{$CTL_OPT{_run}});
    push (@infiles, 'snoscan') if (grep {/snoscan/} @{$CTL_OPT{_run}});
+   push (@infiles, 'sort-snos') if (grep {/sort-snos/} @{$CTL_OPT{_run}});
    push (@infiles, 'evm') if (grep {/evm/} @{$CTL_OPT{_run}});
 
    if($CTL_OPT{organism_type} eq 'eukaryotic'){
@@ -4687,6 +4721,7 @@ sub generate_control_files {
        print OUT "protein2genome=$O{protein2genome} #infer predictions from protein homology, 1 = yes, 0 = no\n"  if(!$ev);
        print OUT "trna=$O{trna} #find tRNAs with tRNAscan, 1 = yes, 0 = no\n";
        print OUT "snoscan_rrna=$O{snoscan_rrna} #rRNA file to have Snoscan find snoRNAs\n";
+       print OUT "snoscan_meth=$O{snoscan_meth} #-O-methylation site fileto have Snoscan find snoRNAs\n";
        print OUT "unmask=$O{unmask} #also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);
@@ -4796,6 +4831,7 @@ sub generate_control_files {
        print OUT "evm=$O{'evm'} #location of EvidenceModeler executable\n";
        print OUT "tRNAscan-SE=$O{'tRNAscan-SE'} #location of trnascan executable\n";
        print OUT "snoscan=$O{snoscan} #location of snoscan executable\n";
+       print OUT "sort-snos=$O{sort-snos} #location of the sort-snos script\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
        print OUT "fathom=$O{fathom} #location of snap's fathom executable (experimental)\n" if($ev);
