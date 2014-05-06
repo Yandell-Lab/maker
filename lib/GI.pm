@@ -4831,7 +4831,7 @@ sub generate_control_files {
        print OUT "evm=$O{'evm'} #location of EvidenceModeler executable\n";
        print OUT "tRNAscan-SE=$O{'tRNAscan-SE'} #location of trnascan executable\n";
        print OUT "snoscan=$O{snoscan} #location of snoscan executable\n";
-       print OUT "sort-snos=$O{sort-snos} #location of the sort-snos script\n";
+#       print OUT "sort-snos=$O{sort-snos} #location of the sort-snos script\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
        print OUT "fathom=$O{fathom} #location of snap's fathom executable (experimental)\n" if($ev);
