@@ -105,6 +105,8 @@ sub parse {
 	next unless $line =~ /^>>/;
 	my $id = "snoscan_". $counter;
         my @stuff = split(/\s+/, $line);
+	$stuff[6] =~ s/\(|\)//g;
+	next if $stuff[6] eq '-';
         next if defined($d{$stuff[3]});
         $d{$stuff[3]}=1;
         my $strand = 1;
@@ -118,8 +120,8 @@ sub parse {
         $g{$id}[$i]{b}        = $b;
         $g{$id}[$i]{e}        = $e;
         $g{$id}[$i]{score}    = $stuff[2];
-        $g{$id}[$i]{name}     = "cmpl_".$stuff[5]."_$n{$stuff[5]}";
-        $i++;
+        $g{$id}[$i]{name}     = "cmpl_".$stuff[5]."_$n{$stuff[5]}"."_$stuff[6]";
+	$i++;
         $counter++;
     }
 

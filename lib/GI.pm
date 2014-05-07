@@ -3552,7 +3552,6 @@ sub set_defaults {
 		  'jigsaw',
 		  'tRNAscan-SE',
 		  'snoscan',
-		  'sort-snos',
 		  'evm'
 		 );
 
@@ -3964,7 +3963,7 @@ sub load_server_files {
 	    $CTL_OPT{STAT}{self_train} = 'DISABLED';
 	}
 
-	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan|sort-snos|evm)$/){
+	if($CTL_OPT{$key} eq '' && $key =~ /^(snap|fgenesh|augustus|gmhmme3|gmhmmp|tRNAscan|snoscan|evm)$/){
 	   $CTL_OPT{STAT}{$key} = 'DISABLED';
 	}
 
@@ -4106,7 +4105,6 @@ sub load_control_files {
    push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
    push(@run, 'trnascan') if($CTL_OPT{trna});
    push(@run, 'snoscan') if($CTL_OPT{snoscan_rrna});
-   push(@run, 'sort-snos') if($CTL_OPT{snoscan_rrna});
    push(@run, 'evm') if($CTL_OPT{evm_weights});
 
    if(! @predictors){ #build predictors if not provided
@@ -4121,7 +4119,7 @@ sub load_control_files {
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
-	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^sort-snos$|^evm$/
+	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^evm$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
 	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
@@ -4238,7 +4236,6 @@ sub load_control_files {
    push (@infiles, 'rmlib') if ($CTL_OPT{rmlib});
    push (@infiles, 'tRNAscan-SE') if (grep {/trnascan/} @{$CTL_OPT{_run}});
    push (@infiles, 'snoscan') if (grep {/snoscan/} @{$CTL_OPT{_run}});
-   push (@infiles, 'sort-snos') if (grep {/sort-snos/} @{$CTL_OPT{_run}});
    push (@infiles, 'evm') if (grep {/evm/} @{$CTL_OPT{_run}});
 
    if($CTL_OPT{organism_type} eq 'eukaryotic'){
@@ -4831,7 +4828,6 @@ sub generate_control_files {
        print OUT "evm=$O{'evm'} #location of EvidenceModeler executable\n";
        print OUT "tRNAscan-SE=$O{'tRNAscan-SE'} #location of trnascan executable\n";
        print OUT "snoscan=$O{snoscan} #location of snoscan executable\n";
-#       print OUT "sort-snos=$O{sort-snos} #location of the sort-snos script\n";
        print OUT "\n";
        print OUT "#-----Other Algorithms\n";
        print OUT "fathom=$O{fathom} #location of snap's fathom executable (experimental)\n" if($ev);
