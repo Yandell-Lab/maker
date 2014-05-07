@@ -68,8 +68,8 @@ while (my $line = <$IN>) {
 	next LINE;
     }
     
-    my ($id) = $attrb =~ /ID\s*=\s*(.*?);/;
-    my ($name) = $attrb =~ /Name\s*=\s*(.*?);/;
+    my ($id) = $attrb =~ /ID\s*=\s*(.*?)([\;\n]|$)/;
+    my ($name) = $attrb =~ /Name\s*=\s*(.*?)([\;\n]|$)/;
     
     my %db_xrefs;
     my $db_xref = {};
@@ -138,9 +138,9 @@ sub parse_genes {
 	    next LINE;
 	}
 	
-	my ($name)   = $attrb =~ /Name\s*=\s*(.*?);/;
-	my ($id)     = $attrb =~ /ID\s*=\s*(.*?);/;
-	my ($parent) = $attrb =~ /Parent\s*=\s*(.*?);/;
+	my ($name)   = $attrb =~ /Name\s*=\s*(.*?)([\;\n]|$)/;
+	my ($id)     = $attrb =~ /ID\s*=\s*(.*?)([\;\n]|$)/;
+	my ($parent) = $attrb =~ /Parent\s*=\s*(.*?)([\;\n]|$)/;
 
 	$gene_map{$id} = $parent;
 	$gene_map{$name} = $parent if($name && $name ne $id);

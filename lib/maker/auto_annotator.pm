@@ -2518,11 +2518,11 @@ sub group_transcripts {
        my $i = @$careful_clusters;
        foreach my $t (@transcripts) {
 	   my $j;
-	   if($predictor =~ /^est2genome$/ && ! exists $t->{gene_id}){
-	       push(@to_do, $t);
-	       next;
-	   }
-	   elsif(! exists $t->{gene_id}){
+	   #if($predictor =~ /^est2genome$/ && ! exists $t->{gene_id}){
+	   #    push(@to_do, $t);
+	   #    next;
+	   #}
+	   if(! exists $t->{gene_id}){
 	       $j = $i;
 	       $i++;
 	   }

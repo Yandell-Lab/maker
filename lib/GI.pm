@@ -1821,13 +1821,12 @@ sub polish_exonerate {
 					 $matrix
 					 );
 
-	#temp
-	#make backup except on TACC cluster
-	if($o_tfile ne $backup && $HOST !~ /tacc\.utexas\.edu/){
+	#make backup
+	if($o_tfile ne $backup){
 	    #File::Copy::move($o_tfile, $backup);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
-
+	
 	#delete fastas
 	unlink($d_file, $t_file, $o_tfile);
 
