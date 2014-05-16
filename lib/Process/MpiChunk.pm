@@ -762,34 +762,38 @@ sub _go {
 		 if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 
-	    #-- repeatmask with RepeatMasker	 
+	    #-- repeatmask with RepeatMasker
 	    my $rm_rb_keepers = []; #repeat masker RepBase
 	    if ($CTL_OPT{model_org}) { #model organism repeats
-	       $rm_rb_keepers = GI::repeatmask($chunk,
-					       $subvoid,
-					       $safe_seq_id,
-					       $CTL_OPT{model_org},
-					       $CTL_OPT{RepeatMasker},
-					       '',
-					       $CTL_OPT{cpus},
-					       $LOG
-					      );
-	       
+	       my @models = split(/\,/, $CTL_OPT{model_org});
+	       foreach my $mod (@models){
+		   $rm_rb_keepers = GI::repeatmask($chunk,
+						   $subvoid,
+						   $safe_seq_id,
+						   $mod,
+						   $CTL_OPT{RepeatMasker},
+						   '',
+						   $CTL_OPT{cpus},
+						   $LOG);
+	       }
+
 	       #mask the chunk
 	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_rb_keepers)
 		   if($CTL_OPT{organism_type} ne 'prokaryotic');
 	    }
 	    my $rm_sp_keepers = []; #repeat masker species
 	    if ($CTL_OPT{rmlib}) {  #species specific repeats;
-	       $rm_sp_keepers = GI::repeatmask($chunk,
-					       $subvoid,
-					       $safe_seq_id,
-					       $CTL_OPT{model_org},
-					       $CTL_OPT{RepeatMasker},
-					       $CTL_OPT{rmlib},
-					       $CTL_OPT{cpus},
-					       $LOG
-					       );
+	       foreach my $db (@{$VARS->{CTL_OPT}{_m_db}}){
+		   my $keepers = GI::repeatmask($chunk,
+						$subvoid,
+						$safe_seq_id,
+						$CTL_OPT{model_org},
+						$CTL_OPT{RepeatMasker},
+						$db,
+						$CTL_OPT{cpus},
+						$LOG);
+		   push(@$rm_sp_keepers, @$keepers);
+	       }
 
 	       #mask the chunk
 	       $chunk = repeat_mask_seq::mask_chunk($chunk, $rm_sp_keepers)

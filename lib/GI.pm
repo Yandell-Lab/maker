@@ -914,6 +914,7 @@ sub create_blastdb {
 		      protein        => '_p_db',
 		      est            => '_e_db',
 		      altest         => '_a_db',
+		      rmlib          => '_m_db',
 		      repeat_protein => '_r_db');
 
    foreach my $in (List::Util::shuffle(keys %source2dest)){
