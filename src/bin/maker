@@ -511,7 +511,7 @@ if($rank == $root){
     }
 
     my @to_do;
-    my @ins = qw(genome protein est altest repeat_protein);
+    my @ins = qw(genome protein est altest repeat_protein rmlib);
     foreach my $in (@ins){
 	my @files = split(/\,/, $CTL_OPT{$in});
 	my %uniq = map {/^([^\:]+)\:?(.*)?/} @files;
@@ -519,7 +519,7 @@ if($rank == $root){
 	@files = map {($uniq{$_}) ? GI::s_abs_path($_).":$_" : $_} keys %uniq;
 
 	my $key  = ($in =~ /protein/) ? 'protein' : 'nucleotide';
-	my $bins = ($in eq 'genome') ? 1 : 10;
+	my $bins = ($in eq 'genome' || $in eq 'rmlib') ? 1 : 10;
 	my $bdir = $CTL_OPT{mpi_blastdb};
 	my $alt  = $CTL_OPT{alt_peptide};
 	

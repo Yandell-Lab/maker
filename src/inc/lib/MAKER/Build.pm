@@ -74,6 +74,8 @@ sub new {
     }
 
     $self->install_base_relpaths('exe' => 'exe');
+    $self->install_base_relpaths('lib' => 'lib');
+    $self->install_base_relpaths('arch' => 'lib');
     bless($self, $class);
 
     #performs a check for eternal algorithm dependencies
