@@ -767,14 +767,15 @@ sub _go {
 	    if ($CTL_OPT{model_org}) { #model organism repeats
 	       my @models = split(/\,/, $CTL_OPT{model_org});
 	       foreach my $mod (@models){
-		   $rm_rb_keepers = GI::repeatmask($chunk,
-						   $subvoid,
-						   $safe_seq_id,
-						   $mod,
-						   $CTL_OPT{RepeatMasker},
-						   '',
-						   $CTL_OPT{cpus},
-						   $LOG);
+		   my $keepers = GI::repeatmask($chunk,
+						$subvoid,
+						$safe_seq_id,
+						$mod,
+						$CTL_OPT{RepeatMasker},
+						'',
+						$CTL_OPT{cpus},
+						$LOG);
+		   push(@$rm_rb_keepers, @$keepers);
 	       }
 
 	       #mask the chunk
