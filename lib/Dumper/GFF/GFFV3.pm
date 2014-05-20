@@ -806,11 +806,13 @@ sub get_exon_data {
 	}
 
 	my $e_l = '';
-	foreach my $e (@uniques){
+	for(my $i = 0; $i < @uniques; $i++){
+	    my $e = $uniques[$i];
 		my $nB = $e->nB('query');
                 my $nE = $e->nE('query');
 		
-		my $e_id = get_id_exon();
+	        #my $e_id = get_id_exon();
+	        my $e_id = $i+1; #exon 1 is labeled with ID of exon:1
 		my $e_n  = $e->name();
 		
 		my @t_ids = @{$epl->{t_ids}->{$nB}->{$nE}};
