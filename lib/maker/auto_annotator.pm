@@ -2652,6 +2652,15 @@ sub group_transcripts {
               $SEEN->{$g_name}++;
               $SEEN->{"$chunk_number\.$c_id"}++;
 	  }
+	  elsif($sources =~ /snoscan/){
+	      my $type = $c->[0]->name;
+	      $g_name = "$sources-$seq_id-noncoding-$type-gene-$chunk_number"; #affects GFFV3.pm
+              $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
+              $g_name = "$g_name.$c_id";
+              $g_id = $g_name;
+              $SEEN->{$g_name}++;
+              $SEEN->{"$chunk_number\.$c_id"}++;
+	  }
 	  else{
 	      $g_name = "$sources-$seq_id-noncoding-gene-$chunk_number"; #affects GFFV3.pm
 	      $c_id++ while(exists $SEEN->{"$chunk_number\.$c_id"} || exists $SEEN->{"$g_name.$c_id"});
