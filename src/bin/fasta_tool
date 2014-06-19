@@ -151,7 +151,8 @@ my ($summary, $chunks, $split, $eval_code, $eval_all, $extract_ids,
     $translate, $seq_only, $nt_count, $length, $total_length, $n50, $tab,
     $reverse, $rev_seq, $comp_seq, $rev_comp, $shuffle_order, $shuffle_seq,
     $shuffle_codon, $shuffle_pick, $select_file, $remove_file, $print,
-    $mRNAseq, $EST, $trim_maker_utr, $table, $swap_ids, $fix_prot, $subseq);
+    $mRNAseq, $EST, $trim_maker_utr, $table, $swap_ids, $fix_prot, $subseq,
+    $mask_fasta);
 
 GetOptions('summary'        => \$summary,
 	   'chunks=i'       => \$chunks,
@@ -189,7 +190,8 @@ GetOptions('summary'        => \$summary,
 	   'mRNAseq'        => \$mRNAseq,
 	   'EST'            => \$EST,
            'swap_ids=s'     => \$swap_ids,
-           'subseq=s'       => \$subseq
+           'subseq=s'       => \$subseq,
+	   'mask_fasta=s'   => \$mask_fasta
 	  );
 
 my $file = shift;
@@ -209,7 +211,8 @@ warn $warning if grep {$_} ($reverse,
 			    $shuffle_seq,
 			    $shuffle_codon,
 			    $shuffle_pick,
-			    $length
+			    $length,
+			    $mask_fasta
 			   );
 
 # These functions handle their own printing;
@@ -241,7 +244,8 @@ $print++ unless grep {$_} ($chunks,
 			   $mRNAseq,
 			   $EST,
 			   $swap_ids,
-			   $subseq
+			   $subseq,
+			   $mask_fasta
 			  );
 
 $nt_count++ if $summary;
@@ -262,6 +266,7 @@ else {
 my $seq_io  = Bio::SeqIO->new(-fh => $IN,
 			      -format => 'Fasta');
 
+mask_fasta($mask_fasta)     if $mask_fasta;
 chunks($file, $chunks)	    if $chunks;
 split_fasta()	            if $split;
 eval_code($eval_code)       if $eval_code;
@@ -961,5 +966,71 @@ sub subseq {
 
     print $fasta->seq($seqid, $start, $end);
     print "\n";
+}
+#-----------------------------------------------------------------------------
+#masks sequences based on coordinates from a gff3 file. 
+sub mask_fasta {
+	my ($gff3_file) = @_;
+	
+	#load the coordinates from the gff3 file into a map
+	#the map is seqid->list of (start,end) coords
+	
+	my %coord_map;
+	open(GFF3, $gff3_file);
+	while(<GFF3>) {
+		unless(/^\#/ ) {
+		my ($seqID, $source, $type, $start, $end, @other_stuff )=split(/\t/);		
+		if(!defined($coord_map{$seqID})) {
+		
+			if($start > $end) {
+				my $tmp = $start;
+				$start = $end;
+				$end = $tmp;
+			}
+
+			my @curr_list = ();
+			my @tmp_list = ($start, $end);
+			push(@curr_list, \@tmp_list);
+			$coord_map{$seqID} = \@curr_list;
+		}	
+		else {
+			my @curr_list = @{ $coord_map{$seqID} };
+			my @tmp_list = ($start, $end);
+			push(@curr_list, \@tmp_list);	
+			$coord_map{$seqID} = \@curr_list;
+		}
+
+
+		}	
+	}
+	close GFF3;	
+
+	#go through the sequences in seqIO
+	while (my $seq_obj = $seq_io->next_seq) {
+		my $id = $seq_obj->display_id;
+		my $header = get_header($seq_obj);
+		my $curr_seq = $seq_obj->seq;
+		
+		#if the seqID matches something in the map
+		if($coord_map{$id}) {
+			#mask that substring
+			my @curr_list = @{ $coord_map{$id} };
+			foreach my $tmp_list_ptr (@curr_list) {
+				my ($start, $end) = @{ $tmp_list_ptr};
+				#The way I determine begin and offset was copied from
+				#Michael Campbell's gene_masker.pl script
+				#DE 06/19/2014
+				my $begin = $start - 1;
+				my $offset = $end - $begin;
+				substr($curr_seq, $begin, $offset, "N" x $offset);
+			}	
+			$header = $header . " masked ";	
+		}		
+	
+		print_this_seq($header, $curr_seq)
+	}
+		#print the old ID and description with a masked note??
+		#print the new (masked) sequence
+	
 }
 #-----------------------------------------------------------------------------
