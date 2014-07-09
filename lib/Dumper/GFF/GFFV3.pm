@@ -841,7 +841,6 @@ sub get_exon_data {
 		else{
 		   $e_l = join("\t", @data)."\n".$e_l;
 		}
-
 	}
 
 	return $e_l;

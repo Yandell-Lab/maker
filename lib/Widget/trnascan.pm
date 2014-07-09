@@ -98,7 +98,8 @@ sub parse {
 	die "ERROR: Multi-line tRNAscan entry\n" if(defined($g{$id}));
 	my $strand = 1;
 	$strand = -1 if $stuff[2] > $stuff[3];
-	
+	$stuff[5] = 'NNN' if($stuff[5] eq '???'); #fix undetermined codons
+
 	if ($stuff[6] == 0){ #no intron
 	    $g{$id}[$i]{strand}   = $strand;
 	    $g{$id}[$i]{type}     = 'exon';
@@ -120,6 +121,8 @@ sub parse {
 	else{ #intron detected
             $g{$id}[$i]{strand}   = $strand;
             $g{$id}[$i]{type}     = 'exon';
+            $g{$id}[$i+1]{strand} = $strand;
+            $g{$id}[$i+1]{type}   = 'exon';
 
             if ($strand == 1){
                 $g{$id}[$i]{b}        = $stuff[2];
@@ -138,8 +141,10 @@ sub parse {
             else {
                 die "ERROR: tRNAs must have a strand";
             }
-            $g{$id}[$i]{score}    = $stuff[8];
-	    $g{$id}[$i]{name} ="$stuff[4]_$stuff[5]";
+            $g{$id}[$i]{score}   = $stuff[8];
+	    $g{$id}[$i]{name}    ="$stuff[4]_$stuff[5]";
+            $g{$id}[$i+1]{score} = $stuff[8];
+	    $g{$id}[$i+1]{name}  ="$stuff[4]_$stuff[5]";
 	}
     }
     $fh->close();
