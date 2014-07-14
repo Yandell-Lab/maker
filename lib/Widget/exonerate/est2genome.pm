@@ -688,7 +688,7 @@ sub assemble {
 		my $hsp = new Bio::Search::HSP::PhatHSP::est2genome(@{$args});
                    $hsp->queryName($v->{q_id});
 		#-------------------------------------------------
-                # setting strand because bioperl is all fucked up!
+                # setting strand because bioperl is all f%^$ up!
                 #------------------------------------------------
                 $hsp->{_strand_hack}->{query} = $exon->{t}->{strand};
                 $hsp->{_strand_hack}->{hit}   = $exon->{q}->{strand};

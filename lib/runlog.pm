@@ -57,6 +57,7 @@ my @ctl_to_log = ('maker_gff',
 		  'alt_peptide',
 		  'evaluate',
 		  'blast_type',
+		  'use_rapsearch',
 		  'softmask',
 		  'pcov_blastn',
 		  'pid_blastn',
@@ -435,7 +436,8 @@ sub _load_old_log {
 			$key eq 'pcid_rm_blastx' ||
 			$key eq 'eval_rm_blastx' ||
 			$key eq 'bit_rm_blastx' ||
-			$key eq 'blast_type'
+			$key eq 'blast_type' ||
+			$key eq 'use_rapsearch'
 			) {
 			$rm_key{all_but}++;
 		    }

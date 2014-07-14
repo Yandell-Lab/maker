@@ -394,6 +394,28 @@ sub get_Seq_by_id {
     return $fastaObj;
 }
 #-------------------------------------------------------------------------------
+sub get_length_by_id {
+    my $self = shift;
+    my $id = shift;
+    my $source = shift;
+
+    my @index = @{$self->{index}};
+    if($source){
+	my @keys = keys %{$self->{name2index}}; #all file names
+	$source =~ s/.*\/([^\/]+)$/$1/;
+	@keys = grep {/$source(\.mpi\.\d+\.\d+)?$/} @keys;
+	@index =  $self->{name2index}{@keys};
+    }
+
+    my $len;
+    foreach my $db (@index){
+	$len = $db->length($id);
+	last if(defined($len));
+    }
+
+    return $len;
+}
+#-------------------------------------------------------------------------------
 sub get_Seq_by_alias {
     my $self = shift;
     my $alias = shift;

@@ -29,6 +29,7 @@ use Fasta;
 use Iterator::Fasta;
 use FastaChunker;
 use Widget::RepeatMasker;
+use Widget::rapsearch;
 use Widget::blastx;
 use Widget::tblastx;
 use Widget::blastn;
@@ -2076,7 +2077,7 @@ sub dbformat {
    my ($file) = shift =~ /^([^\:]+)\:?(.*)/; #peal off label
    my $type = shift;
 
-   confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $exe);
+   confess "ERROR: Can not find xdformat, formatdb, makeblastdb, or prerapsearch executable\n" if(! -e $exe);
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
    confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
    
@@ -2121,6 +2122,12 @@ sub dbformat {
 	       $command .= " -dbtype prot" if($type eq 'blastx');
 	       $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
 	       $command .= " -in $t_file";
+	       $run++;
+	   }
+       }
+       elsif ($exe =~ /prerapsearch/) {
+	   if ((! -e $file.'.db.info')){
+	       $command .= " -d $t_file -n $name.db";
 	       $run++;
 	   }
        }
@@ -2546,7 +2553,7 @@ sub blastx_as_chunks {
    my $pid_blast   = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = $CTL_OPT->{_formater};
+   my $formater    = ($CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -2615,11 +2622,22 @@ sub blastx_as_chunks {
    $params{is_first}      = $chunk->is_first;
    $params{is_last}       = $chunk->is_last;
 
+   #rapsearch misses query length and target length
+   if($blast =~ /rapsearch$/){
+       $params{query_length} = $chunk->length();
+       $params{db} = $db;
+   }
+
    my $chunk_keepers;
    try{
-      $chunk_keepers = Widget::blastx::parse($o_file,
-					     \%params,
-					     );
+       if($blast =~ /rapsearch$/){
+	   $chunk_keepers = Widget::rapsearch::parse($o_file,
+						     \%params,);
+       }
+       else{
+	   $chunk_keepers = Widget::blastx::parse($o_file,
+						  \%params,);
+       }
    }
    catch Error::Simple with {
       my $E = shift;
@@ -2728,7 +2746,7 @@ sub blastx {
    my $pid_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = $CTL_OPT->{_formater};
+   my $formater    = ($CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -2780,11 +2798,22 @@ sub blastx {
    $params{is_first}      = $chunk->is_first;
    $params{is_last}       = $chunk->is_last;
 
+   #rapsearch misses query length and target length
+   if($blast =~ /rapsearch$/){
+       $params{query_length} = $chunk->length();
+       $params{db} = $db;
+   }
+
    my $chunk_keepers;
    try{
-      $chunk_keepers = Widget::blastx::parse($o_file,
-					     \%params,
-					     );
+       if($blast =~ /rapsearch$/){
+           $chunk_keepers = Widget::rapsearch::parse($o_file,
+                                                     \%params,);
+       }
+       else{
+	   $chunk_keepers = Widget::blastx::parse($o_file,
+						  \%params,);
+       }
    }
    catch Error::Simple with {
       my $E = shift;
@@ -2896,12 +2925,19 @@ sub runBlastx {
       #$command .= " -outfmt 6"; # remove for full report
       $command .= " -out $out_file";
    }
+   elsif ($command =~ /rapsearch$/) {
+       $command .= " -z $cpus";
+       $command .= " -e $eval_blast";
+       $command .= " -v -1";
+       $command .= " -b -1";
+       $command .= " -d $db -q $q_file";
+       $command .= " -o $out_file";
+   }
    else{
       confess "ERROR: Must be a blastx executable";  
    }
 
-   my $w = new Widget::blastx();
-
+   my $w = ($command =~ /rapsearch$/) ? new Widget::rapsearch() : new Widget::blastx();
    if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
@@ -2912,6 +2948,12 @@ sub runBlastx {
       $dir =~ s/[^\/]+$//;
       File::Path::mkpath($dir);
       $w->run($command);
+
+      #fix outfile for rapsearch
+      if($command =~ /rapsearch$/){
+	  unlink("$out_file.m8");
+	  File::Copy::move("$out_file.aln", "$out_file");
+      }
    }
 }
 #-----------------------------------------------------------------------------
@@ -3500,6 +3542,8 @@ sub set_defaults {
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'ncbi+';
       $CTL_OPT{'blast_type'} .= '=DISABLED' if($main::server);
+      $CTL_OPT{'use_rapsearch'} = 0;
+      $CTL_OPT{'use_rapsearch'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -3533,11 +3577,13 @@ sub set_defaults {
       my @exes = ('xdformat',
 		  'formatdb',
 		  'makeblastdb',
+		  'prerapsearch',
 		  'blastall',
 		  'blasta',
 		  'blastn',
 		  'blastx',
 		  'tblastx',
+		  'rapsearch',
 		  'RepeatMasker',
 		  'exonerate',
 		  'snap',
@@ -4193,6 +4239,11 @@ sub load_control_files {
       $CTL_OPT{_blastx} = $CTL_OPT{blastx};
       $CTL_OPT{_tblastx} = $CTL_OPT{tblastx};
    }
+
+   #replace blastx with rapsearch
+   if ($CTL_OPT{use_rapsearch}) {
+      $CTL_OPT{_blastx} = $CTL_OPT{rapsearch};
+   }
    
    #--validate existence of required values from control files
    my @infiles;
@@ -4213,6 +4264,11 @@ sub load_control_files {
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{protein}); 
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'tblastx', 'makeblastdb') if($CTL_OPT{altest});
+   }
+
+   if($CTL_OPT{use_rapsearch}){
+       push (@infiles, 'rapsearch', 'prerapsearch')
+	   if($CTL_OPT{protein} || $CTL_OPT{repeat_protein});
    }
 
    push (@infiles, 'genome');
@@ -4769,6 +4825,7 @@ sub generate_control_files {
 	   die "ERROR: Could not create $dir/$app\_bopts.$ext\n";
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
        print OUT "blast_type=$O{blast_type} #set to 'ncbi+', 'ncbi' or 'wublast'\n";
+       print OUT "use_rapsearch=$O{use_rapsearch} #use rapsearch instead of blastx, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "pcov_blastn=$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
        print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
@@ -4816,6 +4873,8 @@ sub generate_control_files {
        print OUT "blastall=$O{blastall} #location of NCBI blastall executable\n";
        print OUT "xdformat=$O{xdformat} #location of WUBLAST xdformat executable\n";
        print OUT "blasta=$O{blasta} #location of WUBLAST blasta executable\n";
+       print OUT "prerapsearch=$O{prerapsearch} #location of prerapsearch executable\n";
+       print OUT "rapsearch=$O{rapsearch} #location of rapsearch executable\n";
        print OUT "RepeatMasker=$O{RepeatMasker} #location of RepeatMasker executable\n";
        print OUT "exonerate=$O{exonerate} #location of exonerate executable\n";
        print OUT "\n";
