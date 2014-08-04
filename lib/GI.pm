@@ -2127,7 +2127,7 @@ sub dbformat {
        }
        elsif ($exe =~ /prerapsearch/) {
 	   if ((! -e $file.'.db.info')){
-	       $command .= " -d $t_file -n $name.db";
+	       $command .= " -d $t_file -n $t_file.db";
 	       $run++;
 	   }
        }
@@ -2553,7 +2553,7 @@ sub blastx_as_chunks {
    my $pid_blast   = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = ($CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
+   my $formater    = (!$CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -2624,7 +2624,8 @@ sub blastx_as_chunks {
 
    #rapsearch misses query length and target length
    if($blast =~ /rapsearch$/){
-       $params{query_length} = $chunk->length();
+       $params{query_length} = $chunk->length_w_flank();       
+       (my $db_dir = $db) =~ s/[^\/]+$//;
        $params{db} = $db;
    }
 
@@ -2746,7 +2747,7 @@ sub blastx {
    my $pid_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = ($CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
+   my $formater    = (!$CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -2878,7 +2879,7 @@ sub runBlastx {
 
    my $tmp = get_global_temp();
    my $command  = $blast;
-   if ($command =~ /blasta$/) {
+   if ($blast =~ /blasta$/) {
       symlink($blast, "$tmp/blastx") if(! -e "$tmp/blastx"); #handle blasta linking
       $command = "$tmp/blastx";
       $command .= " $db $q_file B=10000 V=10000 E=$eval_blast";
@@ -2900,7 +2901,7 @@ sub runBlastx {
       #$command .= " mformat=2"; # remove for full report
       $command .= " -o $out_file";
    }
-   elsif ($command =~ /blastall$/) {
+   elsif ($blast =~ /blastall$/) {
       $command .= " -p blastx";
       $command .= " -d $db -i $q_file -b 10000 -v 10000 -e $eval_blast";
       $command .= " -z 300";
@@ -2912,7 +2913,7 @@ sub runBlastx {
       #$command .= " -m 8"; # remove for full report
       $command .= " -o $out_file";
    }
-   elsif ($command =~ /blastx$/) {
+   elsif ($blast =~ /blastx$/) {
       $command .= " -db $db -query $q_file";
       $command .= " -num_alignments 10000 -num_descriptions 10000 -evalue $eval_blast";
       $command .= " -dbsize 300";
@@ -2925,19 +2926,20 @@ sub runBlastx {
       #$command .= " -outfmt 6"; # remove for full report
       $command .= " -out $out_file";
    }
-   elsif ($command =~ /rapsearch$/) {
+   elsif ($blast =~ /rapsearch$/) {
        $command .= " -z $cpus";
-       $command .= " -e $eval_blast";
+       $command .= " -a"; #acceleration mode
+       $command .= " -e ".log($eval_blast)/log(10);
        $command .= " -v -1";
        $command .= " -b -1";
-       $command .= " -d $db -q $q_file";
+       $command .= " -d $db.db -q $q_file";
        $command .= " -o $out_file";
    }
    else{
       confess "ERROR: Must be a blastx executable";  
    }
 
-   my $w = ($command =~ /rapsearch$/) ? new Widget::rapsearch() : new Widget::blastx();
+   my $w = ($blast =~ /rapsearch$/) ? new Widget::rapsearch() : new Widget::blastx();
    if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
@@ -2950,7 +2952,7 @@ sub runBlastx {
       $w->run($command);
 
       #fix outfile for rapsearch
-      if($command =~ /rapsearch$/){
+      if($blast =~ /rapsearch$/){
 	  unlink("$out_file.m8");
 	  File::Copy::move("$out_file.aln", "$out_file");
       }

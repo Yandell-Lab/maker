@@ -665,8 +665,8 @@ sub repeat_data {
    
    my ($class, $type) = get_class_and_type($h, 'hit');
 
-   $class =~ s/^blastx\:repeat.*?$/repeatrunner/;
-   $class =~ s/^blastx/repeatrunner/;
+   $class =~ s/^(blastx|rapsearch)\:repeat.*?$/repeatrunner/;
+   $class =~ s/^(blastx|rapsearch)/repeatrunner/;
 
    my $h_n = $h->name();
    $h_n = uri_escape($h_n, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards
@@ -710,6 +710,9 @@ sub get_class_and_type {
 
     my $type;
     if($class =~ /^blastx(\:.*)?$/i){
+	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
+    }
+    elsif($class =~ /^rapsearch(\:.*)?$/i){
 	$type = $k eq 'hit' ? 'protein_match' : 'match_part';
     }
     elsif($class =~ /^protein2genome(\:.*)?$/i){
@@ -1100,7 +1103,7 @@ sub get_transcript_data {
 	my $eAED    = $t->{eAED};
 	my $score   = '.'; #transcript scores causes chado errors/warning
 
-	if($t->{hit}->algorithm =~ /est2genome|cdna2genome|protein2genome|BLASTX|est_gff|prot_gff/){
+	if($t->{hit}->algorithm =~ /est2genome|cdna2genome|protein2genome|BLASTX|rapsearch|est_gff|prot_gff/){
 	   $score = $t->{hit}->score();
 	}
 
@@ -1226,7 +1229,7 @@ sub get_repeat_hsp_data {
 	($tB, $tE) = ($tE, $tB) if $tB > $tE;
 
 	my ($class, $type) = get_class_and_type($hsp, 'hsp');
-	$class = "repeatrunner" if ($class eq 'blastx');
+	$class = "repeatrunner" if ($class eq 'blastx' || $class eq 'rapsearch');
 	
 	my $hsp_name = $hit_n;
 	$hsp_name = uri_escape($hsp_name, '^a-zA-Z0-9\.\:\^\*\$\@\!\+\_\?\-\|'); #per gff standards

@@ -679,7 +679,7 @@ sub prep_blastx_data {
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
@@ -727,7 +727,7 @@ sub prep_gff_data {
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c,'cdna2genome', 'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark',  'pred_gff');
@@ -775,7 +775,7 @@ sub prep_pred_data {
 						  'twinscan', 'genemark', 'evm', 'pred_gff');
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 
@@ -886,7 +886,7 @@ sub prep_ncrna_data {
 #
 #	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
 #	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-#	my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
+#	my $bx_in_cluster   = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 #
 #	my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
 #	my $best_p_set = clean::remove_redundant_alt_splices($i_set, 10);
@@ -1718,7 +1718,7 @@ sub run_it{
 	my $ests     = ($CTL_OPT->{correct_est_fusion}) ? $set->{fusion} : $set->{ests};
 	my $model    = $set->{model};
 	my $gomiph   = $set->{gomiph};
-	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
+	my $blastx   = get_selected_types($gomiph,'blastx', 'rapsearch', 'protein_gff');
 	my $pol_p    = get_selected_types($gomiph,'protein2genome');
 	my $alt_ests = $set->{alt_ests};
 	my $preds    = $set->{preds};
@@ -2313,7 +2313,7 @@ sub load_transcript_stats {
 	my $pol_p_hits   = get_selected_types($evi->{gomiph}, 'protein2genome');
 	my $pol_e_hits   = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
 	my $pol_f_hits   = get_selected_types($evi->{fusion}, 'est2genome', 'est_gff', 'blastn');
-	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
+	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'rapsearch', 'protein_gff');
 	my $tblastx_hits = get_selected_types($evi->{alt_ests}, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $abinits      = $evi->{all_preds};
 

@@ -123,12 +123,15 @@ sub parse {
 	
 	#parse IDs (Example -->)
 	#chr10 vs ARATH
-	if(!$first =~ /^(\S+)\s+vs\s+(\S+)\s+(.*)/){
+	my ($q_name, $t_name, $s_line);
+	if($first =~ /^(\S+)\s+vs\s+(\S+)\s+(.*)/){
+	    $q_name = $1;
+	    $t_name = $2;
+	    $s_line = $3;
+	}
+	else{
 	    die "ERROR: File is not a rapSearch report or is corrupt: $report\n";
 	}
-	my $q_name = $1;
-	my $t_name = $2;
-	my $s_line = $3;
 	
 	#make new hit if necessary
 	if(!$hit || $hit->name ne $t_name){
@@ -139,19 +142,28 @@ sub parse {
 		    if($depth && @$keepers >= $depth*20);
 	    }
 
+	    $t_seq_length = $t_index->get_length_by_id($t_name);
+	    if(! defined($t_seq_length) && !$t_index->{__REBUILT}){
+		my $db = $params->{db};
+		$db =~ s/\.\d+$//;
+		my $list = [grep {/\.\d+$/} <$db.*>];
+		if(@$list > 1){
+		    $t_index = GI::build_fasta_index($list);
+		    $t_seq_length = $t_index->get_length_by_id($t_name);
+		}
+		$t_index->{__REBUILT} = 1; #set flag so I don't rebuild again
+	    }
+
 	    $hit = $hitType->new('-name'        => $t_name,
 				 '-description' => '',
 				 '-algorithm'   => 'rapsearch',
-				 '-length'      => $q_seq_length);
-	    $t_seq_length = $t_index->get_length_by_id($t_name);
+				 '-length'      => $t_seq_length);
 	    $count++; #one new hit
 	}
 	
 	#parse stats (Example -->)
 	#bits=23.1 log(E-value)=0.98 identity=46.1% aln-len=13 mismatch=7 gap-openings=0 nFrame=5
 	my %stats = map {split(/=/, )} split(/\s+/, $s_line);
-	$stats{identity} =~ s/\%//;
-	$stats{identity} /= 100;
 	
 	#parse alignments (Example -->)
 	#Query: 79399 CHRCRGFGHVIRD 79361
@@ -171,75 +183,75 @@ sub parse {
 	my $m_str = substr($match, $pos, length($q_str));
 	
 	#add additional stats
-	$stats{conserved}  = $stats{identity} + scalar($m_str =~ tr/\+/\+/);
 	$stats{query_gaps} = scalar($q_str =~ tr/\-/\-/);
 	$stats{hit_gaps}   = scalar($t_str =~ tr/\-/\-/);
 	$stats{identical}  = scalar($m_str =~ tr/a-zA-Z/a-zA-Z/);
-	
+	$stats{conserved}  = $stats{identical} + scalar($m_str =~ tr/\+/\+/);	
+
 	#make HSP arguments
 	my @args;
+	push(@args, '-query_name');
+	push(@args, $q_name);
+
+	push(@args, '-hit_name');
+	push(@args, $t_name);
+
+	push(@args, '-algorithm');
+	push(@args, 'rapsearch');	
+
 	push(@args, '-evalue');
-	push(@args, $stats{'log(E-value)'});
-	
-	push(@args, '-identical');
-	push(@args, $stats{identity});
-	
-	push(@args, '-query_start');
-	push(@args, $q_start);
-	
-	push(@args, '-query_seq');
-	push(@args, $q_str);
-	
+	push(@args, 10**$stats{'log(E-value)'});
+
+	push(@args, '-pvalue');
+	push(@args, $stats{'log(E-value)'}); #hack
+
+	push(@args, '-bits');
+	push(@args, $stats{bits});
+
 	push(@args, '-score');
 	push(@args, 'NA');
 	
-	push(@args, '-homology_seq');
-	push(@args, $m_str);
-	
-	push(@args, '-hit_start');
-	push(@args, $t_start);
-	
-	push(@args, '-hit_seq');
-	push(@args, $t_str);
-	
-	push(@args, '-hsp_length');
-	push(@args, $stats{'aln-len'});
-	
-	push(@args, '-hit_length');
-	push(@args, $t_seq_length);
-	
-	push(@args, '-query_name');
-	push(@args, $q_name);
-	
-	push(@args, '-algorithm');
-	push(@args, 'rapsearch');
-	
-	push(@args, '-bits');
-	push(@args, $stats{bits});
-	
-	push(@args, '-pvalue');
-	push(@args, $stats{'log(E-value)'}); #hack
-	
-	push(@args, '-query_length');
-	push(@args, $q_seq_length);
-	
-	push(@args, '-query_end');
-	push(@args, $q_end);
-	
+	push(@args, '-identical');
+	push(@args, $stats{identical});
+
 	push(@args, '-conserved');
 	push(@args, $stats{conserved});
 	
-	push(@args, '-hit_name');
-	push(@args, $t_name);
-	
-	push(@args, '-hit_end');
-	push(@args, $t_end);
+	push(@args, '-query_start');
+	push(@args, $q_start);
+
+	push(@args, '-query_end');
+	push(@args, $q_end);	
+
+	push(@args, '-query_length');
+	push(@args, $stats{'aln-len'} - $stats{query_gaps});
 	
 	push(@args, '-query_gaps');
 	push(@args, $stats{query_gaps});
 
+	push(@args, '-query_seq');
+	push(@args, $q_str);
+
+	push(@args, '-hit_start');
+	push(@args, $t_start);
+
+	push(@args, '-hit_end');
+	push(@args, $t_end);
+	
+	push(@args, '-hit_length');
+	push(@args, $stats{'aln-len'} - $stats{hit_gaps});
+
 	push(@args, '-hit_gaps');
 	push(@args, $stats{hit_gaps});
+	
+	push(@args, '-hit_seq');
+	push(@args, $t_str);
+
+	push(@args, '-hsp_length');
+	push(@args, $stats{'aln-len'});
+	
+	push(@args, '-homology_seq');
+	push(@args, $m_str);
 	
 	my $hsp = $hspType->new(@args);
 	$hsp->queryName($q_name);
@@ -287,13 +299,13 @@ sub keepers {
 
     #iterate hits
     foreach my $hit (@$hits){
-	my $q_length = $hit->query_length;
+	my $q_length = $hit->queryLength;
 	my $cutoff = ($params->{is_last}) ? $q_length+1 : $q_length - $split_hit;
 	my $scutoff = ($params->{is_first}) ? 0 : 1 + $split_hit;
 	
 	#iterate HSPs
 	my @hsps;
-	foreach my $hsp ($hit->hsp) {
+	foreach my $hsp ($hit->hsps) {
 	    #clear a little memory (will I need this later?)
 	    $hsp->cigar_string; #holds alignment
 	    $hsp->{QUERY_SEQ} = '';
