@@ -1036,8 +1036,11 @@ sub annotate_genes {
     #my $GFF_DB = new GFFDB($CTL_OPT);
     $SEEN = {};#$GFF_DB->get_existing_gene_names($seq_id);
 
+    #model_gff must be first to get propper uniq name check
+    my @keys = sort {($b eq 'model_gff') <=>($a eq 'model_gff')} keys %$transcripts;
+
     my %annotations;
-    while (my $key = each %{$transcripts}){
+    foreach my $key (@keys){
 	$annotations{$key} = group_transcripts($transcripts->{$key},
 					       $all_data,
 					       $v_seq_ref,
