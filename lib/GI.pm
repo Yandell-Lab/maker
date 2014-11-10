@@ -1494,6 +1494,7 @@ sub snoscan {
 	$LOG->add_entry("FINISHED", $backup, "");
 	
 	push(@out_files, [$out_file, $entry]);
+	
     }
     
     return \@out_files;
