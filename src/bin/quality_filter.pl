@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w 
 use strict;
-use lib ('/home/mcampbell/lib');
-use PostData;
+#use lib ('/home/mcampbell/lib');
+#use PostData;
 use Getopt::Std;
 use vars qw($opt_s $opt_d $opt_a $opt_p $opt_c $opt_m $opt_u);
 getopts('sda:pcmu');
@@ -71,6 +71,7 @@ sub build_lus{
 	    $LU_G{$gid}=1;
 	    $LU_T{$tid}=1;
 	}
+	undef %data;
     }
 
 }
