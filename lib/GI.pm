@@ -1826,12 +1826,13 @@ sub polish_exonerate {
 
 	#make backup
 	if($o_tfile ne $backup){
-	    #File::Copy::move($o_tfile, $backup);
+	    File::Copy::move($o_tfile, $backup);
+	    unlink($o_tfile);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 	
 	#delete fastas
-	unlink($d_file, $t_file, $o_tfile);
+	unlink($d_file, $t_file);
 
 	#evaluate exonerate results
 	my @keepers;
@@ -4161,17 +4162,18 @@ sub load_control_files {
        push(@predictors, 'pred_gff') if($CTL_OPT{pred_gff} || ($CTL_OPT{maker_gff} && $CTL_OPT{pred_pass}));
        push(@predictors, 'model_gff') if($CTL_OPT{model_gff} || ($CTL_OPT{maker_gff} && $CTL_OPT{model_pass}));
    }
+   push(@predictors, 'altest2genome') if($CTL_OPT{altest2genome} && ! $main::eva);
    push(@predictors, 'est2genome') if($CTL_OPT{est2genome} && ! $main::eva);
    push(@predictors, 'protein2genome') if($CTL_OPT{protein2genome} && ! $main::eva);
 
    $CTL_OPT{_predictor} = {}; #temporary hash
    $CTL_OPT{_run} = {}; #temporary hash
    foreach my $p (@predictors) {
-       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^fgenesh$/ &&
+       if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^altest2genome$|^fgenesh$/ &&
 	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^evm$/
 	   ) {
 	   $error .= "FATAL: Invalid predictor defined: $p\n".
-	       "Valid entries are: est2genome, model_gff, pred_gff,\n".
+	       "Valid entries are: est2genome, protein2genome, altest2genome, model_gff, pred_gff,\n".
 	       "snap, genemark, augustus, and fgenesh\n\n";
 	   next;
        }
@@ -4184,7 +4186,7 @@ sub load_control_files {
        }
 
        $CTL_OPT{_predictor}{$p}++;
-       $CTL_OPT{_run}{$p}++ unless($p =~ /est2genome|protein2genome|model_gff|pred_gff/);
+       $CTL_OPT{_run}{$p}++ unless($p =~ /est2genome|altest2genome|protein2genome|model_gff|pred_gff/);
    }
    $CTL_OPT{_predictor} = [keys %{$CTL_OPT{_predictor}}]; #convert to array
    $CTL_OPT{predictor} = join(",", @{$CTL_OPT{_predictor}}); #reset value for log
@@ -4346,15 +4348,20 @@ sub load_control_files {
       ){
        $error .= "ERROR: You must provide gene predictions in a GFF3 file to use pred_gff as a predictor.\n\n";
    }
-   if ((grep {/est2genome/} @{$CTL_OPT{_predictor}}) &&
+   if ((grep {/^est2genome/} @{$CTL_OPT{_predictor}}) &&
        !$CTL_OPT{est} &&
-       !$CTL_OPT{altest} &&
        !$CTL_OPT{est_gff} &&
-       !$CTL_OPT{altest_gff} &&
        (!$CTL_OPT{est_pass} || !$CTL_OPT{maker_gff})
       ){
        $error .= "ERROR: You must provide some form of EST evidence to use est2genome as a predictor.\n\n";
    } 
+   if ((grep {/^altest2genome/} @{$CTL_OPT{_predictor}}) &&
+       !$CTL_OPT{altest} &&
+       !$CTL_OPT{altest_gff} &&
+       (!$CTL_OPT{altest_pass} || !$CTL_OPT{maker_gff})
+       ){
+       $error .= "ERROR: You must provide some form of alt-EST evidence to use altest2genome as a predictor.\n\n";
+   }
    if ((grep {/protein2genome/} @{$CTL_OPT{_predictor}}) &&
        !$CTL_OPT{protein} &&
        !$CTL_OPT{protein_gff} &&
@@ -4753,7 +4760,7 @@ sub generate_control_files {
        print OUT "altest_gff=$O{altest_gff} #aligned ESTs from a closly relate species in GFF3 format\n";
        print OUT "\n";
        print OUT "#-----Protein Homology Evidence (for best results provide a file for at least one)\n";
-       print OUT "protein=$O{protein}  #protein sequence file in fasta format (i.e. from mutiple oransisms)\n";
+       print OUT "protein=$O{protein}  #protein sequence file in fasta format (i.e. from mutiple organisms)\n";
        print OUT "protein_gff=$O{protein_gff}  #aligned protein homology evidence from an external GFF3 file\n";
        print OUT "\n";
        print OUT "#-----Repeat Masking (leave values blank to skip repeat masking)\n";

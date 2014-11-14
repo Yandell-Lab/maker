@@ -1399,11 +1399,11 @@ sub _trim_UTR_if_overlap {
 	    confess "ERROR: Strand is neither plus or minus\n";
 	}
     }    
-    $g1->{g_end} = $E;
+    $g1->{g_end} = $E if($E);
 
     my $B;
     foreach my $t (@{$g2->{t_structs}}){
-	last if($g1->{algorithm} =~ /^model_gff/);
+	last if($g2->{algorithm} =~ /^model_gff/);
         my $h = $t->{hit};
 
 	if($h->strand('query') == 1){
@@ -1426,7 +1426,7 @@ sub _trim_UTR_if_overlap {
 	    confess "ERROR: Strand is neither plus or minus\n";
 	}
     }
-    $g2->{g_start} = $B;
+    $g2->{g_start} = $B if($B);
 }
 #------------------------------------------------------------------------
 #filter for CDS competition on opposite strands
@@ -1846,6 +1846,75 @@ sub run_it{
 		$transcript->{_HMM} = 'est2genome';
 
 		#at least 40% of est2genome genes must be ORF
+		#also require some protein support for eukaryote single exon genes
+		if(!$CTL_OPT->{est_forward}){
+		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
+
+		    #40% min
+		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .40);
+
+		    #single exon results require more filtering
+		    if($CTL_OPT->{organism_type} eq 'eukaryotic' && $transcript->num_hsps == 1){
+			next if(!$has_stop && !$has_start); #single exon must have start and stop
+			next if(!@$gomiph); #single exon must have protein support
+			my $bAED = shadow_AED::get_eAED($gomiph, $transcript); #also verifies reading frame
+			next unless($bAED <= 0.5); #must have 50% inframe support
+		    }
+		}
+
+		#labels transcripts mapped to new assembly by % found
+		if($CTL_OPT->{est_forward}){
+		   $transcript->{_tran_name} = $mia->name;
+		   my $score = $mia->frac_identical * $mia->pAh * 100;
+		   $transcript->score($score);
+		}
+
+		push(@transcripts, [$transcript, $set->{index}, $mia]);
+	    }
+
+	    next;
+	}
+
+	#------altest2genome
+	if ($predictor eq 'altest2genome') {
+	    my $gomias = [];
+	    if($CTL_OPT->{est_forward}){
+		$gomias = $alt_ests;
+	    }
+	    elsif($CTL_OPT->{organism_type} eq 'prokaryotic'){
+		$gomias = PhatHit_utils::make_flat_hits($alt_ests, $v_seq);
+	    }
+	    else{
+		$gomias = clean::purge_single_exon_hits($alt_ests);
+
+		if(!@$gomias && @$alt_ests && $CTL_OPT->{single_exon}){ #only use single when there are no spliced
+		    $gomias = clean::purge_short_single_exons($alt_ests, $CTL_OPT->{single_length});
+		}
+		else{
+		    $gomias = clean::get_best_alt_splices($gomias, 10);
+		}
+	    }
+
+	    foreach my $mia (@$gomias){
+		my $transcript = $mia;
+		
+		#only tile if not set to push forward as is
+		if(!$CTL_OPT->{est_forward}){
+		    my $select = $mia;
+		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+		    while(! compare::is_same_alt_form($select, $transcript, 0)){
+			$select = $transcript;
+			$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+		    }
+		}
+		$transcript->{_HMM} = 'cdna2genome';
+
+		#at least 40% of altest2genome genes must be ORF
 		#also require some protein support for eukaryote single exon genes
 		if(!$CTL_OPT->{est_forward}){
 		    my $transcript_seq  = get_transcript_seq($transcript, $v_seq);

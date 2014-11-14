@@ -168,7 +168,7 @@ sub getSafeID {
 	my $fasta_ref = (ref($fasta) eq '') ? \$fasta : $fasta;
 
 	my $seq_id = getSeqID($fasta_ref);
-	my $safe_id = SeqID2SafeID($seq_id);
+	my $safe_id = seqID2SafeID($seq_id);
 
 	return $safe_id;
 }
