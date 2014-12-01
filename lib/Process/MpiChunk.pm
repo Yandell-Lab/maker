@@ -3666,15 +3666,24 @@ sub _go {
 	    my $final_est = GI::combine($exonerate_e_data,
 					$est_gff_keepers);
 
-	    $final_est = GI::combine($final_est,
-				     $blastn_keepers) if($CTL_OPT{organism_type} eq 'prokaryotic');
-
+	    #add unpolished alignments (for prokaryotes)
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$final_est = GI::combine($final_est, $blastn_keepers);
+	    }
+	    else{ #remove unpolisjed alignments (from gff3)
+		@$final_est = grep {$_->algorithm !~ /^blastn/} @$final_est;
+	    }
 
 	    my $final_altest = GI::combine($exonerate_a_data,
 					   $altest_gff_keepers);
 
-	    $final_altest = GI::combine($final_altest,
-					$tblastx_keepers) if($CTL_OPT{organism_type} eq 'prokaryotic');
+	    #add unpolished alignments (for prokaryotes)
+	    if($CTL_OPT{organism_type} eq 'prokaryotic'){
+		$final_altest = GI::combine($final_altest, $tblastx_keepers);
+	    }
+	    else{ #remove unpolished alignments (from gff3)
+		@$final_altest = grep {$_->algorithm !~ /^tblastx/} @$final_altest;
+	    }
 
 	    my $final_prot = GI::combine($blastx_keepers,
 					 $exonerate_p_data,
