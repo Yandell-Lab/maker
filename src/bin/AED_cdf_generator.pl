@@ -37,7 +37,7 @@ report();
 sub report{
     my $places = 0 x $BL;
     my $max_bin = '1.' . $places;
-    print "max bin $max_bin\n";
+#    print "max bin $max_bin\n";
     my @files = sort @ARGV;
     print "AED\t";
     print join("\t", @files);
