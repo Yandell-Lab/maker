@@ -1501,7 +1501,7 @@ sub snoscan {
 }
 #-----------------------------------------------------------------------------
 sub evm {
-    my $in_file     = shift;
+    my $in_file     = shift; #fasta file
     my $the_void    = shift;
     my $CTL_OPT     = shift;
     my $LOG         = shift;
@@ -1517,110 +1517,168 @@ sub evm {
     my $model_gff_keepers = [];
     my $t_dir = GI::get_global_temp();
     my $exe = $CTL_OPT->{evm};
-    my $weights = $CTL_OPT->{evm_weights};
-
-    my $all_data = maker::auto_annotator::prep_hits($final_prot,
-                                                    $final_est,
-                                                    $final_altest,
-                                                    $final_pred,
-                                                    $final_ncrna,
-                                                    $model_gff_keepers,
-                                                    $q_seq_obj,
-                                                    $CTL_OPT->{single_exon},
-                                                    $CTL_OPT->{single_length},
-                                                    $CTL_OPT->{pred_flank},
-                                                    $CTL_OPT->{organism_type},
-                                                    $CTL_OPT->{est_forward},
-                                                    $CTL_OPT->{correct_est_fusion});
-
-    my $flat_ests = maker::auto_annotator::flatten_by_type($all_data,
-                                                           'ests');
-    my $GFF3_est = Dumper::GFF::GFFV3->new($t_dir."/".$sid."ests_for_evm.gff");
-    $GFF3_est->set_current_contig($seq_id);
-    $GFF3_est->add_phathits($flat_ests);
-    $GFF3_est->finalize;
-
-    #my $command_2 = "cp ";
-    #$command_2 .= $t_dir."/".$sid."ests_for_evm.gff";
-    #$command_2 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
-    #system($command_2);
-
-    my $flat_proteins = maker::auto_annotator::flatten_by_type($all_data,
-                                                               'gomiph');
-    my $GFF3_pro = Dumper::GFF::GFFV3->new($t_dir."/".$sid."protein_for_evm.gff");
-    $GFF3_pro->set_current_contig($seq_id);
-    $GFF3_pro->add_phathits($flat_proteins);
-    $GFF3_pro->finalize;
-
-    #my $command_3 = "cp ";
-    #$command_3 .= $t_dir."/".$sid."protein_for_evm.gff";
-    #$command_3 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
-    #system($command_3);
-
-    my $flat_preds = maker::auto_annotator::flatten_by_type($all_data,
-                                                            'all_preds');
-    my $GFF3_preds = Dumper::GFF::GFFV3->new($t_dir."/".$sid."preds_for_evm.gff");
-    $GFF3_preds->set_current_contig($seq_id);
-    $GFF3_preds->add_phathits($flat_preds);
-    $GFF3_preds->finalize;
-    my $chunk = 0;
-    
-    #my $command_1 = "cp ";
-    #$command_1 .= $t_dir."/".$sid."preds_for_evm.gff";
-    #$command_1 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
-    #system($command_1);
-    
-    my $m2g_cmd  = "$FindBin::Bin/match2gene.pl ";
-    $m2g_cmd .= $t_dir."/".$sid."preds_for_evm.gff";
-    $m2g_cmd .= " > ". $t_dir."/".$sid."preds_for_evm_gene.gff";
-    system($m2g_cmd);
-
-    #my $command_5 = "cp ";
-    #$command_5 .= $t_dir."/".$sid."preds_for_evm_gene.gff";
-    #$command_5 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
-    #system($command_5);
 
     my @out_files;
     my $out_file = "$in_file\.evm";
     (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
     $LOG->add_entry("STARTED", $backup, "");
-    my $prot_file = $t_dir."/".$sid."protein_for_evm.gff";
-    my $est_file  = $t_dir."/".$sid."ests_for_evm.gff";
-    my $pred_file = $t_dir."/".$sid."preds_for_evm_gene.gff";
 
-    my $command = $exe;
-    $command .= " --genome $in_file";
-    $command .= " --weights $CTL_OPT->{evm_weights}";
-    $command .= " --gene_predictions $pred_file";
-    $command .= " --protein_alignments $prot_file";
-    $command .= " --transcript_alignments $est_file";
-#    $command .= " --trellis_search_limit 20"; #suposed to make it go faster not working right now                                                                                                                         
-    $command .= " > $out_file";
-    #$command .= " 2> /dev/null"; #I could add an unless here for the debug flag                                                                                                                                            
-    #my $command_4 = "cp ";
-    #$command_4 .= $out_file;
-    #$command_4 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
-    #system($command_4);
-
-    my $w = new Widget::evm();
     if (-f $backup) {
         print STDERR "using existing evm report.\n" unless $main::quiet;
         print STDERR "$backup\n" unless $main::quiet;
         $out_file = $backup;
     }
     else {
+	#generate weights file
+	my ($TFH, $weights) = tempfile( 'evm_eights_XXXXX', DIR => $t_dir, CLEANUP => 1);
+	foreach my $f (@$final_est, @$final_altest){
+	    my $src = lc($f->algorithm);
+	    $src =~ s/^exonerate\:*\_*est2genome$/est2genome/;
+	    $src =~ s/^exonerate\:*\_*cdna2genome$/cdna2genome/;
+
+	    my $value = defined($CTL_OPT->{evmtrans}{$src}) ?
+		$CTL_OPT->{evmtrans}{$src} : $CTL_OPT->{evmtrans}{DEFAULT};
+	    
+	    print $TFH "TRANSCRIPT\t$src\t$value\n";
+	    print $TFH "TRANSCRIPT\test_gff:$src\t$value\n";
+	    print $TFH "TRANSCRIPT\taltest_gff:$src\t$value\n";
+
+	    next unless(my $label = $f->{_label});
+	    my $alt = defined($CTL_OPT->{evmtrans}{"$src:$label"}) ?
+		$CTL_OPT->{evmtrans}{"$src:$label"} : $value;
+
+	    print $TFH "TRANSCRIPT\t$src:$label\t$alt\n";
+	    print $TFH "TRANSCRIPT\test_gff:$src:$label\t$alt\n";
+	    print $TFH "TRANSCRIPT\taltest_gff:$src:$label\t$alt\n";
+	}
+	
+	foreach my $f (@$final_prot){
+	    my $src = lc($f->algorithm);
+	    $src =~ s/^exonerate\:*\_*protein2genome$/protein2genome/;
+	    my $value = defined($CTL_OPT->{evmprot}{$src}) ?
+		$CTL_OPT->{evmprot}{$src} : $CTL_OPT->{evmprot}{DEFAULT};
+	    
+	    print $TFH "PROTEIN\t$src\t$value\n";
+	    print $TFH "PROTEIN\tprotein_gff:$src\t$value\n";
+
+	    next unless(my $label = $f->{_label});
+	    my $alt = defined($CTL_OPT->{evmprot}{"$src:$label"}) ?
+		$CTL_OPT->{evmprot}{"$src:$label"} : $value;
+
+	    print $TFH "PROTEIN\t$src:$label\t$alt\n";
+	    print $TFH "PROTEIN\tprotein_gff:$src:$label\t$alt\n";
+	}
+	
+	foreach my $f (@$final_pred){
+	    my $src = lc($f->algorithm);
+	    my $value = defined($CTL_OPT->{evmab}{$src}) ?
+		$CTL_OPT->{evmab}{$src} : $CTL_OPT->{evmab}{DEFAULT};
+	    
+	    print $TFH "ABINITIO_PREDICTION\t$src\t$value\n";
+	    print $TFH "ABINITIO_PREDICTION\tpred_gff:$src\t$value\n";
+	    print $TFH "ABINITIO_PREDICTION\tmodel_gff:$src\t$value\n";
+
+	    next unless(my $label = $f->{_label});
+	    my $alt = defined($CTL_OPT->{evmab}{"$src\:$label"}) ?
+		$CTL_OPT->{evmab}{"$src\:$label"} : $value;
+
+	    print $TFH "ABINITIO_PREDICTION\t$src:$label\t$alt\n";
+	    print $TFH "ABINITIO_PREDICTION\tpred_gff:$src:$label\t$alt\n";
+	    print $TFH "ABINITIO_PREDICTION\tmodel_gff:$src:$label\t$alt\n";
+	}
+	close($TFH);
+
+	#process features to build needed GFF3 files for EVM
+	my $all_data = maker::auto_annotator::prep_hits($final_prot,
+							$final_est,
+							$final_altest,
+							$final_pred,
+							$final_ncrna,
+							$model_gff_keepers,
+							$q_seq_obj,
+							$CTL_OPT->{single_exon},
+							$CTL_OPT->{single_length},
+							$CTL_OPT->{pred_flank},
+							$CTL_OPT->{organism_type},
+							$CTL_OPT->{est_forward},
+							$CTL_OPT->{correct_est_fusion});
+	
+	#create EST GFF3 file
+	my $flat_ests = maker::auto_annotator::flatten_by_type($all_data, 'ests');
+	my $est_file  = $t_dir."/".$sid."ests_for_evm.gff";
+	my $GFF3_est = Dumper::GFF::GFFV3->new($est_file);
+	$GFF3_est->set_current_contig($seq_id);
+	$GFF3_est->add_phathits($flat_ests);
+	$GFF3_est->finalize;
+	
+	#my $command_2 = "cp ";
+	#$command_2 .= $t_dir."/".$sid."ests_for_evm.gff";
+	#$command_2 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+	#system($command_2);
+	
+	#create protein GFF3 file
+	my $flat_proteins = maker::auto_annotator::flatten_by_type($all_data, 'gomiph');
+	my $prot_file = $t_dir."/".$sid."protein_for_evm.gff";
+	my $GFF3_pro = Dumper::GFF::GFFV3->new($prot_file);
+	$GFF3_pro->set_current_contig($seq_id);
+	$GFF3_pro->add_phathits($flat_proteins);
+	$GFF3_pro->finalize;
+	
+	#my $command_3 = "cp ";
+	#$command_3 .= $t_dir."/".$sid."protein_for_evm.gff";
+	#$command_3 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+	#system($command_3);
+	
+	#create prediction GFF3 file
+	my $flat_preds = maker::auto_annotator::flatten_by_type($all_data, 'all_preds');
+	my $pred_file = $t_dir."/".$sid."preds_for_evm_gene.gff";
+	my $GFF3_preds = Dumper::GFF::GFFV3->new($pred_file);
+	$GFF3_preds->set_current_contig($seq_id);
+	$GFF3_preds->add_phathits($flat_preds);
+	$GFF3_preds->finalize;
+	my $chunk = 0;
+	
+	#my $command_1 = "cp ";
+	#$command_1 .= $t_dir."/".$sid."preds_for_evm.gff";
+	#$command_1 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+	#system($command_1);
+	
+	#fix feature types for Prediction (MAKER does match/match_part and EVM wants genes)
+	system("$FindBin::Bin/match2gene.pl $pred_file > $pred_file\_2; mv $pred_file\_2 $pred_file");
+	
+	#my $command_5 = "cp ";
+	#$command_5 .= $t_dir."/".$sid."preds_for_evm_gene.gff";
+	#$command_5 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+	#system($command_5);
+	
+	#build command
+	my $command = $exe;
+	$command .= " --genome $in_file";
+	$command .= " --weights $weights";
+	$command .= " --gene_predictions $pred_file";
+	$command .= " --protein_alignments $prot_file";
+	$command .= " --transcript_alignments $est_file";
+	#$command .= " --trellis_search_limit 20"; #suposed to make it go faster not working right now
+	$command .= " > $out_file";
+	#$command .= " 2> /dev/null"; #I could add an unless here for the debug flag
+	#my $command_4 = "cp ";
+	#$command_4 .= $out_file;
+	#$command_4 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
+	#system($command_4);
+	
+	my $w = new Widget::evm();
         print STDERR "running  evm.\n" unless $main::quiet;
         $w->run($command);
 	File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
+	unlink($weights, $est_file, $prot_file, $pred_file);
     }
-    $LOG->add_entry("FINISHED", $backup, "");
-
-    push(@out_files, $out_file);
 
     my %params;
     my $keepers = Widget::evm->parse($out_file,
                                      \%params,
                                      $in_file);
+
+    $LOG->add_entry("FINISHED", $backup, "");
 
     return $keepers;
 
@@ -3488,7 +3546,6 @@ sub set_defaults {
       $CTL_OPT{'snoscan_rrna'} = '';
       $CTL_OPT{'snoscan_meth'} = '';
       $CTL_OPT{'trna'} = 0;
-      $CTL_OPT{'evm_weights'} = '';
       $CTL_OPT{'model_gff'} = '';
       $CTL_OPT{'pred_gff'} = '';
       $CTL_OPT{'est2genome'} = 0;
@@ -3618,6 +3675,23 @@ sub set_defaults {
 	  }
 	  $CTL_OPT{$exe} = $loc || '';
       }
+   }
+
+   #maker_evm
+   if ($type eq 'all' || $type eq 'evm') {
+       $CTL_OPT{'evmtrans'}{'DEFAULT'} = 10;
+       $CTL_OPT{'evmtrans'}{'blastn'} = 0;
+       $CTL_OPT{'evmtrans'}{'est2genome'} = 10;
+       $CTL_OPT{'evmtrans'}{'tblastx'} = 0;
+       $CTL_OPT{'evmtrans'}{'cdna2genome'} = 7;
+       $CTL_OPT{'evmprot'}{'DEFAULT'} = 10;
+       $CTL_OPT{'evmprot'}{'blastx'} = 2;
+       $CTL_OPT{'evmprot'}{'protein2genome'} = 10;
+       $CTL_OPT{'evmab'}{'DEFAULT'} = 10;
+       $CTL_OPT{'evmab'}{'snap'} = 10;
+       $CTL_OPT{'evmab'}{'augustus'} = 10;
+       $CTL_OPT{'evmab'}{'fgenesh'} = 10;
+       $CTL_OPT{'evmab'}{'genemark'} = 7;
    }
 
    #server
@@ -4044,7 +4118,8 @@ sub load_control_files {
       while (my $line = <CTL>) {
 	 chomp($line);
 	    
-	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\:\=]+)[\:\=]([^\n\#]*)/) {
+	 if ($line !~ /^[\#\s\t\n]/ && $line =~ /^([^\=]+)[\:\=]([^\n\#]*)/) {
+	    my $label = '';
 	    my $key = $1;
 	    my $value = $2;
 
@@ -4053,7 +4128,24 @@ sub load_control_files {
 
 	    #remove preceding and trailing whitespace
 	    $value =~ s/^[\s\t]+|[\s\t]+$//g;
-	    
+
+	    #handle key labeling from EVM options
+	    if($key =~ /^(evmab|evmtrans|evmprot)\:?(.*)/){
+		($key, $label) = ($1, $2);
+		$label ||= 'DEFAULT';
+
+		#require numerical values
+		if ($value !~  /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/) {
+		    $error .= "ERROR: Invalid setting for the option \'$key\' $label.".
+			" The value must be numerical.\n\n"
+		}
+		
+		#set value
+		$CTL_OPT{$key}{$label} = $value;
+		next;
+	    }
+
+	    #simple validation
 	    if (exists $CTL_OPT{$key}) { #should already exist or is a bad value
 	       #resolve environmental variables
 	       if ($value =~ /\$/) {
@@ -4156,7 +4248,7 @@ sub load_control_files {
    push(@run, 'fgenesh') if($CTL_OPT{fgenesh_par_file});
    push(@run, 'trnascan') if($CTL_OPT{trna});
    push(@run, 'snoscan') if($CTL_OPT{snoscan_rrna});
-   push(@run, 'evm') if($CTL_OPT{evm_weights});
+   push(@run, 'evm') if($CTL_OPT{run_evm});
 
    if(! @predictors){ #build predictors if not provided
        push(@predictors, @run);
@@ -4707,8 +4799,20 @@ sub load_control_files {
        }
    }
 
-   #--exit with status of 0 if just checking control files with -check fla
+   #--exit with status of 0 if just checking control files with -check flag
    exit(0) if($OPT{check});
+
+   #--generate EVM control files and exit after parsing needed values
+   if($OPT{EVM}){
+       #--check for unset EVM labels here 
+       if($CTL_OPT{go_gffdb}){
+	   #....parse any gff3 files relevant to evm and find the labels and add them example below
+	   #$CTL_OPT{evmprot}{$label} = $CTL_OPT{evmprot}{DEFAULT};
+       }
+
+       generate_control_files('', 'evm', \%CTL_OPT);
+       exit(0);
+   }
 
    #---set up blast databases and indexes for analyisis
    $CTL_OPT{_mpi_size} = $mpi_size;
@@ -4778,7 +4882,6 @@ sub generate_control_files {
        print OUT "gmhmm=$O{gmhmm} #GeneMark HMM file\n";
        print OUT "augustus_species=$O{augustus_species} #Augustus gene prediction species model\n";
        print OUT "fgenesh_par_file=$O{fgenesh_par_file} #FGENESH parameter file\n";
-       print OUT "evm_weights=$O{evm_weights} #EvidenceModeler weights file\n";
        print OUT "pred_gff=$O{pred_gff} #ab-initio predictions from an external GFF3 file\n";
        print OUT "model_gff=$O{model_gff} #annotated gene models from an external GFF3 file (annotation pass-through)\n" if(!$ev);
        print OUT "est2genome=$O{est2genome} #infer gene predictions directly from ESTs, 1 = yes, 0 = no\n" if(!$ev);
@@ -4905,25 +5008,36 @@ sub generate_control_files {
        close(OUT);
    }
    if($type eq 'all' || $type eq 'evm'){ #change the behavior for -EVM at some point
+       #hash used to generate sort order for labels
+       my %C = ((map {$_ => 999} (keys %{$O{evmtrans}}, keys %{$O{evmprot}}, keys %{$O{evmab}})), #other
+		blastn => 1, est2genome => 2, tblastx => 3, cdna2genome => 3,  #transcripts
+		blastx => 1, protein2genome => 2,                              #proteins
+		snap => 1, augustus => 2, fgenesh => 3, genemark => 4);        #predictors
+
        open (OUT, "> $dir/$app\_evm.$ext") or
 	   die "ERROR: Could not create $dir/$app\_evm.$ext\n";
        print OUT "#-----Transcript weights\n";
-       print OUT "est2genome= #weight for polished est alignments\n";
-       print OUT "blastn= #weight for raw est alignments\n";
-       print OUT "cdna2genome= #weight for polished alt_est alignments\n";
-       print OUT "tblastx= #weight for raw alt_est alignments\n";
+       print OUT "evmtrans=$O{evmtrans}{DEFAULT} #default weight for source unspecified est/alt_est alignments\n";
+       foreach my $label (sort {$C{$a} <=> $C{$b} || $a cmp $b} keys %{$O{evmtrans}}){
+	   next if ($label eq 'DEFAULT');
+	   print OUT "evmtrans:$label=$O{evmtrans}{$label} #weight for $label sourced alignments\n";
+       }
        print OUT "\n";
        print OUT "#-----Protein weights\n";
-       print OUT "protein2genome= #weight for polished protein alignments\n";
-       print OUT "blastx= #weight for raw protein alignments\n";
+       print OUT "evmprot=$O{evmprot}{DEFAULT} #default weight for source unspecified protein alignments\n";
+       foreach my $label (sort {$C{$a} <=> $C{$b} || $a cmp $b} keys %{$O{evmprot}}){
+	   next if ($label eq 'DEFAULT');
+	   print OUT "evmprot:$label=$O{evmprot}{$label} #weight for $label sourced alignments\n";
+       }
        print OUT "\n";
        print OUT "#-----Abinitio Prediction weights\n";
-       print OUT "augustus= #weight for augustus predictions\n";
-       print OUT "snap= #weight for snap predictions\n";
-       print OUT "genemark= #weight for genemark predictions\n";
-       print OUT "fgenesh= #weight for fgenesh predictions\n";
+       print OUT "evmab=$O{evmab}{DEFAULT} #default weight for source unspecified ab initio predictions\n";
+       foreach my $label (sort {$C{$a} <=> $C{$b} || $a cmp $b} keys %{$O{evmab}}){
+	   next if ($label eq 'DEFAULT');
+	   print OUT "evmab:$label=$O{evmab}{$label} #weight for $label sourced predictions\n";
+       }
        close(OUT);
-}
+   }
    #--build server.ctl file
    if($type eq 'server'){
        open (OUT, "> $dir/server.$ext") or

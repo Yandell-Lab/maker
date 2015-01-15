@@ -329,9 +329,7 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "EXE" => sub {GI::generate_control_files('','exe')
 			     if($rank == $root);
 			 exit_maker(0);},
-	   "EVM" => sub {GI::generate_control_files('','evm')
-                             if($rank == $root);
-                         exit_maker(0);},
+	   "EVM" => \$OPT{EVM},
     );
 $main::quiet = 1 if($main::qq);
 $C = 0;
