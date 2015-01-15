@@ -3446,7 +3446,7 @@ sub set_defaults {
    my $type = shift || 'all';
    my $user_default = shift; #hash ref
 
-   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$/) {
+   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$|^evm$/) {
       warn "WARNING: Invalid type \'$type\' in S_Func ::set_defaults";
       $type = 'all';
    }
@@ -4074,6 +4074,7 @@ sub load_control_files {
 	    }
 	    else {
 	       warn "WARNING: Invalid option \'$key\' in control file $ctlfile\n\n";
+	       print "this one\n"; #mike
 	    }
 	 }
       }
@@ -4726,7 +4727,7 @@ sub generate_control_files {
    my $app = ($ev) ? "eval" : "maker"; #extension
    my $ext = ($log) ? "log" : "ctl"; #extension
 
-   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$/) {
+   if ($type !~ /^all$|^opts$|^bopts$|^exe$|^menus$|^server$|^evm$/) {
        warn "WARNING: Invalid type \'$type\' in GI::generate_control_files";
        $type = 'all';
    }
@@ -4903,7 +4904,26 @@ sub generate_control_files {
        print OUT "probuild=$O{probuild} #location of probuild executable (required for genemark)\n";
        close(OUT);
    }
-
+   if($type eq 'all' || $type eq 'evm'){ #change the behavior for -EVM at some point
+       open (OUT, "> $dir/$app\_evm.$ext") or
+	   die "ERROR: Could not create $dir/$app\_evm.$ext\n";
+       print OUT "#-----Transcript weights\n";
+       print OUT "est2genome= #weight for polished est alignments\n";
+       print OUT "blastn= #weight for raw est alignments\n";
+       print OUT "cdna2genome= #weight for polished alt_est alignments\n";
+       print OUT "tblastx= #weight for raw alt_est alignments\n";
+       print OUT "\n";
+       print OUT "#-----Protein weights\n";
+       print OUT "protein2genome= #weight for polished protein alignments\n";
+       print OUT "blastx= #weight for raw protein alignments\n";
+       print OUT "\n";
+       print OUT "#-----Abinitio Prediction weights\n";
+       print OUT "augustus= #weight for augustus predictions\n";
+       print OUT "snap= #weight for snap predictions\n";
+       print OUT "genemark= #weight for genemark predictions\n";
+       print OUT "fgenesh= #weight for fgenesh predictions\n";
+       close(OUT);
+}
    #--build server.ctl file
    if($type eq 'server'){
        open (OUT, "> $dir/server.$ext") or

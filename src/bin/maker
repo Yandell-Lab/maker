@@ -1,4 +1,7 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
+
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 
 #Hack to get around findbin error where broken Carp is preloaded
 BEGIN {
@@ -326,7 +329,9 @@ GetOptions("RM_off|R" => \$OPT{R},
 	   "EXE" => sub {GI::generate_control_files('','exe')
 			     if($rank == $root);
 			 exit_maker(0);},
-
+	   "EVM" => sub {GI::generate_control_files('','evm')
+                             if($rank == $root);
+                         exit_maker(0);},
     );
 $main::quiet = 1 if($main::qq);
 $C = 0;
@@ -354,8 +359,8 @@ if($main::debug){
 #--get files off the command line
 my @ctlfiles = @ARGV;
 if (! @ctlfiles) {
-    if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl") {
-	@ctlfiles = qw(maker_opts.ctl maker_bopts.ctl maker_exe.ctl);
+    if (-e "maker_opts.ctl" && -e "maker_bopts.ctl" && -e "maker_exe.ctl" && -e "maker_evm.ctl") {
+	@ctlfiles = qw(maker_opts.ctl maker_bopts.ctl maker_exe.ctl maker_evm.ctl);
     }
     elsif($rank == $root) {
 	print STDERR  "ERROR: Control files not found\n";
