@@ -16,7 +16,7 @@ Options -b <number between 0 and 1> sets the y axis intervals. 0.025 works well.
 
 
 
-die($usage) unless $ARGV[0];
+die($usage) unless ($ARGV[0] && $opt_b);
 my $dividend = 1/$opt_b;
 my ($test_value) = ($dividend  =~/\d+\.(\d+)/);
 
