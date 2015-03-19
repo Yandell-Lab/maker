@@ -66,7 +66,7 @@ if (! $outfile && $datastore){
 }
 $outfile = "genome.all.gff" if(! $outfile);
 
-die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -e $datastore);
+die "ERROR: The file \'$datastore\' does not exist\n" if ($datastore && ! -f $datastore);
 if ($datastore){
     open(IN, "< $datastore");
 
