@@ -1,7 +1,4 @@
-#!/usr/bin/perl 
-
-eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
-    if 0; # not running under some shell
+#!/usr/bin/perl
 
 #Hack to get around findbin error where broken Carp is preloaded
 BEGIN {
@@ -293,6 +290,13 @@ Getopt::Long::Configure(qw(no_pass_through));
 GetOptions("RM_off|R" => \$OPT{R},
 	   "force|f" => \$OPT{force},
 	   "genome|g=s" => \$OPT{genome},
+	   "est=s" => \$OPT{est},
+	   "protein=s" => \$OPT{protein},
+	   "altest=s" => \$OPT{altest},
+	   "est2genome" => \$OPT{est2genome},
+	   "altest2genome" => \$OPT{altest2genome},
+	   "protein2genome" => \$OPT{protein2genome},
+	   "est_forward" => \$OPT{est_forward},
 	   "cpus|c=i" => \$OPT{cpus},
 	   "tries=i" =>\$OPT{tries},
 	   "dsindex" =>\$OPT{dsindex},

@@ -1510,14 +1510,10 @@ sub evm {
     my $final_altest= shift;
     my $final_pred  = shift;
     my $q_seq_obj   = shift;
-    my $sid         = shift;
     my $seq_id      = shift;
-    my @empty_array;
-    my $final_ncrna       = [];
-    my $model_gff_keepers = [];
-    my $t_dir = GI::get_global_temp();
+
     my $exe = $CTL_OPT->{evm};
-    my @out_files;
+
     my $out_file = "$in_file\.evm";
     (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
     $LOG->add_entry("STARTED", $backup, "");
@@ -1528,12 +1524,17 @@ sub evm {
         $out_file = $backup;
     }
     else {
+	my $tmp = get_global_temp();
+	my $rank = RANK();
+	my $t_dir = "$tmp/$rank";
+
 	#generate weights file
 	#there are more wight lines writen than are really needed. This is because
 	#it is less computaionaly expensive to just print every option based on 
 	#the known sources than to check for each label individualy.
 
 	my %seen;
+	
 	my ($TFH, $weights) = tempfile( 'evm_weights_XXXXX', DIR => $t_dir, CLEANUP => 1);
 	foreach my $f (@$final_est, @$final_altest){
 	    my $src = lc($f->algorithm);
@@ -1611,8 +1612,8 @@ sub evm {
 							$final_est,
 							$final_altest,
 							$final_pred,
-							$final_ncrna,
-							$model_gff_keepers,
+							[], #final_ncrna
+							[], #model_gff_keepers
 							$q_seq_obj,
 							$CTL_OPT->{single_exon},
 							$CTL_OPT->{single_length},
@@ -1623,34 +1624,34 @@ sub evm {
 	
 	#create EST GFF3 file
 	my $flat_ests = maker::auto_annotator::flatten_by_type($all_data, 'ests');
-	my $est_file  = $t_dir."/".$sid."ests_for_evm.gff";
+	my $est_file  = "$in_file.ests_for_evm.gff";
 	my $GFF3_est = Dumper::GFF::GFFV3->new($est_file);
 	$GFF3_est->set_current_contig($seq_id);
 	$GFF3_est->add_phathits($flat_ests);
 	$GFF3_est->finalize;
 	
 #more of mikes debugging
-	my $command_3 = "cp ";
-	$command_3 .= $t_dir."/".$sid."ests_for_evm.gff";
-	$command_3 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
-	system($command_3);
+	#my $command_3 = "cp ";
+	#$command_3 .= $t_dir."/".$in_file.".ests_for_evm.gff";
+	#$command_3 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
+	#system($command_3);
 	
 	#create protein GFF3 file
 	my $flat_proteins = maker::auto_annotator::flatten_by_type($all_data, 'gomiph');
-	my $prot_file = $t_dir."/".$sid."protein_for_evm.gff";
+	my $prot_file = "$in_file.protein_for_evm.gff";
 	my $GFF3_pro = Dumper::GFF::GFFV3->new($prot_file);
 	$GFF3_pro->set_current_contig($seq_id);
 	$GFF3_pro->add_phathits($flat_proteins);
 	$GFF3_pro->finalize;
 	
 	#my $command_3 = "cp ";
-	#$command_3 .= $t_dir."/".$sid."protein_for_evm.gff";
+	#$command_3 .= $t_dir."/".$in_file.".protein_for_evm.gff";
 	#$command_3 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
 	#system($command_3);
 	
 	#create prediction GFF3 file
 	my $flat_preds = maker::auto_annotator::flatten_by_type($all_data, 'all_preds');
-	my $pred_file = $t_dir."/".$sid."preds_for_evm_gene.gff";
+	my $pred_file = "$in_file.preds_for_evm_gene.gff";
 	my $GFF3_preds = Dumper::GFF::GFFV3->new($pred_file);
 	$GFF3_preds->set_current_contig($seq_id);
 	$GFF3_preds->add_phathits($flat_preds);
@@ -1658,10 +1659,10 @@ sub evm {
 	my $chunk = 0;
 
 #debugging	
-	my $command_1 = "cp ";
-	$command_1 .= $t_dir."/".$sid."preds_for_evm_gene.gff";
-	$command_1 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
-	system($command_1);
+	#my $command_1 = "cp ";
+	#$command_1 .= $t_dir."/".$in_file.".preds_for_evm_gene.gff";
+	#$command_1 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
+	#system($command_1);
 	
 	#fix feature types for Prediction (MAKER does match/match_part and EVM wants genes)
 	system("$FindBin::Bin/match2gene.pl $pred_file > $pred_file\_2; mv $pred_file\_2 $pred_file");
@@ -1672,7 +1673,7 @@ sub evm {
 #	system($command_6);	
 
 	#my $command_5 = "cp ";
-	#$command_5 .= $t_dir."/".$sid."preds_for_evm_gene.gff";
+	#$command_5 .= $t_dir."/".$in_file.".preds_for_evm_gene.gff";
 	#$command_5 .=" /home/mcampbell/project_links/MAKER_dev_msc/incorp_EVM/pigeon_test_data/";
 	#system($command_5);
 	
@@ -1692,10 +1693,10 @@ sub evm {
 	#system($command_4);
 
 #debugging stuff looking at the weight file
-	my $command_2 = "cp ";
-        $command_2 .= "$weights";
-        $command_2 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
-        system($command_2);
+	#my $command_2 = "cp ";
+        #$command_2 .= "$weights";
+        #$command_2 .=" /home/mcampbell/projects/EVM_MAKER/test_data/testing_evm/";
+        #system($command_2);
 	
 	my $w = new Widget::evm();
         print STDERR "running  evm.\n" unless $main::quiet;
@@ -4202,6 +4203,47 @@ sub load_control_files {
 	    }
 	 }
       }
+   }
+
+   #--force certain values on est_forward
+   $CTL_OPT{est_forward} = $OPT{est_forward} if(defined($OPT{est_forward}));
+   if($CTL_OPT{est_forward}){
+       $CTL_OPT{est2genome}       = 1;
+       $CTL_OPT{max_dna_len}      = 300000;
+       $CTL_OPT{split_hit}        = 30000;
+       $CTL_OPT{pred_flank}       = 1000;
+       $CTL_OPT{single_exon}      = 1;
+       $CTL_OPT{single_length}    = 1;
+       $CTL_OPT{pcov_blastn}      = .70;
+       $CTL_OPT{pid_blastn}       = .70;
+       $CTL_OPT{pcov_blastx}      = .50;
+       $CTL_OPT{pid_tblastx}      = .60;
+       $CTL_OPT{pcov_tblastx}     = .50;
+       $CTL_OPT{pid_blastx}       = .60;
+       $CTL_OPT{en_score_limit}   = 20;
+       $CTL_OPT{ep_score_limit}   = 10;
+       $CTL_OPT{R}                = 1;       
+       $CTL_OPT{snaphmm}          = '';
+       $CTL_OPT{gmhmm}            = '';
+       $CTL_OPT{augustus_species} = '';
+       $CTL_OPT{fgenesh_par_file} = '';
+       $CTL_OPT{trna}             = 0;
+       $CTL_OPT{snoscan_rrna}     = '';
+       $CTL_OPT{snoscan_meth}     = '';
+       $CTL_OPT{run_evm}          = 0;
+       $CTL_OPT{maker_gff}        = '';
+       $CTL_OPT{altest}           = '';
+       $CTL_OPT{est_gff}          = '';
+       $CTL_OPT{altest_gff}       = '';
+       $CTL_OPT{protein_gff}      = '';
+       $CTL_OPT{pred_gff}         = '';
+       $CTL_OPT{model_gff}        = '';
+       $CTL_OPT{other_gff}        = '';
+       $CTL_OPT{min_protein}      = 0;
+       $CTL_OPT{alt_splice}       = 0;
+       $CTL_OPT{always_complete}  = 0;
+       $CTL_OPT{map_forward}      = 0;
+       $CTL_OPT{correct_est_fusion} = 0;
    }
 
    #--load command line options

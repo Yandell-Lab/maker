@@ -635,7 +635,7 @@ sub hit_data {
       $hsp_id = join(":", $seq_id, $hsp_id, $uid);
       $hsp_id =~ s/\s/_/g;
       my $hsp_l =
-      get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $name);
+      get_hsp_data($hsp, $hsp_id, $seq_id, $h_id, $name, $h);
       
       $h_l .= $hsp_l."\n";
       
@@ -1159,6 +1159,7 @@ sub get_hsp_data {
         my $seq_id   = shift;
         my $hit_id   = shift;
         my $hit_n    = shift;
+	my $hit      = shift; #incase I need anything else from the hit itself
 
         my $hsp_str  = $hsp->strand('query') ==  1 ? '+' : '-';
 	my $t_strand = $hsp->strand('hit')   == -1 ? '-' : '+';
@@ -1193,7 +1194,8 @@ sub get_hsp_data {
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
 	   $nine .= ' '.$t_strand if($hsp->strand('hit'));
-	   $nine .= ';Gap='.join(' ', @gap).';' if(@gap);
+	   $nine .= ';Length='.$hit->length;
+	   $nine .= ';Gap='.join(' ', @gap) if(@gap);
 	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
 	   $nine =~  s/\;$//;
         my @data;

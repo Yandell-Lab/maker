@@ -69,7 +69,7 @@ sub skip_file {
 	    chomp $line;
 	    my @F = split("\t", $line);
 	    next unless(@F == 3);
-	    next unless($F[2] eq 'FINISHED');
+	    next unless($F[2] eq 'FINISHED' || $F[2] eq 'SKIPPED_SMALL');
 	    next unless($F[1] =~ /^$name\/..\/..\/$F[0]\/?$/ || -d "$out_base/$F[1]");
 	    $skip{$F[0]}++;
 	}

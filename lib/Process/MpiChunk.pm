@@ -3630,7 +3630,10 @@ sub _go {
             #------------------------ARGS_IN
 	    @args = (qw(section_file
 			seq_id
+			safe_seq_id
 			q_seq_obj
+                        chunk
+                        the_void
 			CTL_OPT
 			LOG)
 		     );
@@ -3640,10 +3643,13 @@ sub _go {
 	    print STDERR "$level_status\n";
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
+	    my $the_void = $VARS->{the_void};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
 	    my $seq_id = $VARS->{seq_id};
+	    my $safe_seq_id = $VARS->{safe_seq_id};
+	    my $chunk = $VARS->{chunk};
 	    my $section_file = $VARS->{section_file};
-	    my $GFF3         = $VARS->{GFF3};
+	    my $LOG = $VARS->{LOG};
 
 	    my $section = Storable::retrieve($section_file);
 	    my $tblastx_keepers    = $section->{tblastx_keepers};
@@ -3698,26 +3704,22 @@ sub _go {
 	    #run evm now that the evidence is aligned and the predictors have run                                                       
             my $evm_preds = [];#makes an empty array ref                                                                                
 	    if(grep{/evm/} @{$CTL_OPT{_run}}){
-		my $LOG = $VARS->{LOG};
 		my $t_dir = GI::get_global_temp();
-		my $CTL_OPT = $VARS->{CTL_OPT};
-		my $the_void = $VARS->{the_void};
-		my $sid = $seq_id.".abinit_nomask.";#.$mchunk->number();                                                                
+		my $sid = $safe_seq_id.".abinit_nomask.".$chunk->number();                                                                
 		my $t_file = "$t_dir/$sid";
 		my $seq = $q_seq_obj->seq();
-		my $seq = Fasta::toFastaRef('>'.$seq_id, \$seq); #over writes $seq to save memory                                       
+		$seq = Fasta::toFastaRef('>'.$seq_id, \$seq); #over writes $seq to save memory                                       
 		FastaFile::writeFile($seq, $t_file); #takes the fasta ref and writes it out as a wraped fasta file                      
 		
 		$evm_preds = GI::evm($t_file,
 				     $the_void,
-				     $CTL_OPT,
+				     \%CTL_OPT,
 				     $LOG,
 				     $final_prot,
 				     $final_est,
 				     $final_altest,
 				     $final_pred,
 				     $q_seq_obj,
-				     $sid,
 				     $seq_id);
 		
 		push(@$final_pred, @$evm_preds);# $evm_preds onto $final_pred dereference both of them                                 
