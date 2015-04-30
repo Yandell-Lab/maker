@@ -1514,7 +1514,7 @@ sub evm {
 
     my $exe = $CTL_OPT->{evm};
 
-    my $out_file = "$in_file\.evm";
+    my $out_file = "$in_file\.auto_annotator.evm";
     (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
     $LOG->add_entry("STARTED", $backup, "");
 
@@ -3524,7 +3524,7 @@ sub build_the_void {
 
    my $vid = "theVoid\.$seq_id";   
    my $the_void = "$out_dir/$vid";
-   File::Path::mkpath ($the_void);
+   File::Path::mkpath ($the_void) if(! -d $the_void);
 
    return $the_void;
 }

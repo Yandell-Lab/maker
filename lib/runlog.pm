@@ -38,6 +38,7 @@ my @ctl_to_log = ('maker_gff',
 		  'gmhmm',
 		  'augustus_species',
 		  'fgenesh_par_file',
+		  'run_evm',
 		  'model_gff',
 		  'pred_gff',
 		  'max_dna_len',
@@ -378,6 +379,12 @@ sub _load_old_log {
 		    $log_val = 0 if($log_val eq '');
 		}
 
+	        #run_evm was off before and not logged
+		if($key eq 'run_evm'){
+		    $ctl_val = 0 if($ctl_val eq '');
+		    $log_val = 0 if($log_val eq '');
+		}
+
 	        #est2genome was previously part of predictor
 		if($key eq 'est2genome' && $log_val eq ''){
 		    $log_val = (grep {!/altest/} grep {/est2genome/} $logged_vals{predictor}) ? 1 : 0;
@@ -506,6 +513,11 @@ sub _load_old_log {
 		    if ($key eq 'gmhmm') {
 			$rm_key{genemark}++;
 			$skip{genemark} = $keep;
+		    }
+
+		    if ($key eq 'run_evm') {
+			$rm_key{evm}++;
+			#$skip{evm} = $keep;
 		    }
 
 		    if ($key eq 'protein') {
@@ -689,6 +701,16 @@ sub _load_old_log {
 	    foreach my $e (@{$skip{genemark}}){
 		@f = grep {!/\.$e\.genemark$/} @f;
 	    }
+	    push (@files, @f);
+	}
+	if (exists $rm_key{evm}) {
+	    print STDERR "MAKER WARNING: Changes in control files make re-use of old EVM data impossible\n".
+		"Old EVM files will be erased before continuing\n" unless($main::qq);
+	    
+	    my @f = (<$the_void/*.evm>, <$the_void/*/*.evm>);
+	    #foreach my $e (@{$skip{evm}}){
+	    #	@f = grep {!/\.$e\.evm$/} @f;
+	    #}
 	    push (@files, @f);
 	}
 	if (exists $rm_key{blastn}) {

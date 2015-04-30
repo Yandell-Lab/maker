@@ -97,10 +97,14 @@ sub mkdir {
    if($self->{ds_object}){
       carp "Calling Datastore::MD5::id_to_dir" if($main::debug);
       $dir = $self->{ds_object}->id_to_dir($safe_id);
-      carp "Calling Datastore::MD5::mkdir" if($main::debug);
-      $self->{ds_object}->mkdir($safe_id) || die "ERROR: could not make datastore directory\n";
+      return $dir if(-d $dir); #avoid unecessary IO and system calls
+
+      carp "Calling Datastore::MD5::mkdir" if($main::debug); 
+     $self->{ds_object}->mkdir($safe_id) || die "ERROR: could not make datastore directory\n";
    }
    else{
+      return $dir if(-d $dir); #avoid unecessary IO and system calls
+
       File::Path::mkpath($dir);
    }
 
