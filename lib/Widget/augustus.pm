@@ -289,8 +289,8 @@ sub get_xdef {
                 my $c_e = $p->[1] - $offset;
 
 		my $l  = "$q_id\tPROTEIN\tCDSpart";
-		   $l .= "\t".$c_b."\t".$c_e."\t"."1e-100"."\t".$s;
-                   $l .= "\t".'.'."\t".'group=p_pieces;'."source=P";
+		   $l .= "\t".$c_b."\t".$c_e."\t"."0"."\t".$s;
+                   $l .= "\t".'.'."\t"."source=P;pri=2";
 
                 push(@xdef, $l);
         }
@@ -305,8 +305,8 @@ sub get_xdef {
 	   next if abs($i_b - $i_e) < 25;
 	   
 	   my $l  = "$q_id\tEST-INTRON\tintronpart";
-	   $l .= "\t".$i_b."\t".$i_e."\t"."1e-1000"."\t".$s;
-	   $l .= "\t".'.'."\t".'group=n_pieces;'."source=E";
+	   $l .= "\t".$i_b."\t".$i_e."\t"."0"."\t".$s;
+	   $l .= "\t".'.'."\t"."source=E;pri=3";
 	   
 	   push(@xdef, $l);
         }
@@ -316,8 +316,8 @@ sub get_xdef {
                 my $e_e = $n->[1] - $offset;
 
                 my $l  = "$q_id\tEST-EXON\texonpart";
-                   $l .= "\t".$e_b."\t".$e_e."\t"."1e-1000"."\t".$s;
-                   $l .= "\t".'.'."\t".'group=n_peices;'."source=E";
+                   $l .= "\t".$e_b."\t".$e_e."\t"."0"."\t".$s;
+                   $l .= "\t".'.'."\t"."source=E;pri=1";
 
                 push(@xdef, $l);
         }

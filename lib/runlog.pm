@@ -43,6 +43,7 @@ my @ctl_to_log = ('maker_gff',
 		  'pred_gff',
 		  'max_dna_len',
 		  'split_hit',
+		  'min_intron',
 		  'pred_flank',
 		  'pred_stats',
 		  'min_protein',
@@ -367,6 +368,11 @@ sub _load_old_log {
 		    $log_val = 1;
 		}
 
+		#min_intron was always 20 before and not logged
+		if($key eq 'min_intron' && $log_val eq ''){
+		    $log_val = 20;
+		}
+
 		#est_forward was always 0 before and not logged (is is also sometimes hidden)
 		if($key eq 'est_forward'){
 		    $ctl_val = 0 if($ctl_val eq '');
@@ -450,6 +456,7 @@ sub _load_old_log {
 		    }
 
 		    if ($key eq 'split_hit' ||
+			$key eq 'min_intron' ||
 			$key eq'ep_score_limit' ||
 			$key eq'en_score_limit'
 			) {

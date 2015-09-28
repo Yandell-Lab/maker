@@ -1043,26 +1043,26 @@ sub maintain {
 
 	return 1;
     }
-    else{
+    elsif($m_pid){
 	close($IN);
 	
 	#signal maintainer
-	kill(SIGUSR1, $self->{_maintain});
-	$stat = waitpid($self->{_maintain}, WNOHANG);
+	kill(SIGUSR1, $m_pid);
+	$stat = waitpid($m_pid, WNOHANG);
 	
 	#attempt kill multiple times if still running
 	my $count = 0;
 	while($stat == 0 && $count < 200){
-	    kill(SIGUSR1, $self->{_maintain}); #try multiple signal ending in signal 9
+	    kill(SIGUSR1, $m_pid); #try multiple signal ending in signal 9
 	    usleep(0.1) if($stat == 0);
-	    $stat = waitpid($self->{_maintain}, WNOHANG);
+	    $stat = waitpid($m_pid, WNOHANG);
 	    $count++;
 	}
 	
 	#if still running, do this
 	if($stat == 0){
-	    kill(SIGKILL, $self->{_maintain});
-	    waitpid($self->{_maintain}, 0);
+	    kill(SIGKILL, $m_pid);
+	    waitpid($m_pid, 0);
 	}
 	
 	$self->{_IN} = undef;

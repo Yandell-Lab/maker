@@ -92,37 +92,45 @@ sub parse {
     my $q_name  = Fasta::def2SeqID($def);
     my $fh = new FileHandle();
     $fh->open($report);
-    
-    my $counter  = 1;
-    my $counter2 = 1;
-    my %d;
-    my %g;
-    my $i = 0;
-    my %n;
 
+    my %d;
     while (my $line = <$fh>){
         chomp($line);
 	next unless $line =~ /^>>/;
-	my $id = "snoscan_". $counter;
-        my @stuff = split(/\s+/, $line);
-	$stuff[6] =~ s/\(|\)//g;
-	next if $stuff[6] eq '-';
-        next if defined($d{$stuff[3]});
-        $d{$stuff[3]}=1;
-        my $strand = 1;
-        my ($b,$e) = $stuff[3] =~ /\((\S+?)-(\S+?)\)/;
-        $strand = -1 if $b > $e;
-        $n{$stuff[5]}++;
 
-        $i = 0  if  !defined($g{$id});
-        $g{$id}[$i]{strand}   = $strand;
-        $g{$id}[$i]{type}     = 'exon';
-        $g{$id}[$i]{b}        = $b;
-        $g{$id}[$i]{e}        = $e;
-        $g{$id}[$i]{score}    = $stuff[2];
-        $g{$id}[$i]{name}     = "cmpl_".$stuff[5]."_$n{$stuff[5]}"."_$stuff[6]";
+        my @stuff = split(/\s+/, $line);
+	my $score = $stuff[2];
+        my $key = $stuff[3];
+        my $match = $stuff[5];
+        my ($b, $e) = $key =~ /\((\S+?)-(\S+?)\)/;
+        my $strand = ($b < $e) ? 1 : -1;
+
+	if(!defined($d{$key})){
+	    $d{$key}{'b'} = $b;
+	    $d{$key}{'e'} = $e;
+	    $d{$key}{'strand'} = $strand;
+	    $d{$key}{'score'} = $score;
+	    $d{$key}{'best'}  = $match;
+	}
+	elsif($score > $d{$key}{'score'}){
+	    $d{$key}{'score'} = $score;
+	    $d{$key}{'best'}  = $match;
+	}
+	push(@{$d{$key}{'match'}}, $match);
+    }
+    $fh->close();
+    my %g;
+    my $i = 0;
+    foreach my $key (keys %d){
+	my $best = $d{$key}{'best'};
+	my $id = "snoscan_$i\__$best";
+	$g{$id}[0]{strand}   = $d{$key}{'strand'};
+	$g{$id}[0]{type}     = 'exon';
+	$g{$id}[0]{b}        = $d{$key}{'b'}; 
+	$g{$id}[0]{e}        = $d{$key}{'e'};
+	$g{$id}[0]{score}    = $d{$key}{'score'};
+	$g{$id}[0]{match}    = join(',', @{$d{$key}{'match'}});
 	$i++;
-        $counter++;
     }
 
     my $phat_hits = load_phat_hits($q_name, $q_seq, \%g, $params);

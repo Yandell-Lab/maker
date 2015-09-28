@@ -1767,6 +1767,7 @@ sub polish_exonerate {
     my $pid          = shift;
     my $score_limit  = shift;
     my $max_intron   = shift;
+    my $min_intron   = shift;
     my $matrix       = shift;
     my $pred_flank   = shift;
     my $est_forward  = shift;
@@ -1787,7 +1788,6 @@ sub polish_exonerate {
 	my $h_description;
 	my $B;
 	my $E;
-	my $min_intron = 20; #constant
 
 	#scalar for exonerate
 	if(ref($hit) eq '' && $hit =~ />([^\s]+)\s+(.*)/){
@@ -3606,6 +3606,7 @@ sub set_defaults {
       $CTL_OPT{'pred_stats'} = 0;
       $CTL_OPT{'keep_preds'} = 0;
       $CTL_OPT{'split_hit'} = 10000;
+      $CTL_OPT{'min_intron'} = 20;
       $CTL_OPT{'softmask'} = 1;
       $CTL_OPT{'single_exon'} = 0;
       $CTL_OPT{'single_length'} = 250;
@@ -5046,6 +5047,7 @@ sub generate_control_files {
        print OUT "keep_preds=$O{keep_preds} #Concordance threshold to add unsupported gene prediction (bound by 0 and 1)\n" if(!$ev);
        print OUT "\n";
        print OUT "split_hit=$O{split_hit} #length for the splitting of hits (expected max intron size for evidence alignments)\n";
+       print OUT "min_intron=$O{min_intron} #minimum intron length (used for alignment polishing)\n";
        print OUT "single_exon=$O{single_exon} #consider single exon EST evidence when generating annotations, 1 = yes, 0 = no\n";
        print OUT "single_length=$O{single_length} #min length required for single exon ESTs if \'single_exon\ is enabled'\n";
        print OUT "correct_est_fusion=$O{correct_est_fusion} #limits use of ESTs in annotation to avoid fusion genes\n";
