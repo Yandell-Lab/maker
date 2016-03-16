@@ -194,6 +194,7 @@ foreach my $contig_id (sort {sort_contigs($a, $b, $sort_map)} keys %ids) {
     #first build IDs for genes
     foreach my $gene (sort {$a->{start} <=> $b->{start} || $b->{strand} <=> $a->{strand} || $a->{end} <=> $b->{end}} values %{$contig}) {
 	my $gid = $gene->{ID};
+	my $gname = $gene->{name};
 	my $gcount;
 	my $new_id;
 
@@ -216,10 +217,12 @@ foreach my $contig_id (sort {sort_contigs($a, $b, $sort_map)} keys %ids) {
 
 	#print gene_id
 	print "$gid\t$new_id\n";
+	print "$gname\t$new_id\n" if($gname && $gname ne $gid);
 
 	#now create IDs for mRNAs of the gene
 	foreach my $mRNA (sort {$a->{start} <=> $b->{start} || $a->{end} <=> $b->{end}} values %{$gene->{mRNAs}}){
 	    my $tid = $mRNA->{ID};
+	    my $tname = $mRNA->{name};
 	    my $parent = $mRNA->{parent};
 	    my $tcount;
 	    my $iter;
@@ -252,6 +255,7 @@ foreach my $contig_id (sort {sort_contigs($a, $b, $sort_map)} keys %ids) {
 
 	    #print gene_id
 	    print "$tid\t$new_id\n";
+	    print "$tname\t$new_id\n" if($tname && $tname ne $tid);
 	}
     }
 }

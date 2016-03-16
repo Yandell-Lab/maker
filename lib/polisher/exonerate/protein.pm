@@ -98,7 +98,7 @@ sub runExonerate {
 	if ($matrix) {
 	    $command .= " --proteinsubmat $matrix";
 	}
-	$command .= " --showcigar ";
+	$command .= " --minintron $min_intron --maxintron $max_intron --showcigar";
 	$command .= " > $o_file";
 	
         my $w = new Widget::exonerate::protein2genome();

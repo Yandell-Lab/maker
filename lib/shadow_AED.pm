@@ -254,16 +254,21 @@ sub get_eAED {
 		       my $go = $2;
 		       while($go--){
 			   if($p->strand('query') == 1){
-			       $ok_frames[$pos+0]->{0}++;
-			       $ok_frames[$pos+1]->{1}++;
-			       $ok_frames[$pos+2]->{2}++;
+			       $ok_frames[$pos]->{0}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
+			       $ok_frames[$pos]->{1}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
+			       $ok_frames[$pos]->{2}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
 			   }
 			   else{
-			       $ok_frames[$pos+2]->{0}++;
-			       $ok_frames[$pos+1]->{1}++;
-			       $ok_frames[$pos+0]->{2}++;
+			       $ok_frames[$pos]->{2}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
+			       $ok_frames[$pos]->{1}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
+			       $ok_frames[$pos]->{0}++ if($start <= $pos && $pos <= $end);
+			       $pos++;
 			   }
-			   $pos += 3;
 		       }
 		   }
 	       }
