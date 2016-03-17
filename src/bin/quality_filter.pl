@@ -1,4 +1,7 @@
-#!/usr/bin/perl -w 
+#!/opt/hpc/pkg/perl-5.14/bin/perl -w 
+
+eval 'exec /opt/hpc/pkg/perl-5.14/bin/perl -w  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
 use strict;
 #use lib ('/home/mcampbell/lib');
 #use PostData;
@@ -47,7 +50,7 @@ sub build_lus{
         next if $line =~ /^\#/;
 
         my @array = split(/\t/, $line);
-        next unless $array[2] =~ /mRNA/;
+        next unless $array[2] =~ /mRNA/ || $array[2] =~ /tRNA/;
         my ($tid) = $array[8] =~ /ID\=(.+?);.*/;
 	my ($gid) = $array[8] =~ /Parent\=(.+?);.*/;
         
@@ -68,6 +71,10 @@ sub build_lus{
 	    $LU_T{$tid}=1;
 	}
 	elsif ($opt_a && $data{'_AED'} < $opt_a){
+	    $LU_G{$gid}=1;
+	    $LU_T{$tid}=1;
+	}
+	elsif ($array[2] =~ /tRNA/){
 	    $LU_G{$gid}=1;
 	    $LU_T{$tid}=1;
 	}
