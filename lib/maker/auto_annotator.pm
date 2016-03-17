@@ -1827,7 +1827,9 @@ sub run_it{
 		    $gomias = clean::purge_short_single_exons($ests, $CTL_OPT->{single_length});
 		}
 		else{
+		    print STDERR "begin called get_best_alt_splices1\n";
 		    $gomias = clean::get_best_alt_splices($gomias, 10);
+		    print STDERR "end called get_best_alt_splices1\n";
 		}
 	    }
 
@@ -1896,7 +1898,9 @@ sub run_it{
 		    $gomias = clean::purge_short_single_exons($alt_ests, $CTL_OPT->{single_length});
 		}
 		else{
+		    print STDERR "begin called get_best_alt_splices2\n";
 		    $gomias = clean::get_best_alt_splices($gomias, 10);
+		    print STDERR "end called get_best_alt_splices2\n";
 		}
 	    }
 
@@ -2011,7 +2015,9 @@ sub run_it{
 	my $gomias = []; #group of most informative alt splices
 	if($CTL_OPT->{alt_splice}){
 	    $gomias = clean::purge_single_exon_hits($ests);
+	    print STDERR "begin called get_best_alt_splices2\n";
 	    $gomias = clean::get_best_alt_splices($gomias, 10);
+	    print STDERR "end called get_best_alt_splices2\n";
 	}
 	elsif($CTL_OPT->{organism_type} eq 'eukaryotic'){
 	}
