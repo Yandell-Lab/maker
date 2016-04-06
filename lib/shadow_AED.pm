@@ -232,12 +232,15 @@ sub get_eAED {
 	       my $end = $phsp->end('query') - $offset;
 	       
 	       my $pos = $start; #array position
+	       my $l_max = int((abs($end - $start) + 1) / 3);
 	       my $cigar = $phsp->cigar_string();
 	       if(! $cigar){ #if no gap attribute than we assume translation begins at first bp
-		   my $length = abs($end - $start) + 1;
-		   $cigar .= 'M'.int($length/3);
+		   $cigar .= 'M'.$l_max;
 	       }
-	       
+	       elsif($p->algorithm =~ /protein_gff/ && $cigar =~ /^M(\d+)$/){ #fix GFF3 munging
+		   $cigar = 'M'.$l_max if($1 > $l_max);
+	       }
+
 	       my @gap = $cigar =~ /([A-Z]\d+)/g;
 	       foreach my $g (@gap){
 		   $g =~ /([A-Z])(\d+)/;
@@ -253,6 +256,11 @@ sub get_eAED {
 		   elsif($1 eq 'M'){
 		       my $go = $2;
 		       while($go--){
+			   if($pos > $end || $pos+2 < $start){
+			       warn "WARNING: Alignment is outside of expected bounaries\n".
+				   "This usually means the Gap= attribute is incorrect for GFF3 alignments.\n";
+			   }
+
 			   if($p->strand('query') == 1){
 			       $ok_frames[$pos]->{0}++ if($start <= $pos && $pos <= $end);
 			       $pos++;

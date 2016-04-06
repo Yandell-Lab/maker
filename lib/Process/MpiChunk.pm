@@ -2043,10 +2043,10 @@ sub _go {
 	    my $exonerate_e_clusters = []; #will stay empty for prokaryotes
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    if($CTL_OPT{organism_type} eq 'eukaryotic'){
-	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_data)
+		$exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_data, 0, 0, $CTL_OPT{est_forward});
 	    }
 	    else{
-	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_keepers);
+	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_keepers, 0, 0, $CTL_OPT{est_forward});
 	    }
 	    #-------------------------CODE
 
@@ -2082,7 +2082,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_e_clusters
 		        blastn_clusters
-			_clust_flag)
+			_clust_flag
+                        CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2091,13 +2092,14 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
 	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
-	    my $flag = $VARS->{_clust_flag};	    
+	    my $clflag = $VARS->{_clust_flag};	    
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 
 	    #further combine and cluster
 	    my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
-	    if($flag){
-	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_clusters);
-	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_clusters);
+	    if($clflag){
+	       $blastn_clusters = cluster::clean_and_cluster($depth, $blastn_clusters, 0, 0, $CTL_OPT{est_forward});
+	       $exonerate_e_clusters = cluster::clean_and_cluster($depth, $exonerate_e_clusters, 0, 0, $CTL_OPT{est_forward});
 	    }
 
 	    my $blastn_keepers = GI::flatten($blastn_clusters);
@@ -2548,10 +2550,10 @@ sub _go {
 	    my $exonerate_a_clusters = []; #will stay empty for prokaryotes
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
             if($CTL_OPT{organism_type} eq 'eukaryotic'){
-               $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_data)
+               $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_data, 0, 0, $CTL_OPT{est_forward})
             }
             else{
-		$tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_keepers);
+		$tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_keepers, 0, 0, $CTL_OPT{est_forward});
             }
 	    #-------------------------CODE
 
@@ -2587,7 +2589,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_a_clusters
 		        tblastx_clusters
-			_clust_flag)
+			_clust_flag
+                        CTL_OPT)
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -2596,13 +2599,14 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_a_clusters = $VARS->{exonerate_a_clusters}; #array of overlapping clusters
 	    my $tblastx_clusters = $VARS->{tblastx_clusters}; #array of overlapping clusters
-	    my $flag = $VARS->{_clust_flag};
+	    my $clflag = $VARS->{_clust_flag};
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 
 	    #further combine and cluster
             my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
-	    if($flag){
-	       $tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_clusters);
-	       $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_clusters);
+	    if($clflag){
+	       $tblastx_clusters = cluster::clean_and_cluster($depth, $tblastx_clusters, 0, 0, $CTL_OPT{est_forward});
+	       $exonerate_a_clusters = cluster::clean_and_cluster($depth, $exonerate_a_clusters, 0, 0, $CTL_OPT{est_forward});
 	    }
 
 	    my $tblastx_keepers = GI::flatten($tblastx_clusters);
@@ -3048,8 +3052,8 @@ sub _go {
 
 	    #blastx will be empty from this point on in the script if eukaryotic
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
-	    my $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_keepers);
-	    my $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_data);
+	    my $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_keepers, 0, 0, $CTL_OPT{est_forward});
+	    my $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_data, 0, 0, $CTL_OPT{est_forward});
 	    #-------------------------CODE
 
 	    #------------------------RETURN
@@ -3084,7 +3088,8 @@ sub _go {
 	    #------------------------ARGS_IN
 	    @args = (qw(exonerate_p_clusters
 		        blastx_clusters
-			_clust_flag)
+			_clust_flag
+                        CTL_OPT)		     
 		    );
 	    #------------------------ARGS_IN
 	 }
@@ -3093,13 +3098,14 @@ sub _go {
 	    #-------------------------CODE
 	    my $exonerate_p_clusters = $VARS->{exonerate_p_clusters}; #array of overlapping clusters
 	    my $blastx_clusters = $VARS->{blastx_clusters}; #array of overlapping clusters
-	    my $flag = $VARS->{_clust_flag};
+	    my $clflag = $VARS->{_clust_flag};
+	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 
 	    #further combine and cluster
             my $depth = ($VARS->{CTL_OPT}->{organism_type} eq 'eukaryotic') ? 20 : 0;
-	    if($flag){
-	       $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_clusters);
-	       $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_clusters);
+	    if($clflag){
+	       $blastx_clusters = cluster::clean_and_cluster($depth, $blastx_clusters, 0, 0, $CTL_OPT{est_forward});
+	       $exonerate_p_clusters = cluster::clean_and_cluster($depth, $exonerate_p_clusters, 0, 0, $CTL_OPT{est_forward});
 	    }
 
 	    my $blastx_keepers = GI::flatten($blastx_clusters);
@@ -3246,7 +3252,7 @@ sub _go {
 	    #replaces actual values
 	    my $depth = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 20 : 0;
 	    foreach my $set (@sets) {
-		@$set = map {@$_} @{cluster::clean_and_cluster($depth, $set, 0, 1)};
+		@$set = map {@$_} @{cluster::clean_and_cluster($depth, $set, 0, 1, $CTL_OPT{est_forward})};
 	    }
 
 	    my %section = (est_gff_keepers => $est_gff_keepers,

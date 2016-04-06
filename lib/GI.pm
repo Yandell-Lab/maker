@@ -1374,6 +1374,112 @@ sub augustus {
    my @out_files;
    foreach my $entry (@entries){
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+       my $config_path = $ENV{AUGUSTUS_CONFIG_PATH};
+
+       #fix for directory and tarball
+       {
+	   #file provided
+	   if($hmm =~ /\.(tgz|tar\.gz)$/ && -f $hmm){
+	       #already unzipped
+	       my $md5 = Digest::MD5::md5_hex($hmm);
+	       if(-d "$TMP/augustus_config/$md5"){
+		   if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
+		       my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
+		       $config_path = "$TMP/augustus_config/$md5";
+		       $hmm = $name;
+		       last;
+		   }
+		   else{
+		       File::Path::rmtree("$TMP/augustus_config/$md5")
+		   }
+	       }
+
+	       #needs to be unzipped
+	       my $list = `tar -ztf $hmm`;
+	       die "ERROR: Could not read contents of tarball: $hmm\n" if($?);
+	       if(grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list)){
+		   my $tdir = "$TMP/$RANK/augustus_config/$md5";
+		   File::Path::rmtree($tdir) if(-d $tdir);
+		   File::Path::mkpath($tdir);
+		   mkdir("$tdir/unzip");
+		   mkdir("$tdir/species");
+
+		   #unzip file
+		   $list = `tar -C $tdir/unzip -zxvf $hmm`;
+		   die "ERROR: Could not extract contents of tarball: $hmm\n" if($?);
+
+		   #move unziped directory into place
+		   my ($path) = grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list);
+		   my ($rel, $name) = $path =~ /^(.*)\/+([^\/]+)_parameters.cfg$/;
+		   (my $dir = "$tdir/unzip/$rel") =~ s/\/+/\//g;
+		   (my $newdir = "$tdir/species/$name") =~ s/\/+/\//g;
+		   File::Copy::move($dir, $newdir);
+		   File::Path::rmtree("$tdir/unzip");
+
+		   #mirror the rest from AUGUSTUS_CONFIG_PATH
+		   symlink("$config_path/extrinsic", "$tdir/extrinsic");
+		   symlink("$config_path/profile", "$tdir/profile");
+		   symlink("$config_path/model", "$tdir/model");
+
+		   #move into final position
+		   mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
+		   File::Copy::move($tdir, "$TMP/augustus_config/$md5");
+		   $config_path = "$TMP/augustus_config/$md5";
+		   $hmm = $name;
+		   last;
+	       }
+	   }
+
+	   #directory provided
+	   if($hmm =~ /\// || -d $hmm){
+	       #already relocated
+	       my $md5 = Digest::MD5::md5_hex($hmm);
+	       if(-d "$TMP/augustus_config/$md5"){
+		   if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
+		       my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
+		       $config_path = "$TMP/augustus_config/$md5";
+		       $hmm = $name;
+		       last;
+		   }
+		   else{
+		       File::Path::rmtree("$TMP/augustus_config/$md5")
+		   }
+	       }
+	       
+	       #needs to be relocated
+	       my $name = ($hmm =~ /([^\/]+)\/?$/) ? $1 : '';
+	       if(-d $hmm && -f "$hmm/$name\_parameters.cfg"){
+		   my $tdir = "$TMP/$RANK/augustus_config/$md5";
+		   File::Path::rmtree($tdir) if(-d $tdir);
+		   File::Path::mkpath($tdir);
+		   mkdir("$tdir/species");
+
+		   #copy directory
+		   system('cp', '-R', $hmm, "$tdir/species/");
+		   die "ERROR: Could not copy parameters: $hmm\n" if($?);
+
+		   #mirror the rest from AUGUSTUS_CONFIG_PATH
+		   symlink("$config_path/extrinsic", "$tdir/extrinsic");
+		   symlink("$config_path/profile", "$tdir/profile");
+		   symlink("$config_path/model", "$tdir/model");
+
+		   #move into final position
+		   mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
+		   File::Copy::move($tdir, "$TMP/augustus_config/$md5");
+		   $config_path = "$TMP/augustus_config/$md5";
+		   $hmm = $name;
+		   last;
+	       }
+	   }
+	   
+	   #species name provided
+	   if($hmm !~ /\//){
+	       last if(-f "$config_path/species/$hmm/$hmm\_parameters.cfg");
+	   }
+
+	   die "ERROR: The species provided is invalid: $hmm\n";
+       }
+
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $out_file = "$in_file\.$hmm_n\.augustus";
@@ -1381,6 +1487,7 @@ sub augustus {
        $LOG->add_entry("STARTED", $backup, ""); 
        
        my $command  = $exe;
+       $command .= " --AUGUSTUS_CONFIG_PATH=$config_path";
        $command .= " --species=$hmm";
        $command .= " --UTR=off"; #added 3/19/2009
        $command .= " $in_file";
@@ -1811,11 +1918,18 @@ sub polish_exonerate {
 
 	#gene id specified for est_forward
 	my $gene_id;
-	if($est_forward && $h_description =~ /gene_id\=([^\s\;]+)/){
-	    $gene_id = $1;
+	if($est_forward){
+	    if($h_description =~ /gene_id\=([^\s\;]+)/){
+		$gene_id = $1;
+	    }
+	    elsif($h_description =~ /gene\=([^\s\;]+)/){
+		$gene_id = $1;
+	    }
 	}
 
 	#check if fasta contains coordinates for maker
+	#$min_intron = 1; #temp
+	#$max_intron = 200000; #temp
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $go;
 	    $min_intron = 1;
@@ -1916,7 +2030,7 @@ sub polish_exonerate {
 
 	#make backup
 	if($o_tfile ne $backup){
-	    File::Copy::move($o_tfile, $backup);
+	    #File::Copy::move($o_tfile, $backup);
 	    unlink($o_tfile);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
@@ -4209,21 +4323,24 @@ sub load_control_files {
    #--force certain values on est_forward
    $CTL_OPT{est_forward} = $OPT{est_forward} if(defined($OPT{est_forward}));
    if($CTL_OPT{est_forward}){
+       $OPT{R}                    = 1;
        $CTL_OPT{est2genome}       = 1;
-       $CTL_OPT{max_dna_len}      = 300000;
-       $CTL_OPT{split_hit}        = 30000;
-       $CTL_OPT{pred_flank}       = 1000;
+       $CTL_OPT{max_dna_len}      = 1000000 if($CTL_OPT{max_dna_len} < 1000000);
+       $CTL_OPT{split_hit}        = 100000 if($CTL_OPT{split_hit} < 10000);
+       $CTL_OPT{pred_flank}       = 10000 if($CTL_OPT{pred_flank} < 10000);
        $CTL_OPT{single_exon}      = 1;
        $CTL_OPT{single_length}    = 1;
-       $CTL_OPT{pcov_blastn}      = .70;
-       $CTL_OPT{pid_blastn}       = .70;
-       $CTL_OPT{pcov_blastx}      = .50;
-       $CTL_OPT{pid_tblastx}      = .60;
-       $CTL_OPT{pcov_tblastx}     = .50;
-       $CTL_OPT{pid_blastx}       = .60;
-       $CTL_OPT{en_score_limit}   = 20;
-       $CTL_OPT{ep_score_limit}   = 10;
-       $CTL_OPT{R}                = 1;       
+       $CTL_OPT{pcov_blastn}      = .70 if($CTL_OPT{pcov_blastn} < .70);
+       $CTL_OPT{pid_blastn}       = .70 if($CTL_OPT{pid_blastn} < .70);
+       $CTL_OPT{pcov_blastx}      = .50 if($CTL_OPT{pcov_blastx} < .50);
+       $CTL_OPT{pid_tblastx}      = .60 if($CTL_OPT{pid_blastx} < .60);
+       $CTL_OPT{pcov_tblastx}     = .50 if($CTL_OPT{pcov_tblastx} < .50);
+       $CTL_OPT{pid_blastx}       = .60 if($CTL_OPT{pid_tblastx} < .60);
+       $CTL_OPT{en_score_limit}   = 20 if($CTL_OPT{en_score_limit} > 20);
+       $CTL_OPT{ep_score_limit}   = 10 if($CTL_OPT{ep_score_limit} > 10);
+       $CTL_OPT{bit_blastn}       = 20 if($CTL_OPT{bit_blastn} > 20);
+       $CTL_OPT{bit_blastx}       = 20 if($CTL_OPT{bit_blastx} > 20);
+       $CTL_OPT{bit_tblastx}      = 20 if($CTL_OPT{bit_tblastx} > 20);
        $CTL_OPT{snaphmm}          = '';
        $CTL_OPT{gmhmm}            = '';
        $CTL_OPT{augustus_species} = '';
@@ -4234,7 +4351,7 @@ sub load_control_files {
        $CTL_OPT{run_evm}          = 0;
        $CTL_OPT{maker_gff}        = '';
        $CTL_OPT{altest}           = '';
-       $CTL_OPT{est_gff}          = '';
+       #$CTL_OPT{est_gff}          = '';
        $CTL_OPT{altest_gff}       = '';
        $CTL_OPT{protein_gff}      = '';
        $CTL_OPT{pred_gff}         = '';
@@ -4555,6 +4672,38 @@ sub load_control_files {
 
        if(!$CTL_OPT{augustus_species}) {
 	   $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
+       }
+       else{
+	   #validate all values
+           my @param = split(/\,/, $CTL_OPT{augustus_species});
+           my %uniq;
+           @param = grep {!$uniq{$_}++} @param;
+
+	   my @non;
+	   foreach my $entry (@param){
+	       my ($p, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
+
+	       if($p =~ /\.(tgz|tar\.gz)$/ && -f $p){ #file
+		   my $list = `tar -ztf $p`;
+		   die "ERROR: Could not read contents of tarball: $p\n" if($?);
+		   next if(grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list));
+	       }
+
+	       if($p =~ /\// || -d $p){ #directory
+		   my $name = ($p =~ /([^\/]+)\/?$/) ? $1 : '';
+		   next if(-d $p && -f "$p/$name\_parameters.cfg");
+	       }
+
+	       if($p !~ /\//){ #species name
+		   my $name = $p;
+		   next if(-f "$ENV{AUGUSTUS_CONFIG_PATH}/species/$p/$name\_parameters.cfg");
+	       }
+
+	       push(@non, $entry);
+	   }
+	   
+	   $error .= "ERROR: The augustus_species provided does not exist:\n".
+	       "\t".join("\n\t", @non)."\n\n" if(@non);
        }
    }
    if ($CTL_OPT{blast_type} =~ /^wublast$/i && -f $CTL_OPT{blasta}) {

@@ -81,6 +81,14 @@ sub nE {
         }
 }
 #-------------------------------------------------------------------------------
+sub cigar_string {
+    my $self = shift;
+
+    $self->{_CIGAR} = '' if(! defined($self->{_CIGAR}));
+
+    return $self->{_CIGAR};
+}
+#-------------------------------------------------------------------------------
 sub hasRun {
 
         print " method hasRun is not available for ";

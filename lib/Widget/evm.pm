@@ -153,8 +153,9 @@ sub parse {
 	}
 	elsif($line =~ /^!!/){
 	}
-	else {die "died in evm widget unknown feature $line";
-	  }
+	else {
+	    die "ERROR: Died in evm widget. unknown feature: $line";
+	}
 
 
     }

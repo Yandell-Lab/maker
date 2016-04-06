@@ -60,6 +60,7 @@ sub prep_hits {
 	my $c_bag;
 	my $e_bag;
 	if($correct_est_fusion){
+	    $prot_hits = get_selected_types($prot_hits, 'protein2genome', 'protein_gff');
 	    $c_bag = $prot_hits;
 	    $e_bag = combine($est_hits,
 			     $altest_hits);
@@ -73,13 +74,13 @@ sub prep_hits {
 	}
 
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
-	my $p_clusters = cluster::clean_and_cluster(20, $p, 0, 1); #flattens
+	my $p_clusters = cluster::clean_and_cluster(20, $p, 0, 1, $est_forward); #flattens
 	$p_clusters = cluster::shadow_cluster(0, $p_clusters, $pred_flank); #broaden
-	my $m_clusters = cluster::clean_and_cluster(20, $m, 0, 1); #flattens
+	my $m_clusters = cluster::clean_and_cluster(20, $m, 0, 1, $est_forward); #flattens
 	$m_clusters = cluster::shadow_cluster(0, $m_clusters, $pred_flank); #broaden
 
 	my $e_cluster = [];
-	$e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1); #flattens
+	$e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1, $est_forward); #flattens
 	$e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
 	if(!$correct_est_fusion){
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
@@ -147,7 +148,6 @@ sub prep_hits {
 
 
 	#==prep model_gff data
-
 	if($correct_est_fusion){
 	    #add ESTs that were separated for fusion avoidance
 	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
@@ -690,6 +690,20 @@ sub prep_blastx_data {
 	# go ahead and inclde the proteion2genome data as well... why not?
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
+	#temp
+	#@$ps_in_cluster = grep {$_->hsps > 1 || $_->name =~ /^sp\|/} @$ps_in_cluster;
+	#my $clusters = cluster::shadow_cluster(0, $ps_in_cluster);
+	#$gomiph = [];
+	#foreach my $c (@$clusters){
+	#    if(@$c > 1){
+	#	push(@$gomiph, @$c);
+	#    }
+	#    elsif($c->[0]->name =~ /^sp\|/){
+	#	push(@$gomiph, @$c);
+	#    }
+	#}
+	#temp
+
 	my @data;
 	my $i = 0;
 	push(@data, {'gomiph'    => $gomiph,
@@ -781,6 +795,20 @@ sub prep_pred_data {
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
+
+	#temp
+	#@$ps_in_cluster = grep {$_->hsps > 1 || $_->name =~ /^sp\|/} @$ps_in_cluster;
+	#my $clusters = cluster::shadow_cluster(0, $ps_in_cluster);
+	#$gomiph = [];
+	#foreach my $c (@$clusters){
+	#    if(@$c > 1){
+	#	push(@$gomiph, @$c);
+	#    }
+	#    elsif($c->[0]->name =~ /^sp\|/){
+	#	push(@$gomiph, @$c);
+	#    }
+	#}
+	#temp
 
 	my @data;
 	push(@data, {'gomiph'    => $gomiph,

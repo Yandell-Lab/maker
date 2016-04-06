@@ -10,17 +10,18 @@ use base qw();
 
 our $VERSION='1.0';
 our $PS = File::Which::which('ps');
+eval 'require Proc::ProcessTable';
 
 sub new {
-    if($PS){
-	my $self = {};
-	my $class = shift;
-	bless($self, $class);
-	return $self;
+    my $self = {};
+    my $class = shift;
+
+    if(exists $INC{'Proc/ProcessTable.pm'} || !$PS){
+	return Proc::ProcessTable->new(@_);
     }
     else{
-	eval 'require Proc::ProcessTable';
-	return Proc::ProcessTable->new(@_);
+	bless($self, $class);
+	return $self;
     }
 }
 
@@ -44,7 +45,8 @@ sub _make_procs {
     my $pid = shift || '';
 
     my $cmd = "$PS";
-    $cmd .= ($pid) ? " p$pid" : " ax"; 
+    #$cmd .= ($pid) ? " p$pid" : " ax"; #all processes
+    $cmd .= ($pid) ? " p$pid" : " x"; #just this users processes
     $cmd .= " -o pid=pid".("_"x10).
 	    " -o ppid=ppid".("_"x10).
 	    " -o state=state".("_"x10).

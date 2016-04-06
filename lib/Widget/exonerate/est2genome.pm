@@ -239,7 +239,7 @@ sub get_exon_coors_r {
 	    else {
 		$pos_q -= $o->{q};
 	    }
-	    
+    
 	    if ($v->{t_strand} == 1){
 		$pos_t += $o->{t};
 	    }
@@ -625,31 +625,6 @@ sub fix_exon_coors { #no longer needed 7-26-2008
 	return \@new_data;
 }
 #-------------------------------------------------------------------------------
-sub get_model_order {
-	my $v = shift;
-
-	my $str = '';
-	foreach my $o (@{$v->{operations}}){
-		$str .= $o->{state};
-	}
-
-	my $type;
-	if ($str =~ /3I5/ && $str =~ /5I3/){
-		$type = 'mixed';
-		warn "MIXED MODEL in Widget/est2genome!\n";
-		warn "TELL MARK Y!\n";
-		#sleep 5;
-	}
-	elsif ($str =~ /5I3/){
-		$type = '5I3';
-	}
-	elsif ($str =~ /3I5/){
-		$type = '3I5';
-	}
-
-	return $type;
-}
-#-------------------------------------------------------------------------------
 sub assemble {
 	my $bhd       = shift;
 	my $bad       = shift;
@@ -657,7 +632,7 @@ sub assemble {
 	my $q_seq_len = shift;
 	my $t_seq_len = shift;
 
-	my $type = get_model_order($v);
+	my $type = Widget::exonerate::get_model_order($v);
 
 	my $exons;
 	if ($v->{q_strand} == 1){
@@ -730,11 +705,16 @@ sub split_nc_str {
 
 	my $reg_ex = 'Target\s+Intron\s+\d+';
 
-	my @q_nc_strs = split(/$reg_ex/, $q_nc_str);
+	my @q_nc_strs = split(/$reg_ex/, $q_nc_str, -1);
 
 	foreach my $str (@q_nc_strs){
-	    $str =~ s/\s*[<>]+\s*$//;
-	    $str =~ s/^\s*[<>]+\s*//;
+	    $str =~ s/\s{0,2}[<>]+\s{0,2}$//;
+	    $str =~ s/^\s{0,2}[<>]+\s{0,2}//;
+	}
+
+	#weird zero length intron (spaces only)
+	if(grep {/\s{4}/} @q_nc_strs){
+	    @q_nc_strs = map {split(/\s{4}/, $_, -1)} @q_nc_strs;
 	}
 
 	return \@q_nc_strs;
@@ -785,7 +765,7 @@ sub add_align_strs {
 
 	my $q_nc_str = $bad->{q_nc_str};
 
-	if ($q_nc_str =~ /Target Intron/){
+	if ($q_nc_str =~ /Target Intron|\s{4}/){
 		my $q_nc_strs = split_nc_str($q_nc_str);
 
 		my $i = 0; #report count
@@ -820,9 +800,20 @@ sub add_align_strs {
 			    $exons->[$j]->{t_nc_str} = $t_nc_str;
 			    $j++;
 			}
+			
+			#get intron line (check for weird zero length introns)
+			$o += $L;
+			my $i_str = substr($bad->{q_nc_str},
+					   $o,
+					   28 + length($i + 1));
 
-			$o += $L + 28 + length($i + 1);
-			$i++;
+			if($i_str =~ /^\s{4}/){ #zero length intron
+			    $o += 4;
+			}
+			elsif($i_str =~ /Target Intron/){
+			    $o += length($i_str);
+			    $i++;
+			}
 		}
 	}
 	else {
@@ -1182,13 +1173,13 @@ sub keepers {
         my $start = $result->hits();
         while(my $hit = $result->next_hit) {
 		#$hit->show();
-=head;
+=head
                 my $significance = $hit->significance();
                 $significance = "1".$significance if  $significance =~ /^e/;
                 $hit->queryLength($result->query_length);
                 $hit->queryName($result->query_name);
                 #next unless $significance < $params->{significance};
-=cut;
+=cut
                 my @hsps;
                 while(my $hsp = $hit->next_hsp) {
 			#print "start q:".$hsp->start('hit')."\n";
@@ -1205,26 +1196,6 @@ sub keepers {
         print STDERR "deleted:$deleted hits\n" unless $main::quiet;
 
         return \@keepers;
-}
-#-------------------------------------------------------------------------------
-sub AUTOLOAD {
-        my ($self, $arg) = @_;
-
-        my $caller = caller();
-        use vars qw($AUTOLOAD);
-        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
-        $call =~/DESTROY/ && return;
-
-        print STDERR "Widget::RepeatMasker::AutoLoader called for: ",
-              "\$self->$call","()\n";
-        print STDERR "call to AutoLoader issued from: ", $caller, "\n";
-
-        if (defined($arg)){
-                $self->{$call} = $arg;
-        }
-        else {
-                return $self->{$call};
-        }
 }
 #------------------------------------------------------------------------
 

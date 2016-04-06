@@ -25,6 +25,7 @@ sub clean_and_cluster {
     my $keepers = shift;
     my $flank   = shift || 0;
     my $t_sep_flag = shift || 0; #type seperation flag (depth on types not on whole)
+    my $skip_splice_filter = shift || 0;
     
     return [] if(!@$keepers);
     $depth = 0 if (! defined($depth) || $depth < 0);
@@ -39,6 +40,9 @@ sub clean_and_cluster {
     my $counter = 0;
     my @clusters = (@$p_clusters, @$m_clusters);
     my $num_c = @clusters;
+
+    return \@clusters if($skip_splice_filter);
+
     print STDERR "cleaning clusters....\n" unless $main::quiet;
     foreach my $c (@clusters){
 	print STDERR "total clusters:$num_c now processing $counter\n" unless($main::quiet);

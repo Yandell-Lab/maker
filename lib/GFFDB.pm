@@ -1211,6 +1211,7 @@ sub _load_hsps {
 	my @args;
 	my $hit_end = $e->{f}->end - $e->{f}->start + $hit_start;
 
+	my $cigar = '';
 	my $value = _get_annotation($e->{f}, 'Target');
         if($value ne ''){
             my @dats = split(/\s/, $value);
@@ -1219,6 +1220,8 @@ sub _load_hsps {
             $hit_start = $dats[1];
             $hit_end   = $dats[2];
             $hit_strand = (defined ($dats[3]) && $dats[3] eq '-') ? -1 : 1;
+
+	    $cigar = _get_annotation($e->{f}, 'Gap');
         }
 
 	push(@args, '-query_start');
@@ -1287,7 +1290,7 @@ sub _load_hsps {
 	#strip off unrecognized hit attributes for storage
 	my @anns;
 	if(@anns = $e->{f}->annotation->get_all_annotation_keys()){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$|^Gap$/} @anns;
 	    foreach my $ann (@anns){ 
 		my @list = $e->{f}->annotation->get_Annotations();
 		@list = map {$_->value()} @list;
@@ -1295,12 +1298,13 @@ sub _load_hsps {
 	    }
 	}
 	elsif(@anns = $e->{f}->get_all_tags){ #sometimes bioperl does this, version?
-	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
+	    @anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$|^Gap$/} @anns;
 	    foreach my $ann (@anns){
 		my @list = $e->{f}->get_tag_values($ann);
 		$ann = $ann.'='.join(',', @list);
 	    }
 	}
+
 	my $attrib = join(';', @anns) if(@anns);
 	push(@args, '-attrib');
 	push(@args, $attrib);
@@ -1320,6 +1324,11 @@ sub _load_hsps {
 	}
 
 	$hit_start += $e->{f}->end - $e->{f}->start + 1;
+
+	#cigar string hack
+	if($cigar){
+	    $hsp->{_CIGAR} = $cigar;
+	}
 
 	push(@hsps, $hsp);
     }

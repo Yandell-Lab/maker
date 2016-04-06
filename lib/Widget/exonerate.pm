@@ -71,27 +71,43 @@ sub run {
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
-sub AUTOLOAD {
-        my ($self, $arg) = @_;
+sub get_model_order {
+    my $v = shift;
 
-        my $caller = caller();
-        use vars qw($AUTOLOAD);
-        my ($call) = $AUTOLOAD =~/.*\:\:(\w+)$/;
-        $call =~/DESTROY/ && return;
+    my $str = '';
+    foreach my $o (@{$v->{operations}}){
+	$str .= $o->{state};
+    }
 
-        #print STDERR "Widget::exonerate::AutoLoader called for: ",
-        #      "\$self->$call","()\n";
-        #print STDERR "call to AutoLoader issued from: ", $caller, "\n";
+    my $type;
+    if ($str =~ /3I5/ && $str =~ /5I3/){
+	die "ERROR: Mixed model in Widget::exonerate!\n";
+    }
+    elsif ($str =~ /5I3/){
+	$type = '5I3';
+    }
+    elsif ($str =~ /3I5/){
+	$type = '3I5';
+    }
 
-        if (defined($arg)){
-                $self->{$call} = $arg;
+    if(!$type){
+            if($str =~ /[A-HJ-Z]53|53[A-HJ-Z]/ && $str =~ /[A-HJ-Z]35|35[A-HJ-Z]/){
+                die "ERROR: Mixed zero intron model in Widget::exonerate!\n";
+            }
+            elsif($str =~ /[A-HJ-Z]53|53[A-HJ-Z]/){
+                $type = '5I3';
+            }
+            elsif($str =~ /[A-HJ-Z]35|35[A-HJ-Z]/){
+                $type = '3I5';
+            }
+            elsif($str =~ /[35]/){
+                die "ERROR: Could not determine model type in Widget::exonerate!\n";
+            }
         }
-        else {
-                return $self->{$call};
-        }
+
+        return $type;
 }
 #------------------------------------------------------------------------
-
 1;
 
 

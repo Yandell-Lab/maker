@@ -27,6 +27,24 @@ sub new {
 	return $self;
 }
 #------------------------------------------------------------------------
+sub frac_identical {
+    my $self = shift;
+
+    return $self->{_f_id} if (defined ($self->{_f_id}));
+
+    my $t_f;
+    my $t_l;
+
+    foreach my $s ($self->hsps){
+	$t_l += $s->length / 3; #gaps in protein2genome are handled differently so length is 3 times too big
+	$t_f += $s->num_identical;
+    }
+
+    $self->{_f_id} = sprintf("%.3f", $t_f/$t_l);
+
+    return $self->{_f_id};
+}
+#------------------------------------------------------------------------
 sub show {
 	my $self = shift;
 

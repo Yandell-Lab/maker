@@ -58,38 +58,41 @@ sub _initialize {
    #continuous try because of weird NFS behavior with false success
    my $success = 0;
    while(! $success){
+       unlink($def_file) if(-f $def_file);
        open(my $DEF, "> $tdef_file") || confess "ERROR: Could not open file: $tdef_file\n$!\n";
        print_txt($DEF, $self->header."\n");
        close($DEF);
        #link is atomic on most NFS implementations
-       unlink($def_file) if($link);
        $success = link("$tdef_file", $def_file) if($link);
        $success = -f $def_file if($success || !$link);
        $success = (stat _)[3] == 2 if($success && $link);
        unlink($tdef_file) if($link);
+       $success = -f $def_file if($success || !$link);
    }
    $success = 0;
    while(! $success){
+       unlink($ann_file) if(-f $ann_file);
        open(my $ANN, "> $tann_file") || confess "ERROR: Could not open file: $tann_file\n$!\n";
        close($ANN);
        #link is atomic on most NFS implementations
-       unlink($ann_file) if($link);
        $success = link("$tann_file", $ann_file) if($link);
        $success = -f $ann_file  if($success || !$link);
        $success = (stat _)[3] == 2 if($success && $link);
        unlink($tann_file) if($link);
+       $success = -f $ann_file  if($success || !$link);
    }
    $success = 0;
    while(! $success){
+       unlink($seq_file) if(-f $seq_file);
        open(my $SEQ, "> $tseq_file") || confess "ERROR: Could not open file: $tseq_file\n$!\n";
        print_txt($SEQ, "##FASTA\n");
        close($SEQ);
        #link is atomic on most NFS implementations
-       unlink($seq_file) if($link);
        $success = link("$tseq_file", $seq_file) if($link);
        $success = -f $seq_file if($success || !$link);
        $success = (stat _)[3] == 2 if($success && $link);
        unlink($tseq_file) if($link);
+       $success = -f $seq_file if($success || !$link);
    }
 
    $self->{gff_file} = $gff_file;
@@ -193,7 +196,7 @@ sub finalize {
 
     #already finalized
     return if(-f $gff_f && ! -f $def_f && ! -f $ann_f && ! -f $seq_f);
-    sleep 10 if(! -f $def_f && ! -f $ann_f && ! -f $seq_f); # wait because of slow NFS
+    sleep 10 if(! -f $def_f || ! -f $ann_f || ! -f $seq_f); # wait because of slow NFS
 
     open(my $DEF, ">> $def_f") || confess "ERROR: Can't open def file: $def_f\n$!\n\n";
     open(my $SEQ, "< $seq_f") || confess "ERROR: Can't open seq file: $seq_f\n$!\n\n";
@@ -363,6 +366,8 @@ sub add_predictions {
 
     return if(! $hits || ! @$hits);
 
+    @$hits = sort {$a->start <=> $b->start} @$hits;
+
     my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
     while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
     open(my $ANN, '>>', $self->{ann_file})|| confess "ERROR: Can't open annotation file\n\n";
@@ -380,6 +385,8 @@ sub add_phathits {
 
    return if(! $hits || ! @$hits);
 
+   @$hits = sort {$a->start <=> $b->start} @$hits;
+
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
    open(my $ANN, '>>', $self->{ann_file})|| confess "ERROR: Can't open annotation file\n\n";
@@ -396,6 +403,8 @@ sub add_repeat_hits {
    my $uid   = shift || $$;
 
    return if(! $hits || ! @$hits);  
+
+   @$hits = sort {$a->start <=> $b->start} @$hits;
 
    my $lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30);
    while(!$lock || !$lock->still_mine){$lock = new File::NFSLock($self->{ann_file}, 'EX', 1800, 30)}
@@ -617,18 +626,23 @@ sub hit_data {
    $h_id = join(":", $seq_id, $h_id, $uid);
    my $score = $h->score() || '.';
    $score .= 0 if $score eq '0.';
-   
+
+   my $sorted = PhatHit_utils::sort_hits($h); #hsps
+
    my @h_data;
    push(@h_data, $seq_id, $class, $type, $h_s, $h_e, $score, $h_str, '.');
    my $attributes = 'ID='.$h_id.';Name='.$name;
    $attributes .= ';_AED='.$AED if(defined($AED));
    $attributes .= ';_eAED='.$eAED if(defined($eAED));
    $attributes .= ';_QI='.$QI if(defined($QI));
+   if($sorted->[0]->cigar_string() =~ /[A-Z]\d/){ #goes with cigar
+       $attributes .= ';target_length='.$h->length;
+       $attributes .= ';aligned_coverage='.($h->pAh * 100) if($class =~ /2genome/); #temp
+       $attributes .= ';aligned_identity='.($h->frac_identical * 100) if($class =~ /2genome/); #temp
+   }
    $attributes .= ';'.$h->{-attrib} if($h->{-attrib});
    $attributes =~  s/\;$//;
    my $h_l = join("\t", @h_data, $attributes)."\n";
-   
-   my $sorted = PhatHit_utils::sort_hits($h);
    
    foreach my $hsp (@{$sorted}){
       my $hsp_id = get_id_hsp();
@@ -1194,7 +1208,7 @@ sub get_hsp_data {
 	my $nine  = 'ID='.$hsp_id.';Parent='.$hit_id;
 	   $nine .= ';Target='.$hsp_name.' '.$tB.' '.$tE;
 	   $nine .= ' '.$t_strand if($hsp->strand('hit'));
-	   $nine .= ';Length='.$hit->length;
+	   #$nine .= ';target_length='.$hit->length;
 	   $nine .= ';Gap='.join(' ', @gap) if(@gap);
 	   $nine .= ';'.$hsp->{-attrib} if($hsp->{-attrib});
 	   $nine =~  s/\;$//;
