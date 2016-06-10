@@ -50,6 +50,7 @@ sub get_pred_shot {
         my $pred_flank    = shift;
         my $pred_command  = shift;
         my $hmm           = shift;
+        my $extra         = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -62,12 +63,11 @@ sub get_pred_shot {
                                           $shadow_seq,
                                          );
 
-        my $alt_aug_command;
         if ($strand == 1){
-                $alt_aug_command = $pred_command.' --strand=forward';
+                $extra .= ' --strand=forward';
         }
         else {
-                 $alt_aug_command = $pred_command.' --strand=backward';
+	    $extra .= ' --strand=backward';
         }
 
         my $gene_preds = augustus($shadow_fasta,
@@ -77,8 +77,9 @@ sub get_pred_shot {
                                   $offset,
 				  $end,
                                   $xdef,
-                                  $alt_aug_command,
-				  $hmm
+                                  $pred_command,
+				  $hmm,
+				  $extra
                                  );
 
 
@@ -146,10 +147,21 @@ sub augustus {
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
+        my $extra      = shift;
+
+	#make sure AUGUSTUS_CONFIG_PATH is set or augustus can fail
+	if (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg") {
+	    my ($path) = Cwd::abs_path($command);
+	    $path =~ s/bin\/augustus$/config/;
+	    $ENV{AUGUSTUS_CONFIG_PATH} = $path;
+	}
+
+	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
+	my $config_path = $ENV{AUGUSTUS_CONFIG_PATH};
+	($hmm_name, $config_path) = GI::augustus_species($hmm_name, $config_path);
 
         my $aug_keepers = [];
-	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
-        my $cfg_file = "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg";
+        my $cfg_file = "$config_path/extrinsic/extrinsic.MPE.cfg";
 
         my $tmp = GI::get_global_temp();
         my $rank = GI::RANK();
@@ -161,9 +173,12 @@ sub augustus {
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
 
 	my $run = $command;
+	$run .= " $extra";
+	$run .= " --species=$hmm_name";
 	$run .= ' --UTR=off';
 	$run .= ' --hintsfile='.$xdef_file if(defined $xdef);
 	$run .= ' --extrinsicCfgFile='.$cfg_file if(-e $cfg_file);
+	$run .= ' --AUGUSTUS_CONFIG_PATH='.$config_path;
 	$run .= " $file_name";
 	$run .= " > $o_file";
 
@@ -195,7 +210,7 @@ sub augustus {
                              \%params,
                              $fasta);
             #File::Copy::copy($o_file, $backup) unless(! -f $backup); #temp
-	    unlink($o_file); #temp
+	    unlink($o_file);
         }
         catch Error::Simple with {
             my $E = shift;
@@ -207,9 +222,12 @@ sub augustus {
 	    my $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.augustus";
 	    my $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.augustus";
 	    my $run = $command;
+	    $run .= " $extra";
+	    $run .= " --species=$hmm_name";
 	    $run .= ' --UTR=off';
 	    $run .= ' --hintsfile='.$xdef_file if defined $xdef;
 	    $run .= ' --extrinsicCfgFile='.$cfg_file if -e $cfg_file;
+	    $run .= ' --AUGUSTUS_CONFIG_PATH='.$config_path;
 	    $run .= " $file_name";
 	    $run .= " > $o_file";
             write_xdef_file($xdef, $xdef_file) if(defined $xdef);

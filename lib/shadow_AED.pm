@@ -242,19 +242,31 @@ sub get_eAED {
 	       }
 
 	       my @gap = $cigar =~ /([A-Z]\d+)/g;
-	       foreach my $g (@gap){
-		   $g =~ /([A-Z])(\d+)/;
-		   if($1 eq 'F'){
-		       $pos += $2;
+	       for(my $i = 0; $i < @gap; $i++){
+		   my $g = $gap[$i];
+		   my ($t, $l) = $g =~ /([A-Z])(\d+)/;
+
+		   if($t eq 'F'){
+		       $pos += $l;
 		   }
-		   elsif($1 eq 'R'){
-		       $pos -= $2;
+		   elsif($t eq 'R'){
+		       next; #skip (handled with M)
 		   }
-		   elsif($1 eq 'D'){
-		       $pos += ($2 * 3);
+		   elsif($t eq 'D'){
+		       $pos += ($l * 3);
 		   }
-		   elsif($1 eq 'M'){
-		       my $go = $2;
+		   elsif($t eq 'M'){
+		       #must correct for R that makes M less than 3
+		       my $R = 0; #reverse frame shift length
+		       if($p->strand('query') == 1 && $i > 0 && $gap[$i-1] =~ /^R/){
+			   ($R) = $gap[$i-1] =~ /R(\d+)/;
+		       }
+		       elsif($p->strand('query') == -1 && $i < @gap && $gap[$i+1] =~ /^R/){
+			   ($R) = $gap[$i+1] =~ /R(\d+)/;
+		       }
+		       $pos -= $R;
+
+		       my $go = $l;
 		       while($go--){
 			   if($pos > $end || $pos+2 < $start){
 			       warn "WARNING: Alignment is outside of expected bounaries\n".

@@ -92,6 +92,11 @@ sub prep_hits {
 	my $careful_clusters = [];
 	push(@{$careful_clusters}, @{$p_clusters}, @{$m_clusters});
 
+	#==use jaccardian metrics to split weak clusters
+	if($correct_est_fusion){
+	    $careful_clusters = jaccard_split_clusters($careful_clusters, 0.5);
+	}
+
 	#==purge ESTs in separate group from main evidence cluster
 	# don't use unpliced single exon ESTs-- may be genomic contamination
 	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
@@ -106,8 +111,8 @@ sub prep_hits {
 	    $e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
 	}
 
-	if(!$correct_est_fusion){
-	    #===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	#===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	if(!$correct_est_fusion){ #only needed when ESTs already in cluster
 	    # don't use unpliced single exon ESTs-- may be genomic contamination
 	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
 		$careful_clusters = purge_single_exon_hits_in_cluster($careful_clusters);
@@ -170,7 +175,7 @@ sub prep_hits {
 	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
 								   $careful_clusters
 								   );
-
+	
 	#join clusters on the ab-inits
 	my $pred_clusters = join_clusters_on_pred($predictions, $careful_clusters, $c_index);
 
@@ -230,7 +235,6 @@ sub prep_hits {
 	merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
 
 	#==prep hint data
-
 	if($correct_est_fusion){
 	    #add ESTs that were separated for fusion avoidance
 	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
@@ -239,7 +243,6 @@ sub prep_hits {
 	    merge_into_cluster($hit_mult, $hint_clusters, $c_index);
 	}
 
-	#my @bx_data;
 	foreach my $c (@{$hint_clusters}){
 	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
 	   push(@all_data, @{$bx}) if defined $bx;
@@ -261,6 +264,8 @@ sub prep_hits {
 
 	    $c_id++;
         }
+
+	#==add index values (I don't remember why?)
 
 	#add index value to ESTs (corresponds to order in array)
 	my $index = 0;
@@ -313,7 +318,6 @@ sub prep_hits {
 	}
 
 	return (\@all_data);
-	#return (\@bx_data, \@gf_data, \@pr_data);
 }
 #------------------------------------------------------------------------
 #called in prep_hits to classify abinits as overlaping one, many, or no
@@ -445,6 +449,112 @@ sub segment_preds {
 	}
 
 	return (\%clusters_hit, \@hit_one, \@hit_none, \@hit_mult);
+}
+#------------------------------------------------------------------------
+sub jaccard_split_clusters {
+    my $clusters = shift;
+    my $jac = shift; #jaccard filter
+
+    my @keepers;
+    foreach my $c (@$clusters){
+	push(@keepers, @{jaccard_cluster($c, $jac)});
+    }
+
+    return \@keepers;
+}
+
+#------------------------------------------------------------------------
+sub jaccard_cluster {
+    my $hits = shift;
+    my $jac = shift;
+
+    #sort
+    my @hs = sort {$a->start('query') <=> $b->start('query')} @$hits;
+
+    #identify pairs and build matrix
+    my @pairs;
+    my @matrix;
+    my @matrix_h;
+    my @jaccard_pairs;
+    for(my $i = 0; $i < @hs; $i++){
+	push(@jaccard_pairs, [$i, $i]); #add self pair
+
+	#now evaluate other hits
+	for(my $j = $i+1; $j < @hs; $j++){
+	    next if($hs[$i]->start('query') > $hs[$j]->end('query'));
+	    next if($hs[$i]->strand('query') != $hs[$j]->strand('query'));
+	    last if($hs[$i]->end('query') < $hs[$i]->start('query'));
+
+	    my ($sn, $sp) = shadow_AED::get_SN_SP([$hs[$i]], $hs[$j]);
+	    next if($sn < 0.5 && $sp < 0.5);
+
+	    push(@pairs, [$i, $j]);
+            $matrix_h[$i]->{$j}++;
+            $matrix_h[$j]->{$i}++; #must be redundant
+	}
+    }
+    push(@matrix, [keys %{$_}]) foreach(@matrix_h); #make everything an array
+
+    #get jaccard_pairs
+    for (my $i = 0; $i < @pairs; $i++){
+	my ($j, $k) = @{$pairs[$i]};
+	
+	my $j_size = @{$matrix[$j]};
+	my $k_size = @{$matrix[$k]};
+	my $int = (grep {exists ($matrix_h[$j]{$_})} @{$matrix[$k]}) + 1; #plus 1 for j->k pair
+	my $union = ($j_size + $k_size) - $int;	
+	my $jaccard = $int/$union;
+
+	push(@jaccard_pairs, $pairs[$i]) if ($jaccard >= $jac);
+    }
+    
+    #build clusters
+    my $cId = 0;
+    my @cMap;
+    my @cId_index;
+    foreach my $p (@jaccard_pairs){
+	my ($mUidI, $mUidJ) = @{$p};
+	if(!defined($cId_index[$mUidI]) && !defined($cId_index[$mUidJ])){
+	    $cId_index[$mUidI] = $cId;
+	    $cId_index[$mUidJ] = $cId;
+
+	    if($mUidI ==$mUidJ){
+		push(@{$cMap[$cId]}, $mUidI); #self match
+	    }
+	    else{
+		push(@{$cMap[$cId]}, $mUidI, $mUidJ);
+	    }
+	    $cId++;
+	}
+	elsif (defined($cId_index[$mUidI]) && !defined($cId_index[$mUidJ])){
+	    my $cId = $cId_index[$mUidI];
+	    $cId_index[$mUidJ] = $cId;
+	    push(@{$cMap[$cId]}, $mUidJ);
+	}
+	elsif (!defined($cId_index[$mUidI]) && defined($cId_index[$mUidJ])){
+	    my $cId = $cId_index[$mUidJ];
+	    $cId_index[$mUidI] = $cId;
+	    push(@{$cMap[$cId]}, $mUidI);
+	}
+	elsif (defined($cId_index[$mUidI]) && defined($cId_index[$mUidJ])){
+	    next if ($cId_index[$mUidI] == $cId_index[$mUidJ]);
+	    
+	    my $cIdI = $cId_index[$mUidI];
+	    my $cIdJ = $cId_index[$mUidJ];
+	    @cId_index[@{$cMap[$cIdJ]}] = map {$cIdI} @{$cMap[$cIdJ]};
+	    push(@{$cMap[$cIdI]}, @{$cMap[$cIdJ]});
+	    undef $cMap[$cIdJ];
+	}
+    }
+
+    #return hits
+    my @keepers;
+    foreach my $c (@cMap){
+	next if(!$c);
+	push(@keepers, [@hs[@$c]]);
+    }
+
+    return \@keepers;
 }
 #------------------------------------------------------------------------
 #takes abinits identified by segment_preds and merges them back into
@@ -690,20 +800,6 @@ sub prep_blastx_data {
 	# go ahead and inclde the proteion2genome data as well... why not?
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
 
-	#temp
-	#@$ps_in_cluster = grep {$_->hsps > 1 || $_->name =~ /^sp\|/} @$ps_in_cluster;
-	#my $clusters = cluster::shadow_cluster(0, $ps_in_cluster);
-	#$gomiph = [];
-	#foreach my $c (@$clusters){
-	#    if(@$c > 1){
-	#	push(@$gomiph, @$c);
-	#    }
-	#    elsif($c->[0]->name =~ /^sp\|/){
-	#	push(@$gomiph, @$c);
-	#    }
-	#}
-	#temp
-
 	my @data;
 	my $i = 0;
 	push(@data, {'gomiph'    => $gomiph,
@@ -746,6 +842,7 @@ sub prep_gff_data {
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						  'twinscan', 'genemark',  'pred_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
+	$models_in_cluster->[0]->{_merge_warning} = $models_in_cluster->[0]->{_hit_multi}; #hint cluster merged for model
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
@@ -792,23 +889,10 @@ sub prep_pred_data {
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
+	$abinits->[0]->{_merge_warning} = $abinits->[0]->{_hit_multi}; #hint cluster merged for pred
 
 	# groups of most informative protein hits
 	my $gomiph = combine($ps_in_cluster, $bx_in_cluster);
-
-	#temp
-	#@$ps_in_cluster = grep {$_->hsps > 1 || $_->name =~ /^sp\|/} @$ps_in_cluster;
-	#my $clusters = cluster::shadow_cluster(0, $ps_in_cluster);
-	#$gomiph = [];
-	#foreach my $c (@$clusters){
-	#    if(@$c > 1){
-	#	push(@$gomiph, @$c);
-	#    }
-	#    elsif($c->[0]->name =~ /^sp\|/){
-	#	push(@$gomiph, @$c);
-	#    }
-	#}
-	#temp
 
 	my @data;
 	push(@data, {'gomiph'    => $gomiph,
@@ -2148,7 +2232,7 @@ sub run_it{
 		    }
 		    push(@keepers, $h) if(! $remove);
 		}
-		
+
 		@$on_right_strand = @keepers;
 	    }
 	    
@@ -2202,7 +2286,8 @@ sub get_pred_shot {
 
        foreach my $entry (split(',', $CTL_OPT->{snaphmm})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPT->{snap}.' '.$hmm;
+	   my $pred_command = $CTL_OPT->{snap};
+	   my $extra = '';
 	   (my $preds, $strand) = Widget::snap::get_pred_shot($seq,
 							      $def,
 							      $the_void,
@@ -2212,6 +2297,7 @@ sub get_pred_shot {
 							      $CTL_OPT->{pred_flank},
 							      $pred_command,
 							      $hmm,
+							      $extra,
 							      $CTL_OPT->{force},
 							      $LOG
 							      );
@@ -2237,7 +2323,8 @@ sub get_pred_shot {
 
        foreach my $entry (split(',', $CTL_OPT->{augustus_species})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPT->{augustus}.' --species='.$hmm;
+	   my $pred_command = $CTL_OPT->{augustus};
+	   my $extra = '';
 	   (my $preds, $strand) = Widget::augustus::get_pred_shot($seq,
 								  $def,
 								  $the_void,
@@ -2247,6 +2334,7 @@ sub get_pred_shot {
 								  $CTL_OPT->{pred_flank},
 								  $pred_command,
 								  $hmm,
+								  $extra,
 								  $CTL_OPT->{force},
 								  $LOG
 								  );
@@ -2262,7 +2350,8 @@ sub get_pred_shot {
    elsif($predictor eq 'fgenesh'){
        foreach my $entry (split(',', $CTL_OPT->{fgenesh_par_file})){
 	   my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
-	   my $pred_command = $CTL_OPT->{fgenesh}.' '.$hmm;
+	   my $pred_command = $CTL_OPT->{fgenesh};
+	   my $extra = '';
 	   (my $preds, $strand) = Widget::fgenesh::get_pred_shot($seq,
 								 $def,
 								 $the_void,
@@ -2272,6 +2361,7 @@ sub get_pred_shot {
 								 $CTL_OPT->{pred_flank},
 								 $pred_command,
 								 $hmm,
+								 $extra,
 								 $CTL_OPT->{force},
 								 $LOG
 								 );

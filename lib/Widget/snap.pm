@@ -470,6 +470,7 @@ sub get_pred_shot {
         my $snap_flank    = shift;
         my $snap_command  = shift;
         my $hmm           = shift;
+        my $extra         = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -482,17 +483,12 @@ sub get_pred_shot {
                                           $shadow_seq,
                                          );
 
-        my ($exe, $param) = $snap_command =~ /(\S+)\s+(\S+)/;
-
-        my $alt_snap_command;
         if ($strand == 1){
-                $alt_snap_command = $exe.' -plus ';
+	    $extra .= ' -plus';
         }
         else {
-                 $alt_snap_command = $exe.' -minus ';
+	    $extra .= ' -minus';
         }
-
-        $alt_snap_command .= $param;
 
         my $gene_preds = snap($shadow_fasta,
 			      $the_void,
@@ -501,8 +497,9 @@ sub get_pred_shot {
 			      $offset,
 			      $end,
 			      $xdef,
-			      $alt_snap_command,
-			      $hmm
+			      $snap_command,
+			      $hmm,
+			      $extra
 			     );
 
 
@@ -520,6 +517,14 @@ sub snap {
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
+        my $extra      = shift;
+
+	#try to find ZOE if not specified
+	if(!$ENV{ZOE} || ! -d $ENV{ZOE}){
+	    my ($path) = Cwd::abs_path($command);
+	    $path =~ s/snap$//;
+	    $ENV{ZOE} = $path;
+	}
 
         my $snap_keepers = [];
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
@@ -534,6 +539,8 @@ sub snap {
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
 	
 	my $run = $command;
+	$run .= " $extra";
+	$run .= " $hmm_name";
 	$run .= " -xdef $xdef_file ";
 	$run .= " $file_name";
 	$run .= " > $o_file";
@@ -564,8 +571,8 @@ sub snap {
 	    $keepers = parse($o_file,
 			     \%params,
 			     $fasta);
-	    #File::Copy::copy($o_file, $backup) unless(-f $backup); #temp
-	    unlink($o_file); #temp
+	    #File::Copy::copy($o_file, $backup) unless(-f $backup);
+	    unlink($o_file);
 	}
 	catch Error::Simple with {
 	    my $E = shift;
@@ -577,6 +584,8 @@ sub snap {
 	    $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.snap";
 	    $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.snap";
 	    my $run = $command;
+	    $run .= " $extra";
+	    $run .= " $hmm_name";
 	    $run .= " -xdef $xdef_file ";
 	    $run .= " $file_name";
 	    $run .= " > $o_file";

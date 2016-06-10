@@ -637,8 +637,8 @@ sub hit_data {
    $attributes .= ';_QI='.$QI if(defined($QI));
    if($sorted->[0]->cigar_string() =~ /[A-Z]\d/){ #goes with cigar
        $attributes .= ';target_length='.$h->length;
-       $attributes .= ';aligned_coverage='.($h->pAh * 100) if($class =~ /2genome/); #temp
-       $attributes .= ';aligned_identity='.($h->frac_identical * 100) if($class =~ /2genome/); #temp
+       $attributes .= ';aligned_coverage='.($h->pAh * 100) if($class =~ /2genome/);
+       $attributes .= ';aligned_identity='.($h->frac_identical * 100) if($class =~ /2genome/);
    }
    $attributes .= ';'.$h->{-attrib} if($h->{-attrib});
    $attributes =~  s/\;$//;
@@ -1140,10 +1140,11 @@ sub get_transcript_data {
 	$type = 'snoRNA' if($t->{hit}->algorithm =~ /snoscan/i);
 	push(@data, $seq_id, 'maker', $type, $t_b, $t_e, $score, $t_s, '.');
 	my $nine = 'ID='.$t_id.';Parent='.$g_id.';Name='.$t_name;
-	   $nine .= ';_AED='.$AED if(defined($AED));
-	   $nine .= ';_eAED='.$eAED if(defined($eAED));
-	   $nine .= ';_QI='.$t_qi if(defined($t_qi));
-	   $nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
+	$nine .= ';_AED='.$AED if(defined($AED));
+	$nine .= ';_eAED='.$eAED if(defined($eAED));
+	$nine .= ';_QI='.$t_qi if(defined($t_qi));
+	$nine .= ';_merge_warning=1' if($t->{hit}{_merge_warning}); #temp
+	$nine .= ';'.$t_hit->{-attrib} if($t_hit->{-attrib});
 	if($t->{hit}->{_Alias}){
 	    if($nine =~ /Alias\=([^\;\n]+)/){
 		my @keepers = (@{[split(',', $1)]}, @{$t->{hit}->{_Alias}});

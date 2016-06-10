@@ -107,7 +107,7 @@ sub parse {
     my $score;
     my $count=0;
 
-    print "got here\n";
+    #print "got here\n";
     while (my $line = <$fh>){ # look at the snap and augustus parsers for this	    
 	chomp($line);
 #	print $line."\n";

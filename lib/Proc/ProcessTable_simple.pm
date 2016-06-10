@@ -43,7 +43,6 @@ sub table {
 sub _make_procs {
     my $self = shift;
     my $pid = shift || '';
-
     my $cmd = "$PS";
     #$cmd .= ($pid) ? " p$pid" : " ax"; #all processes
     $cmd .= ($pid) ? " p$pid" : " x"; #just this users processes

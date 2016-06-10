@@ -425,7 +425,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $q_def = $VARS->{q_def};
 	    my $seq_id = $VARS->{seq_id};
@@ -526,7 +526,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $out_dir = $VARS->{out_dir};
 	    my $build = $VARS->{build};
@@ -673,7 +673,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
@@ -731,7 +731,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $LOG = $VARS->{LOG};
@@ -866,7 +866,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -930,7 +930,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -991,7 +991,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $chunk = $VARS->{chunk};
 	    my $rm_gff_keepers = $VARS->{rm_gff_keepers};
@@ -1057,7 +1057,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -1259,7 +1259,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
@@ -1313,7 +1313,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_def = $VARS->{q_def};
@@ -1428,7 +1428,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -1651,7 +1651,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq); #temp
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -1726,7 +1726,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -1954,7 +1954,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2088,7 +2088,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $exonerate_e_clusters = $VARS->{exonerate_e_clusters}; #array of overlapping clusters
 	    my $blastn_clusters = $VARS->{blastn_clusters}; #array of overlapping clusters
@@ -2170,7 +2170,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2243,7 +2243,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -2462,7 +2462,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2595,7 +2595,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $exonerate_a_clusters = $VARS->{exonerate_a_clusters}; #array of overlapping clusters
 	    my $tblastx_clusters = $VARS->{tblastx_clusters}; #array of overlapping clusters
@@ -2677,7 +2677,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -2752,7 +2752,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $res_dir = $VARS->{res_dir};
@@ -2972,7 +2972,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $chunk = $VARS->{chunk};
@@ -3094,7 +3094,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $exonerate_p_clusters = $VARS->{exonerate_p_clusters}; #array of overlapping clusters
 	    my $blastx_clusters = $VARS->{blastx_clusters}; #array of overlapping clusters
@@ -3162,7 +3162,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $chunk = $VARS->{chunk};
 	    my $the_void = $VARS->{the_void};
@@ -3420,7 +3420,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -3598,7 +3598,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    confess "ERROR: Logic error in tier_type:$tier_type, level:$level, flag:$flag.\n";
 	    #-------------------------CODE
@@ -3649,7 +3649,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};
@@ -3810,7 +3810,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $q_seq_obj = $VARS->{q_seq_obj};
@@ -3877,7 +3877,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $trans = $VARS->{trans};
@@ -3963,7 +3963,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $an = $VARS->{an};
@@ -4013,7 +4013,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $annotations = $VARS->{annotations};
@@ -4120,7 +4120,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my $chunk        = $VARS->{chunk};
 	    my $maker_anno   = $VARS->{maker_anno};
@@ -4217,7 +4217,7 @@ sub _go {
 	    #------------------------ARGS_IN
 	 }
 	 elsif ($flag eq 'run') {
-	    print STDERR "$level_status\n";
+	    print STDERR "$level_status\n" unless($main::qq);
 	    #-------------------------CODE
 	    my %CTL_OPT = %{$VARS->{CTL_OPT}};
 	    my $the_void = $VARS->{the_void};

@@ -1,22 +1,5 @@
 #!/usr/bin/perl
 
-#Hack to get around findbin error where broken Carp is preloaded
-BEGIN {
-    if(@ARGV == 1 && $ARGV[0] eq 'findbin'){
-	eval 'require FindBin';
-	print $FindBin::RealBin;
-	exit;
-    }
-
-    my $carp_version = `$^X -MCarp -e 'print \$Carp::VERSION'`;
-    if($carp_version < 1.24){
-	my $bin = `$0 findbin`;
-	eval "use lib '$bin/../src/inc/perl/lib'";
-	eval "use lib '$bin/../lib'";
-	eval "use lib '$bin/../perl/lib'";
-    }
-}
-
 use FindBin;
 use lib "$FindBin::RealBin/../src/inc/perl/lib"; #micelaneous
 use lib "$FindBin::RealBin/../lib";
@@ -464,6 +447,7 @@ if($rank == $root){
 if($rank == $root) {
     for(my $i = 0; $i < $size; $i++){
 	next if $i == $root;
+	MPI_Send(\$File::NFSLock::TYPE, $i, $mpi_data); #sync lock type
 	MPI_Send(\$CTL_OPT{TMP}, $i, $mpi_data);
     }
     carp "Calling GI::new_instance_temp" if($main::debug);
@@ -495,6 +479,9 @@ if($rank == $root) {
 }
 else{
     my $tmp;
+    my $lock_type;
+    MPI_Recv(\$lock_type, $root, $mpi_data); #fix lock type
+    $File::NFSLock::TYPE = $lock_type; #fix lock type
     MPI_Recv(\$tmp, $root, $mpi_data);
     carp "Calling GI::new_instance_temp" if($main::debug);
     $tmp = GI::new_instance_temp($tmp);

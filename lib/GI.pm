@@ -1363,7 +1363,7 @@ sub augustus {
 
    #make sure AUGUSTUS_CONFIG_PATH is set or augustus can fail
    $ENV{AUGUSTUS_CONFIG_PATH} = $CTL_OPT->{AUGUSTUS_CONFIG_PATH} if($CTL_OPT->{AUGUSTUS_CONFIG_PATH} &&
-								    ! -f $CTL_OPT->{AUGUSTUS_CONFIG_PATH}."/extrinsic/extrinsic.MPE.cfg");
+								    -f $CTL_OPT->{AUGUSTUS_CONFIG_PATH}."/extrinsic/extrinsic.MPE.cfg");
    if (! $ENV{AUGUSTUS_CONFIG_PATH} || ! -f "$ENV{AUGUSTUS_CONFIG_PATH}/extrinsic/extrinsic.MPE.cfg") {
        #try and find it
        my ($path) = Cwd::abs_path($CTL_OPT->{augustus});
@@ -1376,109 +1376,8 @@ sub augustus {
        my ($hmm, $label) = $entry =~ /^([^\:]+)\:?(.*)/;
        my $config_path = $ENV{AUGUSTUS_CONFIG_PATH};
 
-       #fix for directory and tarball
-       {
-	   #file provided
-	   if($hmm =~ /\.(tgz|tar\.gz)$/ && -f $hmm){
-	       #already unzipped
-	       my $md5 = Digest::MD5::md5_hex($hmm);
-	       if(-d "$TMP/augustus_config/$md5"){
-		   if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
-		       my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
-		       $config_path = "$TMP/augustus_config/$md5";
-		       $hmm = $name;
-		       last;
-		   }
-		   else{
-		       File::Path::rmtree("$TMP/augustus_config/$md5")
-		   }
-	       }
-
-	       #needs to be unzipped
-	       my $list = `tar -ztf $hmm`;
-	       die "ERROR: Could not read contents of tarball: $hmm\n" if($?);
-	       if(grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list)){
-		   my $tdir = "$TMP/$RANK/augustus_config/$md5";
-		   File::Path::rmtree($tdir) if(-d $tdir);
-		   File::Path::mkpath($tdir);
-		   mkdir("$tdir/unzip");
-		   mkdir("$tdir/species");
-
-		   #unzip file
-		   $list = `tar -C $tdir/unzip -zxvf $hmm`;
-		   die "ERROR: Could not extract contents of tarball: $hmm\n" if($?);
-
-		   #move unziped directory into place
-		   my ($path) = grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list);
-		   my ($rel, $name) = $path =~ /^(.*)\/+([^\/]+)_parameters.cfg$/;
-		   (my $dir = "$tdir/unzip/$rel") =~ s/\/+/\//g;
-		   (my $newdir = "$tdir/species/$name") =~ s/\/+/\//g;
-		   File::Copy::move($dir, $newdir);
-		   File::Path::rmtree("$tdir/unzip");
-
-		   #mirror the rest from AUGUSTUS_CONFIG_PATH
-		   symlink("$config_path/extrinsic", "$tdir/extrinsic");
-		   symlink("$config_path/profile", "$tdir/profile");
-		   symlink("$config_path/model", "$tdir/model");
-
-		   #move into final position
-		   mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
-		   File::Copy::move($tdir, "$TMP/augustus_config/$md5");
-		   $config_path = "$TMP/augustus_config/$md5";
-		   $hmm = $name;
-		   last;
-	       }
-	   }
-
-	   #directory provided
-	   if($hmm =~ /\// || -d $hmm){
-	       #already relocated
-	       my $md5 = Digest::MD5::md5_hex($hmm);
-	       if(-d "$TMP/augustus_config/$md5"){
-		   if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
-		       my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
-		       $config_path = "$TMP/augustus_config/$md5";
-		       $hmm = $name;
-		       last;
-		   }
-		   else{
-		       File::Path::rmtree("$TMP/augustus_config/$md5")
-		   }
-	       }
-	       
-	       #needs to be relocated
-	       my $name = ($hmm =~ /([^\/]+)\/?$/) ? $1 : '';
-	       if(-d $hmm && -f "$hmm/$name\_parameters.cfg"){
-		   my $tdir = "$TMP/$RANK/augustus_config/$md5";
-		   File::Path::rmtree($tdir) if(-d $tdir);
-		   File::Path::mkpath($tdir);
-		   mkdir("$tdir/species");
-
-		   #copy directory
-		   system('cp', '-R', $hmm, "$tdir/species/");
-		   die "ERROR: Could not copy parameters: $hmm\n" if($?);
-
-		   #mirror the rest from AUGUSTUS_CONFIG_PATH
-		   symlink("$config_path/extrinsic", "$tdir/extrinsic");
-		   symlink("$config_path/profile", "$tdir/profile");
-		   symlink("$config_path/model", "$tdir/model");
-
-		   #move into final position
-		   mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
-		   File::Copy::move($tdir, "$TMP/augustus_config/$md5");
-		   $config_path = "$TMP/augustus_config/$md5";
-		   $hmm = $name;
-		   last;
-	       }
-	   }
-	   
-	   #species name provided
-	   if($hmm !~ /\//){
-	       last if(-f "$config_path/species/$hmm/$hmm\_parameters.cfg");
-	   }
-
-	   die "ERROR: The species provided is invalid: $hmm\n";
-       }
+       #fix for directory and tarballs
+       ($hmm, $config_path) = augustus_species($hmm, $config_path);
 
        my ($hmm_n) = $hmm =~ /([^\/]+)$/;
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
@@ -1513,6 +1412,113 @@ sub augustus {
    return \@out_files;
 }
 #-----------------------------------------------------------------------------
+#fix for directory and tarball
+sub augustus_species {
+    my $hmm = shift;
+    my $config_path = shift;
+
+    #file provided
+    if($hmm =~ /\.(tgz|tar\.gz)$/ && -f $hmm){
+	#already unzipped
+	my $md5 = Digest::MD5::md5_hex($hmm);
+	if(-d "$TMP/augustus_config/$md5"){
+	    if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
+		my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
+		$config_path = "$TMP/augustus_config/$md5";
+		$hmm = $name;
+		return ($hmm, $config_path);
+	    }
+	    else{
+		File::Path::rmtree("$TMP/augustus_config/$md5")
+	    }
+	}
+	
+	#needs to be unzipped
+	my $list = `tar -ztf $hmm`;
+	die "ERROR: Could not read contents of tarball: $hmm\n" if($?);
+	if(grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list)){
+	    my $tdir = "$TMP/$RANK/augustus_config/$md5";
+	    File::Path::rmtree($tdir) if(-d $tdir);
+	    File::Path::mkpath($tdir);
+	    mkdir("$tdir/unzip");
+	    mkdir("$tdir/species");
+
+	    #unzip file
+	    $list = `tar -C $tdir/unzip -zxvf $hmm`;
+	    die "ERROR: Could not extract contents of tarball: $hmm\n" if($?);
+
+	    #move unziped directory into place
+	    my ($path) = grep {/[^\/]+\/+[^\/]+_parameters.cfg$/} split(/\n/, $list);
+	    my ($rel, $name) = $path =~ /^(.*)\/+([^\/]+)_parameters.cfg$/;
+	    (my $dir = "$tdir/unzip/$rel") =~ s/\/+/\//g;
+	    (my $newdir = "$tdir/species/$name") =~ s/\/+/\//g;
+	    File::Copy::move($dir, $newdir);
+	    File::Path::rmtree("$tdir/unzip");
+	    
+	    #mirror the rest from AUGUSTUS_CONFIG_PATH
+	    symlink("$config_path/extrinsic", "$tdir/extrinsic");
+	    symlink("$config_path/profile", "$tdir/profile");
+	    symlink("$config_path/model", "$tdir/model");
+	    
+	    #move into final position
+	    mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
+	    File::Copy::move($tdir, "$TMP/augustus_config/$md5");
+	    $config_path = "$TMP/augustus_config/$md5";
+	    $hmm = $name;
+	    return ($hmm, $config_path);
+	}
+    }
+    
+    #directory provided
+    if($hmm =~ /\// || -d $hmm){
+	#already relocated
+	my $md5 = Digest::MD5::md5_hex($hmm);
+	if(-d "$TMP/augustus_config/$md5"){
+	    if(my ($file) = grep {-f $_} <$TMP/augustus_config/$md5/species/*/*_parameters.cfg>){
+		my ($name) = $file =~ /([^\/]+)\/+[^\/]+_parameters.cfg/;
+		$config_path = "$TMP/augustus_config/$md5";
+		$hmm = $name;
+		return ($hmm, $config_path);
+	    }
+	    else{
+		File::Path::rmtree("$TMP/augustus_config/$md5")
+	    }
+	}
+	
+	#needs to be relocated
+	my $name = ($hmm =~ /([^\/]+)\/?$/) ? $1 : '';
+	if(-d $hmm && -f "$hmm/$name\_parameters.cfg"){
+	    my $tdir = "$TMP/$RANK/augustus_config/$md5";
+	    File::Path::rmtree($tdir) if(-d $tdir);
+	    File::Path::mkpath($tdir);
+	    mkdir("$tdir/species");
+	    
+	    #copy directory
+	    system('cp', '-R', $hmm, "$tdir/species/");
+	    die "ERROR: Could not copy parameters: $hmm\n" if($?);
+	    
+	    #mirror the rest from AUGUSTUS_CONFIG_PATH
+	    symlink("$config_path/extrinsic", "$tdir/extrinsic");
+	    symlink("$config_path/profile", "$tdir/profile");
+	    symlink("$config_path/model", "$tdir/model");
+	    
+	    #move into final position
+	    mkdir("$TMP/augustus_config") unless(-d "$TMP/augustus_config");
+	    File::Copy::move($tdir, "$TMP/augustus_config/$md5");
+	    $config_path = "$TMP/augustus_config/$md5";
+	    $hmm = $name;
+	    return ($hmm, $config_path);
+	}
+    }
+	   
+    #species name provided
+    if($hmm !~ /\// && -f "$config_path/species/$hmm/$hmm\_parameters.cfg"){
+	return ($hmm, $config_path);
+    }
+    
+    die "ERROR: The species provided is invalid: $hmm\n";
+}
+
 sub fgenesh {
    my $in_file     = shift;
    my $the_void    = shift;
@@ -1928,8 +1934,6 @@ sub polish_exonerate {
 	}
 
 	#check if fasta contains coordinates for maker
-	#$min_intron = 1; #temp
-	#$max_intron = 200000; #temp
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $go;
 	    $min_intron = 1;
@@ -2030,7 +2034,7 @@ sub polish_exonerate {
 
 	#make backup
 	if($o_tfile ne $backup){
-	    #File::Copy::move($o_tfile, $backup);
+	    #File::Copy::move($o_tfile, $backup); #temp
 	    unlink($o_tfile);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
@@ -4669,6 +4673,7 @@ sub load_control_files {
 		   "installation instructions then try running MAKER again.\n\n";
 	   }
        }
+       #$CTL_OPT{AUGUSTUS_CONFIG_PATH} = $ENV{AUGUSTUS_CONFIG_PATH};
 
        if(!$CTL_OPT{augustus_species}) {
 	   $error .= "ERROR: There is no species specified for Augustus (augustus_species).\n\n";
@@ -4734,6 +4739,7 @@ sub load_control_files {
 	   $path =~ s/snap$//;
 	   $ENV{ZOE} = $path;
        }
+       #$CTL_OPT{ZOE} = $ENV{ZOE};
 
        if(! $CTL_OPT{snaphmm}) {
 	   $error .= "ERROR: There is no HMM specified for for SNAP/Fathom (snaphmm).\n\n";

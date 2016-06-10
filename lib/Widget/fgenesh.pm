@@ -223,6 +223,7 @@ sub get_pred_shot {
         my $pred_flank    = shift;
         my $pred_command  = shift;
         my $hmm           = shift;
+        my $extra         = shift;
            $OPT_F         = shift;
 	   $LOG           = shift;
 
@@ -244,7 +245,8 @@ sub get_pred_shot {
 				  $end,
                                   $xdef,
                                   $pred_command,
-				  $hmm
+				  $hmm,
+				  $extra
                                  );
 
 
@@ -262,9 +264,10 @@ sub fgenesh {
         my $xdef       = shift;
         my $command    = shift;
         my $hmm        = shift;
+        my $extra      = shift;
 
 	my ($hmm_name) = $hmm =~ /([^\:\/]+)(\:[^\:\/]+)?$/;
-	my $wrap = "$FindBin::RealBin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
+	#my $wrap = "$FindBin::RealBin/../lib/Widget/fgenesh/fgenesh_wrap"; #fgenesh wrapper
 
         my $tmp = GI::get_global_temp();
         my $rank = GI::RANK();
@@ -275,9 +278,10 @@ sub fgenesh {
         my $o_file    = "$t_dir/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
         my $backup    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
                             
-        my $run = $wrap . " $command"; #prepend wrapper
+        my $run = $command;
+	$run .= " $hmm_name";
 	$run .= " $file_name";
-	#$run .= " -tmp $TMP";                        
+	$run .= " $extra";
         $run .= ' -exon_table:'.$xdef_file if(defined $xdef);
         $run .= " > $o_file";
         
@@ -315,15 +319,15 @@ sub fgenesh {
         catch Error::Simple with {
             my $E = shift;
 
-            unlink($o_file);
-
             #retry predictor in different location and parse again
+            unlink($o_file);
 	    $file_name = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh.fasta";
 	    $xdef_file = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.xdef\.fgenesh";
 	    $o_file    = "$the_void/$seq_id\.$offset-$end\.$hmm_name\.auto_annotator\.fgenesh";
-	    my $run = $wrap . " $command"; #prepend wrapper
+	    my $run = $command; #prepend wrapper
+	    $run .= " $hmm_name";
 	    $run .= " $file_name";
-	    #$run .= " -tmp $TMP";
+	    $run .= " $extra";
 	    $run .= ' -exon_table:'.$xdef_file if(defined $xdef);
 	    $run .= " > $o_file";
             write_xdef_file($xdef, $xdef_file) if(defined $xdef);
