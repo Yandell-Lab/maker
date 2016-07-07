@@ -103,7 +103,7 @@ sub convert {
     my $locs = shift;
     my $obj = shift;
 
-    return if(!$obj);
+    return if(!defined($obj));
 
     die "ERROR: Object is not a Bio::PrimarySeq::Fasta\n".
 	"It is ".ref($obj)."\n"	if(ref($obj) ne 'Bio::PrimarySeq::Fasta');
