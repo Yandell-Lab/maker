@@ -123,6 +123,7 @@ foreach my $file (@files) {
 	}
 	else {
 	    my ($seqid, $source, $tag, $start, $end, $score, $strand, $phase, $annot) = split(/\t/, $line);
+	    $seqid = uri_unescape($seqid);
 	    my %annotation = split(/[;=]/, $annot);
 	    if ($tag eq "mRNA") {
 		my $id = $annotation{'ID'};
