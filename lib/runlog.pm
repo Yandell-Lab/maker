@@ -31,6 +31,7 @@ my @ctl_to_log = ('maker_gff',
 		  'rmlib',
 		  'rm_gff',
 		  'organism_type',
+		  'allow_overlap',
 		  'predictor',
 		  'est2genome',
 		  'altest2genome',
@@ -358,6 +359,12 @@ sub _load_old_log {
 		    $log_val = 'eukaryotic';
 		}
 
+	        #allow_overlap was organims specific and not logged
+		if($key eq 'allow_overlap' && (!defined($log_val) || $log_val eq '')){
+		    my $org_type = $logged_vals{CTL_OPTIONS}{organism_type} || 'eukaryotic';
+		    $log_val = ($org_type eq 'eukaryotic') ? 0 : 0.30; #30% overlap was allowed in prokaryotes
+		}
+
 		#softmask was always true before and not logged
 		if($key eq 'softmask' && $log_val eq ''){
 		    $log_val = 1;
@@ -434,6 +441,7 @@ sub _load_old_log {
 		       $key ne 'est2genome' &&
 		       $key ne 'altest2genome' &&
 		       $key ne 'protein2genome' &&
+		       $key ne 'allow_overlap' &&
 		       @$change
 		      ){
 			$rm_key{preds}++; #almost all changes affect final predictions

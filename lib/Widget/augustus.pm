@@ -298,15 +298,14 @@ sub get_xdef {
        my $i_flank = shift;
        my $q_id    = shift;
 
-	my $group = 'gb|bogus;';
-
-        my @xdef;
+       my @xdef;
 
        foreach my $p (@$p_coors){
                 my $c_b = $p->[0] - $offset;
                 my $c_e = $p->[1] - $offset;
 
-		my $l  = "$q_id\tPROTEIN\tCDSpart";
+		my $type = ($p->[2]) ? 'CDS' : 'CDSpart';
+		my $l  = "$q_id\tPROTEIN\t$type";
 		   $l .= "\t".$c_b."\t".$c_e."\t"."0"."\t".$s;
                    $l .= "\t".'.'."\t"."source=P;pri=2";
 
@@ -320,9 +319,10 @@ sub get_xdef {
 	   my $i_e = ($i->[1] - $offset);# - ($i_flank-1);
 
 	   #next if abs($i_b - $i_e) < 2*$i_flank;
-	   next if abs($i_b - $i_e) < 25;
+	   next if abs($i_b - $i_e) < 25; #intron too short
 	   
-	   my $l  = "$q_id\tEST-INTRON\tintronpart";
+	   my $type = ($i->[2]) ? 'intron' : 'intronpart';
+	   my $l  = "$q_id\tEST-INTRON\t$type";
 	   $l .= "\t".$i_b."\t".$i_e."\t"."0"."\t".$s;
 	   $l .= "\t".'.'."\t"."source=E;pri=3";
 	   
@@ -333,7 +333,8 @@ sub get_xdef {
                 my $e_b = $n->[0] - $offset;
                 my $e_e = $n->[1] - $offset;
 
-                my $l  = "$q_id\tEST-EXON\texonpart";
+		my $type = ($n->[2]) ? 'exon' : 'exonpart';
+                my $l  = "$q_id\tEST-EXON\t$type";
                    $l .= "\t".$e_b."\t".$e_e."\t"."0"."\t".$s;
                    $l .= "\t".'.'."\t"."source=E;pri=1";
 

@@ -84,13 +84,14 @@ sub process_hints {
     my $all_p  = $set->{all_preds} || [];
     my $ests   = $set->{ests}      || [];
     my $fusion = $set->{fusion}    || [];
-    my @t_data;
-    
+
+    my @t_data;    
     push(@t_data, @{$gomiph});
     push(@t_data, @{$preds});
     push(@t_data, @{$alts});
     push(@t_data, @{$models});
     push(@t_data, @{$ests});
+    #push(@t_data, @{$fusion});
     
     #get span
     my $plus  = 0;
@@ -129,7 +130,7 @@ sub process_hints {
     
     #identify all possible confirmed splice sites (compared later to all preds)
     my %splices;
-    foreach my $e (@$ests, @$gomiph, @$alts){
+    foreach my $e (@$ests, @$gomiph, @$alts, @$fusion){
 	next if($e->num_hsps() == 1);
 	my @hsps = sort {$a->start('query') <=> $b->start('query')} $e->hsps;
 	for(my $i = 0; $i < @hsps - 1; $i++){
@@ -145,40 +146,38 @@ sub process_hints {
     }
 
     #use $mia to infer alt splicing (keep all structure from mia)
-    my $fusion_skip = grep {$mia->algorithm eq $_->algorithm} @$fusion if($mia && $fusion);
-    if($mia && !$fusion_skip){
+    if($mia){
 	my @hsps = sort {$a->start('query') <=> $b->start('query')} $mia->hsps;
-	for(my $i = 0; $i < @hsps - 1; $i++){
-	    my $hsp1 = $hsps[$i];
-	    my $hsp2 = $hsps[$i+1];
-	    
-	    my $s1 = $hsp1->start('query');
-	    my $e1 = $hsp1->end('query');
-	    my $s2 = $hsp2->start('query');
-	    my $e2 = $hsp2->end('query');
-	    
-	    #first exon given lower precedence
-	    my $val = ($i == 0) ? 1 : 2;
-	    my $s = $s1 - $offset;
-	    my $e = $e1 - $offset;
-	    @b_seq[$s..$e] = map {$val} ($s..$e); #overrides all
 
-	    #last exon given lower precedence
-	    if($i + 1 == @hsps - 1){
-		$s = $s2 - $offset;
-		$e = $e2 - $offset;
-		@b_seq[$s..$e] = map {1} ($s..$e); #overrides all  
-	    }
-	    
-	    next if($e1 >= $s2); #no gap so skip
-	    
-	    #intron verify
-	    my $si = $e1 + 1; #fix for inron coordiantes
-	    my $ei = $s2 - 1; #fix for intron coordiantes
-	    
-	    $si -= $offset;
-	    $ei -= $offset;
-	    @b_seq[$si..$ei] = map {-2} ($si..$ei); #overrides all
+	#handle exons
+	for(my $i = 0; $i < @hsps; $i++){
+	    my $s = $hsps[$i]->start('query') - $offset;
+            my $e = $hsps[$i]->end('query') - $offset;
+	    my $val = ($i == 0 || $i == $#hsps) ? 1 : 2; #internal exons given higher precedence
+
+	    #fix for avoid_est_fusion
+	    next if($s < 0 || $e > $most-$offset); #skip partial exons
+	    #if($s < 0 || $e > $most-$offset){
+            #	$val = 1;
+	    #	$s = 0 if($s < 0);
+	    #	$e = $most-$offset if($e > $most-$offset);
+	    #	next if($e < $s); #skip
+	    #}
+
+	    @b_seq[$s..$e] = map {$val} ($s..$e); #overrides all
+	}
+
+	#handle introns
+	for(my $i = 0; $i < @hsps-1; $i++){
+	    my $si = $hsps[$i]->end('query') - $offset + 1; #+-1 for intron
+	    my $ei = $hsps[$i+1]->start('query') - $offset - 1; #+-1 for intron
+	    my $val = -2;
+
+	    #fix for avoid_est_fusion
+	    next if($si < 0 || $ei > $most-$offset); #skip partial introns
+	    next if($ei <= $si); #no intron gap so skip
+
+	    @b_seq[$si..$ei] = map {$val} ($si..$ei); #overrides all
 	}
     }
     
@@ -337,7 +336,7 @@ sub process_hints {
 	}
     }
     
-    #get dually confirmed ab-initio and EST CDS/introns
+    #try and rescue abinit hints by confirming with and EST and CDS introns/exons
     my @intron_set;
     my @exon_set;
     foreach my $p (@$all_p){
@@ -396,7 +395,8 @@ sub process_hints {
 		    }
 		}
 	    }
-	    
+
+	    #these seem to work but were not exactly seen in evidence
 	    if($splices{start}{$s2} && $splices{end}{$e2}){
 		my $s = $s2 - $offset;
 		my $e = $e2 - $offset;
@@ -407,7 +407,7 @@ sub process_hints {
 		    $b_seq[$i] = 4 if($b_seq[$i] != -2);
 		}
 	    }
-	    elsif($splices{start}{$s2} && ! $splices{end}{$e2}){
+	    elsif($splices{start}{$s2} && !$splices{end}{$e2}){ #partial
 		my $s = $s2 - $offset;
 		my $e = $e2 - $offset;
 		foreach my $i ($s..$e){
@@ -433,29 +433,33 @@ sub process_hints {
     my $nfirst;
     my $pfirst;
     my $ifirst;
+    my $exact = 1;
     for (my $i = 0; $i < @b_seq; $i++){
 	$nfirst = $i if(!defined($nfirst) && $b_seq[$i] > 0);
 	$pfirst = $i if(!defined($pfirst) && $b_seq[$i] > 2);
 	$ifirst = $i if(!defined($ifirst) && $b_seq[$i] < 0);
+	$exact = 0 if(abs($b_seq[$i]) % 2 == 1);
 	
 	if($b_seq[$i] <= 0 && defined($nfirst)){
 	    push(@n_set_coors, [$nfirst+$offset, $i-1+$offset]);
 	    $nfirst = undef;
+	    $exact = 1;
 	}
 	if($b_seq[$i] <= 2 && defined($pfirst)){
 	    push(@p_set_coors, [$pfirst+$offset, $i-1+$offset]);
 	    $pfirst = undef;
+	    $exact = 1;
 	}
 	if($b_seq[$i] >= 0 && defined($ifirst)){
 	    push(@i_set_coors, [$ifirst+$offset, $i-1+$offset]);
 	    $ifirst = undef;
+	    $exact = 1;
 	}
     }
-    
     my $j = @b_seq;
-    push(@n_set_coors, [$nfirst+$offset, $j-1+$offset]) if(defined($nfirst));
-    push(@p_set_coors, [$pfirst+$offset, $j-1+$offset]) if(defined($pfirst));
-    push(@i_set_coors, [$ifirst+$offset, $j-1+$offset]) if(defined($ifirst));
+    push(@n_set_coors, [$nfirst+$offset, $j-1+$offset, $exact]) if(defined($nfirst));
+    push(@p_set_coors, [$pfirst+$offset, $j-1+$offset, $exact]) if(defined($pfirst));
+    push(@i_set_coors, [$ifirst+$offset, $j-1+$offset, $exact]) if(defined($ifirst));
     
     return (\@span_coors, $strand, \@p_set_coors, \@n_set_coors, \@i_set_coors);
 }
@@ -481,18 +485,12 @@ sub get_pred_shot {
         my $shadow_fasta = Fasta::toFasta($def." $id offset:$offset",
                                           $shadow_seq,
                                          );
-
-        my ($exe, $param) = $snap_command =~ /(\S+)\s+(\S+)/;
-
-        my $alt_snap_command;
         if ($strand == 1){
-                $alt_snap_command = $exe.' -plus ';
+                $snap_command .= ' -plus';
         }
         else {
-                 $alt_snap_command = $exe.' -minus ';
+                 $snap_command .= ' -minus';
         }
-
-        $alt_snap_command .= $param;
 
         my $gene_preds = snap($shadow_fasta,
 			      $the_void,
@@ -501,7 +499,7 @@ sub get_pred_shot {
 			      $offset,
 			      $end,
 			      $xdef,
-			      $alt_snap_command,
+			      $snap_command,
 			      $hmm
 			     );
 
@@ -535,6 +533,7 @@ sub snap {
 	
 	my $run = $command;
 	$run .= " -xdef $xdef_file ";
+	$run .= " $hmm_name";
 	$run .= " $file_name";
 	$run .= " > $o_file";
 

@@ -2108,7 +2108,7 @@ sub polish_exonerate {
 	    }
 	}
 	
-	#remove ambiguous alternate alignments when hints are given (only keep 1)
+	#remove ambiguous alternate alignments when hints are given
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $coor = $1;
 	    if($coor =~ /$name\:(\d+)-(\d+)$/){
@@ -2116,8 +2116,15 @@ sub polish_exonerate {
 		my @perfect = grep {$_->start == $B && $_->end == $E} @keepers;
 		@keepers = @perfect if(@perfect);
 	    }
-	    @keepers = (sort {($b->frac_identical * $b->pAh) <=> ($a->frac_identical * $a->pAh)} @keepers)[0];
-	    $hit->{_exonerate_flipped} = $keepers[0]->{_was_flipped} if(@keepers && ref($hit));
+	}
+
+	#filter alternates
+	if(@keepers > 0){
+	    @keepers = sort {($b->frac_identical * $b->pAh) <=> ($a->frac_identical * $a->pAh)} @keepers;
+	    my $best = $keepers[0]->frac_identical * $keepers[0]->pAh;
+	    @keepers = grep {($_->frac_identical * $_->pAh) == $best} @keepers;
+	    @keepers = ($keepers[0]) if($est_forward && @keepers > 1);
+	    $hit->{_exonerate_flipped} = $keepers[0]->{_was_flipped} if(@keepers == 1 && ref($hit));
 	}
 
 	push(@exonerate_data, @keepers);
@@ -3684,6 +3691,7 @@ sub set_defaults {
       $CTL_OPT{'rmlib'} = '';
       $CTL_OPT{'rm_gff'} = '';
       $CTL_OPT{'organism_type'} = 'eukaryotic';
+      $CTL_OPT{'allow_overlap'} = '';
       $CTL_OPT{'prok_rm'} = 0;
       $CTL_OPT{'predictor'} = '';
       $CTL_OPT{'predictor'} = 'model_gff' if($main::eva);
@@ -4330,7 +4338,7 @@ sub load_control_files {
        $OPT{R}                    = 1;
        $CTL_OPT{est2genome}       = 1;
        $CTL_OPT{max_dna_len}      = 1000000 if($CTL_OPT{max_dna_len} < 1000000);
-       $CTL_OPT{split_hit}        = 100000 if($CTL_OPT{split_hit} < 10000);
+       $CTL_OPT{split_hit}        = 100000 if($CTL_OPT{split_hit} < 100000);
        $CTL_OPT{pred_flank}       = 10000 if($CTL_OPT{pred_flank} < 10000);
        $CTL_OPT{single_exon}      = 1;
        $CTL_OPT{single_length}    = 1;
@@ -4381,6 +4389,18 @@ sub load_control_files {
 
       #set the default just to assist in populating remaining errors
       $CTL_OPT{organism_type} = 'eukaryotic';
+   }
+
+   #check overlap value
+   if (!defined($CTL_OPT{allow_overlap}) || $CTL_OPT{allow_overlap} eq '') {
+       $CTL_OPT{allow_overlap} = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 0 : 0.30;
+   }
+   if($CTL_OPT{allow_overlap} < 0 || 1 < $CTL_OPT{allow_overlap}){
+       $error .=  "ERROR: allow_overlap must be a value between 0 and 1\n".
+	   "The value $CTL_OPT{allow_overlap} is invalid.\n\n";
+
+       #set default based on organism type just in case
+       $CTL_OPT{allow_overlap} = ($CTL_OPT{organism_type} eq 'eukaryotic') ? 0 : 0.30;
    }
 
    #skip repeat masking command line option
@@ -4455,8 +4475,8 @@ sub load_control_files {
    push(@predictors, 'est2genome') if($CTL_OPT{est2genome} && ! $main::eva);
    push(@predictors, 'protein2genome') if($CTL_OPT{protein2genome} && ! $main::eva);
 
-   $CTL_OPT{_predictor} = {}; #temporary hash
-   $CTL_OPT{_run} = {}; #temporary hash
+   $CTL_OPT{_predictor} = {}; #unique hash of predictors to use for final result
+   $CTL_OPT{_run} = {}; #unique hash of predictors to run
    foreach my $p (@predictors) {
        if ($p !~ /^snap$|^augustus$|^est2genome$|^protein2genome$|^altest2genome$|^fgenesh$/ &&
 	   $p !~ /^genemark$|^model_gff$|^pred_gff$|^trnascan$|^snoscan$|^evm$/
@@ -5179,6 +5199,7 @@ sub generate_control_files {
        print OUT "snoscan_rrna=$O{snoscan_rrna} #rRNA file to have Snoscan find snoRNAs\n";
        print OUT "snoscan_meth=$O{snoscan_meth} #-O-methylation site fileto have Snoscan find snoRNAs\n";
        print OUT "unmask=$O{unmask} #also run ab-initio prediction programs on unmasked sequence, 1 = yes, 0 = no\n";
+       print OUT "allow_overlap=$O{allow_overlap} #allowed gene overlap fraction (value from 0 to 1, blank for default)\n";
        print OUT "\n";
        print OUT "#-----Other Annotation Feature Types (features MAKER doesn't recognize)\n" if(!$ev);
        print OUT "other_gff=$O{other_gff} #extra features to pass-through to final MAKER generated GFF3 file\n" if(!$ev);

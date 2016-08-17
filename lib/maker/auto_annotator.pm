@@ -37,81 +37,65 @@ my $SEEN;
 #prepares hits by combining evidence into appropriate clusters
 #returns clusters for abinits, gff_models, and standard evidence
 sub prep_hits {
-	my $prot_hits        = shift;
-	my $est_hits         = shift;
-	my $altest_hits      = shift;
-	my $predictions      = shift;
-	my $ncrna            = shift;
-	my $models           = shift;
-	my $seq              = shift;
-	my $single_exon      = shift;
-	my $single_length    = shift;
-	my $pred_flank       = shift;
-	my $organism_type    = shift;
-	my $est_forward      = shift;
-	my $correct_est_fusion = shift;
-
-	#---build clusters for basic evidence
-
-	# combine puts type in order they are given
-	# important for later culstering, as hits in
-	# first arg more likey to make in into to cluster
-	# than second arg, etc
-	my $c_bag;
-	my $e_bag;
-	if($correct_est_fusion){
-	    $prot_hits = get_selected_types($prot_hits, 'protein2genome', 'protein_gff');
-	    $c_bag = $prot_hits;
-	    $e_bag = combine($est_hits,
-			     $altest_hits);
-	}
-	else{
-	    $c_bag = combine($prot_hits,
-			     $est_hits,
-			     $altest_hits);
-	    $e_bag = combine($est_hits,
-			     $altest_hits);
-	}
-
+    my $prot_hits        = shift;
+    my $est_hits         = shift;
+    my $altest_hits      = shift;
+    my $predictions      = shift;
+    my $ncrna            = shift;
+    my $models           = shift;
+    my $seq              = shift;
+    my $single_exon      = shift;
+    my $single_length    = shift;
+    my $pred_flank       = shift;
+    my $organism_type    = shift;
+    my $est_forward      = shift;
+    my $correct_est_fusion = shift;
+    
+    #---build clusters for basic evidence
+    
+    # combine puts type in order they are given
+    # important for later culstering, as hits in
+    # first arg more likey to make in into to cluster
+    # than second arg, etc
+    my $c_bag;
+    my $e_bag;
+    if($correct_est_fusion){
+	$prot_hits = get_selected_types($prot_hits, 'protein2genome', 'protein_gff');
+	$c_bag = combine($prot_hits);
+	$e_bag = combine($est_hits,
+			 $altest_hits);
+    }
+    else{
+	$c_bag = combine($prot_hits,
+			 $est_hits,
+			 $altest_hits);
+	$e_bag = combine($est_hits,
+			 $altest_hits);
+    }
+    
+    #-- initial clusters of just evidence
+    my $careful_clusters = [];
+    if(@$c_bag){
+	#cluster main bag of evidence
 	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $c_bag);
 	my $p_clusters = cluster::clean_and_cluster(20, $p, 0, 1, $est_forward); #flattens
 	$p_clusters = cluster::shadow_cluster(0, $p_clusters, $pred_flank); #broaden
 	my $m_clusters = cluster::clean_and_cluster(20, $m, 0, 1, $est_forward); #flattens
 	$m_clusters = cluster::shadow_cluster(0, $m_clusters, $pred_flank); #broaden
-
-	my $e_cluster = [];
-	$e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1, $est_forward); #flattens
-	$e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
 	if(!$correct_est_fusion){
 	    #this method will cause clusters that are near each other and are connected by an orf to merge.
 	    #this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
 	    $p_clusters = join_clusters_around_orf($p_clusters, $seq);
 	    $m_clusters = join_clusters_around_orf($m_clusters, $seq);
 	}
-
-	my $careful_clusters = [];
 	push(@{$careful_clusters}, @{$p_clusters}, @{$m_clusters});
-
-	#==use jaccardian metrics to split weak clusters
+	
+	#use jaccardian metrics to split weak clusters
 	if($correct_est_fusion){
 	    $careful_clusters = jaccard_split_clusters($careful_clusters, 0.5);
 	}
-
-	#==purge ESTs in separate group from main evidence cluster
-	# don't use unpliced single exon ESTs-- may be genomic contamination
-	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
-	    $e_cluster = purge_single_exon_hits_in_cluster($e_cluster);
-	}
-	# throw out the exonerate est hits with weird splice sites
-	if(!$est_forward){
-	    $e_cluster = throw_out_bad_splicers_in_cluster($e_cluster, $seq);
-	}
-	#throw out short ESTs
-	if($single_exon == 1 || $organism_type eq 'prokaryotic') {
-	    $e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
-	}
-
-	#===purge ESTs after clustering so as to still have the effect of evidence joining ESTs
+	
+	#purge ESTs in main bag after clustering so as to still have the effect of evidence joining ESTs
 	if(!$correct_est_fusion){ #only needed when ESTs already in cluster
 	    # don't use unpliced single exon ESTs-- may be genomic contamination
 	    if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
@@ -126,189 +110,201 @@ sub prep_hits {
 		$careful_clusters = purge_short_ESTs_in_clusters($careful_clusters, $single_length);
 	    }
 	}
-
-	#coplapse EST clusters for careful merge back into evidence sets for scoring
-	undef $e_bag;
-	foreach my $c (@$e_cluster){
-	    push(@$e_bag, @$c);
+    }
+    
+    #-- make separate EST clusters from main evidence cluster
+    my $e_cluster = [];
+    if(@$e_bag){
+	$e_cluster = cluster::clean_and_cluster(20, $e_bag, 0, 1, $est_forward); #flattens
+	$e_cluster = cluster::shadow_cluster(0, $e_cluster, $pred_flank); #broaden
+	
+	# don't use unpliced single exon ESTs-- may be genomic contamination
+	if($single_exon != 1 && $organism_type eq 'eukaryotic' && !$est_forward) {
+	    $e_cluster = purge_single_exon_hits_in_cluster($e_cluster);
 	}
-
-	#===now start preparing data for different types of input	    
-	#--model_gff3 input
-	# identify the models that fall within and between basic clusters
-	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models,
-								      $careful_clusters
-								      );
-
+	# throw out the exonerate est hits with weird splice sites
+	if(!$est_forward){
+	    $e_cluster = throw_out_bad_splicers_in_cluster($e_cluster, $seq);
+	}
+	#throw out short ESTs
+	if($single_exon == 1 || $organism_type eq 'prokaryotic') {
+	    $e_cluster = purge_short_ESTs_in_clusters($e_cluster, $single_length);
+	}
+	
+	#coplapse EST clusters for careful merge back into evidence sets for scoring
+	@$e_bag = map {@$_} @$e_cluster;
+    }
+    
+    
+    #===now start preparing data for different types of input	    
+    my @all_data;
+    my $c_id = 0;
+    
+    #--model_gff3 input
+    my $model_clusters = [];
+    if(@$models){
 	#join the clusters on the models
-	my $model_clusters = join_clusters_on_pred($models, $careful_clusters, $c_index);
+	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models, $careful_clusters);
+	$model_clusters = join_clusters_on_pred($models, $careful_clusters, $c_index);
 	
 	# identify the abinits that fall within and between clusters
-	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $model_clusters
-								   );
+	if($predictions){
+	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, $model_clusters);
+	    merge_into_cluster($hit_one, $model_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $model_clusters, $c_index); #these have an internal tag
+	}
 	
-	merge_into_cluster($hit_one, $model_clusters, $c_index);
-	merge_into_cluster($hit_mult, $model_clusters, $c_index); #these have an internal tag
-
-
 	#==prep model_gff data
 	if($correct_est_fusion){
 	    #add ESTs that were separated for fusion avoidance
-	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
-								   $model_clusters);
+	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $model_clusters);
 	    merge_into_cluster($hit_one, $model_clusters, $c_index);
 	    merge_into_cluster($hit_mult, $model_clusters, $c_index);
 	}
-
-	my @all_data;
-	my $c_id = 0;
-	#my @gf_data;
-	foreach my $c (@{$model_clusters}){
-	    my $gf = prep_gff_data($c, $c_id, $seq);
-	    push(@all_data, @{$gf}) if defined $gf;
-
-	    $c_id++;
-	}
-
-	#--abinit input
-	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $careful_clusters
-								   );
-	
+    }
+    #temp (commented out temporariliy)
+    foreach my $c (@{$model_clusters}){
+        my $gf = prep_gff_data($c, $c_id, $seq);
+        push(@all_data, @{$gf}) if defined $gf;
+        $c_id++;
+    }	
+    
+    #--abinit input
+    my $pred_clusters = [];
+    if(@$predictions){
 	#join clusters on the ab-inits
-	my $pred_clusters = join_clusters_on_pred($predictions, $careful_clusters, $c_index);
-
-	# identify the abinits that fall within and between clusters
-	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $pred_clusters
-								   );
+	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, $careful_clusters);	
+	$pred_clusters = join_clusters_on_pred($predictions, $careful_clusters, $c_index);
 	
+	# identify the abinits that fall within and between clusters
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, $pred_clusters);
 	merge_into_cluster($hit_one, $pred_clusters, $c_index);
 	merge_into_cluster($hit_mult, $pred_clusters, $c_index); #these have an internal tag
-
-
-	#==prep abinit data
-
+	
+	#add ESTs that were separated for fusion avoidance
 	if($correct_est_fusion){
-	    #add ESTs that were separated for fusion avoidance
-	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
-								       $pred_clusters);
+	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $pred_clusters);
 	    merge_into_cluster($hit_one, $pred_clusters, $c_index);
 	    merge_into_cluster($hit_mult, $pred_clusters, $c_index);
 	}
-
-	#my @pr_data;
-	foreach my $c (@{$pred_clusters}){
-	    my $pr = prep_pred_data($c, $c_id, $seq);
-	    push(@all_data, @{$pr}) if defined $pr;
-
-	    $c_id++;
-	}
-
-	#--build clusters joined together by models (for hint based annotations)
-	my $hint_clusters = [];
+    }
+    foreach my $c (@{$pred_clusters}){
+	my $pr = prep_pred_data($c, $c_id, $seq);
+	push(@all_data, @{$pr}) if defined $pr;
+	$c_id++;
+    }
+    
+    #replaced with block below 8-19-2016
+    #--build hint clusters joined together by models (for hint based annotations)
+    #my $hint_clusters = = [];
+    #if(@$models){
+    #    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $models);
+    #    $p_clusters = cluster::shadow_cluster(0, [@$p,@$p_clusters], $pred_flank);
+    #    $m_clusters = cluster::shadow_cluster(0, [@$m,@$m_clusters], $pred_flank);
+    #
+    #    if(!$correct_est_fusion){
+    #	#this method will cause clusters that are near each other and are connected by an orf to merge.
+    #	#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
+    #	$p_clusters = join_clusters_around_orf($p_clusters, $seq);
+    #	$m_clusters = join_clusters_around_orf($m_clusters, $seq);
+    #    }
+    #
+    #    push(@{$hint_clusters}, @{$p_clusters}, @{$m_clusters});
+    #}
+    #else{
+    #    $hint_clusters = $careful_clusters;
+    #}
+    
+    #--hint clusters (replaced block above 8-19-2016)
+    my $hint_clusters = [];
+    if(@$careful_clusters){
+	$hint_clusters = $careful_clusters;
+	
+	# identify the models that fall within and between clusters
 	if(@$models){
-	    ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $models);
-	    $p_clusters = cluster::shadow_cluster(0, [@$p,@$p_clusters], $pred_flank);
-	    $m_clusters = cluster::shadow_cluster(0, [@$m,@$m_clusters], $pred_flank);
-
-	    if(!$correct_est_fusion){
-		#this method will cause clusters that are near each other and are connected by an orf to merge.
-		#this solves issues with mRNAseq splice site crossing reads and other EST partial exon coverage
-		$p_clusters = join_clusters_around_orf($p_clusters, $seq);
-		$m_clusters = join_clusters_around_orf($m_clusters, $seq);
-	    }
-
-	    push(@{$hint_clusters}, @{$p_clusters}, @{$m_clusters});
+	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($models, $hint_clusters);	    
+	    merge_into_cluster($hit_one, $hint_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
 	}
-	else{
-	    $hint_clusters = $careful_clusters;
-	}
-
+	
 	# identify the abinits that fall within and between clusters
-	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions,
-								   $hint_clusters
-								   );
-
-	merge_into_cluster($hit_one, $hint_clusters, $c_index);
-	merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
-
+	if(@$predictions){
+	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($predictions, $hint_clusters);
+	    merge_into_cluster($hit_one, $hint_clusters, $c_index);
+	    merge_into_cluster($hit_mult, $hint_clusters, $c_index); #these have an internal tag
+	}
+	
 	#==prep hint data
 	if($correct_est_fusion){
 	    #add ESTs that were separated for fusion avoidance
-	    ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag,
-								       $hint_clusters);
+	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $hint_clusters);
 	    merge_into_cluster($hit_one, $hint_clusters, $c_index);
 	    merge_into_cluster($hit_mult, $hint_clusters, $c_index);
 	}
-
-	foreach my $c (@{$hint_clusters}){
-	   my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
-	   push(@all_data, @{$bx}) if defined $bx;
-
-	   $c_id++;
-	}
-
-        #==ncRNA data
-	# identify the models that fall within and between basic clusters
-	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($ncrna,
-								   $e_cluster);
-
+    }
+    foreach my $c (@{$hint_clusters}){
+	my $bx = prep_blastx_data($c, $c_id, $seq, $organism_type);
+	push(@all_data, @{$bx}) if defined $bx;
+	$c_id++;
+    }
+    
+    #==ncRNA data
+    my $ncrna_clusters = [];
+    if(@$ncrna){
 	#join the clusters on the models
-	my $ncrna_clusters = join_clusters_on_pred($ncrna, $e_cluster, $c_index);
-
-        foreach my $c (@{$ncrna_clusters}){
-	    my $nr = prep_ncrna_data($c, $c_id, $seq, $organism_type);
-	    push(@all_data, @{$nr}) if defined $nr;
-
-	    $c_id++;
-        }
-
-	#==add index values (I don't remember why?)
-
+	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($ncrna, $e_cluster);
+	$ncrna_clusters = join_clusters_on_pred($ncrna, $e_cluster, $c_index);
+    }
+    foreach my $c (@{$ncrna_clusters}){
+	my $nr = prep_ncrna_data($c, $c_id, $seq, $organism_type);
+	push(@all_data, @{$nr}) if defined $nr;
+	$c_id++;
+    }
+    
+    #==add index values (used to help send evidence as messages without duplication)
+    if(@all_data){
 	#add index value to ESTs (corresponds to order in array)
 	my $index = 0;
 	foreach my $f (@$est_hits){
 	    $f->{_index}{est} = $index++;
 	}
-
+	
 	#add index value to alt-ESTs (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$altest_hits){
 	    $f->{_index}{altest} = $index++;
 	}
-
+	
 	#add index value to proteins (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$prot_hits){
 	    $f->{_index}{prot} = $index++;
 	}
-
+	
 	#add index value to preds (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$predictions){
 	    $f->{_index}{pred} = $index++;
 	}
-
+	
 	#add index value to ncrna (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$ncrna){
 	    $f->{_index}{ncrna} = $index++;
 	}
-
+	
 	#add index value to models (corresponds to order in array)
 	$index = 0;
 	foreach my $f (@$models){
 	    $f->{_index}{model} = $index++;
 	}
-
+	
 	#add index value to clusters (corresponds to order in array)
 	$index = 0;
 	foreach my $d (@all_data){
 	    $d->{index} = $index++;
 	}
-
+	
 	#move ESTs to fusion category for fusion correction
 	if($correct_est_fusion){
 	    foreach my $d (@all_data){
@@ -316,9 +312,11 @@ sub prep_hits {
 		$d->{ests} = [];
 	    }
 	}
-
-	return (\@all_data);
+    }
+    
+    return (\@all_data);
 }
+
 #------------------------------------------------------------------------
 #called in prep_hits to classify abinits as overlaping one, many, or no
 #clusters of other evidence
@@ -1448,28 +1446,25 @@ sub best_annotations {
     }
 
     #check for UTR overlap and trim
-    if($CTL_OPT->{correct_est_fusion}){
-	@p_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @p_keepers;
-	for (my $i = 0; $i < @p_keepers -1; $i++){
-	    my $j = $i+1;
-	    my $g1 = $p_keepers[$i];
-	    my $g2 = $p_keepers[$j];
-	    _trim_UTR_if_overlap($g1, $g2);
-	}
-
-	@m_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @m_keepers;
-	for (my $i = 0; $i < @m_keepers -1; $i++){
-	    my $j = $i+1;
-	    my $g1 = $m_keepers[$i];
-	    my $g2 = $m_keepers[$j];
-	    _trim_UTR_if_overlap($g1, $g2);
-	}
+    @p_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @p_keepers;
+    for (my $i = 0; $i < @p_keepers -1; $i++){
+	my $j = $i+1;
+	my $g1 = $p_keepers[$i];
+	my $g2 = $p_keepers[$j];
+	_trim_UTR_if_overlap($g1, $g2);
+    }
+    @m_keepers = sort {$a->{g_cstart} <=>$b->{g_cstart}} @m_keepers;
+    for (my $i = 0; $i < @m_keepers -1; $i++){
+	my $j = $i+1;
+	my $g1 = $m_keepers[$i];
+	my $g2 = $m_keepers[$j];
+	_trim_UTR_if_overlap($g1, $g2);
     }
 
     #remove CDS competition on opposite strand
     my $final;
     if($CTL_OPT->{organism_type} eq 'eukaryotic'){
-       $final = remove_CDS_competitors(\@p_keepers, \@m_keepers);
+       $final = remove_CDS_competitors(\@p_keepers, \@m_keepers, $CTL_OPT);
     }
     else{
        $final = [@p_keepers, @m_keepers];
@@ -1477,6 +1472,7 @@ sub best_annotations {
 
     return $final;
 }
+
 #------------------------------------------------------------------------
 sub _trim_UTR_if_overlap {
     my $g1 = shift;
@@ -1547,6 +1543,7 @@ sub _trim_UTR_if_overlap {
 sub remove_CDS_competitors {
     my $plus = shift;
     my $minus = shift;
+    my $CTL_OPT = shift;
 
     my @p_final;
     my @m_final;
@@ -1636,22 +1633,34 @@ sub remove_CDS_competitors {
 
     #--check if plus strand maybes overlap final set minus
     my @suspects;
+    my $overlap_ok = $CTL_OPT->{allow_overlap};
     if(@m_final){ #skip if nothing to compare to
 	foreach my $s (@p_maybe){
-	    my $sB = $s->{g_start};
-	    my $sE = $s->{g_end};
+	    #my $sB = $s->{g_start};
+	    #my $sE = $s->{g_end};
+	    my ($sB, $sE) = _g_coding_start_end($s);
 	    ($sB, $sE) = ($sE, $sB) if($sE < $sB);
 
 	    my $bad;
 	    foreach my $g (@m_final){
-		my $gB = $g->{g_start};
-		my $gE = $g->{g_end};
+		#my $gB = $g->{g_start};
+		#my $gE = $g->{g_end};
+		my ($gB, $gE) = _g_coding_start_end($g);
 		($gB, $gE) = ($gE, $gB) if($gE < $gB);
 
 		my $comp = compare::compare($sB,
 					    $sE,
 					    $gB,
 					    $gE);
+
+		#can change class if partial overlap is allowed
+		if($overlap_ok && $comp ne '0'){
+		    my $f1 = $g->{t_structs}->[0]->{hit};
+		    my $f2 = $s->{t_structs}->[0]->{hit};
+		    my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
+		    $comp = ($sn > $overlap_ok || $sp > $overlap_ok) ? 1 : 0; #allow overlap of up to 30%
+		}
+
 		if($comp ne '0'){
 		    $bad = 1;
 		    last;
@@ -1669,21 +1678,31 @@ sub remove_CDS_competitors {
     #--check if minus strand maybes overlap final set plus
     if(@p_final){ #skip if nothing to compare to
 	foreach my $s (@m_maybe){
-	    my $sB = $s->{g_start};
-	    my $sE = $s->{g_end};
+	    #my $sB = $s->{g_start};
+	    #my $sE = $s->{g_end};
+	    my ($sB, $sE) = _g_coding_start_end($s);
 	    ($sB, $sE) = ($sE, $sB) if($sE < $sB);
 
 	    my $bad;
 	    foreach my $g (@p_final){
-		my $gB = $g->{g_start};
-		my $gE = $g->{g_end};
+		#my $gB = $g->{g_start};
+		#my $gE = $g->{g_end};
+		my ($gB, $gE) = _g_coding_start_end($g);
 		($gB, $gE) = ($gE, $gB) if($gE < $gB);
 
 		my $comp = compare::compare($sB,
 					    $sE,
 					    $gB,
-					    $gE
-					    );
+					    $gE);
+
+		#can change class if partial overlap is allowed
+		if($overlap_ok && $comp ne '0'){
+		    my $f1 = $g->{t_structs}->[0]->{hit};
+		    my $f2 = $s->{t_structs}->[0]->{hit};
+		    my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
+		    $comp = ($sn > $overlap_ok || $sp > $overlap_ok) ? 1 : 0; #allow overlap of up to 30%
+		}
+
 		if($comp ne '0'){
 		    $bad = 1;
 		    last;
@@ -1700,7 +1719,7 @@ sub remove_CDS_competitors {
 
     #remove suspects that overlap other better suspects
     @suspects = sort {crit4($b) <=> crit4($a)} @suspects;
-    @suspects = @{_best(\@suspects)};
+    @suspects = @{_best(\@suspects, $CTL_OPT)};
 
     #return final annotations
     my $final;
@@ -1720,31 +1739,23 @@ sub _best{
     my $CTL_OPT = shift;
 
     my @keepers;
+    my $overlap_ok = $CTL_OPT->{allow_overlap};
     foreach my $g (@$list){
-	my $g_B = $g->{g_start};
-	my $g_E = $g->{g_end};
-
 	#adjust to check for CDS overlap only
-	if($CTL_OPT->{correct_est_fusion}){
-	    ($g_B, $g_E) = _g_coding_start_end($g);
-	    die if ($g_B < $g->{g_start} || $g_E > $g->{g_end});
-	}
+	my ($g_B, $g_E) = _g_coding_start_end($g);
+	die if ($g_B < $g->{g_start} || $g_E > $g->{g_end});
 
 	my $bad;
 	foreach my $k (@keepers){
-	    my $k_B = $k->{g_start};
-	    my $k_E = $k->{g_end};
-
-	    if($CTL_OPT->{correct_est_fusion}){
-		($k_B, $k_E) = _g_coding_start_end($k);
-	    }
-
+	    my ($k_B, $k_E) = _g_coding_start_end($k);
 	    my $class = compare::compare($g_B, $g_E, $k_B, $k_E);
-	    if($class ne '0' && $CTL_OPT && $CTL_OPT->{organism_type} eq 'prokaryotic'){
-	       my $f1 = $g->{t_structs}->[0]->{hit};
-	       my $f2 = $k->{t_structs}->[0]->{hit};
-	       my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
-	       $class = ($sn >= .30 || $sp >= .30) ? 1 : 0; #allow overlap of up to 30%
+
+	    #can change class if partial overlap is allowed
+	    if($overlap_ok && $class ne '0'){
+		my $f1 = $g->{t_structs}->[0]->{hit};
+		my $f2 = $k->{t_structs}->[0]->{hit};
+		my ($sn, $sp) = shadow_AED::get_SN_SP([$f1], $f2);
+		$class = ($sn > $overlap_ok || $sp > $overlap_ok) ? 1 : 0; #allow overlap of up to 30%
 	    }
 
 	    if($class ne '0'){
@@ -1809,6 +1820,7 @@ sub crit4 {
 
     return $length;
 }
+
 #------------------------------------------------------------------------
 #called by subroutine annotate.
 #takes evidence clusters prepared by prep_hits and runs gene predictons
@@ -1818,10 +1830,10 @@ sub crit4 {
 #est2genome predictions are also built here by adding UTR to the best
 #spliced ESTs
 
-sub run_it{
+sub run_it {
     my $data         = shift;
     my $the_void     = shift;
-    my $m_seq          = shift;
+    my $m_seq        = shift;
     my $v_seq        = shift;
     my $def          = shift;
     my $predictor    = shift;
@@ -1838,41 +1850,41 @@ sub run_it{
 	my $alt_ests = $set->{alt_ests};
 	my $preds    = $set->{preds};
 	my $all_preds = $set->{all_preds};
-
+	
 	#------gff passthrough
 	if ($predictor eq 'model_gff') {
 	    next if(! defined $model);
 	    my $transcript = $model;
-
+	    
 	    push(@transcripts, [$transcript, $set->{index}, undef]);
-
+	    
 	    next;
 	}
-
+	
 	#------ncRNA
 	if ($predictor eq 'ncrna') {
 	    next if(! defined $model);
 	    my $transcript = $model;
-
+	    
 	    push(@transcripts, [$transcript, $set->{index}, undef]);
 	    next;
 	}
-
+    
 	#------ab-init passthrough
 	if ($predictor eq 'abinit') {
 	    next if(! defined $model);
-
+	    
 	    #added 2/23/2009 to reduce spurious gene predictions with only single exon blastx support
 	    my $remove;
 	    if($CTL_OPT->{organism_type} eq 'eukaryotic'){
 		$remove = 1;
-
+		
 		#check all ESTs for splice support
 		if($remove && @$ests){
 		    my $mAED = shadow_AED::get_eAED($ests, $model);
 		    $remove = 0 if($mAED < 1);
 		}
-
+		
 		#make sure the polished protein evidence actually overlaps
 		if($remove && (@$pol_p > 1 || (@$pol_p == 1 && $pol_p->[0]->hsps > 1))){
 		    my $pAED = shadow_AED::get_eAED($pol_p, $model); #veifies reading frame
@@ -1922,7 +1934,7 @@ sub run_it{
 
 	    next;
 	}
-
+    
 	#------est2genome
 	if ($predictor eq 'est2genome') {
 	    my $gomias = [];
@@ -1993,7 +2005,7 @@ sub run_it{
 
 	    next;
 	}
-
+    
 	#------altest2genome
 	if ($predictor eq 'altest2genome') {
 	    my $gomias = [];
@@ -2116,7 +2128,7 @@ sub run_it{
 
 	    next;
 	}
-
+    
 	#------default hint based behavior
 	#------genemark does not have hints enabled
 	return [] if ($predictor eq 'genemark');
@@ -2125,16 +2137,12 @@ sub run_it{
 	return [] if ($predictor eq 'evm'); #evm gets its hints another way
 
 	my $gomias = []; #group of most informative alt splices
-	if($CTL_OPT->{alt_splice}){
+	if($CTL_OPT->{organism_type} eq 'eukaryotic'){
 	    $gomias = clean::purge_single_exon_hits($ests);
-	    print STDERR "begin called get_best_alt_splices2\n";
 	    $gomias = clean::get_best_alt_splices($gomias, 10);
-	    print STDERR "end called get_best_alt_splices2\n";
 	}
-	elsif($CTL_OPT->{organism_type} eq 'eukaryotic'){
-	}
-	$gomias->[0] = undef if(! @$gomias);
-
+	push(@$gomias, undef); #always have one without a specific guide
+	
 	my $i = 0;
 	foreach my $mia (@$gomias) {
 	    my ($pred_shots, $strand) = get_pred_shot($m_seq,
@@ -2241,7 +2249,7 @@ sub run_it{
 	    foreach my $pred_shot (@{$on_right_strand}) {
 		if (defined($pred_shot)){
 		    my $transcript = $pred_shot;
-		    if($CTL_OPT->{alt_splice} && defined($mia)){
+		    if(defined($mia)){
 			$transcript = pneu([$mia], $transcript, $v_seq);
 		    }
 		    my $select = $transcript;
@@ -2258,6 +2266,7 @@ sub run_it{
 
     return \@transcripts;
 }
+
 #------------------------------------------------------------------------
 #runs the gene prdictors with hints.  Called by run_it.
 sub get_pred_shot {
@@ -2380,6 +2389,7 @@ sub get_pred_shot {
 
    return (\@all_preds, $strand);
 }
+
 #------------------------------------------------------------------------
 #takes the gene predictions and evidence and builds transcript name,
 #QI, AED and gets protein and mRNA sequence then puts it al into a
@@ -3252,8 +3262,8 @@ sub get_non_overlaping_abinits {
    my @keepers;
    @p_keepers  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @p_keepers;
    @m_keepers  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @m_keepers;
-   push(@keepers, @{_best(\@p_keepers)});
-   push(@keepers, @{_best(\@m_keepers)});
+   push(@keepers, @{_best(\@p_keepers, $CTL_OPT)});
+   push(@keepers, @{_best(\@m_keepers, $CTL_OPT)});
 
    return (\@keepers);
 }

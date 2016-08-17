@@ -141,7 +141,20 @@ sub splice_infer_exon_coors {
 	    next if($done{$B}{$E}); #skip if these coors already checked
 	    confess "ERROR: Logic error in Widget:snap::get_xdef\n" if($B > $E);
 	    $done{$B}{$E}++;
+
+	    #use hidden hack to avoid recalculating across calls
+	    if(defined($sorted[$i][0]->{__ORF_CHECK}{"$B-$E"})){
+		if($sorted[$i][0]->{__ORF_CHECK}{"$B-$E"}){
+		    push(@coors, [$B, $E]);
+		    $ok = $E if(! $ok || $E > $ok);
+		}
+		else{
+		    $bad = $E if(!$bad || $E < $bad);
+		}
+		next;
+	    }
 	    
+	    #calculate ORF
 	    my $L = abs($E - $B) + 1;
 	    my $piece = ($sorted[$j]->[0]->strand('query') == 1) ?
 		substr_o($seq, $B-1, $L) : Fasta::revComp(substr_o($seq, $B-1, $L));
@@ -149,10 +162,12 @@ sub splice_infer_exon_coors {
 	    my ($p_seq, $poffset) = $tM->longest_translation($piece);
 	    if($poffset < 3 && $L - (3 * length($p_seq) + $poffset) < 3 && $p_seq !~ /X{10}/){
 		push(@coors, [$B, $E]);
+		$sorted[$i][0]->{__ORF_CHECK}{"$B-$E"} = 1; #hide results in HSP incase it gets used again
 		$ok = $E if(! $ok || $E > $ok);
 	    }
 	    else{
 		$bad = $E if(!$bad || $E < $bad);
+		$sorted[$i][0]->{__ORF_CHECK}{"$B-$E"} = 0;  #hide results in HSP incase it gets used again
 	    }
 	}
     }
