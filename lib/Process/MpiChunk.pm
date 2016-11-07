@@ -2021,9 +2021,11 @@ sub _go {
 		$blastn_keepers  = PhatHit_utils::shatter_all_hits($blastn_keepers);
 
 		#this checks the open reading frame and can flip the hit
-		foreach my $phat_hit (@$blastn_keepers){
-		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
-			if exonerate::splice_info::needs_to_be_revcomped($phat_hit, $q_seq_obj);
+		if(!$CTL_OPT{est_forward}){
+		    foreach my $phat_hit (@$blastn_keepers){
+			$phat_hit = PhatHit_utils::copy($phat_hit, 'both')
+			    if(exonerate::splice_info::needs_to_be_revcomped($phat_hit, $q_seq_obj));
+		    }
 		}
 	    }
 
@@ -2531,7 +2533,7 @@ sub _go {
 		#this checks the open reading frame and can flip the hit
 		foreach my $phat_hit (@$tblastx_keepers){
 		    $phat_hit = PhatHit_utils::copy($phat_hit, 'both')
-			if exonerate::splice_info::needs_to_be_revcomped($phat_hit, $q_seq_obj);
+			if(exonerate::splice_info::needs_to_be_revcomped($phat_hit, $q_seq_obj));
 		}
 	    }
 

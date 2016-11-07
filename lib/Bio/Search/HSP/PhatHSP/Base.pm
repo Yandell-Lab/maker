@@ -73,6 +73,7 @@ package Bio::Search::HSP::PhatHSP::Base;
 
 use strict;
 use warnings;
+use Carp;
 
 use Bio::Search::HSP::GenericHSP;
 
@@ -613,6 +614,59 @@ sub strand
 	else{
 	    return $self->SUPER::strand($what);
 	}
+}
+
+################################################ subroutine header begin ##
+
+=head1 getLengths
+
+ Usage     : How to use this function/method
+
+=for example
+    use Bio::Search::HSP::PhatHSP::Base;
+ my $hits = Bio::Search::HSP::PhatHSP::Base::_getTestHSPs('blastn',
+              'sample_data/blastn.sample.report');
+
+=for example begin
+
+ my $hit = $hits->[0];          # $hits is filled in by test harness
+ my ($q_length, $h_length) = $hit->getLengths();
+
+=for example end
+
+=for example_testing
+  is($q_length, 1192, "Check the query length.");
+  is($h_length, 1179, "Check the hit length.");
+
+ Purpose   : What the subroutine does.
+ Returns   : The types and values it returns.
+ Argument  : Required and optional input.
+ Throws    : Exceptions and other anomolies
+ Comments  : This is a sample subroutine header.
+           : It is polite to include more pod and fewer comments.
+ See Also  : Other things that might be useful.
+
+=cut
+
+################################################## subroutine header end ##
+
+sub getLengths {
+    my $self = shift;
+
+    unless(defined($self->{LAlnQ}) && defined($self->{LAlnH})){
+	my $q_e = $self->nE('query');
+	my $q_b = $self->nB('query');
+	my $h_e = $self->nE('hit');
+	my $h_b = $self->nB('hit');
+	
+	($q_b, $q_e) = ($q_e, $q_b) if ($q_b > $q_e);
+	($h_b, $h_e) = ($h_e, $h_b) if ($h_b > $h_e);
+	
+	$self->{LAlnQ} = ($q_e-$q_b)+1;
+	$self->{LAlnH} = ($h_e-$h_b)+1;
+    }
+
+    return ($self->{LAlnQ}, $self->{LAlnH});
 }
 
 ################################################ subroutine header begin ##

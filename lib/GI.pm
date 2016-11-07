@@ -1894,7 +1894,8 @@ sub polish_exonerate {
     my $exe = $exonerate;
     
     my @exonerate_data;
-    
+    my @to_copy; #results to backup
+
     my %uniq; #make sure this same exonerate hit does not already exist
     foreach my $hit (@{$phat_hits}) {
 	my $h_name;
@@ -2034,8 +2035,9 @@ sub polish_exonerate {
 
 	#make backup
 	if($o_tfile ne $backup){
-	    #File::Copy::move($o_tfile, $backup); #temp
-	    unlink($o_tfile);
+	    push(@to_copy, [$o_tfile, $backup]);
+	    #File::Copy::move($o_tfile, $backup);
+	    #unlink($o_tfile);
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 	
@@ -2067,7 +2069,7 @@ sub polish_exonerate {
 		    my $len = length($eseq);
 		    my $a_count = $eseq =~ tr/Aa/Aa/;
 		    if($a_count/$len >= 0.8){
-			$e->hsps(\@hsps); #make new referece rather than direct reference
+			$e->hsps(\@hsps); #replace hsps with new reference
 			next;
 		    }
 		    else{
@@ -2102,12 +2104,20 @@ sub polish_exonerate {
 		if($est_forward){
 		   my $score = $e->frac_identical * $e->pAh * 100;
 		   $e->score($score);
+		   $e->{_est_forward} = 1;
 		}
 
 		push(@keepers, $e);
 	    }
 	}
-	
+
+	#make backup copy of results (done at end to group IO calls)
+	for(my $i = 0; $i < @to_copy; $i++){
+	    my ($o_tfile, $backup) = @{$to_copy[$i]};
+	    #File::Copy::move($o_tfile, $backup); #temp
+	    unlink($o_tfile);
+	}
+
 	#remove ambiguous alternate alignments when hints are given
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $coor = $1;
@@ -2531,6 +2541,13 @@ sub blastn_as_chunks {
    foreach my $hit (@$chunk_keepers){
        $hit->{_label} = $label if($label);
        map{$_->{_label} = $label} $hit->hsps if($label);
+
+       #fix hot score
+       if($CTL_OPT->{est_forward} && $CTL_OPT->{organism_type} eq 'prokaryotic'){
+	   my $score = $hit->frac_identical * $hit->pAh * 100;
+	   $hit->score($score);
+	   $hit->{_est_forward} = 1;
+       }
    }
 
    return ($chunk_keepers, $blast_dir);

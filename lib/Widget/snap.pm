@@ -91,7 +91,7 @@ sub process_hints {
     push(@t_data, @{$alts});
     push(@t_data, @{$models});
     push(@t_data, @{$ests});
-    #push(@t_data, @{$fusion});
+    push(@t_data, @{$fusion}); #temp
     
     #get span
     my $plus  = 0;
@@ -156,13 +156,13 @@ sub process_hints {
 	    my $val = ($i == 0 || $i == $#hsps) ? 1 : 2; #internal exons given higher precedence
 
 	    #fix for avoid_est_fusion
-	    next if($s < 0 || $e > $most-$offset); #skip partial exons
-	    #if($s < 0 || $e > $most-$offset){
-            #	$val = 1;
-	    #	$s = 0 if($s < 0);
-	    #	$e = $most-$offset if($e > $most-$offset);
-	    #	next if($e < $s); #skip
-	    #}
+	    #next if($s < 0 || $e > $most-$offset); #skip partial exons
+	    if($s < 0 || $e > $most-$offset){
+            	$val = 1;
+	    	$s = 0 if($s < 0);
+	    	$e = $most-$offset if($e > $most-$offset);
+	    	next if($e < $s); #skip
+	    }
 
 	    @b_seq[$s..$e] = map {$val} ($s..$e); #overrides all
 	}

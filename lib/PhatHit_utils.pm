@@ -421,7 +421,7 @@ sub shatter_hit {
             my $new_hit = new $ref('-name'         => $hit->name,
                                    '-description'  => $hit->description,
                                    '-algorithm'    => $hit->algorithm,
-                                   '-length'       => $hsp->length,
+                                   '-length'       => $hit->length,
 				   '-score'        => $hsp->score,
 				   '-bits'         => $hsp->bits,
 				   '-significance' => $hsp->significance
@@ -435,6 +435,13 @@ sub shatter_hit {
 
 	    $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
 	    $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+
+	    #fix for est_forward
+	    if($hit->{_est_forward}){
+		my $score = $new_hit->frac_identical * $new_hit->pAh * 100;
+		$new_hit->score($score);
+		$new_hit->{_est_forward} = 1
+	    }
 
 	    push(@new_hits, $new_hit);
 	}
@@ -454,7 +461,7 @@ sub shatter_all_hits {
 		my $new_hit = new $ref('-name'         => $hit->name,
 				       '-description'  => $hit->description,
 				       '-algorithm'    => $hit->algorithm,
-				       '-length'       => $hsp->length,
+				       '-length'       => $hit->length,
 				       '-score'        => $hsp->score,
 				       '-bits'         => $hsp->bits,
 				       '-significance' => $hsp->significance
@@ -468,6 +475,13 @@ sub shatter_all_hits {
 
 		$new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
 		$new_hit->{_label} = $hit->{_label} if($hit->{_label});
+
+		#fix for est_forward
+		if($hit->{_est_forward}){
+		    my $score = $new_hit->frac_identical * $new_hit->pAh * 100;
+		    $new_hit->score($score);
+		    $new_hit->{_est_forward} = 1
+		}
 		
 		push(@new_hits, $new_hit);
 	    }

@@ -162,7 +162,6 @@ sub prep_hits {
 	    merge_into_cluster($hit_mult, $model_clusters, $c_index);
 	}
     }
-    #temp (commented out temporariliy)
     foreach my $c (@{$model_clusters}){
         my $gf = prep_gff_data($c, $c_id, $seq);
         push(@all_data, @{$gf}) if defined $gf;
@@ -240,6 +239,35 @@ sub prep_hits {
 	    my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $hint_clusters);
 	    merge_into_cluster($hit_one, $hint_clusters, $c_index);
 	    merge_into_cluster($hit_mult, $hint_clusters, $c_index);
+
+	    #while(@$hit_none){
+	    #	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $hint_clusters);
+	    #	last if(!@$hit_one && !@$hit_mult);
+	    #	merge_into_cluster($hit_one, $hint_clusters, $c_index);
+	    #	merge_into_cluster($hit_mult, $hint_clusters, $c_index);
+	    #}
+	}
+    }
+    if(@$e_bag && $correct_est_fusion){
+	#identify EST only clusters (don't overlap other clusters already under consideration)
+	my $e_only = [];
+	my ($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($e_bag, $careful_clusters);
+	($c_index, $hit_one, $hit_none, $hit_mult) = segment_preds($hit_none, $pred_clusters);
+
+	#cluster the non-overlapping ESTs
+	my $e_only = [];
+	my ($p, $m, $x, $z) = PhatHit_utils::separate_by_strand('query', $hit_none);
+	my $p_clusters = cluster::clean_and_cluster(20, $p, 0, 1, $est_forward); #flattens
+	$p_clusters = cluster::shadow_cluster(0, $p_clusters, $pred_flank); #broaden
+	my $m_clusters = cluster::clean_and_cluster(20, $m, 0, 1, $est_forward); #flattens
+	$m_clusters = cluster::shadow_cluster(0, $m_clusters, $pred_flank); #broaden
+	push(@{$e_only}, @{$p_clusters}, @{$m_clusters});
+	#$e_only = jaccard_split_clusters($e_only, 0.5);	
+
+	#further filter so at least two cluster members have 3 exons or more
+	foreach my $c (@$e_only){
+	    next unless((grep {$_->hsps > 3} @$c) > 1);
+	    push(@$hint_clusters, $c);
 	}
     }
     foreach my $c (@{$hint_clusters}){
@@ -1412,10 +1440,10 @@ sub best_annotations {
 		my $eAED = $g->{eAED};
 		my $low = ($AED < $eAED) ? $AED : $eAED;
 
-		if($p !~ /2genome$/ && $g->{g_strand} == 1){
+		if(($p !~ /2genome$/ || $CTL_OPT->{always_complete}) && $g->{g_strand} == 1){
 		    push(@$p_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
-		elsif($p !~ /2genome$/ && $g->{g_strand} == -1) {
+		elsif(($p !~ /2genome$/ || $CTL_OPT->{always_complete}) && $g->{g_strand} == -1) {
 		    push(@$m_list, $g) if(($AED < 1 && $low <= $thresh) || $p eq 'model_gff');
 		}
 		elsif($g->{g_strand} == 1){
@@ -1982,7 +2010,19 @@ sub run_it {
 			$has_stop) = get_translation_seq($transcript_seq, $transcript);
 
 		    #40% min
-		    next if((length($translation_seq)+1) * 3 / length($transcript_seq) < .40);
+		    my $short_cds;
+		    if((($end-1)-$offset) / length($transcript_seq) < .40){
+			$short_cds = 1;
+		    }
+		    #long first/last exon is not uncommon
+		    if($short_cds && $has_start && $has_stop && $transcript->num_hsps >= 3){
+			my ($first, $last) = @{$transcript->sortedHSPs}[0, -1];
+			my ($Blen, $Elen) = ($offset, length($transcript_seq)-($end-1));
+			my $trim = ($Blen < $first->length) ? $Blen : $first->length;
+			$trim   += ($Elen < $last->length)  ? $Elen : $last->length;
+			$short_cds = 0 if((length($translation_seq)+1)*3/(length($transcript_seq)-$trim) >= .80);
+		    }
+		    next if($short_cds);
 
 		    #single exon results require more filtering
 		    if($CTL_OPT->{organism_type} eq 'eukaryotic' && $transcript->num_hsps == 1){
@@ -1998,6 +2038,17 @@ sub run_it {
 		   $transcript->{_tran_name} = $mia->name;
 		   my $score = $mia->frac_identical * $mia->pAh * 100;
 		   $transcript->score($score);
+		}
+
+		#only keep complete one when always complete set
+		if($CTL_OPT->{always_complete}){
+		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    next if(!$has_start || !$has_stop);
 		}
 
 		push(@transcripts, [$transcript, $set->{index}, $mia]);
@@ -2071,6 +2122,17 @@ sub run_it {
 		   $transcript->score($score);
 		}
 
+		#only keep complete one when always complete set
+		if($CTL_OPT->{always_complete}){
+		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    next if(!$has_start || !$has_stop);
+		}
+
 		push(@transcripts, [$transcript, $set->{index}, $mia]);
 	    }
 
@@ -2104,6 +2166,9 @@ sub run_it {
 		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
 		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
 
+		#make sure most exons are preserved
+		next if($copy->hsps/$miph->hsps < 0.8 || $copy->hsps < $miph->hsps-2);
+
 		#only tile if not set to push forward as is
 		my $transcript = $copy;
 		if(!$CTL_OPT->{est_forward}){
@@ -2121,6 +2186,17 @@ sub run_it {
 		   $transcript->{_tran_name} = $miph->name;
 		   my $score = $miph->frac_identical * $miph->pAh * 100;
 		   $transcript->score($score);
+		}
+
+		#only keep complete one when always complete set
+		if($CTL_OPT->{always_complete}){
+		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    next if(!$has_start || !$has_stop);
 		}
 
 		push(@transcripts, [$transcript, $set->{index}, $miph]);
