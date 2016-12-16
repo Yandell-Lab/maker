@@ -96,12 +96,10 @@ sub needs_to_be_revcomped {
 	    my $p_len = length($p_seq);
 	    my $r_len = length($r_p_seq);
 	    if( $p_len >= $r_len){
-		return 0 if $hit->strand('hit') ==  1;
-		return 1 if $hit->strand('hit') == -1;
+		return 0;
 	    }
 	    else{
-		return 1 if $hit->strand('hit') ==  1;
-		return 0 if $hit->strand('hit') == -1;
+		return 1;
 	    }
 	}
 
