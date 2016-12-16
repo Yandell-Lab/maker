@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 use strict;
 use warnings;
@@ -83,6 +83,7 @@ while (my $line = <$IN>) {
 		my @ids;
 		push @ids, @{$attrb{Parent}} if $attrb{Parent};
 		push @ids, @{$attrb{ID}}     if $attrb{ID};
+		push @ids, @{$attrb{Name}}   if $attrb{Name};
 		push @ids, @{$attrb{Alias}}  if $attrb{Alias};
 
 		# Keep only the IDs that are in the mapping file.
