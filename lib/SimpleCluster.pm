@@ -11,26 +11,6 @@ use FileHandle;
 #-------------------------------------------------------------------------------
 #------------------------------ FUNCTIONS --------------------------------------
 #-------------------------------------------------------------------------------
-sub cluster_hits {
-    my $hits = shift;
-    my $flank = shift;
-
-    my $pairs = build_hit_pairs($hits, $flank);
-    my $cMap = cluster_pairs($pairs);
-
-    my @clusters;
-    for(my $i = 0; $i < @$cMap; $i++){
-        my $members = $cMap->[$i];
-        next if(!$members || !@$members);
-
-        my @array = map {$hits->[$_]} @{$members};
-
-	push(@clusters, \@array);
-    }
-    
-    return \@clusters;
-}
-#-------------------------------------------------------------------------------
 #generic form - requires an array of hashes or other features with the keys
 #start, end, and stand (optional) defined
 sub cluster {
@@ -52,6 +32,47 @@ sub cluster {
     
     return \@clusters;
 }
+#-------------------------------------------------------------------------------
+sub cluster_hits {
+    my $hits = shift;
+    my $flank = shift;
+
+    my $pairs = build_hit_pairs($hits, $flank);
+    my $cMap = cluster_pairs($pairs);
+
+    my @clusters;
+    for(my $i = 0; $i < @$cMap; $i++){
+        my $members = $cMap->[$i];
+        next if(!$members || !@$members);
+
+        my @array = map {$hits->[$_]} @{$members};
+
+	push(@clusters, \@array);
+    }
+    
+    return \@clusters;
+}
+#-------------------------------------------------------------------------------
+sub cluster_on_hsps {
+    my $hits = shift;
+    my $flank = shift;
+
+    my $pairs = build_hsp_pairs($hits, $flank);
+    my $cMap = cluster_pairs($pairs);
+
+    my @clusters;
+    for(my $i = 0; $i < @$cMap; $i++){
+        my $members = $cMap->[$i];
+        next if(!$members || !@$members);
+
+        my @array = map {$hits->[$_]} @{$members};
+
+	push(@clusters, \@array);
+    }
+    
+    return \@clusters;
+}
+
 #-------------------------------------------------------------------------------
 sub build_hit_pairs {
     my $hits = shift;
@@ -80,6 +101,27 @@ sub build_hit_pairs {
 	    next if($aSt ne $bSt && !$ignore_strand);
 
 	    my $code = compare::compare($aB, $aE, $bB, $bE);
+	    push(@pairs, [$i, $j]) if($code);
+	}
+    }
+
+    return \@pairs;
+}
+#-------------------------------------------------------------------------------
+sub build_hsp_pairs {
+    my $hits = shift;
+    my $flank = shift;
+
+    my @pairs;
+
+    for (my $i = 0; $i < @$hits; $i++) {
+	my $aSt = $hits->[$i]->strand('query');
+	push(@pairs, [$i, $i]);
+
+	for (my $j = $i+1; $j < @$hits; $j++) {
+	    my $bSt = $hits->[$j]->strand('query');
+	    next if($aSt ne $bSt);
+	    my $code = compare::hsps_overlap($hits->[$i], $hits->[$j], 'query', $flank);
 	    push(@pairs, [$i, $j]) if($code);
 	}
     }
@@ -157,47 +199,6 @@ sub build_pairs {
 	}
 
 	return \@n_pairs;
-    }
-
-    return \@pairs;
-}
-#-------------------------------------------------------------------------------
-sub cluster_on_hsps {
-    my $hits = shift;
-    my $flank = shift;
-
-    my $pairs = build_hsp_pairs($hits, $flank);
-    my $cMap = cluster_pairs($pairs);
-
-    my @clusters;
-    for(my $i = 0; $i < @$cMap; $i++){
-        my $members = $cMap->[$i];
-        next if(!$members || !@$members);
-
-        my @array = map {$hits->[$_]} @{$members};
-
-	push(@clusters, \@array);
-    }
-    
-    return \@clusters;
-}
-#-------------------------------------------------------------------------------
-sub build_hsp_pairs {
-    my $hits = shift;
-    my $flank = shift;
-
-    my @pairs;
-
-    for (my $i = 0; $i < @$hits; $i++) {
-	my $aSt = $hits->[$i]->strand('query');
-	push(@pairs, [$i, $i]);
-
-	for (my $j = $i+1; $j < @$hits; $j++) {
-	    my $bSt = $hits->[$j]->strand('query');
-	    next if($aSt ne $bSt);
-	    my $code = compare::hsps_overlap($hits->[$i], $hits->[$j], 'query', $flank);
-	    push(@pairs, [$i, $j]) if($code);
-	}
     }
 
     return \@pairs;

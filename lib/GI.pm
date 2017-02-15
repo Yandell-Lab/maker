@@ -27,6 +27,7 @@ use FileHandle;
 use PostData;
 use Fasta;
 use Iterator::Fasta;
+use Iterator::Any;
 use FastaChunker;
 use Widget::RepeatMasker;
 use Widget::rapsearch;
@@ -172,7 +173,6 @@ sub set_global_temp {
 }
 #------------------------------------------------------------------------
 sub get_global_temp {
-    
     return $TMP;
 }
 #------------------------------------------------------------------------
@@ -895,6 +895,7 @@ sub localize_file {
 	last if(-f "$tmp/$name");
 	next unless($lock->maintain(30));
 
+	mkdir("$tmp/$rank") if(! -d "$tmp/$rank");
 	File::Copy::copy($file, "$tmp/$rank/$name.tmp");
 	File::Copy::move("$tmp/$rank/$name.tmp", "$tmp/$name");
 	$lock->unlock if($lock);
@@ -1275,7 +1276,7 @@ sub snap {
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $out_file = "$in_file\.$hmm_n\.snap";
        (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-       $LOG->add_entry("STARTED", $backup, "");
+       $LOG->add_entry("STARTED", $backup, "") if($LOG);
        
        my $command  = $exe;
        $command .= " $hmm";
@@ -1294,7 +1295,7 @@ sub snap {
 	   File::Copy::copy($out_file, $backup);
 	   unlink($out_file);
        }
-       $LOG->add_entry("FINISHED", $backup, "");
+       $LOG->add_entry("FINISHED", $backup, "") if($LOG);
 
        push(@out_files, [$backup, $entry]);
    }
@@ -1322,7 +1323,7 @@ sub genemark {
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $out_file = "$in_file\.$hmm_n\.genemark";
        (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-       $LOG->add_entry("STARTED", $backup, "");
+       $LOG->add_entry("STARTED", $backup, "") if($LOG);
 
        my $command  = "$^X $wrap";
        $command .= " -m $hmm";
@@ -1344,7 +1345,7 @@ sub genemark {
 	   File::Copy::copy($out_file, $backup);
 	   unlink($out_file);
        }
-       $LOG->add_entry("FINISHED", $backup, "");
+       $LOG->add_entry("FINISHED", $backup, "") if($LOG);
 
        push(@out_files, [$backup, $entry]);
    }
@@ -1383,7 +1384,7 @@ sub augustus {
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $out_file = "$in_file\.$hmm_n\.augustus";
        (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-       $LOG->add_entry("STARTED", $backup, ""); 
+       $LOG->add_entry("STARTED", $backup, "") if($LOG); 
        
        my $command  = $exe;
        $command .= " --AUGUSTUS_CONFIG_PATH=$config_path";
@@ -1404,7 +1405,7 @@ sub augustus {
 	   File::Copy::copy($out_file, $backup);
 	   unlink($out_file);
        }
-       $LOG->add_entry("FINISHED", $backup, "");
+       $LOG->add_entry("FINISHED", $backup, "") if($LOG);
 
        push(@out_files, [$backup, $entry]);
    }
@@ -1537,7 +1538,7 @@ sub fgenesh {
        $hmm_n = uri_escape($hmm_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
        my $out_file = "$in_file\.$hmm_n\.fgenesh";       
        (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-       $LOG->add_entry("STARTED", $backup, "");
+       $LOG->add_entry("STARTED", $backup, "") if($LOG);
 
        my $command  = "$^X $wrap $exe";
        $command .= " $hmm";
@@ -1556,7 +1557,7 @@ sub fgenesh {
 	   File::Copy::copy($out_file, $backup);
 	   unlink($out_file);
        }
-       $LOG->add_entry("FINISHED", $backup, "");
+       $LOG->add_entry("FINISHED", $backup, "") if($LOG);
 
        push(@out_files, [$backup, $entry]);
    }
@@ -1584,7 +1585,7 @@ sub snoscan {
         $rna_n = uri_escape($rna_n, '\*\?\|\\\/\'\"\{\}\<\>\;\,\^\(\)\$\~\:\.\+');
         my $out_file = "$in_file\.$rna_n\.snoscan";
 	(my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-	$LOG->add_entry("STARTED", $backup, "");
+	$LOG->add_entry("STARTED", $backup, "") if($LOG);
 
 	my $command  = $exe;
 	$command .= " -o $out_file";
@@ -1604,7 +1605,7 @@ sub snoscan {
 	    $w->run($command);
 	    File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
 	}
-	$LOG->add_entry("FINISHED", $backup, "");
+	$LOG->add_entry("FINISHED", $backup, "") if($LOG);
 	
 	push(@out_files, [$out_file, $entry]);
 	
@@ -1629,7 +1630,7 @@ sub evm {
 
     my $out_file = "$in_file\.auto_annotator.evm";
     (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-    $LOG->add_entry("STARTED", $backup, "");
+    $LOG->add_entry("STARTED", $backup, "") if($LOG);
 
     if (-f $backup) {
         print STDERR "using existing evm report.\n" unless $main::quiet;
@@ -1823,7 +1824,7 @@ sub evm {
                                      \%params,
                                      $in_file);
 
-    $LOG->add_entry("FINISHED", $backup, "");
+    $LOG->add_entry("FINISHED", $backup, "") if($LOG);
 
     return $keepers;
 
@@ -1841,7 +1842,7 @@ sub trnascan {
     my $entry = $CTL_OPT->{organism_type};
     my $out_file = "$in_file.$entry.trnascan";
     (my $backup = $out_file) =~ s/.*\/([^\/]+)$/$the_void\/$1/;
-    $LOG->add_entry("STARTED", $backup, "");
+    $LOG->add_entry("STARTED", $backup, "") if($LOG);
 
     my $command  = $exe;
     $command .= " -b -q";
@@ -1860,7 +1861,7 @@ sub trnascan {
         $w->run($command);
 	File::Copy::copy($out_file, $backup) unless($CTL_OPT->{clean_up});
     }
-    $LOG->add_entry("FINISHED", $backup, "");
+    $LOG->add_entry("FINISHED", $backup, "") if($LOG);
     push(@outfiles, [$out_file, $entry]);
     
     return \@outfiles;
@@ -2060,6 +2061,9 @@ sub polish_exonerate {
 
 	    #add gene_id if specified
 	    $e->{gene_id} = $gene_id if($gene_id);
+
+	    #add database_name
+	    $e->database_name($hit->database_name());
 
 	    #trim poly-A tails
 	    if($type eq 'e' && ! $est_forward){
@@ -2585,7 +2589,7 @@ sub blastn {
    my $file_name = "$the_void/$seq_id\.$chunk_number";
    my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.blastn";
 
-   $LOG->add_entry("STARTED", $o_file, ""); 
+   $LOG->add_entry("STARTED", $o_file, "") if($LOG); 
 
    #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
    if(! -e $o_file){
@@ -2640,7 +2644,7 @@ sub blastn {
       }
    };
 
-   $LOG->add_entry("FINISHED", $o_file, "");
+   $LOG->add_entry("FINISHED", $o_file, "") if($LOG);
 
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset_w_flank(),
@@ -2941,7 +2945,7 @@ sub combine_blast_report {
 	       && confess "ERROR: Could not colapse BLAST reports\n";
 	   File::Path::rmtree ("$dir");
        }
-       $LOG->add_entry("FINISHED", $blast_finished, ""); 
+       $LOG->add_entry("FINISHED", $blast_finished, "") if($LOG); 
    }
 
    my @flat;
@@ -2996,7 +3000,7 @@ sub blastx {
    my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.";
    $o_file .= ($rflag) ? 'repeatrunner': 'blastx';
 
-   $LOG->add_entry("STARTED", $o_file, ""); 
+   $LOG->add_entry("STARTED", $o_file, "") if($LOG); 
 
    #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
    if(! -e $o_file){
@@ -3069,7 +3073,7 @@ sub blastx {
       }
    };
 
-   $LOG->add_entry("FINISHED", $o_file, "");
+   $LOG->add_entry("FINISHED", $o_file, "") if($LOG);
 
    if($rflag){
        PhatHit_utils::add_offset($chunk_keepers,
@@ -3356,7 +3360,7 @@ sub tblastx {
    my $file_name = "$the_void/$seq_id\.$chunk_number";
    my $o_file    = "$the_void/$seq_id\.$chunk_number\.$db_n\.tblastx";
 
-   $LOG->add_entry("STARTED", $o_file, ""); 
+   $LOG->add_entry("STARTED", $o_file, "") if($LOG); 
 
    if(! -e $o_file){
        #copy db to local tmp dir and run xdformat, formatdb, or makeblastdb
@@ -3412,7 +3416,7 @@ sub tblastx {
       }
    };
 
-   $LOG->add_entry("FINISHED", $o_file, "");
+   $LOG->add_entry("FINISHED", $o_file, "") if($LOG);
 
    PhatHit_utils::add_offset($chunk_keepers,
 			     $chunk->offset_w_flank(),
@@ -3574,7 +3578,7 @@ sub repeatmask {
    my $query_def = $chunk->parent_def();
    my $query_seq = $chunk->seq();
    
-   $LOG->add_entry("STARTED", $o_file, ""); 
+   $LOG->add_entry("STARTED", $o_file, "") if($LOG); 
    
    $chunk->write_file($file_name);
    
@@ -3597,7 +3601,7 @@ sub repeatmask {
    my @files = map {File::Glob::bsd_glob("$file_name.$_")} qw(ref tbl cat masked);
    unlink(@files);
 
-   $LOG->add_entry("FINISHED", $o_file, ""); 
+   $LOG->add_entry("FINISHED", $o_file, "") if($LOG); 
    
    PhatHit_utils::add_offset($rm_chunk_keepers, 
 			     $chunk->offset(),
@@ -4279,16 +4283,15 @@ sub load_server_files {
 #this function parses the control files and sets up options for each maker run
 #error checking for starup occurs here
 sub load_control_files {
-   my @ctlfiles = @{shift @_};
-   my %OPT = %{shift @_};
-   my $mpi_size = shift @_ || 1; 
+   my @ctlfiles = (@_) ? @{shift @_} : ();
+   my %OPT = (@_) ? %{shift @_} : ();
+   my $mpi_size = shift @_ || 1;
 
    #--set default values and control structure
    my %CTL_OPT = set_defaults();
 
-   my $error;	      #hold all fatal errors from control file parsing
-
    #--load values from control files
+   my $error;	      #hold all fatal errors from control file parsing
    foreach my $ctlfile (@ctlfiles) {
       open (CTL, "< $ctlfile") or die "ERROR: Could not open the control file \"$ctlfile\".\n";
 	
