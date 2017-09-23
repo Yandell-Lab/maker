@@ -101,14 +101,16 @@ while (my $line = <$IN>) {
 		for my $tag (keys %attrb) {
 		    #avoid replacing values in other tags
 		    next unless($tag eq 'ID' || $tag eq 'Name' || $tag eq 'Parent' || $tag eq 'Derives_from');
-			for my $value (@{$attrb{$tag}}) {
-				for my $id (@map_ids) {
-					# Only if the value (or the portion preceding
-					# the first colon) is equal to the map key.
-					next unless ($value eq $id || $value =~ /^$id:/);
-					$value =~ s/$id/$map{$id}/ unless($tag eq 'Name' && $id !~ /\-gene\-\d+\.\d+|^CG\:|^....\:|^[^\:]+\:temp\d+\:/);
-				}
+		    for my $value (@{$attrb{$tag}}) {
+			for my $id (@map_ids) {
+			    my $safe_id = quotemeta($id);
+			    # Only if the value (or the portion preceding
+			    # the first colon) is equal to the map key.
+				    next unless ($value eq $id || $value =~ /^$safe_id:/);
+			    $value =~ s/$safe_id/$map{$id}/
+				unless($tag eq 'Name' && $id !~ /\-gene\-\d+\.\d+|^CG\:|^....\:|^[^\:]+\:temp\d+\:/);
 			}
+		    }
 		}
 		# Now that we're done mapping, add the alias to the attributes
 		# if we have one.

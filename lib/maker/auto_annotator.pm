@@ -2159,46 +2159,72 @@ sub run_it {
 		#at least 80% of protein must be CDS to make a gene prediction
 		next if(length($translation_seq) * 3 / length($transcript_seq) < .80);
 
-		#now get best translation and adjust
-		get_translation_seq($transcript_seq, $miph); #just setting values
+                #now get best translation and adjust
+                ($translation_seq,
+                 my $offset,
+                 my $end,
+                 my $has_start,
+                 my $has_stop) = get_translation_seq($transcript_seq, $miph); #just setting values
 
-		#adjust CDS pre-UTR identification
-		my $copy = PhatHit_utils::adjust_start_stop($miph, $v_seq);
-		$copy = PhatHit_utils::clip_utr($copy, $v_seq);
+		#base transcript is protein
+                my $transcript = $miph;
+
+		#ESTs for building UTR
+		my @set = (!$CTL_OPT->{est_forward}) ? (@$ests) : (grep {$_->name eq $transcript->name} @$ests);
+
+		#add UTR
+		my $select = $transcript;
+		$transcript = pneu(\@set, $select, $v_seq); #helps tile ESTs
+		while(! compare::is_same_alt_form($select, $transcript, 0)){
+		    $select = $transcript;
+		    $transcript = pneu(\@set, $select, $v_seq); #helps tile ESTs
+		}
+		
+		#walk edges and trim
+		$transcript = PhatHit_utils::adjust_start_stop($transcript, $v_seq);
+		$transcript = PhatHit_utils::clip_utr($transcript, $v_seq);
 
 		#make sure most exons are preserved
-		next if($copy->hsps/$miph->hsps < 0.8 || $copy->hsps < $miph->hsps-2);
-
-		#only tile if not set to push forward as is
-		my $transcript = $copy;
-		if(!$CTL_OPT->{est_forward}){
-		    my $select = $copy;
-		    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
-		    while(! compare::is_same_alt_form($select, $transcript, 0)){
-			$select = $transcript;
-			$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
-		    }
+		next if($transcript->hsps/$miph->hsps < 0.8 || $transcript->hsps < $miph->hsps-2);
+		    
+		#add UTR again given trim
+		$select = $transcript;
+		$transcript = pneu(\@set, $select, $v_seq); #helps tile ESTs
+		while(! compare::is_same_alt_form($select, $transcript, 0)){
+		    $select = $transcript;
+		    $transcript = pneu(\@set, $select, $v_seq); #helps tile ESTs
 		}
-		$transcript->{_HMM} = 'protein2genome';
-
-		#label by % found
-		if($CTL_OPT->{est_forward}){
-		   $transcript->{_tran_name} = $miph->name;
-		   my $score = $miph->frac_identical * $miph->pAh * 100;
-		   $transcript->score($score);
+		    
+		#walk out edges to force completion
+		$transcript = PhatHit_utils::adjust_start_stop($transcript, $v_seq);
+		$transcript_seq  = get_transcript_seq($transcript, $v_seq);
+		($translation_seq,
+		 $offset,
+		 $end,
+		 $has_start,
+		 $has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    
+		#fix for non-canonical (almost certainly bad) 5' and 3' UTR
+		my $trim3 = (!$has_stop && $end != length($transcript_seq) + 1);
+		my $trim5 = (!$has_start && $offset != 0);
+		if($trim5 || $trim3){
+		    $transcript = PhatHit_utils::_clip($transcript, $v_seq, $trim5, $trim3); #WARNING: this removes any non-standard values added to the object hash
+		    $transcript_seq  = get_transcript_seq($transcript, $v_seq);
+		    ($translation_seq, $offset, $end, $has_start, $has_stop) = get_translation_seq($transcript_seq, $transcript);
 		}
 
 		#only keep complete one when always complete set
-		if($CTL_OPT->{always_complete}){
-		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
-		    my ($translation_seq,
-			$offset,
-			$end,
-			$has_start,
-			$has_stop) = get_translation_seq($transcript_seq, $transcript);
-		    next if(!$has_start || !$has_stop);
-		}
+		next if($CTL_OPT->{always_complete} && (!$has_start || !$has_stop));
 
+		#label by % found and pull forward other info
+		$transcript->{_tran_name} = $miph->name;
+		$transcript->{_tran_id} = $miph->{_tran_id} if(defined($miph->{_tran_id}));
+		$transcript->{gene_id} = $miph->{gene_id} if(defined($miph->{gene_id}));
+		$transcript->{_est_forward} = $miph->{_est_forward} if(defined($miph->{_est_forward}));
+		my $score = $miph->frac_identical * $miph->pAh * 100;
+		$transcript->score($score);
+
+		$transcript->{_HMM} = 'protein2genome';
 		push(@transcripts, [$transcript, $set->{index}, $miph]);
 	    }
 

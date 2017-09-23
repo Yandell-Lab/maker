@@ -995,10 +995,10 @@ sub split_db {
     my ($file, $label) = $entry =~ /^([^\:]+)\:?(.*)/;    
     my ($f_name) = $file =~ /([^\/]+)$/;
     $f_name = uri_escape($f_name, '^a-zA-Z0-9\-\_');
+    $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
     my $d_name = "$f_name\.mpi\.$bins";
     my $f_dir = "$b_dir/$d_name";
     my $t_dir = "$tmp/$rank/$d_name";
-    $bins = ($bins > 1 && $bins < 30 && -s $file > 1000000000) ? 30 : $bins;
 
     #check if already finished
     my @t_db = map {($label) ? "$_:$label" : $_} grep {-f $_ && /$d_name\.\d+$/} File::Glob::bsd_glob("$f_dir/$d_name\.*");
@@ -1701,7 +1701,7 @@ sub evm {
 	    my $value = defined($CTL_OPT->{evmab}{$src}) ?
 		$CTL_OPT->{evmab}{$src} : $CTL_OPT->{evmab}{DEFAULT};
 	    unless ($seen{$src}){
-	    $seen{$src} =1;
+		$seen{$src} =1;
 		print $TFH "ABINITIO_PREDICTION\t$src\t$value\n";
 		print $TFH "ABINITIO_PREDICTION\tpred_gff:$src\t$value\n";
 		print $TFH "ABINITIO_PREDICTION\tmodel_gff:$src\t$value\n";
@@ -1938,8 +1938,6 @@ sub polish_exonerate {
 	#check if fasta contains coordinates for maker
 	if($h_description =~ /maker_coor\=([^\s\;]+)/){
 	    my $go;
-	    $min_intron = 1;
-	    $max_intron = 200000;
 	    foreach my $coor (split(',', $1)){
 		my ($bName, $bB, $bE);
 		if(($bName, $bB, $bE) = $coor =~ /^([^\s\;]+)\:(\d+)\-(\d+)$/){
@@ -4356,12 +4354,13 @@ sub load_control_files {
    $CTL_OPT{est_forward} = $OPT{est_forward} if(defined($OPT{est_forward}));
    if($CTL_OPT{est_forward}){
        $OPT{R}                    = 1;
-       $CTL_OPT{est2genome}       = 1;
+       $CTL_OPT{est2genome}       = 1 if(!$CTL_OPT{protein2genome} && !$CTL_OPT{cdna2genome});
        $CTL_OPT{max_dna_len}      = 1000000 if($CTL_OPT{max_dna_len} < 1000000);
        $CTL_OPT{split_hit}        = 100000 if($CTL_OPT{split_hit} < 100000);
        $CTL_OPT{pred_flank}       = 10000 if($CTL_OPT{pred_flank} < 10000);
        $CTL_OPT{single_exon}      = 1;
        $CTL_OPT{single_length}    = 1;
+       $CTL_OPT{min_intron}       = 10 if($CTL_OPT{min_intron} < 10);
        $CTL_OPT{pcov_blastn}      = .70 if($CTL_OPT{pcov_blastn} < .70);
        $CTL_OPT{pid_blastn}       = .70 if($CTL_OPT{pid_blastn} < .70);
        $CTL_OPT{pcov_blastx}      = .50 if($CTL_OPT{pcov_blastx} < .50);
