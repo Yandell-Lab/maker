@@ -1,0 +1,103 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $usage = "Usage:
+     split_gff3 <gff3_file>
+
+Description:
+     This script takes a genome GFF3 and splits in into contig GFF3 files.
+
+";
+
+my $file = shift;
+
+#validate
+if(!$file){
+    print $usage;
+    die "ERROR: Failure to specify input GFF# file\n";
+}
+if(! -f $file){
+    die "ERROR: File does not exist: $file\n";
+}
+
+
+my ($name) = $file =~ /([^\/]+)$/;
+my $outdir = "$name.split";
+mkdir($outdir);
+open(my $IN, "<$file");
+my $last;
+my %files;
+my $buffer;
+while(my $line = <$IN>){
+    last if($line =~ /^##FASTA/);
+    next if($line =~ /^#/);
+    my @F = split(/\t/, $line);
+    chomp($F[-1]);
+
+    if(defined($last) && $F[0] ne $last){
+	my $OUT;
+	my $file = "$outdir/$last.gff";
+	if(!$files{$file}++){
+	    open($OUT, ">$file");
+	    print $OUT "##gff-version 3\n";
+	}
+	else{
+	    open($OUT, ">>$file");
+	}
+	print $OUT $buffer;
+	close($OUT);
+	$buffer = '';
+    }
+
+    $buffer .= $line;
+    $last = $F[0];
+}
+if(length($buffer)){
+    my $OUT;
+    my $file = "$outdir/$last.gff";
+    if(!$files{$file}++){
+	open($OUT, ">$file");
+	print $OUT "##gff-version 3\n";
+    }
+    else{
+	open($OUT, ">>$file");
+    }
+    print $OUT $buffer;
+    close($OUT);
+    $buffer = '';
+}
+
+undef $last;
+$buffer = '';
+while(my $line = <$IN>){
+    if($line =~ />([^\n\s]+)/){
+	my $id = $1;
+	if(length($buffer)){
+	    my $OUT;
+	    my $file = "$outdir/$last.gff";
+	    if($files{$file}++){
+		open($OUT, ">>$file");
+		print $OUT "##FASTA\n";
+		print $OUT "$buffer";
+		close($OUT);
+	    }
+	    $buffer = '';
+	}
+	$last = $id;
+    }
+    $buffer .= $line;
+}
+if(length($buffer)){
+    my $OUT;
+    my $file = "$outdir/$last.gff";
+    if($files{$file}++){
+	open($OUT, ">>$file");
+	print $OUT "##FASTA\n";
+	print $OUT "$buffer";
+	close($OUT);
+    }
+    $buffer = '';
+}
+
+close($IN);
