@@ -533,7 +533,7 @@ sub snap {
 	
 	my $run = $command;
 	$run .= " -xdef $xdef_file ";
-	$run .= " $hmm_name";
+	$run .= " $hmm";
 	$run .= " $file_name";
 	$run .= " > $o_file";
 
