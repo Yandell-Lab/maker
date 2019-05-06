@@ -1547,7 +1547,7 @@ sub _trim_UTR_if_overlap {
 	    $t->{t_seq} = get_transcript_seq($h);
 	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/^\d+/0/;
-	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	    $B = $h->start('query') if(!$B || $B > $h->start('query'));
 	    $t->{hit} = $h;
 	}
 	elsif($h->strand('query') == -1){
@@ -1555,7 +1555,7 @@ sub _trim_UTR_if_overlap {
 	    $t->{t_seq} = get_transcript_seq($h);
 	    ($t->{p_seq}, $t->{t_offset}, $t->{t_end}) = get_translation_seq($t->{t_seq}, $h);
 	    $t->{t_qi} =~ s/\d+(\|\d+)$/0$1/;
-	    $B = $h->start('query') if(!$B || $B < $h->start('query'));
+	    $B = $h->start('query') if(!$B || $B > $h->start('query'));
 	    $t->{hit} = $h;
 	}
 	else{

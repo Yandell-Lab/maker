@@ -232,7 +232,8 @@ my %OPT;
 carp "Calling GetOptions pre-init" if($main::debug);
 Getopt::Long::Configure(qw(pass_through));
 GetOptions("MPICC=s" => \$OPT{MPICC}, #hidden
-	   "MPIDIR=s" => \$OPT{MPIDIR},); #hidden
+	   "MPIDIR=s" => \$OPT{MPIDIR},
+	   "mpi"      => \$main::is_mpi); #hidden
 
 #--set MPI configuration if specified on the command line
 if($OPT{MPICC} || $OPT{MPIDIR}){
