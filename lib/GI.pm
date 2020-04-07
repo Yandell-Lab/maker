@@ -1845,7 +1845,7 @@ sub trnascan {
     $LOG->add_entry("STARTED", $backup, "") if($LOG);
 
     my $command  = $exe;
-    $command .= " -b -q";
+    $command .= " --brief -q";
     $command .= " -B" if($CTL_OPT->{organism_type} ne 'eukaryotic');
     $command .= " $in_file";
     $command .= " > $out_file";

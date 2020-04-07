@@ -1920,7 +1920,7 @@ sub run_it {
 		}
 		elsif($remove && @$pol_p){
 		    my $pAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
-		    $remove = 0 if($pAED <= 0.5);
+		    $remove = 0 if($pAED <= 0.4); #was 0.5
 		}
 
 		#make sure the alt est evidence is not single exon and actually overlaps
@@ -1938,7 +1938,7 @@ sub run_it {
 
 		    if(@$pieces <= 1){ # if single exon evidence model should be close
 			my $bAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
-			$remove = 0 if($bAED <= 0.5);
+			$remove = 0 if($bAED <= 0.4); #was 0.5
 		    }
 		    elsif(@$pieces > 1){
 			$remove = 0;
@@ -2029,7 +2029,7 @@ sub run_it {
 			next if(!$has_stop && !$has_start); #single exon must have start and stop
 			next if(!@$gomiph); #single exon must have protein support
 			my $bAED = shadow_AED::get_eAED($gomiph, $transcript); #also verifies reading frame
-			next unless($bAED <= 0.5); #must have 50% inframe support
+			next unless($bAED <= 0.4); #must have 40% inframe support (was 0.5)
 		    }
 		}
 
@@ -2111,7 +2111,7 @@ sub run_it {
 			next if(!$has_stop && !$has_start); #single exon must have start and stop
 			next if(!@$gomiph); #single exon must have protein support
 			my $bAED = shadow_AED::get_eAED($gomiph, $transcript); #also verifies reading frame
-			next unless($bAED <= 0.5); #must have 50% inframe support
+			next unless($bAED <= 0.4); #must have 50% inframe support (was 0.5)
 		    }
 		}
 
@@ -2299,7 +2299,7 @@ sub run_it {
 			my $pAED = shadow_AED::get_eAED($blastx, $model); #also verifies reading frame
 		    
 			if($abAED <= 0.3){
-			    $remove = 0 if($pAED <= 0.5);
+			    $remove = 0 if($pAED <= 0.4); #was 0.5
 			}
 			else{
 			    $remove = 0 if($pAED <= 0.25); #stricter threshold when no abinit
@@ -2329,7 +2329,7 @@ sub run_it {
 				my $bAED = shadow_AED::get_eAED($blastx, $h);
 				
 				if($abAED <= 0.3){
-				   $remove = 0 if($bAED <= 0.5);
+				   $remove = 0 if($bAED <= 0.4); #was 0.5
 				}
 				else{
 				   $remove = 0 if($bAED <= 0.25); #stricter threshold when no abinit

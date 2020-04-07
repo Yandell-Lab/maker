@@ -173,6 +173,7 @@ sub parse {
 			($h_remainder) = $fields[13] =~/\((\d+)\)/;
 		}
 		$h_begin = 1 if($h_begin == 0); #only happens when RepeatMasker configured with with rmblast
+		$h_end = 1 if($h_end == 0); #only happens when RepeatMasker configured with with rmblast
 
 		$h_seq_length = $h_end + $h_remainder;		
 		my $identical = (1 - $fields[1]/100) * abs($q_end - $q_begin);

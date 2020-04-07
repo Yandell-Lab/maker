@@ -138,10 +138,28 @@ my $s_in = "$tname\_in";
 symlink($mod, $s_mod);
 symlink($infile, $s_in);
 
+#get probuild version
+my $version = 1;
+open(my $EXE, '-|', "$probuild 2>&1");
+while(my $line = <$EXE>){
+    if($line =~ /split_at_n/){
+	$version = 2;
+	last;
+    }
+}
+close($EXE);
+
 #split fastas on runs of NNN because Genemark can't handle it
 my $command  = "cd $tempdir \n";
-   $command .= " $probuild --split gm_dna.fa --seq $s_in --MIN_SPLIT_SIZE 100".
-               " --letters_per_line 100 --max_nnn_substring 49 --nnn_margin 3";
+if($version == 1){
+    $command .= (" $probuild --split gm_dna.fa --seq $s_in --MIN_SPLIT_SIZE 100".
+		 " --letters_per_line 100 --max_nnn_substring 49 --nnn_margin 3");
+}
+elsif($version == 2){
+    $command .= (" $probuild --seq $s_in --split gm_dna.fa --max_contig 5000000".
+		 " --min_contig 50000 --letters_per_line 100 --split_at_n 5000".
+		 " --split_at_x 5000 --allow_x --x_to_n");
+}
 
 system($command) && die "ERROR: Could not parse fasta for GeneMark\n";
 
@@ -192,6 +210,9 @@ foreach my $file (@files){
     my $offset;
     if($def =~ /^.*\; (\d+)$/){
 	$offsets{Cwd::abs_path($file)} = $1;
+    }
+    elsif($def =~ /^[^\t]+\t[^\t]+\t(\d+)\t\d+$/){
+	$offsets{Cwd::abs_path($file)} = $1 - 1;
     }
     elsif(@files == 1){
 	$offsets{Cwd::abs_path($file)} = 0;

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl 
 
 use strict;
 use warnings;
@@ -119,20 +119,20 @@ sub parse_blast{
 		next unless /^>/;
 
 		my ($id, $desc, $org, $name);
+                #>sp|Q6GZX4|001R_FRG3G Putative transcription factor 001R OS=Frog virus 3 (isolate Goorha) OX=654924 GN=FV3-001R PE=4 SV=1
+                if (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+OX=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
+                        $id   = $1;
+                        $desc = $2;
+                        $org  = $3;
+                        $name = $6 || '';
+                }
 		#>sp|P18560|1101L_ASFB7 Protein MGF 110-1L OS=African swine fever virus (strain Badajoz 1971 Vero-adapted) GN=BA71V-008 PE=3 SV=1
-		if (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
+		elsif (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
 			$id   = $1;
 			$desc = $2;
 			$org  = $3;
 			$name = $5 || '';
 		}
-                #>sp|Q6GZX4|001R_FRG3G Putative transcription factor 001R OS=Frog virus 3 (isolate Goorha) OX=654924 GN=FV3-001R PE=4 SV=1
-                elsif (/>(\S+)\s+(.*?)\s+OS=(.*?)\s+OX=(.*?)\s+(GN=(.*?)\s+)?PE=/) {
-		    $id   = $1;
-		    $desc = $2;
-		    $org  = $3;
-		    $name = $6 || '';
-                }
 		#>UniRef50_P18963 Inhibitory regulator protein IRA1 n=10 Tax=Saccharomyces RepID=IRA1_YEAST
 		elsif(/>(\S+)\s+(.*?)\s+n=\S+\s+Tax=(.*?)\s+(RepID=(.*?)\s+)?/){
 		    $id   = $1;
