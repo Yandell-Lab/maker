@@ -100,7 +100,7 @@ sub parse {
 	$strand = -1 if $stuff[2] > $stuff[3];
 	$stuff[5] = 'NNN' if($stuff[5] eq '???'); #fix undetermined codons
 	$stuff[9] = 'Pseudo' if($stuff[9] && $stuff[9] eq 'pseudo');
-	($stuff[4], $stuff[9]) = ('Undet', 'Pseudo') if($stuff[4] eq 'Pseudo')
+	($stuff[4], $stuff[9]) = ('Undet', 'Pseudo') if($stuff[4] eq 'Pseudo');
 
 	if ($stuff[6] == 0){ #no intron
 	    $g{$id}[$i]{strand}   = $strand;
