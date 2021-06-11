@@ -1053,10 +1053,15 @@ sub _load_cdss {
 	if($value ne ''){
 	    my @dats = split(/\s/, $value);
 
-	    $hit_name  = $dats[0];
-	    $hit_start = $dats[1];
-	    $hit_end   = $dats[2];
-	    $hit_strand = (defined ($dats[3]) && $dats[3] eq '-') ? -1 : 1;
+            if($dats[1] < 1 || $dats[2] < $dats[1]){
+                warn "WARNING: Negative numbers in GFF3 'Target=' attribute --> $value\n";
+            }
+            else{
+		$hit_name  = $dats[0];
+		$hit_start = $dats[1];
+		$hit_end   = $dats[2];
+		$hit_strand = (defined ($dats[3]) && $dats[3] eq '-') ? -1 : 1;
+	    }
 	}
 
 	push(@args, '-query_start');
@@ -1216,12 +1221,17 @@ sub _load_hsps {
         if($value ne ''){
             my @dats = split(/\s/, $value);
 
-            $hit_name  = $dats[0];
-            $hit_start = $dats[1];
-            $hit_end   = $dats[2];
-            $hit_strand = (defined ($dats[3]) && $dats[3] eq '-') ? -1 : 1;
+	    if($dats[1] < 1 || $dats[2] < $dats[1]){
+		warn "WARNING: Negative numbers in GFF3 'Target=' attribute --> $value\n";
+	    }
+	    else{
+		$hit_name  = $dats[0];
+		$hit_start = $dats[1];
+		$hit_end   = $dats[2];
+		$hit_strand = (defined ($dats[3]) && $dats[3] eq '-') ? -1 : 1;
 
-	    $cigar = _get_annotation($e->{f}, 'Gap');
+		$cigar = _get_annotation($e->{f}, 'Gap');
+	    }
         }
 
 	push(@args, '-query_start');

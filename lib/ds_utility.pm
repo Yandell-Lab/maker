@@ -45,7 +45,7 @@ sub _initialize {
    $self->{out_base} = $out_base;
    $self->{root} = "$out_base/$out_name\_datastore";
    $self->{log} = "$out_base/$out_name\_master_datastore_index.log";
-   $CTL_OPT->{SEEN_file} = $self->{SEEN_file} = "$out_base/seen.dbm";
+   #$CTL_OPT->{SEEN_file} = $self->{SEEN_file} = "$out_base/seen.dbm";
    
    print STDERR "A data structure will be created for you at:\n".
    $self->{root}."\n\n".
@@ -67,7 +67,7 @@ sub _initialize {
    #then just append to the existing log
    if(!$CTL_OPT->{_multi_chpc} && !$CTL_OPT->{_resume}){
        open(IN, "> $self->{log}");
-       open(IN, "> $self->{SEEN_file}");
+       #open(IN, "> $self->{SEEN_file}");
        close(IN);
    }
 }

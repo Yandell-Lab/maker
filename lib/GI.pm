@@ -65,7 +65,7 @@ print STDERR "TMP_STAT: TMP is being initialized to $TMP: PID=$$\n" if($main::dt
 #--------------------------- CLASS FUNCTIONS ----------------------------
 #------------------------------------------------------------------------
 sub version {
-    $VERSION = '3.01.03';
+    $VERSION = '3.01.02';
     return $VERSION;
 }
 #------------------------------------------------------------------------
@@ -2061,7 +2061,7 @@ sub polish_exonerate {
 	    $e->{gene_id} = $gene_id if($gene_id);
 
 	    #add database_name
-	    $e->database_name($hit->database_name());
+	    $e->database_name($hit->database_name()) if(ref($hit));
 
 	    #trim poly-A tails
 	    if($type eq 'e' && ! $est_forward){
@@ -4355,44 +4355,56 @@ sub load_control_files {
    if($CTL_OPT{est_forward}){
        $OPT{R}                    = 1;
        $CTL_OPT{est2genome}       = 1 if(!$CTL_OPT{protein2genome} && !$CTL_OPT{cdna2genome});
-       $CTL_OPT{max_dna_len}      = 1000000 if($CTL_OPT{max_dna_len} < 1000000);
-       $CTL_OPT{split_hit}        = 100000 if($CTL_OPT{split_hit} < 100000);
-       $CTL_OPT{pred_flank}       = 10000 if($CTL_OPT{pred_flank} < 10000);
-       $CTL_OPT{single_exon}      = 1;
-       $CTL_OPT{single_length}    = 1;
-       $CTL_OPT{min_intron}       = 10 if($CTL_OPT{min_intron} < 10);
-       $CTL_OPT{pcov_blastn}      = .70 if($CTL_OPT{pcov_blastn} < .70);
-       $CTL_OPT{pid_blastn}       = .70 if($CTL_OPT{pid_blastn} < .70);
-       $CTL_OPT{pcov_blastx}      = .50 if($CTL_OPT{pcov_blastx} < .50);
-       $CTL_OPT{pid_tblastx}      = .60 if($CTL_OPT{pid_blastx} < .60);
-       $CTL_OPT{pcov_tblastx}     = .50 if($CTL_OPT{pcov_tblastx} < .50);
-       $CTL_OPT{pid_blastx}       = .60 if($CTL_OPT{pid_tblastx} < .60);
-       $CTL_OPT{en_score_limit}   = 20 if($CTL_OPT{en_score_limit} > 20);
-       $CTL_OPT{ep_score_limit}   = 10 if($CTL_OPT{ep_score_limit} > 10);
-       $CTL_OPT{bit_blastn}       = 20 if($CTL_OPT{bit_blastn} > 20);
-       $CTL_OPT{bit_blastx}       = 20 if($CTL_OPT{bit_blastx} > 20);
-       $CTL_OPT{bit_tblastx}      = 20 if($CTL_OPT{bit_tblastx} > 20);
+
+       $CTL_OPT{est_gff}          = '' if(!$CTL_OPT{protein2genome} && !$CTL_OPT{est2genome});
+       $CTL_OPT{est_pass}         = 0  if(!$CTL_OPT{protein2genome} && !$CTL_OPT{est2genome});
+       $CTL_OPT{altest_gff}       = '' if(!$CTL_OPT{cdna2genome});
+       $CTL_OPT{altest_pass}      = 0  if(!$CTL_OPT{cdna2genome});
+       $CTL_OPT{protein_gff}      = '' if(!$CTL_OPT{protein2genome});
+       $CTL_OPT{protein_pass}     = 0  if(!$CTL_OPT{protein2genome});
+       $CTL_OPT{rm_gff}           = '';
+       $CTL_OPT{rm_pass}          = 0;
+       $CTL_OPT{pred_gff}         = '';
+       $CTL_OPT{pred_pass}        = 0;
+       $CTL_OPT{model_gff}        = '';
+       $CTL_OPT{model_pass}       = 0;
+       $CTL_OPT{other_gff}        = '';
+       $CTL_OPT{other_pass}       = 0;
+
        $CTL_OPT{snaphmm}          = '';
        $CTL_OPT{gmhmm}            = '';
        $CTL_OPT{augustus_species} = '';
        $CTL_OPT{fgenesh_par_file} = '';
-       $CTL_OPT{trna}             = 0;
        $CTL_OPT{snoscan_rrna}     = '';
        $CTL_OPT{snoscan_meth}     = '';
+       $CTL_OPT{trna}             = 0;
        $CTL_OPT{run_evm}          = 0;
-       $CTL_OPT{maker_gff}        = '';
-       $CTL_OPT{altest}           = '';
-       #$CTL_OPT{est_gff}          = '';
-       $CTL_OPT{altest_gff}       = '';
-       $CTL_OPT{protein_gff}      = '';
-       $CTL_OPT{pred_gff}         = '';
-       $CTL_OPT{model_gff}        = '';
-       $CTL_OPT{other_gff}        = '';
-       $CTL_OPT{min_protein}      = 0;
-       $CTL_OPT{alt_splice}       = 0;
-       $CTL_OPT{always_complete}  = 0;
-       $CTL_OPT{map_forward}      = 0;
+
+       $CTL_OPT{max_dna_len}        = 1000000 if($CTL_OPT{max_dna_len} < 1000000);
+       $CTL_OPT{split_hit}          = 100000 if($CTL_OPT{split_hit} < 100000);
+       $CTL_OPT{pred_flank}         = 10000 if($CTL_OPT{pred_flank} < 10000);
+       $CTL_OPT{min_intron}         = 10 if($CTL_OPT{min_intron} < 10);
+       $CTL_OPT{single_exon}        = 1;
+       $CTL_OPT{single_length}      = 1;
+       $CTL_OPT{min_protein}        = 0;
+       $CTL_OPT{always_complete}    = 0;
+       $CTL_OPT{alt_splice}         = 0;
        $CTL_OPT{correct_est_fusion} = 0;
+       $CTL_OPT{map_forward}        = 0;
+
+       $CTL_OPT{pcov_blastn}    = .70 if($CTL_OPT{pcov_blastn}   < .70);
+       $CTL_OPT{pid_blastn}     = .70 if($CTL_OPT{pid_blastn}    < .70);
+       $CTL_OPT{pcov_blastx}    = .50 if($CTL_OPT{pcov_blastx}   < .50);
+       $CTL_OPT{pid_blastx}     = .60 if($CTL_OPT{pid_tblastx}   < .60);
+       $CTL_OPT{pid_tblastx}    = .60 if($CTL_OPT{pid_blastx}    < .60);
+       $CTL_OPT{pcov_tblastx}   = .50 if($CTL_OPT{pcov_tblastx}  < .50);
+
+       $CTL_OPT{bit_blastn}     = 20 if($CTL_OPT{bit_blastn}  > 20);
+       $CTL_OPT{bit_blastx}     = 20 if($CTL_OPT{bit_blastx}  > 20);
+       $CTL_OPT{bit_tblastx}    = 20 if($CTL_OPT{bit_tblastx} > 20);
+
+       $CTL_OPT{en_score_limit} = 20 if($CTL_OPT{en_score_limit} > 20);
+       $CTL_OPT{ep_score_limit} = 10 if($CTL_OPT{ep_score_limit} > 10);
    }
 
    #--load command line options
