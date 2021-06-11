@@ -819,7 +819,7 @@ sub prep_blastx_data {
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark', 'pred_gff');
+						     'genemark', 'pred_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 	
 	# groups of most informative protein hits
@@ -866,7 +866,7 @@ sub prep_gff_data {
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c,'cdna2genome', 'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark',  'pred_gff');
+						     'genemark',  'pred_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 	$models_in_cluster->[0]->{_merge_warning} = $models_in_cluster->[0]->{_hit_multi}; #hint cluster merged for model
 
@@ -903,13 +903,13 @@ sub prep_pred_data {
 
 	#abinit model should always be first cluster entry
 	my $abinits = get_selected_types([$c->[0]],'snap', 'augustus', 'fgenesh',
-					 'twinscan', 'genemark', 'evm', 'pred_gff');
+					           'genemark', 'evm', 'pred_gff');
 	return undef if(!@$abinits);
 	confess "ERROR: Logic problem in maker::auto_annotator::prep_pred_data\n"
 	    if(@$abinits > 1);
 
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
-						  'twinscan', 'genemark', 'evm', 'pred_gff');
+						     'genemark', 'evm', 'pred_gff');
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
 	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
@@ -1946,19 +1946,39 @@ sub run_it {
 		}
 	    }
 
-	    #add UTR to ab-inits
+	    ##replace with the below alt-splice UTR code 09/18/2020
+	    ##add UTR to ab-init
 	    my $select = $model;
 	    my $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
 	    while(! compare::is_same_alt_form($select, $transcript, 0)){
-		$select = $transcript;
-		$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
-		$remove = 0; #I just added EST support
-	    }
-
-	    #don't filter imediately just mark for downstream filtering
+	    	$select = $transcript;
+	    	$transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+	    	$remove = 0; #I just added EST support
+	    }            
+	    ##don't filter imediately just mark for downstream filtering
 	    $transcript->{_REMOVE} = $remove;
-
 	    push(@transcripts, [$transcript, $set->{index}, $model]);
+
+	    #temp
+	    ##search for alternatively spiced UTR
+	    #my $gomias = []; #group of most informative alt splices
+	    #if($CTL_OPT->{organism_type} eq 'eukaryotic'){
+	    #	$gomias = clean::purge_single_exon_hits($ests);
+	    #	$gomias = clean::get_best_alt_splices($gomias, 10);
+	    #}
+	    #foreach my $mia (@$gomias, undef){ #runs at least once with empty $mia
+	    #	my $select = (defined($mia)) ? pneu([$mia], $model, $v_seq) : $model;
+	    #	my $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+	    #	while(! compare::is_same_alt_form($select, $transcript, 0)){
+	    #	    $select = $transcript;
+	    #	    $transcript = pneu($ests, $select, $v_seq); #helps tile ESTs
+	    #	}
+            #
+	    #	#don't filter imediately just mark for downstream filtering
+	    #	$transcript->{_REMOVE} = (compare::is_same_alt_form($model, $transcript, 0)) ? $remove : 0;
+	    #	push(@transcripts, [$transcript, $set->{index}, $model]);
+	    #}
+	    #temp
 
 	    next;
 	}
@@ -2816,53 +2836,50 @@ sub group_transcripts {
 
    #cluster the transcripts to get genes
    my $careful_clusters = [];
-
-   if (! $CTL_OPT->{alt_splice} ||
-       $predictor =~ /^model_gff$|_abinit$|^pred_gff$|_ncrna$|^ncrna_gff$/ ||
-       ($predictor =~ /^(est2genome|protein2genome|altest2genome)$/ && $CTL_OPT->{est_forward})
-       ) {
-       my @to_do;
-       my %index;
-       my $i = @$careful_clusters;
-       foreach my $t (@transcripts) {
-	   my $j;
-	   #if($predictor =~ /^est2genome$/ && ! exists $t->{gene_id}){
-	   #    push(@to_do, $t);
-	   #    next;
-	   #}
-	   if(! exists $t->{gene_id}){
-	       $j = $i;
-	       $i++;
-	   }
-	   elsif (exists $index{$t->{gene_id}}) {
-	       $j = $index{$t->{gene_id}};
-	   }
-	   else {
-	       $j = $i;
-	       $index{$t->{gene_id}} = $j;
-	       $i++;
-	   }
-	   push(@{$careful_clusters->[$j]}, $t);
-       }
-       @transcripts = @to_do;
+   if($predictor =~ /(_ncrna$|^ncrna_gff$)/){
+       @$careful_clusters = map {[$_]} @transcripts;
    }
-
-   #seperate out when multiple HMM's are provided (comma seperated list)
-   my %sources;
-   foreach my $t (@transcripts){
-       push(@{$sources{$t->{_HMM}}}, $t);
-       confess "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(! $t->{_HMM});
+   elsif($predictor =~ /^(model_gff|pred_gff)$/){
+       $careful_clusters = gene_id_cluster(\@transcripts);
    }
-   #now cluster each list seperately
-   foreach my $set (values %sources){
+   elsif($predictor =~ /^(est2genome|protein2genome|altest2genome)$/){
        if($CTL_OPT->{est_forward}){
-	   @$careful_clusters = map {[$_]} @$set; #every result as separate gene
+	   $careful_clusters = gene_id_cluster(\@transcripts);
        }
        else{
-	   my $clusters = cluster::careful_cluster_phat_hits($set);
-	   
+	   @$careful_clusters = map{[$_]} @transcripts;
+       }
+   }
+   elsif(!$CTL_OPT->{alt_splice}){
+       @$careful_clusters = map{[$_]} @transcripts;
+   }
+   else{
+       #seperate out when multiple HMM's are provided (comma seperated list)
+       my %sources;
+       foreach my $t (@transcripts){
+	   my $src = $t->{_HMM};
+	   confess "ERROR: No hit source {_HMM} in maker::auto_annotator\n" if(!$src);
+	   push(@{$sources{$src}}, $t);
+       }
+
+       #now cluster each list seperately
+       foreach my $set (values %sources){
+	   my @yes_id;
+	   my @no_id;
+	   foreach my $t (@$set){
+	       if(exists($t->{gene_id})){
+		   push(@yes_id, $t);
+	       }
+	       else{
+		   push(@no_id, $t);
+	       }
+	   }
+       
+	   my $yes_clusters = gene_id_cluster(\@yes_id);
+	   my $no_clusters  = cluster::careful_cluster_phat_hits(\@no_id);
+
 	   #remove redundant transcripts in gene
-	   foreach my $c (@{$clusters}) {
+	   foreach my $c (@$yes_clusters, @$no_clusters) {
 	       my $best_alt_forms = clean::remove_redundant_alt_splices($c, 10);
 	       push(@$careful_clusters, $best_alt_forms);
 	   }
@@ -3052,6 +3069,32 @@ sub group_transcripts {
    }
 
    return \@annotations;
+}
+#------------------------------------------------------------------------
+sub gene_id_cluster {
+    my $transcripts = shift;
+    
+    my %index;
+    my $clusters = [];
+    my $i = 0;
+    foreach my $t (@$transcripts) {
+	my $j;
+	if(! exists $t->{gene_id}){
+	    $j = $i;
+	    $i++;
+	}
+	elsif (exists $index{$t->{gene_id}}) {
+	    $j = $index{$t->{gene_id}};
+	}
+	else {
+	    $j = $i;
+	    $index{$t->{gene_id}} = $j;
+	    $i++;
+	}
+	push(@{$clusters->[$j]}, $t);
+    }
+
+    return $clusters;
 }
 #------------------------------------------------------------------------
 #merges evidence of data supporting annotations.  Merges them so that
