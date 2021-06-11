@@ -124,8 +124,10 @@ while (my $line = <$IN>) {
 		# Create new attribute text.
 		my $new_attrb_text;
 		for my $tag (sort {$order{$a} <=> $order{$b} || $a cmp $b} keys %attrb) {
-			my $value_text = join ',', @{$attrb{$tag}};
-			$new_attrb_text .= "$tag=$value_text;"
+		    #next if($tag eq 'Alias'); #temp
+
+		    my $value_text = join ',', @{$attrb{$tag}};
+		    $new_attrb_text .= "$tag=$value_text;"
 		}
 		$new_attrb_text .= "\n";
 

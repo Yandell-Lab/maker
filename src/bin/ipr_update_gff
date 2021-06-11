@@ -154,17 +154,25 @@ sub parse_ipr_scan {
     
     open($IN, '<', $file) or die "Can't open $file for reading\n$!\n";
     
-    my %db_map = (BlastProDom  => 'ProDom',
-		  FPrintScan   => 'PRINTS',
-		  Gene3D       => 'Gene3D',
-		  HMMPanther   => 'PANTHER',
-		  HMMPfam      => 'Pfam',
-		  HMMPIR       => 'PIR',
-		  HMMSmart     => 'SMART',
-		  HMMTigr      => 'JCVI_TIGRFAMS',
-		  PatternScan  => 'Prosite',
-		  ProfileScan  => 'Prosite',
-		  );
+    my %db_map = (BlastProDom           => 'ProDom',
+		  FPrintScan            => 'PRINTS',
+		  Gene3D                => 'Gene3D',
+		  HMMPanther            => 'PANTHER',
+		  HMMPfam               => 'PFAM',
+		  Pfam                  => 'PFAM',
+		  HMMPIR                => 'PIR',
+		  HMMSmart              => 'SMART',
+		  HMMTigr               => 'TIGRFAM',
+		  PatternScan           => 'PROSITE',
+		  ProfileScan           => 'PROSITE',
+		  ProSitePatterns       => 'PROSITE',
+		  ProSiteProfiles       => 'PROSITE',
+		  Coil                  => 'Coils',
+		  SignalPHMM            => 'SignalP',
+		  SignalP_EUK           => 'SignalP',
+		  SignalP_GRAM_NEGATIVE => 'SignalP',
+		  SignalP_GRAM_POSITIVE => 'SignalP',
+		  Hamap                 => 'HAMAP');
     
     
     my %ipr;
@@ -184,9 +192,8 @@ sub parse_ipr_scan {
 	    map {$ipr{$gene_id}{go}{$_}++} @go_ids;
 	}
 	else{
-	    next if grep {$method eq $_} qw(Seg Coil SignalPHMM TMHMM SignalP);
-	    
 	    $method = $db_map{$method} || $method;
+	    next if grep {$method eq $_} qw(Seg Coils TMHMM SignalP MobiDBLite Phobius);
 	    
 	    push @{$ipr{$seq_id}{dbxref}{$method}}, {id   => $db_id,
 						     desc => $db_desc};

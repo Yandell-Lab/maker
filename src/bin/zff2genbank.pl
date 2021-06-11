@@ -79,7 +79,7 @@ while(1) {
     my @F = split(/\t/, $line);
     die "ERROR: Input does not appear to be ZFF\n" if(@F != 4 && @F != 9);
     
-    my ($B, $E, $s) = ($F[1] >= $F[2]) ? ($F[1], $F[2], 1) : ($F[2], $F[1], -1);
+    my ($B, $E, $s) = ($F[1] <= $F[2]) ? ($F[1], $F[2], 1) : ($F[2], $F[1], -1);
     push @location, Bio::Location::Simple->new(-start  => $B,
 					       -end    => $E,
 					       -strand => $s);
