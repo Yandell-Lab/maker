@@ -474,6 +474,7 @@ sub get_pred_shot {
         my $snap_flank    = shift;
         my $snap_command  = shift;
         my $hmm           = shift;
+	my $extra         = shift;
 	   $OPT_F         = shift;
 	   $LOG           = shift;
 
