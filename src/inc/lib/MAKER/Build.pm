@@ -371,14 +371,17 @@ sub ACTION_build {
 sub ACTION_commit {
     my $self = shift;
 
+    my ($s_git) = `git rev-parse HEAD`;
     $self->sync_bins();
-    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    $self->svn_w_args('update', '');
-    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    $self->svn_w_args('commit');
+    $self->git_w_args('pull', '');
+    my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
+    $self->git_w_args('add', join(' ', @files));
+    $self->git_w_args('commit');
+    $self->git_w_args('push');
+    my ($f_git) = `git rev-parse HEAD`;
 
     #there were changes so re-run install
-    if($s_svn != $f_svn){
+    if($s_git ne $f_git){
 	$self->dispatch('clean');
 	$self->dispatch('install');
     }
@@ -389,18 +392,18 @@ sub ACTION_update {
     my $self = shift;
 
     $self->sync_bins();
-    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    $self->svn_w_args('update');
-    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
+    my ($s_git) = `git rev-parse HEAD`;
+    $self->git_w_args('pull');
+    my ($f_git) = `git rev-parse HEAD`;
 
     #there were changes so re-run install
-    if($s_svn != $f_svn){
+    if($s_git ne $f_git){
 	$self->dispatch('clean');
 	$self->dispatch('install');
     }
 
-    print "\nSVN STATUS:\n";
-    $self->svn_w_args('status');
+    print "\nGIT STATUS:\n";
+    $self->git_w_args('status');
 }
 
 #syncronize the maker/src/bin and maker/src/inc/bin directories
@@ -1885,35 +1888,36 @@ sub module_loc {
     return $INC{$desired};
 }
 
-sub svn_w_args {
+sub git_w_args {
     my $self = shift;
     my $param = shift;
     my $o_args = shift;
 
-    my $svn = File::Which::which("svn");
-    if($svn){
+    my $git = File::Which::which("git");
+    if($git){
+	$git .= " -C ".$self->base_dir."/../";
+
 	#get message off command line
-	$svn .= " $param";
+	$git .= " $param";
 	if(defined($o_args)){
-	    $svn .= " $o_args";
+	    $git .= " $o_args";
 	}
 	else{
 	    my @args = @{$self->args->{ARGV}};
-	    $svn .= " -m " if($param eq 'commit' && @args && $args[0] ne '-m');
+	    $git .= " -m " if($param eq 'commit' && @args && $args[0] ne '-m');
 	    foreach my $arg (@args){
 		if($arg =~ /[\s\t]/){
 		    $arg =~ s/\'/\\\'/g;
 		    $arg = "'$arg'" 
 		    }
-		$svn .= " $arg";
+		$git .= " $arg";
 	    }
 	}
-	$svn .= " ".$self->base_dir."/../";
 
-	$self->do_system($svn);
+	$self->do_system($git);
     }
     else{
-	die "ERROR: Cannot find the executable svn (subversion respository tool)\n";
+	die "ERROR: Cannot find the executable git (GitHub respository tool)\n";
     }
 }
 
