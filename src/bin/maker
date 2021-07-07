@@ -66,10 +66,14 @@ use Sys::Hostname;
 
 BEGIN{
 <<<<<<< HEAD
+<<<<<<< HEAD
    $VERSION = GI->version;
 =======
    $VERSION = '3.01.04';
 >>>>>>> 8189bf2... Update maker
+=======
+   $VERSION = GI->version;
+>>>>>>> ace52f3... pre-release commit
 
    #what to do on ^C
    $SIG{INT}  = sub {print STDERR "SIGINT received\n"; print STDERR Carp::longmess; exit_maker(SIGINT);};
