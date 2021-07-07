@@ -38,7 +38,7 @@ chdir($FindBin::RealBin); #alway go here for safety
 my $build = MAKER::Build->new(
      module_name => 'MAKER',
      dist_author => 'Yandell Lab <maker-devel@yandell-lab.org>',
-     dist_version_from  => "$FindBin::RealBin/version",
+     dist_version_from  => "$FindBin::RealBin/../lib/GI.pm",
      dist_abstract => ('MAKER is a portable and easily configurable genome annotation pipeline. '.
 		       'It\'s purpose is to allow smaller eukaryotic and prokaryotic genome '.
 		       'projects to independently annotate their genomes and to create genome '.
