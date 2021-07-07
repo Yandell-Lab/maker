@@ -367,7 +367,7 @@ sub ACTION_build {
     $self->config_data(build_done => 1);
 }
 
-#commit current MAKER to subversion repository
+#commit current MAKER to GitHub repository
 sub ACTION_commit {
     my $self = shift;
 
@@ -375,7 +375,7 @@ sub ACTION_commit {
     $self->sync_bins();
     $self->git_w_args('pull', '');
     my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
-    $self->git_w_args('add', join(' ', @files));
+    $self->git_w_args('add', join(' ', @files)) if(@files);
     $self->git_w_args('commit');
     $self->git_w_args('push');
     my ($f_git) = `git rev-parse HEAD`;
@@ -421,13 +421,15 @@ sub ACTION_release {
     #update current MAKER
     print "\nUpdating to most current repository...\n";
     $self->sync_bins();
-    my ($s_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    $self->svn_w_args('update', '');
+    my ($s_git) = `git rev-parse HEAD`;
+    $self->git_w_args('pull', '');
 
     #doing
     print "\nPre-release commit of any user changes...\n";
-    $self->svn_w_args('commit', '-m "pre-release commit"');
-    $self->svn_w_args('update', '');
+    my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
+    $self->git_w_args('add', join(' ', @files)) if(@files);
+    $self->git_w_args('commit', '-m "pre-release commit"');
+    $self->git_w_args('pull', '');
 
     #clean and check versions for release
     $self->dispatch('clean');
@@ -435,30 +437,30 @@ sub ACTION_release {
     $self->{properties}->{dist_version} = $ver;
 
     File::Which::which('tar') || die "ERROR: Cannot find tar to build the release\n";
-    File::Which::which('svn') || die "ERROR: Cannot find the executable svn\n";
+    File::Which::which('git') || die "ERROR: Cannot find the executable git\n";
     
     #build tarball for users to download
     my $cwd = $self->base_dir;
-    my $tgz = "$cwd/maker-$ver.tgz";    
+    my $tgz = "$cwd/maker-$ver.tgz";
     if(! -f $tgz){
 	my ($dir, $base) = $cwd =~ /^(.*\/)([^\/]+)\/src$/;
 	
-	my $exclude = `cd $dir; svn status $base`;
+	my $exclude = `cd $dir; git status $base`;
 	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
 	open(OUT, "> .exclude~");
 	print OUT $exclude;
 	close(OUT);
 	
 	print "\nBuilding tarball for distribution...\n";
-	my $command = "tar -C $dir -zcf $tgz $base --exclude \"*~\" --exclude \".svn\" --exclude \"maker-*.tgz\" --exclude-from .exclude~";
+	my $command = "tar -C $dir -zcf $tgz $base --exclude \"*~\" --exclude \".git\" --exclude \"maker-*.tgz\" --exclude-from .exclude~";
 	system($command) && unlink($tgz);
 	unlink(".exclude~");
 	die "ERROR: tarball creation failed\n" if(! -f $tgz);
     }
 
     #there were changes so re-run install (updates version info in scripts)
-    my ($f_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    if($s_svn != $f_svn){
+    my ($f_git) = `git rev-parse HEAD`;
+    if($s_git != $f_git){
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
@@ -1996,90 +1998,70 @@ sub sync_bins {
 sub check_update_version {
     my $self = shift;
 
-    #get current subversion version
-    my ($svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-    die "ERROR: Could not query subversion repository\n" if(!$svn);
+    #get current GitHub version
+    my ($git) = `git rev-parse HEAD`;
+    chomp($git);
+    die "ERROR: Could not query GitHub repository\n" if(!$git);
 
     #get old version information for last stable release
-    open(IN, "< version") or die "ERROR: Could not open MAKER version file\n";
-    my $data = join("\n", <IN>);
-    my ($old_svn) = $data =~ /\$SVN=(\d+)/;
-    my ($old_version) = $data =~ /\$VERSION=([\d\.]+)/;
-    close(IN);
+    my $old_version = `git tag -l --format='\%(refname)' --sort=-taggerdate | head -n 1`;
+    $old_version =~ s/^refs\/tags\/Version_//;
+    $old_version =~ s/_r\d+$//;
+    my $old_git = `git tag -l --format='\%(*objectname)' --sort=-taggerdate | head -n 1`;
+    chomp($old_git);
 
     #check if update is really needed
     my $version = $old_version;
-    if($old_svn == $svn){
+    if($old_git eq $git){
 	print "MAKER is already up to date as stable release $version\n";
 
 	return $version;
     }
-    else{
-	#set new version
-	$old_version =~ /(.*)\.(\d+)$/;
-	$version = $1;
-	my $s = $2; #sub version
-	my $n = sprintf ('%02s', $s + 1); #new sub version
-	$s = ".$s"; #add decimal
-	$n = ".$n"; #add decimal
-	
-	#if version iteration results in lower value then make sub iterator
-	#this means major version numbers can only be changed by the user
-	if($n < $s){
-	    $n = "$s.01";
-	}
-	$version .= $n;
 
-	#output what will be next version to file
-	#then another commit will be performed to
-	#sync subverion with the release
-	my $commit_svn = $svn;
-	do{
-	    $svn = $commit_svn;
-	    $svn++;
-	    open(OUT, "> version");
-	    print OUT "\$VERSION=$version\n";
-	    print OUT "\$SVN=$svn\n";
-	    close(OUT);
-
-	    #files to fix version for
-	    my $cwd = $self->base_dir;
-	    my @files = ("$cwd/bin/maker",
-			 "$cwd/bin/evaluator",
-			 "$cwd/bin/iprscan_wrap",
-			 "$cwd/inc/bin/mpi_evaluator",
-			 "$cwd/inc/bin/mpi_iprscan",
-			 "$cwd/../lib/GI.pm"
-			 );
-
-	    #changing script version here
-	    foreach my $file (@files){
-		open(IN, "< $file");
-		unlink($file);
-		open(OUT, "> $file");
-		while(my $line = <IN>){
-		    $line =~ s/\$VERSION\s*\=\s*\'[\d\.]+\'/\$VERSION = \'$version\'/;
-		    print OUT $line;
-		}
-		close(OUT);
-		close(IN);
-	    }
-
-	    $self->svn_w_args('commit', "-m \"MAKER stable release version $version\"");
-	    $self->svn_w_args('update', '');
-	    ($commit_svn) = `svn info` =~ /Revision\:\s*(\d+)/;
-	    die "ERROR: Could not query subversion repository\n" if(!$commit_svn);
-
-	    my $svn_server = 'svn://topaz.genetics.utah.edu/maker';
-	    my $copy_args = "$svn_server/trunk $svn_server/tags/Version_$version\_r$svn";
-	    my $copy_message = "Adding tags/Version_$version\_r$svn";
-	    $self->svn_w_args('copy', "$copy_args -m '$copy_message'");
-	}while($svn != $commit_svn);
-
-	print "MAKER has been updated to stable release $version\n";
-
-	return $version;
+    #set new version
+    $old_version =~ /(.*)\.(\d+)$/;
+    $version = $1;
+    my $s = $2; #sub version
+    my $n = sprintf ('%02s', $s + 1); #new sub version
+    $s = ".$s"; #add decimal
+    $n = ".$n"; #add decimal
+    
+    #if version iteration results in lower value then make sub iterator
+    #this means major version numbers can only be changed by the user
+    if($n < $s){
+	$n = "$s.01";
     }
+    $version .= $n;
+    
+    #files to fix version for
+    my $cwd = $self->base_dir;
+    my @files = ("$cwd/bin/maker",
+		 "$cwd/../lib/GI.pm"
+	);
+    
+    #changing script version here
+    foreach my $file (@files){
+	open(IN, "< $file");
+	unlink($file);
+	open(OUT, "> $file");
+	while(my $line = <IN>){
+	    $line =~ s/\$VERSION\s*\=\s*\'[\d\.]+\'/\$VERSION = \'$version\'/;
+	    print OUT $line;
+	}
+	close(OUT);
+	close(IN);
+    }
+    
+    @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
+    $self->git_w_args('add', join(' ', @files)) if(@files);
+    $self->git_w_args('commit', "-m \"MAKER stable release version $version\"");
+    $self->git_w_args('pull', '');
+    
+    $self->git_w_args('tag', "-a Version_$version -m 'Adding tags/Version_$version'");
+    
+    print "MAKER has been updated to stable release $version\n";
+    
+    return $version;
 }
 
 sub safe_prompt {
