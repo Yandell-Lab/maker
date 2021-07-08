@@ -494,11 +494,15 @@ sub ACTION_release {
     #there were changes so re-run install (updates version info in scripts)
     my ($f_git) = `git rev-parse HEAD`;
 <<<<<<< HEAD
+<<<<<<< HEAD
     chomp($f_git);
     if($s_git ne $f_git){
 =======
     if($s_git != $f_git){
 >>>>>>> ace52f3... pre-release commit
+=======
+    if($s_git ne $f_git){
+>>>>>>> 8c95735... pre-release commit
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
