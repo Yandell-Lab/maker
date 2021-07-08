@@ -2005,6 +2005,7 @@ sub check_update_version {
 
     #get old version information for last stable release
     my $old_version = `git tag -l --format='\%(refname)' --sort=-taggerdate | head -n 1`;
+    chomp($old_version);
     $old_version =~ s/^refs\/tags\/Version_//;
     $old_version =~ s/_r\d+$//;
     my $old_git = `git tag -l --format='\%(*objectname)' --sort=-taggerdate | head -n 1`;
