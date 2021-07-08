@@ -460,7 +460,7 @@ sub ACTION_release {
 
     #there were changes so re-run install (updates version info in scripts)
     my ($f_git) = `git rev-parse HEAD`;
-    if($s_git != $f_git){
+    if($s_git ne $f_git){
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
