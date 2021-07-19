@@ -470,6 +470,7 @@ sub ACTION_release {
 	
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	my $exclude = `cd $dir; git -C $base status -s`;
 	$exclude = join("\n", ($exclude =~ /\?+\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
 =======
@@ -480,6 +481,10 @@ sub ACTION_release {
 	my $exclude = `cd $dir/$base; git status -s`;
 	$exclude = join("\n", ($exclude =~ /\?\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
 >>>>>>> aa961d1... pre-release commit
+=======
+	my $exclude = `cd $dir; git status $base`;
+	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
+>>>>>>> c607257... Revert "Update evaluator"
 	open(OUT, "> .exclude~");
 	print OUT $exclude;
 	close(OUT);
