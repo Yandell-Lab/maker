@@ -372,10 +372,6 @@ sub ACTION_commit {
     my $self = shift;
 
     my ($s_git) = `git rev-parse HEAD`;
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> c6102e0... pre-release commit
     chomp($s_git);
     $self->sync_bins();
     $self->git_w_args('pull', '');
@@ -385,18 +381,6 @@ sub ACTION_commit {
     $self->git_w_args('push');
     my ($f_git) = `git rev-parse HEAD`;
     chomp($f_git);
-<<<<<<< HEAD
-=======
-    $self->sync_bins();
-    $self->git_w_args('pull', '');
-    my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
-    $self->git_w_args('add', join(' ', @files)) if(@files);
-    $self->git_w_args('commit');
-    $self->git_w_args('push');
-    my ($f_git) = `git rev-parse HEAD`;
->>>>>>> 05650f9... Updating Build script to handle GitHub
-=======
->>>>>>> c6102e0... pre-release commit
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -411,22 +395,10 @@ sub ACTION_update {
 
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
-<<<<<<< HEAD
-<<<<<<< HEAD
     chomp($s_git);
     $self->git_w_args('pull');
     my ($f_git) = `git rev-parse HEAD`;
     chomp($f_git);
-=======
-    $self->git_w_args('pull');
-    my ($f_git) = `git rev-parse HEAD`;
->>>>>>> 05650f9... Updating Build script to handle GitHub
-=======
-    chomp($s_git);
-    $self->git_w_args('pull');
-    my ($f_git) = `git rev-parse HEAD`;
-    chomp($f_git);
->>>>>>> c6102e0... pre-release commit
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -454,14 +426,7 @@ sub ACTION_release {
     print "\nUpdating to most current repository...\n";
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
-<<<<<<< HEAD
-<<<<<<< HEAD
     chomp($s_git);
-=======
->>>>>>> ace52f3... pre-release commit
-=======
-    chomp($s_git);
->>>>>>> c6102e0... pre-release commit
     $self->git_w_args('pull', '');
 
     #doing
@@ -485,32 +450,8 @@ sub ACTION_release {
     if(! -f $tgz){
 	my ($dir, $base) = $cwd =~ /^(.*\/)([^\/]+)\/src$/;
 	
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 	my $exclude = `cd $dir; git -C $base status -s`;
 	$exclude = join("\n", ($exclude =~ /\?+\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
-=======
-	my $exclude = `cd $dir; git status $base`;
-	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
->>>>>>> ace52f3... pre-release commit
-=======
-	my $exclude = `cd $dir/$base; git status -s`;
-	$exclude = join("\n", ($exclude =~ /\?\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
->>>>>>> aa961d1... pre-release commit
-=======
-	my $exclude = `cd $dir; git status $base`;
-=======
-	my $exclude = `cd $dir; git status -C $base`;
->>>>>>> 104bdf6... pre-release commit
-	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
->>>>>>> c607257... Revert "Update evaluator"
-=======
-	my $exclude = `cd $dir; git -C $base status -s`;
-	$exclude = join("\n", ($exclude =~ /\?+\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
->>>>>>> db9ad68... pre-release commit
 	open(OUT, "> .exclude~");
 	print OUT $exclude;
 	close(OUT);
@@ -524,25 +465,8 @@ sub ACTION_release {
 
     #there were changes so re-run install (updates version info in scripts)
     my ($f_git) = `git rev-parse HEAD`;
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     chomp($f_git);
     if($s_git ne $f_git){
-=======
-    if($s_git != $f_git){
->>>>>>> ace52f3... pre-release commit
-=======
-    if($s_git ne $f_git){
->>>>>>> 8c95735... pre-release commit
-=======
-    if($s_git != $f_git){
->>>>>>> ca85eda... Revert "pre-release commit"
-=======
-    chomp($f_git);
-    if($s_git ne $f_git){
->>>>>>> c6102e0... pre-release commit
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
@@ -2087,14 +2011,7 @@ sub check_update_version {
 
     #get old version information for last stable release
     my $old_version = `git tag -l --format='\%(refname)' --sort=-taggerdate | head -n 1`;
-<<<<<<< HEAD
-<<<<<<< HEAD
     chomp($old_version);
-=======
->>>>>>> ace52f3... pre-release commit
-=======
-    chomp($old_version);
->>>>>>> 7acbeda... pre-release commit
     $old_version =~ s/^refs\/tags\/Version_//;
     $old_version =~ s/_r\d+$//;
     my $old_git = `git tag -l --format='\%(*objectname)' --sort=-taggerdate | head -n 1`;
@@ -2125,17 +2042,7 @@ sub check_update_version {
     
     #files to fix version for
     my $cwd = $self->base_dir;
-<<<<<<< HEAD
-<<<<<<< HEAD
     my @files = ("$cwd/../lib/GI.pm");
-=======
-    my @files = ("$cwd/bin/maker",
-		 "$cwd/../lib/GI.pm"
-	);
->>>>>>> ace52f3... pre-release commit
-=======
-    my @files = ("$cwd/../lib/GI.pm");
->>>>>>> 2a77314... pre-release commit
     
     #changing script version here
     foreach my $file (@files){
@@ -2153,16 +2060,7 @@ sub check_update_version {
     @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
     $self->git_w_args('add', join(' ', @files)) if(@files);
     $self->git_w_args('commit', "-m \"MAKER stable release version $version\"");
-<<<<<<< HEAD
-<<<<<<< HEAD
     $self->git_w_args('push', '');
-=======
-    $self->git_w_args('pull', '');
->>>>>>> ace52f3... pre-release commit
-=======
-    $self->git_w_args('push', '');
->>>>>>> 548cac9... pre-release commit
-    
     $self->git_w_args('tag', "-a Version_$version -m 'Adding tags/Version_$version'");
     
     print "MAKER has been updated to stable release $version\n";
