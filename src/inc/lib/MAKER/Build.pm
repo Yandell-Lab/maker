@@ -2060,7 +2060,7 @@ sub check_update_version {
     @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
     $self->git_w_args('add', join(' ', @files)) if(@files);
     $self->git_w_args('commit', "-m \"MAKER stable release version $version\"");
-    $self->git_w_args('pull', '');
+    $self->git_w_args('push', '');
     
     $self->git_w_args('tag', "-a Version_$version -m 'Adding tags/Version_$version'");
     
