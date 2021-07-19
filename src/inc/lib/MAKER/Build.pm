@@ -372,6 +372,7 @@ sub ACTION_commit {
     my $self = shift;
 
     my ($s_git) = `git rev-parse HEAD`;
+    chomp($s_git);
     $self->sync_bins();
     $self->git_w_args('pull', '');
     my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
@@ -379,6 +380,7 @@ sub ACTION_commit {
     $self->git_w_args('commit');
     $self->git_w_args('push');
     my ($f_git) = `git rev-parse HEAD`;
+    chomp($f_git);
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -393,8 +395,10 @@ sub ACTION_update {
 
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
+    chomp($s_git);
     $self->git_w_args('pull');
     my ($f_git) = `git rev-parse HEAD`;
+    chomp($f_git);
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -422,6 +426,7 @@ sub ACTION_release {
     print "\nUpdating to most current repository...\n";
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
+    chomp($s_git);
     $self->git_w_args('pull', '');
 
     #doing
@@ -460,7 +465,8 @@ sub ACTION_release {
 
     #there were changes so re-run install (updates version info in scripts)
     my ($f_git) = `git rev-parse HEAD`;
-    if($s_git != $f_git){
+    chomp($f_git);
+    if($s_git ne $f_git){
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
