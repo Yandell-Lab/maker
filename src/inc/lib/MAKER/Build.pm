@@ -445,8 +445,8 @@ sub ACTION_release {
     if(! -f $tgz){
 	my ($dir, $base) = $cwd =~ /^(.*\/)([^\/]+)\/src$/;
 	
-	my $exclude = `cd $dir; git status -C $base`;
-	$exclude = join("\n", ($exclude =~ /\?\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
+	my $exclude = `cd $dir; git -C $base status -s`;
+	$exclude = join("\n", ($exclude =~ /\?+\s+([^\n]+)/g), "maker/src/maker-$ver.tgz") ."\n";
 	open(OUT, "> .exclude~");
 	print OUT $exclude;
 	close(OUT);
