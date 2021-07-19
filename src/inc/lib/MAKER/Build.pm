@@ -373,6 +373,9 @@ sub ACTION_commit {
 
     my ($s_git) = `git rev-parse HEAD`;
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> c6102e0... pre-release commit
     chomp($s_git);
     $self->sync_bins();
     $self->git_w_args('pull', '');
@@ -382,6 +385,7 @@ sub ACTION_commit {
     $self->git_w_args('push');
     my ($f_git) = `git rev-parse HEAD`;
     chomp($f_git);
+<<<<<<< HEAD
 =======
     $self->sync_bins();
     $self->git_w_args('pull', '');
@@ -391,6 +395,8 @@ sub ACTION_commit {
     $self->git_w_args('push');
     my ($f_git) = `git rev-parse HEAD`;
 >>>>>>> 05650f9... Updating Build script to handle GitHub
+=======
+>>>>>>> c6102e0... pre-release commit
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -406,6 +412,7 @@ sub ACTION_update {
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
 <<<<<<< HEAD
+<<<<<<< HEAD
     chomp($s_git);
     $self->git_w_args('pull');
     my ($f_git) = `git rev-parse HEAD`;
@@ -414,6 +421,12 @@ sub ACTION_update {
     $self->git_w_args('pull');
     my ($f_git) = `git rev-parse HEAD`;
 >>>>>>> 05650f9... Updating Build script to handle GitHub
+=======
+    chomp($s_git);
+    $self->git_w_args('pull');
+    my ($f_git) = `git rev-parse HEAD`;
+    chomp($f_git);
+>>>>>>> c6102e0... pre-release commit
 
     #there were changes so re-run install
     if($s_git ne $f_git){
@@ -442,9 +455,13 @@ sub ACTION_release {
     $self->sync_bins();
     my ($s_git) = `git rev-parse HEAD`;
 <<<<<<< HEAD
+<<<<<<< HEAD
     chomp($s_git);
 =======
 >>>>>>> ace52f3... pre-release commit
+=======
+    chomp($s_git);
+>>>>>>> c6102e0... pre-release commit
     $self->git_w_args('pull', '');
 
     #doing
@@ -510,6 +527,7 @@ sub ACTION_release {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     chomp($f_git);
     if($s_git ne $f_git){
 =======
@@ -521,6 +539,10 @@ sub ACTION_release {
 =======
     if($s_git != $f_git){
 >>>>>>> ca85eda... Revert "pre-release commit"
+=======
+    chomp($f_git);
+    if($s_git ne $f_git){
+>>>>>>> c6102e0... pre-release commit
 	print "\nNow reinstalling MAKER scripts to reflect version changes...\n";
 	sleep 1;
 	$self->dispatch('realclean'); #clean up all old files
