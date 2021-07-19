@@ -2036,9 +2036,7 @@ sub check_update_version {
     
     #files to fix version for
     my $cwd = $self->base_dir;
-    my @files = ("$cwd/bin/maker",
-		 "$cwd/../lib/GI.pm"
-	);
+    my @files = ("$cwd/../lib/GI.pm");
     
     #changing script version here
     foreach my $file (@files){
