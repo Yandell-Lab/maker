@@ -430,11 +430,11 @@ sub ACTION_release {
     $self->git_w_args('pull', '');
 
     #doing
-    print "\nPre-release commit of any user changes...\n";
+    print "\nPre-release update & commit of any user changes...\n";
+    $self->git_w_args('pull', '');
     my @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
     $self->git_w_args('add', join(' ', @files)) if(@files);
-    $self->git_w_args('commit', '-m "pre-release commit"');
-    $self->git_w_args('pull', '');
+    $self->git_w_args('commit', '-m "pre-release commit of user changes"');
 
     #clean and check versions for release
     $self->dispatch('clean');
@@ -2057,11 +2057,15 @@ sub check_update_version {
 	close(IN);
     }
     
+    #update version number
     @files = map {Cwd::abs_path($_)} map {/^\tmodified:\s+(.*)\n$/} (`git status | grep modified`);
     $self->git_w_args('add', join(' ', @files)) if(@files);
-    $self->git_w_args('commit', "-m \"MAKER stable release version $version\"");
+    $self->git_w_args('commit', "-m \"pre-release commit to itterate version number\"");
     $self->git_w_args('push', '');
-    $self->git_w_args('tag', "-a Version_$version -m 'Adding tags/Version_$version'");
+
+    #tag the release
+    $self->git_w_args('tag', "-a Version_$version -m 'MAKER stable release version Version_$version'");
+    $self->git_w_args('push', 'origin Version_$version'); #push tag
     
     print "MAKER has been updated to stable release $version\n";
     
