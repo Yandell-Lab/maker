@@ -2095,12 +2095,16 @@ sub check_update_version {
     #files to fix version for
     my $cwd = $self->base_dir;
 <<<<<<< HEAD
+<<<<<<< HEAD
     my @files = ("$cwd/../lib/GI.pm");
 =======
     my @files = ("$cwd/bin/maker",
 		 "$cwd/../lib/GI.pm"
 	);
 >>>>>>> ace52f3... pre-release commit
+=======
+    my @files = ("$cwd/../lib/GI.pm");
+>>>>>>> 2a77314... pre-release commit
     
     #changing script version here
     foreach my $file (@files){
