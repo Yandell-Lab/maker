@@ -2154,10 +2154,14 @@ sub check_update_version {
     $self->git_w_args('add', join(' ', @files)) if(@files);
     $self->git_w_args('commit', "-m \"MAKER stable release version $version\"");
 <<<<<<< HEAD
+<<<<<<< HEAD
     $self->git_w_args('push', '');
 =======
     $self->git_w_args('pull', '');
 >>>>>>> ace52f3... pre-release commit
+=======
+    $self->git_w_args('push', '');
+>>>>>>> 548cac9... pre-release commit
     
     $self->git_w_args('tag', "-a Version_$version -m 'Adding tags/Version_$version'");
     
