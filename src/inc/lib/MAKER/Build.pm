@@ -1086,26 +1086,11 @@ sub _install_exe {
 
     #get OS and architecture
     my %os_ok = (Linux_x86_64  => 1,
-		 Linux_i386    => 1,
-		 Darwin_i386   => 1,
 		 Darwin_x86_64 => 1,
 		 src           => 1); 
     my ($OS, $ARC) = (POSIX::uname())[0,4];
 
-    #set all pentium achitectures to use i386 (safest choice)
-    if($ARC =~ /^i.86$/){
-	$ARC = 'i386';
-    }
-
     ($OS, $ARC) = ('src', '') if(! $os_ok{"$OS\_$ARC"}); #use source code for unknown architectures
-
-    #add fink paths just in case
-    if($OS eq 'Darwin'){
-	$ENV{C_INCLUDE_PATH} .= ":" if($ENV{C_INCLUDE_PATH});
-	$ENV{LIBRARY_PATH} .= ":" if($ENV{LIBRARY_PATH});
-	$ENV{C_INCLUDE_PATH} .= "/sw/include:/usr/X11/include";
-	$ENV{LIBRARY_PATH} .= "/sw/lib:/usr/X11/lib";
-    }
 
     #get url for exectuable to be installed
     my $data;
@@ -1156,113 +1141,53 @@ sub _install_exe {
         push(@unlink, $file);
 	return $self->fail($exe, $path) if(! -f "$path/$exe");
 
-	#RepBase
-	my $req = 'RepBase';
-	my $go = $self->y_n("\nIf are a registered user of RepBase, then MAKER can\n".
-			    "download and install RepBase for RepeatMasker for you.\n".
-			    "Do you want to do this?", 'Y');
-
-	if($go){
-	    print "\n* NOTE: Register at http://www.girinst.org/\n\n";
-	    my $user = $self->prompt("Please enter your username:", '');
-	    my $pass;
-	    if($self->check_installed_status('Term::ReadKey', '0')->{ok}){
-		$pass = $self->safe_prompt("Please enter your Password:", '');
-	    }
-	    else{
-		$pass = $self->prompt("Please enter your Password:", '');
-	    }
-	    chdir($path);
-	    $file = "$path/$req.tar.gz"; #file to save to
-	    $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-	    $url2 = $data2->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-	    print "Downloading $req...\n";
-	    $self->getstore($url, $file, {USER => $user, PASS => $pass, ALT => $url2}) or return $self->fail($req, $path);
-	    print "Unpacking $exe tarball...\n";
-	    $self->extract_archive($file) or return $self->fail($req, $path);
-	    push(@unlink, $file);
-	}
-	else{
-	    print "\n\n*You will have to install RepBase manually.\n\n";
-	    print "Go to http://www.girinst.org/ to download RepBase.\n".
-		"Install it into this path --> $path\n\n".
-		"Example:\n".
-		"     cd $path\n".
-		"     tar -zxvf repeatmaskerlibraries-xxx.tar.gz\n\n";
-	}
-
 	#TRF
-	$req = 'trf';
+	my $req = 'trf';
         chdir($path);
 	unlink("$path/$req");
 	$file = "$path/$req"; #file to save to
-        $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-        $url2 = $data2->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
+        $url = $data->{$req}{"$OS\_$ARC"};
+        $url2 = $data2->{$req}{"$OS\_$ARC"};
 	print "Downloading $req...\n";
         $self->getstore($url, $file, {ALT => $url2}) or return $self->fail($req, $path);
         chmod(0755, $file) or return $self->fail($req, $path);
 	return $self->fail($req, $path) if(! -f "$path/$req");
 
-	#RMBlast
-	$req = 'rmblast';
+	#DFam
+	$req = 'dfam';
+	chdir("$path/Libraries");
+	unlink("$path/Libraries/Dfam.h5");
+        $file = "$path/Libraries/Dfam.h5.gz"; #file to save to
+	$url = $data->{$req}{"$OS\_$ARC"};
+        $url2 = $data2->{$req}{"$OS\_$ARC"};
+	print "Downloading $req...\n";
+        $self->getstore($url, $file, {ALT => $url2}) or return $self->fail($req, $path);
+	$self->extract_archive($file) or return $self->fail($req, $path);
+	push(@unlink, $file);
+	return $self->fail($req, $path) if(! -f "$path/Libraries/Dfam.h5");
+
+	#HMMER
+	$req = 'hmmer';
         chdir($path);
 	File::Path::rmtree("$path/$req");
 	$file = "$path/$req.tar.gz"; #file to save to
-        $url = $data->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-        $url2 = $data2->{$req}{"$OS\_$ARC"}; #url to rmblast for OS
-
-	#not needed any more 10/10/2012
-	#if($OS eq 'Linux'){
-	#    #glibc 2.5 or greater is required for Linux binary
-	#    my $ldd = File::Which::which('ldd');
-	#    my ($ver, $sver) = (`$ldd --version` =~ /(\d+)\.(\d+)/) if($ldd);
-	#    $url = $data->{$req}{src_} if(!$ver || $ver < 2 || $sver < 5);
-	#}
-
+        $url = $data->{$req}{"$OS\_$ARC"};
+        $url2 = $data2->{$req}{"$OS\_$ARC"};
 	print "Downloading $req...\n";
         $self->getstore($url, $file, {ALT => $url2}) or return $self->fail($req, $path);
 	print "Unpacking $req tarball...\n";
         $self->extract_archive($file) or return $self->fail($req, $path);
         push(@unlink, $file);
-	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*rmblast*");
-	if(-d "$dir/c++"){ #this is the source code and must be compiled
-	    chdir("$dir/c++");
-	    print "Configuring $req...\n";
-	    $self->do_system("./configure --with-mt --prefix=".quotemeta("$path/$dir")." --without-debug") or return $self->fail($req, $path);
-	    $self->do_system("make") or return $self->fail($req, $path);
-	    $self->do_system("make install") or return $self->fail($req, $path);
-	}
-	else{ #install BLAST+ first
-	    my $req2 = 'blast';
-	    my $file = "$path/$req2.tar.gz"; #file to save to
-	    my $url = $data->{$req2}{"$OS\_$ARC"}; #url to rmblast for OS
-	    my $url2 = $data2->{$req2}{"$OS\_$ARC"}; #url to rmblast for OS
-	    print "Downloading $req2...\n";
-	    $self->getstore($url, $file, {ALT => $url2}) or return $self->fail($req2, $path);
-	    print "Unpacking $req2 tarball...\n";
-	    $self->extract_archive($file) or return $self->fail($req2, $path);
-	    push(@unlink, $file);
-	    my ($dir2) = grep {-d $_} File::Glob::bsd_glob("ncbi-blast-*");
-
-	    #move to rmblast path, not blast path
-	    File::Copy::move($dir2, $req) or return $self->fail($req2, $path);
-	    return $self->fail($req2, $path) if(! -f "$path/$req/bin/blastn");	    
-
-	    my @to_move = File::Glob::bsd_glob("$dir/*");
-	    my $safe = quotemeta($dir);
-	    foreach my $f (@to_move){
-		(my $new = $f) =~ s/^$safe/$req/;
-		(my $base = $new) =~ s/[^\/]+$//;
-		mkdir $base if(!-d $base);
-		if(-d $f){
-		    push(@to_move, File::Glob::bsd_glob("$f/*"));
-		    next;
-		}
-		File::Copy::move($f, $new);
-	    }
-	}
-        chdir($path);
-	return $self->fail($req, $path) if(! -f "$path/$req/bin/rmblastn");
+	my ($dir) = grep {-d $_} File::Glob::bsd_glob("hmmer-*");
+	return $self->fail($req, $path) if(!-d $dir);
+	print "Configuring $exe...\n";
+	chdir($dir);
+	$self->do_system("./configure --prefix=".quotemeta("$path/$req")) or return $self->fail($exe, $path);
+	$self->do_system("make") or return $self->fail($exe, $path);
+	$self->do_system("make install") or return $self->fail($exe, $path);
+	chdir($path);
+        push(@unlink, $dir);
+	return $self->fail($req, $path) if(! -f "$path/$req/bin/phmmer");
 
 	#Configure RepeatMasker
 	chdir($path);
@@ -1303,7 +1228,7 @@ sub _install_exe {
 	    $self->do_system("make install") or return $self->fail($exe, $path);
 	}
         chdir($base);
-	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);;
+	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
 	return $self->fail($exe, $path) if(! -f "$path/bin/blastn");
     }
     elsif($exe eq 'exonerate'){
@@ -1351,7 +1276,7 @@ sub _install_exe {
     }
     elsif($exe eq 'augustus'){
 	#augustus
-        &File::Path::rmtree($path);
+        File::Path::rmtree($path);
 	my $file = "$base/$exe.tar.gz"; #file to save to
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
 	my $url2 = $data2->{$exe}{"$OS\_$ARC"}; #url to blast for OS
@@ -1382,9 +1307,9 @@ sub _install_exe {
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
 	return $self->fail($exe, $path) if(! -f "$path/bin/$exe");
     }
-    elsif($exe eq 'mpich2'){
-	#MPICH2
-	&File::Path::rmtree($path);
+    elsif($exe eq 'mpich'){
+	#MPICH
+	File::Path::rmtree($path);
 	my $file = "$base/$exe.tar.gz"; #file to save to
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
 	my $url2 = $data2->{$exe}{"$OS\_$ARC"}; #url to blast for OS
@@ -1405,9 +1330,6 @@ sub _install_exe {
 	chdir($base);
 	File::Path::rmtree($dir) or return $self->fail($exe, $path);
     }
-    elsif($exe eq 'apache ant'){
-	#do nothing
-    }
     elsif($exe eq 'apollo'){
 	#apollo
 	if(grep {/Apache Ant/} map {keys %{$_->{exe_requires}}} $self->exe_failures()){
@@ -1415,7 +1337,7 @@ sub _install_exe {
 		"You will need to install it first manually.\n";
 	}
 
-	&File::Path::rmtree($path);
+	File::Path::rmtree($path);
 	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
 	my $url2 = $data2->{$exe}{"$OS\_$ARC"}; #url to blast for OS
 	my $file = "$base/$exe.tar.gz"; #file to save to	
@@ -1434,54 +1356,6 @@ sub _install_exe {
 	$self->do_system("ant jar") or return $self->fail($exe, $path);
 	chdir($base);
 	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
-    }
-    elsif($exe eq 'jbrowse'){
-	#jbrowse
-	if(grep {/LibPNG/} map {keys %{$_->{exe_requires}}} $self->lib_failures()){
-	    die "ERROR: Cannot install JBrowse without LibPNG\n".
-		"You will need to install it first manually.\n";
-	}
-
-	&File::Path::rmtree($path);
-	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
-	my $url2 = $data2->{$exe}{"$OS\_$ARC"}; #url to blast for OS
-	my $file = "$base/$exe.tar.gz"; #file to save to
-	$file = "$base/$exe.zip"if($url =~ /\.zip$/);
-
-	print "Downloading $exe...\n";
-	$self->getstore($url, $file, {ALT => $url2}) or return $self->fail($exe, $path);
-	print "Unpacking $exe tarball...\n";
-	$self->extract_archive($file) or return $self->fail($exe, $path);
-	push (@unlink, $file);
-	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*jbrowse*");
-	($dir) = grep {-d $_} File::Glob::bsd_glob("*JBrowse*") if(! $dir);
-
-	print "Configuring $exe...\n";
-	#File::Copy::copy("$base/../GMOD/JBrowse/genome.css", "$dir/genome.css");
-	chdir($dir);
-
-	#new jbrowse is setup like this
-	$self->do_system('./setup.sh') or return $self->fail($exe, $path);
-
-	chdir($base);
-	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
-    }
-    elsif($exe eq 'webapollo'){
-	#webapollo
-        File::Path::rmtree($path);
-	my $file = "$base/$exe.tar.gz"; #file to save to
-	my $url = $data->{$exe}{"$OS\_$ARC"}; #url to blast for OS
-	my $url2 = $data2->{$exe}{"$OS\_$ARC"}; #url to blast for OS
-	print "Downloading $exe...\n";
-        $self->getstore($url, $file, {ALT => $url2}) or return $self->fail($exe, $path);
-	print "Unpacking $exe tarball...\n";
-        $self->extract_archive($file) or return $self->fail($exe, $path);
-        push (@unlink, $file);
-	my ($dir) = grep {-d $_} File::Glob::bsd_glob("*WebApollo*");
-	chdir($base);
-	File::Copy::move($dir, $exe) or return $self->fail($exe, $path);
-
-	return $self->fail($exe, $path) if(! -f "$path/tools/user/extract_seqids_from_fasta.pl");
     }
     else{
 	die "ERROR: No install method defined for $exe in MAKER::Build::_install_exe.\n";
@@ -1717,32 +1591,51 @@ sub extract_archive {
 	}
     }
 
-    if(File::Which::which('tar')){
-	my $command;
-	my $u = scalar getpwuid($>);
-	my $g = scalar getgrgid($));
-	if($file =~ /\.gz$|\.tgz$/){
-	    $command = "tar -zxm -f ".quotemeta($file);
-	}
-	elsif($file =~ /\.bz2?$|\.tbz2?$/){
-	    $command = "tar -jxm -f $file";
-	}
-	elsif($file =~ /\.zip$/){
-	    $command = "unzip";
+    if($file =~ /\.tar$|\.tar\.gz$|\.tar\.bz2?$|\.tgz$|\.tbz2?$/){
+	if(File::Which::which('tar')){
+	    my $command;
+	    my $u = scalar getpwuid($>);
+	    my $g = scalar getgrgid($));
+	    if($file =~ /\.tar\.gz$|\.tgz$/){
+		$command = "tar -zxm -f ".quotemeta($file);
+	    }
+	    elsif($file =~ /\.tar\.bz2?$|\.tbz2?$/){
+		$command = "tar -jxm -f ".quotemeta($file);
+	    }
+	    else{
+		$command = "tar -xm -f ".quotemeta($file);
+	    }
+	    $command .= " --owner $u --group $g" unless((POSIX::uname())[0] =~ /darwin/i);
+	    
+	    return $self->do_system($command); #fast
 	}
 	else{
-	    $command = "tar -xm -f ".quotemeta($file);
+	    die "ERROR: Archive::Tar required to unpack missing executables.\n".
+		"Try running ./Build installdeps first.\n\n"
+		if(!$self->check_installed_status('Archive::Tar', '0')->{ok});
+	    
+	    return (Archive::Tar->extract_archive($file)) ? 1 : 0; #slow
 	}
-	$command .= " --owner $u --group $g" unless((POSIX::uname())[0] =~ /darwin/i);
-
-	return $self->do_system($command); #fast
     }
-    else{
-	die "ERROR: Archive::Tar required to unpack missing executables.\n".
-	    "Try running ./Build installdeps first.\n\n"
-	    if(!$self->check_installed_status('Archive::Tar', '0')->{ok});
 
-	return (Archive::Tar->extract_archive($file)) ? 1 : 0; #slow
+    if($file =~ /\.gz$/){
+	if(File::Which::which('gzip')){
+	    my $command = "gunzip ".quotemeta($file);
+	    return $self->do_system($command); #fast
+	}
+	else{
+	    die "ERROR: GZip required to unzip archive";
+        }
+    }
+
+    if($file =~ /\.bz2?$/){
+	if(File::Which::which('bzip2')){
+	    my $command = "bzip2 -d ".quotemeta($file);
+	    return $self->do_system($command); #fast
+	}
+	else{
+	    die "ERROR: BZip2 required to unzip archive";
+        }
     }
 }
 
