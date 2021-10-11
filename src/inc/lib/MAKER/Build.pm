@@ -429,6 +429,12 @@ sub ACTION_release {
     chomp($s_git);
     $self->git_w_args('pull', '');
 
+    #Make a change log file
+    $self->make_change_log();
+
+    #update MANIFEST
+    ExtUtils::Manifest::mkmanifest();
+    
     #doing
     print "\nPre-release update & commit of any user changes...\n";
     $self->git_w_args('pull', '');
@@ -1963,6 +1969,28 @@ sub check_update_version {
     print "MAKER has been updated to stable release $version\n";
     
     return $version;
+}
+
+sub make_change_log {
+    my $self = shift;
+
+    #get current GitHub version
+    my $changes;
+    open(my $GIT, '-|', 'git log --pretty=”%s"');
+    while(my $line = <$GIT>){
+	next if($line =~ /pre-release commit/);
+	next if($line =~ /Merge branch/);
+	last if($line =~ /MAKER stable release/);
+	$changes .= $line;
+    }
+    close($GIT);
+
+    my $cwd = $self->base_dir;
+    open(my $OUT, '>', "$cwd/../CHANGELOG");
+    print $OUT $changes;
+    close($OUT);
+
+    return $changes;
 }
 
 sub safe_prompt {

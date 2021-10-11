@@ -1,8 +1,8 @@
+bin/AED_cdf_generator.pl
 bin/cegma2zff
 bin/chado2gff3
 bin/compare_gff3_to_chado
 bin/cufflinks2gff3
-bin/evaluator
 bin/fasta_merge
 bin/fasta_tool
 bin/genemark_gtf2gff3
@@ -23,8 +23,12 @@ bin/map_data_ids
 bin/map_fasta_ids
 bin/map_gff_ids
 bin/match2gene.pl
+bin/quality_filter.pl
+bin/split_gff3
 bin/TACC.PL
 bin/tophat2gff3
+bin/train_augustus.pl
+bin/zff2genbank.pl
 Build.PL
 inc/bin/ibrun
 inc/bundle/auto/Module/Build/.packlist
@@ -65,4 +69,3 @@ inc/lib/MAKER/Build.pm
 lib/Parallel/Application/MPI.pm
 locations
 MANIFEST			This list of files
-version

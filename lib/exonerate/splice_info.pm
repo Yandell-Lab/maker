@@ -68,6 +68,13 @@ sub needs_to_be_revcomped {
 	my $hit = shift;
 	my $seq_o = shift;
 
+	#strand specific RNA short circuit
+	if($hit->description =~ /strand_specific\=([^\s\;]+)/ && $1){
+	    return 1 if($hit->strand('hit') == -1); #already revcomped (undo it)
+	    return 0; 
+	}
+
+	#single exon
 	if ($hit->num_hsps == 1){
 	    my $seq;
 	    my $r_seq;
@@ -103,12 +110,10 @@ sub needs_to_be_revcomped {
 	    }
 	}
 
+	#spliced
 	my $str = get_splice_str($hit);
-
 	my $num = get_numbers($str);
-
 	my $ratio = $num->{m}/$num->{l};
-
 	if ($ratio >= .75){
 		return 1;
 	}
