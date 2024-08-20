@@ -11,7 +11,7 @@ use Widget;
 use Bio::Search::Hit::PhatHit::repeatmasker;
 use Bio::Search::HSP::PhatHSP::repeatmasker;
 use IPC::Open3;
-use Symbol;
+use Symbol qw(gensym);
 
 @ISA = qw(
 	Widget
@@ -42,13 +42,14 @@ sub run {
 	if (defined($command)){
 		$self->print_command($command);
 		my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-		my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+		my $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 
 		my $err;
 		{
 		    local $/ = \1;
 		    while (my $line = <$CHLD_ERR>){
-			print STDERR $line unless($main::quiet);
+			next if(_ignore_line($line));
+			print STDERR __PACKAGE__ . " --> " . $line unless($main::quiet);
 			$err .= $line;
 			kill (9, $pid) if ($err =~ /refinelib\) does not exist/); #kill rather than wait for failure
 		    }
@@ -60,10 +61,11 @@ sub run {
 		if($? != 0 && $err =~ /refinelib\) does not exist/){
 		    print STDERR "Reconfiguring command and trying again.\n" unless($main::quiet);
 		    $command =~ s/\-species\s+[^\s]+/-species mammalia/;
-		    $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+		    $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 		    $err = ();
 		    while (my $line = <$CHLD_ERR>){
-			print STDERR $line unless($main::quiet);
+			next if(_ignore_line($line));
+			print STDERR __PACKAGE__ . " --> " . $line unless($main::quiet);
 			$err.= $line;
 		    }
 		    waitpid $pid, 0;
@@ -80,6 +82,50 @@ sub run {
 		$self->maskedFastaFile("$projDir/$name\.masked");
 	}
 
+}
+#-------------------------------------------------------------------------------
+sub _ignore_line {
+    if($_[0] =~ /^\s*$/){
+	return 1;
+    }
+    elsif($_[0] =~ /^identifying /){
+	return 1;
+    }
+    elsif($_[0] =~ /^Checking for /){
+	return 1;
+    }
+    elsif($_[0] =~ /^Search Engine: /){
+	return 1;
+    }
+    elsif($_[0] =~ /^RepeatMasker version /){
+	return 1;
+    }
+    elsif($_[0] =~ /^Master RepeatMasker Database: /){
+	return 1;
+    }
+    elsif($_[0] =~ /^Custom Repeat Library: /){
+	return 1;
+    }
+    elsif($_[0] =~ /^analyzing file /){
+	return 1;
+    }
+    elsif($_[0] =~ /^Generating output\.\./){
+	return 1;
+    }
+    elsif($_[0] =~ /^processing output:/){
+	return 1;
+    }
+    elsif($_[0] =~ /^cycle \d+/){
+	return 1;
+    }
+    elsif($_[0] =~ /^masking$/){
+	return 1;
+    }
+    elsif($_[0] =~ /^done$/){
+	return 1;
+    }
+
+    return 0;
 }
 #-------------------------------------------------------------------------------
 sub maskedFastaFile {

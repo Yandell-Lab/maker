@@ -60,7 +60,6 @@ my @ctl_to_log = ('maker_gff',
 		  'alt_peptide',
 		  'evaluate',
 		  'blast_type',
-		  'use_rapsearch',
 		  'softmask',
 		  'pcov_blastn',
 		  'pid_blastn',
@@ -398,12 +397,6 @@ sub _load_old_log {
 		    $log_val = 0 if($log_val eq '');
 		}
 
-	        #use_rapsearch was off before and not logged
-		if($key eq 'use_rapsearch'){
-		    $ctl_val = 0 if($ctl_val eq '');
-		    $log_val = 0 if($log_val eq '');
-		}
-
 	        #est2genome was previously part of predictor
 		if($key eq 'est2genome' && $log_val eq ''){
 		    $log_val = (grep {!/altest/} grep {/est2genome/} $logged_vals{predictor}) ? 1 : 0;
@@ -463,8 +456,7 @@ sub _load_old_log {
 			$key eq 'pcid_rm_blastx' ||
 			$key eq 'eval_rm_blastx' ||
 			$key eq 'bit_rm_blastx' ||
-			$key eq 'blast_type' ||
-			$key eq 'use_rapsearch'
+			$key eq 'blast_type'
 			) {
 			$rm_key{all_but}++;
 		    }

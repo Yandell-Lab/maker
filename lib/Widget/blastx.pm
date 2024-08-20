@@ -37,7 +37,7 @@ sub run {
    if (defined($command)){
       $self->print_command($command);
       my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-      my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+      my $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 
       my $all_err;
       {
@@ -51,7 +51,7 @@ sub run {
       if ($? != 0 && ! ignorable($all_err, $command)){
 	  #try again a second time
 	  sleep 15;
-	  $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	  $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	  $all_err = '';
 	  {
 	      local $/ = \1;

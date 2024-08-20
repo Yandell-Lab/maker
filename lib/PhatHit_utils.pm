@@ -631,7 +631,7 @@ sub _clip {
     my $end = $hit->{translation_end};
     my $strand = $hit->strand('query');
 
-    if(!$end || !defined($offset)){
+    if(!$end || !defined($offset) || !$hit->{_TSTART} || !$hit->{_TEND}){
 	confess "ERROR: Need seq to determine translation in PhatHit_utils::_clip\n" if(!$seq);
 	my $transcript_seq  = maker::auto_annotator::get_transcript_seq($hit, $seq);
 	(undef, $offset, $end, undef, undef) = maker::auto_annotator::get_translation_seq($transcript_seq, $hit);
@@ -923,14 +923,24 @@ sub _adjust {
 	    my $codon = substr($iseq, $i, 3);
 	    last if($tM->is_ter_codon($codon));
 	    if($tM->is_start_codon($codon)){
+		my $diff = (length($iseq) - $tlength) - $i;
+		if($strand == 1){
+		    $B -= $diff if($diff > 0);
+		}
+		else{
+		    $E += $diff if($diff > 0);
+		}
+
 		$has_start = 1;
-		$offset = $i;
+		$offset = 0;
+		$end += $diff;
+		last;
 	    }
 
 	    #don't try and extend through string of N's beyond edge of existing transcript
 	    if($tM->translate($codon) eq 'X'){
 		$repeat++;
-		my $diff = (length($iseq) - $tlength) - $offset;
+		my $diff = (length($iseq) - $tlength) - $i;
 		last if($repeat > 5 &&  $diff > 0);
 	    }
 	    else{
@@ -938,7 +948,7 @@ sub _adjust {
 	    }
 	}
 
-	#step downstream if no good upstream start
+	#step downstream if no good upstream start found
 	my $j = $offset;
 	while(!$has_start){
 	    $j += 3;
@@ -948,17 +958,8 @@ sub _adjust {
 	    if($tM->is_start_codon($codon)){
 		$has_start = 1;
 		$offset = $j;
+		last;
 	    }
-	}
-
-	if($has_start){
-	    my $diff = (length($iseq) - $tlength) - $offset;
-	    if($strand == 1){
-		$B -= $diff if($diff > 0);
-	    }
-	    else{
-		$E += $diff if($diff > 0);
-	    }	    
 	}
     }
 
@@ -1088,6 +1089,10 @@ sub _adjust {
 
     $new_hit->{_HMM} = $hit->{_HMM} if($hit->{_HMM});
     $new_hit->{_label} = $hit->{_label} if($hit->{_label});
+    if($fixstart && $has_start){
+	$new_hit->{translation_offset} = $offset;
+	$new_hit->{translation_end} = $end;
+    }
 
     return $new_hit;
 }

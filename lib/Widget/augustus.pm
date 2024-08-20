@@ -258,7 +258,7 @@ sub run {
 	if (defined($command)){
 	   $self->print_command($command);
 	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	   my $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	   {
 	       local $/ = \1;
 	       while (my $line = <$CHLD_ERR>){
@@ -270,7 +270,7 @@ sub run {
 	   #try one more time
 	   if ($? != 0){
 	       ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-	       $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	       $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	       {
 		   local $/ = \1;
 		   while (my $line = <$CHLD_ERR>){

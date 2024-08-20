@@ -3230,7 +3230,7 @@ sub _go {
 							       'model',
 							       $q_seq_length
 							       );
-	       #$GFF3_e->add_phathits($model_gff_keepers, $uid);
+	       $GFF3_e->add_phathits($model_gff_keepers, $uid);
 
 	       #-pred passthrough
 	       $pred_gff_keepers = $GFF_DB->phathits_on_chunk($chunk,
@@ -3238,7 +3238,7 @@ sub _go {
 							      'pred',
                                                               $q_seq_length
 							      );
-	       #$GFF3_e->add_phathits($pred_gff_keepers, $uid);
+	       $GFF3_e->add_phathits($pred_gff_keepers, $uid);
 
 	       #-other passthrough
 	       my $lines = $GFF_DB->lines_for_chunk($chunk, 'other');

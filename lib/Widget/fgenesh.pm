@@ -96,7 +96,7 @@ sub run {
 	if (defined($command)){
 	   $self->print_command($command);
 	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	   my $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	   {
 	       local $/ = \1; #read in everytime a byte becomes available
 	       while (my $line = <$CHLD_ERR>){

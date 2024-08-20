@@ -30,7 +30,6 @@ use Iterator::Fasta;
 use Iterator::Any;
 use FastaChunker;
 use Widget::RepeatMasker;
-use Widget::rapsearch;
 use Widget::blastx;
 use Widget::tblastx;
 use Widget::blastn;
@@ -2034,9 +2033,7 @@ sub polish_exonerate {
 
 	#make backup
 	if($o_tfile ne $backup){
-	    push(@to_copy, [$o_tfile, $backup]);
-	    #File::Copy::move($o_tfile, $backup);
-	    #unlink($o_tfile);
+	    push(@to_copy, [$o_tfile, $backup]); #group them for later copy
 	}
 	$LOG->add_entry("FINISHED", $backup, "") if(defined $LOG);
 	
@@ -2117,7 +2114,7 @@ sub polish_exonerate {
 	for(my $i = 0; $i < @to_copy; $i++){
 	    my ($o_tfile, $backup) = @{$to_copy[$i]};
 	    #File::Copy::move($o_tfile, $backup); #temp
-	    unlink($o_tfile);
+	    #unlink($o_tfile);
 	}
 
 	#remove ambiguous alternate alignments when hints are given
@@ -2306,7 +2303,7 @@ sub dbformat {
    my ($file) = shift =~ /^([^\:]+)\:?(.*)/; #peal off label
    my $type = shift;
 
-   confess "ERROR: Can not find xdformat, formatdb, makeblastdb, or prerapsearch executable\n" if(! -e $exe);
+   confess "ERROR: Can not find xdformat, formatdb, or makeblastdb executable\n" if(! -e $exe);
    confess "ERROR: Can not find the db file $file\n" if(! -e $file);
    confess "ERROR: You must define a type (blastn|blastx|tblastx)\n" if(! $type);
    
@@ -2351,12 +2348,6 @@ sub dbformat {
 	       $command .= " -dbtype prot" if($type eq 'blastx');
 	       $command .= " -dbtype nucl" if($type eq 'blastn' || $type eq 'tblastx');
 	       $command .= " -in $t_file";
-	       $run++;
-	   }
-       }
-       elsif ($exe =~ /prerapsearch/) {
-	   if ((! -e $file.'.db.info')){
-	       $command .= " -d $t_file -n $t_file.db";
 	       $run++;
 	   }
        }
@@ -2789,7 +2780,7 @@ sub blastx_as_chunks {
    my $pid_blast   = ($rflag) ? $CTL_OPT->{pid_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = (!$CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
+   my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask}; #always on for repeats
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -2858,23 +2849,10 @@ sub blastx_as_chunks {
    $params{is_first}      = $chunk->is_first;
    $params{is_last}       = $chunk->is_last;
 
-   #rapsearch misses query length and target length
-   if($blast =~ /rapsearch$/){
-       $params{query_length} = $chunk->length_w_flank();       
-       (my $db_dir = $db) =~ s/[^\/]+$//;
-       $params{db} = $db;
-   }
-
    my $chunk_keepers;
    try{
-       if($blast =~ /rapsearch$/){
-	   $chunk_keepers = Widget::rapsearch::parse($o_file,
-						     \%params,);
-       }
-       else{
-	   $chunk_keepers = Widget::blastx::parse($o_file,
+       $chunk_keepers = Widget::blastx::parse($o_file,
 						  \%params,);
-       }
    }
    catch Error::Simple with {
       my $E = shift;
@@ -2983,7 +2961,7 @@ sub blastx {
    my $pid_blast  = ($rflag) ? $CTL_OPT->{bit_rm_blastx} : $CTL_OPT->{pid_blastx};
    my $split_hit   = ($rflag) ? 0 : $CTL_OPT->{split_hit}; #repeat proteins get shatttered later anyway
    my $cpus        = $CTL_OPT->{cpus};
-   my $formater    = (!$CTL_OPT->{use_rapsearch}) ? $CTL_OPT->{_formater} : $CTL_OPT->{prerapsearch};
+   my $formater    = $CTL_OPT->{_formater};
    my $softmask    = ($rflag) ? 1 : $CTL_OPT->{softmask};
    my $org_type    = $CTL_OPT->{organism_type};
 
@@ -3035,22 +3013,10 @@ sub blastx {
    $params{is_first}      = $chunk->is_first;
    $params{is_last}       = $chunk->is_last;
 
-   #rapsearch misses query length and target length
-   if($blast =~ /rapsearch$/){
-       $params{query_length} = $chunk->length();
-       $params{db} = $db;
-   }
-
    my $chunk_keepers;
    try{
-       if($blast =~ /rapsearch$/){
-           $chunk_keepers = Widget::rapsearch::parse($o_file,
-                                                     \%params,);
-       }
-       else{
-	   $chunk_keepers = Widget::blastx::parse($o_file,
+       $chunk_keepers = Widget::blastx::parse($o_file,
 						  \%params,);
-       }
    }
    catch Error::Simple with {
       my $E = shift;
@@ -3162,20 +3128,13 @@ sub runBlastx {
       #$command .= " -outfmt 6"; # remove for full report
       $command .= " -out $out_file";
    }
-   elsif ($blast =~ /rapsearch$/) {
-       $command .= " -z $cpus";
-       $command .= " -a"; #acceleration mode
-       $command .= " -e ".log($eval_blast)/log(10);
-       $command .= " -v -1";
-       $command .= " -b -1";
-       $command .= " -d $db.db -q $q_file";
-       $command .= " -o $out_file";
-   }
    else{
       confess "ERROR: Must be a blastx executable";  
    }
 
-   my $w = ($blast =~ /rapsearch$/) ? new Widget::rapsearch() : new Widget::blastx();
+   #select widget
+   my $w = new Widget::blastx();
+
    if (-e $out_file) {
       print STDERR "re reading blast report.\n" unless $main::quiet;
       print STDERR "$out_file\n" unless $main::quiet;
@@ -3186,12 +3145,6 @@ sub runBlastx {
       $dir =~ s/[^\/]+$//;
       File::Path::mkpath($dir);
       $w->run($command);
-
-      #fix outfile for rapsearch
-      if($blast =~ /rapsearch$/){
-	  unlink("$out_file.m8");
-	  File::Copy::move("$out_file.aln", "$out_file");
-      }
    }
 }
 #-----------------------------------------------------------------------------
@@ -3782,8 +3735,6 @@ sub set_defaults {
    if ($type eq 'all' || $type eq 'bopts') {
       $CTL_OPT{'blast_type'} = 'ncbi+';
       $CTL_OPT{'blast_type'} .= '=DISABLED' if($main::server);
-      $CTL_OPT{'use_rapsearch'} = 0;
-      $CTL_OPT{'use_rapsearch'} .= '=DISABLED' if($main::server);
       $CTL_OPT{'pcov_blastn'} = 0.80;
       $CTL_OPT{'pid_blastn'} = 0.85;
       $CTL_OPT{'eval_blastn'} = 1e-10;
@@ -3817,13 +3768,11 @@ sub set_defaults {
       my @exes = ('xdformat',
 		  'formatdb',
 		  'makeblastdb',
-		  'prerapsearch',
 		  'blastall',
 		  'blasta',
 		  'blastn',
 		  'blastx',
 		  'tblastx',
-		  'rapsearch',
 		  'RepeatMasker',
 		  'exonerate',
 		  'snap',
@@ -4585,11 +4534,6 @@ sub load_control_files {
       $CTL_OPT{_tblastx} = $CTL_OPT{tblastx};
    }
 
-   #replace blastx with rapsearch
-   if ($CTL_OPT{use_rapsearch}) {
-      $CTL_OPT{_blastx} = $CTL_OPT{rapsearch};
-   }
-   
    #--validate existence of required values from control files
    my @infiles;
    if($CTL_OPT{blast_type} =~ /^wublast$/i){
@@ -4609,11 +4553,6 @@ sub load_control_files {
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{protein}); 
        push (@infiles, 'blastx', 'makeblastdb') if($CTL_OPT{repeat_protein}); 
        push (@infiles, 'tblastx', 'makeblastdb') if($CTL_OPT{altest});
-   }
-
-   if($CTL_OPT{use_rapsearch}){
-       push (@infiles, 'rapsearch', 'prerapsearch')
-	   if($CTL_OPT{protein} || $CTL_OPT{repeat_protein});
    }
 
    push (@infiles, 'genome');
@@ -4968,26 +4907,34 @@ sub load_control_files {
        my ($lib) = $exe =~ /(.*\/)RepeatMasker$/;
        die "ERROR: Could not determine if RepBase is installed\n" if(! $lib);
 
-       $lib .= "Libraries/RepeatMaskerLib.embl";
-       die "ERROR: Could not determine if RepBase is installed\n" if(! -f $lib);
-
-       open(my $IN, "< $lib");
-       my $rb_flag;
-       for(my $i = 0; $i < 20; $i++){
-           my $line = <$IN>;
-           if($line =~ /RELEASE \d+(\-min)?\;/){
-	       $rb_flag = ($1 && $1 eq '-min') ? 0 : 1;
-	       last;
-           }
+       #Dfam vs RepBase
+       my $engine = `$^X -M'lib qw($lib)' -MRepeatMaskerConfig -e 'print \$RepeatMaskerConfig::configuration->{DEFAULT_SEARCH_ENGINE}{value}'`;
+       if($engine eq 'hmmer'){
+	   $lib .= "Libraries/Dfam.h5";
+	   die "ERROR: Could not determine if Dfam libraries are installed\n" if(! -f $lib);
        }
-       close($IN);
+       else{
+	   $lib .= "Libraries/RepeatMaskerLib.embl";
+	   die "ERROR: Could not determine if RepBase is installed\n" if(! -f $lib);
 
-       if(! $rb_flag){
-	   warn "WARNING: RepBase is not installed for RepeatMasker. This limits\n".
-	       "RepeatMasker's functionality and makes the model_org option in the\n".
-	       "control files virtually meaningless. MAKER will now reconfigure\n".
-	       "for simple repeat masking only.\n";
-	   $CTL_OPT{model_org} = 'simple';
+	   open(my $IN, "< $lib");
+	   my $rb_flag;
+	   for(my $i = 0; $i < 20; $i++){
+	       my $line = <$IN>;
+	       if($line =~ /RELEASE \d+(\-min)?\;/){
+		   $rb_flag = ($1 && $1 eq '-min') ? 0 : 1;
+		   last;
+	       }
+	   }
+	   close($IN);
+
+	   if(! $rb_flag){
+	       warn "WARNING: RepBase is not installed for RepeatMasker. This limits\n".
+		   "RepeatMasker's functionality and makes the model_org option in the\n".
+		   "control files virtually meaningless. MAKER will now reconfigure\n".
+		   "for simple repeat masking only.\n";
+	       $CTL_OPT{model_org} = 'simple';
+	   }
        }
    }
 
@@ -5281,7 +5228,6 @@ sub generate_control_files {
 	   die "ERROR: Could not create $dir/$app\_bopts.$ext\n";
        print OUT "#-----BLAST and Exonerate Statistics Thresholds\n";
        print OUT "blast_type=$O{blast_type} #set to 'ncbi+', 'ncbi' or 'wublast'\n";
-       print OUT "use_rapsearch=$O{use_rapsearch} #use rapsearch instead of blastx, 1 = yes, 0 = no\n";
        print OUT "\n";
        print OUT "pcov_blastn=$O{pcov_blastn} #Blastn Percent Coverage Threhold EST-Genome Alignments\n";
        print OUT "pid_blastn=$O{pid_blastn} #Blastn Percent Identity Threshold EST-Genome Aligments\n";
@@ -5329,8 +5275,6 @@ sub generate_control_files {
        print OUT "blastall=$O{blastall} #location of NCBI blastall executable\n";
        print OUT "xdformat=$O{xdformat} #location of WUBLAST xdformat executable\n";
        print OUT "blasta=$O{blasta} #location of WUBLAST blasta executable\n";
-       print OUT "prerapsearch=$O{prerapsearch} #location of prerapsearch executable\n";
-       print OUT "rapsearch=$O{rapsearch} #location of rapsearch executable\n";
        print OUT "RepeatMasker=$O{RepeatMasker} #location of RepeatMasker executable\n";
        print OUT "exonerate=$O{exonerate} #location of exonerate executable\n";
        print OUT "\n";

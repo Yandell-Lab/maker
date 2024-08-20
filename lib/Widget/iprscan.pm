@@ -40,7 +40,7 @@ sub run {
 
 	   $ENV{PERL_SIGNALS} = 'unsafe';
 	   my ($CHLD_IN, $CHLD_OUT, $CHLD_ERR) = (gensym, gensym, gensym);
-	   my $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	   my $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 
 	   my $err;
@@ -105,7 +105,7 @@ sub run {
 
 	   #always try twice because iprscan is unstable
 	   $ENV{PERL_SIGNALS} = 'unsafe';
-	   $pid = open3($CHLD_IN, $CHLD_OUT, $CHLD_ERR, $command);
+	   $pid = open3($CHLD_IN, $CHLD_ERR, $CHLD_ERR, $command);
 	   $ENV{PERL_SIGNALS} = 'safe';
 
 	   undef $err;

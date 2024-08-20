@@ -70,8 +70,8 @@ sub needs_to_be_revcomped {
 
 	#strand specific RNA short circuit
 	if($hit->description =~ /strand_specific\=([^\s\;]+)/ && $1){
-	    return 1 if($hit->strand('hit') == -1); #already revcomped (undo it)
-	    return 0; 
+	    return 1 if($hit->strand('hit') < 0); #already revcomped (undo it)
+	    return 0;
 	}
 
 	#single exon

@@ -815,7 +815,7 @@ sub prep_blastx_data {
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $models_in_cluster = get_selected_types($c,'model_gff', 'maker');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
@@ -863,7 +863,7 @@ sub prep_gff_data {
 
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c,'cdna2genome', 'tblastx', 'altest_gff');
 	my $preds_in_cluster = get_selected_types($c,'snap', 'augustus', 'fgenesh',
 						     'genemark',  'pred_gff');
@@ -912,7 +912,7 @@ sub prep_pred_data {
 						     'genemark', 'evm', 'pred_gff');
 	my $ests_in_cluster  = get_selected_types($c,'est2genome', 'est_gff', 'blastn');
 	my $ps_in_cluster    = get_selected_types($c,'protein2genome');
-	my $bx_in_cluster    = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
+	my $bx_in_cluster    = get_selected_types($c,'blastx', 'protein_gff');
 	my $alt_ests_in_cluster = get_selected_types($c, 'cdna2genome', 'tblastx', 'altest_gff');
 	my @uniq_preds = grep {$_->{_hit_multi} == 0} @$preds_in_cluster;
 	$abinits->[0]->{_merge_warning} = $abinits->[0]->{_hit_multi}; #hint cluster merged for pred
@@ -1024,7 +1024,7 @@ sub prep_ncrna_data {
 #
 #	my $ests_in_cluster = get_selected_types($c, 'est2genome', 'est_gff', 'blastn');
 #	my $ps_in_cluster   = get_selected_types($c,'protein2genome');
-#	my $bx_in_cluster   = get_selected_types($c,'blastx', 'rapsearch', 'protein_gff');
+#	my $bx_in_cluster   = get_selected_types($c,'blastx', 'protein_gff');
 #
 #	my $i_set      = combine($ps_in_cluster, $bx_in_cluster);
 #	my $best_p_set = clean::remove_redundant_alt_splices($i_set, 10);
@@ -1461,6 +1461,8 @@ sub best_annotations {
 	}
 
 	#remove low scoring overlaping genes
+	#@$p_list  = sort {crit0($b) <=> crit0($a) || crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$p_list; #temp
+	#@$m_list  = sort {crit0($b) <=> crit0($a) || crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$m_list; #temp
 	@$p_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$p_list;
 	@$m_list  = sort {crit1($a) <=> crit1($b) || crit2($a) <=> crit2($b) || crit3($a) <=> crit3($b) || crit4($b) <=> crit4($a)} @$m_list;
 	push(@$p_list, @p_est2g); #est2genome added to end, will only appear if nothing else overlaps
@@ -1819,6 +1821,13 @@ sub _g_coding_start_end {
     return ($B, $E);
 }
 #------------------------------------------------------------------------
+#model_gff always first (use for manual manipulation and testing)
+sub crit0 {
+    my $g = shift;
+
+    return ($g->{predictor} =~ /^model_gff/) ? 1 : 0;
+}
+#------------------------------------------------------------------------
 #sort by combined abinit-evidence AED score
 sub crit1 {
    my $g = shift;
@@ -1873,7 +1882,7 @@ sub run_it {
 	my $ests     = ($CTL_OPT->{correct_est_fusion}) ? $set->{fusion} : $set->{ests};
 	my $model    = $set->{model};
 	my $gomiph   = $set->{gomiph};
-	my $blastx   = get_selected_types($gomiph,'blastx', 'rapsearch', 'protein_gff');
+	my $blastx   = get_selected_types($gomiph,'blastx', 'protein_gff');
 	my $pol_p    = get_selected_types($gomiph,'protein2genome');
 	my $alt_ests = $set->{alt_ests};
 	my $preds    = $set->{preds};
@@ -2019,6 +2028,28 @@ sub run_it {
 		}
 		$transcript->{_HMM} = 'est2genome';
 
+		#only keep complete one when always complete set
+		if($CTL_OPT->{always_complete}){
+		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
+		    my ($translation_seq,
+			$offset,
+			$end,
+			$has_start,
+			$has_stop) = get_translation_seq($transcript_seq, $transcript);
+
+		    if($has_stop && ! $has_start){
+			$transcript = PhatHit_utils::adjust_start($transcript, $v_seq);
+			$transcript_seq  = get_transcript_seq($transcript, $v_seq);
+			($translation_seq,
+			 $offset,
+			 $end,
+			 $has_start,
+			 $has_stop) = get_translation_seq($transcript_seq, $transcript);
+		    }
+
+		    next if(!$has_start || !$has_stop);
+		}
+
 		#at least 40% of est2genome genes must be ORF
 		#also require some protein support for eukaryote single exon genes
 		if(!$CTL_OPT->{est_forward}){
@@ -2034,12 +2065,15 @@ sub run_it {
 		    if((($end-1)-$offset) / length($transcript_seq) < .40){
 			$short_cds = 1;
 		    }
-		    #long first/last exon is not uncommon
+
+		    #long first/last exons are not uncommon (long 3 prime UTR especially)
 		    if($short_cds && $has_start && $has_stop && $transcript->num_hsps >= 3){
 			my ($first, $last) = @{$transcript->sortedHSPs}[0, -1];
 			my ($Blen, $Elen) = ($offset, length($transcript_seq)-($end-1));
-			my $trim = ($Blen < $first->length) ? $Blen : $first->length;
-			$trim   += ($Elen < $last->length)  ? $Elen : $last->length;
+
+			my $trim = 0;
+			$trim += ($Blen < $first->length) ? $Blen : $first->length;
+			$trim += ($Elen < $last->length)  ? $Elen : $last->length;
 			$short_cds = 0 if((length($translation_seq)+1)*3/(length($transcript_seq)-$trim) >= .80);
 		    }
 		    next if($short_cds);
@@ -2058,17 +2092,6 @@ sub run_it {
 		   $transcript->{_tran_name} = $mia->name;
 		   my $score = $mia->frac_identical * $mia->pAh * 100;
 		   $transcript->score($score);
-		}
-
-		#only keep complete one when always complete set
-		if($CTL_OPT->{always_complete}){
-		    my $transcript_seq = get_transcript_seq($transcript, $v_seq);
-		    my ($translation_seq,
-			$offset,
-			$end,
-			$has_start,
-			$has_stop) = get_translation_seq($transcript_seq, $transcript);
-		    next if(!$has_start || !$has_stop);
 		}
 
 		push(@transcripts, [$transcript, $set->{index}, $mia]);
@@ -2641,7 +2664,7 @@ sub load_transcript_stats {
 	my $pol_p_hits   = get_selected_types($evi->{gomiph}, 'protein2genome');
 	my $pol_e_hits   = get_selected_types($evi->{ests}, 'est2genome', 'est_gff', 'blastn');
 	my $pol_f_hits   = get_selected_types($evi->{fusion}, 'est2genome', 'est_gff', 'blastn');
-	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'rapsearch', 'protein_gff');
+	my $blastx_hits  = get_selected_types($evi->{gomiph},'blastx', 'protein_gff');
 	my $tblastx_hits = get_selected_types($evi->{alt_ests}, 'cdna2genome', 'tblastx', 'altest_gff');
 	my $abinits      = $evi->{all_preds};
 
@@ -2844,10 +2867,10 @@ sub group_transcripts {
    }
    elsif($predictor =~ /^(est2genome|protein2genome|altest2genome)$/){
        if($CTL_OPT->{est_forward}){
-	   $careful_clusters = gene_id_cluster(\@transcripts);
+   	   $careful_clusters = gene_id_cluster(\@transcripts);
        }
        else{
-	   @$careful_clusters = map{[$_]} @transcripts;
+   	   @$careful_clusters = map{[$_]} @transcripts;
        }
    }
    elsif(!$CTL_OPT->{alt_splice}){

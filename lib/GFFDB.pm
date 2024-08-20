@@ -922,6 +922,9 @@ sub _load_hits {
 	foreach my $ann (@anns){
 	    my @list = $g->{f}->annotation->get_Annotations();
 	    @list = map {$_->value()} @list;
+	    #if($ann eq 'gene_id'){ #temp
+	    #	$gene_id ||= join(',', @list); #temp
+	    #} #temp
 	    $ann = $ann.'='.join(',', @list);
 	}
     }
@@ -929,6 +932,9 @@ sub _load_hits {
 	@anns = grep {!/^ID$|^Name$|^Target$|^Parent$|^_AED$|^_eAED$|^_QI$/} @anns;
         foreach my $ann (@anns){
             my @list = $g->{f}->get_tag_values($ann);
+	    #if($ann eq 'gene_id'){ #temp
+	    #	$gene_id ||= join(',', @list); #temp
+	    #} #temp
             $ann = $ann.'='.join(',', @list);
         }
     }
